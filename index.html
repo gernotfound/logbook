@@ -217,13 +217,31 @@
 
 </div>
 
+<!-- Notifica Aggiornamento PWA -->
+<div id="update-toast" class="toast">
+    <span>✨ Nuovo aggiornamento!</span>
+    <button onclick="window.location.reload()">Ricarica</button>
+</div>
+
 <!-- Service Worker Registration -->
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
+            // Controlliamo se c'è già un SW attivo prima di questa registrazione
+            const hasControllerOnLoad = !!navigator.serviceWorker.controller;
+            
             navigator.serviceWorker.register('sw.js')
                 .then(reg => console.log('Service Worker registrato', reg))
                 .catch(err => console.error('Errore registrazione SW', err));
+
+            // Questo evento scatta quando il nuovo sw.js prende il controllo (tramite skipWaiting)
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                // Mostriamo il toast solo se l'utente aveva già una vecchia versione installata
+                if (hasControllerOnLoad) {
+                    const toast = document.getElementById('update-toast');
+                    if (toast) toast.classList.add('show');
+                }
+            });
         });
     }
 </script>
