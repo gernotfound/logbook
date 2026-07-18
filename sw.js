@@ -1,4 +1,6 @@
-const CACHE_NAME = 'gym-pro-cache-v1';
+// MODIFICA QUESTO NUMERO DI VERSIONE PER FORZARE L'AGGIORNAMENTO DELLA PWA SUI DISPOSITIVI
+const APP_VERSION = 'v1.0.0';
+const CACHE_NAME = `gym-pro-cache-${APP_VERSION}`;
 const urlsToCache = [
   './index.html',
   './css/styles.css',
