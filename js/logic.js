@@ -3,17 +3,47 @@
 
 export const Logic = {
     MUSCLES: [
-        { id: "chest", name: "Petto" },
-        { id: "back", name: "Dorso" },
-        { id: "shoulders", name: "Spalle" },
+        // PECTORALS
+        { id: "chest", name: "Petto (Globale)" },
+        { id: "chest_upper", name: "Fascio Clavicolare (Petto Alto)" },
+        { id: "chest_lower", name: "Fascio Addominale (Petto Basso)" },
+        // BACK
+        { id: "back", name: "Dorso (Globale)" },
+        { id: "lats", name: "Gran Dorsale" },
+        { id: "traps", name: "Trapezi" },
+        { id: "rhomboids", name: "Romboidi" },
+        { id: "lower_back", name: "Lombari" },
+        // SHOULDERS
+        { id: "shoulders", name: "Spalle (Globale)" },
+        { id: "delts_front", name: "Deltoide Anteriore" },
+        { id: "delts_side", name: "Deltoide Laterale" },
+        { id: "delts_rear", name: "Deltoide Posteriore" },
+        // ARMS
         { id: "biceps", name: "Bicipiti" },
-        { id: "triceps", name: "Tricipiti" },
+        { id: "biceps_long", name: "Capo Lungo del Bicipite" },
+        { id: "biceps_short", name: "Capo Breve del Bicipite" },
+        { id: "brachialis", name: "Brachiale" },
+        { id: "triceps", name: "Tricipiti (Globale)" },
+        { id: "triceps_long", name: "Capo Lungo del Tricipite" },
+        { id: "triceps_lateral", name: "Capo Laterale del Tricipite" },
+        { id: "triceps_medial", name: "Capo Mediale del Tricipite" },
+        { id: "triceps_right", name: "Tricipite Destro" },
+        { id: "triceps_left", name: "Tricipite Sinistro" },
         { id: "forearms", name: "Avambracci" },
-        { id: "abs", name: "Addome" },
-        { id: "glutes", name: "Glutei" },
-        { id: "quads", name: "Quadricipiti" },
-        { id: "hamstrings", name: "Femorali" },
-        { id: "calves", name: "Polpacci" }
+        // ABS/CORE
+        { id: "abs", name: "Addome (Retto dell'Addome)" },
+        { id: "obliques", name: "Obliqui" },
+        { id: "core", name: "Core (Globale)" },
+        // LEGS (FRONT)
+        { id: "quads", name: "Quadricipiti (Globale)" },
+        { id: "adductors", name: "Adduttori (Interno Coscia)" },
+        { id: "abductors", name: "Abduttori (Esterno Coscia)" },
+        // LEGS (BACK)
+        { id: "glutes", name: "Glutei (Globale)" },
+        { id: "glutes_right", name: "Gluteo Destro" },
+        { id: "glutes_left", name: "Gluteo Sinistro" },
+        { id: "hamstrings", name: "Femorali (Ischiocrurali)" },
+        { id: "calves", name: "Polpacci (Globale)" }
     ],
 
     generateId(prefix) { 

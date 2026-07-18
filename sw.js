@@ -1,6 +1,6 @@
 // MODIFICA QUESTO NUMERO DI VERSIONE SE VUOI FORZARE UNA PULIZIA PROFONDA DELLA CACHE SUI DISPOSITIVI
-const APP_VERSION = 'v1.0.7';
-const CACHE_NAME = `gym-pro-cache-${APP_VERSION}`;
+const APP_VERSION = 'v1.0.8';
+const CACHE_NAME = `logbook-cache-${APP_VERSION}`;
 
 // File critici da memorizzare subito all'installazione
 const urlsToCache = [

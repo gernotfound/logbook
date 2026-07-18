@@ -27,9 +27,12 @@ const App = {
                 document.getElementById('nutri-date').value = new Date().toISOString().split('T')[0];
                 this.timers.initLoop();
                 this.renderAll();
+                this.renderNewExMuscles(); // Assicura che l'SVG vuoto venga renderizzato all'avvio
             } else {
                 // Utente Non Loggato
                 authOverlay.style.display = 'flex';
+                document.getElementById('auth-loading').style.display = 'none';
+                document.getElementById('auth-login-box').style.display = 'block';
                 mainApp.style.display = 'none';
             }
         });
@@ -47,8 +50,11 @@ const App = {
         });
         
         document.getElementById('btn-delete-account').addEventListener('click', () => {
-            if(confirm("ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente il tuo account e tutti i tuoi dati? Questa azione è irreversibile.")) {
+            const answer = prompt('ATTENZIONE: Stai per eliminare per sempre tutti i tuoi dati e il tuo account.\nScrivi "elimina account" per confermare:');
+            if(answer && answer.trim().toLowerCase() === "elimina account") {
                 DB.deleteAccount();
+            } else if (answer !== null) {
+                alert("Testo non corrispondente. Operazione annullata.");
             }
         });
     },
@@ -63,6 +69,13 @@ const App = {
             this.state.profile = { dob: '', height: '', gender: 'M' };
         }
     },
+
+    showAppStatus() {
+        const isOnline = navigator.onLine ? "Online 🟢" : "Offline 🔴";
+        const version = "v1.0.8"; // Sincronizzato con sw.js
+        alert(`Stato Applicazione\n\nVersione: ${version}\nStato Rete: ${isOnline}`);
+    },
+
 
     // Salva nel cloud (Debounce per ottimizzare le scritture ed evitare di superare la quota)
     saveTimeout: null,
@@ -200,17 +213,41 @@ const App = {
         
         activeMusclesIds.forEach(mId => {
             let svgIds = [];
-            if(mId === 'chest') svgIds = ['svg-chest'];
-            else if(mId === 'back') svgIds = ['svg-back'];
-            else if(mId === 'shoulders') svgIds = ['svg-shoulders-front', 'svg-shoulders-back'];
-            else if(mId === 'biceps') svgIds = ['svg-biceps'];
-            else if(mId === 'triceps') svgIds = ['svg-triceps'];
-            else if(mId === 'forearms') svgIds = ['svg-forearms-front', 'svg-forearms-back'];
+            if(mId === 'chest') svgIds = ['svg-chest_upper', 'svg-chest_lower'];
+            else if(mId === 'chest_upper') svgIds = ['svg-chest_upper'];
+            else if(mId === 'chest_lower') svgIds = ['svg-chest_lower'];
+            else if(mId === 'back') svgIds = ['svg-traps', 'svg-lats', 'svg-rhomboids', 'svg-lower_back'];
+            else if(mId === 'lats') svgIds = ['svg-lats'];
+            else if(mId === 'traps') svgIds = ['svg-traps'];
+            else if(mId === 'rhomboids') svgIds = ['svg-rhomboids'];
+            else if(mId === 'lower_back') svgIds = ['svg-lower_back'];
+            else if(mId === 'shoulders') svgIds = ['svg-delts_front', 'svg-delts_side', 'svg-delts_rear'];
+            else if(mId === 'delts_front') svgIds = ['svg-delts_front'];
+            else if(mId === 'delts_side') svgIds = ['svg-delts_side'];
+            else if(mId === 'delts_rear') svgIds = ['svg-delts_rear'];
+            else if(mId === 'biceps') svgIds = ['svg-biceps_long', 'svg-biceps_short'];
+            else if(mId === 'biceps_long') svgIds = ['svg-biceps_long'];
+            else if(mId === 'biceps_short') svgIds = ['svg-biceps_short'];
+            else if(mId === 'brachialis') svgIds = ['svg-brachialis'];
+            else if(mId === 'triceps') svgIds = ['svg-triceps_right', 'svg-triceps_left', 'svg-triceps_lateral', 'svg-triceps_long'];
+            else if(mId === 'triceps_right') svgIds = ['svg-triceps_right'];
+            else if(mId === 'triceps_left') svgIds = ['svg-triceps_left'];
+            else if(mId === 'triceps_lateral') svgIds = ['svg-triceps_lateral'];
+            else if(mId === 'triceps_long') svgIds = ['svg-triceps_long'];
+            else if(mId === 'triceps_medial') svgIds = ['svg-triceps_lateral', 'svg-triceps_long'];
+            else if(mId === 'forearms') svgIds = ['svg-forearms'];
             else if(mId === 'abs') svgIds = ['svg-abs'];
-            else if(mId === 'glutes') svgIds = ['svg-glutes'];
+            else if(mId === 'obliques') svgIds = ['svg-obliques'];
+            else if(mId === 'core') svgIds = ['svg-abs', 'svg-obliques', 'svg-lower_back'];
             else if(mId === 'quads') svgIds = ['svg-quads'];
+            else if(mId === 'adductors') svgIds = ['svg-adductors'];
+            else if(mId === 'abductors') svgIds = ['svg-abductors'];
+            else if(mId === 'glutes') svgIds = ['svg-glutes_right', 'svg-glutes_left'];
+            else if(mId === 'glutes_right') svgIds = ['svg-glutes_right'];
+            else if(mId === 'glutes_left') svgIds = ['svg-glutes_left'];
             else if(mId === 'hamstrings') svgIds = ['svg-hamstrings'];
-            else if(mId === 'calves') svgIds = ['svg-calves-front', 'svg-calves-back'];
+            else if(mId === 'calves') svgIds = ['svg-calves'];
+            else svgIds = [`svg-${mId}`];
             
             svgIds.forEach(sid => {
                 const el = clone.getElementById(sid);
@@ -220,19 +257,39 @@ const App = {
         container.appendChild(clone);
     },
 
+    editingExerciseId: null,
+
     createExerciseInLibrary() {
         const nameInput = document.getElementById('new-ex-name');
         const notesInput = document.getElementById('new-ex-notes');
         const name = nameInput.value.trim();
         if(!name) return alert("Inserisci un nome.");
-        if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) return alert("Esercizio già esistente!");
 
-        this.state.library.push({ 
-            id: Logic.generateId('ex'), 
-            name, 
-            notes: notesInput.value,
-            muscles: [...this.tempNewExMuscles]
-        });
+        if(this.editingExerciseId) {
+            // Aggiorna esistente
+            if(this.state.library.some(e => e.id !== this.editingExerciseId && e.name.toLowerCase() === name.toLowerCase())) {
+                return alert("Nome esercizio già esistente!");
+            }
+            const ex = this.state.library.find(e => e.id === this.editingExerciseId);
+            if(ex) {
+                ex.name = name;
+                ex.notes = notesInput.value;
+                ex.muscles = [...this.tempNewExMuscles];
+            }
+            this.editingExerciseId = null;
+            document.getElementById('btn-save-exercise').innerText = "+ Aggiungi in Archivio";
+        } else {
+            // Crea nuovo
+            if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) {
+                return alert("Esercizio già esistente!");
+            }
+            this.state.library.push({ 
+                id: Logic.generateId('ex'), 
+                name, 
+                notes: notesInput.value,
+                muscles: [...this.tempNewExMuscles]
+            });
+        }
         
         this.tempNewExMuscles = [];
         this.renderNewExMuscles();
@@ -240,6 +297,23 @@ const App = {
         this.sortLibraryAndRoutines(); this.saveToStorage();
         nameInput.value = ''; notesInput.value = '';
         this.renderLibrary(); this.renderRoutineBuilder();
+    },
+    
+    editLibraryEx(id) {
+        const ex = this.state.library.find(e => e.id === id);
+        if(!ex) return;
+        
+        document.getElementById('new-ex-name').value = ex.name;
+        document.getElementById('new-ex-notes').value = ex.notes || '';
+        this.tempNewExMuscles = [...(ex.muscles || [])];
+        
+        this.editingExerciseId = id;
+        document.getElementById('btn-save-exercise').innerText = "💾 Aggiorna Esercizio";
+        
+        this.renderNewExMuscles();
+        
+        // Scroll in alto alla form di modifica
+        document.getElementById('sub-exercises').scrollIntoView({behavior: 'smooth', block: 'start'});
     },
     updateLibraryEx(id, field, value) {
         const ex = this.state.library.find(e => e.id === id);
@@ -269,10 +343,13 @@ const App = {
         this.state.library.forEach(ex => {
             html += `<div class="card" style="padding:15px; margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <input type="text" value="${ex.name}" onchange="App.updateLibraryEx('${ex.id}', 'name', this.value)" style="font-weight:bold; margin-bottom:0; width:80%">
-                    <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteLibraryEx('${ex.id}')">🗑</button>
+                    <div style="font-weight:bold; width:70%">${ex.name}</div>
+                    <div>
+                        <button class="btn-icon" style="color:var(--warning-color); margin-right: 5px;" onclick="App.editLibraryEx('${ex.id}')">✏️</button>
+                        <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteLibraryEx('${ex.id}')">🗑</button>
+                    </div>
                 </div>
-                <input type="text" value="${ex.notes}" placeholder="Note..." onchange="App.updateLibraryEx('${ex.id}', 'notes', this.value)" style="margin-bottom:0;">
+                <div style="font-size:0.85rem; color:var(--text-muted);">${ex.notes || 'Nessuna nota'}</div>
             </div>`;
         });
         container.innerHTML = html;
@@ -409,9 +486,11 @@ const App = {
             routineId: routine.id,
             routineName: routine.name,
             globalStartTime: Date.now(),
-            exercises: activeExs
+            exercises: activeExs,
+            waterLiters: 0
         };
         
+        document.getElementById('active-water-input').value = '';
         this.saveToStorage(); this.renderWorkoutView(); App.timers.stopRest();
     },
     endActiveWorkout() {
@@ -448,6 +527,10 @@ const App = {
 
         const elapsed = Date.now() - this.state.activeWorkout.globalStartTime;
         this.state.activeWorkout.globalDurationStr = Logic.formatTime(elapsed, true);
+        
+        const waterInput = document.getElementById('active-water-input').value;
+        this.state.activeWorkout.waterLiters = waterInput ? parseFloat(waterInput) : 0;
+
         this.state.history.unshift(this.state.activeWorkout);
         this.state.activeWorkout = null;
         this.timers.stopRest();
@@ -602,7 +685,7 @@ const App = {
 
             let lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
 
-            html += `<div class="card" style="padding:15px; border-color:rgba(14, 165, 233, 0.3);">
+            html += `<div style="margin-bottom:25px; padding-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1);">
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h4 style="color:var(--primary-color); margin:0;">${exName}</h4>
@@ -710,6 +793,7 @@ const App = {
                 </div>
                 <div style="margin-bottom:15px; font-size:0.9rem; color:var(--text-muted)">
                     Durata: <input type="text" value="${w.globalDurationStr}" onchange="App.updateHistoryGlobalTime('${w.id}', this.value)" style="width:100px; padding:6px; margin:0; display:inline-block">
+                    ${w.waterLiters ? `<span style="margin-left: 15px; color:var(--primary-color);">💧 Acqua: ${w.waterLiters}L</span>` : ''}
                 </div>`;
             
             w.exercises.forEach((ex, exIdx) => {
