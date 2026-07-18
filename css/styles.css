@@ -203,29 +203,28 @@ input:focus, select:focus, textarea:focus {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     z-index: 50; 
-    padding: 15px 20px; 
+    padding: 10px 15px; 
     border-bottom: 1px solid rgba(255,255,255,0.05);
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
 }
 .timer-display { 
-    font-size: 3rem; 
+    font-size: 2.2rem; 
     font-weight: 800; 
     font-family: 'Inter', sans-serif; 
     font-variant-numeric: tabular-nums;
     color: #fff; 
     margin: 0;
-    text-shadow: 0 0 25px var(--primary-glow);
-    letter-spacing: -2px;
-    line-height: 1;
+    text-shadow: 0 0 15px var(--primary-glow);
+    letter-spacing: -1px;
 }
-.timer-controls { display: flex; gap: 15px; justify-content: center; width: 100%; }
+.timer-controls { display: flex; gap: 8px; }
 
 .timer-btn {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.1);
     display: flex;
@@ -241,7 +240,7 @@ input:focus, select:focus, textarea:focus {
     transform: scale(0.85); 
     box-shadow: inset 0 4px 10px rgba(0,0,0,0.5); 
 }
-.timer-btn svg { width: 24px; height: 24px; fill: currentColor; }
+.timer-btn svg { width: 18px; height: 18px; fill: currentColor; }
 .timer-btn.play { background: rgba(34, 197, 94, 0.15); color: var(--success-color); border-color: rgba(34, 197, 94, 0.3); }
 .timer-btn.pause { background: rgba(245, 158, 11, 0.15); color: var(--warning-color); border-color: rgba(245, 158, 11, 0.3); }
 .timer-btn.stop { background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: rgba(239, 68, 68, 0.3); }
