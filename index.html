@@ -128,7 +128,7 @@
             
             <div style="margin-top:20px; padding-bottom:20px; border-bottom:1px solid var(--glass-border);">
                 <label style="font-size:0.9rem; font-weight:bold; color:var(--primary-color)">⚖️ Peso Corporeo (kg)</label>
-                <input type="number" step="0.1" id="nutri-weight" placeholder="es. 80.5" oninput="App.validateInput(this, 'float'); App.saveNutritionData()">
+                <input type="number" step="0.1" id="nutri-weight" placeholder="es. 80.5" oninput="App.validateInput(this, 'float')" onchange="App.saveNutritionData()">
                 
                 <div style="background:rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-top:10px; text-align:center; border:1px solid var(--glass-border)">
                     <span style="font-size:0.8rem; color:var(--text-muted)">Stima Massa Grassa (Richiede dati Profilo)</span>
@@ -138,13 +138,13 @@
 
             <div style="margin-top:20px;">
                 <label style="font-size:0.9rem; font-weight:bold; color:var(--warning-color)">🔥 Calorie Totali (kcal)</label>
-                <input type="number" id="nutri-kcal" placeholder="es. 2500" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
+                <input type="number" id="nutri-kcal" placeholder="es. 2500" oninput="App.validateInput(this, 'int')" onchange="App.saveNutritionData()">
                 
                 <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;">Macros (Carbo, Pro, Grassi in g)</label>
                 <div class="input-row">
-                    <input type="number" id="nutri-carbs" placeholder="CHO" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
-                    <input type="number" id="nutri-pro" placeholder="PRO" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
-                    <input type="number" id="nutri-fat" placeholder="FAT" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
+                    <input type="number" id="nutri-carbs" placeholder="CHO" oninput="App.validateInput(this, 'int')" onchange="App.saveNutritionData()">
+                    <input type="number" id="nutri-pro" placeholder="PRO" oninput="App.validateInput(this, 'int')" onchange="App.saveNutritionData()">
+                    <input type="number" id="nutri-fat" placeholder="FAT" oninput="App.validateInput(this, 'int')" onchange="App.saveNutritionData()">
                 </div>
             </div>
         </div>
@@ -172,7 +172,10 @@
         <div class="card" style="border: 1px solid var(--primary-color)">
             <h3 style="color:var(--primary-color)">Account Google</h3>
             <p style="font-size:0.8rem;">I tuoi dati sono sincronizzati automaticamente sul cloud.</p>
-            <button id="btn-logout" class="btn" style="margin-top:10px; background:rgba(255,255,255,0.05)">Esci dall'account</button>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:15px;">
+                <button id="btn-logout" class="btn" style="background:rgba(255,255,255,0.05)">Esci dall'account</button>
+                <button id="btn-delete-account" class="btn btn-danger" style="background:rgba(239, 68, 68, 0.1); color:var(--danger-color); border:1px solid var(--danger-color)">Elimina Account e Dati</button>
+            </div>
         </div>
 
         <div class="card">
@@ -182,7 +185,7 @@
             <div class="input-row">
                 <div style="flex:1">
                     <label style="font-size:0.8rem; color:var(--text-muted)">Altezza (cm)</label>
-                    <input type="number" id="profile-height" placeholder="es. 180" oninput="App.validateInput(this, 'int'); App.saveProfile()">
+                    <input type="number" id="profile-height" placeholder="es. 180" oninput="App.validateInput(this, 'int')" onchange="App.saveProfile()">
                 </div>
                 <div style="flex:1">
                     <label style="font-size:0.8rem; color:var(--text-muted)">Sesso</label>

@@ -45,6 +45,12 @@ const App = {
         document.getElementById('btn-logout').addEventListener('click', () => {
             DB.secureLogOut();
         });
+        
+        document.getElementById('btn-delete-account').addEventListener('click', () => {
+            if(confirm("ATTENZIONE: Sei sicuro di voler ELIMINARE definitivamente il tuo account e tutti i tuoi dati? Questa azione è irreversibile.")) {
+                DB.deleteAccount();
+            }
+        });
     },
 
     async loadDataFromCloud() {
@@ -58,9 +64,20 @@ const App = {
         }
     },
 
-    // Salva nel cloud (Sostituisce il vecchio localStorage)
+    // Salva nel cloud (Debounce per ottimizzare le scritture ed evitare di superare la quota)
+    saveTimeout: null,
     saveToStorage() { 
-        DB.saveUserData(this.state);
+        if (this.saveTimeout) clearTimeout(this.saveTimeout);
+        
+        // Mostra un piccolo indicatore visivo se lo desideri (opzionale)
+        const btnLogout = document.getElementById('btn-logout');
+        if(btnLogout) btnLogout.innerText = "Salvataggio in corso...";
+
+        this.saveTimeout = setTimeout(() => {
+            DB.saveUserData(this.state).then(() => {
+                if(btnLogout) btnLogout.innerText = "Esci dall'account";
+            });
+        }, 1500); // Aspetta 1.5 secondi dall'ultima modifica prima di inviare al cloud
     },
 
     validateInput(input, type) {
