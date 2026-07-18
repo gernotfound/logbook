@@ -1,0 +1,604 @@
+import { Logic } from './logic.js';
+import { DB } from './db.js';
+import { auth, provider, signInWithPopup, onAuthStateChanged } from './firebase-config.js';
+
+const App = {
+    state: {
+        profile: { dob: '', height: '', gender: 'M' },
+        library: [],      
+        routines: [],     
+        activeWorkout: null, 
+        history: [],      
+        nutrition: {}     
+    },
+
+    init() {
+        // Ascolta lo stato di autenticazione Firebase
+        onAuthStateChanged(auth, async (user) => {
+            const authOverlay = document.getElementById('auth-overlay');
+            const mainApp = document.getElementById('app-container');
+            
+            if (user) {
+                // Utente Loggato
+                authOverlay.style.display = 'none';
+                mainApp.style.display = 'block';
+                await this.loadDataFromCloud();
+                
+                document.getElementById('nutri-date').value = new Date().toISOString().split('T')[0];
+                this.timers.initLoop();
+                this.renderAll();
+            } else {
+                // Utente Non Loggato
+                authOverlay.style.display = 'flex';
+                mainApp.style.display = 'none';
+            }
+        });
+        
+        // Collega i bottoni del login/logout
+        document.getElementById('btn-login-google').addEventListener('click', () => {
+            signInWithPopup(auth, provider).catch(error => {
+                console.error("Errore di Login:", error);
+                alert("Errore durante il login con Google.");
+            });
+        });
+        
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            DB.secureLogOut();
+        });
+    },
+
+    async loadDataFromCloud() {
+        const cloudData = await DB.loadUserData();
+        if (cloudData) {
+            this.state = Object.assign(this.state, cloudData);
+            this.sortLibraryAndRoutines();
+        } else {
+            // Struttura iniziale se l'utente è nuovo
+            this.state.profile = { dob: '', height: '', gender: 'M' };
+        }
+    },
+
+    // Salva nel cloud (Sostituisce il vecchio localStorage)
+    saveToStorage() { 
+        DB.saveUserData(this.state);
+    },
+
+    validateInput(input, type) {
+        input.value = Logic.validateInputData(input.value, type);
+    },
+
+    toggleUI(id) {
+        const el = document.getElementById(id);
+        if(el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
+    },
+
+    sortLibraryAndRoutines() {
+        this.state.library.sort((a, b) => a.name.localeCompare(b.name));
+        this.state.routines.sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    // --- NAVIGAZIONE ---
+    switchMainTab(tabName) {
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        document.getElementById('view-' + tabName).classList.add('active');
+        const navs = document.querySelectorAll('.nav-item');
+        if (tabName === 'training') navs[0].classList.add('active');
+        if (tabName === 'nutrition') navs[1].classList.add('active');
+        if (tabName === 'data') navs[2].classList.add('active');
+        this.renderAll();
+    },
+    switchTrainingTab(subTab, btnElement) {
+        document.querySelectorAll('.training-sub-view').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.sub-nav-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById('sub-' + subTab).classList.add('active');
+        btnElement.classList.add('active');
+    },
+
+    // --- TIMERS ---
+    timers: {
+        restStartTime: 0, restAccumulated: 0, restState: 'stopped',
+        initLoop() { 
+            // requestAnimationFrame per performance migliori del timer (Fix Problema 3)
+            const loop = () => {
+                App.timers.updateDisplay();
+                requestAnimationFrame(loop);
+            };
+            requestAnimationFrame(loop);
+        },
+        updateDisplay() {
+            if (this.restState === 'running') {
+                const elapsed = Date.now() - this.restStartTime + this.restAccumulated;
+                document.getElementById('rest-timer-display').innerText = Logic.formatTime(elapsed);
+            }
+            if (App.state.activeWorkout && App.state.activeWorkout.globalStartTime) {
+                const elapsed = Date.now() - App.state.activeWorkout.globalStartTime;
+                document.getElementById('global-timer-display').innerText = Logic.formatTime(elapsed, true);
+            }
+        },
+        startRest() { if(this.restState !== 'running') { this.restStartTime = Date.now(); this.restState = 'running'; } },
+        pauseRest() { if(this.restState === 'running') { this.restAccumulated += (Date.now() - this.restStartTime); this.restState = 'paused'; } },
+        stopRest() { this.restState = 'stopped'; this.restAccumulated = 0; document.getElementById('rest-timer-display').innerText = "00:00"; },
+        resetRest() { this.restAccumulated = 0; this.restStartTime = Date.now(); this.restState = 'running'; }
+    },
+
+    // --- ARCHIVIO ESERCIZI ---
+    createExerciseInLibrary() {
+        const nameInput = document.getElementById('new-ex-name');
+        const notesInput = document.getElementById('new-ex-notes');
+        const name = nameInput.value.trim();
+        if(!name) return alert("Inserisci un nome.");
+        if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) return alert("Esercizio già esistente!");
+
+        this.state.library.push({ id: Logic.generateId('ex'), name, notes: notesInput.value });
+        this.sortLibraryAndRoutines(); this.saveToStorage();
+        nameInput.value = ''; notesInput.value = '';
+        this.renderLibrary(); this.renderRoutineBuilder();
+    },
+    updateLibraryEx(id, field, value) {
+        const ex = this.state.library.find(e => e.id === id);
+        if(!ex) return;
+        if(field === 'name') {
+            if(this.state.library.some(e => e.id !== id && e.name.toLowerCase() === value.trim().toLowerCase())) {
+                alert("Nome già in uso."); return this.renderLibrary();
+            }
+        }
+        ex[field] = value;
+        if(field === 'name') this.sortLibraryAndRoutines();
+        this.saveToStorage(); this.renderLibrary(); this.renderRoutineBuilder();
+    },
+    updateLibraryNotesFromActive(exId, value) {
+        const ex = this.state.library.find(e => e.id === exId);
+        if(ex) { ex.notes = value; this.saveToStorage(); }
+    },
+    deleteLibraryEx(id) {
+        if(confirm("Eliminare questo esercizio? Verrà mostrato come 'Rimosso' nelle vecchie schede.")){
+            this.state.library = this.state.library.filter(e => e.id !== id);
+            this.saveToStorage(); this.renderLibrary(); this.renderRoutineBuilder();
+        }
+    },
+    renderLibrary() {
+        const container = document.getElementById('exercise-library-list');
+        let html = '';
+        this.state.library.forEach(ex => {
+            html += `<div class="card" style="padding:15px; margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <input type="text" value="${ex.name}" onchange="App.updateLibraryEx('${ex.id}', 'name', this.value)" style="font-weight:bold; margin-bottom:0; width:80%">
+                    <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteLibraryEx('${ex.id}')">🗑</button>
+                </div>
+                <input type="text" value="${ex.notes}" placeholder="Note..." onchange="App.updateLibraryEx('${ex.id}', 'notes', this.value)" style="margin-bottom:0;">
+            </div>`;
+        });
+        container.innerHTML = html;
+    },
+
+    // --- BUILDER SCHEDE ---
+    createRoutine() {
+        const name = document.getElementById('routine-name-input').value.trim();
+        if(!name) return alert("Dai un nome alla scheda.");
+        if(this.state.routines.some(r => r.name.toLowerCase() === name.toLowerCase())) return alert("Nome esiste già!");
+        this.state.routines.push({ id: Logic.generateId('rt'), name, exercises: [] });
+        this.sortLibraryAndRoutines(); this.saveToStorage();
+        document.getElementById('routine-name-input').value = '';
+        this.renderRoutineBuilder();
+    },
+    updateRoutineName(id, value) {
+        const r = this.state.routines.find(x => x.id === id);
+        if(!r) return;
+        if(this.state.routines.some(x => x.id !== id && x.name.toLowerCase() === value.trim().toLowerCase())) {
+            alert("Nome già in uso."); return this.renderRoutineBuilder();
+        }
+        r.name = value.trim();
+        this.sortLibraryAndRoutines(); this.saveToStorage(); this.renderRoutineBuilder();
+    },
+    deleteRoutine(id) {
+        if(confirm("Eliminare scheda?")) {
+            this.state.routines = this.state.routines.filter(r => r.id !== id);
+            this.saveToStorage(); this.renderRoutineBuilder();
+        }
+    },
+    addExToRoutine(routineId, exId, setsCount) {
+        const r = this.state.routines.find(x => x.id === routineId);
+        if(r && exId) {
+            r.exercises.push({ exerciseId: exId, setsCount: parseInt(setsCount) || 1 });
+            this.saveToStorage(); this.renderRoutineBuilder();
+        }
+    },
+    removeExFromRoutine(rId, index) {
+        const r = this.state.routines.find(x => x.id === rId);
+        r.exercises.splice(index, 1);
+        this.saveToStorage(); this.renderRoutineBuilder();
+    },
+    moveExInRoutine(rId, index, dir) {
+        const r = this.state.routines.find(x => x.id === rId);
+        if(dir === -1 && index > 0) {
+            [r.exercises[index-1], r.exercises[index]] = [r.exercises[index], r.exercises[index-1]];
+        } else if (dir === 1 && index < r.exercises.length - 1) {
+            [r.exercises[index+1], r.exercises[index]] = [r.exercises[index], r.exercises[index+1]];
+        }
+        this.saveToStorage(); this.renderRoutineBuilder();
+    },
+    updateExSetsInRoutine(rId, index, newSets) {
+        const r = this.state.routines.find(x => x.id === rId);
+        let val = parseInt(newSets);
+        if(val > 0) { r.exercises[index].setsCount = val; this.saveToStorage(); }
+    },
+    renderRoutineBuilder() {
+        const container = document.getElementById('routines-list');
+        let html = '';
+        const exOptions = this.state.library.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+
+        this.state.routines.forEach(r => {
+            html += `<div class="card" style="margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <input type="text" value="${r.name}" onchange="App.updateRoutineName('${r.id}', this.value)" style="font-weight:bold; font-size:1.1rem; margin:0; width:80%">
+                    <button class="btn-icon" style="color:var(--danger-color);" onclick="App.deleteRoutine('${r.id}')">🗑</button>
+                </div>
+                <div style="margin-bottom:15px;">`;
+            
+            r.exercises.forEach((re, idx) => {
+                const exData = this.state.library.find(e => e.id === re.exerciseId);
+                const name = exData ? exData.name : "Esercizio rimosso";
+                html += `<div style="display:flex; align-items:center; justify-content:space-between; font-size:0.9rem; padding:10px 0; border-bottom:1px solid var(--glass-border);">
+                    <div style="flex:2; font-weight:600;">${idx+1}. ${name}</div>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <input type="number" value="${re.setsCount}" min="1" onchange="App.updateExSetsInRoutine('${r.id}', ${idx}, this.value)" style="width:50px; padding:8px; margin:0; text-align:center;">
+                        <span style="color:var(--text-muted); font-size:0.8rem;">serie</span>
+                    </div>
+                    <div style="display:flex; gap:2px; margin-left:10px;">
+                        <button class="btn-icon" onclick="App.moveExInRoutine('${r.id}', ${idx}, -1)">⬆️</button>
+                        <button class="btn-icon" onclick="App.moveExInRoutine('${r.id}', ${idx}, 1)">⬇️</button>
+                        <button class="btn-icon" style="color:var(--danger-color);" onclick="App.removeExFromRoutine('${r.id}', ${idx})">❌</button>
+                    </div>
+                </div>`;
+            });
+
+            html += `</div>
+                <div class="input-row" style="margin-top:10px;">
+                    <select id="sel-ex-${r.id}" style="flex:2; margin:0;"><option disabled selected>Esercizio...</option>${exOptions}</select>
+                    <input type="number" id="sel-set-${r.id}" value="3" min="1" style="flex:1; margin:0;" placeholder="Serie">
+                    <button class="btn btn-primary btn-small" style="margin:0;" onclick="App.addExToRoutine('${r.id}', document.getElementById('sel-ex-${r.id}').value, document.getElementById('sel-set-${r.id}').value)">+ Add</button>
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+        this.renderStartWorkoutSelect();
+    },
+
+    // --- ALLENAMENTO ATTIVO (Sessione) ---
+    renderStartWorkoutSelect() {
+        const sel = document.getElementById('select-routine-to-start');
+        sel.innerHTML = `<option value="" disabled selected>-- Seleziona una Scheda --</option>` +
+            this.state.routines.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    },
+    startWorkout() {
+        if(this.state.activeWorkout) return alert("Hai già un allenamento in corso!");
+        const rId = document.getElementById('select-routine-to-start').value;
+        const routine = this.state.routines.find(r => r.id === rId);
+        if(!routine) return alert("Seleziona una scheda!");
+
+        const activeExs = routine.exercises.map(re => {
+            const sets = [];
+            for(let i=0; i<re.setsCount; i++) sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
+            return { exId: re.exerciseId, sets: sets, sessionNote: '' };
+        });
+
+        this.state.activeWorkout = {
+            id: Logic.generateId('w'),
+            date: new Date().toISOString().split('T')[0],
+            routineName: routine.name,
+            globalStartTime: Date.now(),
+            exercises: activeExs
+        };
+        
+        this.saveToStorage(); this.renderWorkoutView(); App.timers.stopRest();
+    },
+    endActiveWorkout() {
+        if(!confirm("Terminare l'allenamento?")) return;
+        const elapsed = Date.now() - this.state.activeWorkout.globalStartTime;
+        this.state.activeWorkout.globalDurationStr = Logic.formatTime(elapsed, true);
+        this.state.history.unshift(this.state.activeWorkout);
+        this.state.activeWorkout = null;
+        this.timers.stopRest();
+        this.saveToStorage(); this.renderWorkoutView();
+    },
+    
+    // Ricerca testuale degli Esercizi Attivi
+    filterActiveExercises(query) {
+        const resContainer = document.getElementById('active-search-results');
+        if(!query.trim()) { resContainer.style.display = 'none'; resContainer.innerHTML = ''; return; }
+        
+        const q = query.toLowerCase();
+        const filtered = this.state.library.filter(e => e.name.toLowerCase().includes(q));
+        
+        resContainer.style.display = 'block';
+        if(filtered.length === 0) {
+            resContainer.innerHTML = '<div style="padding:12px; color:var(--text-muted)">Nessun esercizio.</div>';
+            return;
+        }
+        
+        let html = '';
+        filtered.forEach(ex => { html += `<div class="search-item" onclick="App.addExerciseToActive('${ex.id}')">${ex.name}</div>`; });
+        resContainer.innerHTML = html;
+    },
+    addExerciseToActive(exId) {
+        if(exId) {
+            this.state.activeWorkout.exercises.push({ exId: exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' });
+            this.saveToStorage(); this.renderActiveWorkout();
+            document.getElementById('active-search-ex').value = '';
+            document.getElementById('active-search-results').style.display = 'none';
+        }
+    },
+    
+    updateActiveSet(exIndex, setId, field, value) {
+        const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
+        if(s) { s[field] = value; this.saveToStorage(); } 
+    },
+    updateActiveSessionNote(exIndex, value) {
+        if(this.state.activeWorkout.exercises[exIndex]) {
+            this.state.activeWorkout.exercises[exIndex].sessionNote = value;
+            this.saveToStorage();
+        }
+    },
+    addSetToActiveEx(exIndex) {
+        this.state.activeWorkout.exercises[exIndex].sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
+        this.saveToStorage(); this.renderActiveWorkout();
+    },
+
+    renderWorkoutView() {
+        const activeContainer = document.getElementById('active-workout-container');
+        const startContainer = document.getElementById('start-workout-container');
+        const topTimer = document.getElementById('top-timer-bar');
+
+        if(this.state.activeWorkout) {
+            activeContainer.style.display = 'block'; startContainer.style.display = 'none'; topTimer.style.display = 'flex';
+            this.renderActiveWorkout();
+        } else {
+            activeContainer.style.display = 'none'; startContainer.style.display = 'block'; topTimer.style.display = 'none';
+        }
+        this.renderHistory();
+    },
+
+    renderActiveWorkout() {
+        if(!this.state.activeWorkout) return;
+        document.getElementById('active-routine-name').innerText = this.state.activeWorkout.routineName;
+
+        const container = document.getElementById('active-exercises-list');
+        let html = '';
+
+        this.state.activeWorkout.exercises.forEach((exItem, exIndex) => {
+            const libEx = this.state.library.find(l => l.id === exItem.exId);
+            const exName = libEx ? libEx.name : "Esercizio Rimosso";
+            const exNotes = libEx ? libEx.notes : "";
+
+            const pastWorkouts = [];
+            for(let w of this.state.history) {
+                let ex = w.exercises.find(e => e.exId === exItem.exId);
+                if(ex) pastWorkouts.push({ date: w.date, sets: ex.sets, note: ex.sessionNote });
+                if(pastWorkouts.length === 2) break; 
+            }
+            
+            let histHtml = '';
+            if (pastWorkouts.length === 0) {
+                histHtml = '<div style="font-size:0.8rem; color:var(--text-muted)">Nessun dato precedente trovato.</div>';
+            } else {
+                pastWorkouts.forEach(pw => {
+                    histHtml += `<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed var(--glass-border);">
+                        <strong style="font-size:0.85rem; color:var(--primary-color)">${pw.date}</strong><br>`;
+                    pw.sets.forEach((s, idx) => {
+                        histHtml += `<span style="font-size:0.85rem; margin-right:15px; display:inline-block;">S${idx+1}: <b>${s.kg}</b> kg x <b>${s.reps}</b></span>`;
+                    });
+                    histHtml += `</div>`;
+                });
+            }
+
+            let lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
+
+            html += `<div class="card" style="padding:15px; border-color:rgba(14, 165, 233, 0.3);">
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h4 style="color:var(--primary-color); margin:0;">${exName}</h4>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-small" style="background:rgba(14, 165, 233, 0.1); border:1px solid var(--primary-color); color:var(--primary-color); border-radius:8px;" onclick="App.toggleUI('hist-${exItem.exId}-${exIndex}')">📊 Storico</button>
+                        <button class="btn-small" style="background:rgba(255, 255, 255, 0.05); border:1px solid var(--glass-border); color:var(--text-muted); border-radius:8px;" onclick="App.toggleUI('setup-${exItem.exId}-${exIndex}')">📝 Setup</button>
+                    </div>
+                </div>
+
+                <div id="hist-${exItem.exId}-${exIndex}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);">
+                    <h5 style="margin-bottom:8px;">Ultimi 2 Allenamenti:</h5>
+                    ${histHtml}
+                </div>
+                
+                <div id="setup-${exItem.exId}-${exIndex}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);">
+                    <h5 style="margin-bottom:8px; color:var(--text-muted)">Modifica Setup (Globale):</h5>
+                    <input type="text" value="${exNotes}" placeholder="Note di setup (es. altezza sedile...)" onchange="App.updateLibraryNotesFromActive('${exItem.exId}', this.value)" style="margin:0;">
+                </div>
+
+                ${lastNote ? `<div style="background:rgba(239, 68, 68, 0.1); padding:10px; border-radius:8px; border-left:3px solid var(--danger-color); font-size:0.85rem; margin-bottom:15px; color:#fca5a5;">⚠️ <b>Note scorsa volta:</b> ${lastNote}</div>` : ''}
+                `;
+            
+            exItem.sets.forEach((s, sIndex) => {
+                html += `
+                <div class="set-row">
+                    <div style="font-size:0.8rem; margin-bottom:8px; font-weight:600; color:var(--text-main)">Serie ${sIndex + 1}</div>
+                    <div class="set-controls">
+                        <input type="number" step="0.25" placeholder="Kg" value="${s.kg}" oninput="App.validateInput(this, 'float')" onchange="App.updateActiveSet(${exIndex}, '${s.id}', 'kg', this.value)" style="margin:0">
+                        <input type="number" placeholder="Reps" value="${s.reps}" oninput="App.validateInput(this, 'int')" onchange="App.updateActiveSet(${exIndex}, '${s.id}', 'reps', this.value)" style="margin:0">
+                    </div>
+                </div>`;
+            });
+
+            html += `<button class="btn btn-small" style="border:1px dashed var(--glass-border); background:rgba(255,255,255,0.05)" onclick="App.addSetToActiveEx(${exIndex})">+ Aggiungi Serie</button>
+                <textarea placeholder="Note per la prossima volta (dolori, feedback)..." onchange="App.updateActiveSessionNote(${exIndex}, this.value)" style="width:100%; padding:12px; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); border-radius:12px; margin-top:15px; font-size:0.9rem; resize:vertical;">${exItem.sessionNote || ''}</textarea>
+            </div>`;
+        });
+        container.innerHTML = html;
+    },
+
+    // --- STORICO ALLENAMENTI ---
+    updateHistory(wId, exIndex, setId, field, value) {
+        const w = this.state.history.find(x => x.id === wId);
+        if(w && w.exercises[exIndex]) {
+            const s = w.exercises[exIndex].sets.find(x => x.id === setId);
+            if(s) { s[field] = value; this.saveToStorage(); }
+        }
+    },
+    updateHistoryGlobalTime(wId, val) {
+        const w = this.state.history.find(x => x.id === wId);
+        if(w) { w.globalDurationStr = val; this.saveToStorage(); }
+    },
+    deleteHistoryRecord(wId) {
+        if(confirm("Eliminare definitivamente questo allenamento dallo storico?")) {
+            this.state.history = this.state.history.filter(x => x.id !== wId);
+            this.saveToStorage(); this.renderHistory();
+        }
+    },
+    renderHistory() {
+        const container = document.getElementById('history-container');
+        if(this.state.history.length === 0) { container.innerHTML = "<p>Nessun allenamento salvato.</p>"; return; }
+
+        let html = '';
+        this.state.history.forEach(w => {
+            html += `<div class="card" style="border-left: 4px solid var(--primary-dark);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                    <h3 style="margin:0; font-size:1.1rem">${w.date} - ${w.routineName}</h3>
+                    <button class="btn-icon" style="color:var(--danger-color);" onclick="App.deleteHistoryRecord('${w.id}')">🗑</button>
+                </div>
+                <div style="margin-bottom:15px; font-size:0.9rem; color:var(--text-muted)">
+                    Durata: <input type="text" value="${w.globalDurationStr}" onchange="App.updateHistoryGlobalTime('${w.id}', this.value)" style="width:100px; padding:6px; margin:0; display:inline-block">
+                </div>`;
+            
+            w.exercises.forEach((ex, exIdx) => {
+                const libEx = this.state.library.find(l => l.id === ex.exId);
+                const name = libEx ? libEx.name : "Esercizio rimosso";
+                html += `<div style="margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid var(--glass-border)">
+                    <div style="font-weight:600; color:var(--primary-color); margin-bottom:8px;">${name}</div>`;
+                
+                ex.sets.forEach((s, sIdx) => {
+                    html += `<div style="display:flex; gap:8px; margin-bottom:5px; align-items:center;">
+                        <span style="width:30px; font-size:0.8rem; color:var(--text-muted); font-weight:600">S${sIdx+1}</span>
+                        <input type="number" step="0.25" value="${s.kg}" style="padding:8px; margin:0; flex:1;" onchange="App.updateHistory('${w.id}', ${exIdx}, '${s.id}', 'kg', this.value)"> <span style="font-size:0.8rem">kg</span>
+                        <input type="number" value="${s.reps}" style="padding:8px; margin:0; flex:1;" onchange="App.updateHistory('${w.id}', ${exIdx}, '${s.id}', 'reps', this.value)"> <span style="font-size:0.8rem">reps</span>
+                    </div>`;
+                });
+                html += `</div>`;
+            });
+            html += `</div>`;
+        });
+        container.innerHTML = html;
+    },
+
+    // --- NUTRIZIONE ---
+    saveProfile() {
+        this.state.profile.dob = document.getElementById('profile-dob').value;
+        this.state.profile.height = document.getElementById('profile-height').value;
+        this.state.profile.gender = document.getElementById('profile-gender').value;
+        this.saveToStorage(); this.renderNutritionDisplay(); 
+    },
+    
+    loadNutritionDate(dateStr) {
+        if (!dateStr) return;
+        const data = this.state.nutrition[dateStr] || { weight: '', kcal: '', carbs: '', pro: '', fat: '' };
+        document.getElementById('nutri-weight').value = data.weight;
+        document.getElementById('nutri-kcal').value = data.kcal;
+        document.getElementById('nutri-carbs').value = data.carbs;
+        document.getElementById('nutri-pro').value = data.pro;
+        document.getElementById('nutri-fat').value = data.fat;
+        this.renderNutritionDisplay();
+    },
+    saveNutritionData() {
+        const dateStr = document.getElementById('nutri-date').value;
+        if(!dateStr) return;
+        this.state.nutrition[dateStr] = {
+            weight: document.getElementById('nutri-weight').value, kcal: document.getElementById('nutri-kcal').value,
+            carbs: document.getElementById('nutri-carbs').value, pro: document.getElementById('nutri-pro').value, fat: document.getElementById('nutri-fat').value
+        };
+        this.saveToStorage(); this.renderNutritionDisplay();
+    },
+    updateNutritionHistory(dateStr, field, value) {
+        if(this.state.nutrition[dateStr]) {
+            this.state.nutrition[dateStr][field] = value;
+            this.saveToStorage();
+            if(dateStr === document.getElementById('nutri-date').value) document.getElementById('nutri-' + field).value = value;
+            this.renderNutritionDisplay();
+        }
+    },
+    deleteNutritionDay(dateStr) {
+        if(confirm("Eliminare i dati di questo giorno?")) {
+            delete this.state.nutrition[dateStr]; this.saveToStorage();
+            if(dateStr === document.getElementById('nutri-date').value) this.loadNutritionDate(dateStr); 
+            this.renderNutritionDisplay();
+        }
+    },
+
+    renderNutritionDisplay() {
+        const currentWeight = document.getElementById('nutri-weight').value;
+        const bf = Logic.calculateBodyFat(currentWeight, this.state.profile);
+        document.getElementById('current-bf-display').innerText = bf ? `${bf} %` : '-- %';
+
+        const historyContainer = document.getElementById('nutrition-history-list');
+        const sortedDates = Object.keys(this.state.nutrition).sort((a,b) => new Date(b) - new Date(a));
+        let histHtml = '';
+        
+        if(sortedDates.length === 0) { histHtml = "<p>Nessun dato registrato.</p>"; } 
+        else {
+            sortedDates.forEach(d => {
+                const day = this.state.nutrition[d];
+                const dayBf = Logic.calculateBodyFat(day.weight, this.state.profile) || '--';
+                histHtml += `<div class="card" style="padding:15px; margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                        <h4 style="margin:0; color:var(--primary-color)">${d}</h4>
+                        <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteNutritionDay('${d}')">🗑</button>
+                    </div>
+                    <div class="input-row" style="margin-bottom:10px;">
+                        <input type="number" step="0.1" value="${day.weight}" onchange="App.updateNutritionHistory('${d}', 'weight', this.value)" style="padding:10px; margin:0;" placeholder="Kg"> <span style="font-size:0.8rem">kg</span>
+                        <input type="number" value="${day.kcal}" onchange="App.updateNutritionHistory('${d}', 'kcal', this.value)" style="padding:10px; margin:0;" placeholder="Kcal"> <span style="font-size:0.8rem">kcal</span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; background:rgba(0,0,0,0.2); padding:8px; border-radius:8px;">
+                        <span>Macros: C ${day.carbs||0} | P ${day.pro||0} | F ${day.fat||0}</span><span style="font-weight:bold; color:var(--text-main)">BF: ${dayBf}%</span>
+                    </div>
+                </div>`;
+            });
+        }
+        historyContainer.innerHTML = histHtml;
+        
+        // Passa l'array di oggetti nutrizione ordinato cronologicamente (dal più vecchio al più nuovo)
+        const chronoData = sortedDates.reverse().map(d => ({ date: d, ...this.state.nutrition[d] }));
+        this.renderTDEE(chronoData); 
+    },
+    
+    renderTDEE(chronoData) {
+        const resultBox = document.getElementById('tdee-result');
+        const tdeeCalc = Logic.calculateTDEE(chronoData);
+        
+        if (tdeeCalc.error) { 
+            resultBox.innerHTML = `<h3>-- kcal</h3><span>${tdeeCalc.message}</span>`; 
+            return; 
+        }
+
+        resultBox.innerHTML = `<h3 style="font-size:2rem; color:var(--success-color); margin-bottom:5px;">${tdeeCalc.tdee} kcal</h3>
+            <span style="font-weight:600">TDEE Stimato</span>
+            <div style="margin-top:15px; font-size:0.85rem; color:var(--text-muted); background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; text-align:left;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <span>Media Kcal (${tdeeCalc.daysTracked}gg):</span> 
+                    <strong style="color:var(--text-main)">${tdeeCalc.avgKcal}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Trend Peso (${tdeeCalc.timeSpanDays}gg):</span> 
+                    <strong style="color:${tdeeCalc.weightDiff > 0 ? 'var(--danger-color)' : 'var(--success-color)'}">${tdeeCalc.weightDiff > 0 ? '+'+tdeeCalc.weightDiff : tdeeCalc.weightDiff} kg</strong>
+                </div>
+            </div>`;
+    },
+
+    renderAll() {
+        document.getElementById('profile-dob').value = this.state.profile.dob || '';
+        document.getElementById('profile-height').value = this.state.profile.height || '';
+        document.getElementById('profile-gender').value = this.state.profile.gender || 'M';
+
+        this.renderLibrary(); this.renderRoutineBuilder(); this.renderWorkoutView();
+        this.loadNutritionDate(document.getElementById('nutri-date').value);
+    }
+};
+
+window.App = App; // Esponi globale per poter essere chiamato dall'HTML (onClick)
+window.onload = () => App.init();

@@ -3,112 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Advanced Fitness Tracker Pro</title>
-    <style>
-        /* =========================================
-           CSS: VARIABILI E STILI GLOBALI
-           ========================================= */
-        :root {
-            --bg-color: #121212;
-            --surface-color: #1e1e1e;
-            --surface-light: #2c2c2c;
-            --primary-color: #03dac6;
-            --primary-dark: #00a896;
-            --text-main: #ffffff;
-            --text-muted: #b3b3b3;
-            --danger-color: #cf6679;
-            --warning-color: #f6c23e;
-            --success-color: #4bb543;
-            --border-radius: 12px;
-            --spacing: 16px;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 70px; -webkit-tap-highlight-color: transparent; }
-        #app-container { max-width: 600px; margin: 0 auto; position: relative; min-height: 100vh; }
-        
-        h1, h2, h3, h4, h5 { color: var(--text-main); margin-bottom: 10px; }
-        p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; margin-bottom: 10px;}
-
-        /* Viste (Tab Principali) */
-        .view-section { display: none; padding: var(--spacing); animation: fadeIn 0.3s ease; }
-        .view-section.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* Sottomenu in Training */
-        .sub-nav { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
-        .sub-nav-btn { flex: 1; min-width: 100px; background: var(--surface-color); border: 1px solid #444; color: var(--text-muted); padding: 10px; border-radius: 20px; text-align: center; cursor: pointer; font-size: 0.9rem; font-weight: bold; transition: 0.2s; }
-        .sub-nav-btn.active { background: var(--primary-color); color: #000; border-color: var(--primary-color); }
-        .training-sub-view { display: none; }
-        .training-sub-view.active { display: block; animation: fadeIn 0.2s; }
-
-        /* Card components */
-        .card { background: var(--surface-color); border-radius: var(--border-radius); padding: var(--spacing); margin-bottom: var(--spacing); box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-
-        /* Form & Input */
-        input[type="text"], input[type="number"], input[type="date"], select, textarea {
-            width: 100%; padding: 12px; margin-bottom: 10px; background: var(--surface-light);
-            border: 1px solid #444; color: var(--text-main); border-radius: 8px; font-size: 1rem;
-        }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary-color); }
-        .input-row { display: flex; gap: 10px; align-items: center;}
-
-        /* Pulsanti */
-        .btn { background: var(--surface-light); color: var(--text-main); border: none; padding: 12px 16px; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 10px; transition: background 0.2s; }
-        .btn:active { background: #444; }
-        .btn-primary { background: var(--primary-color); color: #000; }
-        .btn-primary:active { background: var(--primary-dark); }
-        .btn-danger { background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
-        .btn-success { background: var(--success-color); color: #fff; }
-        .btn-small { padding: 6px 10px; font-size: 0.85rem; width: auto; margin-bottom:0;}
-        .btn-icon { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; padding: 5px; }
-
-        /* Stili Allenamento Attivo */
-        .set-row { background: var(--surface-light); padding: 10px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--primary-color); }
-        .set-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } /* Solo 2 colonne ora (Kg e Reps) */
-
-        /* Top Rest Timer Bar */
-        #top-timer-bar {
-            display: none; position: sticky; top: 0; left: 0; width: 100%; background: #000; z-index: 50; 
-            padding: 10px 15px; border-bottom: 2px solid var(--primary-color);
-            align-items: center; justify-content: space-between;
-        }
-        .timer-display { font-size: 2.2rem; font-weight: bold; font-family: monospace; color: var(--primary-color); margin: 0;}
-        .timer-controls { display: flex; gap: 8px; }
-
-        /* Global Timer Bottom */
-        #global-timer-bar { background: #111; padding: 15px; border-radius: 8px; text-align: center; margin-top: 20px; border: 1px solid #333; }
-
-        /* Autocomplete Search Results */
-        #active-search-results { max-height: 200px; overflow-y: auto; background: var(--bg-color); border-radius: 8px; border: 1px solid #444; display: none; }
-        .search-item { padding: 12px; border-bottom: 1px solid #333; cursor: pointer; font-size: 0.95rem; }
-        .search-item:last-child { border-bottom: none; }
-        .search-item:active { background: var(--surface-light); }
-
-        /* Schermata Avvio */
-        #startup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
-        /* Bottom Navigation */
-        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--surface-color); border-top: 1px solid #333; display: flex; justify-content: center; z-index: 100; }
-        .nav-container { width: 100%; max-width: 600px; display: flex; }
-        .nav-item { flex: 1; padding: 12px 0; text-align: center; color: var(--text-muted); cursor: pointer; font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .nav-item.active { color: var(--primary-color); }
-    </style>
+    <title>GymTracker Pro</title>
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
-<!-- SCHERMATA DI AVVIO -->
-<div id="startup-overlay">
-    <h1 style="color:var(--primary-color); text-align:center;">Fitness App Pro</h1>
-    <p style="text-align:center; margin-bottom:30px;">Seleziona il file di salvataggio per caricare i tuoi dati.</p>
-    <div style="width:100%; max-width:400px;">
-        <input type="file" id="startup-import-file" accept=".json" style="display:none" onchange="App.handleStartupImport(event)">
-        <button class="btn btn-primary" onclick="document.getElementById('startup-import-file').click()">📂 Importa File JSON</button>
-        <p style="text-align:center; margin:15px 0;">oppure</p>
-        <button class="btn" onclick="App.closeStartupOverlay()">Inizia / Continua con Dati Locali ➔</button>
+<!-- OVERLAY DI AUTENTICAZIONE -->
+<div id="auth-overlay">
+    <div style="text-align: center; max-width: 400px; padding: 30px; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+        <h1 style="color:var(--primary-color); margin-bottom: 10px;">GymTracker Pro</h1>
+        <p style="margin-bottom:30px;">Accedi per sincronizzare i tuoi allenamenti sul cloud e renderli disponibili su ogni dispositivo.</p>
+        <button id="btn-login-google" class="btn btn-primary" style="font-size: 1.1rem; padding: 15px;">
+            <svg style="width:20px; height:20px; margin-right:10px; fill:currentColor" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Accedi con Google
+        </button>
     </div>
 </div>
 
-<div id="app-container">
+<!-- OVERLAY DI SINCRONIZZAZIONE (Logout sicuro) -->
+<div id="sync-overlay">
+    <div class="spinner"></div>
+    <p style="font-weight:bold; color:var(--primary-color);">Sincronizzazione in corso...</p>
+    <p style="font-size:0.8rem">Attendere, non chiudere l'app.</p>
+</div>
+
+<div id="app-container" style="display:none;">
 
     <!-- TOP TIMER BAR -->
     <div id="top-timer-bar">
@@ -143,15 +64,15 @@
                     
                     <div id="active-exercises-list"></div>
                     
-                    <div style="margin-top:20px; padding-top:20px; border-top:1px solid #444;">
-                        <h4>Aggiungi Esercizio</h4>
+                    <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--glass-border);">
+                        <h4>Aggiungi Esercizio Extra</h4>
                         <input type="text" id="active-search-ex" placeholder="Cerca esercizio da aggiungere..." oninput="App.filterActiveExercises(this.value)" autocomplete="off">
                         <div id="active-search-results"></div>
                     </div>
 
                     <div id="global-timer-bar">
                         <div style="font-size:0.9rem; color:var(--text-muted)">Durata Allenamento Globale</div>
-                        <div class="timer-display" id="global-timer-display" style="font-size:1.5rem; margin:10px 0;">00:00:00</div>
+                        <div class="timer-display" id="global-timer-display" style="font-size:1.8rem; margin:10px 0;">00:00:00</div>
                         <button class="btn btn-success" onclick="App.endActiveWorkout()">✅ Termina Sessione</button>
                     </div>
                 </div>
@@ -178,7 +99,7 @@
                 <input type="text" id="routine-name-input" placeholder="Nome Scheda (es. Push Day, Univoco)">
                 <button class="btn btn-primary" onclick="App.createRoutine()">💾 Salva Nuova Scheda</button>
             </div>
-            <h3>Archivio Schede (A-Z)</h3>
+            <h3 style="margin-top:20px;">Archivio Schede (A-Z)</h3>
             <div id="routines-list"></div>
         </div>
 
@@ -190,7 +111,7 @@
                 <input type="text" id="new-ex-notes" placeholder="Note Setup (es. Inclinazione panca)">
                 <button class="btn btn-primary" onclick="App.createExerciseInLibrary()">+ Aggiungi in Archivio</button>
             </div>
-            <h3>Lista Esercizi (A-Z)</h3>
+            <h3 style="margin-top:20px;">Lista Esercizi (A-Z)</h3>
             <div id="exercise-library-list"></div>
         </div>
     </div>
@@ -205,21 +126,21 @@
             <h3>Registro di Oggi</h3>
             <input type="date" id="nutri-date" onchange="App.loadNutritionDate(this.value)">
             
-            <div style="margin-top:15px; padding-bottom:15px; border-bottom:1px solid #333;">
+            <div style="margin-top:20px; padding-bottom:20px; border-bottom:1px solid var(--glass-border);">
                 <label style="font-size:0.9rem; font-weight:bold; color:var(--primary-color)">⚖️ Peso Corporeo (kg)</label>
                 <input type="number" step="0.1" id="nutri-weight" placeholder="es. 80.5" oninput="App.validateInput(this, 'float'); App.saveNutritionData()">
                 
-                <div style="background:var(--bg-color); padding:10px; border-radius:8px; margin-top:5px; text-align:center;">
+                <div style="background:rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-top:10px; text-align:center; border:1px solid var(--glass-border)">
                     <span style="font-size:0.8rem; color:var(--text-muted)">Stima Massa Grassa (Richiede dati Profilo)</span>
-                    <h3 id="current-bf-display" style="color:var(--primary-color); margin:5px 0;">-- %</h3>
+                    <h3 id="current-bf-display" style="color:var(--primary-color); margin:5px 0; font-size:1.8rem">-- %</h3>
                 </div>
             </div>
 
-            <div style="margin-top:15px;">
+            <div style="margin-top:20px;">
                 <label style="font-size:0.9rem; font-weight:bold; color:var(--warning-color)">🔥 Calorie Totali (kcal)</label>
                 <input type="number" id="nutri-kcal" placeholder="es. 2500" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
                 
-                <label style="font-size:0.8rem;">Macros (Carbo, Pro, Grassi in g)</label>
+                <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;">Macros (Carbo, Pro, Grassi in g)</label>
                 <div class="input-row">
                     <input type="number" id="nutri-carbs" placeholder="CHO" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
                     <input type="number" id="nutri-pro" placeholder="PRO" oninput="App.validateInput(this, 'int'); App.saveNutritionData()">
@@ -228,15 +149,15 @@
             </div>
         </div>
 
-        <div class="card">
-            <h3>TDEE Dinamico</h3>
-            <div id="tdee-result" style="background:var(--surface-light); padding:15px; border-radius:8px; text-align:center;">
+        <div class="card" style="border-color: rgba(34, 197, 94, 0.4);">
+            <h3>Calcolo TDEE Dinamico</h3>
+            <div id="tdee-result" style="text-align:center; padding:10px 0;">
                 <h3>-- kcal</h3>
                 <span>Raccogliendo dati... (richiesti min. 7 giorni)</span>
             </div>
         </div>
 
-        <h3>Archivio Nutrizione</h3>
+        <h3 style="margin-top:30px;">Archivio Nutrizione</h3>
         <p>Modifica le registrazioni passate.</p>
         <div id="nutrition-history-list"></div>
     </div>
@@ -246,23 +167,31 @@
          VISTA 3: DATI PERSONALI & EXPORT
          ========================================= -->
     <div id="view-data" class="view-section">
-        <h2>⚙️ Profilo & Dati</h2>
+        <h2>⚙️ Impostazioni</h2>
+        
+        <div class="card" style="border: 1px solid var(--primary-color)">
+            <h3 style="color:var(--primary-color)">Account Google</h3>
+            <p style="font-size:0.8rem;">I tuoi dati sono sincronizzati automaticamente sul cloud.</p>
+            <button id="btn-logout" class="btn" style="margin-top:10px; background:rgba(255,255,255,0.05)">Esci dall'account</button>
+        </div>
+
         <div class="card">
             <h3>Dati Biometrici</h3>
             <label style="font-size:0.8rem; color:var(--text-muted)">Data di Nascita</label>
             <input type="date" id="profile-dob" onchange="App.saveProfile()">
             <div class="input-row">
-                <div style="flex:1"><label style="font-size:0.8rem; color:var(--text-muted)">Altezza (cm)</label><input type="number" id="profile-height" placeholder="es. 180" oninput="App.validateInput(this, 'int'); App.saveProfile()"></div>
-                <div style="flex:1"><label style="font-size:0.8rem; color:var(--text-muted)">Sesso</label><select id="profile-gender" onchange="App.saveProfile()"><option value="M">Uomo</option><option value="F">Donna</option></select></div>
+                <div style="flex:1">
+                    <label style="font-size:0.8rem; color:var(--text-muted)">Altezza (cm)</label>
+                    <input type="number" id="profile-height" placeholder="es. 180" oninput="App.validateInput(this, 'int'); App.saveProfile()">
+                </div>
+                <div style="flex:1">
+                    <label style="font-size:0.8rem; color:var(--text-muted)">Sesso</label>
+                    <select id="profile-gender" onchange="App.saveProfile()">
+                        <option value="M">Uomo</option>
+                        <option value="F">Donna</option>
+                    </select>
+                </div>
             </div>
-        </div>
-        <div class="card">
-            <h3>Backup Dati</h3>
-            <button class="btn btn-primary" onclick="App.exportData()">💾 Scarica File JSON</button>
-        </div>
-        <div class="card" style="border: 1px solid var(--danger-color)">
-            <h3 style="color: var(--danger-color)">Danger Zone</h3>
-            <button class="btn btn-danger" onclick="App.clearAllData()">🗑 Cancella tutti i dati dal dispositivo</button>
         </div>
     </div>
 
@@ -271,639 +200,25 @@
         <div class="nav-container">
             <div class="nav-item active" onclick="App.switchMainTab('training')"><span>🏋️</span><span>Training</span></div>
             <div class="nav-item" onclick="App.switchMainTab('nutrition')"><span>🍏</span><span>Nutrizione</span></div>
-            <div class="nav-item" onclick="App.switchMainTab('data')"><span>⚙️</span><span>Dati</span></div>
+            <div class="nav-item" onclick="App.switchMainTab('data')"><span>⚙️</span><span>Impostazioni</span></div>
         </div>
     </nav>
 
 </div>
 
+<!-- Service Worker Registration -->
 <script>
-const App = {
-    storageKey: 'fitness_pro_data_v3', // Aggiornata key per evitare conflitti con strutture vecchie
-    
-    state: {
-        profile: { dob: '', height: '', gender: 'M' },
-        library: [],      
-        routines: [],     
-        activeWorkout: null, 
-        history: [],      
-        nutrition: {}     
-    },
-
-    init() {
-        this.loadFromStorage();
-        if(!this.state.profile) this.state.profile = { dob: '', height: '', gender: 'M' };
-        document.getElementById('nutri-date').value = new Date().toISOString().split('T')[0];
-        this.timers.initLoop();
-    },
-
-    handleStartupImport(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const imported = JSON.parse(e.target.result);
-                if(imported.library !== undefined) { 
-                    this.state = Object.assign(this.state, imported);
-                    this.sortLibraryAndRoutines();
-                    this.saveToStorage();
-                    this.closeStartupOverlay();
-                    alert("Dati caricati con successo!");
-                } else { alert("Formato file non valido."); }
-            } catch (err) { alert("Errore nella lettura del JSON."); }
-        };
-        reader.readAsText(file);
-    },
-    closeStartupOverlay() {
-        document.getElementById('startup-overlay').style.display = 'none';
-        this.renderAll();
-    },
-
-    saveToStorage() { localStorage.setItem(this.storageKey, JSON.stringify(this.state)); },
-    loadFromStorage() {
-        const saved = localStorage.getItem(this.storageKey);
-        if (saved) { try { this.state = Object.assign(this.state, JSON.parse(saved)); } catch(e) {} }
-    },
-    generateId(prefix) { return prefix + '_' + Math.random().toString(36).substr(2, 9); },
-
-    validateInput(input, type) {
-        if(input.value === '') return;
-        if(type === 'int') {
-            input.value = Math.abs(parseInt(input.value.replace(/[^0-9]/g, ''), 10)) || '';
-        } else if(type === 'float') {
-            let val = parseFloat(input.value);
-            if(val < 0) input.value = Math.abs(val);
-        }
-    },
-    toggleUI(id) {
-        const el = document.getElementById(id);
-        if(el) el.style.display = (el.style.display === 'none') ? 'block' : 'none';
-    },
-
-    sortLibraryAndRoutines() {
-        this.state.library.sort((a, b) => a.name.localeCompare(b.name));
-        this.state.routines.sort((a, b) => a.name.localeCompare(b.name));
-    },
-
-    // --- NAVIGAZIONE ---
-    switchMainTab(tabName) {
-        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        document.getElementById('view-' + tabName).classList.add('active');
-        const navs = document.querySelectorAll('.nav-item');
-        if (tabName === 'training') navs[0].classList.add('active');
-        if (tabName === 'nutrition') navs[1].classList.add('active');
-        if (tabName === 'data') navs[2].classList.add('active');
-        this.renderAll();
-    },
-    switchTrainingTab(subTab, btnElement) {
-        document.querySelectorAll('.training-sub-view').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.sub-nav-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById('sub-' + subTab).classList.add('active');
-        btnElement.classList.add('active');
-    },
-
-    // --- TIMERS ---
-    timers: {
-        restStartTime: 0, restAccumulated: 0, restState: 'stopped',
-        initLoop() { setInterval(() => App.timers.updateDisplay(), 1000); },
-        updateDisplay() {
-            if (this.restState === 'running') {
-                const elapsed = Date.now() - this.restStartTime + this.restAccumulated;
-                document.getElementById('rest-timer-display').innerText = this.formatTime(elapsed);
-            }
-            if (App.state.activeWorkout && App.state.activeWorkout.globalStartTime) {
-                const elapsed = Date.now() - App.state.activeWorkout.globalStartTime;
-                document.getElementById('global-timer-display').innerText = this.formatTime(elapsed, true);
-            }
-        },
-        startRest() { if(this.restState !== 'running') { this.restStartTime = Date.now(); this.restState = 'running'; } },
-        pauseRest() { if(this.restState === 'running') { this.restAccumulated += (Date.now() - this.restStartTime); this.restState = 'paused'; } },
-        stopRest() { this.restState = 'stopped'; this.restAccumulated = 0; document.getElementById('rest-timer-display').innerText = "00:00"; },
-        resetRest() { this.restAccumulated = 0; this.restStartTime = Date.now(); this.restState = 'running'; this.updateDisplay(); },
-        formatTime(ms, showHours=false) {
-            let totalSec = Math.floor(ms / 1000);
-            let h = Math.floor(totalSec / 3600); let m = Math.floor((totalSec % 3600) / 60); let s = totalSec % 60;
-            let p = n => n.toString().padStart(2, '0');
-            return showHours ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
-        }
-    },
-
-    // --- ARCHIVIO ESERCIZI ---
-    createExerciseInLibrary() {
-        const nameInput = document.getElementById('new-ex-name');
-        const notesInput = document.getElementById('new-ex-notes');
-        const name = nameInput.value.trim();
-        if(!name) return alert("Inserisci un nome.");
-        if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) return alert("Esercizio già esistente!");
-
-        this.state.library.push({ id: this.generateId('ex'), name, notes: notesInput.value });
-        this.sortLibraryAndRoutines(); this.saveToStorage();
-        nameInput.value = ''; notesInput.value = '';
-        this.renderLibrary(); this.renderRoutineBuilder();
-    },
-    updateLibraryEx(id, field, value) {
-        const ex = this.state.library.find(e => e.id === id);
-        if(!ex) return;
-        if(field === 'name') {
-            if(this.state.library.some(e => e.id !== id && e.name.toLowerCase() === value.trim().toLowerCase())) {
-                alert("Nome già in uso."); return this.renderLibrary();
-            }
-        }
-        ex[field] = value;
-        if(field === 'name') this.sortLibraryAndRoutines();
-        this.saveToStorage(); this.renderLibrary(); this.renderRoutineBuilder();
-    },
-    updateLibraryNotesFromActive(exId, value) {
-        // Chiamato dall'allenamento attivo: aggiorna solo lo storage senza ricaricare la pagina perdendo focus
-        const ex = this.state.library.find(e => e.id === exId);
-        if(ex) { ex.notes = value; this.saveToStorage(); }
-    },
-    deleteLibraryEx(id) {
-        if(confirm("Eliminare questo esercizio? Verrà mostrato come 'Rimosso' nelle vecchie schede.")){
-            this.state.library = this.state.library.filter(e => e.id !== id);
-            this.saveToStorage(); this.renderLibrary(); this.renderRoutineBuilder();
-        }
-    },
-    renderLibrary() {
-        const container = document.getElementById('exercise-library-list');
-        let html = '';
-        this.state.library.forEach(ex => {
-            html += `<div style="background:var(--surface-light); padding:10px; margin-bottom:10px; border-radius:8px; border:1px solid #444;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                    <input type="text" value="${ex.name}" onchange="App.updateLibraryEx('${ex.id}', 'name', this.value)" style="font-weight:bold; margin-bottom:0; width:85%">
-                    <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteLibraryEx('${ex.id}')">🗑</button>
-                </div>
-                <input type="text" value="${ex.notes}" placeholder="Note..." onchange="App.updateLibraryEx('${ex.id}', 'notes', this.value)" style="margin-bottom:0;">
-            </div>`;
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('Service Worker registrato', reg))
+                .catch(err => console.error('Errore registrazione SW', err));
         });
-        container.innerHTML = html;
-    },
-
-    // --- BUILDER SCHEDE ---
-    createRoutine() {
-        const name = document.getElementById('routine-name-input').value.trim();
-        if(!name) return alert("Dai un nome alla scheda.");
-        if(this.state.routines.some(r => r.name.toLowerCase() === name.toLowerCase())) return alert("Nome esiste già!");
-        this.state.routines.push({ id: this.generateId('rt'), name, exercises: [] });
-        this.sortLibraryAndRoutines(); this.saveToStorage();
-        document.getElementById('routine-name-input').value = '';
-        this.renderRoutineBuilder();
-    },
-    updateRoutineName(id, value) {
-        const r = this.state.routines.find(x => x.id === id);
-        if(!r) return;
-        if(this.state.routines.some(x => x.id !== id && x.name.toLowerCase() === value.trim().toLowerCase())) {
-            alert("Nome già in uso."); return this.renderRoutineBuilder();
-        }
-        r.name = value.trim();
-        this.sortLibraryAndRoutines(); this.saveToStorage(); this.renderRoutineBuilder();
-    },
-    deleteRoutine(id) {
-        if(confirm("Eliminare scheda?")) {
-            this.state.routines = this.state.routines.filter(r => r.id !== id);
-            this.saveToStorage(); this.renderRoutineBuilder();
-        }
-    },
-    addExToRoutine(routineId, exId, setsCount) {
-        const r = this.state.routines.find(x => x.id === routineId);
-        if(r && exId) {
-            r.exercises.push({ exerciseId: exId, setsCount: parseInt(setsCount) || 1 });
-            this.saveToStorage(); this.renderRoutineBuilder();
-        }
-    },
-    removeExFromRoutine(rId, index) {
-        const r = this.state.routines.find(x => x.id === rId);
-        r.exercises.splice(index, 1);
-        this.saveToStorage(); this.renderRoutineBuilder();
-    },
-    moveExInRoutine(rId, index, dir) {
-        const r = this.state.routines.find(x => x.id === rId);
-        if(dir === -1 && index > 0) {
-            [r.exercises[index-1], r.exercises[index]] = [r.exercises[index], r.exercises[index-1]];
-        } else if (dir === 1 && index < r.exercises.length - 1) {
-            [r.exercises[index+1], r.exercises[index]] = [r.exercises[index], r.exercises[index+1]];
-        }
-        this.saveToStorage(); this.renderRoutineBuilder();
-    },
-    updateExSetsInRoutine(rId, index, newSets) {
-        const r = this.state.routines.find(x => x.id === rId);
-        let val = parseInt(newSets);
-        if(val > 0) r.exercises[index].setsCount = val;
-        this.saveToStorage();
-    },
-    renderRoutineBuilder() {
-        const container = document.getElementById('routines-list');
-        let html = '';
-        const exOptions = this.state.library.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
-
-        this.state.routines.forEach(r => {
-            html += `<div class="card" style="border:1px solid #444; margin-bottom:20px;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <input type="text" value="${r.name}" onchange="App.updateRoutineName('${r.id}', this.value)" style="font-weight:bold; font-size:1.2rem; margin:0; width:85%">
-                    <button class="btn-icon" style="color:var(--danger-color);" onclick="App.deleteRoutine('${r.id}')">🗑</button>
-                </div>
-                <div style="margin-bottom:10px;">`;
-            
-            r.exercises.forEach((re, idx) => {
-                const exData = this.state.library.find(e => e.id === re.exerciseId);
-                const name = exData ? exData.name : "Esercizio rimosso";
-                html += `<div style="display:flex; align-items:center; justify-content:space-between; font-size:0.9rem; padding:8px 0; border-bottom:1px solid #333;">
-                    <div style="flex:2; font-weight:bold;">${idx+1}. ${name}</div>
-                    <div style="display:flex; align-items:center; gap:5px;">
-                        <input type="number" value="${re.setsCount}" min="1" onchange="App.updateExSetsInRoutine('${r.id}', ${idx}, this.value)" style="width:50px; padding:5px; margin:0; text-align:center;">
-                        <span style="color:var(--text-muted); font-size:0.7rem;">serie</span>
-                    </div>
-                    <div style="display:flex; gap:5px; margin-left:10px;">
-                        <button class="btn-icon" onclick="App.moveExInRoutine('${r.id}', ${idx}, -1)">⬆️</button>
-                        <button class="btn-icon" onclick="App.moveExInRoutine('${r.id}', ${idx}, 1)">⬇️</button>
-                        <button class="btn-icon" style="color:var(--danger-color);" onclick="App.removeExFromRoutine('${r.id}', ${idx})">❌</button>
-                    </div>
-                </div>`;
-            });
-
-            html += `</div>
-                <div class="input-row" style="margin-top:10px;">
-                    <select id="sel-ex-${r.id}" style="flex:2; margin:0;"><option disabled selected>Seleziona Esercizio</option>${exOptions}</select>
-                    <input type="number" id="sel-set-${r.id}" value="3" min="1" style="flex:1; margin:0;" placeholder="Serie">
-                    <button class="btn btn-primary btn-small" style="margin:0;" onclick="App.addExToRoutine('${r.id}', document.getElementById('sel-ex-${r.id}').value, document.getElementById('sel-set-${r.id}').value)">+ Add</button>
-                </div>
-            </div>`;
-        });
-        container.innerHTML = html;
-        this.renderStartWorkoutSelect();
-    },
-
-    // --- ALLENAMENTO ATTIVO (Sessione) ---
-    renderStartWorkoutSelect() {
-        const sel = document.getElementById('select-routine-to-start');
-        sel.innerHTML = `<option value="" disabled selected>-- Seleziona una Scheda --</option>` +
-            this.state.routines.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
-    },
-    startWorkout() {
-        if(this.state.activeWorkout) return alert("Hai già un allenamento in corso!");
-        const rId = document.getElementById('select-routine-to-start').value;
-        const routine = this.state.routines.find(r => r.id === rId);
-        if(!routine) return alert("Seleziona una scheda!");
-
-        const activeExs = routine.exercises.map(re => {
-            const sets = [];
-            for(let i=0; i<re.setsCount; i++) sets.push({ id: this.generateId('s'), kg: '', reps: '' });
-            return { exId: re.exerciseId, sets: sets, sessionNote: '' };
-        });
-
-        this.state.activeWorkout = {
-            id: this.generateId('w'),
-            date: new Date().toISOString().split('T')[0],
-            routineName: routine.name,
-            globalStartTime: Date.now(),
-            exercises: activeExs
-        };
-        
-        this.saveToStorage(); this.renderWorkoutView(); App.timers.stopRest();
-    },
-    endActiveWorkout() {
-        if(!confirm("Terminare l'allenamento?")) return;
-        const elapsed = Date.now() - this.state.activeWorkout.globalStartTime;
-        this.state.activeWorkout.globalDurationStr = this.timers.formatTime(elapsed, true);
-        this.state.history.unshift(this.state.activeWorkout);
-        this.state.activeWorkout = null;
-        this.timers.stopRest();
-        this.saveToStorage(); this.renderWorkoutView();
-    },
-    
-    // Ricerca testuale degli Esercizi Attivi
-    filterActiveExercises(query) {
-        const resContainer = document.getElementById('active-search-results');
-        if(!query.trim()) { resContainer.style.display = 'none'; resContainer.innerHTML = ''; return; }
-        
-        const q = query.toLowerCase();
-        const filtered = this.state.library.filter(e => e.name.toLowerCase().includes(q));
-        
-        resContainer.style.display = 'block';
-        if(filtered.length === 0) {
-            resContainer.innerHTML = '<div style="padding:12px; color:var(--text-muted)">Nessun esercizio.</div>';
-            return;
-        }
-        
-        let html = '';
-        filtered.forEach(ex => { html += `<div class="search-item" onclick="App.addExerciseToActive('${ex.id}')">${ex.name}</div>`; });
-        resContainer.innerHTML = html;
-    },
-    addExerciseToActive(exId) {
-        if(exId) {
-            this.state.activeWorkout.exercises.push({ exId: exId, sets: [{ id: this.generateId('s'), kg: '', reps: '' }], sessionNote: '' });
-            this.saveToStorage(); this.renderActiveWorkout();
-            document.getElementById('active-search-ex').value = '';
-            document.getElementById('active-search-results').style.display = 'none';
-        }
-    },
-    
-    updateActiveSet(exIndex, setId, field, value) {
-        const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
-        if(s) { s[field] = value; this.saveToStorage(); } // Non ricarica pagina (focus sicuro)
-    },
-    updateActiveSessionNote(exIndex, value) {
-        if(this.state.activeWorkout.exercises[exIndex]) {
-            this.state.activeWorkout.exercises[exIndex].sessionNote = value;
-            this.saveToStorage();
-        }
-    },
-    addSetToActiveEx(exIndex) {
-        this.state.activeWorkout.exercises[exIndex].sets.push({ id: this.generateId('s'), kg: '', reps: '' });
-        this.saveToStorage(); this.renderActiveWorkout();
-    },
-
-    renderWorkoutView() {
-        const activeContainer = document.getElementById('active-workout-container');
-        const startContainer = document.getElementById('start-workout-container');
-        const topTimer = document.getElementById('top-timer-bar');
-
-        if(this.state.activeWorkout) {
-            activeContainer.style.display = 'block'; startContainer.style.display = 'none'; topTimer.style.display = 'flex';
-            this.renderActiveWorkout();
-        } else {
-            activeContainer.style.display = 'none'; startContainer.style.display = 'block'; topTimer.style.display = 'none';
-        }
-        this.renderHistory();
-    },
-
-    renderActiveWorkout() {
-        if(!this.state.activeWorkout) return;
-        document.getElementById('active-routine-name').innerText = this.state.activeWorkout.routineName;
-
-        const container = document.getElementById('active-exercises-list');
-        let html = '';
-
-        this.state.activeWorkout.exercises.forEach((exItem, exIndex) => {
-            const libEx = this.state.library.find(l => l.id === exItem.exId);
-            const exName = libEx ? libEx.name : "Esercizio Rimosso";
-            const exNotes = libEx ? libEx.notes : "";
-
-            // Ricerca degli ultimi 2 allenamenti per questo esercizio (Storico) + Ultima Nota
-            const pastWorkouts = [];
-            for(let w of this.state.history) {
-                let ex = w.exercises.find(e => e.exId === exItem.exId);
-                if(ex) pastWorkouts.push({ date: w.date, sets: ex.sets, note: ex.sessionNote });
-                if(pastWorkouts.length === 2) break; // Prendiamo solo gli ultimi 2
-            }
-            
-            // Creazione HTML per lo Storico
-            let histHtml = '';
-            if (pastWorkouts.length === 0) {
-                histHtml = '<div style="font-size:0.8rem; color:var(--text-muted)">Nessun dato precedente trovato.</div>';
-            } else {
-                pastWorkouts.forEach(pw => {
-                    histHtml += `<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed #444;">
-                        <strong style="font-size:0.8rem; color:var(--primary-color)">${pw.date}</strong><br>`;
-                    pw.sets.forEach((s, idx) => {
-                        histHtml += `<span style="font-size:0.8rem; margin-right:15px; display:inline-block;">S${idx+1}: <b>${s.kg}</b> kg x <b>${s.reps}</b></span>`;
-                    });
-                    histHtml += `</div>`;
-                });
-            }
-
-            // Ricerca ultima nota lasciata (Ignorando i passati dove era vuota)
-            let lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
-
-            // Layout Card Esercizio
-            html += `<div style="background:var(--bg-color); padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #333;">
-                
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h4 style="color:var(--primary-color); margin:0;">${exName}</h4>
-                    <div style="display:flex; gap:5px;">
-                        <button class="btn-small" style="background:transparent; border:1px solid var(--primary-color); color:var(--primary-color);" onclick="App.toggleUI('hist-${exItem.exId}-${exIndex}')">📊 Storico</button>
-                        <button class="btn-small" style="background:transparent; border:1px solid #aaa; color:#aaa;" onclick="App.toggleUI('setup-${exItem.exId}-${exIndex}')">📝 Setup</button>
-                    </div>
-                </div>
-
-                <!-- Pannelli a scomparsa (Storico & Setup) -->
-                <div id="hist-${exItem.exId}-${exIndex}" style="display:none; padding:10px; background:#111; border-radius:5px; margin-bottom:10px; border:1px solid #333;">
-                    <h5 style="margin-bottom:5px;">Ultimi 2 Allenamenti:</h5>
-                    ${histHtml}
-                </div>
-                
-                <div id="setup-${exItem.exId}-${exIndex}" style="display:none; padding:10px; background:#111; border-radius:5px; margin-bottom:10px; border:1px solid #333;">
-                    <h5 style="margin-bottom:5px; color:var(--text-muted)">Modifica Setup (Globale):</h5>
-                    <input type="text" value="${exNotes}" placeholder="Note di setup (es. altezza sedile...)" onchange="App.updateLibraryNotesFromActive('${exItem.exId}', this.value)" style="margin:0;">
-                </div>
-
-                <!-- Alert Ultima Nota Sessione -->
-                ${lastNote ? `<div style="background:rgba(207, 102, 121, 0.15); padding:8px; border-radius:5px; border-left:3px solid var(--danger-color); font-size:0.85rem; margin-bottom:15px; color:#ffb3b3;">⚠️ <b>Note scorsa volta:</b> ${lastNote}</div>` : ''}
-                `;
-            
-            // Serie
-            exItem.sets.forEach((s, sIndex) => {
-                html += `
-                <div class="set-row">
-                    <div style="font-size:0.8rem; margin-bottom:5px; color:var(--text-muted)">Serie ${sIndex + 1}</div>
-                    <div class="set-controls">
-                        <input type="number" step="0.25" placeholder="Kg" value="${s.kg}" oninput="App.validateInput(this, 'float')" onchange="App.updateActiveSet(${exIndex}, '${s.id}', 'kg', this.value)" style="margin:0">
-                        <input type="number" placeholder="Reps" value="${s.reps}" oninput="App.validateInput(this, 'int')" onchange="App.updateActiveSet(${exIndex}, '${s.id}', 'reps', this.value)" style="margin:0">
-                    </div>
-                </div>`;
-            });
-
-            // Footer Esercizio: Pulsante aggiungi e Textarea Note Sessione
-            html += `<button class="btn btn-small" style="border:1px dashed #555" onclick="App.addSetToActiveEx(${exIndex})">+ Aggiungi Serie</button>
-                <textarea placeholder="Note per la prossima volta (dolori, feedback)..." onchange="App.updateActiveSessionNote(${exIndex}, this.value)" style="width:100%; padding:10px; background:var(--surface-light); border:1px solid #444; color:var(--text-main); border-radius:8px; margin-top:10px; font-size:0.9rem; resize:vertical;">${exItem.sessionNote || ''}</textarea>
-            </div>`;
-        });
-        container.innerHTML = html;
-    },
-
-    // --- STORICO ALLENAMENTI ---
-    updateHistory(wId, exIndex, setId, field, value) {
-        const w = this.state.history.find(x => x.id === wId);
-        if(w && w.exercises[exIndex]) {
-            const s = w.exercises[exIndex].sets.find(x => x.id === setId);
-            if(s) { s[field] = value; this.saveToStorage(); }
-        }
-    },
-    updateHistoryGlobalTime(wId, val) {
-        const w = this.state.history.find(x => x.id === wId);
-        if(w) { w.globalDurationStr = val; this.saveToStorage(); }
-    },
-    deleteHistoryRecord(wId) {
-        if(confirm("Eliminare definitivamente questo allenamento dallo storico?")) {
-            this.state.history = this.state.history.filter(x => x.id !== wId);
-            this.saveToStorage(); this.renderHistory();
-        }
-    },
-    renderHistory() {
-        const container = document.getElementById('history-container');
-        if(this.state.history.length === 0) { container.innerHTML = "<p>Nessun allenamento salvato.</p>"; return; }
-
-        let html = '';
-        this.state.history.forEach(w => {
-            html += `<div class="card" style="border-left: 4px solid var(--primary-dark);">
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                    <h3 style="margin:0">${w.date} - ${w.routineName}</h3>
-                    <button class="btn-icon" style="color:var(--danger-color);" onclick="App.deleteHistoryRecord('${w.id}')">🗑</button>
-                </div>
-                <div style="margin-bottom:10px; font-size:0.9rem;">
-                    Durata: <input type="text" value="${w.globalDurationStr}" onchange="App.updateHistoryGlobalTime('${w.id}', this.value)" style="width:100px; padding:5px; margin:0;">
-                </div>`;
-            
-            w.exercises.forEach((ex, exIdx) => {
-                const libEx = this.state.library.find(l => l.id === ex.exId);
-                const name = libEx ? libEx.name : "Esercizio rimosso";
-                html += `<div style="margin-bottom:10px; padding:5px; background:var(--bg-color); border-radius:5px;">
-                    <div style="font-weight:bold; color:var(--primary-color); margin-bottom:5px;">${name}</div>`;
-                
-                ex.sets.forEach((s, sIdx) => {
-                    html += `<div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
-                        <span style="width:30px; font-size:0.8rem; color:#888;">S${sIdx+1}</span>
-                        <input type="number" step="0.25" value="${s.kg}" style="padding:5px; margin:0; flex:1;" onchange="App.updateHistory('${w.id}', ${exIdx}, '${s.id}', 'kg', this.value)"> <span style="font-size:0.8rem">kg</span>
-                        <input type="number" value="${s.reps}" style="padding:5px; margin:0; flex:1;" onchange="App.updateHistory('${w.id}', ${exIdx}, '${s.id}', 'reps', this.value)"> <span style="font-size:0.8rem">reps</span>
-                    </div>`;
-                });
-                html += `</div>`;
-            });
-            html += `</div>`;
-        });
-        container.innerHTML = html;
-    },
-
-    // --- NUTRIZIONE (Intatta come richiesto) ---
-    saveProfile() {
-        this.state.profile.dob = document.getElementById('profile-dob').value;
-        this.state.profile.height = document.getElementById('profile-height').value;
-        this.state.profile.gender = document.getElementById('profile-gender').value;
-        this.saveToStorage(); this.renderNutritionDisplay(); 
-    },
-    calculateBodyFat(weight) {
-        if(!this.state.profile.height || !this.state.profile.dob || !weight) return null;
-        const hMeters = parseFloat(this.state.profile.height) / 100;
-        const wKg = parseFloat(weight);
-        const bmi = wKg / (hMeters * hMeters);
-        const dobDate = new Date(this.state.profile.dob);
-        const age = Math.abs(new Date(Date.now() - dobDate.getTime()).getUTCFullYear() - 1970);
-        const sexFactor = this.state.profile.gender === 'M' ? 1 : 0;
-        let bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;
-        return Math.max(2, bf).toFixed(1); 
-    },
-    
-    loadNutritionDate(dateStr) {
-        if (!dateStr) return;
-        const data = this.state.nutrition[dateStr] || { weight: '', kcal: '', carbs: '', pro: '', fat: '' };
-        document.getElementById('nutri-weight').value = data.weight;
-        document.getElementById('nutri-kcal').value = data.kcal;
-        document.getElementById('nutri-carbs').value = data.carbs;
-        document.getElementById('nutri-pro').value = data.pro;
-        document.getElementById('nutri-fat').value = data.fat;
-        this.renderNutritionDisplay();
-    },
-    saveNutritionData() {
-        const dateStr = document.getElementById('nutri-date').value;
-        if(!dateStr) return;
-        this.state.nutrition[dateStr] = {
-            weight: document.getElementById('nutri-weight').value, kcal: document.getElementById('nutri-kcal').value,
-            carbs: document.getElementById('nutri-carbs').value, pro: document.getElementById('nutri-pro').value, fat: document.getElementById('nutri-fat').value
-        };
-        this.saveToStorage(); this.renderNutritionDisplay();
-    },
-    updateNutritionHistory(dateStr, field, value) {
-        if(this.state.nutrition[dateStr]) {
-            this.state.nutrition[dateStr][field] = value;
-            this.saveToStorage();
-            if(dateStr === document.getElementById('nutri-date').value) document.getElementById('nutri-' + field).value = value;
-            this.renderNutritionDisplay();
-        }
-    },
-    deleteNutritionDay(dateStr) {
-        if(confirm("Eliminare i dati di questo giorno?")) {
-            delete this.state.nutrition[dateStr]; this.saveToStorage();
-            if(dateStr === document.getElementById('nutri-date').value) this.loadNutritionDate(dateStr); 
-            this.renderNutritionDisplay();
-        }
-    },
-
-    renderNutritionDisplay() {
-        const currentWeight = document.getElementById('nutri-weight').value;
-        const bf = this.calculateBodyFat(currentWeight);
-        document.getElementById('current-bf-display').innerText = bf ? `${bf} %` : '-- %';
-
-        const historyContainer = document.getElementById('nutrition-history-list');
-        const sortedDates = Object.keys(this.state.nutrition).sort((a,b) => new Date(b) - new Date(a));
-        let histHtml = '';
-        
-        if(sortedDates.length === 0) { histHtml = "<p>Nessun dato registrato.</p>"; } 
-        else {
-            sortedDates.forEach(d => {
-                const day = this.state.nutrition[d];
-                const dayBf = this.calculateBodyFat(day.weight) || '--';
-                histHtml += `<div class="card" style="padding:10px; margin-bottom:10px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                        <h4 style="margin:0; color:var(--primary-color)">${d}</h4>
-                        <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteNutritionDay('${d}')">🗑</button>
-                    </div>
-                    <div class="input-row" style="margin-bottom:5px;">
-                        <input type="number" step="0.1" value="${day.weight}" onchange="App.updateNutritionHistory('${d}', 'weight', this.value)" style="padding:5px; margin:0;" placeholder="Kg"> kg
-                        <input type="number" value="${day.kcal}" onchange="App.updateNutritionHistory('${d}', 'kcal', this.value)" style="padding:5px; margin:0;" placeholder="Kcal"> kcal
-                    </div>
-                    <div style="font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between;">
-                        <span>Macros: C ${day.carbs||0} | P ${day.pro||0} | F ${day.fat||0}</span><span>BF: ${dayBf}%</span>
-                    </div>
-                </div>`;
-            });
-        }
-        historyContainer.innerHTML = histHtml;
-        this.renderTDEE(sortedDates.reverse()); 
-    },
-    
-    renderTDEE(chronologicalDates) {
-        const validDates = chronologicalDates.filter(d => this.state.nutrition[d].weight && this.state.nutrition[d].kcal);
-        const resultBox = document.getElementById('tdee-result');
-        if (validDates.length < 7) { resultBox.innerHTML = `<h3>-- kcal</h3><span>Raccolta dati in corso... (ne servono 7)</span>`; return; }
-        
-        const recentDates = validDates.slice(-14); 
-        const wLast = parseFloat(this.state.nutrition[recentDates[recentDates.length - 1]].weight);
-        const wFirst = parseFloat(this.state.nutrition[recentDates[0]].weight);
-        const diffDays = Math.ceil(Math.abs(new Date(recentDates[recentDates.length - 1]) - new Date(recentDates[0])) / (1000 * 60 * 60 * 24));
-        if (diffDays === 0) return;
-        
-        const avgKcal = recentDates.reduce((sum, d) => sum + parseFloat(this.state.nutrition[d].kcal), 0) / recentDates.length;
-        const weightDiff = wLast - wFirst;
-        const estimatedTDEE = avgKcal - ((weightDiff / diffDays) * 7700);
-
-        resultBox.innerHTML = `<h3>${Math.round(estimatedTDEE)} kcal</h3><span>TDEE Stimato</span>
-            <div style="margin-top:10px; font-size:0.85rem; color:var(--text-muted);">
-                Media Kcal (${recentDates.length}gg): <b>${Math.round(avgKcal)}</b><br>
-                Trend Peso (${diffDays}gg): <b>${weightDiff > 0 ? '+'+weightDiff.toFixed(2) : weightDiff.toFixed(2)} kg</b>
-            </div>`;
-    },
-
-    exportData() {
-        try {
-            const dataStr = JSON.stringify(this.state, null, 2);
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'fitness_pro_data.json';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch (e) { alert("Errore export: " + e.message); }
-    },
-    clearAllData() {
-        if(confirm("ATTENZIONE: Eliminare tutti i dati dal dispositivo?")) {
-            localStorage.removeItem(this.storageKey); location.reload();
-        }
-    },
-
-    renderAll() {
-        document.getElementById('profile-dob').value = this.state.profile.dob || '';
-        document.getElementById('profile-height').value = this.state.profile.height || '';
-        document.getElementById('profile-gender').value = this.state.profile.gender || 'M';
-
-        this.renderLibrary(); this.renderRoutineBuilder(); this.renderWorkoutView();
-        this.loadNutritionDate(document.getElementById('nutri-date').value);
     }
-};
-
-window.onload = () => App.init();
 </script>
+
+<!-- App Modules -->
+<script type="module" src="js/app.js"></script>
 
 </body>
 </html>
