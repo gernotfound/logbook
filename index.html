@@ -281,54 +281,65 @@
 
 <!-- SVG MUSCLE MAP TEMPLATE -->
 <template id="muscle-map-template">
-    <div class="muscle-map-container" style="display:flex; justify-content:center; gap:10px; padding:10px 0; overflow-x:auto;">
-        <!-- FRONTE -->
-        <div style="text-align:center; min-width:80px;">
-            <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:5px;">Fronte</div>
-            <svg viewBox="0 0 100 200" width="80" height="160" class="muscle-svg front">
-                <circle cx="50" cy="15" r="10" fill="var(--surface-color)" />
-                <path id="svg-delts_front" class="muscle-group" d="M30,30 Q50,25 70,30 L75,38 L25,38 Z" />
-                <path id="svg-chest_upper" class="muscle-group" d="M35,38 L65,38 L62,45 L38,45 Z" />
-                <path id="svg-chest_lower" class="muscle-group" d="M38,45 L62,45 L58,55 L42,55 Z" />
-                <rect id="svg-abs" class="muscle-group" x="42" y="57" width="16" height="28" rx="2" />
-                <path id="svg-obliques" class="muscle-group" d="M33,57 L40,57 L40,85 L30,85 Z M60,57 L67,57 L70,85 L60,85 Z" />
-                <path id="svg-biceps_long" class="muscle-group" d="M22,40 L16,65 L20,68 L26,40 Z M78,40 L84,65 L80,68 L74,40 Z" />
-                <path id="svg-biceps_short" class="muscle-group" d="M26,40 L20,68 L24,70 L30,40 Z M74,40 L80,68 L76,70 L70,40 Z" />
-                <path id="svg-forearms" class="muscle-group" d="M14,75 L8,105 L15,108 L21,75 Z M86,75 L92,105 L85,108 L79,75 Z" />
-                <path id="svg-quads" class="muscle-group" d="M38,90 L45,145 L32,145 L25,90 Z M62,90 L55,145 L68,145 L75,90 Z" />
-                <path id="svg-adductors" class="muscle-group" d="M42,90 L48,125 L45,125 L39,90 Z M58,90 L52,125 L55,125 L61,90 Z" />
-                <path id="svg-calves" class="muscle-group" d="M32,150 L42,190 L30,190 L26,150 Z M68,150 L58,190 L70,190 L74,150 Z" />
-            </svg>
-        </div>
-        <!-- RETRO -->
-        <div style="text-align:center; min-width:80px;">
-            <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:5px;">Retro</div>
-            <svg viewBox="0 0 100 200" width="80" height="160" class="muscle-svg back">
-                <circle cx="50" cy="15" r="10" fill="var(--surface-color)" />
-                <path id="svg-traps" class="muscle-group" d="M40,25 L60,25 L65,35 L50,45 L35,35 Z" />
-                <path id="svg-delts_rear" class="muscle-group" d="M25,35 L35,35 L30,45 Z M75,35 L65,35 L70,45 Z" />
-                <path id="svg-rhomboids" class="muscle-group" d="M40,35 L60,35 L55,50 L45,50 Z" />
-                <path id="svg-lats" class="muscle-group" d="M30,45 L45,50 L50,75 L35,75 Z M70,45 L55,50 L50,75 L65,75 Z" />
-                <path id="svg-lower_back" class="muscle-group" d="M40,77 L60,77 L55,85 L45,85 Z" />
-                <path id="svg-triceps_right" class="muscle-group" d="M26,40 L16,65 L22,68 L30,40 Z" />
-                <path id="svg-triceps_left" class="muscle-group" d="M74,40 L84,65 L78,68 L70,40 Z" />
-                <path id="svg-glutes_right" class="muscle-group" d="M32,88 L50,88 L48,110 L28,105 Z" />
-                <path id="svg-glutes_left" class="muscle-group" d="M68,88 L50,88 L52,110 L72,105 Z" />
-                <path id="svg-hamstrings" class="muscle-group" d="M30,112 L45,150 L35,150 L25,112 Z M70,112 L55,150 L65,150 L75,112 Z" />
-            </svg>
-        </div>
-        <!-- LATO -->
-        <div style="text-align:center; min-width:80px;">
-            <div style="font-size:0.7rem; color:var(--text-muted); margin-bottom:5px;">Lato</div>
-            <svg viewBox="0 0 100 200" width="80" height="160" class="muscle-svg side">
-                <circle cx="50" cy="15" r="10" fill="var(--surface-color)" />
-                <path id="svg-delts_side" class="muscle-group" d="M40,28 L60,28 L55,42 L45,42 Z" />
-                <path id="svg-brachialis" class="muscle-group" d="M45,44 L40,65 L48,65 Z" />
-                <path id="svg-triceps_lateral" class="muscle-group" d="M52,42 L58,65 L52,68 Z" />
-                <path id="svg-triceps_long" class="muscle-group" d="M58,42 L64,65 L58,68 Z" />
-                <path id="svg-abductors" class="muscle-group" d="M40,90 L35,145 L45,145 Z" />
-            </svg>
-        </div>
+    <div class="muscle-map-container" style="display:flex; justify-content:center; padding:10px 0; overflow-x:auto;">
+        <svg viewBox="0 0 1024 512" width="100%" style="max-width: 800px; background-color: #303030; border-radius: 12px;">
+            <defs>
+                <pattern id="textured_black_pattern" width="10" height="10" patternUnits="userSpaceOnUse">
+                    <rect width="10" height="10" fill="#222" />
+                    <circle cx="5" cy="5" r="1" fill="#444" />
+                </pattern>
+            </defs>
+
+            <g id="figures" stroke="#CCCCCC" stroke-width="2" fill="transparent">
+                <!-- FRONT (x=150, y=100) -->
+                <g id="figure_anterior" transform="translate(150, 60) scale(1.9)">
+                    <circle cx="50" cy="15" r="10" fill="var(--surface-color)" stroke="#CCCCCC"/>
+                    
+                    <path id="svg-delts_front" class="muscle-group" d="M30,30 Q50,25 70,30 L75,38 L25,38 Z" />
+                    <path id="svg-chest_upper" class="muscle-group" d="M35,38 L65,38 L62,45 L38,45 Z" />
+                    <path id="svg-chest_lower" class="muscle-group" d="M38,45 L62,45 L58,55 L42,55 Z" />
+                    <rect id="svg-abs" class="muscle-group" x="42" y="57" width="16" height="28" rx="2" />
+                    <path id="svg-obliques" class="muscle-group" d="M33,57 L40,57 L40,85 L30,85 Z M60,57 L67,57 L70,85 L60,85 Z" />
+                    <path id="svg-biceps_long" class="muscle-group" d="M22,40 L16,65 L20,68 L26,40 Z M78,40 L84,65 L80,68 L74,40 Z" />
+                    <path id="svg-biceps_short" class="muscle-group" d="M26,40 L20,68 L24,70 L30,40 Z M74,40 L80,68 L76,70 L70,40 Z" />
+                    <path id="svg-forearms" class="muscle-group" d="M14,75 L8,105 L15,108 L21,75 Z M86,75 L92,105 L85,108 L79,75 Z" />
+                    <path id="svg-quads" class="muscle-group" d="M38,90 L45,145 L32,145 L25,90 Z M62,90 L55,145 L68,145 L75,90 Z" />
+                    <path id="svg-adductors" class="muscle-group" d="M42,90 L48,125 L45,125 L39,90 Z M58,90 L52,125 L55,125 L61,90 Z" />
+                    <path id="svg-calves" class="muscle-group" d="M32,150 L42,190 L30,190 L26,150 Z M68,150 L58,190 L70,190 L74,150 Z" />
+                </g>
+
+                <!-- BACK (x=400, y=100) -->
+                <g id="figure_posterior" transform="translate(450, 60) scale(1.9)">
+                    <circle cx="50" cy="15" r="10" fill="var(--surface-color)" stroke="#CCCCCC"/>
+                    
+                    <path id="svg-traps" class="muscle-group" d="M40,25 L60,25 L65,35 L50,45 L35,35 Z" />
+                    <path id="svg-delts_rear" class="muscle-group" d="M25,35 L35,35 L30,45 Z M75,35 L65,35 L70,45 Z" />
+                    <path id="svg-rhomboids" class="muscle-group" d="M40,35 L60,35 L55,50 L45,50 Z" />
+                    <path id="svg-lats" class="muscle-group" d="M30,45 L45,50 L50,75 L35,75 Z M70,45 L55,50 L50,75 L65,75 Z" />
+                    <path id="svg-lower_back" class="muscle-group" d="M40,77 L60,77 L55,85 L45,85 Z" />
+                    <path id="svg-triceps_right" class="muscle-group" d="M26,40 L16,65 L22,68 L30,40 Z" />
+                    <path id="svg-triceps_left" class="muscle-group" d="M74,40 L84,65 L78,68 L70,40 Z" />
+                    <path id="svg-glutes_right" class="muscle-group" d="M32,88 L50,88 L48,110 L28,105 Z" />
+                    <path id="svg-glutes_left" class="muscle-group" d="M68,88 L50,88 L52,110 L72,105 Z" />
+                    <path id="svg-hamstrings" class="muscle-group" d="M30,112 L45,150 L35,150 L25,112 Z M70,112 L55,150 L65,150 L75,112 Z" />
+                </g>
+
+                <!-- SIDE (x=650, y=100) -->
+                <g id="figure_lateral" transform="translate(750, 60) scale(1.9)">
+                    <circle cx="50" cy="15" r="10" fill="var(--surface-color)" stroke="#CCCCCC"/>
+                    
+                    <path id="svg-delts_side" class="muscle-group" d="M40,28 L60,28 L55,42 L45,42 Z" />
+                    <path id="svg-brachialis" class="muscle-group" d="M45,44 L40,65 L48,65 Z" />
+                    <path id="svg-triceps_lateral" class="muscle-group" d="M52,42 L58,65 L52,68 Z" />
+                    <path id="svg-triceps_long" class="muscle-group" d="M58,42 L64,65 L58,68 Z" />
+                    <path id="svg-abductors" class="muscle-group" d="M40,90 L35,145 L45,145 Z" />
+                </g>
+            </g>
+
+            <!-- Textured base at bottom -->
+            <rect id="textured_base" x="0" y="450" width="1024" height="62" fill="url(#textured_black_pattern)" />
+            <text x="512" y="485" fill="#CCCCCC" font-size="20" text-anchor="middle" font-family="sans-serif">ANTERIORE - POSTERIORE - LATERALE</text>
+        </svg>
     </div>
 </template>
 
