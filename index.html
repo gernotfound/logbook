@@ -109,6 +109,8 @@
             </div>
             <h3 style="margin-top:20px;">Archivio Schede (A-Z)</h3>
             <div id="routines-list"></div>
+            
+            <div id="routine-builder-svg-container" style="margin-top: 20px;"></div>
         </div>
 
         <!-- 1.C: ARCHIVIO ESERCIZI -->
@@ -117,6 +119,16 @@
                 <h3>Nuovo Esercizio</h3>
                 <input type="text" id="new-ex-name" placeholder="Nome Esercizio (Univoco)">
                 <input type="text" id="new-ex-notes" placeholder="Note Setup (es. Inclinazione panca)">
+                
+                <div style="margin:15px 0;">
+                    <label style="font-size:0.8rem; color:var(--text-muted)">Muscoli Coinvolti (Ricerca)</label>
+                    <input type="text" id="new-ex-muscle-search" placeholder="Cerca muscolo (es. Petto)..." oninput="App.filterMuscleSearch(this.value)">
+                    <div id="new-ex-muscle-results" style="display:none; max-height:150px; overflow-y:auto; background:var(--surface-color); border:1px solid var(--glass-border); border-radius:8px; margin-bottom:10px;"></div>
+                    <div id="new-ex-selected-muscles" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:15px;"></div>
+                </div>
+
+                <div id="new-ex-svg-container" style="margin-bottom:15px;"></div>
+
                 <button class="btn btn-primary" onclick="App.createExerciseInLibrary()">+ Aggiungi in Archivio</button>
             </div>
             <h3 style="margin-top:20px;">Lista Esercizi (A-Z)</h3>
@@ -248,6 +260,38 @@
 
 <!-- App Modules -->
 <script type="module" src="js/app.js"></script>
+
+<!-- SVG MUSCLE MAP TEMPLATE -->
+<template id="muscle-map-template">
+    <div class="muscle-map-container" style="display:flex; justify-content:center; gap:20px; padding:10px 0;">
+        <div style="text-align:center;">
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:5px;">Fronte</div>
+            <svg viewBox="0 0 100 200" width="100" height="200" class="muscle-svg front">
+                <circle cx="50" cy="15" r="10" fill="var(--surface-color)" />
+                <path id="svg-shoulders-front" class="muscle-group" d="M30,30 Q50,25 70,30 L80,40 L20,40 Z" />
+                <path id="svg-chest" class="muscle-group" d="M35,42 L65,42 L60,60 L40,60 Z" />
+                <rect id="svg-abs" class="muscle-group" x="40" y="62" width="20" height="30" rx="2" />
+                <path id="svg-biceps" class="muscle-group" d="M25,45 L15,75 L22,78 L30,45 Z M75,45 L85,75 L78,78 L70,45 Z" />
+                <path id="svg-forearms-front" class="muscle-group" d="M14,78 L8,105 L15,108 L21,78 Z M86,78 L92,105 L85,108 L79,78 Z" />
+                <path id="svg-quads" class="muscle-group" d="M38,95 L48,150 L35,150 L25,95 Z M62,95 L52,150 L65,150 L75,95 Z" />
+                <path id="svg-calves-front" class="muscle-group" d="M35,155 L45,195 L32,195 L28,155 Z M65,155 L55,195 L68,195 L72,155 Z" />
+            </svg>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:5px;">Retro</div>
+            <svg viewBox="0 0 100 200" width="100" height="200" class="muscle-svg back">
+                <circle cx="50" cy="15" r="10" fill="var(--surface-color)" />
+                <path id="svg-shoulders-back" class="muscle-group" d="M30,30 Q50,25 70,30 L80,40 L20,40 Z" />
+                <path id="svg-back" class="muscle-group" d="M35,42 L65,42 L55,85 L45,85 Z" />
+                <path id="svg-triceps" class="muscle-group" d="M25,45 L15,75 L22,78 L30,45 Z M75,45 L85,75 L78,78 L70,45 Z" />
+                <path id="svg-forearms-back" class="muscle-group" d="M14,78 L8,105 L15,108 L21,78 Z M86,78 L92,105 L85,108 L79,78 Z" />
+                <path id="svg-glutes" class="muscle-group" d="M35,88 L65,88 L68,110 L50,115 L32,110 Z" />
+                <path id="svg-hamstrings" class="muscle-group" d="M32,112 L45,150 L35,150 L25,112 Z M68,112 L55,150 L65,150 L75,112 Z" />
+                <path id="svg-calves-back" class="muscle-group" d="M35,155 L45,195 L32,195 L28,155 Z M65,155 L55,195 L68,195 L72,155 Z" />
+            </svg>
+        </div>
+    </div>
+</template>
 
 </body>
 </html>

@@ -140,6 +140,86 @@ const App = {
     },
 
     // --- ARCHIVIO ESERCIZI ---
+    tempNewExMuscles: [],
+
+    filterMuscleSearch(query) {
+        const resContainer = document.getElementById('new-ex-muscle-results');
+        if(!query.trim()) { resContainer.style.display = 'none'; return; }
+        
+        const q = query.toLowerCase();
+        const filtered = Logic.MUSCLES.filter(m => m.name.toLowerCase().includes(q) && !this.tempNewExMuscles.includes(m.id));
+        
+        if(filtered.length === 0) { resContainer.style.display = 'none'; return; }
+        
+        resContainer.style.display = 'block';
+        let html = '';
+        filtered.forEach(m => {
+            html += `<div class="search-item" onclick="App.addMuscleToNewEx('${m.id}')">${m.name}</div>`;
+        });
+        resContainer.innerHTML = html;
+    },
+
+    addMuscleToNewEx(mId) {
+        if(!this.tempNewExMuscles.includes(mId)) {
+            this.tempNewExMuscles.push(mId);
+            this.renderNewExMuscles();
+        }
+        document.getElementById('new-ex-muscle-search').value = '';
+        document.getElementById('new-ex-muscle-results').style.display = 'none';
+    },
+
+    removeMuscleFromNewEx(mId) {
+        this.tempNewExMuscles = this.tempNewExMuscles.filter(id => id !== mId);
+        this.renderNewExMuscles();
+    },
+
+    renderNewExMuscles() {
+        const container = document.getElementById('new-ex-selected-muscles');
+        if(!container) return;
+        let html = '';
+        this.tempNewExMuscles.forEach(mId => {
+            const m = Logic.MUSCLES.find(x => x.id === mId);
+            if(m) {
+                html += `<span style="background:var(--primary-color); color:#fff; padding:4px 8px; border-radius:12px; font-size:0.8rem; display:flex; align-items:center; gap:5px;">
+                    ${m.name} <span style="cursor:pointer; font-weight:bold;" onclick="App.removeMuscleFromNewEx('${m.id}')">×</span>
+                </span>`;
+            }
+        });
+        container.innerHTML = html;
+        this.renderSVG('new-ex-svg-container', this.tempNewExMuscles);
+    },
+
+    renderSVG(containerId, activeMusclesIds) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const template = document.getElementById('muscle-map-template');
+        if(!template) return;
+        
+        container.innerHTML = '';
+        const clone = template.content.cloneNode(true);
+        
+        activeMusclesIds.forEach(mId => {
+            let svgIds = [];
+            if(mId === 'chest') svgIds = ['svg-chest'];
+            else if(mId === 'back') svgIds = ['svg-back'];
+            else if(mId === 'shoulders') svgIds = ['svg-shoulders-front', 'svg-shoulders-back'];
+            else if(mId === 'biceps') svgIds = ['svg-biceps'];
+            else if(mId === 'triceps') svgIds = ['svg-triceps'];
+            else if(mId === 'forearms') svgIds = ['svg-forearms-front', 'svg-forearms-back'];
+            else if(mId === 'abs') svgIds = ['svg-abs'];
+            else if(mId === 'glutes') svgIds = ['svg-glutes'];
+            else if(mId === 'quads') svgIds = ['svg-quads'];
+            else if(mId === 'hamstrings') svgIds = ['svg-hamstrings'];
+            else if(mId === 'calves') svgIds = ['svg-calves-front', 'svg-calves-back'];
+            
+            svgIds.forEach(sid => {
+                const el = clone.getElementById(sid);
+                if (el) el.classList.add('active');
+            });
+        });
+        container.appendChild(clone);
+    },
+
     createExerciseInLibrary() {
         const nameInput = document.getElementById('new-ex-name');
         const notesInput = document.getElementById('new-ex-notes');
@@ -147,7 +227,16 @@ const App = {
         if(!name) return alert("Inserisci un nome.");
         if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) return alert("Esercizio già esistente!");
 
-        this.state.library.push({ id: Logic.generateId('ex'), name, notes: notesInput.value });
+        this.state.library.push({ 
+            id: Logic.generateId('ex'), 
+            name, 
+            notes: notesInput.value,
+            muscles: [...this.tempNewExMuscles]
+        });
+        
+        this.tempNewExMuscles = [];
+        this.renderNewExMuscles();
+
         this.sortLibraryAndRoutines(); this.saveToStorage();
         nameInput.value = ''; notesInput.value = '';
         this.renderLibrary(); this.renderRoutineBuilder();
@@ -276,9 +365,23 @@ const App = {
                     <input type="number" id="sel-set-${r.id}" value="3" min="1" style="flex:1; margin:0;" placeholder="Serie">
                     <button class="btn btn-primary btn-small" style="margin:0;" onclick="App.addExToRoutine('${r.id}', document.getElementById('sel-ex-${r.id}').value, document.getElementById('sel-set-${r.id}').value)">+ Add</button>
                 </div>
+                <div id="routine-svg-${r.id}" style="margin-top:15px; padding-top:15px; border-top:1px solid var(--glass-border);"></div>
             </div>`;
         });
         container.innerHTML = html;
+        
+        // Renderizza l'SVG per ogni scheda
+        this.state.routines.forEach(r => {
+            const routineMuscles = new Set();
+            r.exercises.forEach(re => {
+                const ex = this.state.library.find(e => e.id === re.exerciseId);
+                if(ex && ex.muscles) {
+                    ex.muscles.forEach(m => routineMuscles.add(m));
+                }
+            });
+            this.renderSVG('routine-svg-' + r.id, Array.from(routineMuscles));
+        });
+
         this.renderStartWorkoutSelect();
     },
 
@@ -303,6 +406,7 @@ const App = {
         this.state.activeWorkout = {
             id: Logic.generateId('w'),
             date: new Date().toISOString().split('T')[0],
+            routineId: routine.id,
             routineName: routine.name,
             globalStartTime: Date.now(),
             exercises: activeExs
@@ -312,6 +416,36 @@ const App = {
     },
     endActiveWorkout() {
         if(!confirm("Terminare l'allenamento?")) return;
+
+        // Controllo se ci sono modifiche rispetto alla scheda originale
+        const originalRoutine = this.state.routines.find(r => r.id === this.state.activeWorkout.routineId);
+        let routineModified = false;
+        
+        if (originalRoutine) {
+            const activeExs = this.state.activeWorkout.exercises;
+            const origExs = originalRoutine.exercises;
+            
+            if (activeExs.length !== origExs.length) {
+                routineModified = true;
+            } else {
+                for (let i = 0; i < activeExs.length; i++) {
+                    if (activeExs[i].exId !== origExs[i].exerciseId || activeExs[i].sets.length !== origExs[i].setsCount) {
+                        routineModified = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (routineModified && confirm("Hai apportato modifiche agli esercizi o alle serie rispetto alla scheda originale.\nVuoi aggiornare la scheda in modo permanente con queste modifiche?")) {
+                originalRoutine.exercises = this.state.activeWorkout.exercises.map(activeEx => {
+                    return {
+                        exerciseId: activeEx.exId,
+                        setsCount: activeEx.sets.length || 1
+                    };
+                });
+            }
+        }
+
         const elapsed = Date.now() - this.state.activeWorkout.globalStartTime;
         this.state.activeWorkout.globalDurationStr = Logic.formatTime(elapsed, true);
         this.state.history.unshift(this.state.activeWorkout);
@@ -346,10 +480,67 @@ const App = {
             document.getElementById('active-search-results').style.display = 'none';
         }
     },
+    createExerciseFromActive() {
+        const nameInput = document.getElementById('active-new-ex-name');
+        const name = nameInput.value.trim();
+        if(!name) return alert("Inserisci un nome.");
+        if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) return alert("Esercizio già esistente!");
+
+        const newId = Logic.generateId('ex');
+        this.state.library.push({ id: newId, name, notes: '', muscles: [] });
+        this.sortLibraryAndRoutines();
+        this.saveToStorage();
+        
+        nameInput.value = '';
+        this.toggleUI('active-create-ex-box');
+        
+        // Lo aggiungo subito all'allenamento attivo
+        this.addExerciseToActive(newId);
+    },
     
     updateActiveSet(exIndex, setId, field, value) {
         const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
         if(s) { s[field] = value; this.saveToStorage(); } 
+    },
+    removeActiveSet(exIndex, sIndex) {
+        if(confirm("Vuoi eliminare questa serie?")) {
+            this.state.activeWorkout.exercises[exIndex].sets.splice(sIndex, 1);
+            this.saveToStorage(); this.renderActiveWorkout();
+        }
+    },
+    removeActiveExercise(exIndex) {
+        if(confirm("Vuoi rimuovere l'intero esercizio dalla sessione corrente?")) {
+            this.state.activeWorkout.exercises.splice(exIndex, 1);
+            this.saveToStorage(); this.renderActiveWorkout();
+        }
+    },
+    addSpecialSet(exIndex, setId, type) {
+        const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
+        if(s) {
+            if(type === 'dropset') {
+                if(!s.dropsets) s.dropsets = [];
+                s.dropsets.push({ id: Logic.generateId('ds'), kg: '', reps: '' });
+            } else if(type === 'isometry') {
+                if(!s.isometrics) s.isometrics = [];
+                s.isometrics.push({ id: Logic.generateId('iso'), kg: '', time: '' });
+            }
+            this.toggleUI(`special-menu-${setId}`);
+            this.saveToStorage(); this.renderActiveWorkout();
+        }
+    },
+    updateSpecialSet(exIndex, setId, typeArray, specialIdx, field, value) {
+        const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
+        if(s && s[typeArray] && s[typeArray][specialIdx]) {
+            s[typeArray][specialIdx][field] = value;
+            this.saveToStorage();
+        }
+    },
+    removeSpecialSet(exIndex, setId, typeArray, specialIdx) {
+        const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
+        if(s && s[typeArray]) {
+            s[typeArray].splice(specialIdx, 1);
+            this.saveToStorage(); this.renderActiveWorkout();
+        }
     },
     updateActiveSessionNote(exIndex, value) {
         if(this.state.activeWorkout.exercises[exIndex]) {
@@ -416,6 +607,7 @@ const App = {
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h4 style="color:var(--primary-color); margin:0;">${exName}</h4>
                     <div style="display:flex; gap:5px;">
+                        <button class="btn-small" style="background:rgba(239, 68, 68, 0.1); border:1px solid var(--danger-color); color:var(--danger-color); border-radius:8px;" onclick="App.removeActiveExercise(${exIndex})">🗑</button>
                         <button class="btn-small" style="background:rgba(14, 165, 233, 0.1); border:1px solid var(--primary-color); color:var(--primary-color); border-radius:8px;" onclick="App.toggleUI('hist-${exItem.exId}-${exIndex}')">📊 Storico</button>
                         <button class="btn-small" style="background:rgba(255, 255, 255, 0.05); border:1px solid var(--glass-border); color:var(--text-muted); border-radius:8px;" onclick="App.toggleUI('setup-${exItem.exId}-${exIndex}')">📝 Setup</button>
                     </div>
@@ -435,14 +627,49 @@ const App = {
                 `;
             
             exItem.sets.forEach((s, sIndex) => {
+                let specialHtml = '';
+                if(s.dropsets) {
+                    s.dropsets.forEach((ds, dsIdx) => {
+                        specialHtml += `<div class="set-row special-row" style="margin-left: 20px; border-left: 2px solid var(--warning-color); padding-left: 10px;">
+                            <div style="font-size:0.75rem; color:var(--warning-color);">↳ Dropset</div>
+                            <div class="set-controls">
+                                <input type="number" step="0.25" placeholder="Kg" value="${ds.kg}" onchange="App.updateSpecialSet(${exIndex}, '${s.id}', 'dropsets', ${dsIdx}, 'kg', this.value)" style="margin:0">
+                                <input type="number" placeholder="Reps" value="${ds.reps}" onchange="App.updateSpecialSet(${exIndex}, '${s.id}', 'dropsets', ${dsIdx}, 'reps', this.value)" style="margin:0">
+                                <button class="btn-icon" style="color:var(--danger-color); padding:0 5px;" onclick="App.removeSpecialSet(${exIndex}, '${s.id}', 'dropsets', ${dsIdx})">×</button>
+                            </div>
+                        </div>`;
+                    });
+                }
+                if(s.isometrics) {
+                    s.isometrics.forEach((iso, isoIdx) => {
+                        specialHtml += `<div class="set-row special-row" style="margin-left: 20px; border-left: 2px solid var(--accent-color); padding-left: 10px;">
+                            <div style="font-size:0.75rem; color:var(--accent-color);">↳ Isometria</div>
+                            <div class="set-controls">
+                                <input type="number" step="0.25" placeholder="Kg" value="${iso.kg}" onchange="App.updateSpecialSet(${exIndex}, '${s.id}', 'isometrics', ${isoIdx}, 'kg', this.value)" style="margin:0">
+                                <input type="number" placeholder="Sec" value="${iso.time}" onchange="App.updateSpecialSet(${exIndex}, '${s.id}', 'isometrics', ${isoIdx}, 'time', this.value)" style="margin:0">
+                                <button class="btn-icon" style="color:var(--danger-color); padding:0 5px;" onclick="App.removeSpecialSet(${exIndex}, '${s.id}', 'isometrics', ${isoIdx})">×</button>
+                            </div>
+                        </div>`;
+                    });
+                }
+
                 html += `
                 <div class="set-row">
-                    <div style="font-size:0.8rem; margin-bottom:8px; font-weight:600; color:var(--text-main)">Serie ${sIndex + 1}</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:0.8rem; font-weight:600; color:var(--text-main)">Serie ${sIndex + 1}</span>
+                        <button class="btn-icon" style="color:var(--danger-color); font-size:1rem;" onclick="App.removeActiveSet(${exIndex}, ${sIndex})">🗑</button>
+                    </div>
                     <div class="set-controls">
                         <input type="number" step="0.25" placeholder="Kg" value="${s.kg}" oninput="App.validateInput(this, 'float')" onchange="App.updateActiveSet(${exIndex}, '${s.id}', 'kg', this.value)" style="margin:0">
                         <input type="number" placeholder="Reps" value="${s.reps}" oninput="App.validateInput(this, 'int')" onchange="App.updateActiveSet(${exIndex}, '${s.id}', 'reps', this.value)" style="margin:0">
+                        <button class="btn-icon" style="background:var(--primary-color); border-radius:50%; width:28px; height:28px; color:#fff;" onclick="App.toggleUI('special-menu-${s.id}')">+</button>
                     </div>
-                </div>`;
+                </div>
+                <div id="special-menu-${s.id}" style="display:none; text-align:right; margin-bottom:10px;">
+                    <button class="btn-small" style="background:var(--warning-color); color:#fff; border:none; border-radius:4px; padding:4px 8px;" onclick="App.addSpecialSet(${exIndex}, '${s.id}', 'dropset')">Dropset</button>
+                    <button class="btn-small" style="background:var(--accent-color); color:#fff; border:none; border-radius:4px; padding:4px 8px;" onclick="App.addSpecialSet(${exIndex}, '${s.id}', 'isometry')">Isometria</button>
+                </div>
+                ${specialHtml}`;
             });
 
             html += `<button class="btn btn-small" style="border:1px dashed var(--glass-border); background:rgba(255,255,255,0.05)" onclick="App.addSetToActiveEx(${exIndex})">+ Aggiungi Serie</button>

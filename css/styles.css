@@ -360,3 +360,21 @@ input:focus, select:focus, textarea:focus {
     font-weight: bold;
     box-shadow: 0 4px 15px var(--primary-glow);
 }
+
+/* Mappa Muscolare SVG */
+.muscle-svg {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    padding: 10px;
+}
+.muscle-group {
+    fill: var(--surface-light);
+    stroke: var(--bg-color);
+    stroke-width: 1;
+    transition: fill 0.3s ease, stroke 0.3s ease;
+}
+.muscle-group.active {
+    fill: var(--danger-color);
+    stroke: #ff7b7b;
+}

@@ -2,6 +2,20 @@
 // Funzioni logiche pure, scorporate dalla UI e dal database
 
 export const Logic = {
+    MUSCLES: [
+        { id: "chest", name: "Petto" },
+        { id: "back", name: "Dorso" },
+        { id: "shoulders", name: "Spalle" },
+        { id: "biceps", name: "Bicipiti" },
+        { id: "triceps", name: "Tricipiti" },
+        { id: "forearms", name: "Avambracci" },
+        { id: "abs", name: "Addome" },
+        { id: "glutes", name: "Glutei" },
+        { id: "quads", name: "Quadricipiti" },
+        { id: "hamstrings", name: "Femorali" },
+        { id: "calves", name: "Polpacci" }
+    ],
+
     generateId(prefix) { 
         return prefix + '_' + Math.random().toString(36).substr(2, 9); 
     },
