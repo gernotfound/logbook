@@ -369,7 +369,7 @@ input:focus, select:focus, textarea:focus {
 .muscle-group {
     fill: var(--surface-light);
     stroke: var(--bg-color);
-    stroke-width: 1;
+    stroke-width: 0.2;
     transition: fill 0.3s ease, stroke 0.3s ease;
 }
 .muscle-group.active {
