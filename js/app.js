@@ -212,42 +212,48 @@ const App = {
         const clone = template.content.cloneNode(true);
         
         activeMusclesIds.forEach(mId => {
-            let svgIds = [];
-            if(mId === 'chest') svgIds = ['svg-chest_upper', 'svg-chest_lower'];
-            else if(mId === 'chest_upper') svgIds = ['svg-chest_upper'];
-            else if(mId === 'chest_lower') svgIds = ['svg-chest_lower'];
-            else if(mId === 'back') svgIds = ['svg-traps', 'svg-lats', 'svg-rhomboids', 'svg-lower_back'];
-            else if(mId === 'lats') svgIds = ['svg-lats'];
-            else if(mId === 'traps') svgIds = ['svg-traps'];
-            else if(mId === 'rhomboids') svgIds = ['svg-rhomboids'];
-            else if(mId === 'lower_back') svgIds = ['svg-lower_back'];
-            else if(mId === 'shoulders') svgIds = ['svg-delts_front', 'svg-delts_side', 'svg-delts_rear'];
-            else if(mId === 'delts_front') svgIds = ['svg-delts_front'];
-            else if(mId === 'delts_side') svgIds = ['svg-delts_side'];
-            else if(mId === 'delts_rear') svgIds = ['svg-delts_rear'];
-            else if(mId === 'biceps') svgIds = ['svg-biceps_long', 'svg-biceps_short'];
-            else if(mId === 'biceps_long') svgIds = ['svg-biceps_long'];
-            else if(mId === 'biceps_short') svgIds = ['svg-biceps_short'];
-            else if(mId === 'brachialis') svgIds = ['svg-brachialis'];
-            else if(mId === 'triceps') svgIds = ['svg-triceps_right', 'svg-triceps_left', 'svg-triceps_lateral', 'svg-triceps_long'];
-            else if(mId === 'triceps_right') svgIds = ['svg-triceps_right'];
-            else if(mId === 'triceps_left') svgIds = ['svg-triceps_left'];
-            else if(mId === 'triceps_lateral') svgIds = ['svg-triceps_lateral'];
-            else if(mId === 'triceps_long') svgIds = ['svg-triceps_long'];
-            else if(mId === 'triceps_medial') svgIds = ['svg-triceps_lateral', 'svg-triceps_long'];
-            else if(mId === 'forearms') svgIds = ['svg-forearms'];
-            else if(mId === 'abs') svgIds = ['svg-abs'];
-            else if(mId === 'obliques') svgIds = ['svg-obliques'];
-            else if(mId === 'core') svgIds = ['svg-abs', 'svg-obliques', 'svg-lower_back'];
-            else if(mId === 'quads') svgIds = ['svg-quads'];
-            else if(mId === 'adductors') svgIds = ['svg-adductors'];
-            else if(mId === 'abductors') svgIds = ['svg-abductors'];
-            else if(mId === 'glutes') svgIds = ['svg-glutes_right', 'svg-glutes_left'];
-            else if(mId === 'glutes_right') svgIds = ['svg-glutes_right'];
-            else if(mId === 'glutes_left') svgIds = ['svg-glutes_left'];
-            else if(mId === 'hamstrings') svgIds = ['svg-hamstrings'];
-            else if(mId === 'calves') svgIds = ['svg-calves'];
-            else svgIds = [`svg-${mId}`];
+            const GROUP_MAP = {
+                'chest': ['chest-upper-left', 'chest-lower-left', 'chest-upper-right', 'chest-lower-right'],
+                'chest_upper': ['chest-upper-left', 'chest-upper-right'],
+                'chest_lower': ['chest-lower-left', 'chest-lower-right'],
+                'chest_left': ['chest-upper-left', 'chest-lower-left'],
+                'chest_right': ['chest-upper-right', 'chest-lower-right'],
+                'back': ['traps-upper-left', 'traps-mid-left', 'traps-lower-left', 'traps-upper-right', 'traps-mid-right', 'traps-lower-right', 'lats-upper-left', 'lats-mid-left', 'lats-lower-left', 'lats-upper-right', 'lats-mid-right', 'lats-lower-right', 'lower-back-erectors-left', 'lower-back-ql-left', 'lower-back-erectors-right', 'lower-back-ql-right', 'spine'],
+                'lats': ['lats-upper-left', 'lats-mid-left', 'lats-lower-left', 'lats-upper-right', 'lats-mid-right', 'lats-lower-right'],
+                'traps': ['traps-upper-left', 'traps-mid-left', 'traps-lower-left', 'traps-upper-right', 'traps-mid-right', 'traps-lower-right', 'nape'],
+                'rhomboids': ['traps-mid-left', 'traps-mid-right'],
+                'lower_back': ['lower-back-erectors-left', 'lower-back-ql-left', 'lower-back-erectors-right', 'lower-back-ql-right', 'spine'],
+                'shoulders': ['shoulder-front-left', 'shoulder-side-left', 'shoulder-front-right', 'shoulder-side-right', 'deltoid-rear-left', 'deltoid-rear-right'],
+                'delts_front': ['shoulder-front-left', 'shoulder-front-right'],
+                'delts_side': ['shoulder-side-left', 'shoulder-side-right'],
+                'delts_rear': ['deltoid-rear-left', 'deltoid-rear-right'],
+                'biceps': ['biceps-left', 'biceps-right'],
+                'biceps_long': ['biceps-left', 'biceps-right'],
+                'biceps_short': ['biceps-left', 'biceps-right'],
+                'brachialis': ['biceps-left', 'biceps-right'],
+                'triceps': ['triceps-long-left', 'triceps-lateral-left', 'triceps-long-right', 'triceps-lateral-right'],
+                'triceps_long': ['triceps-long-left', 'triceps-long-right'],
+                'triceps_lateral': ['triceps-lateral-left', 'triceps-lateral-right'],
+                'triceps_medial': ['triceps-long-left', 'triceps-long-right'],
+                'triceps_right': ['triceps-long-right', 'triceps-lateral-right'],
+                'triceps_left': ['triceps-long-left', 'triceps-lateral-left'],
+                'forearms': ['forearm-left', 'forearm-right', 'forearm-flexors-left', 'forearm-extensors-left', 'forearm-flexors-right', 'forearm-extensors-right'],
+                'abs': ['abs-upper-left', 'abs-upper-right', 'abs-lower-left', 'abs-lower-right'],
+                'abs_upper': ['abs-upper-left', 'abs-upper-right'],
+                'abs_lower': ['abs-lower-left', 'abs-lower-right'],
+                'obliques': ['obliques-left', 'obliques-right', 'serratus-anterior-left', 'serratus-anterior-right'],
+                'core': ['abs-upper-left', 'abs-upper-right', 'abs-lower-left', 'abs-lower-right', 'obliques-left', 'obliques-right', 'lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right'],
+                'quads': ['quads-left', 'quads-right'],
+                'adductors': ['adductors-left', 'adductors-right'],
+                'abductors': ['gluteus-medius-left', 'gluteus-medius-right'],
+                'glutes': ['gluteus-maximus-left', 'gluteus-maximus-right', 'gluteus-medius-left', 'gluteus-medius-right'],
+                'glutes_right': ['gluteus-maximus-right', 'gluteus-medius-right'],
+                'glutes_left': ['gluteus-maximus-left', 'gluteus-medius-left'],
+                'hamstrings': ['hamstrings-medial-left', 'hamstrings-lateral-left', 'hamstrings-medial-right', 'hamstrings-lateral-right'],
+                'calves': ['calves-gastroc-medial-left', 'calves-gastroc-lateral-left', 'calves-soleus-left', 'calves-gastroc-medial-right', 'calves-gastroc-lateral-right', 'calves-soleus-right']
+            };
+            
+            let svgIds = GROUP_MAP[mId] || [mId];
             
             svgIds.forEach(sid => {
                 const el = clone.getElementById(sid);
