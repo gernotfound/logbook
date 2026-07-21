@@ -113,9 +113,10 @@ const App = {
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         document.getElementById('view-' + tabName).classList.add('active');
         const navs = document.querySelectorAll('.nav-item');
-        if (tabName === 'training') navs[0].classList.add('active');
-        if (tabName === 'nutrition') navs[1].classList.add('active');
-        if (tabName === 'data') navs[2].classList.add('active');
+        if (tabName === 'home') navs[0].classList.add('active');
+        if (tabName === 'training') navs[1].classList.add('active');
+        if (tabName === 'nutrition') navs[2].classList.add('active');
+        if (tabName === 'data') navs[3].classList.add('active');
         this.renderAll();
     },
     switchTrainingTab(subTab, btnElement) {
@@ -957,6 +958,103 @@ const App = {
             </div>`;
     },
 
+    renderHomeDashboard() {
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // --- 1. Workout Status ---
+        let workoutToday = this.state.history.find(w => {
+            const date = new Date(w.globalStartTime || Date.now());
+            // adjust timezone offset to get local YYYY-MM-DD
+            const localStr = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+            return localStr === todayStr;
+        });
+
+        const iconEl = document.getElementById('home-workout-icon');
+        const titleEl = document.getElementById('home-workout-title');
+        const subEl = document.getElementById('home-workout-subtitle');
+        const widgetEl = document.getElementById('home-workout-widget');
+
+        if (this.state.activeWorkout) {
+            iconEl.innerText = "⏳";
+            titleEl.innerText = "In Corso";
+            subEl.innerText = this.state.activeWorkout.routineName || "Allenamento attivo";
+            widgetEl.style.borderLeftColor = "var(--warning-color)";
+        } else if (workoutToday) {
+            iconEl.innerText = "✅";
+            titleEl.innerText = "Completato";
+            subEl.innerText = workoutToday.routineName || "Allenamento terminato";
+            widgetEl.style.borderLeftColor = "var(--success-color)";
+        } else {
+            iconEl.innerText = "😴";
+            titleEl.innerText = "Riposo";
+            subEl.innerText = "Nessun allenamento oggi.";
+            widgetEl.style.borderLeftColor = "var(--primary-color)";
+        }
+
+        // --- 2. Nutrition ---
+        const calc = Logic.calculateTDEEAndMacros(this.state);
+        const tdee = calc.tdee || 2500;
+        document.getElementById('home-kcal-target').innerText = tdee;
+        
+        const nut = this.state.nutrition[todayStr];
+        const kcal = nut && nut.kcal ? parseFloat(nut.kcal) : 0;
+        const carbs = nut && nut.carbs ? nut.carbs : 0;
+        const pro = nut && nut.pro ? nut.pro : 0;
+        const fat = nut && nut.fat ? nut.fat : 0;
+
+        document.getElementById('home-kcal-eaten').innerText = kcal;
+        document.getElementById('home-carbs-val').innerText = carbs + "g";
+        document.getElementById('home-pro-val').innerText = pro + "g";
+        document.getElementById('home-fat-val').innerText = fat + "g";
+        
+        const pct = Math.min(100, Math.max(0, (kcal / tdee) * 100));
+        document.getElementById('home-kcal-bar').style.width = pct + "%";
+
+        // --- 3. Body Fat & Streak ---
+        document.getElementById('home-bf-display').innerText = calc.bf ? calc.bf.toFixed(1) + "%" : "--%";
+        document.getElementById('home-streak-display').innerText = "🔥 " + this.state.history.length;
+
+        // --- 4. Chart.js ---
+        if(typeof Chart === 'undefined') return;
+
+        const sortedDates = Object.keys(this.state.nutrition).sort((a,b) => new Date(a) - new Date(b));
+        const weightDates = sortedDates.filter(d => this.state.nutrition[d].weight).slice(-14);
+        const labels = weightDates.map(d => d.slice(5)); // MM-DD
+        const data = weightDates.map(d => parseFloat(this.state.nutrition[d].weight));
+
+        const canvas = document.getElementById('weightChart');
+        if(!canvas) return;
+
+        if (window.weightChartInstance) {
+            window.weightChartInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+        window.weightChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Peso (kg)',
+                    data: data,
+                    borderColor: '#3b82f6',
+                    tension: 0.3,
+                    fill: true,
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { 
+                    x: { ticks: { color: 'rgba(255,255,255,0.7)' } },
+                    y: { ticks: { color: 'rgba(255,255,255,0.7)' } } 
+                }
+            }
+        });
+    },
+
     renderAll() {
         document.getElementById('profile-dob').value = this.state.profile.dob || '';
         document.getElementById('profile-height').value = this.state.profile.height || '';
@@ -964,6 +1062,7 @@ const App = {
 
         this.renderLibrary(); this.renderRoutineBuilder(); this.renderWorkoutView();
         this.loadNutritionDate(document.getElementById('nutri-date').value);
+        this.renderHomeDashboard();
     }
 };
 

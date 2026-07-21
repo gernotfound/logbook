@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body ontouchstart="">
 
@@ -63,9 +64,89 @@
 
 
     <!-- =========================================
+         VISTA 0: HOME / DASHBOARD
+         ========================================= -->
+    <div id="view-home" class="view-section active">
+        <h2 style="margin-top: 10px; margin-bottom: 25px;">Panoramica di Oggi</h2>
+        
+        <!-- Widget Stato Allenamento -->
+        <div class="card" id="home-workout-widget" style="display:flex; align-items:center; gap:15px; border-left: 4px solid var(--primary-color);">
+            <div style="font-size: 2.5rem;" id="home-workout-icon">😴</div>
+            <div>
+                <h4 id="home-workout-title" style="margin:0;">Riposo</h4>
+                <p id="home-workout-subtitle" style="margin:0; font-size:0.85rem;">Nessun allenamento oggi.</p>
+            </div>
+            <button class="btn btn-small btn-primary" style="margin-left:auto; margin-bottom:0;" onclick="App.switchMainTab('training')">Vai</button>
+        </div>
+
+        <!-- Widget Calorie e Macros -->
+        <div class="card" id="home-nutrition-widget">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h4 style="margin:0;">Nutrizione Odierna</h4>
+                <button class="btn-icon" style="color:var(--primary-color)" onclick="App.switchMainTab('nutrition')">✏️</button>
+            </div>
+            
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+                <div>
+                    <div style="font-size:1.8rem; font-weight:800; color:var(--text-main);" id="home-kcal-eaten">0</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">kcal assunte</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:1.2rem; font-weight:bold; color:var(--warning-color);" id="home-kcal-target">---</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">TDEE stimato</div>
+                </div>
+            </div>
+
+            <!-- Progress Bar Kcal -->
+            <div class="progress-bg" style="margin-bottom:20px;">
+                <div class="progress-fill" id="home-kcal-bar" style="width: 0%; background: linear-gradient(90deg, var(--warning-color), #fcd34d);"></div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; gap:10px;">
+                <!-- Carbs -->
+                <div style="flex:1; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid var(--glass-border); text-align:center;">
+                    <div style="font-size:0.75rem; color:var(--success-color); font-weight:bold;">CARBO</div>
+                    <div style="font-size:1.1rem; font-weight:bold;" id="home-carbs-val">0g</div>
+                </div>
+                <!-- Pro -->
+                <div style="flex:1; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid var(--glass-border); text-align:center;">
+                    <div style="font-size:0.75rem; color:var(--primary-color); font-weight:bold;">PRO</div>
+                    <div style="font-size:1.1rem; font-weight:bold;" id="home-pro-val">0g</div>
+                </div>
+                <!-- Fat -->
+                <div style="flex:1; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid var(--glass-border); text-align:center;">
+                    <div style="font-size:0.75rem; color:#f43f5e; font-weight:bold;">GRASSI</div>
+                    <div style="font-size:1.1rem; font-weight:bold;" id="home-fat-val">0g</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Widget TDEE & Body Fat -->
+        <div style="display:flex; gap:15px; margin-bottom:20px;">
+            <div class="card" style="flex:1; text-align:center; margin-bottom:0; padding:15px;">
+                <div style="font-size:0.8rem; color:var(--text-muted);">Massa Grassa (Stima)</div>
+                <div style="font-size:1.5rem; font-weight:bold; color:var(--text-main); margin-top:5px;" id="home-bf-display">-- %</div>
+            </div>
+            <div class="card" style="flex:1; text-align:center; margin-bottom:0; padding:15px;">
+                <div style="font-size:0.8rem; color:var(--text-muted);">Streak Allenamenti</div>
+                <div style="font-size:1.5rem; font-weight:bold; color:var(--text-main); margin-top:5px;" id="home-streak-display">🔥 0</div>
+            </div>
+        </div>
+
+        <!-- Widget Grafico Peso -->
+        <div class="card" id="home-chart-widget">
+            <h4 style="margin-bottom:15px;">Trend Peso Corporeo (Ultimi 14gg)</h4>
+            <div style="position: relative; height:200px; width:100%;">
+                <canvas id="weightChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- =========================================
          VISTA 1: TRAINING
          ========================================= -->
-    <div id="view-training" class="view-section active">
+    <div id="view-training" class="view-section">
         
         <div class="sub-nav">
             <div class="sub-nav-btn active" onclick="App.switchTrainingTab('session', this)">Sessione</div>
@@ -245,7 +326,8 @@
     <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
         <div class="nav-container">
-            <div class="nav-item active" onclick="App.switchMainTab('training')"><span>🏋️‍♂️</span><span>Training</span></div>
+            <div class="nav-item active" onclick="App.switchMainTab('home')"><span>🏠</span><span>Home</span></div>
+            <div class="nav-item" onclick="App.switchMainTab('training')"><span>🏋️‍♂️</span><span>Training</span></div>
             <div class="nav-item" onclick="App.switchMainTab('nutrition')"><span>🍎</span><span>Nutrizione</span></div>
             <div class="nav-item" onclick="App.switchMainTab('data')"><span>⚙️</span><span>Impostazioni</span></div>
         </div>

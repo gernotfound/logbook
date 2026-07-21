@@ -376,3 +376,20 @@ input:focus, select:focus, textarea:focus {
     fill: var(--danger-color);
     stroke: #ff7b7b;
 }
+
+/* Home Dashboard Styles */
+.progress-bg {
+    width: 100%;
+    height: 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#weightChart {
+    max-height: 200px;
+}
