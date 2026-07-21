@@ -1,4 +1,4 @@
-﻿import { Logic } from './logic.js';
+import { Logic } from './logic.js';
 import { DB } from './db.js';
 import { auth, provider, signInWithPopup, onAuthStateChanged } from './firebase-config.js';
 
@@ -128,8 +128,8 @@ const App = {
     // --- TIMERS ---
     timers: {
         restStartTime: 0, restAccumulated: 0, restState: 'stopped',
+        lastRestStr: '', lastGlobalStr: '',
         initLoop() { 
-            // requestAnimationFrame per performance migliori del timer (Fix Problema 3)
             const loop = () => {
                 App.timers.updateDisplay();
                 requestAnimationFrame(loop);
@@ -139,16 +139,26 @@ const App = {
         updateDisplay() {
             if (this.restState === 'running') {
                 const elapsed = Date.now() - this.restStartTime + this.restAccumulated;
-                document.getElementById('rest-timer-display').innerText = Logic.formatTime(elapsed);
+                const str = Logic.formatTime(elapsed);
+                if (str !== this.lastRestStr) {
+                    const el = document.getElementById('rest-timer-display');
+                    if(el) el.innerText = str;
+                    this.lastRestStr = str;
+                }
             }
             if (App.state.activeWorkout && App.state.activeWorkout.globalStartTime) {
                 const elapsed = Date.now() - App.state.activeWorkout.globalStartTime;
-                document.getElementById('global-timer-display').innerText = Logic.formatTime(elapsed, true);
+                const str = Logic.formatTime(elapsed, true);
+                if (str !== this.lastGlobalStr) {
+                    const el = document.getElementById('global-timer-display');
+                    if(el) el.innerText = str;
+                    this.lastGlobalStr = str;
+                }
             }
         },
         startRest() { if(this.restState !== 'running') { this.restStartTime = Date.now(); this.restState = 'running'; } },
         pauseRest() { if(this.restState === 'running') { this.restAccumulated += (Date.now() - this.restStartTime); this.restState = 'paused'; } },
-        stopRest() { this.restState = 'stopped'; this.restAccumulated = 0; document.getElementById('rest-timer-display').innerText = "00:00"; },
+        stopRest() { this.restState = 'stopped'; this.restAccumulated = 0; document.getElementById('rest-timer-display').innerText = "00:00"; this.lastRestStr = "00:00"; },
         resetRest() { this.restAccumulated = 0; this.restStartTime = Date.now(); this.restState = 'running'; }
     },
 

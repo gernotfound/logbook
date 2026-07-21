@@ -1,5 +1,5 @@
 // MODIFICA QUESTO NUMERO DI VERSIONE SE VUOI FORZARE UNA PULIZIA PROFONDA DELLA CACHE SUI DISPOSITIVI
-const APP_VERSION = 'v2.0.2';
+const APP_VERSION = 'v2.1.0';
 const CACHE_NAME = `logbook-cache-${APP_VERSION}`;
 
 // File critici da memorizzare subito all'installazione
@@ -47,10 +47,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   // Ignora le chiamate alle API esterne di Google e Firebase (devono essere gestite online o dall'SDK offline di Firebase)
+  // Ignora anche richieste non http (es. estensioni chrome) per evitare crash
   if (event.request.method !== 'GET' || 
       event.request.url.includes('firestore') || 
       event.request.url.includes('googleapis') || 
-      event.request.url.includes('gstatic')) {
+      event.request.url.includes('gstatic') ||
+      !event.request.url.startsWith('http')) {
       return;
   }
 

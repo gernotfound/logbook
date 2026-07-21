@@ -1,9 +1,12 @@
 {
-  "name": "LogBook",
+  "name": "LogBook Premium",
   "short_name": "LogBook",
-  "description": "App avanzata per tracciare allenamento e nutrizione",
+  "description": "L'app definitiva per il tracciamento di allenamento, nutrizione e progressi. Funziona anche offline in palestra.",
   "start_url": "./index.html",
   "display": "standalone",
+  "orientation": "portrait",
+  "lang": "it-IT",
+  "categories": ["fitness", "health", "lifestyle"],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "icons": [

@@ -1,4 +1,4 @@
-﻿// js/logic.js
+// js/logic.js
 // Funzioni logiche pure, scorporate dalla UI e dal database
 
 export const Logic = {
@@ -115,10 +115,14 @@ export const Logic = {
     validateInputData(value, type) {
         if(value === '' || value === null) return '';
         if(type === 'int') {
-            return Math.abs(parseInt(value.toString().replace(/[^0-9]/g, ''), 10)) || '';
+            return value.toString().replace(/[^0-9]/g, '');
         } else if(type === 'float') {
-            let val = parseFloat(value);
-            return val < 0 ? Math.abs(val) : val;
+            let val = value.toString().replace(/[^0-9.]/g, '');
+            const parts = val.split('.');
+            if (parts.length > 2) {
+                val = parts[0] + '.' + parts.slice(1).join('');
+            }
+            return val;
         }
         return value;
     },
