@@ -1,4 +1,4 @@
-import { Logic } from './logic.js';
+﻿import { Logic } from './logic.js';
 import { DB } from './db.js';
 import { auth, provider, signInWithPopup, onAuthStateChanged } from './firebase-config.js';
 
@@ -212,45 +212,53 @@ const App = {
         const clone = template.content.cloneNode(true);
         
         activeMusclesIds.forEach(mId => {
-            const GROUP_MAP = {
-                'chest': ['chest-upper-left', 'chest-lower-left', 'chest-upper-right', 'chest-lower-right'],
-                'chest_upper': ['chest-upper-left', 'chest-upper-right'],
-                'chest_lower': ['chest-lower-left', 'chest-lower-right'],
-                'chest_left': ['chest-upper-left', 'chest-lower-left'],
-                'chest_right': ['chest-upper-right', 'chest-lower-right'],
-                'back': ['traps-upper-left', 'traps-mid-left', 'traps-lower-left', 'traps-upper-right', 'traps-mid-right', 'traps-lower-right', 'lats-upper-left', 'lats-mid-left', 'lats-lower-left', 'lats-upper-right', 'lats-mid-right', 'lats-lower-right', 'lower-back-erectors-left', 'lower-back-ql-left', 'lower-back-erectors-right', 'lower-back-ql-right', 'spine'],
-                'lats': ['lats-upper-left', 'lats-mid-left', 'lats-lower-left', 'lats-upper-right', 'lats-mid-right', 'lats-lower-right'],
-                'traps': ['traps-upper-left', 'traps-mid-left', 'traps-lower-left', 'traps-upper-right', 'traps-mid-right', 'traps-lower-right', 'nape'],
-                'rhomboids': ['traps-mid-left', 'traps-mid-right'],
-                'lower_back': ['lower-back-erectors-left', 'lower-back-ql-left', 'lower-back-erectors-right', 'lower-back-ql-right', 'spine'],
-                'shoulders': ['shoulder-front-left', 'shoulder-side-left', 'shoulder-front-right', 'shoulder-side-right', 'deltoid-rear-left', 'deltoid-rear-right'],
-                'delts_front': ['shoulder-front-left', 'shoulder-front-right'],
-                'delts_side': ['shoulder-side-left', 'shoulder-side-right'],
-                'delts_rear': ['deltoid-rear-left', 'deltoid-rear-right'],
-                'biceps': ['biceps-left', 'biceps-right'],
-                'biceps_long': ['biceps-left', 'biceps-right'],
-                'biceps_short': ['biceps-left', 'biceps-right'],
-                'brachialis': ['biceps-left', 'biceps-right'],
-                'triceps': ['triceps-long-left', 'triceps-lateral-left', 'triceps-long-right', 'triceps-lateral-right'],
-                'triceps_long': ['triceps-long-left', 'triceps-long-right'],
-                'triceps_lateral': ['triceps-lateral-left', 'triceps-lateral-right'],
-                'triceps_medial': ['triceps-long-left', 'triceps-long-right'],
-                'triceps_right': ['triceps-long-right', 'triceps-lateral-right'],
-                'triceps_left': ['triceps-long-left', 'triceps-lateral-left'],
-                'forearms': ['forearm-left', 'forearm-right', 'forearm-flexors-left', 'forearm-extensors-left', 'forearm-flexors-right', 'forearm-extensors-right'],
-                'abs': ['abs-upper-left', 'abs-upper-right', 'abs-lower-left', 'abs-lower-right'],
-                'abs_upper': ['abs-upper-left', 'abs-upper-right'],
-                'abs_lower': ['abs-lower-left', 'abs-lower-right'],
-                'obliques': ['obliques-left', 'obliques-right', 'serratus-anterior-left', 'serratus-anterior-right'],
-                'core': ['abs-upper-left', 'abs-upper-right', 'abs-lower-left', 'abs-lower-right', 'obliques-left', 'obliques-right', 'lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right'],
-                'quads': ['quads-left', 'quads-right'],
-                'adductors': ['adductors-left', 'adductors-right'],
+                        const GROUP_MAP = {
                 'abductors': ['gluteus-medius-left', 'gluteus-medius-right'],
+                'abductors_left': ['gluteus-medius-left'],
+                'abductors_right': ['gluteus-medius-right'],
+                'abs': ['abs-lower-left', 'abs-lower-right', 'abs-upper-left', 'abs-upper-right'],
+                'abs_lower': ['abs-lower-left', 'abs-lower-right'],
+                'abs_upper': ['abs-upper-left', 'abs-upper-right'],
+                'adductors': ['adductors-left_1', 'adductors-left_2', 'adductors-right_1', 'adductors-right_2'],
+                'back': ['lats-lower-left', 'lats-lower-right', 'lats-mid-left', 'lats-mid-right', 'lats-upper-left', 'lats-upper-right', 'lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right', 'nape_1', 'nape_2', 'spine', 'traps-lower-left', 'traps-lower-right', 'traps-mid-left', 'traps-mid-right', 'traps-upper-left', 'traps-upper-right'],
+                'biceps': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
+                'biceps_left': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3'],
+                'biceps_long': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
+                'biceps_right': ['biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
+                'biceps_short': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
+                'brachialis': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
+                'calves': ['calves-gastroc-lateral-left', 'calves-gastroc-lateral-right', 'calves-gastroc-medial-left', 'calves-gastroc-medial-right', 'calves-soleus-left', 'calves-soleus-right'],
+                'chest': ['chest-lower-left', 'chest-lower-right', 'chest-upper-left', 'chest-upper-right'],
+                'chest_left': ['chest-lower-left', 'chest-upper-left'],
+                'chest_lower': ['chest-lower-left', 'chest-lower-right'],
+                'chest_right': ['chest-lower-right', 'chest-upper-right'],
+                'chest_upper': ['chest-upper-left', 'chest-upper-right'],
+                'core': ['abs-lower-left', 'abs-lower-right', 'abs-upper-left', 'abs-upper-right', 'lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right', 'obliques-left_1', 'obliques-left_2', 'obliques-left_3', 'obliques-right_1', 'obliques-right_2', 'obliques-right_3'],
+                'delts_front': ['shoulder-front-left_1', 'shoulder-front-left_2', 'shoulder-front-right_1', 'shoulder-front-right_2'],
+                'delts_rear': ['deltoid-rear-left', 'deltoid-rear-right'],
+                'delts_side': ['shoulder-side-left_1', 'shoulder-side-left_2', 'shoulder-side-right_1', 'shoulder-side-right_2'],
+                'forearms': ['forearm-extensors-left', 'forearm-extensors-right', 'forearm-flexors-left', 'forearm-flexors-right', 'forearm-left_1', 'forearm-left_2', 'forearm-right_1', 'forearm-right_2', 'hand-left', 'hand-right'],
+                'forearms_left': ['forearm-extensors-left', 'forearm-flexors-left', 'forearm-left_1', 'forearm-left_2', 'hand-left'],
+                'forearms_right': ['forearm-extensors-right', 'forearm-flexors-right', 'forearm-right_1', 'forearm-right_2', 'hand-right'],
                 'glutes': ['gluteus-maximus-left', 'gluteus-maximus-right', 'gluteus-medius-left', 'gluteus-medius-right'],
-                'glutes_right': ['gluteus-maximus-right', 'gluteus-medius-right'],
                 'glutes_left': ['gluteus-maximus-left', 'gluteus-medius-left'],
-                'hamstrings': ['hamstrings-medial-left', 'hamstrings-lateral-left', 'hamstrings-medial-right', 'hamstrings-lateral-right'],
-                'calves': ['calves-gastroc-medial-left', 'calves-gastroc-lateral-left', 'calves-soleus-left', 'calves-gastroc-medial-right', 'calves-gastroc-lateral-right', 'calves-soleus-right']
+                'glutes_right': ['gluteus-maximus-right', 'gluteus-medius-right'],
+                'hamstrings': ['hamstrings-lateral-left', 'hamstrings-lateral-right', 'hamstrings-medial-left', 'hamstrings-medial-right'],
+                'hand_flexors_left': ['forearm-flexors-left', 'hand-left'],
+                'hand_flexors_right': ['forearm-flexors-right', 'hand-right'],
+                'lats': ['lats-lower-left', 'lats-lower-right', 'lats-mid-left', 'lats-mid-right', 'lats-upper-left', 'lats-upper-right'],
+                'lower_back': ['lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right', 'spine'],
+                'obliques': ['obliques-left_1', 'obliques-left_2', 'obliques-left_3', 'obliques-right_1', 'obliques-right_2', 'obliques-right_3', 'serratus-anterior-left_1', 'serratus-anterior-left_2', 'serratus-anterior-left_3', 'serratus-anterior-left_4', 'serratus-anterior-right_1', 'serratus-anterior-right_2', 'serratus-anterior-right_3', 'serratus-anterior-right_4'],
+                'quads': ['quads-left_1', 'quads-left_2', 'quads-left_3', 'quads-right_1', 'quads-right_2', 'quads-right_3'],
+                'rhomboids': ['traps-mid-left', 'traps-mid-right'],
+                'shoulders': ['deltoid-rear-left', 'deltoid-rear-right', 'shoulder-front-left_1', 'shoulder-front-left_2', 'shoulder-front-right_1', 'shoulder-front-right_2', 'shoulder-side-left_1', 'shoulder-side-left_2', 'shoulder-side-right_1', 'shoulder-side-right_2'],
+                'traps': ['nape_1', 'nape_2', 'traps-lower-left', 'traps-lower-right', 'traps-mid-left', 'traps-mid-right', 'traps-upper-left', 'traps-upper-right'],
+                'triceps': ['triceps-lateral-left', 'triceps-lateral-right', 'triceps-long-left', 'triceps-long-right'],
+                'triceps_lateral': ['triceps-lateral-left', 'triceps-lateral-right'],
+                'triceps_left': ['triceps-lateral-left', 'triceps-long-left'],
+                'triceps_long': ['triceps-long-left', 'triceps-long-right'],
+                'triceps_medial': ['triceps-long-left', 'triceps-long-right'],
+                'triceps_right': ['triceps-lateral-right', 'triceps-long-right'],
             };
             
             let svgIds = GROUP_MAP[mId] || [mId];
@@ -283,7 +291,9 @@ const App = {
                 ex.muscles = [...this.tempNewExMuscles];
             }
             this.editingExerciseId = null;
+            document.getElementById('new-ex-title').innerText = "Nuovo Esercizio";
             document.getElementById('btn-save-exercise').innerText = "+ Aggiungi in Archivio";
+            document.getElementById('btn-cancel-edit').style.display = "none";
         } else {
             // Crea nuovo
             if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) {
@@ -314,12 +324,25 @@ const App = {
         this.tempNewExMuscles = [...(ex.muscles || [])];
         
         this.editingExerciseId = id;
-        document.getElementById('btn-save-exercise').innerText = "💾 Aggiorna Esercizio";
+        document.getElementById('new-ex-title').innerText = "Modifica Esercizio";
+        document.getElementById('btn-save-exercise').innerText = "Aggiorna";
+        document.getElementById('btn-cancel-edit').style.display = "block";
         
         this.renderNewExMuscles();
         
         // Scroll in alto alla form di modifica
         document.getElementById('sub-exercises').scrollIntoView({behavior: 'smooth', block: 'start'});
+    },
+    cancelEditExercise() {
+        this.editingExerciseId = null;
+        document.getElementById('new-ex-name').value = '';
+        document.getElementById('new-ex-notes').value = '';
+        this.tempNewExMuscles = [];
+        this.renderNewExMuscles();
+        
+        document.getElementById('new-ex-title').innerText = "Nuovo Esercizio";
+        document.getElementById('btn-save-exercise').innerText = "+ Aggiungi in Archivio";
+        document.getElementById('btn-cancel-edit').style.display = "none";
     },
     updateLibraryEx(id, field, value) {
         const ex = this.state.library.find(e => e.id === id);
@@ -936,3 +959,6 @@ const App = {
 
 window.App = App; // Esponi globale per poter essere chiamato dall'HTML (onClick)
 window.onload = () => App.init();
+
+
+
