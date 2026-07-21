@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -94,7 +94,7 @@
                         <div class="timer-display" id="global-timer-display" style="font-size:1.8rem; margin:10px 0;">00:00:00</div>
                         
                         <div style="margin: 20px 0; padding: 15px; background: rgba(14, 165, 233, 0.1); border-radius: 12px; border: 1px solid var(--primary-color);">
-                            <label style="font-size:0.85rem; color:var(--primary-color); display:block; margin-bottom:8px;">ðŸ’§ Acqua bevuta (Litri)</label>
+                            <label style="font-size:0.85rem; color:var(--primary-color); display:block; margin-bottom:8px;">💧 Acqua bevuta (Litri)</label>
                             <input type="number" step="0.1" id="active-water-input" placeholder="es. 1.5" style="margin:0; width:100%; border-color:var(--primary-color);">
                         </div>
 
@@ -122,7 +122,7 @@
             <div class="card">
                 <h3>Crea Nuova Scheda</h3>
                 <input type="text" id="routine-name-input" placeholder="Nome Scheda (es. Push Day, Univoco)">
-                <button class="btn btn-primary" onclick="App.createRoutine()">ðŸ’¾ Salva Nuova Scheda</button>
+                <button class="btn btn-primary" onclick="App.createRoutine()">💾 Salva Nuova Scheda</button>
             </div>
             <h3 style="margin-top:20px;">Archivio Schede (A-Z)</h3>
             <div id="routines-list"></div>
@@ -161,13 +161,13 @@
          VISTA 2: NUTRIZIONE E TDEE
          ========================================= -->
     <div id="view-nutrition" class="view-section">
-        <h2>ðŸ Nutrizione & Corpo</h2>
+        <h2>🍎 Nutrizione & Corpo</h2>
         <div class="card">
             <h3>Registro di Oggi</h3>
             <input type="date" id="nutri-date" onchange="App.loadNutritionDate(this.value)">
             
             <div style="margin-top:20px; padding-bottom:20px; border-bottom:1px solid var(--glass-border);">
-                <label style="font-size:0.9rem; font-weight:bold; color:var(--primary-color)">âš–ï¸ Peso Corporeo (kg)</label>
+                <label style="font-size:0.9rem; font-weight:bold; color:var(--primary-color)">⚖️ Peso Corporeo (kg)</label>
                 <input type="number" step="0.1" id="nutri-weight" placeholder="es. 80.5" oninput="App.validateInput(this, 'float')" onchange="App.saveNutritionData()">
                 
                 <div style="background:rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-top:10px; text-align:center; border:1px solid var(--glass-border)">
@@ -177,7 +177,7 @@
             </div>
 
             <div style="margin-top:20px;">
-                <label style="font-size:0.9rem; font-weight:bold; color:var(--warning-color)">ðŸ”¥ Calorie Totali (kcal)</label>
+                <label style="font-size:0.9rem; font-weight:bold; color:var(--warning-color)">🔥 Calorie Totali (kcal)</label>
                 <input type="number" id="nutri-kcal" placeholder="es. 2500" oninput="App.validateInput(this, 'int')" onchange="App.saveNutritionData()">
                 
                 <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:5px;">Macros (Carbo, Pro, Grassi in g)</label>
@@ -207,7 +207,7 @@
          VISTA 3: DATI PERSONALI & EXPORT
          ========================================= -->
     <div id="view-data" class="view-section">
-        <h2>âš™ï¸ Impostazioni</h2>
+        <h2>⚙️ Impostazioni</h2>
         
         <div class="card" style="border: 1px solid var(--primary-color)">
             <h3 style="color:var(--primary-color)">Account Google</h3>
@@ -237,7 +237,7 @@
         </div>
 
         <div style="margin-top:40px; margin-bottom:100px;">
-            <button id="btn-app-status" class="btn" style="background:rgba(255, 255, 255, 0.05); color:var(--text-main); border:1px solid var(--glass-border); width:100%; margin-bottom: 15px;" onclick="App.showAppStatus()">ðŸ“± Stato Applicazione</button>
+            <button id="btn-app-status" class="btn" style="background:rgba(255, 255, 255, 0.05); color:var(--text-main); border:1px solid var(--glass-border); width:100%; margin-bottom: 15px;" onclick="App.showAppStatus()">📶 Stato Applicazione</button>
             <button id="btn-delete-account" class="btn btn-danger" style="background:rgba(239, 68, 68, 0.1); color:var(--danger-color); border:1px solid var(--danger-color); width:100%;">Elimina Account e Dati</button>
         </div>
     </div>
@@ -245,9 +245,9 @@
     <!-- BOTTOM NAVIGATION -->
     <nav class="bottom-nav">
         <div class="nav-container">
-            <div class="nav-item active" onclick="App.switchMainTab('training')"><span>ðŸ‹ï¸</span><span>Training</span></div>
-            <div class="nav-item" onclick="App.switchMainTab('nutrition')"><span>ðŸ</span><span>Nutrizione</span></div>
-            <div class="nav-item" onclick="App.switchMainTab('data')"><span>âš™ï¸</span><span>Impostazioni</span></div>
+            <div class="nav-item active" onclick="App.switchMainTab('training')"><span>🏋️‍♂️</span><span>Training</span></div>
+            <div class="nav-item" onclick="App.switchMainTab('nutrition')"><span>🍎</span><span>Nutrizione</span></div>
+            <div class="nav-item" onclick="App.switchMainTab('data')"><span>⚙️</span><span>Impostazioni</span></div>
         </div>
     </nav>
 
