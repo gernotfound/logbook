@@ -11,7 +11,27 @@ export const DB = {
         if (!user) return null;
         
         try {
-            const state = { profile: {}, library: [], routines: [], history: [], nutrition: {}, activeWorkout: null };
+            const defaultNutritionPlanning = {
+                weight: 80,
+                carbsPerKg: 3.5,
+                proPerKg: 2.0,
+                fatPerKg: 1.0,
+                lockedMacro: null,
+                chartPeriod: 7,
+                normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
+            };
+            const state = { 
+                profile: {}, 
+                library: [], 
+                routines: [], 
+                history: [], 
+                nutrition: {}, 
+                customFoods: [],
+                activeWorkout: null,
+                nutritionPlanning: Object.assign({}, defaultNutritionPlanning, {
+                    normocalorica: Object.assign({}, defaultNutritionPlanning.normocalorica)
+                })
+            };
             let needsMigration = false;
 
             const docRef = doc(db, "users", user.uid);
@@ -22,7 +42,16 @@ export const DB = {
                 if(data.profile) state.profile = data.profile;
                 if(data.library) state.library = data.library;
                 if(data.routines) state.routines = data.routines;
+                if(data.customFoods) state.customFoods = data.customFoods;
                 if(data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
+                if (data.nutritionPlanning) {
+                    state.nutritionPlanning = Object.assign({}, defaultNutritionPlanning, data.nutritionPlanning);
+                    if (data.nutritionPlanning.normocalorica && typeof data.nutritionPlanning.normocalorica === 'object') {
+                        state.nutritionPlanning.normocalorica = Object.assign({}, defaultNutritionPlanning.normocalorica, data.nutritionPlanning.normocalorica);
+                    } else {
+                        state.nutritionPlanning.normocalorica = Object.assign({}, defaultNutritionPlanning.normocalorica);
+                    }
+                }
                 
                 // Se ci sono campi legacy history/nutrition nel doc principale, dobbiamo migrare
                 if (data.history || data.nutrition) {
@@ -51,7 +80,9 @@ export const DB = {
                     profile: state.profile, 
                     library: state.library, 
                     routines: state.routines, 
+                    customFoods: state.customFoods,
                     activeWorkout: state.activeWorkout,
+                    nutritionPlanning: state.nutritionPlanning,
                     history: [], 
                     nutrition: {}
                 });
@@ -72,7 +103,7 @@ export const DB = {
         if (!user) return;
         
         try {
-            let oldState = { profile: {}, library: [], routines: [], history: [], nutrition: {}, activeWorkout: null };
+            let oldState = { profile: {}, library: [], routines: [], customFoods: [], history: [], nutrition: {}, activeWorkout: null, nutritionPlanning: null };
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
             }
@@ -83,14 +114,18 @@ export const DB = {
             if (JSON.stringify(state.profile) !== JSON.stringify(oldState.profile) ||
                 JSON.stringify(state.library) !== JSON.stringify(oldState.library) ||
                 JSON.stringify(state.routines) !== JSON.stringify(oldState.routines) ||
-                JSON.stringify(state.activeWorkout) !== JSON.stringify(oldState.activeWorkout)) {
+                JSON.stringify(state.customFoods) !== JSON.stringify(oldState.customFoods) ||
+                JSON.stringify(state.activeWorkout) !== JSON.stringify(oldState.activeWorkout) ||
+                JSON.stringify(state.nutritionPlanning) !== JSON.stringify(oldState.nutritionPlanning)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 promises.push(setDoc(userRef, {
                     profile: state.profile,
                     library: state.library,
                     routines: state.routines,
+                    customFoods: state.customFoods || [],
                     activeWorkout: state.activeWorkout || null,
+                    nutritionPlanning: state.nutritionPlanning || null,
                     history: deleteField(), // Assicura che i dati legacy vengano puliti
                     nutrition: deleteField() 
                 }, { merge: true }));
