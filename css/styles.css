@@ -30,9 +30,8 @@
 body { 
     background-color: var(--bg-color); 
     color: var(--text-main); 
-    padding-bottom: 80px; 
+    padding-bottom: calc(80px + env(safe-area-inset-bottom)); 
     -webkit-tap-highlight-color: transparent; 
-    overflow-x: hidden;
 }
 
 #app-container { 
@@ -40,6 +39,7 @@ body {
     margin: 0 auto; 
     position: relative; 
     min-height: 100vh; 
+    overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5 { 
@@ -149,7 +149,7 @@ input:focus, select:focus, textarea:focus {
     background: rgba(0,0,0,0.4);
     box-shadow: 0 0 0 3px var(--primary-glow);
 }
-.input-row { display: flex; gap: 12px; align-items: center;}
+.input-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;}
 
 /* Pulsanti */
 .btn { 
@@ -966,8 +966,14 @@ input[type="range"].fat-slider::-webkit-slider-thumb {
 }
 .muscle-svg-map {
     width: 100%;
-    max-height: 180px;
     margin: 10px 0;
+    display: flex;
+    justify-content: center;
+}
+.muscle-map-container svg {
+    max-height: 180px;
+    width: auto;
+    height: 100%;
 }
 
 

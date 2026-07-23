@@ -452,9 +452,9 @@
                 </div>
 
                 <div class="input-row" style="margin-bottom: 20px;">
-                    <div style="flex:1;">
+                    <div style="flex:1;" id="plan-weight-container">
                         <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Peso Corporeo (kg)</label>
-                        <input type="number" step="0.1" id="plan-weight" value="80.0" placeholder="80.0" oninput="App.validateInput(this, 'float')" onchange="App.onPlanningWeightChange(this.value)">
+                        <div id="plan-weight-display" style="font-size:1.4rem; font-weight:800; color:var(--text-main); margin-top:5px;"></div>
                     </div>
                     <div style="flex:1; text-align:right;">
                         <span style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Target Totale</span>
@@ -613,8 +613,8 @@
                     <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Metodo di Calcolo % BF</label>
                     <select id="measure-method" onchange="App.onMeasurementMethodChange(this.value)">
                         <option value="manual">Inserimento Manuale % BF</option>
-                        <option value="navy_male">Metodo US Navy (Uomo)</option>
-                        <option value="navy_female">Metodo US Navy (Donna)</option>
+                        <option value="navy_male" id="opt-navy-male">Metodo US Navy (Uomo)</option>
+                        <option value="navy_female" id="opt-navy-female">Metodo US Navy (Donna)</option>
                         <option value="bmi">Calcolo Automatico (BMI)</option>
                     </select>
                 </div>
@@ -698,6 +698,7 @@
                 <div style="flex:1">
                     <label style="font-size:0.8rem; color:var(--text-muted)">Sesso</label>
                     <select id="profile-gender" onchange="App.saveProfile()">
+                        <option value="">Non Specificato</option>
                         <option value="M">Uomo</option>
                         <option value="F">Donna</option>
                     </select>

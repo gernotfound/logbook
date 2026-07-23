@@ -5,7 +5,7 @@ import { auth, provider, signInWithPopup, onAuthStateChanged } from './firebase-
 
 const App = {
     state: {
-        profile: { dob: '', height: '', gender: 'M' },
+        profile: { dob: '', height: '', gender: '' },
         library: [],      
         routines: [],     
         activeWorkout: null, 
@@ -86,7 +86,7 @@ const App = {
             this.sortLibraryAndRoutines();
         } else {
             // Struttura iniziale se l'utente è nuovo
-            this.state.profile = { dob: '', height: '', gender: 'M' };
+            this.state.profile = { dob: '', height: '', gender: '' };
         }
     },
 
@@ -1108,6 +1108,7 @@ const App = {
         this.state.profile.height = document.getElementById('profile-height').value;
         this.state.profile.gender = document.getElementById('profile-gender').value;
         this.saveToStorage(); 
+        this.updateMeasurementMethodOptions();
         this.renderNutritionDisplay(); 
     },
     
@@ -1799,6 +1800,21 @@ const App = {
         return dates.sort((a, b) => new Date(b) - new Date(a));
     },
 
+    updateMeasurementMethodOptions() {
+        const optMale = document.getElementById('opt-navy-male');
+        const optFemale = document.getElementById('opt-navy-female');
+        const gender = this.state.profile?.gender;
+        
+        if (optMale) optMale.style.display = (gender === 'F') ? 'none' : 'block';
+        if (optFemale) optFemale.style.display = (gender === 'M') ? 'none' : 'block';
+
+        const select = document.getElementById('measure-method');
+        if (select) {
+            if (select.value === 'navy_male' && gender === 'F') select.value = 'manual';
+            if (select.value === 'navy_female' && gender === 'M') select.value = 'manual';
+        }
+    },
+
     onMeasurementMethodChange(methodVal) {
         const method = methodVal || document.getElementById('measure-method')?.value || 'manual';
         const fieldManual = document.getElementById('field-manual-bf');
@@ -1958,6 +1974,8 @@ const App = {
         if (dateInput && !dateInput.value) {
             dateInput.value = new Date().toISOString().split('T')[0];
         }
+
+        this.updateMeasurementMethodOptions();
 
         const methodSelect = document.getElementById('measure-method');
         const method = methodSelect ? methodSelect.value : 'manual';
@@ -2205,6 +2223,21 @@ const App = {
         this.renderNutritionTrendChart();
     },
 
+    getLatestWeight() {
+        if (!this.state.nutrition) return null;
+        let today = Logic.getToday();
+        if (this.state.nutrition[today] && this.state.nutrition[today].weight) {
+            return parseFloat(this.state.nutrition[today].weight);
+        }
+        let dates = Object.keys(this.state.nutrition).sort((a,b) => new Date(b) - new Date(a));
+        for (let d of dates) {
+            if (this.state.nutrition[d] && this.state.nutrition[d].weight) {
+                return parseFloat(this.state.nutrition[d].weight);
+            }
+        }
+        return null;
+    },
+
     renderNutritionPlanning() {
         if (!this.state.nutritionPlanning) {
             this.state.nutritionPlanning = {
@@ -2217,10 +2250,19 @@ const App = {
                 normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
             };
         }
-        const planning = this.state.nutritionPlanning;
+        
+        let latestWeight = this.getLatestWeight();
+        const displayEl = document.getElementById('plan-weight-display');
+        
+        if (latestWeight) {
+            this.state.nutritionPlanning.weight = latestWeight;
+            if (displayEl) displayEl.innerHTML = `${latestWeight} <span style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">kg</span>`;
+        } else {
+            this.state.nutritionPlanning.weight = 0;
+            if (displayEl) displayEl.innerHTML = `<span style="font-size:0.9rem; color:var(--warning-color);">Inserisci peso in Misurazioni</span>`;
+        }
 
-        const weightEl = document.getElementById('plan-weight');
-        if (weightEl && document.activeElement !== weightEl) weightEl.value = planning.weight;
+        const planning = this.state.nutritionPlanning;
 
         const sliderC = document.getElementById('slider-carbs-kg');
         const inputC = document.getElementById('input-carbs-kg');
