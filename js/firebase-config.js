@@ -17,7 +17,6 @@ import {
     persistentMultipleTabManager,
     waitForPendingWrites
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 const firebaseConfig = {
   apiKey: "AIzaSyD3kkRIXqIZAbpBNGTYkumYa_pr31naRD4",
   authDomain: "logbook-db-98cc4.firebaseapp.com",
@@ -32,9 +31,9 @@ const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
-const storage = getStorage(app);
+
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 setPersistence(auth, browserLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
-export { auth, db, storage, provider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser };
+export { auth, db, provider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser };

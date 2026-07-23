@@ -2,7 +2,7 @@ import { Logic } from './logic.js';
 import { DB } from './db.js';
 import { COMMON_FOODS } from './foods.js';
 import { Exporter } from './export.js';
-import { StorageManager } from './storage.js';
+
 import { ChartsManager } from './charts.js';
 import { auth, provider, signInWithPopup, onAuthStateChanged } from './firebase-config.js';
 const App = {
@@ -1584,19 +1584,7 @@ const App = {
         dayData.bfPercentage = validation.bfPercentage;
         dayData.measurementMethod = validation.cleanData.measurementMethod;
         dayData.measurements = validation.cleanData.measurements;
-        const photoInput = document.getElementById('measure-photo');
-        if (photoInput && photoInput.files && photoInput.files.length > 0) {
-            try {
-                const file = photoInput.files[0];
-                if (auth.currentUser) {
-                    const downloadUrl = await StorageManager.uploadPhoto(file, auth.currentUser.uid, dateStr);
-                    dayData.photoUrl = downloadUrl;
-                }
-            } catch (err) {
-                alert("Errore durante il caricamento della foto. La misurazione è stata comunque salvata.");
-            }
-            photoInput.value = ""; // Reset input
-        }
+
         this.saveToStorage();
         this.renderMeasurements();
         this.renderNutritionDisplay();
@@ -1698,13 +1686,6 @@ const App = {
                             <span class="comp-chip-val">${bodyComp.leanMass} kg</span>
                         </div>
                     </div>
-                    ${item.photoUrl ? `
-                    <div style="margin-top: 10px; border-top: 1px solid var(--glass-border); padding-top: 10px; text-align: center;">
-                        <a href="${item.photoUrl}" target="_blank">
-                            <img src="${item.photoUrl}" alt="Progress Photo" style="max-width: 100%; max-height: 200px; border-radius: 8px; object-fit: cover; border: 1px solid var(--glass-border);">
-                        </a>
-                    </div>
-                    ` : ''}
                 </div>
             `;
         });

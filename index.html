@@ -602,11 +602,11 @@
                 </p>
 
                 <div class="input-row" style="margin-bottom:12px;">
-                    <div style="flex:1;">
+                    <div style="flex: 1 1 130px;">
                         <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Data</label>
                         <input type="date" id="measure-date" onchange="App.updateMeasurementBFPreview()">
                     </div>
-                    <div style="flex:1;">
+                    <div style="flex: 1 1 130px;">
                         <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Peso (kg)</label>
                         <input type="number" step="0.1" id="measure-weight" placeholder="es. 80.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                     </div>
@@ -638,13 +638,13 @@
 
                     <div class="input-row" style="margin-bottom:12px;">
                         
-                        <div id="field-neck" style="flex:1; display:none;">
+                        <div id="field-neck" style="flex: 1 1 130px; display:none;">
                             <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Collo (cm)</label>
                             <input type="number" step="0.1" id="measure-neck" placeholder="es. 38.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                         </div>
 
                         
-                        <div id="field-waist" style="flex:1; display:none;">
+                        <div id="field-waist" style="flex: 1 1 130px; display:none;">
                             <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Vita (cm)</label>
                             <input type="number" step="0.1" id="measure-waist" placeholder="es. 85.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                         </div>
@@ -657,12 +657,7 @@
                     </div>
                 </div>
 
-                
-                <div style="margin-bottom:15px;">
-                    <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Foto Progresso (Opzionale)</label>
-                    <input type="file" id="measure-photo" accept="image/*" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-main);">
-                    <small style="color:var(--text-muted); font-size:0.7rem;">La foto verrà salvata in modo sicuro nel cloud.</small>
-                </div>
+
 
                 
                 <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); padding:12px 15px; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:15px;">
