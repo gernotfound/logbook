@@ -66,7 +66,9 @@ const App = {
         });
         
         document.getElementById('btn-logout').addEventListener('click', () => {
-            DB.secureLogOut();
+            if(confirm('Sei sicuro di voler effettuare il logout?')) {
+                DB.secureLogOut();
+            }
         });
         
         document.getElementById('btn-delete-account').addEventListener('click', () => {
@@ -92,7 +94,7 @@ const App = {
 
     showAppStatus() {
         const isOnline = navigator.onLine ? "Online 🟢" : "Offline 🔴";
-        const version = "v3.2.1"; // Sincronizzato con sw.js
+        const version = "v3.2.2"; // Sincronizzato con sw.js
         alert(`Stato Applicazione\n\nVersione: ${version}\nStato Rete: ${isOnline}`);
     },
 
