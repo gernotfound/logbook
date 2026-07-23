@@ -173,7 +173,7 @@ export const DB = {
         try {
             document.getElementById('sync-overlay').style.display = 'flex';
             console.log("Attendo il completamento delle scritture offline...");
-            await waitForPendingWrites();
+            await waitForPendingWrites(db);
             console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
             await auth.signOut();
         } catch (error) {
@@ -192,20 +192,28 @@ export const DB = {
         try {
             document.getElementById('sync-overlay').style.display = 'flex';
             
-            // 1. Elimina i documenti dalle subcollections (History e Nutrition)
-            // Poichè non possiamo eliminare ricorsivamente da client in Firestore facilmente, 
-            // recuperiamo i docs e li cancelliamo
-            const histSnap = await getDocs(collection(db, "users", user.uid, "history"));
-            const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition"));
-            
+            // 1. Elimina i documenti dalle subcollections
+            // Usiamo try/catch separati così se mancano i permessi per una subcollection, non si blocca l'intero processo
             const delPromises = [];
-            histSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
-            nutSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
-            await Promise.all(delPromises);
+            try {
+                const histSnap = await getDocs(collection(db, "users", user.uid, "history"));
+                histSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
+            } catch(e) { console.warn("Permesso negato per leggere history, proseguo...", e); }
+
+            try {
+                const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition"));
+                nutSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
+            } catch(e) { console.warn("Permesso negato per leggere nutrition, proseguo...", e); }
+            
+            if (delPromises.length > 0) {
+                await Promise.all(delPromises);
+            }
 
             // 2. Elimina il documento principale
-            const docRef = doc(db, "users", user.uid);
-            await deleteDoc(docRef);
+            try {
+                const docRef = doc(db, "users", user.uid);
+                await deleteDoc(docRef);
+            } catch(e) { console.warn("Permesso negato per eliminare il doc user, proseguo...", e); }
             
             // 3. Elimina l'utente dall'Authentication
             await deleteUser(user);

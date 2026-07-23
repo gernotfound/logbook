@@ -92,7 +92,7 @@ const App = {
 
     showAppStatus() {
         const isOnline = navigator.onLine ? "Online 🟢" : "Offline 🔴";
-        const version = "v1.0.8"; // Sincronizzato con sw.js
+        const version = "v3.2.1"; // Sincronizzato con sw.js
         alert(`Stato Applicazione\n\nVersione: ${version}\nStato Rete: ${isOnline}`);
     },
 
@@ -2225,7 +2225,7 @@ const App = {
 
     getLatestWeight() {
         if (!this.state.nutrition) return null;
-        let today = Logic.getToday();
+        let today = new Date().toISOString().split('T')[0];
         if (this.state.nutrition[today] && this.state.nutrition[today].weight) {
             return parseFloat(this.state.nutrition[today].weight);
         }
