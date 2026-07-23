@@ -652,7 +652,7 @@ const App = {
             let lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
             html += `<div style="margin-bottom:25px; padding-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h4 style="color:var(--primary-color); margin:0;">${exName}</h4>
+                    <h3 style="color:var(--primary-color); margin:0;">${exName}</h3>
                     <div style="display:flex; gap:5px;">
                         <button class="btn-small" style="background:rgba(239, 68, 68, 0.1); border:1px solid var(--danger-color); color:var(--danger-color); border-radius:8px;" onclick="App.removeActiveExercise(${exIndex})">🗑</button>
                         <button class="btn-small toggle-btn" onclick="App.toggleUI('hist-${exItem.exId}-${exIndex}', this)">📊 Storico</button>
@@ -757,7 +757,7 @@ const App = {
             const exSummary = exSummaryList.length > 0 ? exSummaryList.join(' • ') : 'Nessun esercizio';
             html += `<div class="routine-card">
                 <div class="routine-card-header">
-                    <h4 class="routine-card-title" style="margin:0;">${r.name}</h4>
+                    <h3 class="routine-card-title" style="margin:0;">${r.name}</h3>
                 </div>
                 ${r.description ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:6px;">${r.description}</div>` : ''}
                 <div class="routine-card-ex-list">${exSummary}</div>
@@ -1115,7 +1115,7 @@ const App = {
                     const dayBf = Logic.calculateBodyFat(day.weight, this.state.profile) || '--';
                     histHtml += `<div class="card" style="padding:15px; margin-bottom:15px;">
                         <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                            <h4 style="margin:0; color:var(--primary-color)">${d}</h4>
+                            <h3 style="margin:0; color:var(--primary-color)">${d}</h3>
                             <button class="btn-icon" style="color:var(--danger-color)" onclick="App.deleteNutritionDay('${d}')">🗑</button>
                         </div>
                         <div class="input-row" style="margin-bottom:10px;">
@@ -2024,3 +2024,4 @@ const App = {
 };
 window.App = App; // Esponi globale per poter essere chiamato dall'HTML (onClick)
 window.onload = () => App.init();
+

@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LogBook</title>
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
@@ -72,7 +72,7 @@
         <div class="card" id="home-workout-widget" style="display:flex; align-items:center; gap:15px; border-left: 4px solid var(--primary-color);">
             <div style="font-size: 2.5rem;" id="home-workout-icon">😴</div>
             <div>
-                <h4 id="home-workout-title" style="margin:0;">Riposo</h4>
+                <h3 id="home-workout-title" style="margin:0;">Riposo</h3>
                 <p id="home-workout-subtitle" style="margin:0; font-size:0.85rem;">Nessun allenamento oggi.</p>
             </div>
             <button class="btn btn-small btn-primary" style="margin-left:auto; margin-bottom:0;" onclick="App.switchMainTab('training')">Vai</button>
@@ -81,7 +81,7 @@
         
         <div class="card" id="home-nutrition-widget">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h4 style="margin:0;">Nutrizione Odierna</h4>
+                <h3 style="margin:0;">Nutrizione Odierna</h3>
                 <button class="btn-icon" style="color:var(--primary-color)" onclick="App.switchMainTab('nutrition')">✏️</button>
             </div>
             
@@ -134,7 +134,7 @@
 
         
         <div class="card" id="home-chart-widget">
-            <h4 style="margin-bottom:15px;">Trend Peso Corporeo (Ultimi 14gg)</h4>
+            <h3 style="margin-bottom:15px;">Trend Peso Corporeo (Ultimi 14gg)</h3>
             <div style="position: relative; height:200px; width:100%;">
                 <canvas id="weightChart"></canvas>
             </div>
@@ -163,7 +163,7 @@
                     <div id="active-exercises-list"></div>
                     
                     <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--glass-border);">
-                        <h4>Aggiungi Esercizio Extra</h4>
+                        <h3>Aggiungi Esercizio Extra</h3>
                         <input type="text" id="active-search-ex" placeholder="Cerca esercizio da aggiungere..." oninput="App.filterActiveExercises(this.value)" autocomplete="off">
                         <div id="active-search-results"></div>
                     </div>
@@ -179,7 +179,7 @@
 
                         
                         <div style="margin: 20px 0; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 12px; border: 1px solid var(--glass-border);">
-                            <h4 style="margin-top:0; margin-bottom:12px; font-size:0.95rem;">Valuta Sessione (1-10)</h4>
+                            <h3 style="margin-top:0; margin-bottom:12px; font-size:0.95rem;">Valuta Sessione (1-10)</h3>
                             <div style="display:flex; gap:10px;">
                                 <div style="flex:1;">
                                     <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:4px;">Umore (1-10)</label>
@@ -218,7 +218,7 @@
             <div class="card calendar-card" style="margin-bottom:20px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <button class="btn btn-small" onclick="App.changeCalendarMonth(-1)">◀</button>
-                    <h4 id="calendar-month-year-title" style="margin:0; font-weight:bold;">Mese Anno</h4>
+                    <h3 id="calendar-month-year-title" style="margin:0; font-weight:bold;">Mese Anno</h3>
                     <button class="btn btn-small" onclick="App.changeCalendarMonth(1)">▶</button>
                 </div>
                 <div class="calendar-weekdays" style="display:grid; grid-template-columns:repeat(7, 1fr); text-align:center; font-weight:bold; font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
@@ -234,7 +234,7 @@
 
             
             <div class="card" id="history-chart-widget" style="margin-bottom:20px;">
-                <h4 style="margin-bottom:15px;">📊 Volume Muscolare (Kg Totali / Settimana)</h4>
+                <h3 style="margin-bottom:15px;">📊 Volume Muscolare (Kg Totali / Settimana)</h3>
                 <div style="position: relative; height:200px; width:100%;">
                     <canvas id="volumeChart"></canvas>
                 </div>
@@ -528,7 +528,7 @@
 
             
             <div class="card">
-                <h4 style="margin-bottom:8px;">🔒 Blocco Ratio Macro</h4>
+                <h3 style="margin-bottom:8px;">🔒 Blocco Ratio Macro</h3>
                 <p style="font-size:0.8rem; margin-bottom:15px; color:var(--text-muted);">Fissa un macronutriente principale. Se vari le calorie target, l'altro macronutriente si adatterà automaticamente.</p>
                 
                 <div class="lock-toggle-group">
@@ -547,7 +547,7 @@
             
             <div class="card" style="border-color: rgba(14, 165, 233, 0.3);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <h4 style="margin:0;">🔥 Normocalorica di Riferimento</h4>
+                    <h3 style="margin:0;">🔥 Normocalorica di Riferimento</h3>
                     <button class="btn btn-small" style="background:rgba(255,255,255,0.05); color:var(--primary-color);" onclick="App.copyTDEEToNormo()">Copia da TDEE</button>
                 </div>
                 <div class="input-row" style="margin-bottom:12px;">
@@ -579,7 +579,7 @@
             
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                    <h4 style="margin:0;">📊 Trend Pianificazione</h4>
+                    <h3 style="margin:0;">📊 Trend Pianificazione</h3>
                     <div class="chart-period-selector">
                         <button id="btn-chart-7d" class="chart-period-btn active" onclick="App.switchPlanningChartPeriod(7)">7G</button>
                         <button id="btn-chart-30d" class="chart-period-btn" onclick="App.switchPlanningChartPeriod(30)">30G</button>
@@ -984,6 +984,7 @@
 
 </body>
 </html>
+
 
 
 
