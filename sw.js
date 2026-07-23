@@ -1,5 +1,5 @@
 // MODIFICA QUESTO NUMERO DI VERSIONE SE VUOI FORZARE UNA PULIZIA PROFONDA DELLA CACHE SUI DISPOSITIVI
-const APP_VERSION = 'v3.3.0';
+const APP_VERSION = 'v3.3.1';
 const CACHE_NAME = `logbook-cache-${APP_VERSION}`;
 
 // File critici da memorizzare subito all'installazione
