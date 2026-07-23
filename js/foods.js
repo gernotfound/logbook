@@ -1,6 +1,3 @@
-// js/foods.js
-// Database degli alimenti comuni con valori nutrizionali base (per 100g / 100ml) e dettagli estesi
-
 export const COMMON_FOODS = Object.freeze([
     {
         id: 'preset_latte_intero',

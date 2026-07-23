@@ -1,5 +1,5 @@
 // MODIFICA QUESTO NUMERO DI VERSIONE SE VUOI FORZARE UNA PULIZIA PROFONDA DELLA CACHE SUI DISPOSITIVI
-const APP_VERSION = 'v3.2.2';
+const APP_VERSION = 'v3.3.0';
 const CACHE_NAME = `logbook-cache-${APP_VERSION}`;
 
 // File critici da memorizzare subito all'installazione
@@ -15,10 +15,8 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', event => {
-  // skipWaiting forza il Service Worker ad attivarsi subito (Fondamentale su Smartphone,
-  // altrimenti l'app aspetta che tutte le schede e le app in background vengano chiuse)
-  self.skipWaiting();
-  
+  // L'installazione attende il messaggio per skipWaiting
+
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(urlsToCache);
@@ -77,4 +75,10 @@ self.addEventListener('fetch', event => {
         return caches.match(event.request);
       })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

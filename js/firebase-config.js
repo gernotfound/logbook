@@ -1,4 +1,3 @@
-// js/firebase-config.js
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { 
     getAuth, 
@@ -18,9 +17,7 @@ import {
     persistentMultipleTabManager,
     waitForPendingWrites
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-
-// INSERISCI QUI LA TUA CONFIGURAZIONE FIREBASE
-// Puoi trovarla nelle impostazioni del tuo progetto Firebase -> App Web
+import { getStorage } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-storage.js";
 const firebaseConfig = {
   apiKey: "AIzaSyD3kkRIXqIZAbpBNGTYkumYa_pr31naRD4",
   authDomain: "logbook-db-98cc4.firebaseapp.com",
@@ -31,21 +28,13 @@ const firebaseConfig = {
   appId: "1:135243298458:web:ee8346adb4634ff953d123",
   measurementId: "G-560HT9M19Y"
 };
-
-// Inizializza Firebase
 const app = initializeApp(firebaseConfig);
-
-// Inizializza Firestore con supporto multi-tab offline (Fix per Problema 5)
 const db = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
-
-// Inizializza Auth
+const storage = getStorage(app);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
-
-// Fissa la persistenza locale dell'Auth per evitare logout in background (Fix Problema 6 su iOS)
 setPersistence(auth, browserLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
-
-export { auth, db, provider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser };
+export { auth, db, storage, provider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser };

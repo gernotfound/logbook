@@ -15,16 +15,16 @@
 </head>
 <body ontouchstart="">
 
-<!-- OVERLAY DI AUTENTICAZIONE -->
+
 <div id="auth-overlay">
-    <!-- Schermata di caricamento predefinita -->
+    
     <div id="auth-loading" style="text-align: center; max-width: 400px; padding: 30px; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
         <h1 style="color:var(--primary-color); margin-bottom: 10px;">LogBook</h1>
         <div class="spinner" style="margin: 20px auto;"></div>
         <p>Verifica credenziali in corso...</p>
     </div>
 
-    <!-- Schermata di Login -->
+    
     <div id="auth-login-box" style="display: none; text-align: center; max-width: 400px; padding: 30px; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
         <h1 style="color:var(--primary-color); margin-bottom: 10px;">LogBook</h1>
         <p style="margin-bottom:30px;">Accedi per sincronizzare i tuoi allenamenti sul cloud e renderli disponibili su ogni dispositivo.</p>
@@ -35,7 +35,7 @@
     </div>
 </div>
 
-<!-- OVERLAY DI SINCRONIZZAZIONE (Logout sicuro) -->
+
 <div id="sync-overlay">
     <div class="spinner"></div>
     <p style="font-weight:bold; color:var(--primary-color);">Sincronizzazione in corso...</p>
@@ -44,7 +44,7 @@
 
 <div id="app-container" style="display:none;">
 
-    <!-- TOP TIMER BAR -->
+    
     <div id="top-timer-bar">
         <div class="timer-display" id="rest-timer-display">00:00</div>
         <div class="timer-controls">
@@ -64,13 +64,11 @@
     </div>
 
 
-    <!-- =========================================
-         VISTA 0: HOME / DASHBOARD
-         ========================================= -->
+    
     <div id="view-home" class="view-section active">
         <h2 style="margin-top: 10px; margin-bottom: 25px;">Panoramica di Oggi</h2>
         
-        <!-- Widget Stato Allenamento -->
+        
         <div class="card" id="home-workout-widget" style="display:flex; align-items:center; gap:15px; border-left: 4px solid var(--primary-color);">
             <div style="font-size: 2.5rem;" id="home-workout-icon">😴</div>
             <div>
@@ -80,7 +78,7 @@
             <button class="btn btn-small btn-primary" style="margin-left:auto; margin-bottom:0;" onclick="App.switchMainTab('training')">Vai</button>
         </div>
 
-        <!-- Widget Calorie e Macros -->
+        
         <div class="card" id="home-nutrition-widget">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h4 style="margin:0;">Nutrizione Odierna</h4>
@@ -98,23 +96,23 @@
                 </div>
             </div>
 
-            <!-- Progress Bar Kcal -->
+            
             <div class="progress-bg" style="margin-bottom:20px;">
                 <div class="progress-fill" id="home-kcal-bar" style="width: 0%; background: linear-gradient(90deg, var(--warning-color), #fcd34d);"></div>
             </div>
 
             <div style="display:flex; justify-content:space-between; gap:10px;">
-                <!-- Carbs -->
+                
                 <div style="flex:1; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid var(--glass-border); text-align:center;">
                     <div style="font-size:0.75rem; color:var(--success-color); font-weight:bold;">CARBO</div>
                     <div style="font-size:1.1rem; font-weight:bold;" id="home-carbs-val">0g</div>
                 </div>
-                <!-- Pro -->
+                
                 <div style="flex:1; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid var(--glass-border); text-align:center;">
                     <div style="font-size:0.75rem; color:var(--primary-color); font-weight:bold;">PRO</div>
                     <div style="font-size:1.1rem; font-weight:bold;" id="home-pro-val">0g</div>
                 </div>
-                <!-- Fat -->
+                
                 <div style="flex:1; background:rgba(0,0,0,0.2); padding:10px; border-radius:12px; border:1px solid var(--glass-border); text-align:center;">
                     <div style="font-size:0.75rem; color:#f43f5e; font-weight:bold;">GRASSI</div>
                     <div style="font-size:1.1rem; font-weight:bold;" id="home-fat-val">0g</div>
@@ -122,7 +120,7 @@
             </div>
         </div>
 
-        <!-- Widget TDEE & Body Fat -->
+        
         <div style="display:flex; gap:15px; margin-bottom:20px;">
             <div class="card" style="flex:1; text-align:center; margin-bottom:0; padding:15px;">
                 <div style="font-size:0.8rem; color:var(--text-muted);">Massa Grassa (Stima)</div>
@@ -134,7 +132,7 @@
             </div>
         </div>
 
-        <!-- Widget Grafico Peso -->
+        
         <div class="card" id="home-chart-widget">
             <h4 style="margin-bottom:15px;">Trend Peso Corporeo (Ultimi 14gg)</h4>
             <div style="position: relative; height:200px; width:100%;">
@@ -144,9 +142,7 @@
 
     </div>
 
-    <!-- =========================================
-         VISTA 1: TRAINING
-         ========================================= -->
+    
     <div id="view-training" class="view-section">
         
         <div class="sub-nav">
@@ -156,10 +152,10 @@
             <div class="sub-nav-btn" onclick="App.switchTrainingTab('history', this)">Storico</div>
         </div>
 
-        <!-- 1.A: SESSIONE -->
+        
         <div id="sub-session" class="training-sub-view active">
             
-            <!-- ALLENAMENTO ATTIVO -->
+            
             <div id="active-workout-container" style="display:none; margin-bottom: 30px;">
                 <div>
                     <h3 id="active-routine-name" style="margin-top: 0;">Allenamento in corso</h3>
@@ -181,7 +177,7 @@
                             <input type="number" step="0.1" id="active-water-input" placeholder="es. 1.5" style="margin:0; width:100%; border-color:var(--primary-color);">
                         </div>
 
-                        <!-- VALUTAZIONI ALLENAMENTO (R4) -->
+                        
                         <div style="margin: 20px 0; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 12px; border: 1px solid var(--glass-border);">
                             <h4 style="margin-top:0; margin-bottom:12px; font-size:0.95rem;">Valuta Sessione (1-10)</h4>
                             <div style="display:flex; gap:10px;">
@@ -205,7 +201,7 @@
                 </div>
             </div>
 
-            <!-- SCHERMATA START WORKOUT -->
+            
             <div id="start-workout-container" class="card">
                 <h3 style="margin-top:0; margin-bottom:15px;">Avvia nuova sessione</h3>
                 <div style="margin-bottom:15px;">
@@ -216,9 +212,9 @@
             </div>
         </div>
 
-        <!-- 1.D: STORICO ALLENAMENTI (R4) -->
+        
         <div id="sub-history" class="training-sub-view">
-            <!-- Visual Dot Calendar Card -->
+            
             <div class="card calendar-card" style="margin-bottom:20px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <button class="btn btn-small" onclick="App.changeCalendarMonth(-1)">◀</button>
@@ -236,11 +232,19 @@
                 </div>
             </div>
 
+            
+            <div class="card" id="history-chart-widget" style="margin-bottom:20px;">
+                <h4 style="margin-bottom:15px;">📊 Volume Muscolare (Kg Totali / Settimana)</h4>
+                <div style="position: relative; height:200px; width:100%;">
+                    <canvas id="volumeChart"></canvas>
+                </div>
+            </div>
+
             <h3>Storico Allenamenti</h3>
             <div id="history-container"></div>
         </div>
 
-        <!-- 1.B: GESTIONE SCHEDE -->
+        
         <div id="sub-routines" class="training-sub-view">
             <div class="card">
                 <h3>Crea Nuova Scheda</h3>
@@ -253,7 +257,7 @@
             <div id="routine-builder-svg-container" style="margin-top: 20px;"></div>
         </div>
 
-        <!-- 1.C: ARCHIVIO ESERCIZI -->
+        
         <div id="sub-exercises" class="training-sub-view">
             <div class="card">
                 <h3 id="new-ex-title">Nuovo Esercizio</h3>
@@ -280,23 +284,21 @@
     </div>
 
 
-    <!-- =========================================
-         VISTA 2: NUTRIZIONE E TDEE
-         ========================================= -->
+    
     <div id="view-nutrition" class="view-section">
         <h2 style="margin-top: 10px; margin-bottom: 20px;">🍎 Nutrizione & Corpo</h2>
 
-        <!-- Sub-Navigation Tabs -->
+        
         <div class="sub-nav">
             <div class="sub-nav-btn active" id="tab-btn-pasti" onclick="App.switchNutritionTab('meals', this)">Pasti</div>
             <div class="sub-nav-btn" id="tab-btn-pianificazione" onclick="App.switchNutritionTab('planning', this)">Pianificazione</div>
             <div class="sub-nav-btn" id="tab-btn-misurazioni" onclick="App.switchNutritionTab('measurements', this)">Misurazioni</div>
         </div>
 
-        <!-- 2.A: PASTI (Requirement R2 Core) -->
+        
         <div id="sub-nutri-meals" class="nutrition-sub-view active">
             
-            <!-- DATE & WEIGHT NAV CARD -->
+            
             <div class="card" style="padding:15px; margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
                     <button class="btn btn-small" onclick="App.navigateNutritionDate(-1)">◀</button>
@@ -315,14 +317,14 @@
                 </div>
             </div>
 
-            <!-- DAILY TOTALS VS TARGET DISPLAY CARD -->
+            
             <div class="card daily-summary-card" style="margin-bottom:15px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <h3 style="margin:0;">🔥 Totali Giornalieri</h3>
                     <span id="daily-kcal-target-badge" class="badge badge-primary" style="font-size:0.85rem; padding:4px 10px;">0 / 2500 kcal</span>
                 </div>
 
-                <!-- Main Kcal Progress Bar -->
+                
                 <div class="progress-bg" style="margin-bottom:8px; height:12px; background:rgba(255,255,255,0.1); border-radius:6px; overflow:hidden;">
                     <div class="progress-fill" id="daily-kcal-progress" style="width: 0%; height:100%; transition: width 0.3s ease; background: linear-gradient(90deg, var(--primary-color), var(--success-color));"></div>
                 </div>
@@ -331,9 +333,9 @@
                     <span id="daily-kcal-remaining-text">Rimanenti: 2500 kcal</span>
                 </div>
 
-                <!-- Macro Progress Bars Grid -->
+                
                 <div class="macro-chips-row" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                    <!-- Carbo -->
+                    
                     <div class="macro-chip carbs" style="background:rgba(0,0,0,0.2); padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
                         <div style="font-size:0.7rem; font-weight:bold; color:var(--primary-color);">CARBO</div>
                         <div id="daily-carbs-val" style="font-size:1.1rem; font-weight:bold; margin:2px 0;">0g</div>
@@ -342,7 +344,7 @@
                             <div class="progress-fill" id="daily-carbs-bar" style="width:0%; height:100%; background:var(--primary-color);"></div>
                         </div>
                     </div>
-                    <!-- Pro -->
+                    
                     <div class="macro-chip pro" style="background:rgba(0,0,0,0.2); padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
                         <div style="font-size:0.7rem; font-weight:bold; color:var(--success-color);">PROTEINE</div>
                         <div id="daily-pro-val" style="font-size:1.1rem; font-weight:bold; margin:2px 0;">0g</div>
@@ -351,7 +353,7 @@
                             <div class="progress-fill" id="daily-pro-bar" style="width:0%; height:100%; background:var(--success-color);"></div>
                         </div>
                     </div>
-                    <!-- Grassi -->
+                    
                     <div class="macro-chip fat" style="background:rgba(0,0,0,0.2); padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
                         <div style="font-size:0.7rem; font-weight:bold; color:#f43f5e;">GRASSI</div>
                         <div id="daily-fat-val" style="font-size:1.1rem; font-weight:bold; margin:2px 0;">0g</div>
@@ -363,7 +365,7 @@
                 </div>
             </div>
 
-            <!-- FOOD SEARCH & SELECTION SECTION -->
+            
             <div class="card" style="position:relative; margin-bottom:15px;">
                 <h3 style="margin-bottom:12px;">🔍 Cerca Alimento</h3>
                 <div style="position:relative;">
@@ -371,15 +373,15 @@
                     <button id="btn-clear-food-search" onclick="App.clearFoodSearch()" style="display:none; position:absolute; right:12px; top:12px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem;">✕</button>
                 </div>
                 
-                <!-- Live Instant Search Results Container -->
+                
                 <div id="nutri-food-results" class="search-results-dropdown" style="display:none;"></div>
                 
                 <button class="btn btn-small" style="width:100%; margin-top:10px; background:rgba(255,255,255,0.05); border:1px dashed var(--glass-border);" onclick="App.openCustomFoodModal()">+ Crea Alimento Personalizzato</button>
             </div>
 
-            <!-- MEALS LOG CONTAINERS (4 MEALS) -->
+            
             <div id="meals-log-container">
-                <!-- Colazione -->
+                
                 <div class="card meal-card" id="meal-card-colazione">
                     <div class="meal-header">
                         <div>
@@ -391,7 +393,7 @@
                     <div class="meal-items-list" id="meal-items-colazione"></div>
                 </div>
 
-                <!-- Pranzo -->
+                
                 <div class="card meal-card" id="meal-card-pranzo">
                     <div class="meal-header">
                         <div>
@@ -403,7 +405,7 @@
                     <div class="meal-items-list" id="meal-items-pranzo"></div>
                 </div>
 
-                <!-- Cena -->
+                
                 <div class="card meal-card" id="meal-card-cena">
                     <div class="meal-header">
                         <div>
@@ -415,7 +417,7 @@
                     <div class="meal-items-list" id="meal-items-cena"></div>
                 </div>
 
-                <!-- Spuntini -->
+                
                 <div class="card meal-card" id="meal-card-spuntini">
                     <div class="meal-header">
                         <div>
@@ -428,7 +430,7 @@
                 </div>
             </div>
 
-            <!-- DYNAMIC TDEE WIDGET & ARCHIVE -->
+            
             <div class="card" style="border-color: rgba(34, 197, 94, 0.4); margin-top:20px;">
                 <h3>Calcolo TDEE Dinamico</h3>
                 <div id="tdee-result" style="text-align:center; padding:10px 0;">
@@ -442,10 +444,10 @@
             <div id="nutrition-history-list"></div>
         </div>
 
-        <!-- 2.B: PIANIFICAZIONE (R1 Core) -->
+        
         <div id="sub-nutri-planning" class="nutrition-sub-view">
             
-            <!-- Header & Target Output Card -->
+            
             <div class="card planning-target-card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h3 style="margin:0; color:var(--text-main);">🎯 Target Calorico & Macro</h3>
@@ -463,7 +465,7 @@
                     </div>
                 </div>
 
-                <!-- Target Grams Breakdown -->
+                
                 <div class="macro-chips-row">
                     <div class="macro-chip carbs">
                         <span class="chip-label">CARBO</span>
@@ -483,11 +485,11 @@
                 </div>
             </div>
 
-            <!-- Macro g/kg Sliders Card -->
+            
             <div class="card">
                 <h3 style="margin-bottom: 20px;">⚖️ Configurazione Macro per kg</h3>
 
-                <!-- Carbs Control -->
+                
                 <div class="macro-slider-group">
                     <div class="macro-slider-header">
                         <span style="color:var(--success-color); font-weight:bold; font-size:0.9rem;">Carboidrati</span>
@@ -499,7 +501,7 @@
                     <input type="range" step="0.1" min="0" max="10" id="slider-carbs-kg" value="3.5" class="range-slider carbs-slider" oninput="App.onMacroKgSliderChange('carbs', this.value)">
                 </div>
 
-                <!-- Protein Control -->
+                
                 <div class="macro-slider-group">
                     <div class="macro-slider-header">
                         <span style="color:var(--primary-color); font-weight:bold; font-size:0.9rem;">Proteine</span>
@@ -511,7 +513,7 @@
                     <input type="range" step="0.1" min="0.5" max="4.0" id="slider-pro-kg" value="2.0" class="range-slider pro-slider" oninput="App.onMacroKgSliderChange('pro', this.value)">
                 </div>
 
-                <!-- Fat Control -->
+                
                 <div class="macro-slider-group">
                     <div class="macro-slider-header">
                         <span style="color:#f43f5e; font-weight:bold; font-size:0.9rem;">Grassi</span>
@@ -524,7 +526,7 @@
                 </div>
             </div>
 
-            <!-- Macro Ratio Lock Switch Card -->
+            
             <div class="card">
                 <h4 style="margin-bottom:8px;">🔒 Blocco Ratio Macro</h4>
                 <p style="font-size:0.8rem; margin-bottom:15px; color:var(--text-muted);">Fissa un macronutriente principale. Se vari le calorie target, l'altro macronutriente si adatterà automaticamente.</p>
@@ -542,7 +544,7 @@
                 </div>
             </div>
 
-            <!-- Normocalorica Comparison Card -->
+            
             <div class="card" style="border-color: rgba(14, 165, 233, 0.3);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <h4 style="margin:0;">🔥 Normocalorica di Riferimento</h4>
@@ -574,7 +576,7 @@
                 </div>
             </div>
 
-            <!-- Chart Analytics Card -->
+            
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h4 style="margin:0;">📊 Trend Pianificazione</h4>
@@ -590,9 +592,9 @@
 
         </div>
 
-        <!-- 2.C: MISURAZIONI (R3: Nutrition Module Measurements) -->
+        
         <div id="sub-nutri-measurements" class="nutrition-sub-view">
-            <!-- Form Container -->
+            
             <div class="card" id="measurement-form-card">
                 <h3>📏 Nuova Misurazione</h3>
                 <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:15px;">
@@ -620,42 +622,49 @@
                     </select>
                 </div>
 
-                <!-- Dynamic input fields -->
+                
                 <div id="measure-navy-fields">
-                    <!-- Field Manual BF -->
+                    
                     <div id="field-manual-bf" style="margin-bottom:12px;">
                         <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Massa Grassa (% BF)</label>
                         <input type="number" step="0.1" min="0" max="100" id="measure-bf-manual" placeholder="es. 15.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                     </div>
 
-                    <!-- Field Height -->
+                    
                     <div id="field-height" style="margin-bottom:12px; display:none;">
                         <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Altezza (cm)</label>
                         <input type="number" step="0.1" id="measure-height" placeholder="es. 180" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                     </div>
 
                     <div class="input-row" style="margin-bottom:12px;">
-                        <!-- Field Neck -->
+                        
                         <div id="field-neck" style="flex:1; display:none;">
                             <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Collo (cm)</label>
                             <input type="number" step="0.1" id="measure-neck" placeholder="es. 38.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                         </div>
 
-                        <!-- Field Waist -->
+                        
                         <div id="field-waist" style="flex:1; display:none;">
                             <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Vita (cm)</label>
                             <input type="number" step="0.1" id="measure-waist" placeholder="es. 85.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                         </div>
                     </div>
 
-                    <!-- Field Hip -->
+                    
                     <div id="field-hip" style="margin-bottom:12px; display:none;">
                         <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Fianchi (cm) [Donna]</label>
                         <input type="number" step="0.1" id="measure-hip" placeholder="es. 95.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
                     </div>
                 </div>
 
-                <!-- Live preview badge -->
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Foto Progresso (Opzionale)</label>
+                    <input type="file" id="measure-photo" accept="image/*" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-main);">
+                    <small style="color:var(--text-muted); font-size:0.7rem;">La foto verrà salvata in modo sicuro nel cloud.</small>
+                </div>
+
+                
                 <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2); padding:12px 15px; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:15px;">
                     <span style="font-size:0.85rem; color:var(--text-muted);">Massa Grassa Calcolata:</span>
                     <span id="measure-bf-preview" class="badge badge-primary" style="font-size:1rem; padding:6px 14px;">Stima BF: --%</span>
@@ -664,7 +673,7 @@
                 <button id="save-measurement-btn" class="btn btn-primary" onclick="App.saveMeasurement(event)">💾 Salva Misurazione</button>
             </div>
 
-            <!-- Historical List Container -->
+            
             <div style="margin-top:25px;">
                 <h3 style="margin-bottom:15px;">📜 Storico Misurazioni</h3>
                 <div id="measurements-history-container"></div>
@@ -673,9 +682,7 @@
     </div>
 
 
-    <!-- =========================================
-         VISTA 3: DATI PERSONALI & EXPORT
-         ========================================= -->
+    
     <div id="view-data" class="view-section">
         <h2>⚙️ Impostazioni</h2>
         
@@ -708,12 +715,13 @@
         </div>
 
         <div style="margin-top:40px; margin-bottom:100px;">
+            <button id="btn-export-csv" class="btn" style="background:rgba(255, 255, 255, 0.05); color:var(--text-main); border:1px solid var(--glass-border); width:100%; margin-bottom: 15px;">💾 Esporta Dati (CSV)</button>
             <button id="btn-app-status" class="btn" style="background:rgba(255, 255, 255, 0.05); color:var(--text-main); border:1px solid var(--glass-border); width:100%; margin-bottom: 15px;" onclick="App.showAppStatus()">📶 Stato Applicazione</button>
             <button id="btn-delete-account" class="btn btn-danger" style="background:rgba(239, 68, 68, 0.1); color:var(--danger-color); border:1px solid var(--danger-color); width:100%;">Elimina Account e Dati</button>
         </div>
     </div>
 
-    <!-- BOTTOM NAVIGATION -->
+    
     <nav class="bottom-nav">
         <div class="nav-container">
             <div class="nav-item active" onclick="App.switchMainTab('home')"><span>🏠</span><span>Home</span></div>
@@ -725,39 +733,23 @@
 
 </div>
 
-<!-- Notifica Aggiornamento PWA -->
+
 <div id="update-toast" class="toast">
     <span>✨ Nuovo aggiornamento!</span>
     <button onclick="window.location.reload()">Ricarica</button>
 </div>
 
-<!-- Service Worker Registration -->
-<script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            // Controlliamo se c'Ã¨ giÃ  un SW attivo prima di questa registrazione
-            const hasControllerOnLoad = !!navigator.serviceWorker.controller;
-            
-            navigator.serviceWorker.register('sw.js')
-                .then(reg => console.log('Service Worker registrato', reg))
-                .catch(err => console.error('Errore registrazione SW', err));
 
-            // Questo evento scatta quando il nuovo sw.js prende il controllo (tramite skipWaiting)
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                // Mostriamo il toast solo se l'utente aveva giÃ  una vecchia versione installata
-                if (hasControllerOnLoad) {
-                    const toast = document.getElementById('update-toast');
-                    if (toast) toast.classList.add('show');
-                }
-            });
-        });
-    }
+
+<script type="module">
+    import { PWA } from './js/pwa.js';
+    PWA.init();
 </script>
-
-<!-- App Modules -->
+<script type="module" src="js/export.js"></script>
+<script type="module" src="js/logic.js"></script>
 <script type="module" src="js/app.js"></script>
 
-<!-- SVG MUSCLE MAP TEMPLATE -->
+
 <template id="muscle-map-template">
     <div class="muscle-map-container" style="display:flex; justify-content:center; padding:10px 0; overflow-x:auto;">
         <svg viewBox="-5 -5 85 110" width="100%" style="max-width: 800px; background-color: #303030; border-radius: 0;">
@@ -864,16 +856,14 @@
 
             
 
-            <!-- Textured base at bottom -->
+            
             
             
         </svg>
     </div>
-<!-- =========================================
-     MODALS FOR REQUIREMENT R2
-     ========================================= -->
 
-<!-- QUANTITY SELECTION MODAL -->
+
+
 <div id="modal-food-qty" class="modal-overlay" style="display:none;">
     <div class="modal-card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
@@ -900,7 +890,7 @@
             <div id="modal-qty-chips" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;"></div>
         </div>
 
-        <!-- Live Scaled Macros Preview -->
+        
         <div class="card" style="background:rgba(0,0,0,0.3); padding:12px; margin-bottom:15px; border-color:var(--glass-border);">
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:6px;">Macro Calcolati:</div>
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; text-align:center;">
@@ -911,7 +901,7 @@
             </div>
         </div>
 
-        <!-- Extended Micro Details Accordion -->
+        
         <button type="button" class="btn btn-small" style="background:none; border:1px solid var(--glass-border); color:var(--text-muted); width:100%; margin-bottom:15px;" onclick="App.toggleQtyMicroDetails()">🔬 Dettagli Nutrizionali Estesi ▾</button>
 
         <div id="modal-qty-micro-fields" style="display:none; background:rgba(0,0,0,0.25); padding:10px; border-radius:10px; margin-bottom:15px; font-size:0.8rem; color:var(--text-muted);">
@@ -929,7 +919,7 @@
     </div>
 </div>
 
-<!-- CUSTOM FOOD CREATION MODAL -->
+
 <div id="modal-custom-food" class="modal-overlay" style="display:none;">
     <div class="modal-card" style="max-height:85vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
@@ -966,7 +956,7 @@
             <input type="number" id="custom-food-fat" placeholder="Grassi (g)" step="any" style="margin:0;">
         </div>
 
-        <!-- Extended Micro Details Accordion -->
+        
         <button type="button" class="btn btn-small" style="background:none; border:1px solid var(--glass-border); color:var(--text-muted); width:100%; margin-bottom:15px;" onclick="App.toggleCustomMicroDetails()">🔬 Dettagli Nutrizionali Avanzati ▾</button>
 
         <div id="custom-food-micro-fields" style="display:none; background:rgba(0,0,0,0.2); padding:12px; border-radius:12px; margin-bottom:15px;">
@@ -994,5 +984,6 @@
 
 </body>
 </html>
+
 
 

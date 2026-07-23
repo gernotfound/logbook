@@ -1,8 +1,10 @@
 import { Logic } from './logic.js';
 import { DB } from './db.js';
 import { COMMON_FOODS } from './foods.js';
+import { Exporter } from './export.js';
+import { StorageManager } from './storage.js';
+import { ChartsManager } from './charts.js';
 import { auth, provider, signInWithPopup, onAuthStateChanged } from './firebase-config.js';
-
 const App = {
     state: {
         profile: { dob: '', height: '', gender: '' },
@@ -31,46 +33,36 @@ const App = {
             }
         }
     },
-
     init() {
-        // Ascolta lo stato di autenticazione Firebase
         onAuthStateChanged(auth, async (user) => {
             const authOverlay = document.getElementById('auth-overlay');
             const mainApp = document.getElementById('app-container');
-            
             if (user) {
-                // Utente Loggato
                 authOverlay.style.display = 'none';
                 mainApp.style.display = 'block';
                 await this.loadDataFromCloud();
-                
                 document.getElementById('nutri-date').value = new Date().toISOString().split('T')[0];
                 this.timers.initLoop();
                 this.renderAll();
                 this.renderNewExMuscles(); // Assicura che l'SVG vuoto venga renderizzato all'avvio
             } else {
-                // Utente Non Loggato
                 authOverlay.style.display = 'flex';
                 document.getElementById('auth-loading').style.display = 'none';
                 document.getElementById('auth-login-box').style.display = 'block';
                 mainApp.style.display = 'none';
             }
         });
-        
-        // Collega i bottoni del login/logout
         document.getElementById('btn-login-google').addEventListener('click', () => {
             signInWithPopup(auth, provider).catch(error => {
                 console.error("Errore di Login:", error);
                 alert("Errore durante il login con Google.");
             });
         });
-        
         document.getElementById('btn-logout').addEventListener('click', () => {
             if(confirm('Sei sicuro di voler effettuare il logout?')) {
                 DB.secureLogOut();
             }
         });
-        
         document.getElementById('btn-delete-account').addEventListener('click', () => {
             const answer = prompt('ATTENZIONE: Stai per eliminare per sempre tutti i tuoi dati e il tuo account.\nScrivi "elimina account" per confermare:');
             if(answer && answer.trim().toLowerCase() === "elimina account") {
@@ -79,46 +71,40 @@ const App = {
                 alert("Testo non corrispondente. Operazione annullata.");
             }
         });
+        document.getElementById('btn-export-csv').addEventListener('click', () => {
+            if(confirm("Vuoi scaricare tutti i tuoi allenamenti e misurazioni in formato CSV?")) {
+                Exporter.exportToCSV(App.state.history, App.state.nutrition);
+            }
+        });
     },
-
     async loadDataFromCloud() {
         const cloudData = await DB.loadUserData();
         if (cloudData) {
             this.state = Object.assign(this.state, cloudData);
             this.sortLibraryAndRoutines();
         } else {
-            // Struttura iniziale se l'utente è nuovo
             this.state.profile = { dob: '', height: '', gender: '' };
         }
     },
-
     showAppStatus() {
         const isOnline = navigator.onLine ? "Online 🟢" : "Offline 🔴";
-        const version = "v3.2.2"; // Sincronizzato con sw.js
+        const version = "v3.2.3"; // Sincronizzato con sw.js
         alert(`Stato Applicazione\n\nVersione: ${version}\nStato Rete: ${isOnline}`);
     },
-
-
-    // Salva nel cloud (Debounce per ottimizzare le scritture ed evitare di superare la quota)
     saveTimeout: null,
     saveToStorage() { 
         if (this.saveTimeout) clearTimeout(this.saveTimeout);
-        
-        // Mostra un piccolo indicatore visivo se lo desideri (opzionale)
         const btnLogout = document.getElementById('btn-logout');
         if(btnLogout) btnLogout.innerText = "Salvataggio in corso...";
-
         this.saveTimeout = setTimeout(() => {
             DB.saveUserData(this.state).then(() => {
                 if(btnLogout) btnLogout.innerText = "Esci dall'account";
             });
         }, 1500); // Aspetta 1.5 secondi dall'ultima modifica prima di inviare al cloud
     },
-
     validateInput(input, type) {
         input.value = Logic.validateInputData(input.value, type);
     },
-
     toggleUI(id, btnElement) {
         const el = document.getElementById(id);
         if(el) {
@@ -131,13 +117,10 @@ const App = {
             btnElement.classList.toggle('active');
         }
     },
-
     sortLibraryAndRoutines() {
         this.state.library.sort((a, b) => a.name.localeCompare(b.name));
         this.state.routines.sort((a, b) => a.name.localeCompare(b.name));
     },
-
-    // --- NAVIGAZIONE ---
     switchMainTab(tabName) {
         document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -151,12 +134,10 @@ const App = {
     },
     switchTrainingTab(subTab, btnElement) {
         document.querySelectorAll('.training-sub-view').forEach(el => el.classList.remove('active'));
-        // Scope to training sub-nav only, to avoid clearing nutrition tab active state
         document.querySelectorAll('#view-training .sub-nav .sub-nav-btn').forEach(el => el.classList.remove('active'));
         const targetSub = document.getElementById('sub-' + subTab);
         if (targetSub) targetSub.classList.add('active');
         if (btnElement) btnElement.classList.add('active');
-
         if (subTab === 'history') {
             this.renderHistory();
         } else if (subTab === 'session') {
@@ -168,16 +149,12 @@ const App = {
         }
     },
     switchNutritionTab(subTab, btnElement) {
-        // HTML calls with: 'meals', 'planning', 'measurements'
-        // Keep direct mapping, no translation needed
         document.querySelectorAll('.nutrition-sub-view').forEach(el => el.classList.remove('active'));
         const navBtns = document.querySelectorAll('#view-nutrition .sub-nav .sub-nav-btn');
         navBtns.forEach(el => el.classList.remove('active'));
-
         const targetSub = document.getElementById('sub-nutri-' + subTab);
         if (targetSub) targetSub.classList.add('active');
         if (btnElement) btnElement.classList.add('active');
-
         if (subTab === 'planning') {
             this.renderNutritionPlanning();
         }
@@ -185,8 +162,6 @@ const App = {
             this.renderMeasurements();
         }
     },
-
-    // --- TIMERS ---
     timers: {
         restStartTime: 0, restAccumulated: 0, restState: 'stopped',
         lastRestStr: '', lastGlobalStr: '',
@@ -222,19 +197,13 @@ const App = {
         stopRest() { this.restState = 'stopped'; this.restAccumulated = 0; document.getElementById('rest-timer-display').innerText = "00:00"; this.lastRestStr = "00:00"; },
         resetRest() { this.restAccumulated = 0; this.restStartTime = Date.now(); this.restState = 'running'; }
     },
-
-    // --- ARCHIVIO ESERCIZI ---
     tempNewExMuscles: [],
-
     filterMuscleSearch(query) {
         const resContainer = document.getElementById('new-ex-muscle-results');
         if(!query.trim()) { resContainer.style.display = 'none'; return; }
-        
         const q = query.toLowerCase();
         const filtered = Logic.MUSCLES.filter(m => m.name.toLowerCase().includes(q) && !this.tempNewExMuscles.includes(m.id));
-        
         if(filtered.length === 0) { resContainer.style.display = 'none'; return; }
-        
         resContainer.style.display = 'block';
         let html = '';
         filtered.forEach(m => {
@@ -242,7 +211,6 @@ const App = {
         });
         resContainer.innerHTML = html;
     },
-
     addMuscleToNewEx(mId) {
         if(!this.tempNewExMuscles.includes(mId)) {
             this.tempNewExMuscles.push(mId);
@@ -251,12 +219,10 @@ const App = {
         document.getElementById('new-ex-muscle-search').value = '';
         document.getElementById('new-ex-muscle-results').style.display = 'none';
     },
-
     removeMuscleFromNewEx(mId) {
         this.tempNewExMuscles = this.tempNewExMuscles.filter(id => id !== mId);
         this.renderNewExMuscles();
     },
-
     renderNewExMuscles() {
         const container = document.getElementById('new-ex-selected-muscles');
         if(!container) return;
@@ -272,68 +238,15 @@ const App = {
         container.innerHTML = html;
         this.renderSVG('new-ex-svg-container', this.tempNewExMuscles);
     },
-
     renderSVG(containerId, activeMusclesIds) {
         const container = document.getElementById(containerId);
         if (!container) return;
         const template = document.getElementById('muscle-map-template');
         if(!template) return;
-        
         container.innerHTML = '';
         const clone = template.content.cloneNode(true);
-        
         activeMusclesIds.forEach(mId => {
-                        const GROUP_MAP = {
-                'abductors': ['gluteus-medius-left', 'gluteus-medius-right'],
-                'abductors_left': ['gluteus-medius-left'],
-                'abductors_right': ['gluteus-medius-right'],
-                'abs': ['abs-lower-left', 'abs-lower-right', 'abs-upper-left', 'abs-upper-right'],
-                'abs_lower': ['abs-lower-left', 'abs-lower-right'],
-                'abs_upper': ['abs-upper-left', 'abs-upper-right'],
-                'adductors': ['adductors-left_1', 'adductors-left_2', 'adductors-right_1', 'adductors-right_2'],
-                'back': ['lats-lower-left', 'lats-lower-right', 'lats-mid-left', 'lats-mid-right', 'lats-upper-left', 'lats-upper-right', 'lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right', 'nape_1', 'nape_2', 'spine', 'traps-lower-left', 'traps-lower-right', 'traps-mid-left', 'traps-mid-right', 'traps-upper-left', 'traps-upper-right'],
-                'biceps': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
-                'biceps_left': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3'],
-                'biceps_long': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
-                'biceps_right': ['biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
-                'biceps_short': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
-                'brachialis': ['biceps-left_1', 'biceps-left_2', 'biceps-left_3', 'biceps-right_1', 'biceps-right_2', 'biceps-right_3'],
-                'calves': ['calves-gastroc-lateral-left', 'calves-gastroc-lateral-right', 'calves-gastroc-medial-left', 'calves-gastroc-medial-right', 'calves-soleus-left', 'calves-soleus-right'],
-                'chest': ['chest-lower-left', 'chest-lower-right', 'chest-upper-left', 'chest-upper-right'],
-                'chest_left': ['chest-lower-left', 'chest-upper-left'],
-                'chest_lower': ['chest-lower-left', 'chest-lower-right'],
-                'chest_right': ['chest-lower-right', 'chest-upper-right'],
-                'chest_upper': ['chest-upper-left', 'chest-upper-right'],
-                'core': ['abs-lower-left', 'abs-lower-right', 'abs-upper-left', 'abs-upper-right', 'lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right', 'obliques-left_1', 'obliques-left_2', 'obliques-left_3', 'obliques-right_1', 'obliques-right_2', 'obliques-right_3'],
-                'delts_front': ['shoulder-front-left_1', 'shoulder-front-left_2', 'shoulder-front-right_1', 'shoulder-front-right_2'],
-                'delts_rear': ['deltoid-rear-left', 'deltoid-rear-right'],
-                'delts_side': ['shoulder-side-left_1', 'shoulder-side-left_2', 'shoulder-side-right_1', 'shoulder-side-right_2'],
-                'forearms': ['forearm-extensors-left', 'forearm-extensors-right', 'forearm-flexors-left', 'forearm-flexors-right', 'forearm-left_1', 'forearm-left_2', 'forearm-right_1', 'forearm-right_2', 'hand-left', 'hand-right'],
-                'forearms_left': ['forearm-extensors-left', 'forearm-flexors-left', 'forearm-left_1', 'forearm-left_2', 'hand-left'],
-                'forearms_right': ['forearm-extensors-right', 'forearm-flexors-right', 'forearm-right_1', 'forearm-right_2', 'hand-right'],
-                'glutes': ['gluteus-maximus-left', 'gluteus-maximus-right', 'gluteus-medius-left', 'gluteus-medius-right'],
-                'glutes_left': ['gluteus-maximus-left', 'gluteus-medius-left'],
-                'glutes_right': ['gluteus-maximus-right', 'gluteus-medius-right'],
-                'hamstrings': ['hamstrings-lateral-left', 'hamstrings-lateral-right', 'hamstrings-medial-left', 'hamstrings-medial-right'],
-                'hand_flexors_left': ['forearm-flexors-left', 'hand-left'],
-                'hand_flexors_right': ['forearm-flexors-right', 'hand-right'],
-                'lats': ['lats-lower-left', 'lats-lower-right', 'lats-mid-left', 'lats-mid-right', 'lats-upper-left', 'lats-upper-right'],
-                'lower_back': ['lower-back-erectors-left', 'lower-back-erectors-right', 'lower-back-ql-left', 'lower-back-ql-right', 'spine'],
-                'obliques': ['obliques-left_1', 'obliques-left_2', 'obliques-left_3', 'obliques-right_1', 'obliques-right_2', 'obliques-right_3', 'serratus-anterior-left_1', 'serratus-anterior-left_2', 'serratus-anterior-left_3', 'serratus-anterior-left_4', 'serratus-anterior-right_1', 'serratus-anterior-right_2', 'serratus-anterior-right_3', 'serratus-anterior-right_4'],
-                'quads': ['quads-left_1', 'quads-left_2', 'quads-left_3', 'quads-right_1', 'quads-right_2', 'quads-right_3'],
-                'rhomboids': ['traps-mid-left', 'traps-mid-right'],
-                'shoulders': ['deltoid-rear-left', 'deltoid-rear-right', 'shoulder-front-left_1', 'shoulder-front-left_2', 'shoulder-front-right_1', 'shoulder-front-right_2', 'shoulder-side-left_1', 'shoulder-side-left_2', 'shoulder-side-right_1', 'shoulder-side-right_2'],
-                'traps': ['nape_1', 'nape_2', 'traps-lower-left', 'traps-lower-right', 'traps-mid-left', 'traps-mid-right', 'traps-upper-left', 'traps-upper-right'],
-                'triceps': ['triceps-lateral-left', 'triceps-lateral-right', 'triceps-long-left', 'triceps-long-right'],
-                'triceps_lateral': ['triceps-lateral-left', 'triceps-lateral-right'],
-                'triceps_left': ['triceps-lateral-left', 'triceps-long-left'],
-                'triceps_long': ['triceps-long-left', 'triceps-long-right'],
-                'triceps_medial': ['triceps-long-left', 'triceps-long-right'],
-                'triceps_right': ['triceps-lateral-right', 'triceps-long-right'],
-            };
-            
-            let svgIds = GROUP_MAP[mId] || [mId];
-            
+            let svgIds = Logic.GROUP_MAP[mId] || [mId];
             svgIds.forEach(sid => {
                 const el = clone.getElementById(sid);
                 if (el) el.classList.add('active');
@@ -341,17 +254,13 @@ const App = {
         });
         container.appendChild(clone);
     },
-
     editingExerciseId: null,
-
     createExerciseInLibrary() {
         const nameInput = document.getElementById('new-ex-name');
         const notesInput = document.getElementById('new-ex-notes');
         const name = nameInput.value.trim();
         if(!name) return alert("Inserisci un nome.");
-
         if(this.editingExerciseId) {
-            // Aggiorna esistente
             if(this.state.library.some(e => e.id !== this.editingExerciseId && e.name.toLowerCase() === name.toLowerCase())) {
                 return alert("Nome esercizio già esistente!");
             }
@@ -366,7 +275,6 @@ const App = {
             document.getElementById('btn-save-exercise').innerText = "+ Aggiungi in Archivio";
             document.getElementById('btn-cancel-edit').style.display = "none";
         } else {
-            // Crea nuovo
             if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) {
                 return alert("Esercizio già esistente!");
             }
@@ -377,31 +285,23 @@ const App = {
                 muscles: [...this.tempNewExMuscles]
             });
         }
-        
         this.tempNewExMuscles = [];
         this.renderNewExMuscles();
-
         this.sortLibraryAndRoutines(); this.saveToStorage();
         nameInput.value = ''; notesInput.value = '';
         this.renderLibrary(); this.renderRoutineBuilder();
     },
-    
     editLibraryEx(id) {
         const ex = this.state.library.find(e => e.id === id);
         if(!ex) return;
-        
         document.getElementById('new-ex-name').value = ex.name;
         document.getElementById('new-ex-notes').value = ex.notes || '';
         this.tempNewExMuscles = [...(ex.muscles || [])];
-        
         this.editingExerciseId = id;
         document.getElementById('new-ex-title').innerText = "Modifica Esercizio";
         document.getElementById('btn-save-exercise').innerText = "Aggiorna";
         document.getElementById('btn-cancel-edit').style.display = "block";
-        
         this.renderNewExMuscles();
-        
-        // Scroll in alto alla form di modifica
         document.getElementById('sub-exercises').scrollIntoView({behavior: 'smooth', block: 'start'});
     },
     cancelEditExercise() {
@@ -410,23 +310,11 @@ const App = {
         document.getElementById('new-ex-notes').value = '';
         this.tempNewExMuscles = [];
         this.renderNewExMuscles();
-        
         document.getElementById('new-ex-title').innerText = "Nuovo Esercizio";
         document.getElementById('btn-save-exercise').innerText = "+ Aggiungi in Archivio";
         document.getElementById('btn-cancel-edit').style.display = "none";
     },
-    updateLibraryEx(id, field, value) {
-        const ex = this.state.library.find(e => e.id === id);
-        if(!ex) return;
-        if(field === 'name') {
-            if(this.state.library.some(e => e.id !== id && e.name.toLowerCase() === value.trim().toLowerCase())) {
-                alert("Nome già in uso."); return this.renderLibrary();
-            }
-        }
-        ex[field] = value;
-        if(field === 'name') this.sortLibraryAndRoutines();
-        this.saveToStorage(); this.renderLibrary(); this.renderRoutineBuilder();
-    },
+
     updateLibraryNotesFromActive(exId, value) {
         const ex = this.state.library.find(e => e.id === exId);
         if(ex) { ex.notes = value; this.saveToStorage(); }
@@ -454,8 +342,6 @@ const App = {
         });
         container.innerHTML = html;
     },
-
-    // --- BUILDER SCHEDE ---
     createRoutine() {
         const name = document.getElementById('routine-name-input').value.trim();
         if(!name) return alert("Dai un nome alla scheda.");
@@ -510,7 +396,6 @@ const App = {
         const container = document.getElementById('routines-list');
         let html = '';
         const exOptions = this.state.library.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
-
         this.state.routines.forEach(r => {
             html += `<div class="card" style="margin-bottom:20px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
@@ -518,7 +403,6 @@ const App = {
                     <button class="btn-icon" style="color:var(--danger-color);" onclick="App.deleteRoutine('${r.id}')">🗑</button>
                 </div>
                 <div style="margin-bottom:15px;">`;
-            
             r.exercises.forEach((re, idx) => {
                 const exData = this.state.library.find(e => e.id === re.exerciseId);
                 const name = exData ? exData.name : "Esercizio rimosso";
@@ -535,7 +419,6 @@ const App = {
                     </div>
                 </div>`;
             });
-
             html += `</div>
                 <div class="input-row" style="margin-top:10px;">
                     <select id="sel-ex-${r.id}" style="flex:2; margin:0;"><option disabled selected>Esercizio...</option>${exOptions}</select>
@@ -546,8 +429,6 @@ const App = {
             </div>`;
         });
         container.innerHTML = html;
-        
-        // Renderizza l'SVG per ogni scheda
         this.state.routines.forEach(r => {
             const routineMuscles = new Set();
             r.exercises.forEach(re => {
@@ -558,11 +439,8 @@ const App = {
             });
             this.renderSVG('routine-svg-' + r.id, Array.from(routineMuscles));
         });
-
         this.renderStartWorkoutSelect();
     },
-
-    // --- ALLENAMENTO ATTIVO (Sessione) ---
     renderStartWorkoutSelect() {
         const sel = document.getElementById('select-routine-to-start');
         if (sel) {
@@ -575,13 +453,11 @@ const App = {
         const rId = routineId || (document.getElementById('select-routine-to-start') ? document.getElementById('select-routine-to-start').value : '');
         const routine = this.state.routines.find(r => r.id === rId);
         if(!routine) return alert("Seleziona una scheda!");
-
         const activeExs = routine.exercises.map(re => {
             const sets = [];
             for(let i=0; i<re.setsCount; i++) sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
             return { exId: re.exerciseId, sets: sets, sessionNote: '' };
         });
-
         this.state.activeWorkout = {
             id: Logic.generateId('w'),
             date: new Date().toISOString().split('T')[0],
@@ -594,7 +470,6 @@ const App = {
             pumpRating: null,
             fatigueRating: null
         };
-        
         const moodInput = document.getElementById('active-mood-input');
         const pumpInput = document.getElementById('active-pump-input');
         const fatigueInput = document.getElementById('active-fatigue-input');
@@ -603,30 +478,23 @@ const App = {
         if (fatigueInput) fatigueInput.value = '';
         const waterInput = document.getElementById('active-water-input');
         if (waterInput) waterInput.value = '';
-
         this.saveToStorage(); this.renderWorkoutView(); App.timers.stopRest();
     },
     endActiveWorkout() {
         const moodVal = document.getElementById('active-mood-input')?.value;
         const pumpVal = document.getElementById('active-pump-input')?.value;
         const fatigueVal = document.getElementById('active-fatigue-input')?.value;
-
         const valRes = Logic.validateWorkoutRatings(moodVal, pumpVal, fatigueVal);
         if (!valRes.isValid) {
             alert("Inserisci voti validi (interi da 1 a 10) per Umore, Pump e Stanchezza prima di terminare la sessione.");
             return;
         }
-
         if(!confirm("Terminare l'allenamento?")) return;
-
-        // Controllo se ci sono modifiche rispetto alla scheda originale
         const originalRoutine = this.state.routines.find(r => r.id === this.state.activeWorkout.routineId);
         let routineModified = false;
-        
         if (originalRoutine) {
             const activeExs = this.state.activeWorkout.exercises;
             const origExs = originalRoutine.exercises;
-            
             if (activeExs.length !== origExs.length) {
                 routineModified = true;
             } else {
@@ -637,7 +505,6 @@ const App = {
                     }
                 }
             }
-            
             if (routineModified && confirm("Hai apportato modifiche agli esercizi o alle serie rispetto alla scheda originale.\nVuoi aggiornare la scheda in modo permanente con queste modifiche?")) {
                 originalRoutine.exercises = this.state.activeWorkout.exercises.map(activeEx => {
                     return {
@@ -647,37 +514,28 @@ const App = {
                 });
             }
         }
-
         const elapsed = Date.now() - this.state.activeWorkout.globalStartTime;
         this.state.activeWorkout.globalDurationStr = Logic.formatTime(elapsed, true);
-        
         const waterInput = document.getElementById('active-water-input').value;
         this.state.activeWorkout.waterLiters = waterInput ? parseFloat(waterInput) : 0;
-        
         this.state.activeWorkout.moodRating = valRes.mood;
         this.state.activeWorkout.pumpRating = valRes.pump;
         this.state.activeWorkout.fatigueRating = valRes.fatigue;
-
         this.state.history.unshift(this.state.activeWorkout);
         this.state.activeWorkout = null;
         this.timers.stopRest();
         this.saveToStorage(); this.renderWorkoutView();
     },
-    
-    // Ricerca testuale degli Esercizi Attivi
     filterActiveExercises(query) {
         const resContainer = document.getElementById('active-search-results');
         if(!query.trim()) { resContainer.style.display = 'none'; resContainer.innerHTML = ''; return; }
-        
         const q = query.toLowerCase();
         const filtered = this.state.library.filter(e => e.name.toLowerCase().includes(q));
-        
         resContainer.style.display = 'block';
         if(filtered.length === 0) {
             resContainer.innerHTML = '<div style="padding:12px; color:var(--text-muted)">Nessun esercizio.</div>';
             return;
         }
-        
         let html = '';
         filtered.forEach(ex => { html += `<div class="search-item" onclick="App.addExerciseToActive('${ex.id}')">${ex.name}</div>`; });
         resContainer.innerHTML = html;
@@ -690,24 +548,7 @@ const App = {
             document.getElementById('active-search-results').style.display = 'none';
         }
     },
-    createExerciseFromActive() {
-        const nameInput = document.getElementById('active-new-ex-name');
-        const name = nameInput.value.trim();
-        if(!name) return alert("Inserisci un nome.");
-        if(this.state.library.some(e => e.name.toLowerCase() === name.toLowerCase())) return alert("Esercizio già esistente!");
 
-        const newId = Logic.generateId('ex');
-        this.state.library.push({ id: newId, name, notes: '', muscles: [] });
-        this.sortLibraryAndRoutines();
-        this.saveToStorage();
-        
-        nameInput.value = '';
-        this.toggleUI('active-create-ex-box');
-        
-        // Lo aggiungo subito all'allenamento attivo
-        this.addExerciseToActive(newId);
-    },
-    
     updateActiveSet(exIndex, setId, field, value) {
         const s = this.state.activeWorkout.exercises[exIndex].sets.find(x => x.id === setId);
         if(s) { s[field] = value; this.saveToStorage(); } 
@@ -762,12 +603,10 @@ const App = {
         this.state.activeWorkout.exercises[exIndex].sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
         this.saveToStorage(); this.renderActiveWorkout();
     },
-
     renderWorkoutView() {
         const activeContainer = document.getElementById('active-workout-container');
         const startContainer = document.getElementById('start-workout-container');
         const topTimer = document.getElementById('top-timer-bar');
-
         if(this.state.activeWorkout) {
             if (activeContainer) activeContainer.style.display = 'block';
             if (startContainer) startContainer.style.display = 'none';
@@ -782,26 +621,21 @@ const App = {
         }
         this.renderHistory();
     },
-
     renderActiveWorkout() {
         if(!this.state.activeWorkout) return;
         document.getElementById('active-routine-name').innerText = this.state.activeWorkout.routineName;
-
         const container = document.getElementById('active-exercises-list');
         let html = '';
-
         this.state.activeWorkout.exercises.forEach((exItem, exIndex) => {
             const libEx = this.state.library.find(l => l.id === exItem.exId);
             const exName = libEx ? libEx.name : "Esercizio Rimosso";
             const exNotes = libEx ? libEx.notes : "";
-
             const pastWorkouts = [];
             for(let w of this.state.history) {
                 let ex = w.exercises.find(e => e.exId === exItem.exId);
                 if(ex) pastWorkouts.push({ date: w.date, sets: ex.sets, note: ex.sessionNote });
                 if(pastWorkouts.length === 2) break; 
             }
-            
             let histHtml = '';
             if (pastWorkouts.length === 0) {
                 histHtml = '<div style="font-size:0.8rem; color:var(--text-muted)">Nessun dato precedente trovato.</div>';
@@ -815,11 +649,8 @@ const App = {
                     histHtml += `</div>`;
                 });
             }
-
             let lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
-
             html += `<div style="margin-bottom:25px; padding-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1);">
-                
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h4 style="color:var(--primary-color); margin:0;">${exName}</h4>
                     <div style="display:flex; gap:5px;">
@@ -828,20 +659,16 @@ const App = {
                         <button class="btn-small toggle-btn" onclick="App.toggleUI('setup-${exItem.exId}-${exIndex}', this)">📝 Setup</button>
                     </div>
                 </div>
-
                 <div id="hist-${exItem.exId}-${exIndex}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);">
                     <h5 style="margin-bottom:8px;">Ultimi 2 Allenamenti:</h5>
                     ${histHtml}
                 </div>
-                
                 <div id="setup-${exItem.exId}-${exIndex}" style="display:none; padding:12px; background:rgba(0,0,0,0.3); border-radius:8px; margin-bottom:15px; border:1px solid var(--glass-border);">
                     <h5 style="margin-bottom:8px; color:var(--text-muted)">Modifica Setup (Globale):</h5>
                     <input type="text" value="${exNotes}" placeholder="Note di setup (es. altezza sedile...)" onchange="App.updateLibraryNotesFromActive('${exItem.exId}', this.value)" style="margin:0;">
                 </div>
-
                 ${lastNote ? `<div style="background:rgba(239, 68, 68, 0.1); padding:10px; border-radius:8px; border-left:3px solid var(--danger-color); font-size:0.85rem; margin-bottom:15px; color:#fca5a5;">⚠️ <b>Note scorsa volta:</b> ${lastNote}</div>` : ''}
                 `;
-            
             exItem.sets.forEach((s, sIndex) => {
                 let specialHtml = '';
                 if(s.dropsets) {
@@ -868,7 +695,6 @@ const App = {
                         </div>`;
                     });
                 }
-
                 html += `
                 <div class="set-row">
                     <div style="display:flex; align-items:center; gap:8px;">
@@ -887,15 +713,12 @@ const App = {
                 </div>
                 ${specialHtml}`;
             });
-
             html += `<button class="btn btn-small" style="border:1px dashed var(--glass-border); background:rgba(255,255,255,0.05)" onclick="App.addSetToActiveEx(${exIndex})">+ Aggiungi Serie</button>
                 <textarea placeholder="Note per la prossima volta (dolori, feedback)..." onchange="App.updateActiveSessionNote(${exIndex}, this.value)" style="width:100%; padding:12px; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); border-radius:12px; margin-top:15px; font-size:0.9rem; resize:vertical;">${exItem.sessionNote || ''}</textarea>
             </div>`;
         });
         container.innerHTML = html;
     },
-
-    // --- STORICO ALLENAMENTI ---
     updateHistory(wId, exIndex, setId, field, value) {
         const w = this.state.history.find(x => x.id === wId);
         if(w && w.exercises[exIndex]) {
@@ -917,27 +740,21 @@ const App = {
         this.state.routineSearchQuery = query || '';
         this.renderRoutinesList();
     },
-
     renderRoutinesList() {
         const container = document.getElementById('routine-cards-container');
         if (!container) return;
-
         const filtered = Logic.filterRoutines(this.state.routines, this.state.library, this.state.routineSearchQuery);
-
         if (filtered.length === 0) {
             container.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:15px;">Nessuna scheda trovata.</p>`;
             return;
         }
-
         let html = '';
         filtered.forEach(r => {
             const exSummaryList = (r.exercises || []).map(re => {
                 const ex = this.state.library.find(l => l.id === (re.exerciseId || re.id));
                 return ex ? `${ex.name} (${re.setsCount} serie)` : null;
             }).filter(Boolean);
-
             const exSummary = exSummaryList.length > 0 ? exSummaryList.join(' • ') : 'Nessun esercizio';
-
             html += `<div class="routine-card">
                 <div class="routine-card-header">
                     <h4 class="routine-card-title" style="margin:0;">${r.name}</h4>
@@ -948,9 +765,7 @@ const App = {
                 <button class="btn btn-primary" style="width:100%; margin-top:10px; margin-bottom:0;" onclick="App.startWorkout('${r.id}')">▶️ Inizia ${r.name}</button>
             </div>`;
         });
-
         container.innerHTML = html;
-
         filtered.forEach(r => {
             const routineMuscles = new Set();
             (r.exercises || []).forEach(re => {
@@ -962,43 +777,35 @@ const App = {
             this.renderSVG('start-routine-svg-' + r.id, Array.from(routineMuscles));
         });
     },
-
     renderCalendar() {
         const gridContainer = document.getElementById('calendar-grid');
         const titleEl = document.getElementById('calendar-month-year-title');
         const infoEl = document.getElementById('calendar-selected-info');
         const resetBtn = document.getElementById('btn-reset-calendar-filter');
         if (!gridContainer) return;
-
         const monthNames = [
             'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
             'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
         ];
-
         if (titleEl) {
             titleEl.textContent = `${monthNames[this.state.calendarMonth]} ${this.state.calendarYear}`;
         }
-
         const grid = Logic.getCalendarMonthGrid(this.state.calendarYear, this.state.calendarMonth);
         const workoutDatesSet = Logic.getWorkoutDatesSet(this.state.history);
-
         let gridHtml = '';
         grid.forEach(cell => {
             let classes = ['calendar-day-cell'];
             if (!cell.isCurrentMonth) classes.push('other-month');
             if (cell.isToday) classes.push('today');
             if (cell.dateStr === this.state.selectedHistoryDate) classes.push('selected');
-
             const hasWorkout = workoutDatesSet.has(cell.dateStr);
             const dotHtml = hasWorkout ? '<div class="workout-dot"></div>' : '';
-
             gridHtml += `<div class="${classes.join(' ')}" onclick="App.selectCalendarDate('${cell.dateStr}')">
                 <span>${cell.dayNum}</span>
                 ${dotHtml}
             </div>`;
         });
         gridContainer.innerHTML = gridHtml;
-
         if (infoEl && resetBtn) {
             if (this.state.selectedHistoryDate) {
                 infoEl.textContent = `Filtrato: ${this.state.selectedHistoryDate}`;
@@ -1009,7 +816,6 @@ const App = {
             }
         }
     },
-
     changeCalendarMonth(delta) {
         this.state.calendarMonth += delta;
         if (this.state.calendarMonth < 0) {
@@ -1021,7 +827,6 @@ const App = {
         }
         this.renderCalendar();
     },
-
     selectCalendarDate(dateStr) {
         if (this.state.selectedHistoryDate === dateStr) {
             this.state.selectedHistoryDate = null;
@@ -1030,23 +835,19 @@ const App = {
         }
         this.renderHistory();
     },
-
     clearCalendarFilter() {
         this.state.selectedHistoryDate = null;
         this.renderHistory();
     },
-
     renderHistory() {
         this.renderCalendar();
-
         const container = document.getElementById('history-container');
         if (!container) return;
-
+        ChartsManager.renderVolumeChart(this.state.history);
         if (this.state.history.length === 0) {
             container.innerHTML = "<p>Nessun allenamento salvato.</p>";
             return;
         }
-
         let historyItems = this.state.history;
         if (this.state.selectedHistoryDate) {
             historyItems = historyItems.filter(w => {
@@ -1054,12 +855,10 @@ const App = {
                 return wDate === this.state.selectedHistoryDate;
             });
         }
-
         if (historyItems.length === 0) {
             container.innerHTML = `<p style="color:var(--text-muted);">Nessun allenamento per il ${this.state.selectedHistoryDate}.</p>`;
             return;
         }
-
         let html = '';
         historyItems.forEach(w => {
             const hasRatings = (w.moodRating !== undefined && w.moodRating !== null) ||
@@ -1072,7 +871,6 @@ const App = {
                     ${w.fatigueRating ? `<span class="rating-badge fatigue">Stanchezza: ${w.fatigueRating}/10</span>` : ''}
                 </div>
             ` : '';
-
             html += `<div class="card" style="border-left: 4px solid var(--primary-dark);">
                 <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
                     <h3 style="margin:0; font-size:1.1rem">${w.date} - ${w.routineName}</h3>
@@ -1083,13 +881,11 @@ const App = {
                     ${w.waterLiters ? `<span style="margin-left: 15px; color:var(--primary-color);">💧 Acqua: ${w.waterLiters}L</span>` : ''}
                 </div>
                 ${ratingsHtml}`;
-            
             (w.exercises || []).forEach((ex, exIdx) => {
                 const libEx = this.state.library.find(l => l.id === ex.exId);
                 const name = libEx ? libEx.name : "Esercizio rimosso";
                 html += `<div style="margin-bottom:10px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px solid var(--glass-border)">
                     <div style="font-weight:600; color:var(--primary-color); margin-bottom:8px;">${name}</div>`;
-                
                 (ex.sets || []).forEach((s, sIdx) => {
                     html += `<div style="display:flex; gap:8px; margin-bottom:5px; align-items:center;">
                         <span style="width:30px; font-size:0.8rem; color:var(--text-muted); font-weight:600">S${sIdx+1}</span>
@@ -1103,8 +899,6 @@ const App = {
         });
         container.innerHTML = html;
     },
-
-    // --- NUTRIZIONE (REQUIREMENT R2) ---
     saveProfile() {
         this.state.profile.dob = document.getElementById('profile-dob').value;
         this.state.profile.height = document.getElementById('profile-height').value;
@@ -1113,14 +907,12 @@ const App = {
         this.updateMeasurementMethodOptions();
         this.renderNutritionDisplay(); 
     },
-    
     loadNutritionDate(dateStr) {
         if (!dateStr) {
             dateStr = new Date().toISOString().split('T')[0];
         }
         const dateInput = document.getElementById('nutri-date');
         if (dateInput) dateInput.value = dateStr;
-
         if (!this.state.nutrition[dateStr]) {
             this.state.nutrition[dateStr] = {
                 weight: '',
@@ -1155,14 +947,11 @@ const App = {
                 });
             }
         }
-
         const data = this.state.nutrition[dateStr];
         const weightInput = document.getElementById('nutri-weight');
         if (weightInput) weightInput.value = data.weight || '';
-
         this.renderNutritionDisplay();
     },
-
     navigateNutritionDate(offsetDays) {
         let dateInput = document.getElementById('nutri-date');
         let dateStr = dateInput ? dateInput.value : '';
@@ -1179,7 +968,6 @@ const App = {
         }
         this.loadNutritionDate(dateStr);
     },
-
     saveNutritionWeight(weightVal) {
         const dateInput = document.getElementById('nutri-date');
         const dateStr = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
@@ -1189,18 +977,6 @@ const App = {
         this.state.nutrition[dateStr].weight = weightVal;
         const bf = Logic.calculateBodyFat(weightVal, this.state.profile);
         this.state.nutrition[dateStr].bfPercentage = bf ? parseFloat(bf) : null;
-        this.saveToStorage();
-        this.renderNutritionDisplay();
-    },
-
-    saveNutritionData() {
-        const dateStr = document.getElementById('nutri-date').value;
-        if (!dateStr) return;
-        if (!this.state.nutrition[dateStr]) {
-            this.loadNutritionDate(dateStr);
-        }
-        const weightElem = document.getElementById('nutri-weight');
-        if (weightElem) this.state.nutrition[dateStr].weight = weightElem.value;
         this.saveToStorage();
         this.renderNutritionDisplay();
     },
@@ -1216,7 +992,6 @@ const App = {
             this.renderNutritionDisplay();
         }
     },
-
     deleteNutritionDay(dateStr) {
         if (confirm("Eliminare i dati di questo giorno?")) {
             delete this.state.nutrition[dateStr];
@@ -1228,28 +1003,21 @@ const App = {
             }
         }
     },
-
     renderNutritionDisplay() {
         const dateInput = document.getElementById('nutri-date');
         const dateStr = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
-
         const weightElem = document.getElementById('nutri-weight');
         const currentWeight = weightElem ? weightElem.value : (this.state.nutrition[dateStr]?.weight || '');
         const bf = Logic.calculateBodyFat(currentWeight, this.state.profile);
         const bfDisplay = document.getElementById('current-bf-display');
         if (bfDisplay) bfDisplay.innerText = bf ? `${bf} %` : '-- %';
-
         const dayData = this.state.nutrition[dateStr] || { meals: [] };
         const dayMeals = dayData.meals || [];
-
-        // Build targets from planning (macro g/kg × weight) for consistency with the Planning tab.
-        // Fall back to normocalorica if planning is not set.
         const planning = this.state.nutritionPlanning;
         let targetPlan = planning || { normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 } };
         if (planning && planning.weight && planning.carbsPerKg !== undefined) {
             const calc = Logic.calculateMacrosFromKg(planning.weight, planning.carbsPerKg, planning.proPerKg, planning.fatPerKg);
             if (calc.totalKcal > 0) {
-                // Override normocalorica with computed values so Pasti targets reflect Planning
                 targetPlan = {
                     normocalorica: {
                         kcal: calc.totalKcal,
@@ -1261,17 +1029,14 @@ const App = {
             }
         }
         const summary = Logic.calculateDailyNutritionSummary(dayMeals, targetPlan);
-
         if (this.state.nutrition[dateStr]) {
             this.state.nutrition[dateStr].kcal = summary.totals.kcal;
             this.state.nutrition[dateStr].carbs = summary.totals.carbs;
             this.state.nutrition[dateStr].pro = summary.totals.pro;
             this.state.nutrition[dateStr].fat = summary.totals.fat;
         }
-
         const targetBadge = document.getElementById('daily-kcal-target-badge');
         if (targetBadge) targetBadge.innerText = `${summary.totals.kcal} / ${summary.targets.kcal} kcal`;
-
         const progressFill = document.getElementById('daily-kcal-progress');
         if (progressFill) {
             const pct = Math.min(100, summary.percentages.kcal);
@@ -1282,10 +1047,8 @@ const App = {
                 progressFill.style.background = 'linear-gradient(90deg, var(--primary-color), var(--success-color))';
             }
         }
-
         const consumedText = document.getElementById('daily-kcal-consumed-text');
         if (consumedText) consumedText.innerText = `Consumate: ${summary.totals.kcal} kcal`;
-
         const remainingText = document.getElementById('daily-kcal-remaining-text');
         if (remainingText) {
             if (summary.remaining.kcal >= 0) {
@@ -1296,7 +1059,6 @@ const App = {
                 remainingText.style.color = '#ef4444';
             }
         }
-
         const setMacroBar = (valId, targetId, barId, consumed, target, pct) => {
             const valElem = document.getElementById(valId);
             if (valElem) valElem.innerText = `${consumed}g`;
@@ -1305,23 +1067,19 @@ const App = {
             const barElem = document.getElementById(barId);
             if (barElem) barElem.style.width = `${Math.min(100, pct)}%`;
         };
-
         setMacroBar('daily-carbs-val', 'daily-carbs-target', 'daily-carbs-bar', summary.totals.carbs, summary.targets.carbs, summary.percentages.carbs);
         setMacroBar('daily-pro-val', 'daily-pro-target', 'daily-pro-bar', summary.totals.pro, summary.targets.pro, summary.percentages.pro);
         setMacroBar('daily-fat-val', 'daily-fat-target', 'daily-fat-bar', summary.totals.fat, summary.targets.fat, summary.percentages.fat);
-
         const mealCategories = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
         mealCategories.forEach(mName => {
             const mKey = mName.toLowerCase();
             const mealObj = dayMeals.find(m => m.name === mName || m.id === 'meal_' + mKey) || { foods: [] };
             const foods = mealObj.foods || [];
-
             const mealTotals = Logic.calculateMealTotals([mealObj]);
             const subtotalElem = document.getElementById(`meal-subtotal-${mKey}`);
             if (subtotalElem) {
                 subtotalElem.innerText = `${mealTotals.kcal} kcal • C:${mealTotals.carbs} P:${mealTotals.pro} F:${mealTotals.fat}`;
             }
-
             const itemsContainer = document.getElementById(`meal-items-${mKey}`);
             if (itemsContainer) {
                 if (foods.length === 0) {
@@ -1346,7 +1104,6 @@ const App = {
                 }
             }
         });
-
         const historyContainer = document.getElementById('nutrition-history-list');
         if (historyContainer) {
             const sortedDates = Object.keys(this.state.nutrition).sort((a,b) => new Date(b) - new Date(a));
@@ -1372,13 +1129,10 @@ const App = {
                 });
             }
             historyContainer.innerHTML = histHtml;
-
             const chronoData = sortedDates.slice().reverse().map(d => ({ date: d, ...this.state.nutrition[d] }));
             this.renderTDEE(chronoData);
         }
     },
-
-    // --- FOOD SEARCH & SELECTION HANDLERS ---
     onFoodSearchInput(query) {
         const clearBtn = document.getElementById('btn-clear-food-search');
         const dropdown = document.getElementById('nutri-food-results');
@@ -1387,15 +1141,11 @@ const App = {
             if (dropdown) dropdown.style.display = 'none';
             return;
         }
-
         if (clearBtn) clearBtn.style.display = 'block';
-
         const customFoods = this.state.customFoods || [];
         const combined = [...COMMON_FOODS, ...customFoods];
         const results = Logic.searchFoods(combined, query);
-
         if (!dropdown) return;
-
         if (results.length === 0) {
             dropdown.innerHTML = `<div class="food-result-item" style="color:var(--text-muted); font-size:0.85rem;">Nessun alimento trovato per "${query}".</div>`;
         } else {
@@ -1419,7 +1169,6 @@ const App = {
         }
         dropdown.style.display = 'block';
     },
-
     clearFoodSearch() {
         const input = document.getElementById('nutri-food-search');
         if (input) input.value = '';
@@ -1428,7 +1177,6 @@ const App = {
         const dropdown = document.getElementById('nutri-food-results');
         if (dropdown) dropdown.style.display = 'none';
     },
-
     focusMealSearch(mealName) {
         this._targetMealName = mealName;
         const searchInput = document.getElementById('nutri-food-search');
@@ -1437,7 +1185,6 @@ const App = {
             searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     },
-
     selectSearchFood(foodId) {
         const customFoods = this.state.customFoods || [];
         const combined = [...COMMON_FOODS, ...customFoods];
@@ -1447,25 +1194,18 @@ const App = {
             this.openQtyModal(food, null, this._targetMealName);
         }
     },
-
-    // --- QUANTITY SELECTION MODAL ---
     _activeQtyFood: null,
     _editingMealItem: null,
     _targetMealName: 'Colazione',
-
     openQtyModal(food, existingItem = null, targetMealName = null) {
         this._activeQtyFood = food;
         this._editingMealItem = existingItem;
         if (targetMealName) this._targetMealName = targetMealName;
-
         const modal = document.getElementById('modal-food-qty');
         if (!modal) return;
-
         document.getElementById('modal-food-title').innerText = food.name;
-        
         const mealSelect = document.getElementById('modal-meal-select');
         if (mealSelect) mealSelect.value = targetMealName || this._targetMealName || 'Colazione';
-
         const unitSelect = document.getElementById('modal-food-unit-select');
         if (unitSelect) {
             let optionsHtml = `<option value="${food.unit}">${food.unit}</option>`;
@@ -1475,7 +1215,6 @@ const App = {
             unitSelect.innerHTML = optionsHtml;
             unitSelect.value = existingItem ? existingItem.unit : (food.servingUnit || food.unit);
         }
-
         const qtyInput = document.getElementById('modal-food-qty-val');
         if (qtyInput) {
             if (existingItem) {
@@ -1484,7 +1223,6 @@ const App = {
                 qtyInput.value = food.servingUnit ? 1 : (food.baseQty || 100);
             }
         }
-
         const chipsWrap = document.getElementById('modal-qty-chips');
         if (chipsWrap) {
             let chipsHtml = '';
@@ -1500,16 +1238,13 @@ const App = {
             }
             chipsWrap.innerHTML = chipsHtml;
         }
-
         const confirmBtn = document.getElementById('btn-confirm-add-food');
         if (confirmBtn) {
             confirmBtn.innerText = existingItem ? '💾 Aggiorna Pasto' : '➕ Aggiungi al Pasto';
         }
-
         this.updateQtyModalMacros();
         modal.style.display = 'flex';
     },
-
     setQtyModalValue(val) {
         const qtyInput = document.getElementById('modal-food-qty-val');
         if (qtyInput) {
@@ -1517,22 +1252,17 @@ const App = {
             this.updateQtyModalMacros();
         }
     },
-
     updateQtyModalMacros() {
         if (!this._activeQtyFood) return;
         const qtyInput = document.getElementById('modal-food-qty-val');
         const unitSelect = document.getElementById('modal-food-unit-select');
-
         const qty = qtyInput ? parseFloat(qtyInput.value) || 0 : 0;
         const unit = unitSelect ? unitSelect.value : (this._activeQtyFood.unit || 'g');
-
         const nutrients = Logic.scaleFoodNutrients(this._activeQtyFood, qty, unit);
-
         document.getElementById('modal-scaled-kcal').innerText = nutrients.kcal;
         document.getElementById('modal-scaled-carbs').innerText = `${nutrients.carbs}g`;
         document.getElementById('modal-scaled-pro').innerText = `${nutrients.pro}g`;
         document.getElementById('modal-scaled-fat').innerText = `${nutrients.fat}g`;
-
         document.getElementById('modal-micro-sugars').innerText = `${nutrients.sugars}g`;
         document.getElementById('modal-micro-fiber').innerText = `${nutrients.fiber}g`;
         document.getElementById('modal-micro-satfat').innerText = `${nutrients.satFat}g`;
@@ -1540,52 +1270,41 @@ const App = {
         document.getElementById('modal-micro-salt').innerText = `${nutrients.salt}g`;
         document.getElementById('modal-micro-sodium').innerText = `${nutrients.sodium}mg`;
     },
-
     closeQtyModal() {
         const modal = document.getElementById('modal-food-qty');
         if (modal) modal.style.display = 'none';
         this._activeQtyFood = null;
         this._editingMealItem = null;
     },
-
     toggleQtyMicroDetails() {
         const fields = document.getElementById('modal-qty-micro-fields');
         if (fields) {
             fields.style.display = fields.style.display === 'none' ? 'block' : 'none';
         }
     },
-
     confirmAddFoodToMeal() {
         if (!this._activeQtyFood) return;
-
         const dateStr = document.getElementById('nutri-date').value || new Date().toISOString().split('T')[0];
         if (!this.state.nutrition[dateStr]) {
             this.loadNutritionDate(dateStr);
         }
-
         const mealSelect = document.getElementById('modal-meal-select');
         const targetMealName = mealSelect ? mealSelect.value : (this._targetMealName || 'Colazione');
-
         const qtyInput = document.getElementById('modal-food-qty-val');
         const unitSelect = document.getElementById('modal-food-unit-select');
-
         const qty = parseFloat(qtyInput ? qtyInput.value : 0) || 0;
         const unit = unitSelect ? unitSelect.value : (this._activeQtyFood.unit || 'g');
-
         if (qty <= 0) {
             alert("Inserisci una quantità valida maggiore di 0");
             return;
         }
-
         const nutrients = Logic.scaleFoodNutrients(this._activeQtyFood, qty, unit);
-
         const dayData = this.state.nutrition[dateStr];
         let targetMealObj = dayData.meals.find(m => m.name === targetMealName || m.id === 'meal_' + targetMealName.toLowerCase());
         if (!targetMealObj) {
             targetMealObj = { id: 'meal_' + targetMealName.toLowerCase(), name: targetMealName, foods: [] };
             dayData.meals.push(targetMealObj);
         }
-
         if (this._editingMealItem) {
             const itemIdx = targetMealObj.foods.findIndex(f => f.id === this._editingMealItem.id);
             if (itemIdx >= 0) {
@@ -1610,28 +1329,22 @@ const App = {
             };
             targetMealObj.foods.push(newItem);
         }
-
         this.saveToStorage();
         this.closeQtyModal();
         this.clearFoodSearch();
         this.renderNutritionDisplay();
     },
-
     openEditMealItemModal(mealName, itemId) {
         const dateStr = document.getElementById('nutri-date').value || new Date().toISOString().split('T')[0];
         const dayData = this.state.nutrition[dateStr];
         if (!dayData || !dayData.meals) return;
-
         const mealObj = dayData.meals.find(m => m.name === mealName || m.id === 'meal_' + mealName.toLowerCase());
         if (!mealObj) return;
-
         const item = mealObj.foods.find(f => f.id === itemId);
         if (!item) return;
-
         const customFoods = this.state.customFoods || [];
         const combined = [...COMMON_FOODS, ...customFoods];
         let baseFood = combined.find(f => f.id === item.foodId || f.name === item.name);
-
         if (!baseFood) {
             baseFood = {
                 id: item.foodId || item.id,
@@ -1651,37 +1364,28 @@ const App = {
                 sodium: item.sodium || 0
             };
         }
-
         this.openQtyModal(baseFood, item, mealName);
     },
-
     deleteMealItem(mealName, itemId) {
         const dateStr = document.getElementById('nutri-date').value || new Date().toISOString().split('T')[0];
         const dayData = this.state.nutrition[dateStr];
         if (!dayData || !dayData.meals) return;
-
         const mealObj = dayData.meals.find(m => m.name === mealName || m.id === 'meal_' + mealName.toLowerCase());
         if (!mealObj) return;
-
         mealObj.foods = mealObj.foods.filter(f => f.id !== itemId);
-
         this.saveToStorage();
         this.renderNutritionDisplay();
     },
-
-    // --- CUSTOM FOOD MODAL HANDLERS ---
     openCustomFoodModal() {
         document.getElementById('custom-food-name').value = '';
         document.getElementById('custom-food-brand').value = '';
         document.getElementById('custom-food-unit').value = '100g';
         document.getElementById('custom-food-piece-weight').value = '';
         document.getElementById('custom-food-piece-weight-wrap').style.display = 'none';
-
         document.getElementById('custom-food-kcal').value = '';
         document.getElementById('custom-food-carbs').value = '';
         document.getElementById('custom-food-pro').value = '';
         document.getElementById('custom-food-fat').value = '';
-
         document.getElementById('custom-food-sugars').value = '';
         document.getElementById('custom-food-fiber').value = '';
         document.getElementById('custom-food-satfat').value = '';
@@ -1690,41 +1394,34 @@ const App = {
         document.getElementById('custom-food-sodium').value = '';
         document.getElementById('custom-food-vita').value = '';
         document.getElementById('custom-food-vitc').value = '';
-
         const modal = document.getElementById('modal-custom-food');
         if (modal) modal.style.display = 'flex';
     },
-
     closeCustomFoodModal() {
         const modal = document.getElementById('modal-custom-food');
         if (modal) modal.style.display = 'none';
     },
-
     toggleCustomFoodPieceWeight(unitVal) {
         const wrap = document.getElementById('custom-food-piece-weight-wrap');
         if (wrap) {
             wrap.style.display = unitVal === '1pezzo' ? 'block' : 'none';
         }
     },
-
     toggleCustomMicroDetails() {
         const fields = document.getElementById('custom-food-micro-fields');
         if (fields) {
             fields.style.display = fields.style.display === 'none' ? 'block' : 'none';
         }
     },
-
     saveCustomFood() {
         const name = document.getElementById('custom-food-name').value;
         const brand = document.getElementById('custom-food-brand').value;
         const unit = document.getElementById('custom-food-unit').value;
         const pieceWeight = document.getElementById('custom-food-piece-weight').value;
-
         const kcal = document.getElementById('custom-food-kcal').value;
         const carbs = document.getElementById('custom-food-carbs').value;
         const pro = document.getElementById('custom-food-pro').value;
         const fat = document.getElementById('custom-food-fat').value;
-
         const sugars = document.getElementById('custom-food-sugars').value;
         const fiber = document.getElementById('custom-food-fiber').value;
         const satFat = document.getElementById('custom-food-satfat').value;
@@ -1733,7 +1430,6 @@ const App = {
         const sodium = document.getElementById('custom-food-sodium').value;
         const vitA = document.getElementById('custom-food-vita').value;
         const vitC = document.getElementById('custom-food-vitc').value;
-
         const foodData = {
             name,
             brand,
@@ -1753,31 +1449,25 @@ const App = {
             vitA,
             vitC
         };
-
         const validation = Logic.validateCustomFood(foodData);
         if (!validation.isValid) {
             alert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
             return;
         }
-
         const newCustomFood = validation.cleanData;
         if (!this.state.customFoods) this.state.customFoods = [];
         this.state.customFoods.push(newCustomFood);
-
         this.saveToStorage();
         this.closeCustomFoodModal();
         this.openQtyModal(newCustomFood);
     },
-
     renderTDEE(chronoData) {
         const resultBox = document.getElementById('tdee-result');
         const tdeeCalc = Logic.calculateTDEE(chronoData);
-        
         if (tdeeCalc.error) { 
             resultBox.innerHTML = `<h3>-- kcal</h3><span>${tdeeCalc.message}</span>`; 
             return; 
         }
-
         resultBox.innerHTML = `<h3 style="font-size:2rem; color:var(--success-color); margin-bottom:5px;">${tdeeCalc.tdee} kcal</h3>
             <span style="font-weight:600">TDEE Stimato</span>
             <div style="margin-top:15px; font-size:0.85rem; color:var(--text-muted); background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; text-align:left;">
@@ -1791,8 +1481,6 @@ const App = {
                 </div>
             </div>`;
     },
-
-    // --- MISURAZIONI (REQUIREMENT R3) ---
     getMeasurementsList() {
         if (!this.state.nutrition) return [];
         const dates = Object.keys(this.state.nutrition).filter(d => {
@@ -1801,22 +1489,18 @@ const App = {
         });
         return dates.sort((a, b) => new Date(b) - new Date(a));
     },
-
     updateMeasurementMethodOptions() {
         const optMale = document.getElementById('opt-navy-male');
         const optFemale = document.getElementById('opt-navy-female');
         const gender = this.state.profile?.gender;
-        
         if (optMale) optMale.style.display = (gender === 'F') ? 'none' : 'block';
         if (optFemale) optFemale.style.display = (gender === 'M') ? 'none' : 'block';
-
         const select = document.getElementById('measure-method');
         if (select) {
             if (select.value === 'navy_male' && gender === 'F') select.value = 'manual';
             if (select.value === 'navy_female' && gender === 'M') select.value = 'manual';
         }
     },
-
     onMeasurementMethodChange(methodVal) {
         const method = methodVal || document.getElementById('measure-method')?.value || 'manual';
         const fieldManual = document.getElementById('field-manual-bf');
@@ -1824,25 +1508,20 @@ const App = {
         const fieldNeck = document.getElementById('field-neck');
         const fieldWaist = document.getElementById('field-waist');
         const fieldHip = document.getElementById('field-hip');
-
         if (fieldManual) fieldManual.style.display = method === 'manual' ? 'block' : 'none';
         if (fieldHeight) fieldHeight.style.display = (method === 'navy_male' || method === 'navy_female' || method === 'bmi') ? 'block' : 'none';
         if (fieldNeck) fieldNeck.style.display = (method === 'navy_male' || method === 'navy_female') ? 'block' : 'none';
         if (fieldWaist) fieldWaist.style.display = (method === 'navy_male' || method === 'navy_female') ? 'block' : 'none';
         if (fieldHip) fieldHip.style.display = method === 'navy_female' ? 'block' : 'none';
-
         const heightInput = document.getElementById('measure-height');
         if (heightInput && (!heightInput.value || parseFloat(heightInput.value) <= 0) && this.state.profile && this.state.profile.height) {
             heightInput.value = this.state.profile.height;
         }
-
         this.updateMeasurementBFPreview();
     },
-
     updateMeasurementBFPreview() {
         const previewBadge = document.getElementById('measure-bf-preview');
         if (!previewBadge) return;
-
         const method = document.getElementById('measure-method')?.value || 'manual';
         const weight = parseFloat(document.getElementById('measure-weight')?.value);
         const height = parseFloat(document.getElementById('measure-height')?.value);
@@ -1850,7 +1529,6 @@ const App = {
         const waist = parseFloat(document.getElementById('measure-waist')?.value);
         const hip = parseFloat(document.getElementById('measure-hip')?.value);
         const manualBf = parseFloat(document.getElementById('measure-bf-manual')?.value);
-
         const params = {
             weight,
             height,
@@ -1862,7 +1540,6 @@ const App = {
             gender: this.state.profile?.gender || 'M',
             dob: this.state.profile?.dob
         };
-
         const bf = Logic.calculateBodyFatByMethod(method, params);
         if (bf !== null && !isNaN(bf)) {
             previewBadge.innerText = `Stima BF: ${bf}%`;
@@ -1872,10 +1549,8 @@ const App = {
             previewBadge.className = 'badge badge-primary';
         }
     },
-
-    saveMeasurement(event) {
+    async saveMeasurement(event) {
         if (event) event.preventDefault();
-
         const dateStr = document.getElementById('measure-date')?.value || new Date().toISOString().split('T')[0];
         const weight = document.getElementById('measure-weight')?.value;
         const method = document.getElementById('measure-method')?.value || 'manual';
@@ -1884,7 +1559,6 @@ const App = {
         const neck = document.getElementById('measure-neck')?.value;
         const waist = document.getElementById('measure-waist')?.value;
         const hip = document.getElementById('measure-hip')?.value;
-
         const payload = {
             date: dateStr,
             weight,
@@ -1897,32 +1571,39 @@ const App = {
             gender: this.state.profile?.gender || 'M',
             dob: this.state.profile?.dob
         };
-
         const validation = Logic.validateMeasurementData(payload);
         if (!validation.isValid) {
             alert("Attenzione, errori nella misurazione:\n- " + Object.values(validation.errors).join('\n- '));
             return;
         }
-
         if (!this.state.nutrition[dateStr]) {
             this.loadNutritionDate(dateStr);
         }
-
         const dayData = this.state.nutrition[dateStr];
         dayData.weight = validation.cleanData.weight;
         dayData.bfPercentage = validation.bfPercentage;
         dayData.measurementMethod = validation.cleanData.measurementMethod;
         dayData.measurements = validation.cleanData.measurements;
-
+        const photoInput = document.getElementById('measure-photo');
+        if (photoInput && photoInput.files && photoInput.files.length > 0) {
+            try {
+                const file = photoInput.files[0];
+                if (auth.currentUser) {
+                    const downloadUrl = await StorageManager.uploadPhoto(file, auth.currentUser.uid, dateStr);
+                    dayData.photoUrl = downloadUrl;
+                }
+            } catch (err) {
+                alert("Errore durante il caricamento della foto. La misurazione è stata comunque salvata.");
+            }
+            photoInput.value = ""; // Reset input
+        }
         this.saveToStorage();
         this.renderMeasurements();
         this.renderNutritionDisplay();
     },
-
     editMeasurement(dateStr) {
         const record = this.state.nutrition[dateStr];
         if (!record) return;
-
         const dateInput = document.getElementById('measure-date');
         const weightInput = document.getElementById('measure-weight');
         const methodSelect = document.getElementById('measure-method');
@@ -1931,74 +1612,58 @@ const App = {
         const neckInput = document.getElementById('measure-neck');
         const waistInput = document.getElementById('measure-waist');
         const hipInput = document.getElementById('measure-hip');
-
         if (dateInput) dateInput.value = dateStr;
         if (weightInput) weightInput.value = record.weight || '';
-
         const method = record.measurementMethod || 'manual';
         if (methodSelect) methodSelect.value = method;
-
         const m = record.measurements || {};
         if (manualBfInput) manualBfInput.value = m.manualBf !== null && m.manualBf !== undefined ? m.manualBf : (record.bfPercentage !== null && record.bfPercentage !== undefined ? record.bfPercentage : '');
         if (heightInput) heightInput.value = m.height !== null && m.height !== undefined ? m.height : (this.state.profile?.height || '');
         if (neckInput) neckInput.value = m.neck !== null && m.neck !== undefined ? m.neck : '';
         if (waistInput) waistInput.value = m.waist !== null && m.waist !== undefined ? m.waist : '';
         if (hipInput) hipInput.value = m.hip !== null && m.hip !== undefined ? m.hip : '';
-
         this.onMeasurementMethodChange(method);
-
         const formCard = document.getElementById('measurement-form-card');
         if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
-
     deleteMeasurement(dateStr) {
         if (!confirm(`Eliminare la misurazione del ${dateStr}?`)) return;
-
         if (this.state.nutrition[dateStr]) {
             delete this.state.nutrition[dateStr].bfPercentage;
             delete this.state.nutrition[dateStr].measurementMethod;
             delete this.state.nutrition[dateStr].measurements;
-
             const day = this.state.nutrition[dateStr];
             const hasMeals = day.meals && day.meals.some(m => m.foods && m.foods.length > 0);
             if (!day.weight && !hasMeals) {
                 delete this.state.nutrition[dateStr];
             }
         }
-
         this.saveToStorage();
         this.renderMeasurements();
         this.renderNutritionDisplay();
     },
-
     renderMeasurements() {
         const dateInput = document.getElementById('measure-date');
         if (dateInput && !dateInput.value) {
             dateInput.value = new Date().toISOString().split('T')[0];
         }
-
         this.updateMeasurementMethodOptions();
-
         const methodSelect = document.getElementById('measure-method');
         const method = methodSelect ? methodSelect.value : 'manual';
         this.onMeasurementMethodChange(method);
-
         const container = document.getElementById('measurements-history-container');
         if (!container) return;
-
         const datesList = this.getMeasurementsList();
         if (datesList.length === 0) {
             container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem; font-style:italic;">Nessuna misurazione registrata.</div>`;
             return;
         }
-
         const methodLabels = {
             'manual': 'Manuale',
             'navy_male': 'US Navy (Uomo)',
             'navy_female': 'US Navy (Donna)',
             'bmi': 'BMI'
         };
-
         let html = '';
         datesList.forEach(d => {
             const item = this.state.nutrition[d];
@@ -2006,9 +1671,7 @@ const App = {
             const bf = item.bfPercentage !== null && item.bfPercentage !== undefined ? item.bfPercentage : '--';
             const methodKey = item.measurementMethod || 'manual';
             const methodBadge = methodLabels[methodKey] || methodKey;
-
             const bodyComp = (weight !== '--' && bf !== '--') ? Logic.calculateBodyComposition(weight, bf) : { fatMass: '--', leanMass: '--' };
-
             html += `
                 <div class="measurement-card">
                     <div class="measurement-header">
@@ -2035,29 +1698,29 @@ const App = {
                             <span class="comp-chip-val">${bodyComp.leanMass} kg</span>
                         </div>
                     </div>
+                    ${item.photoUrl ? `
+                    <div style="margin-top: 10px; border-top: 1px solid var(--glass-border); padding-top: 10px; text-align: center;">
+                        <a href="${item.photoUrl}" target="_blank">
+                            <img src="${item.photoUrl}" alt="Progress Photo" style="max-width: 100%; max-height: 200px; border-radius: 8px; object-fit: cover; border: 1px solid var(--glass-border);">
+                        </a>
+                    </div>
+                    ` : ''}
                 </div>
             `;
         });
-
         container.innerHTML = html;
     },
-
     renderHomeDashboard() {
         const todayStr = new Date().toISOString().split('T')[0];
-        
-        // --- 1. Workout Status ---
         let workoutToday = this.state.history.find(w => {
             const date = new Date(w.globalStartTime || Date.now());
-            // adjust timezone offset to get local YYYY-MM-DD
             const localStr = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
             return localStr === todayStr;
         });
-
         const iconEl = document.getElementById('home-workout-icon');
         const titleEl = document.getElementById('home-workout-title');
         const subEl = document.getElementById('home-workout-subtitle');
         const widgetEl = document.getElementById('home-workout-widget');
-
         if (this.state.activeWorkout) {
             iconEl.innerText = "⏳";
             titleEl.innerText = "In Corso";
@@ -2074,45 +1737,32 @@ const App = {
             subEl.innerText = "Nessun allenamento oggi.";
             widgetEl.style.borderLeftColor = "var(--primary-color)";
         }
-
-        // --- 2. Nutrition ---
         const calc = Logic.calculateTDEEAndMacros(this.state);
         const tdee = calc.tdee || 2500;
         document.getElementById('home-kcal-target').innerText = tdee;
-        
         const nut = this.state.nutrition[todayStr];
         const kcal = nut && nut.kcal ? parseFloat(nut.kcal) : 0;
         const carbs = nut && nut.carbs ? nut.carbs : 0;
         const pro = nut && nut.pro ? nut.pro : 0;
         const fat = nut && nut.fat ? nut.fat : 0;
-
         document.getElementById('home-kcal-eaten').innerText = kcal;
         document.getElementById('home-carbs-val').innerText = carbs + "g";
         document.getElementById('home-pro-val').innerText = pro + "g";
         document.getElementById('home-fat-val').innerText = fat + "g";
-        
         const pct = Math.min(100, Math.max(0, (kcal / tdee) * 100));
         document.getElementById('home-kcal-bar').style.width = pct + "%";
-
-        // --- 3. Body Fat & Streak ---
         document.getElementById('home-bf-display').innerText = calc.bf ? calc.bf.toFixed(1) + "%" : "--%";
         document.getElementById('home-streak-display').innerText = "🔥 " + this.state.history.length;
-
-        // --- 4. Chart.js ---
         if(typeof Chart === 'undefined') return;
-
         const sortedDates = Object.keys(this.state.nutrition).sort((a,b) => new Date(a) - new Date(b));
         const weightDates = sortedDates.filter(d => this.state.nutrition[d].weight).slice(-14);
         const labels = weightDates.map(d => d.slice(5)); // MM-DD
         const data = weightDates.map(d => parseFloat(this.state.nutrition[d].weight));
-
         const canvas = document.getElementById('weightChart');
         if(!canvas) return;
-
         if (window.weightChartInstance) {
             window.weightChartInstance.destroy();
         }
-
         const ctx = canvas.getContext('2d');
         window.weightChartInstance = new Chart(ctx, {
             type: 'line',
@@ -2139,37 +1789,23 @@ const App = {
         });
     },
 
-    onPlanningWeightChange(val) {
-        const w = parseFloat(val);
-        if (!isNaN(w) && w > 0) {
-            this.state.nutritionPlanning.weight = w;
-            this.renderNutritionPlanning();
-            this.saveToStorage();
-        }
-    },
-
     onMacroKgSliderChange(macro, val) {
         const inputEl = document.getElementById(`input-${macro}-kg`);
         if (inputEl) inputEl.value = val;
         this.updateMacroKgValue(macro, parseFloat(val));
     },
-
     onMacroKgInputChange(macro, val) {
         const sliderEl = document.getElementById(`slider-${macro}-kg`);
         if (sliderEl) sliderEl.value = val;
         this.updateMacroKgValue(macro, parseFloat(val));
     },
-
     updateMacroKgValue(macro, val) {
         const numVal = isNaN(val) ? 0 : val;
         const planning = this.state.nutritionPlanning;
-
         const initialMacros = Logic.calculateMacrosFromKg(planning.weight, planning.carbsPerKg, planning.proPerKg, planning.fatPerKg);
         const targetKcal = (planning.normocalorica && planning.normocalorica.kcal) ? planning.normocalorica.kcal : initialMacros.totalKcal;
-
         const key = `${macro}PerKg`;
         planning[key] = numVal;
-
         if (planning.lockedMacro && (macro === 'carbs' || macro === 'fat')) {
             const modulated = Logic.modulateMacroRatio({
                 weight: planning.weight,
@@ -2183,40 +1819,33 @@ const App = {
             planning.carbsPerKg = modulated.carbsPerKg;
             planning.fatPerKg = modulated.fatPerKg;
         }
-
         this.renderNutritionPlanning();
         this.saveToStorage();
     },
-
     setMacroLock(lockedMacro) {
         this.state.nutritionPlanning.lockedMacro = lockedMacro;
         this.renderNutritionPlanning();
         this.saveToStorage();
     },
-
     updateNormoBaseline() {
         const k = parseFloat(document.getElementById('normo-kcal').value) || 2500;
         const c = parseFloat(document.getElementById('normo-carbs').value) || 300;
         const p = parseFloat(document.getElementById('normo-pro').value) || 160;
         const f = parseFloat(document.getElementById('normo-fat').value) || 70;
-
         this.state.nutritionPlanning.normocalorica = { kcal: k, carbs: c, pro: p, fat: f };
         this.renderNutritionPlanning();
         this.saveToStorage();
     },
-
     copyTDEEToNormo() {
         const calc = Logic.calculateTDEEAndMacros(this.state);
         const tdee = calc.tdee || 2500;
         const carbs = calc.carbs || 300;
         const pro = calc.pro || 160;
         const fat = calc.fat || 70;
-
         this.state.nutritionPlanning.normocalorica = { kcal: tdee, carbs, pro, fat };
         this.renderNutritionPlanning();
         this.saveToStorage();
     },
-
     switchPlanningChartPeriod(period) {
         this.state.nutritionPlanning.chartPeriod = period;
         document.querySelectorAll('.chart-period-btn').forEach(btn => btn.classList.remove('active'));
@@ -2224,7 +1853,6 @@ const App = {
         if (activeBtn) activeBtn.classList.add('active');
         this.renderNutritionTrendChart();
     },
-
     getLatestWeight() {
         if (!this.state.nutrition) return null;
         let today = new Date().toISOString().split('T')[0];
@@ -2239,7 +1867,6 @@ const App = {
         }
         return null;
     },
-
     renderNutritionPlanning() {
         if (!this.state.nutritionPlanning) {
             this.state.nutritionPlanning = {
@@ -2252,10 +1879,8 @@ const App = {
                 normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
             };
         }
-        
         let latestWeight = this.getLatestWeight();
         const displayEl = document.getElementById('plan-weight-display');
-        
         if (latestWeight) {
             this.state.nutritionPlanning.weight = latestWeight;
             if (displayEl) displayEl.innerHTML = `${latestWeight} <span style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">kg</span>`;
@@ -2263,24 +1888,19 @@ const App = {
             this.state.nutritionPlanning.weight = 0;
             if (displayEl) displayEl.innerHTML = `<span style="font-size:0.9rem; color:var(--warning-color);">Inserisci peso in Misurazioni</span>`;
         }
-
         const planning = this.state.nutritionPlanning;
-
         const sliderC = document.getElementById('slider-carbs-kg');
         const inputC = document.getElementById('input-carbs-kg');
         if (sliderC && document.activeElement !== sliderC) sliderC.value = planning.carbsPerKg;
         if (inputC && document.activeElement !== inputC) inputC.value = planning.carbsPerKg;
-
         const sliderP = document.getElementById('slider-pro-kg');
         const inputP = document.getElementById('input-pro-kg');
         if (sliderP && document.activeElement !== sliderP) sliderP.value = planning.proPerKg;
         if (inputP && document.activeElement !== inputP) inputP.value = planning.proPerKg;
-
         const sliderF = document.getElementById('slider-fat-kg');
         const inputF = document.getElementById('input-fat-kg');
         if (sliderF && document.activeElement !== sliderF) sliderF.value = planning.fatPerKg;
         if (inputF && document.activeElement !== inputF) inputF.value = planning.fatPerKg;
-
         const normoKcal = document.getElementById('normo-kcal');
         const normoCarbs = document.getElementById('normo-carbs');
         const normoPro = document.getElementById('normo-pro');
@@ -2289,28 +1909,21 @@ const App = {
         if (normoCarbs && document.activeElement !== normoCarbs) normoCarbs.value = planning.normocalorica.carbs;
         if (normoPro && document.activeElement !== normoPro) normoPro.value = planning.normocalorica.pro;
         if (normoFat && document.activeElement !== normoFat) normoFat.value = planning.normocalorica.fat;
-
         const totals = Logic.calculateMacrosFromKg(planning.weight, planning.carbsPerKg, planning.proPerKg, planning.fatPerKg);
-
         const totalKcalEl = document.getElementById('plan-total-kcal');
         if (totalKcalEl) totalKcalEl.innerHTML = `${totals.totalKcal} <span style="font-size:1rem; font-weight:normal; color:var(--text-muted);">kcal</span>`;
-
         const totalCarbsEl = document.getElementById('plan-total-carbs');
         const carbsKcalEl = document.getElementById('plan-carbs-kcal');
         if (totalCarbsEl) totalCarbsEl.innerText = `${totals.carbsGrams}g`;
         if (carbsKcalEl) carbsKcalEl.innerText = `${totals.carbsKcal} kcal`;
-
         const totalProEl = document.getElementById('plan-total-pro');
         const proKcalEl = document.getElementById('plan-pro-kcal');
         if (totalProEl) totalProEl.innerText = `${totals.proGrams}g`;
         if (proKcalEl) proKcalEl.innerText = `${totals.proKcal} kcal`;
-
         const totalFatEl = document.getElementById('plan-total-fat');
         const fatKcalEl = document.getElementById('plan-fat-kcal');
         if (totalFatEl) totalFatEl.innerText = `${totals.fatGrams}g`;
         if (fatKcalEl) fatKcalEl.innerText = `${totals.fatKcal} kcal`;
-
-        // Normocalorica comparison
         const diff = Logic.calculateNormocaloricaDiff(totals, planning.normocalorica);
         if (diff) {
             const kcalDeltaEl = document.getElementById('badge-kcal-delta');
@@ -2318,45 +1931,33 @@ const App = {
                 kcalDeltaEl.innerText = `${diff.kcalDiff.formatted} Normo`;
                 kcalDeltaEl.className = 'badge ' + (diff.kcalPct > 2 ? 'badge-success' : diff.kcalPct < -2 ? 'badge-danger' : 'badge-primary');
             }
-
             const carbsDeltaEl = document.getElementById('badge-carbs-delta');
             if (carbsDeltaEl) carbsDeltaEl.innerText = `CHO: ${diff.carbsDiff.formatted}`;
-
             const proDeltaEl = document.getElementById('badge-pro-delta');
             if (proDeltaEl) proDeltaEl.innerText = `PRO: ${diff.proDiff.formatted}`;
-
             const fatDeltaEl = document.getElementById('badge-fat-delta');
             if (fatDeltaEl) fatDeltaEl.innerText = `FAT: ${diff.fatDiff.formatted}`;
         }
-
-        // Lock buttons styling
         const btnLockCarbs = document.getElementById('btn-lock-carbs');
         const btnLockFat = document.getElementById('btn-lock-fat');
         const btnLockNone = document.getElementById('btn-lock-none');
-
         if (btnLockCarbs) btnLockCarbs.classList.toggle('active', planning.lockedMacro === 'carbs');
         if (btnLockFat) btnLockFat.classList.toggle('active', planning.lockedMacro === 'fat');
         if (btnLockNone) btnLockNone.classList.toggle('active', !planning.lockedMacro);
-
         this.renderNutritionTrendChart();
     },
-
     renderNutritionTrendChart() {
         if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById('planningChart');
         if (!canvas) return;
-
         if (window.nutritionTrendChartInstance) {
             window.nutritionTrendChartInstance.destroy();
         }
-
         const period = (this.state.nutritionPlanning && this.state.nutritionPlanning.chartPeriod) ? parseInt(this.state.nutritionPlanning.chartPeriod) : 7;
         const labels = [];
         const actualData = [];
         const targetData = [];
-
         const targetKcal = (this.state.nutritionPlanning && this.state.nutritionPlanning.normocalorica && this.state.nutritionPlanning.normocalorica.kcal) ? this.state.nutritionPlanning.normocalorica.kcal : 2500;
-
         const today = new Date();
         for (let i = period - 1; i >= 0; i--) {
             const d = new Date(today);
@@ -2364,13 +1965,11 @@ const App = {
             const dateStr = d.toISOString().split('T')[0];
             const labelStr = `${d.getDate()}/${d.getMonth() + 1}`;
             labels.push(labelStr);
-
             const nut = this.state.nutrition ? this.state.nutrition[dateStr] : null;
             const kcalVal = nut && nut.kcal ? parseFloat(nut.kcal) : 0;
             actualData.push(kcalVal);
             targetData.push(targetKcal);
         }
-
         const ctx = canvas.getContext('2d');
         window.nutritionTrendChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -2412,12 +2011,10 @@ const App = {
             }
         });
     },
-
     renderAll() {
         document.getElementById('profile-dob').value = this.state.profile.dob || '';
         document.getElementById('profile-height').value = this.state.profile.height || '';
         document.getElementById('profile-gender').value = this.state.profile.gender || 'M';
-
         this.renderLibrary(); this.renderRoutineBuilder(); this.renderWorkoutView();
         this.loadNutritionDate(document.getElementById('nutri-date').value);
         this.renderHomeDashboard();
@@ -2425,9 +2022,5 @@ const App = {
         this.renderMeasurements();
     }
 };
-
 window.App = App; // Esponi globale per poter essere chiamato dall'HTML (onClick)
 window.onload = () => App.init();
-
-
-
