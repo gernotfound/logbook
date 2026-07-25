@@ -4,6 +4,7 @@ import {
     GoogleAuthProvider, 
     signInWithPopup, 
     signInWithRedirect,
+    getRedirectResult,
     signOut, 
     onAuthStateChanged,
     setPersistence,
@@ -39,4 +40,4 @@ const provider = new GoogleAuthProvider();
 setPersistence(auth, browserLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
-export { auth, db, provider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser };
+export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser };

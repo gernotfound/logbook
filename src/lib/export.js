@@ -6,11 +6,15 @@ export const Exporter = {
             const routineName = `"${session.routineName || 'Allenamento Libero'}"`;
             if (session.exercises && session.exercises.length > 0) {
                 session.exercises.forEach(ex => {
-                    const exName = `"${ex.name || 'Sconosciuto'}"`;
+                    // Support both legacy 'name' field and new 'exId' lookup
+                    const exName = `"${ex.name || ex.exId || 'Sconosciuto'}"`;
                     if (ex.sets && ex.sets.length > 0) {
                         ex.sets.forEach((set, idx) => {
-                            if (!set.reps && !set.weight) return;
-                            workoutCsv += `${dateStr},${routineName},${exName},${idx + 1},${set.reps || 0},${set.weight || 0}\n`;
+                            // BUG FIX: new app uses set.kg (not set.weight)
+                            const kg = set.kg !== undefined ? set.kg : (set.weight || 0);
+                            const reps = set.reps || 0;
+                            if (!reps && !kg) return;
+                            workoutCsv += `${dateStr},${routineName},${exName},${idx + 1},${reps},${kg}\n`;
                         });
                     }
                 });
@@ -44,5 +48,6 @@ export const Exporter = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url); // Cleanup memory
     }
 };

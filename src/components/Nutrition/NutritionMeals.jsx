@@ -9,22 +9,25 @@ const NutritionMeals = () => {
     
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
-    const [selectedMealType, setSelectedMealType] = useState(null);
 
     const todayDateStr = new Date().toISOString().split('T')[0];
     const todayNutrition = userData?.nutrition?.[todayDateStr] || { 
         kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
     };
     
-    // Support legacy structure or new meals array
     const meals = todayNutrition.meals || [];
 
+    // BUG FIX: Also search in customFoods, not just COMMON_FOODS
     const handleSearch = (query) => {
         setSearchQuery(query);
         if (query.trim().length > 1) {
             const q = query.toLowerCase();
-            const res = COMMON_FOODS.filter(f => 
-                f.name.toLowerCase().includes(q) || f.category.toLowerCase().includes(q)
+            const customFoods = userData?.customFoods || [];
+            const combined = [...COMMON_FOODS, ...customFoods];
+            const res = combined.filter(f => 
+                (f.name || '').toLowerCase().includes(q) || 
+                (f.category || '').toLowerCase().includes(q) ||
+                (f.brand || '').toLowerCase().includes(q)
             ).slice(0, 10);
             setSearchResults(res);
         } else {
@@ -33,33 +36,32 @@ const NutritionMeals = () => {
     };
 
     const addFood = (food, mealType) => {
-        // By default adding 1 portion based on baseQty
         const addedItem = {
-            ...food,
+            id: food.id,
+            name: food.name,
             meal: mealType,
-            quantity: food.baseQty,
+            quantity: food.baseQty || 100,
+            baseQty: food.baseQty || 100,
+            unit: food.unit || 'g',
+            kcal: food.kcal || 0,
+            carbs: food.carbs || 0,
+            pro: food.pro || 0,
+            fat: food.fat || 0,
             time: new Date().getTime()
         };
 
         const updatedMeals = [...meals, addedItem];
         
         // Recalculate daily totals
-        let kcal = 0, carbs = 0, pro = 0, fat = 0;
-        updatedMeals.forEach(m => {
-            const ratio = m.quantity / m.baseQty;
-            kcal += m.kcal * ratio;
-            carbs += m.carbs * ratio;
-            pro += m.pro * ratio;
-            fat += m.fat * ratio;
-        });
+        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
         const newNutritionDay = {
             ...todayNutrition,
             meals: updatedMeals,
-            kcal: Math.round(kcal),
-            carbs: Math.round(carbs),
-            pro: Math.round(pro),
-            fat: Math.round(fat)
+            kcal,
+            carbs,
+            pro,
+            fat
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
@@ -67,33 +69,42 @@ const NutritionMeals = () => {
         
         setSearchQuery('');
         setSearchResults([]);
-        setSelectedMealType(null);
     };
 
-    const removeFood = (indexToRemove) => {
-        const updatedMeals = meals.filter((_, idx) => idx !== indexToRemove);
-        
-        // Recalculate daily totals
-        let kcal = 0, carbs = 0, pro = 0, fat = 0;
-        updatedMeals.forEach(m => {
-            const ratio = m.quantity / m.baseQty;
-            kcal += m.kcal * ratio;
-            carbs += m.carbs * ratio;
-            pro += m.pro * ratio;
-            fat += m.fat * ratio;
-        });
+    // BUG FIX: use a unique key (time) to safely find the correct item to remove
+    const removeFood = (itemTime) => {
+        // Find by time (set when item was added – unique enough for same session)
+        const updatedMeals = meals.filter(m => m.time !== itemTime);
+        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
         const newNutritionDay = {
             ...todayNutrition,
             meals: updatedMeals,
-            kcal: Math.round(kcal),
-            carbs: Math.round(carbs),
-            pro: Math.round(pro),
-            fat: Math.round(fat)
+            kcal,
+            carbs,
+            pro,
+            fat
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         saveUserData({ ...userData, nutrition: newNutritionObj });
+    };
+
+    const recalcTotals = (mealsList) => {
+        let kcal = 0, carbs = 0, pro = 0, fat = 0;
+        mealsList.forEach(m => {
+            const ratio = (m.quantity || m.baseQty || 100) / (m.baseQty || 100);
+            kcal += (parseFloat(m.kcal) || 0) * ratio;
+            carbs += (parseFloat(m.carbs) || 0) * ratio;
+            pro += (parseFloat(m.pro) || 0) * ratio;
+            fat += (parseFloat(m.fat) || 0) * ratio;
+        });
+        return {
+            kcal: Math.round(kcal),
+            carbs: Math.round(carbs * 10) / 10,
+            pro: Math.round(pro * 10) / 10,
+            fat: Math.round(fat * 10) / 10
+        };
     };
 
     return (
@@ -103,7 +114,7 @@ const NutritionMeals = () => {
                 <h3 style={{ marginBottom: '12px' }}>🔍 Cerca Alimento</h3>
                 <input 
                     type="text" 
-                    placeholder="Cerca es. Pollo, Avena..." 
+                    placeholder="Cerca es. Pollo, Avena, o alimento custom..." 
                     value={searchQuery}
                     onChange={e => handleSearch(e.target.value)}
                     style={{ margin: 0 }} 
@@ -118,22 +129,25 @@ const NutritionMeals = () => {
                     }}>
                         {searchResults.map(f => (
                             <div key={f.id} style={{ padding: '12px', borderBottom: '1px solid var(--glass-border)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{f.name}</div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                                            {f.name}
+                                            {f.isCustom && <span style={{ marginLeft: '5px', fontSize: '0.65rem', background: 'var(--warning-color)', color: '#000', padding: '2px 5px', borderRadius: '4px' }}>Custom</span>}
+                                        </div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                             {f.kcal} kcal / {f.baseQty}{f.unit} • C:{f.carbs} P:{f.pro} F:{f.fat}
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '5px' }}>
+                                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                                         {MEAL_TYPES.map(mt => (
                                             <button 
                                                 key={mt}
                                                 className="btn btn-small"
-                                                style={{ padding: '5px', fontSize: '0.7rem' }}
+                                                style={{ padding: '4px 6px', fontSize: '0.65rem' }}
                                                 onClick={() => addFood(f, mt)}
                                             >
-                                                + {mt.substring(0,3)}
+                                                {mt.substring(0,3)}
                                             </button>
                                         ))}
                                     </div>
@@ -149,11 +163,11 @@ const NutritionMeals = () => {
                 const mealItems = meals.filter(m => m.meal === mt);
                 let subKcal = 0, subC = 0, subP = 0, subF = 0;
                 mealItems.forEach(m => {
-                    const ratio = m.quantity / m.baseQty;
-                    subKcal += m.kcal * ratio;
-                    subC += m.carbs * ratio;
-                    subP += m.pro * ratio;
-                    subF += m.fat * ratio;
+                    const ratio = (m.quantity || m.baseQty || 100) / (m.baseQty || 100);
+                    subKcal += (parseFloat(m.kcal) || 0) * ratio;
+                    subC += (parseFloat(m.carbs) || 0) * ratio;
+                    subP += (parseFloat(m.pro) || 0) * ratio;
+                    subF += (parseFloat(m.fat) || 0) * ratio;
                 });
 
                 return (
@@ -168,15 +182,15 @@ const NutritionMeals = () => {
                         {mealItems.length === 0 ? (
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', margin: '10px 0' }}>Nessun alimento aggiunto.</p>
                         ) : (
-                            mealItems.map((item, idx) => {
-                                const realIdx = meals.findIndex(m => m.time === item.time && m.id === item.id);
+                            mealItems.map((item) => {
                                 return (
-                                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px dashed var(--glass-border)' }}>
+                                    <div key={item.time || item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px dashed var(--glass-border)' }}>
                                         <div>
                                             <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.quantity}{item.unit}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.quantity || item.baseQty}{item.unit}</div>
                                         </div>
-                                        <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => removeFood(realIdx)}>✕</button>
+                                        {/* BUG FIX: pass item.time as unique key to removeFood */}
+                                        <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => removeFood(item.time)}>✕</button>
                                     </div>
                                 )
                             })

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Logic } from '../../lib/logic';
 
@@ -18,6 +18,7 @@ const NutritionPlanning = () => {
     );
 
     // Calculate current macros based on settings
+    // calculateMacrosFromKg returns: { carbsGrams, proGrams, fatGrams, totalKcal, ... }
     const macros = Logic.calculateMacrosFromKg(
         planning.weight, 
         planning.carbsPerKg, 
@@ -32,7 +33,18 @@ const NutritionPlanning = () => {
     };
 
     const handleSave = () => {
-        const newUserData = { ...userData, nutritionPlanning: planning };
+        // Also update normocalorica to match calculated macros so HomeView reflects correctly
+        const updatedPlanning = {
+            ...planning,
+            normocalorica: {
+                kcal: macros.totalKcal,
+                carbs: macros.carbsGrams,
+                pro: macros.proGrams,
+                fat: macros.fatGrams,
+            }
+        };
+        setPlanning(updatedPlanning);
+        const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
         saveUserData(newUserData);
         alert("Pianificazione salvata sul cloud!");
     };
@@ -64,15 +76,15 @@ const NutritionPlanning = () => {
             <div className="macro-chips-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                 <div className="macro-chip carbs" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>CARBO</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.carbs.grams) || 0}g</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.carbsGrams) || 0}g</div>
                 </div>
                 <div className="macro-chip pro" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: 'var(--success-color)', fontWeight: 'bold' }}>PRO</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.pro.grams) || 0}g</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.proGrams) || 0}g</div>
                 </div>
                 <div className="macro-chip fat" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: '#f43f5e', fontWeight: 'bold' }}>GRASSI</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.fat.grams) || 0}g</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.fatGrams) || 0}g</div>
                 </div>
             </div>
 

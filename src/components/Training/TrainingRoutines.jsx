@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { Logic } from '../../lib/logic';
 
 const TrainingRoutines = () => {
     const { userData, saveUserData } = useAuth();
@@ -16,7 +17,7 @@ const TrainingRoutines = () => {
         }
 
         const newRoutine = {
-            id: 'rtn_' + new Date().getTime(),
+            id: Logic.generateId('rtn'),
             name: routineName.trim(),
             exercises: []
         };
@@ -28,7 +29,7 @@ const TrainingRoutines = () => {
     };
 
     const handleDelete = (id, e) => {
-        e.stopPropagation(); // prevent expanding
+        e.stopPropagation();
         if (confirm("Vuoi davvero eliminare questa scheda?")) {
             const updatedRoutines = routines.filter(r => r.id !== id);
             saveUserData({ ...userData, routines: updatedRoutines });
@@ -38,15 +39,24 @@ const TrainingRoutines = () => {
 
     const handleAddExerciseToRoutine = (routineId, exId) => {
         if (!exId) return;
-        const routine = routines.find(r => r.id === routineId);
-        if (!routine) return;
-
         const updatedRoutines = routines.map(r => {
             if (r.id === routineId) {
                 return {
                     ...r,
-                    exercises: [...(r.exercises || []), { exId }]
+                    exercises: [...(r.exercises || []), { exId, setsCount: 3 }]  // BUG FIX: include setsCount default
                 };
+            }
+            return r;
+        });
+        saveUserData({ ...userData, routines: updatedRoutines });
+    };
+
+    const handleUpdateSetsCount = (routineId, index, count) => {
+        const updatedRoutines = routines.map(r => {
+            if (r.id === routineId) {
+                const newExs = [...(r.exercises || [])];
+                newExs[index] = { ...newExs[index], setsCount: parseInt(count) || 1 };
+                return { ...r, exercises: newExs };
             }
             return r;
         });
@@ -72,21 +82,15 @@ const TrainingRoutines = () => {
         
         const newExercises = [...(routine.exercises || [])];
         if (direction === 'up' && index > 0) {
-            const temp = newExercises[index];
-            newExercises[index] = newExercises[index - 1];
-            newExercises[index - 1] = temp;
+            [newExercises[index], newExercises[index - 1]] = [newExercises[index - 1], newExercises[index]];
         } else if (direction === 'down' && index < newExercises.length - 1) {
-            const temp = newExercises[index];
-            newExercises[index] = newExercises[index + 1];
-            newExercises[index + 1] = temp;
+            [newExercises[index], newExercises[index + 1]] = [newExercises[index + 1], newExercises[index]];
         } else {
             return;
         }
 
         const updatedRoutines = routines.map(r => {
-            if (r.id === routineId) {
-                return { ...r, exercises: newExercises };
-            }
+            if (r.id === routineId) return { ...r, exercises: newExercises };
             return r;
         });
         saveUserData({ ...userData, routines: updatedRoutines });
@@ -101,6 +105,7 @@ const TrainingRoutines = () => {
                     placeholder="Nome Scheda (es. Push Day, Full Body)" 
                     value={routineName}
                     onChange={e => setRoutineName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreate()}
                 />
                 <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleCreate}>
                     ➕ Salva Nuova Scheda
@@ -125,13 +130,11 @@ const TrainingRoutines = () => {
                                             {rtn.name}
                                         </div>
                                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                            {(rtn.exercises || []).length} esercizi {isEditing ? ' (Modifica in corso)' : ''}
+                                            {(rtn.exercises || []).length} esercizi
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button className="btn-icon" style={{ fontSize: '1.2rem' }}>
-                                            {isEditing ? '⬆️' : '⬇️'}
-                                        </button>
+                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '1.2rem' }}>{isEditing ? '🔼' : '🔽'}</span>
                                         <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={(e) => handleDelete(rtn.id, e)}>🗑️</button>
                                     </div>
                                 </div>
@@ -154,20 +157,31 @@ const TrainingRoutines = () => {
                                         </div>
 
                                         {(rtn.exercises || []).length === 0 ? (
-                                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nessun esercizio presente in questa scheda.</p>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nessun esercizio presente. Aggiungine uno dalla libreria!</p>
                                         ) : (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                 {(rtn.exercises || []).map((ex, index) => {
                                                     const libDef = library.find(l => l.id === ex.exId);
                                                     return (
-                                                        <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>
-                                                            <div style={{ fontSize: '0.95rem' }}>
+                                                        <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>
+                                                            <div style={{ fontSize: '0.95rem', flex: 1 }}>
                                                                 {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
                                                             </div>
-                                                            <div style={{ display: 'flex', gap: '5px' }}>
+                                                            {/* FIX: setsCount editor */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem' }}>
+                                                                <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Serie:</label>
+                                                                <input 
+                                                                    type="number" min="1" max="20"
+                                                                    value={ex.setsCount || 3}
+                                                                    onChange={e => handleUpdateSetsCount(rtn.id, index, e.target.value)}
+                                                                    style={{ width: '50px', margin: 0, padding: '4px', textAlign: 'center' }}
+                                                                    onClick={e => e.stopPropagation()}
+                                                                />
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '4px' }}>
                                                                 <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(rtn.id, index, 'up')}>⬆️</button>
                                                                 <button className="btn-icon" disabled={index === (rtn.exercises || []).length - 1} style={{ opacity: index === (rtn.exercises || []).length - 1 ? 0.3 : 1 }} onClick={() => moveExercise(rtn.id, index, 'down')}>⬇️</button>
-                                                                <button className="btn-icon" style={{ color: 'var(--danger-color)', marginLeft: '10px' }} onClick={() => handleRemoveExerciseFromRoutine(rtn.id, index)}>❌</button>
+                                                                <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => handleRemoveExerciseFromRoutine(rtn.id, index)}>❌</button>
                                                             </div>
                                                         </div>
                                                     );
