@@ -40,7 +40,7 @@ const NutritionMeasurements = () => {
         newNutrition[todayDateStr].bf = bf;
 
         saveUserData({ ...userData, nutrition: newNutrition });
-        alert(`Misurazione salvata! BF Calcolata: ${bf.toFixed(1)}%`);
+        alert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
     };
 
     return (

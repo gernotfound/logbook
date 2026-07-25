@@ -18,7 +18,7 @@ const TrainingHistory = () => {
                         const date = new Date(wo.globalStartTime).toLocaleDateString('it-IT', { 
                             weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' 
                         });
-                        const duration = Math.round((wo.globalEndTime - wo.globalStartTime) / 60000); // minutes
+                        const duration = (wo.globalEndTime && wo.globalStartTime) ? Math.round((wo.globalEndTime - wo.globalStartTime) / 60000) : 0; // minutes
                         
                         return (
                             <div key={wo.id} className="card" style={{ marginBottom: 0 }}>

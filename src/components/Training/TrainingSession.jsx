@@ -125,10 +125,10 @@ const TrainingSession = () => {
             </div>
 
             <div className="card" style={{ padding: '15px', marginBottom: '20px' }}>
-                {activeWorkout.exercises.length === 0 ? (
+                {(activeWorkout.exercises || []).length === 0 ? (
                     <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente.</p>
                 ) : (
-                    activeWorkout.exercises.map((ex, idx) => (
+                    (activeWorkout.exercises || []).map((ex, idx) => (
                         <div key={idx} style={{ marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px dashed var(--glass-border)' }}>
                             <h4 style={{ margin: '0 0 10px 0' }}>{ex.name}</h4>
                             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Gestione Set/Ripetizioni in lavorazione...</p>

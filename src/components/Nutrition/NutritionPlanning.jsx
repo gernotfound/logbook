@@ -56,7 +56,7 @@ const NutritionPlanning = () => {
                 <div style={{ flex: 1, textAlign: 'right' }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Target Totale</span>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary-color)' }}>
-                        {Math.round(totalKcal)} <span style={{ fontSize: '1rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>kcal</span>
+                        {Math.round(totalKcal) || 0} <span style={{ fontSize: '1rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>kcal</span>
                     </div>
                 </div>
             </div>
@@ -64,15 +64,15 @@ const NutritionPlanning = () => {
             <div className="macro-chips-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                 <div className="macro-chip carbs" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>CARBO</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.carbs.grams)}g</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.carbs.grams) || 0}g</div>
                 </div>
                 <div className="macro-chip pro" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: 'var(--success-color)', fontWeight: 'bold' }}>PRO</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.pro.grams)}g</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.pro.grams) || 0}g</div>
                 </div>
                 <div className="macro-chip fat" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.7rem', color: '#f43f5e', fontWeight: 'bold' }}>GRASSI</span>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.fat.grams)}g</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.fat.grams) || 0}g</div>
                 </div>
             </div>
 

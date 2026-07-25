@@ -48,7 +48,7 @@ const HomeView = ({ onNavigate }) => {
   let bf = "--";
   if (userData.profile && Object.keys(userData.profile).length > 0) {
       const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
-      if (calcBf) bf = calcBf.toFixed(1);
+      if (calcBf) bf = Number(calcBf).toFixed(1);
   }
 
   // Streak (simplified as total workouts for now, as in legacy app)
@@ -62,7 +62,7 @@ const HomeView = ({ onNavigate }) => {
       datasets: [
           {
               label: 'Peso Corporeo (kg)',
-              data: recentDates.map(d => nutrition[d].weight),
+              data: recentDates.map(d => nutrition[d]?.weight || null),
               borderColor: '#0ea5e9',
               backgroundColor: 'rgba(14, 165, 233, 0.2)',
               tension: 0.4,
