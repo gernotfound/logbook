@@ -155,7 +155,7 @@ export const Logic = {
         if(type === 'int') {
             return value.toString().replace(/[^0-9]/g, '');
         } else if(type === 'float') {
-            let val = value.toString().replace(/[^0-9.]/g, '');
+            let val = value.toString().replace(/,/g, '.').replace(/[^0-9.]/g, '');
             const parts = val.split('.');
             if (parts.length > 2) {
                 val = parts[0] + '.' + parts.slice(1).join('');

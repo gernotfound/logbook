@@ -1490,16 +1490,32 @@ const App = {
         return dates.sort((a, b) => new Date(b) - new Date(a));
     },
     updateMeasurementMethodOptions() {
-        const optMale = document.getElementById('opt-navy-male');
-        const optFemale = document.getElementById('opt-navy-female');
-        const gender = this.state.profile?.gender;
-        if (optMale) optMale.style.display = (gender === 'F') ? 'none' : 'block';
-        if (optFemale) optFemale.style.display = (gender === 'M') ? 'none' : 'block';
         const select = document.getElementById('measure-method');
-        if (select) {
-            if (select.value === 'navy_male' && gender === 'F') select.value = 'manual';
-            if (select.value === 'navy_female' && gender === 'M') select.value = 'manual';
+        if (!select) return;
+        const gender = this.state.profile?.gender;
+        let optMale = document.getElementById('opt-navy-male');
+        let optFemale = document.getElementById('opt-navy-female');
+        
+        if (!optMale && gender !== 'F') {
+            optMale = document.createElement('option');
+            optMale.value = 'navy_male';
+            optMale.id = 'opt-navy-male';
+            optMale.textContent = 'Metodo US Navy (Uomo)';
+            select.insertBefore(optMale, select.querySelector('option[value="bmi"]'));
         }
+        if (!optFemale && gender !== 'M') {
+            optFemale = document.createElement('option');
+            optFemale.value = 'navy_female';
+            optFemale.id = 'opt-navy-female';
+            optFemale.textContent = 'Metodo US Navy (Donna)';
+            select.insertBefore(optFemale, select.querySelector('option[value="bmi"]'));
+        }
+
+        if (gender === 'F' && optMale) optMale.remove();
+        if (gender === 'M' && optFemale) optFemale.remove();
+
+        if (select.value === 'navy_male' && gender === 'F') select.value = 'manual';
+        if (select.value === 'navy_female' && gender === 'M') select.value = 'manual';
     },
     onMeasurementMethodChange(methodVal) {
         const method = methodVal || document.getElementById('measure-method')?.value || 'manual';
@@ -1578,6 +1594,10 @@ const App = {
         }
         if (!this.state.nutrition[dateStr]) {
             this.loadNutritionDate(dateStr);
+        } else if (this.state.nutrition[dateStr].weight) {
+            if (!confirm(`Esiste già una misurazione per la data ${dateStr}. Vuoi sovrascriverla?`)) {
+                return;
+            }
         }
         const dayData = this.state.nutrition[dateStr];
         dayData.weight = validation.cleanData.weight;
@@ -1678,11 +1698,11 @@ const App = {
                     </div>
                     <div class="measurement-body-comp">
                         <div class="comp-chip fat">
-                            <span class="comp-chip-label">Fat Mass</span>
+                            <span class="comp-chip-label">Massa Grassa</span>
                             <span class="comp-chip-val">${bodyComp.fatMass} kg</span>
                         </div>
                         <div class="comp-chip lean">
-                            <span class="comp-chip-label">Lean Mass</span>
+                            <span class="comp-chip-label">Massa Magra</span>
                             <span class="comp-chip-val">${bodyComp.leanMass} kg</span>
                         </div>
                     </div>

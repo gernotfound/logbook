@@ -601,15 +601,13 @@
                     Registrazione peso corporeo e calcolo % massa grassa con il metodo US Navy o inserimento manuale.
                 </p>
 
-                <div class="input-row" style="margin-bottom:12px;">
-                    <div style="flex: 1 1 130px;">
-                        <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Data</label>
-                        <input type="date" id="measure-date" onchange="App.updateMeasurementBFPreview()">
-                    </div>
-                    <div style="flex: 1 1 130px;">
-                        <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Peso (kg)</label>
-                        <input type="number" step="0.1" id="measure-weight" placeholder="es. 80.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()">
-                    </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Data</label>
+                    <input type="date" id="measure-date" onchange="App.updateMeasurementBFPreview()" style="width:100%; max-width:100%;">
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Peso (kg)</label>
+                    <input type="number" step="0.1" id="measure-weight" placeholder="es. 80.0" oninput="App.validateInput(this, 'float'); App.updateMeasurementBFPreview()" style="width:100%; max-width:100%;">
                 </div>
 
                 <div style="margin-bottom:15px;">
@@ -691,8 +689,10 @@
 
         <div class="card">
             <h3>Dati Biometrici</h3>
-            <label style="font-size:0.8rem; color:var(--text-muted)">Data di Nascita</label>
-            <input type="date" id="profile-dob" onchange="App.saveProfile()">
+            <div style="margin-bottom:12px;">
+                <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px;">Data di Nascita</label>
+                <input type="date" id="profile-dob" onchange="App.saveProfile()" style="width:100%; max-width:100%;">
+            </div>
             <div class="input-row">
                 <div style="flex:1">
                     <label style="font-size:0.8rem; color:var(--text-muted)">Altezza (cm)</label>
