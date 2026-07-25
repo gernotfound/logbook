@@ -55,22 +55,24 @@ function App() {
         {activeTab === 'settings' && <SettingsView />}
 
         {/* Bottom Navigation */}
-        <nav id="bottom-nav">
-          <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-            <Home size={24} />
-            <span>Home</span>
-          </div>
-          <div className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
-            <Dumbbell size={24} />
-            <span>Allenamento</span>
-          </div>
-          <div className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} onClick={() => setActiveTab('nutrition')}>
-            <Utensils size={24} />
-            <span>Nutrizione</span>
-          </div>
-          <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-            <Settings size={24} />
-            <span>Dati</span>
+        <nav className="bottom-nav">
+          <div className="nav-container">
+            <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+              <Home size={24} />
+              <span>Home</span>
+            </div>
+            <div className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
+              <Dumbbell size={24} />
+              <span>Allenamento</span>
+            </div>
+            <div className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} onClick={() => setActiveTab('nutrition')}>
+              <Utensils size={24} />
+              <span>Nutrizione</span>
+            </div>
+            <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+              <Settings size={24} />
+              <span>Dati</span>
+            </div>
           </div>
         </nav>
       </div>

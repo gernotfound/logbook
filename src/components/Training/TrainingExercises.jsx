@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Logic } from '../../lib/logic';
+import MuscleModel from './MuscleModel';
 
 const TrainingExercises = () => {
     const { userData, saveUserData } = useAuth();
@@ -101,6 +102,9 @@ const TrainingExercises = () => {
                             </span>
                         ))}
                     </div>
+
+                    {/* Modello Muscolare 3D-like (SVG) */}
+                    <MuscleModel selectedMuscles={selectedMuscles.map(m => m.id)} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
