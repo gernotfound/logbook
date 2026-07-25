@@ -1,6 +1,8 @@
-import { auth, db, waitForPendingWrites, deleteUser } from './firebase-config.js';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { auth, db, waitForPendingWrites, deleteUser } from './firebase.js';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField } from "firebase/firestore";
+
 let lastSavedStateStr = null;
+
 export const DB = {
     async loadUserData() {
         const user = auth.currentUser;
@@ -138,7 +140,6 @@ export const DB = {
     },
     async secureLogOut() {
         try {
-            document.getElementById('sync-overlay').style.display = 'flex';
             console.log("Attendo il completamento delle scritture offline...");
             await waitForPendingWrites(db);
             console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
@@ -146,15 +147,12 @@ export const DB = {
         } catch (error) {
             console.error("Errore durante il Log Out:", error);
             alert("Errore durante il Log Out. Controlla la connessione.");
-        } finally {
-            document.getElementById('sync-overlay').style.display = 'none';
         }
     },
     async deleteAccount() {
         const user = auth.currentUser;
         if (!user) return;
         try {
-            document.getElementById('sync-overlay').style.display = 'flex';
             const delPromises = [];
             try {
                 const histSnap = await getDocs(collection(db, "users", user.uid, "history"));
@@ -179,8 +177,7 @@ export const DB = {
             } else {
                 alert("Impossibile eliminare l'account in questo momento. Errore: " + error.message);
             }
-        } finally {
-            document.getElementById('sync-overlay').style.display = 'none';
+            throw error;
         }
     }
 };
