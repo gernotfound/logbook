@@ -4,8 +4,7 @@ import TrainingRoutines from './TrainingRoutines';
 import TrainingExercises from './TrainingExercises';
 import TrainingHistory from './TrainingHistory';
 
-const TrainingView = () => {
-    const [subTab, setSubTab] = useState('session');
+const TrainingView = ({ subTab, setSubTab }) => {
 
     return (
         <div id="view-training" className="view-section active">

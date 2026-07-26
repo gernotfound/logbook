@@ -3,8 +3,7 @@ import NutritionMeasurements from './NutritionMeasurements';
 import NutritionPlanning from './NutritionPlanning';
 import NutritionMeals from './NutritionMeals';
 
-const NutritionView = () => {
-    const [subTab, setSubTab] = useState('meals');
+const NutritionView = ({ subTab = 'meals', setSubTab }) => {
 
     return (
         <div id="view-nutrition" className="view-section active">

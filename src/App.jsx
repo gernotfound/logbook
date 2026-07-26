@@ -10,6 +10,8 @@ import { useRegisterSW } from 'virtual:pwa-register/react'; // PWA Update Hook
 function App() {
   const { currentUser, loading, syncing, login } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
+  const [trainingSubTab, setTrainingSubTab] = useState('session');
+  const [nutritionSubTab, setNutritionSubTab] = useState('tracking');
 
   // PWA Auto-Update Logic
   const {
@@ -101,8 +103,8 @@ function App() {
       <div id="app-container">
         {/* Render Active View */}
         {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
-        {activeTab === 'training' && <TrainingView />}
-        {activeTab === 'nutrition' && <NutritionView />}
+        {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
+        {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
         {activeTab === 'settings' && <SettingsView />}
 
       </div>

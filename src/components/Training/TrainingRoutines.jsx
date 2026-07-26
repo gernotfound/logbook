@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Logic } from '../../lib/logic';
+import MuscleModel from './MuscleModel';
 
 const TrainingRoutines = () => {
     const { userData, saveUserData } = useAuth();
@@ -139,10 +140,25 @@ const TrainingRoutines = () => {
                                     </div>
                                 </div>
                                 
-                                {isEditing && (
-                                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
-                                        <div style={{ marginBottom: '15px' }}>
-                                            <select 
+                                {isEditing && (() => {
+                                    const routineMuscles = new Set();
+                                    (rtn.exercises || []).forEach(ex => {
+                                        const libDef = library.find(l => l.id === ex.exId);
+                                        if (libDef && libDef.muscles) {
+                                            libDef.muscles.forEach(mId => routineMuscles.add(mId));
+                                        }
+                                    });
+                                    const routineSelectedMuscles = Array.from(routineMuscles);
+
+                                    return (
+                                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
+                                            {(rtn.exercises || []).length > 0 && (
+                                                <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center' }}>
+                                                    <MuscleModel selectedMuscles={routineSelectedMuscles} />
+                                                </div>
+                                            )}
+                                            <div style={{ marginBottom: '15px' }}>
+                                                <select 
                                                 onChange={(e) => {
                                                     handleAddExerciseToRoutine(rtn.id, e.target.value);
                                                     e.target.value = '';
@@ -188,8 +204,9 @@ const TrainingRoutines = () => {
                                                 })}
                                             </div>
                                         )}
-                                    </div>
-                                )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         );
                     })}

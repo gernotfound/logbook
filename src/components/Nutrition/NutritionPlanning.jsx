@@ -33,16 +33,8 @@ const NutritionPlanning = () => {
     };
 
     const handleSave = () => {
-        // Also update normocalorica to match calculated macros so HomeView reflects correctly
-        const updatedPlanning = {
-            ...planning,
-            normocalorica: {
-                kcal: macros.totalKcal,
-                carbs: macros.carbsGrams,
-                pro: macros.proGrams,
-                fat: macros.fatGrams,
-            }
-        };
+        // Do NOT overwrite normocalorica. It is manually configured by the user.
+        const updatedPlanning = { ...planning };
         setPlanning(updatedPlanning);
         const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
         saveUserData(newUserData);
@@ -90,43 +82,91 @@ const NutritionPlanning = () => {
 
             <h3 style={{ marginTop: '30px', marginBottom: '20px' }}>⚖️ Configurazione Macro per kg</h3>
 
-            <div style={{ marginBottom: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--primary-color)' }}>Carboidrati</span>
-                    <span>{planning.carbsPerKg} g/kg</span>
-                </div>
+            <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--primary-color)' }}>Carboidrati (g/kg)</span>
                 <input 
-                    type="range" min="0" max="10" step="0.1" 
+                    type="number" min="0" max="10" step="0.1" 
                     value={planning.carbsPerKg} 
-                    onChange={e => handleUpdate('carbsPerKg', parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
+                    onChange={e => handleUpdate('carbsPerKg', parseFloat(e.target.value) || 0)}
+                    style={{ width: '100px', textAlign: 'right' }}
                 />
             </div>
 
-            <div style={{ marginBottom: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--success-color)' }}>Proteine</span>
-                    <span>{planning.proPerKg} g/kg</span>
-                </div>
+            <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--success-color)' }}>Proteine (g/kg)</span>
                 <input 
-                    type="range" min="0.5" max="4.0" step="0.1" 
+                    type="number" min="0.5" max="4.0" step="0.1" 
                     value={planning.proPerKg} 
-                    onChange={e => handleUpdate('proPerKg', parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
+                    onChange={e => handleUpdate('proPerKg', parseFloat(e.target.value) || 0)}
+                    style={{ width: '100px', textAlign: 'right' }}
                 />
             </div>
 
-            <div style={{ marginBottom: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#f43f5e' }}>Grassi</span>
-                    <span>{planning.fatPerKg} g/kg</span>
-                </div>
+            <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#f43f5e' }}>Grassi (g/kg)</span>
                 <input 
-                    type="range" min="0.2" max="3.0" step="0.1" 
+                    type="number" min="0.2" max="3.0" step="0.1" 
                     value={planning.fatPerKg} 
-                    onChange={e => handleUpdate('fatPerKg', parseFloat(e.target.value))}
-                    style={{ width: '100%' }}
+                    onChange={e => handleUpdate('fatPerKg', parseFloat(e.target.value) || 0)}
+                    style={{ width: '100px', textAlign: 'right' }}
                 />
+            </div>
+
+            <div className="card" style={{ marginTop: '30px', padding: '15px', background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h3 style={{ margin: 0 }}>🔥 Normocalorica di Riferimento</h3>
+                    <button className="btn btn-small" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--primary-color)' }} onClick={() => {
+                        const calc = Logic.calculateTDEEAndMacros(userData);
+                        const tdee = calc.tdee || 2500;
+                        const carbs = calc.carbs || 300;
+                        const pro = calc.pro || 160;
+                        const fat = calc.fat || 70;
+                        handleUpdate('normocalorica', { kcal: tdee, carbs, pro, fat });
+                    }}>Copia da TDEE</button>
+                </div>
+                <div className="input-row" style={{ marginBottom: '12px' }}>
+                    <div style={{ flex: 2 }}>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kcal Mantenimento</label>
+                        <input type="number" value={planning.normocalorica.kcal} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, kcal: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CHO (g)</label>
+                        <input type="number" value={planning.normocalorica.carbs} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, carbs: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO (g)</label>
+                        <input type="number" value={planning.normocalorica.pro} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, pro: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>FAT (g)</label>
+                        <input type="number" value={planning.normocalorica.fat} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, fat: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                    </div>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: '10px' }}>
+                    {(() => {
+                        const diff = Logic.calculateNormocaloricaDiff(macros, planning.normocalorica);
+                        if (!diff) return null;
+                        
+                        const getBadgeClass = (val) => val > 0 ? 'badge-primary' : (val < 0 ? 'badge-danger' : ''); // Positive diff (surplus) -> primary/blue, Negative diff (deficit) -> red/danger
+                        return (
+                            <>
+                                <span className={`badge ${getBadgeClass(diff.carbs)}`} style={{ background: diff.carbs === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    CHO: {diff.carbs > 0 ? '+' : ''}{diff.carbs}%
+                                </span>
+                                <span className={`badge ${getBadgeClass(diff.pro)}`} style={{ background: diff.pro === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    PRO: {diff.pro > 0 ? '+' : ''}{diff.pro}%
+                                </span>
+                                <span className={`badge ${getBadgeClass(diff.fat)}`} style={{ background: diff.fat === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    FAT: {diff.fat > 0 ? '+' : ''}{diff.fat}%
+                                </span>
+                                <span className={`badge ${getBadgeClass(diff.kcal)}`} style={{ background: diff.kcal === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    KCAL: {diff.kcal > 0 ? '+' : ''}{diff.kcal}%
+                                </span>
+                            </>
+                        );
+                    })()}
+                </div>
             </div>
 
             <button className="btn btn-primary" style={{ width: '100%', marginTop: '20px' }} onClick={handleSave}>
