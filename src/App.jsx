@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import HomeView from './components/Home/HomeView';
 import TrainingView from './components/Training/TrainingView';
@@ -12,6 +12,11 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [trainingSubTab, setTrainingSubTab] = useState('session');
   const [nutritionSubTab, setNutritionSubTab] = useState('meals');
+
+  // Scroll to top whenever the main tab changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [activeTab]);
 
   // PWA Auto-Update Logic
   const {
