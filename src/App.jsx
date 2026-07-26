@@ -3,12 +3,26 @@ import { useAuth } from './contexts/AuthContext';
 import HomeView from './components/Home/HomeView';
 import TrainingView from './components/Training/TrainingView';
 import NutritionView from './components/Nutrition/NutritionView';
-import SettingsView from './components/SettingsView'; // We will create this as a separate file
-import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; // Example icons
+import SettingsView from './components/SettingsView'; 
+import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; 
+import { useRegisterSW } from 'virtual:pwa-register/react'; // PWA Update Hook
 
 function App() {
   const { currentUser, loading, syncing, login } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
+
+  // PWA Auto-Update Logic
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      console.log('SW Registered: ' + r)
+    },
+    onRegisterError(error) {
+      console.log('SW registration error', error)
+    },
+  });
 
   if (loading) {
     return (
@@ -44,6 +58,35 @@ function App() {
           <div className="spinner"></div>
           <p style={{fontWeight:'bold', color:'var(--primary-color)'}}>Sincronizzazione in corso...</p>
           <p style={{fontSize:'0.8rem'}}>Attendere, non chiudere l'app.</p>
+        </div>
+      )}
+
+      {/* PWA Update Prompt */}
+      {needRefresh && (
+        <div style={{
+          position: 'fixed', top: '15px', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--accent-color)', color: '#fff', padding: '12px 20px', borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '15px',
+          width: '90%', maxWidth: '400px'
+        }}>
+          <div>
+            <div style={{fontWeight: 'bold', fontSize: '0.95rem'}}>Aggiornamento Disponibile!</div>
+            <div style={{fontSize: '0.8rem', opacity: 0.9}}>Ricarica l'app per avere l'ultima versione.</div>
+          </div>
+          <button 
+            className="btn btn-small" 
+            style={{background: '#fff', color: 'var(--accent-color)', border: 'none', marginLeft: 'auto'}} 
+            onClick={() => updateServiceWorker(true)}
+          >
+            Aggiorna
+          </button>
+          <button 
+            className="btn-icon" 
+            style={{color: '#fff', marginLeft: '5px'}} 
+            onClick={() => setNeedRefresh(false)}
+          >
+            ✕
+          </button>
         </div>
       )}
 

@@ -94,12 +94,20 @@ const HomeView = ({ onNavigate }) => {
       if (calcBf) bf = Number(calcBf).toFixed(1);
   }
 
-  // FIX: Use real consecutive streak calculation
   const streak = calcStreak(history);
   const totalWorkouts = history.length;
 
-  // Chart Logic (Last 14 days)
+  // Chronological array for charts and TDEE calc
   const sortedDates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
+  
+  // Build data for calculateTDEE
+  const chronoData = sortedDates.map(d => ({
+      date: d,
+      ...nutrition[d]
+  }));
+  const tdeeCalc = Logic.calculateTDEE(chronoData);
+
+  // Chart Logic (Last 14 days)
   const recentDates = sortedDates.slice(-14);
   const chartData = {
       labels: recentDates.map(d => d.slice(5).replace('-', '/')),
@@ -173,7 +181,7 @@ const HomeView = ({ onNavigate }) => {
               </div>
               <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--warning-color)' }}>{kcalTarget}</div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>TDEE stimato</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>TDEE teorico</div>
               </div>
           </div>
 
@@ -194,6 +202,44 @@ const HomeView = ({ onNavigate }) => {
                   <div style={{ fontSize: '0.75rem', color: '#f43f5e', fontWeight: 'bold' }}>GRASSI</div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{fat}g</div>
               </div>
+          </div>
+      </div>
+
+      {/* Real TDEE Estimator Widget */}
+      <div className="card" style={{ border: '1px solid rgba(16, 185, 129, 0.3)', background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(16, 185, 129, 0.05) 100%)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                  <h3 style={{ margin: 0, color: 'var(--success-color)' }}>TDEE Reale Stimato</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                  {tdeeCalc.error ? (
+                      <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>-- kcal</span>
+                  ) : (
+                      <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--success-color)' }}>{tdeeCalc.tdee} <span style={{fontSize:'1rem'}}>kcal</span></span>
+                  )}
+              </div>
+          </div>
+          
+          <div style={{ marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', fontSize: '0.85rem' }}>
+              {tdeeCalc.error ? (
+                  <div style={{ color: 'var(--warning-color)', textAlign: 'center' }}>
+                      ⏳ {tdeeCalc.message}
+                  </div>
+              ) : (
+                  <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Media Calorie Assunte ({tdeeCalc.daysTracked}gg):</span>
+                          <span style={{ fontWeight: 'bold' }}>{tdeeCalc.avgKcal} kcal</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Trend Peso ({tdeeCalc.timeSpanDays}gg):</span>
+                          <span style={{ fontWeight: 'bold', color: tdeeCalc.weightDiff > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
+                              {tdeeCalc.weightDiff > 0 ? '+' : ''}{tdeeCalc.weightDiff} kg
+                          </span>
+                      </div>
+                  </div>
+              )}
           </div>
       </div>
 

@@ -12,6 +12,7 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [saveError, setSaveError] = useState(null);
+    const [pendingSave, setPendingSave] = useState(false);
 
     const loadData = async (user) => {
         if (!user) return;
@@ -94,17 +95,23 @@ export const AuthProvider = ({ children }) => {
         }
     };
     
-    const saveUserData = async (newData) => {
-        // Optimistic update — set state first for snappy UI
-        setUserData(newData);
-        setSaveError(null);
-        try {
-            await DB.saveUserData(newData);
-        } catch (error) {
-            console.error("Errore durante il salvataggio:", error);
-            // On save failure, show a non-blocking error
-            setSaveError("Errore sincronizzazione. Verifica la connessione.");
+    // Trigger save to DB via useEffect to catch the fully merged state after React batches multiple saveUserData calls
+    useEffect(() => {
+        if (pendingSave && userData) {
+            setPendingSave(false);
+            const dataToSave = userData; // capture current state
+            DB.saveUserData(dataToSave).catch(error => {
+                console.error("Errore durante il salvataggio:", error);
+                setSaveError("Errore sincronizzazione. Verifica la connessione.");
+            });
         }
+    }, [pendingSave, userData]);
+
+    const saveUserData = (newDataOrUpdater) => {
+        // Support functional updates to prevent race conditions when multiple components save at the same time
+        setUserData(prev => typeof newDataOrUpdater === 'function' ? newDataOrUpdater(prev) : newDataOrUpdater);
+        setSaveError(null);
+        setPendingSave(true);
     };
 
     const value = {

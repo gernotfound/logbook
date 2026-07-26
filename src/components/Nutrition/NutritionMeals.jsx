@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { COMMON_FOODS } from '../../lib/foods';
+import { Logic } from '../../lib/logic';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
@@ -9,6 +10,13 @@ const NutritionMeals = () => {
     
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
+    
+    // Custom Food Modal State
+    const [showCustomModal, setShowCustomModal] = useState(false);
+    const [cfData, setCfData] = useState({
+        name: '', brand: '', unit: 'g', pieceWeight: '',
+        kcal: '', carbs: '', pro: '', fat: ''
+    });
 
     const todayDateStr = new Date().toISOString().split('T')[0];
     const todayNutrition = userData?.nutrition?.[todayDateStr] || { 
@@ -17,7 +25,6 @@ const NutritionMeals = () => {
     
     const meals = todayNutrition.meals || [];
 
-    // BUG FIX: Also search in customFoods, not just COMMON_FOODS
     const handleSearch = (query) => {
         setSearchQuery(query);
         if (query.trim().length > 1) {
@@ -51,17 +58,12 @@ const NutritionMeals = () => {
         };
 
         const updatedMeals = [...meals, addedItem];
-        
-        // Recalculate daily totals
         const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
         const newNutritionDay = {
             ...todayNutrition,
             meals: updatedMeals,
-            kcal,
-            carbs,
-            pro,
-            fat
+            kcal, carbs, pro, fat
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
@@ -71,19 +73,14 @@ const NutritionMeals = () => {
         setSearchResults([]);
     };
 
-    // BUG FIX: use a unique key (time) to safely find the correct item to remove
     const removeFood = (itemTime) => {
-        // Find by time (set when item was added – unique enough for same session)
         const updatedMeals = meals.filter(m => m.time !== itemTime);
         const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
         const newNutritionDay = {
             ...todayNutrition,
             meals: updatedMeals,
-            kcal,
-            carbs,
-            pro,
-            fat
+            kcal, carbs, pro, fat
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
@@ -105,6 +102,28 @@ const NutritionMeals = () => {
             pro: Math.round(pro * 10) / 10,
             fat: Math.round(fat * 10) / 10
         };
+    };
+
+    const saveCustomFood = () => {
+        const foodData = {
+            ...cfData,
+            baseQty: 100,
+            servingWeight: cfData.unit === 'pezzo' ? cfData.pieceWeight : null
+        };
+        
+        const validation = Logic.validateCustomFood(foodData);
+        if (!validation.isValid) {
+            alert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
+            return;
+        }
+
+        const customFoods = userData?.customFoods || [];
+        const updatedCustomFoods = [...customFoods, validation.cleanData];
+        saveUserData({ ...userData, customFoods: updatedCustomFoods });
+        
+        setShowCustomModal(false);
+        setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
+        alert("Alimento custom salvato!");
     };
 
     return (
@@ -156,6 +175,52 @@ const NutritionMeals = () => {
                         ))}
                     </div>
                 )}
+
+                <button 
+                    className="btn btn-small" 
+                    style={{ width: '100%', marginTop: '10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--glass-border)' }}
+                    onClick={() => setShowCustomModal(!showCustomModal)}
+                >
+                    + Crea Alimento Custom
+                </button>
+                
+                {/* Custom Food Creation UI */}
+                {showCustomModal && (
+                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
+                        <div style={{ marginBottom: '10px' }}>
+                            <input type="text" placeholder="Nome alimento (obbligatorio)" value={cfData.name} onChange={e => setCfData({...cfData, name: e.target.value})} style={{ marginBottom: '8px' }} />
+                            <input type="text" placeholder="Marca (opzionale)" value={cfData.brand} onChange={e => setCfData({...cfData, brand: e.target.value})} style={{ marginBottom: '8px' }} />
+                        </div>
+                        
+                        <div className="input-row" style={{ marginBottom: '10px' }}>
+                            <div style={{ flex: 1 }}>
+                                <select value={cfData.unit} onChange={e => setCfData({...cfData, unit: e.target.value})} style={{ width: '100%', padding: '10px' }}>
+                                    <option value="g">Grammi (g)</option>
+                                    <option value="ml">Millilitri (ml)</option>
+                                    <option value="pezzo">A pezzo / Unità</option>
+                                </select>
+                            </div>
+                            {cfData.unit === 'pezzo' && (
+                                <div style={{ flex: 1 }}>
+                                    <input type="number" placeholder="Peso 1 pezzo (g)" value={cfData.pieceWeight} onChange={e => setCfData({...cfData, pieceWeight: e.target.value})} />
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Valori per 100 {cfData.unit !== 'pezzo' ? cfData.unit : 'g'}:</div>
+                        
+                        <div className="input-row" style={{ marginBottom: '10px' }}>
+                            <input type="number" placeholder="Kcal" value={cfData.kcal} onChange={e => setCfData({...cfData, kcal: e.target.value})} style={{ flex: 1 }} />
+                            <input type="number" placeholder="Carbo (g)" value={cfData.carbs} onChange={e => setCfData({...cfData, carbs: e.target.value})} style={{ flex: 1 }} />
+                            <input type="number" placeholder="Pro (g)" value={cfData.pro} onChange={e => setCfData({...cfData, pro: e.target.value})} style={{ flex: 1 }} />
+                            <input type="number" placeholder="Grassi (g)" value={cfData.fat} onChange={e => setCfData({...cfData, fat: e.target.value})} style={{ flex: 1 }} />
+                        </div>
+
+                        <button className="btn btn-primary" style={{ width: '100%' }} onClick={saveCustomFood}>
+                            💾 Salva nei miei alimenti
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Meals List */}
@@ -189,7 +254,6 @@ const NutritionMeals = () => {
                                             <div style={{ fontWeight: 'bold' }}>{item.name}</div>
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.quantity || item.baseQty}{item.unit}</div>
                                         </div>
-                                        {/* BUG FIX: pass item.time as unique key to removeFood */}
                                         <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => removeFood(item.time)}>✕</button>
                                     </div>
                                 )
