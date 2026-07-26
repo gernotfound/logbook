@@ -11,7 +11,7 @@ function App() {
   const { currentUser, loading, syncing, login } = useAuth();
   const [activeTab, setActiveTab] = useState('home');
   const [trainingSubTab, setTrainingSubTab] = useState('session');
-  const [nutritionSubTab, setNutritionSubTab] = useState('tracking');
+  const [nutritionSubTab, setNutritionSubTab] = useState('meals');
 
   // PWA Auto-Update Logic
   const {
