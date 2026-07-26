@@ -1,45 +1,12 @@
-import React, { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import React from 'react';
 import { Logic } from '../../lib/logic';
+import { useNutritionPlanning } from '../../hooks/useNutritionPlanning';
 
 const NutritionPlanning = () => {
-    const { userData, saveUserData } = useAuth();
-    
-    const [planning, setPlanning] = useState(
-        userData?.nutritionPlanning || {
-            weight: 80,
-            carbsPerKg: 3.5,
-            proPerKg: 2.0,
-            fatPerKg: 1.0,
-            lockedMacro: null,
-            chartPeriod: 7,
-            normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-        }
-    );
-
-    // Calculate current macros based on settings
-    // calculateMacrosFromKg returns: { carbsGrams, proGrams, fatGrams, totalKcal, ... }
-    const macros = Logic.calculateMacrosFromKg(
-        planning.weight, 
-        planning.carbsPerKg, 
-        planning.proPerKg, 
-        planning.fatPerKg
-    );
-    const totalKcal = macros.totalKcal;
-
-    const handleUpdate = (field, value) => {
-        const newPlanning = { ...planning, [field]: value };
-        setPlanning(newPlanning);
-    };
-
-    const handleSave = () => {
-        // Do NOT overwrite normocalorica. It is manually configured by the user.
-        const updatedPlanning = { ...planning };
-        setPlanning(updatedPlanning);
-        const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
-        saveUserData(newUserData);
-        alert("Pianificazione salvata sul cloud!");
-    };
+    const { 
+        planning, macros, totalKcal, 
+        handleUpdate, handleSave, handleCopyFromTDEE 
+    } = useNutritionPlanning();
 
     return (
         <div className="card planning-target-card">
@@ -115,14 +82,9 @@ const NutritionPlanning = () => {
             <div className="card" style={{ marginTop: '30px', padding: '15px', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                     <h3 style={{ margin: 0 }}>🔥 Normocalorica di Riferimento</h3>
-                    <button className="btn btn-small" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--primary-color)' }} onClick={() => {
-                        const calc = Logic.calculateTDEEAndMacros(userData);
-                        const tdee = calc.tdee || 2500;
-                        const carbs = calc.carbs || 300;
-                        const pro = calc.pro || 160;
-                        const fat = calc.fat || 70;
-                        handleUpdate('normocalorica', { kcal: tdee, carbs, pro, fat });
-                    }}>Copia da TDEE</button>
+                    <button className="btn btn-small" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--primary-color)' }} onClick={handleCopyFromTDEE}>
+                        Copia da TDEE
+                    </button>
                 </div>
                 <div className="input-row" style={{ marginBottom: '12px' }}>
                     <div style={{ flex: 2 }}>
@@ -148,7 +110,7 @@ const NutritionPlanning = () => {
                         const diff = Logic.calculateNormocaloricaDiff(macros, planning.normocalorica);
                         if (!diff) return null;
                         
-                        const getBadgeClass = (val) => val > 0 ? 'badge-primary' : (val < 0 ? 'badge-danger' : ''); // Positive diff (surplus) -> primary/blue, Negative diff (deficit) -> red/danger
+                        const getBadgeClass = (val) => val > 0 ? 'badge-primary' : (val < 0 ? 'badge-danger' : ''); 
                         return (
                             <>
                                 <span className={`badge ${getBadgeClass(diff.carbs)}`} style={{ background: diff.carbs === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>

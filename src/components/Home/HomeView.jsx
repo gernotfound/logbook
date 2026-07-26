@@ -1,6 +1,4 @@
 import React from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { Logic } from '../../lib/logic';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,121 +10,21 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import { useHomeView } from '../../hooks/useHomeView';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-/**
- * Calculate consecutive training streak (days in a row up to today).
- */
-function calcStreak(history) {
-    if (!history || history.length === 0) return 0;
-    
-    // Build a set of workout date strings
-    const workoutDates = new Set(
-        history
-            .filter(w => w.globalStartTime)
-            .map(w => new Date(w.globalStartTime).toISOString().split('T')[0])
-    );
-
-    let streak = 0;
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
-    // Check if worked out today or yesterday to begin streak count
-    const startDate = workoutDates.has(todayStr) ? new Date(today) : (() => {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yStr = yesterday.toISOString().split('T')[0];
-        return workoutDates.has(yStr) ? yesterday : null;
-    })();
-    
-    if (!startDate) return 0;
-    
-    const cur = new Date(startDate);
-    while (true) {
-        const dateStr = cur.toISOString().split('T')[0];
-        if (workoutDates.has(dateStr)) {
-            streak++;
-            cur.setDate(cur.getDate() - 1);
-        } else {
-            break;
-        }
-    }
-    return streak;
-}
-
 const HomeView = ({ onNavigate }) => {
-  const { userData } = useAuth();
+  const {
+      loading, isRestDay, todaysWorkout,
+      kcalEaten, carbs, pro, fat, kcalTarget,
+      bf, streak, totalWorkouts,
+      tdeeCalc, recentDates, chartData
+  } = useHomeView();
   
-  if (!userData) {
+  if (loading) {
       return <div className="view-section active"><div className="spinner"></div></div>;
   }
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const history = userData.history || [];
-  const nutrition = userData.nutrition || {};
-  
-  // Calculate today's workout
-  const todaysWorkout = history.find(s => {
-      if (!s.globalStartTime) return false;
-      return new Date(s.globalStartTime).toISOString().split('T')[0] === todayStr;
-  });
-  const isRestDay = !todaysWorkout;
-
-  // Calculate today's nutrition
-  const todayNutrition = nutrition[todayStr] || { kcal: 0, carbs: 0, pro: 0, fat: 0 };
-  const kcalEaten = todayNutrition.kcal || 0;
-  const carbs = todayNutrition.carbs || 0;
-  const pro = todayNutrition.pro || 0;
-  const fat = todayNutrition.fat || 0;
-
-  // Get Targets from planning
-  const kcalTarget = userData?.nutritionPlanning?.normocalorica?.kcal || 
-                     userData?.nutritionPlanning?.totalKcal || 2500;
-  
-  // Get BF % — use today's or most recent measurement
-  const currentWeight = todayNutrition.weight || 
-                        (Object.values(nutrition).reverse().find(n => n.weight)?.weight) || 
-                        userData?.nutritionPlanning?.weight || 80;
-  let bf = "--";
-  if (userData.profile && Object.keys(userData.profile).length > 0) {
-      const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
-      if (calcBf) bf = Number(calcBf).toFixed(1);
-  }
-
-  const streak = calcStreak(history);
-  const totalWorkouts = history.length;
-
-  // Chronological array for charts and TDEE calc
-  const sortedDates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
-  
-  // Build data for calculateTDEE
-  const chronoData = sortedDates.map(d => ({
-      date: d,
-      ...nutrition[d]
-  }));
-  const tdeeCalc = Logic.calculateTDEE(chronoData);
-
-  // Chart Logic (Last 14 days)
-  const recentDates = sortedDates.slice(-14);
-  const chartData = {
-      labels: recentDates.map(d => d.slice(5).replace('-', '/')),
-      datasets: [
-          {
-              label: 'Peso Corporeo (kg)',
-              data: recentDates.map(d => {
-                  const w = nutrition[d]?.weight;
-                  return (w && !isNaN(parseFloat(w))) ? parseFloat(w) : null;
-              }),
-              borderColor: 'var(--primary-color)',
-              backgroundColor: 'rgba(14, 165, 233, 0.2)',
-              tension: 0.4,
-              pointRadius: 4,
-              pointBackgroundColor: 'var(--primary-color)',
-              spanGaps: true // connect across null values
-          }
-      ]
-  };
 
   const chartOptions = {
       responsive: true,
@@ -139,7 +37,6 @@ const HomeView = ({ onNavigate }) => {
           y: { 
               ticks: { color: 'var(--text-muted)' },
               grid: { color: 'rgba(255,255,255,0.05)' },
-              // Auto-scale based on data, avoid toFixed crash with null check
               grace: '5%'
           }
       }
