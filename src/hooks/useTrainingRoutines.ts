@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
-export function useTrainingRoutines(setSubTab) {
+export function useTrainingRoutines(setSubTab?: any) {
     const { userData, saveUserData } = useAppStore();
     const [routineName, setRoutineName] = useState('');
     const [editingRoutineId, setEditingRoutineId] = useState(null);

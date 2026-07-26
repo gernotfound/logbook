@@ -111,19 +111,23 @@ const NutritionPlanning = () => {
                         if (!diff) return null;
                         
                         const getBadgeClass = (val) => val > 0 ? 'badge-primary' : (val < 0 ? 'badge-danger' : ''); 
+                        const carbsVal = diff.carbsPct ?? 0;
+                        const proVal = diff.proPct ?? 0;
+                        const fatVal = diff.fatPct ?? 0;
+                        const kcalVal = diff.kcalPct ?? 0;
                         return (
                             <>
-                                <span className={`badge ${getBadgeClass(diff.carbs)}`} style={{ background: diff.carbs === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
-                                    CHO: {diff.carbs > 0 ? '+' : ''}{diff.carbs}%
+                                <span className={`badge ${getBadgeClass(carbsVal)}`} style={{ background: carbsVal === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    CHO: {carbsVal > 0 ? '+' : ''}{carbsVal}%
                                 </span>
-                                <span className={`badge ${getBadgeClass(diff.pro)}`} style={{ background: diff.pro === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
-                                    PRO: {diff.pro > 0 ? '+' : ''}{diff.pro}%
+                                <span className={`badge ${getBadgeClass(proVal)}`} style={{ background: proVal === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    PRO: {proVal > 0 ? '+' : ''}{proVal}%
                                 </span>
-                                <span className={`badge ${getBadgeClass(diff.fat)}`} style={{ background: diff.fat === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
-                                    FAT: {diff.fat > 0 ? '+' : ''}{diff.fat}%
+                                <span className={`badge ${getBadgeClass(fatVal)}`} style={{ background: fatVal === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    FAT: {fatVal > 0 ? '+' : ''}{fatVal}%
                                 </span>
-                                <span className={`badge ${getBadgeClass(diff.kcal)}`} style={{ background: diff.kcal === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
-                                    KCAL: {diff.kcal > 0 ? '+' : ''}{diff.kcal}%
+                                <span className={`badge ${getBadgeClass(kcalVal)}`} style={{ background: kcalVal === 0 ? 'rgba(255,255,255,0.1)' : undefined }}>
+                                    KCAL: {kcalVal > 0 ? '+' : ''}{kcalVal}%
                                 </span>
                             </>
                         );

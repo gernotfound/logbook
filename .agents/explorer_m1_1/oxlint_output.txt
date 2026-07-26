@@ -1,0 +1,324 @@
+﻿
+  ! eslint(no-unused-vars): Catch parameter 'e' is caught but never used.
+    ,-[src/store/useAppStore.ts:14:18]
+ 13 |             return saved ? JSON.parse(saved) : null;
+ 14 |         } catch (e) {
+    :                  |
+    :                  `-- 'e' is declared here
+ 15 |             return null;
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Identifier 'useState' is imported but never used.
+   ,-[src/components/Training/TrainingView.tsx:1:17]
+ 1 | import React, { useState } from 'react';
+   :                 ^^^^|^^^
+   :                     `-- 'useState' is imported here
+ 2 | import TrainingSession from './TrainingSession';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'getFirestore' is imported but never used.
+    ,-[src/lib/firebase.ts:15:5]
+ 14 | import { 
+ 15 |     getFirestore, 
+    :     ^^^^^^|^^^^^
+    :           `-- 'getFirestore' is imported here
+ 16 |     initializeFirestore,
+    `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Parameter 'setShowCustomModal' is declared but never used. Unused parameters should start with a '_'.
+   ,-[src/components/Nutrition/CustomFoodModal.tsx:3:95]
+ 2 | 
+ 3 | export default function CustomFoodModal({ cfData, setCfData, saveCustomFood, showCustomModal, setShowCustomModal }) {
+   :                                                                                               ^^^^^^^^^|^^^^^^^^
+   :                                                                                                        `-- 'setShowCustomModal' is declared here
+ 4 |     if (!showCustomModal) return null;
+   `----
+  help: Consider removing this parameter.
+
+  ! eslint(no-unused-vars): Parameter 'onFinish' is declared but never used. Unused parameters should start with a '_'.
+   ,-[src/hooks/useWorkoutSession.ts:5:35]
+ 4 | 
+ 5 | export function useWorkoutSession(onFinish) {
+   :                                   ^^^^|^^^
+   :                                       `-- 'onFinish' is declared here
+ 6 |     const { userData, saveUserData, localWorkout, setLocalWorkout } = useAppStore();
+   `----
+  help: Consider removing this parameter.
+
+  ! eslint(no-unused-vars): Parameter 'setSubTab' is declared but never used. Unused parameters should start with a '_'.
+   ,-[src/hooks/useTrainingRoutines.ts:5:37]
+ 4 | 
+ 5 | export function useTrainingRoutines(setSubTab) {
+   :                                     ^^^^|^^^^
+   :                                         `-- 'setSubTab' is declared here
+ 6 |     const { userData, saveUserData } = useAppStore();
+   `----
+  help: Consider removing this parameter.
+
+  ! eslint(no-unused-vars): Identifier 'useState' is imported but never used.
+   ,-[src/components/Nutrition/NutritionView.tsx:1:17]
+ 1 | import React, { useState } from 'react';
+   :                 ^^^^|^^^
+   :                     `-- 'useState' is imported here
+ 2 | import NutritionMeasurements from './NutritionMeasurements';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Variable 'totalSets' is declared but never used. Unused variables should start with a '_'.
+    ,-[src/components/Training/TrainingHistory.tsx:57:51]
+ 56 |                                             const exName = libDef ? libDef.name : (ex.name || 'Esercizio Rimosso');
+ 57 |                                             const totalSets = (ex.sets || []).length;
+    :                                                   ^^^^|^^^^
+    :                                                       `-- 'totalSets' is declared here
+ 58 |                                             const validSets = (ex.sets || []).filter(s => s.kg || s.reps);
+    `----
+  help: Consider removing this declaration.
+
+  ! eslint(no-unused-vars): Parameter 'si' is declared but never used. Unused parameters should start with a '_'.
+    ,-[src/components/Training/TrainingHistory.tsx:63:87]
+ 62 |                                                     {validSets.length > 0 && (
+ 63 |                                                         <span> ÔÇö {validSets.map((s, si) => `${s.kg || '?'}kg├ù${s.reps || '?'}`).join(', ')}</span>
+    :                                                                                     ^|
+    :                                                                                      `-- 'si' is declared here
+ 64 |                                                     )}
+    `----
+  help: Consider removing this parameter.
+
+  ! eslint(no-unused-vars): Identifier 'Logic' is imported but never used.
+   ,-[src/components/Training/TrainingSession.tsx:2:10]
+ 1 | import React, { useState } from 'react';
+ 2 | import { Logic } from '../../lib/logic';
+   :          ^^|^^
+   :            `-- 'Logic' is imported here
+ 3 | import { useWorkoutSession } from '../../hooks/useWorkoutSession';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'WorkoutTimer' is imported but never used.
+   ,-[src/components/Training/TrainingSession.tsx:4:8]
+ 3 | import { useWorkoutSession } from '../../hooks/useWorkoutSession';
+ 4 | import WorkoutTimer from './WorkoutTimer';
+   :        ^^^^^^|^^^^^
+   :              `-- 'WorkoutTimer' is imported here
+ 5 | 
+   `----
+  help: Consider removing this import.
+
+  x Failed to open file C:\Users\gerar\Documents\GitHub\logbook\legacy_logic.js with error "stream did not contain valid UTF-8"
+
+  ! eslint(no-unused-vars): Identifier 'fs' is imported but never used.
+   ,-[resize_icons.mjs:2:8]
+ 1 | import sharp from 'sharp';
+ 2 | import fs from 'fs';
+   :        ^|
+   :         `-- 'fs' is imported here
+ 3 | 
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Variable 'userData' is declared but never used. Unused variables should start with a '_'.
+    ,-[src/contexts/AuthContext.tsx:15:9]
+ 14 |     const { 
+ 15 |         userData, 
+    :         ^^^^|^^^
+    :             `-- 'userData' is declared here
+ 16 |         setUserData, 
+    `----
+  help: Consider removing this declaration.
+
+  ! react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+   ,-[src/contexts/AuthContext.tsx:8:14]
+ 7 | 
+ 8 | export const useAuth = () => useContext(AuthContext);
+   :              ^^^^^^^
+ 9 | 
+   `----
+
+  ! eslint(no-unused-vars): Variable 'chronoData' is declared but never used. Unused variables should start with a '_'.
+    ,-[src/hooks/useHomeView.ts:85:26]
+ 84 |     // Chronological array for charts and TDEE calc
+ 85 |     const { sortedDates, chronoData, tdeeCalc } = useMemo(() => {
+    :                          ^^^^^|^^^^
+    :                               `-- 'chronoData' is declared here
+ 86 |         const dates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
+    `----
+  help: Consider removing this declaration.
+
+  ! react-hooks(exhaustive-deps): React hook useMemo depends on `history`, which changes every render
+    ,-[src/hooks/useHomeView.ts:81:56]
+ 49 |     const todayStr = new Date().toISOString().split('T')[0];
+ 50 |     const history = userData.history || [];
+    :           ^^^|^^^
+    :              `-- `history` is declared here
+ 51 |     const nutrition = userData.nutrition || {};
+ 52 |     
+ 53 |     // Calculate today's workout
+ 54 |     const todaysWorkout = history.find(s => {
+ 55 |         if (!s.globalStartTime) return false;
+ 56 |         return new Date(s.globalStartTime).toISOString().split('T')[0] === todayStr;
+ 57 |     });
+ 58 |     const isRestDay = !todaysWorkout;
+ 59 | 
+ 60 |     // Calculate today's nutrition
+ 61 |     const todayNutrition = nutrition[todayStr] || { kcal: 0, carbs: 0, pro: 0, fat: 0 };
+ 62 |     const kcalEaten = todayNutrition.kcal || 0;
+ 63 |     const carbs = todayNutrition.carbs || 0;
+ 64 |     const pro = todayNutrition.pro || 0;
+ 65 |     const fat = todayNutrition.fat || 0;
+ 66 | 
+ 67 |     // Get Targets from planning
+ 68 |     const kcalTarget = userData?.nutritionPlanning?.normocalorica?.kcal || 
+ 69 |                        userData?.nutritionPlanning?.totalKcal || 2500;
+ 70 |     
+ 71 |     // Get BF % ÔÇö use today's or most recent measurement
+ 72 |     const currentWeight = todayNutrition.weight || 
+ 73 |                           (Object.values(nutrition).reverse().find(n => n.weight)?.weight) || 
+ 74 |                           userData?.nutritionPlanning?.weight || 80;
+ 75 |     let bf = "--";
+ 76 |     if (userData.profile && Object.keys(userData.profile).length > 0) {
+ 77 |         const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
+ 78 |         if (calcBf) bf = Number(calcBf).toFixed(1);
+ 79 |     }
+ 80 | 
+ 81 |     const streak = useMemo(() => calcStreak(history), [history]);
+    :                                                        ^^^|^^^
+    :                                                           `-- it will always cause this hook to re-evaluate
+ 82 |     const totalWorkouts = history.length;
+    `----
+  help: Try memoizing this variable with `useRef` or `useCallback`.
+
+  x react-hooks(rules-of-hooks): React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render.
+    ,-[src/hooks/useHomeView.ts:81:20]
+ 80 | 
+ 81 |     const streak = useMemo(() => calcStreak(history), [history]);
+    :                    ^^^^^^^^^^^^^^^^^^^^^^|^^^^^^^^^^^^^^^^^^^^^^
+    :                                          `-- This Hook call is not reachable on every render path.
+ 82 |     const totalWorkouts = history.length;
+    `----
+  help: Move the Hook call before the condition, or call it unconditionally and branch inside the Hook/effect instead.
+
+  ! react-hooks(exhaustive-deps): React hook useMemo depends on `nutrition`, which changes every render
+    ,-[src/hooks/useHomeView.ts:90:9]
+ 50 |     const history = userData.history || [];
+ 51 |     const nutrition = userData.nutrition || {};
+    :           ^^^^|^^^^
+    :               `-- `nutrition` is declared here
+ 52 |     
+ 53 |     // Calculate today's workout
+ 54 |     const todaysWorkout = history.find(s => {
+ 55 |         if (!s.globalStartTime) return false;
+ 56 |         return new Date(s.globalStartTime).toISOString().split('T')[0] === todayStr;
+ 57 |     });
+ 58 |     const isRestDay = !todaysWorkout;
+ 59 | 
+ 60 |     // Calculate today's nutrition
+ 61 |     const todayNutrition = nutrition[todayStr] || { kcal: 0, carbs: 0, pro: 0, fat: 0 };
+ 62 |     const kcalEaten = todayNutrition.kcal || 0;
+ 63 |     const carbs = todayNutrition.carbs || 0;
+ 64 |     const pro = todayNutrition.pro || 0;
+ 65 |     const fat = todayNutrition.fat || 0;
+ 66 | 
+ 67 |     // Get Targets from planning
+ 68 |     const kcalTarget = userData?.nutritionPlanning?.normocalorica?.kcal || 
+ 69 |                        userData?.nutritionPlanning?.totalKcal || 2500;
+ 70 |     
+ 71 |     // Get BF % ÔÇö use today's or most recent measurement
+ 72 |     const currentWeight = todayNutrition.weight || 
+ 73 |                           (Object.values(nutrition).reverse().find(n => n.weight)?.weight) || 
+ 74 |                           userData?.nutritionPlanning?.weight || 80;
+ 75 |     let bf = "--";
+ 76 |     if (userData.profile && Object.keys(userData.profile).length > 0) {
+ 77 |         const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
+ 78 |         if (calcBf) bf = Number(calcBf).toFixed(1);
+ 79 |     }
+ 80 | 
+ 81 |     const streak = useMemo(() => calcStreak(history), [history]);
+ 82 |     const totalWorkouts = history.length;
+ 83 | 
+ 84 |     // Chronological array for charts and TDEE calc
+ 85 |     const { sortedDates, chronoData, tdeeCalc } = useMemo(() => {
+ 86 |         const dates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
+ 87 |         const cData = dates.map(d => ({ date: d, ...nutrition[d] }));
+ 88 |         const tCalc = Logic.calculateTDEE(cData);
+ 89 |         return { sortedDates: dates, chronoData: cData, tdeeCalc: tCalc };
+ 90 |     }, [nutrition]);
+    :         ^^^^|^^^^
+    :             `-- it will always cause this hook to re-evaluate
+ 91 | 
+    `----
+  help: Try memoizing this variable with `useRef` or `useCallback`.
+
+  x react-hooks(rules-of-hooks): React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render.
+    ,-[src/hooks/useHomeView.ts:85:51]
+ 84 |         // Chronological array for charts and TDEE calc
+ 85 | ,->     const { sortedDates, chronoData, tdeeCalc } = useMemo(() => {
+ 86 | |           const dates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
+ 87 | |           const cData = dates.map(d => ({ date: d, ...nutrition[d] }));
+ 88 | |           const tCalc = Logic.calculateTDEE(cData);
+ 89 | |           return { sortedDates: dates, chronoData: cData, tdeeCalc: tCalc };
+ 90 | |->     }, [nutrition]);
+    : `---- This Hook call is not reachable on every render path.
+ 91 |     
+    `----
+  help: Move the Hook call before the condition, or call it unconditionally and branch inside the Hook/effect instead.
+
+  x react-hooks(rules-of-hooks): React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render.
+    ,-[src/hooks/useHomeView.ts:93:25]
+ 92 |     // Chart Logic (Last 14 days)
+ 93 |     const recentDates = useMemo(() => sortedDates.slice(-14), [sortedDates]);
+    :                         ^^^^^^^^^^^^^^^^^^^^^^^^^^|^^^^^^^^^^^^^^^^^^^^^^^^^
+    :                                                   `-- This Hook call is not reachable on every render path.
+ 94 |     const chartData = useMemo(() => ({
+    `----
+  help: Move the Hook call before the condition, or call it unconditionally and branch inside the Hook/effect instead.
+
+  ! react-hooks(exhaustive-deps): React hook useMemo depends on `nutrition`, which changes every render
+    ,-[src/hooks/useHomeView.ts:51:11]
+ 50 |     const history = userData.history || [];
+ 51 |     const nutrition = userData.nutrition || {};
+    :           ^^^^|^^^^
+    :               `-- `nutrition` is declared here
+ 52 |     
+    `----
+     ,-[src/hooks/useHomeView.ts:111:23]
+ 110 |         ]
+ 111 |     }), [recentDates, nutrition]);
+     :                       ^^^^|^^^^
+     :                           `-- it will always cause this hook to re-evaluate
+ 112 | 
+     `----
+  help: Try memoizing this variable with `useRef` or `useCallback`.
+
+  x react-hooks(rules-of-hooks): React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render.
+     ,-[src/hooks/useHomeView.ts:94:23]
+  93 |         const recentDates = useMemo(() => sortedDates.slice(-14), [sortedDates]);
+  94 | ,->     const chartData = useMemo(() => ({
+  95 | |           labels: recentDates.map(d => d.slice(5).replace('-', '/')),
+  96 | |           datasets: [
+  97 | |               {
+  98 | |                   label: 'Peso Corporeo (kg)',
+  99 | |                   data: recentDates.map(d => {
+ 100 | |                       const w = nutrition[d]?.weight;
+ 101 | |                       return (w && !isNaN(parseFloat(w))) ? parseFloat(w) : null;
+ 102 | |                   }),
+ 103 | |                   borderColor: 'var(--primary-color)',
+ 104 | |                   backgroundColor: 'rgba(14, 165, 233, 0.2)',
+ 105 | |                   tension: 0.4,
+ 106 | |                   pointRadius: 4,
+ 107 | |                   pointBackgroundColor: 'var(--primary-color)',
+ 108 | |                   spanGaps: true // connect across null values
+ 109 | |               }
+ 110 | |           ]
+ 111 | |->     }), [recentDates, nutrition]);
+     : `---- This Hook call is not reachable on every render path.
+ 112 |     
+     `----
+  help: Move the Hook call before the condition, or call it unconditionally and branch inside the Hook/effect instead.
+
+  x Failed to open file C:\Users\gerar\Documents\GitHub\logbook\legacy_app.js with error "stream did not contain valid UTF-8"
+
+Found 18 warnings and 6 errors.
+Finished in 21ms on 45 files with 91 rules using 12 threads.

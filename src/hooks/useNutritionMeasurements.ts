@@ -13,7 +13,7 @@ export function useNutritionMeasurements() {
     const [manualBf, setManualBf] = useState('');
     const [method, setMethod] = useState(profile.gender === 'F' ? 'navy_female' : 'navy_male');
 
-    const todayDateStr = new Date().toISOString().split('T')[0];
+    const todayDateStr = Logic.getLocalDateString();
 
     const calculateAndSave = () => {
         if (!weight) {

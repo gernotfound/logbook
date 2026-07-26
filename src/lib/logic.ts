@@ -130,6 +130,14 @@ export const Logic = {
     generateId(prefix) { 
         return prefix + '_' + Math.random().toString(36).substr(2, 9); 
     },
+    getLocalDateString(d: Date | string | number = new Date()): string {
+        const date = new Date(d);
+        if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    },
     formatTime(ms, showHours = false) {
         let totalSec = Math.floor(ms / 1000);
         let h = Math.floor(totalSec / 3600); 
@@ -174,7 +182,7 @@ export const Logic = {
         const wFirst = parseFloat(recentDays[0].weight);
         const firstDate = new Date(recentDays[0].date);
         const lastDate = new Date(recentDays[recentDays.length - 1].date);
-        const diffDays = Math.ceil(Math.abs(lastDate - firstDate) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.ceil(Math.abs(lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays === 0) return { error: true, message: "Dati insufficienti (stesso giorno)" };
         const avgKcal = recentDays.reduce((sum, d) => sum + parseFloat(d.kcal), 0) / recentDays.length;
         const weightDiff = wLast - wFirst;
@@ -333,7 +341,7 @@ export const Logic = {
             tdeeVal = state.nutritionPlanning.normocalorica.kcal;
         }
         if (state.nutrition && typeof state.nutrition === 'object') {
-            const dates = Object.keys(state.nutrition).sort((a,b) => new Date(a) - new Date(b));
+            const dates = Object.keys(state.nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
             const historyList = dates.map(d => ({ date: d, weight: state.nutrition[d].weight, kcal: state.nutrition[d].kcal }));
             const tdeeRes = this.calculateTDEE(historyList);
             if (!tdeeRes.error && tdeeRes.tdee) {
@@ -426,8 +434,8 @@ export const Logic = {
         }
         return null;
     },
-    validateMeasurementData(data) {
-        const errors = {};
+    validateMeasurementData(data: any) {
+        const errors: Record<string, string> = {};
         if (!data || typeof data !== 'object') {
             return { isValid: false, errors: { general: "Dati non validi" }, cleanData: null, bfPercentage: null };
         }
@@ -596,8 +604,8 @@ export const Logic = {
             return aName.localeCompare(bName);
         });
     },
-    validateCustomFood(foodData) {
-        const errors = {};
+    validateCustomFood(foodData: any) {
+        const errors: Record<string, string> = {};
         if (!foodData || typeof foodData !== 'object') {
             return { isValid: false, errors: { general: "Dati alimento non validi" }, cleanData: null };
         }

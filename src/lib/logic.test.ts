@@ -86,4 +86,29 @@ describe('Logic Library Tests', () => {
         expect(tdee.tdee).toBeGreaterThan(2300);
         expect(tdee.tdee).toBeLessThan(2700);
     });
+
+    it('getLocalDateString: formats local date YYYY-MM-DD correctly', () => {
+        const testDate = new Date(2026, 6, 26); // July 26, 2026
+        const dateStr = Logic.getLocalDateString(testDate);
+        expect(dateStr).toBe('2026-07-26');
+    });
+
+    it('scaleFoodNutrients: returns zero nutrients when quantity is 0', () => {
+        const food = { baseQty: 100, kcal: 200, carbs: 30, pro: 10, fat: 5, unit: 'g' };
+        const scaled = Logic.scaleFoodNutrients(food, 0, 'g');
+        expect(scaled.kcal).toBe(0);
+        expect(scaled.carbs).toBe(0);
+        expect(scaled.pro).toBe(0);
+        expect(scaled.fat).toBe(0);
+    });
+
+    it('calculateNormocaloricaDiff: calculates percentages and returns carbsPct, proPct, fatPct, kcalPct', () => {
+        const current = { carbsGrams: 300, proGrams: 160, fatGrams: 70, totalKcal: 2470 };
+        const normocalorica = { carbs: 250, pro: 150, fat: 60, kcal: 2140 };
+        const diff = Logic.calculateNormocaloricaDiff(current, normocalorica);
+        expect(diff.carbsPct).toBeGreaterThan(0);
+        expect(diff.proPct).toBeGreaterThan(0);
+        expect(diff.fatPct).toBeGreaterThan(0);
+        expect(diff.kcalPct).toBeGreaterThan(0);
+    });
 });

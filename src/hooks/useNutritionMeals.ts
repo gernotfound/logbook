@@ -15,7 +15,7 @@ export function useNutritionMeals() {
         kcal: '', carbs: '', pro: '', fat: ''
     });
 
-    const todayDateStr = new Date().toISOString().split('T')[0];
+    const todayDateStr = Logic.getLocalDateString();
     const todayNutrition = userData?.nutrition?.[todayDateStr] || { 
         kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
     };
@@ -42,7 +42,9 @@ export function useNutritionMeals() {
     const recalcTotals = (mealsList) => {
         let kcal = 0, carbs = 0, pro = 0, fat = 0;
         mealsList.forEach(m => {
-            const ratio = (m.quantity || m.baseQty || 100) / (m.baseQty || 100);
+            const qty = m.quantity ?? m.baseQty ?? 100;
+            const base = m.baseQty ?? 100;
+            const ratio = qty / base;
             kcal += (parseFloat(m.kcal) || 0) * ratio;
             carbs += (parseFloat(m.carbs) || 0) * ratio;
             pro += (parseFloat(m.pro) || 0) * ratio;

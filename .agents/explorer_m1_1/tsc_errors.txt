@@ -1,0 +1,90 @@
+﻿src/App.tsx(5,31): error TS2307: Cannot find module 'virtual:pwa-register/react' or its corresponding type declarations.
+src/App.tsx(13,11): error TS2339: Property 'currentUser' does not exist on type '{}'.
+src/App.tsx(13,24): error TS2339: Property 'loading' does not exist on type '{}'.
+src/App.tsx(13,33): error TS2339: Property 'login' does not exist on type '{}'.
+src/App.tsx(14,46): error TS2339: Property 'syncing' does not exist on type 'unknown'.
+src/components/Home/HomeView.tsx(134,69): error TS2365: Operator '>' cannot be applied to types 'string' and 'number'.
+src/components/Home/HomeView.tsx(135,32): error TS2365: Operator '>' cannot be applied to types 'string' and 'number'.
+src/components/Nutrition/NutritionPlanning.tsx(116,78): error TS2339: Property 'carbs' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(116,114): error TS2339: Property 'carbs' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(117,48): error TS2339: Property 'carbs' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(117,75): error TS2339: Property 'carbs' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(119,78): error TS2339: Property 'pro' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(119,112): error TS2339: Property 'pro' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(120,48): error TS2339: Property 'pro' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(120,73): error TS2339: Property 'pro' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(122,78): error TS2339: Property 'fat' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(122,112): error TS2339: Property 'fat' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(123,48): error TS2339: Property 'fat' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(123,73): error TS2339: Property 'fat' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(125,78): error TS2339: Property 'kcal' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(125,113): error TS2339: Property 'kcal' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(126,49): error TS2339: Property 'kcal' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Nutrition/NutritionPlanning.tsx(126,75): error TS2339: Property 'kcal' does not exist on type '{ kcalPct: number; carbsPct: number; proPct: number; fatPct: number; formatted: string; kcalDiff: { pct: number; formatted: string; }; carbsDiff: { pct: number; formatted: string; }; proDiff: { pct: number; formatted: string; }; fatDiff: { ...; }; }'.
+src/components/Training/TrainingRoutines.tsx(13,9): error TS2554: Expected 1 arguments, but got 0.
+src/components/Training/TrainingSession.tsx(16,9): error TS2554: Expected 1 arguments, but got 0.
+src/components/Training/TrainingSession.tsx(76,26): error TS2304: Cannot find name 'timerDisplay'.
+src/contexts/AuthContext.tsx(6,21): error TS2554: Expected 1 arguments, but got 0.
+src/contexts/AuthContext.tsx(15,9): error TS2339: Property 'userData' does not exist on type '{}'.
+src/contexts/AuthContext.tsx(16,9): error TS2339: Property 'setUserData' does not exist on type '{}'.
+src/contexts/AuthContext.tsx(17,9): error TS2339: Property 'setSyncing' does not exist on type '{}'.
+src/contexts/AuthContext.tsx(18,9): error TS2339: Property 'saveError' does not exist on type '{}'.
+src/contexts/AuthContext.tsx(19,9): error TS2339: Property 'setSaveError' does not exist on type '{}'.
+src/contexts/AuthContext.tsx(55,44): error TS2339: Property 'userData' does not exist on type 'unknown'.
+src/hooks/useHomeView.ts(43,49): error TS2339: Property 'userData' does not exist on type 'unknown'.
+src/hooks/useHomeView.ts(73,75): error TS2339: Property 'weight' does not exist on type 'unknown'.
+src/hooks/useHomeView.ts(73,84): error TS2339: Property 'weight' does not exist on type 'unknown'.
+src/hooks/useHomeView.ts(86,60): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/hooks/useHomeView.ts(86,74): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/hooks/useNutritionMeals.ts(7,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useNutritionMeals.ts(7,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useNutritionMeasurements.ts(6,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useNutritionMeasurements.ts(6,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useNutritionPlanning.ts(6,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useNutritionPlanning.ts(6,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useSettings.ts(8,13): error TS2339: Property 'currentUser' does not exist on type '{}'.
+src/hooks/useSettings.ts(8,26): error TS2339: Property 'logout' does not exist on type '{}'.
+src/hooks/useSettings.ts(9,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useSettings.ts(9,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useTrainingExercises.ts(6,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useTrainingExercises.ts(6,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useTrainingHistory.ts(4,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useTrainingHistory.ts(4,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useTrainingRoutines.ts(6,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useTrainingRoutines.ts(6,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useWorkoutSession.ts(6,13): error TS2339: Property 'userData' does not exist on type '{}'.
+src/hooks/useWorkoutSession.ts(6,23): error TS2339: Property 'saveUserData' does not exist on type '{}'.
+src/hooks/useWorkoutSession.ts(6,37): error TS2339: Property 'localWorkout' does not exist on type '{}'.
+src/hooks/useWorkoutSession.ts(6,51): error TS2339: Property 'setLocalWorkout' does not exist on type '{}'.
+src/lib/logic.ts(177,45): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/lib/logic.ts(177,56): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/lib/logic.ts(336,70): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/lib/logic.ts(336,84): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/lib/logic.ts(436,20): error TS2339: Property 'date' does not exist on type '{}'.
+src/lib/logic.ts(440,20): error TS2339: Property 'weight' does not exist on type '{}'.
+src/lib/logic.ts(445,20): error TS2339: Property 'method' does not exist on type '{}'.
+src/lib/logic.ts(454,24): error TS2339: Property 'manualBf' does not exist on type '{}'.
+src/lib/logic.ts(457,54): error TS2339: Property 'height' does not exist on type '{}'.
+src/lib/logic.ts(458,50): error TS2339: Property 'neck' does not exist on type '{}'.
+src/lib/logic.ts(459,52): error TS2339: Property 'waist' does not exist on type '{}'.
+src/lib/logic.ts(460,25): error TS2339: Property 'waist' does not exist on type '{}'.
+src/lib/logic.ts(460,42): error TS2339: Property 'neck' does not exist on type '{}'.
+src/lib/logic.ts(461,24): error TS2339: Property 'waist' does not exist on type '{}'.
+src/lib/logic.ts(464,54): error TS2339: Property 'height' does not exist on type '{}'.
+src/lib/logic.ts(465,50): error TS2339: Property 'neck' does not exist on type '{}'.
+src/lib/logic.ts(466,52): error TS2339: Property 'waist' does not exist on type '{}'.
+src/lib/logic.ts(467,48): error TS2339: Property 'hip' does not exist on type '{}'.
+src/lib/logic.ts(468,25): error TS2339: Property 'waist' does not exist on type '{}'.
+src/lib/logic.ts(468,42): error TS2339: Property 'hip' does not exist on type '{}'.
+src/lib/logic.ts(468,57): error TS2339: Property 'neck' does not exist on type '{}'.
+src/lib/logic.ts(469,24): error TS2339: Property 'hip' does not exist on type '{}'.
+src/lib/logic.ts(472,54): error TS2339: Property 'height' does not exist on type '{}'.
+src/lib/logic.ts(491,20): error TS2339: Property 'bfPercentage' does not exist on type '{}'.
+src/lib/logic.ts(606,20): error TS2339: Property 'name' does not exist on type '{}'.
+src/lib/logic.ts(610,20): error TS2339: Property 'unit' does not exist on type '{}'.
+src/lib/logic.ts(614,20): error TS2339: Property 'baseQty' does not exist on type '{}'.
+src/lib/logic.ts(619,24): error TS2339: Property 'servingWeight' does not exist on type '{}'.
+src/lib/logic.ts(645,20): error TS2339: Property 'sugars' does not exist on type '{}'.
+src/lib/logic.ts(648,20): error TS2339: Property 'satFat' does not exist on type '{}'.
+src/main.tsx(5,8): error TS2882: Cannot find module or type declarations for side-effect import of './styles/global.css'.
+src/store/useAppStore.ts(33,17): error TS2339: Property 'userData' does not exist on type '{}'.

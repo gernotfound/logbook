@@ -82,7 +82,9 @@ export default function NutritionMeals() {
                 const mealItems = meals.filter(m => m.meal === mt);
                 let subKcal = 0, subC = 0, subP = 0, subF = 0;
                 mealItems.forEach(m => {
-                    const ratio = (m.quantity || m.baseQty || 100) / (m.baseQty || 100);
+                    const qty = m.quantity ?? m.baseQty ?? 100;
+                    const base = m.baseQty ?? 100;
+                    const ratio = qty / base;
                     subKcal += (parseFloat(m.kcal) || 0) * ratio;
                     subC += (parseFloat(m.carbs) || 0) * ratio;
                     subP += (parseFloat(m.pro) || 0) * ratio;
@@ -106,7 +108,7 @@ export default function NutritionMeals() {
                                     <div key={item.time || item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px dashed var(--glass-border)' }}>
                                         <div>
                                             <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.quantity || item.baseQty}{item.unit}</div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.quantity ?? item.baseQty}{item.unit}</div>
                                         </div>
                                         <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => removeFood(item.time)}>✕</button>
                                     </div>

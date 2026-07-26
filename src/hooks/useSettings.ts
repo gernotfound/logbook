@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppStore } from '../store/useAppStore';
 import { Exporter } from '../lib/export';
@@ -15,6 +15,14 @@ export function useSettings() {
     const [height, setHeight] = useState(profile.height || '');
     const [gender, setGender] = useState(profile.gender || '');
     const [deletingAccount, setDeletingAccount] = useState(false);
+
+    useEffect(() => {
+        if (userData?.profile) {
+            if (userData.profile.dob !== undefined) setDob(userData.profile.dob || '');
+            if (userData.profile.height !== undefined) setHeight(userData.profile.height || '');
+            if (userData.profile.gender !== undefined) setGender(userData.profile.gender || '');
+        }
+    }, [userData?.profile]);
 
     const handleSaveProfile = () => {
         const newProfile = { dob, height, gender };

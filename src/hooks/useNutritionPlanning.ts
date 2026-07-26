@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
@@ -16,6 +16,12 @@ export function useNutritionPlanning() {
             normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
         }
     );
+
+    useEffect(() => {
+        if (userData?.nutritionPlanning) {
+            setPlanning(userData.nutritionPlanning);
+        }
+    }, [userData?.nutritionPlanning]);
 
     // Calculate current macros based on settings
     const macros = Logic.calculateMacrosFromKg(

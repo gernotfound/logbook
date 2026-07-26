@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
-export function useWorkoutSession(onFinish) {
+export function useWorkoutSession(onFinish?: any) {
     const { userData, saveUserData, localWorkout, setLocalWorkout } = useAppStore();
 
     const activeWorkout = localWorkout;
@@ -35,7 +35,7 @@ export function useWorkoutSession(onFinish) {
             id: Logic.generateId('w'),
             routineId: routine.id,
             routineName: routine.name,
-            date: new Date().toISOString().split('T')[0],
+            date: Logic.getLocalDateString(),
             globalStartTime: new Date().getTime(),
             exercises: (routine.exercises || []).map(ex => {
                 const setsCount = ex.setsCount || 3;
@@ -76,7 +76,7 @@ export function useWorkoutSession(onFinish) {
             pumpRating: valRes.pump,
             fatigueRating: valRes.fatigue,
             waterLiters: water ? parseFloat(water) : 0,
-            date: activeWorkout.date || new Date().toISOString().split('T')[0]
+            date: activeWorkout.date || Logic.getLocalDateString()
         };
 
         const updatedHistory = [finishedWorkout, ...history];

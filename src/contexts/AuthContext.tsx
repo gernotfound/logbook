@@ -3,11 +3,25 @@ import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult,
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 
-const AuthContext = createContext();
+export interface AuthContextType {
+    currentUser: any;
+    loading: boolean;
+    login: () => Promise<void>;
+    logout: () => Promise<void>;
+}
 
-export const useAuth = () => useContext(AuthContext);
+const defaultAuthContext: AuthContextType = {
+    currentUser: null,
+    loading: false,
+    login: async () => {},
+    logout: async () => {}
+};
 
-export const AuthProvider = ({ children }) => {
+const AuthContext = createContext<AuthContextType>(defaultAuthContext);
+
+export const useAuth = () => useContext(AuthContext) || defaultAuthContext;
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
     

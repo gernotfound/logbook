@@ -68,13 +68,11 @@ const TrainingSession = () => {
         <div className="training-sub-view active">
             {/* Sticky Timer */}
             <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '1rem', color: 'var(--text-muted)' }}>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: 'var(--text-muted)', textAlign: 'center' }}>
                     Allenamento: <span style={{ color: 'var(--primary-color)' }}>{activeWorkout.routineName}</span>
                 </h3>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '2rem', fontWeight: 'bold', margin: 0, fontFamily: 'monospace', color: 'var(--primary-color)' }}>
-                        {timerDisplay}
-                    </div>
+                    <WorkoutTimer globalStartTime={activeWorkout?.globalStartTime || activeWorkout?.startTime} />
                 </div>
             </div>
 

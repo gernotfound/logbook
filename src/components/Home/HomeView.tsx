@@ -131,8 +131,8 @@ const HomeView = ({ onNavigate }) => {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: 'var(--text-muted)' }}>Trend Peso ({tdeeCalc.timeSpanDays}gg):</span>
-                          <span style={{ fontWeight: 'bold', color: tdeeCalc.weightDiff > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
-                              {tdeeCalc.weightDiff > 0 ? '+' : ''}{tdeeCalc.weightDiff} kg
+                          <span style={{ fontWeight: 'bold', color: Number(tdeeCalc.weightDiff) > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
+                              {Number(tdeeCalc.weightDiff) > 0 ? '+' : ''}{tdeeCalc.weightDiff} kg
                           </span>
                       </div>
                   </div>
