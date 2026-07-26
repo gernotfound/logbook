@@ -105,16 +105,16 @@ function App() {
         </div>
       )}
 
-      <div id="app-container">
+      <main id="app-container">
         {/* Render Active View */}
         {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
         {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
         {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
         {activeTab === 'settings' && <SettingsView />}
 
-      </div>
+      </main>
       {/* Bottom Navigation */}
-      <nav className="bottom-nav">
+      <nav className="bottom-nav" aria-label="Navigazione principale">
         <div className="nav-container">
           <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
             <Home size={24} />
