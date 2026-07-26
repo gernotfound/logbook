@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'LogBook',
         short_name: 'LogBook',
         description: 'App per allenamento e nutrizione',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

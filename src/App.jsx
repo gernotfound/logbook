@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './contexts/AuthContext';
-import HomeView from './components/Home/HomeView';
-import TrainingView from './components/Training/TrainingView';
-import NutritionView from './components/Nutrition/NutritionView';
-import SettingsView from './components/SettingsView'; 
 import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; 
-import { useRegisterSW } from 'virtual:pwa-register/react'; // PWA Update Hook
+import { useRegisterSW } from 'virtual:pwa-register/react';
+
+const HomeView = lazy(() => import('./components/Home/HomeView'));
+const TrainingView = lazy(() => import('./components/Training/TrainingView'));
+const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'));
+const SettingsView = lazy(() => import('./components/SettingsView'));
 
 function App() {
   const { currentUser, loading, syncing, login } = useAuth();
@@ -107,11 +108,17 @@ function App() {
 
       <main id="app-container">
         {/* Render Active View */}
-        {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
-        {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
-        {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
-        {activeTab === 'settings' && <SettingsView />}
-
+        <Suspense fallback={
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+            <div className="spinner"></div>
+            <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
+          </div>
+        }>
+          {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
+          {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
+          {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
+          {activeTab === 'settings' && <SettingsView />}
+        </Suspense>
       </main>
       {/* Bottom Navigation */}
       <nav className="bottom-nav" aria-label="Navigazione principale">

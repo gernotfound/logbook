@@ -3,9 +3,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Logic } from '../../lib/logic';
 
 const TrainingSession = () => {
-    const { userData, saveUserData } = useAuth();
+    const { userData, saveUserData, localWorkout, setLocalWorkout } = useAuth();
     
-    const activeWorkout = userData?.activeWorkout;
+    const activeWorkout = localWorkout;
     const routines = userData?.routines || [];
     const library = userData?.library || [];
     const history = userData?.history || [];
@@ -71,7 +71,7 @@ const TrainingSession = () => {
             })
         };
 
-        saveUserData({ ...userData, activeWorkout: newActiveWorkout });
+        setLocalWorkout(newActiveWorkout);
     };
 
     const endWorkout = () => {
@@ -96,7 +96,14 @@ const TrainingSession = () => {
 
         const updatedHistory = [finishedWorkout, ...history];
         
-        saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
+        saveUserData({ ...userData, history: updatedHistory });
+        setLocalWorkout(null);
+        setMood(''); setPump(''); setFatigue(''); setWater('');
+    };
+
+    const deleteWorkout = () => {
+        if (!confirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata.")) return;
+        setLocalWorkout(null);
         setMood(''); setPump(''); setFatigue(''); setWater('');
     };
 
@@ -109,14 +116,14 @@ const TrainingSession = () => {
                 { exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
             ]
         };
-        saveUserData({ ...userData, activeWorkout: updatedActive });
+        setLocalWorkout(updatedActive);
     };
 
     const removeActiveExercise = (exIndex) => {
         if (!confirm("Rimuovere questo esercizio dalla sessione corrente?")) return;
         const updatedExercises = [...activeWorkout.exercises];
         updatedExercises.splice(exIndex, 1);
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
         // Also close any open panels for this index
         if (openHistoryExIndex === exIndex) setOpenHistoryExIndex(null);
         if (openSetupExIndex === exIndex) setOpenSetupExIndex(null);
@@ -128,7 +135,7 @@ const TrainingSession = () => {
             if (i !== exIndex) return ex;
             return { ...ex, sets: [...ex.sets, { id: Logic.generateId('s'), kg: '', reps: '' }] };
         });
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     const removeSet = (exIndex, setIndex) => {
@@ -136,7 +143,7 @@ const TrainingSession = () => {
             if (i !== exIndex) return ex;
             return { ...ex, sets: ex.sets.filter((_, si) => si !== setIndex) };
         });
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     const updateSet = (exIndex, setId, field, value) => {
@@ -147,7 +154,7 @@ const TrainingSession = () => {
                 sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: value } : s)
             };
         });
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     // Special Sets
@@ -168,7 +175,7 @@ const TrainingSession = () => {
             };
         });
         setOpenSpecialMenuId(null);
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     const updateSpecialSet = (exIndex, setId, collection, specIndex, field, value) => {
@@ -183,7 +190,7 @@ const TrainingSession = () => {
                 })
             };
         });
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     const removeSpecialSet = (exIndex, setId, collection, specIndex) => {
@@ -197,7 +204,7 @@ const TrainingSession = () => {
                 })
             };
         });
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     // Notes
@@ -206,7 +213,7 @@ const TrainingSession = () => {
             if (i !== exIndex) return ex;
             return { ...ex, sessionNote: note };
         });
-        saveUserData({ ...userData, activeWorkout: { ...activeWorkout, exercises: updatedExercises } });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
     const updateSetupNote = (exId, note) => {
@@ -419,8 +426,11 @@ const TrainingSession = () => {
                 </div>
             </div>
 
-            <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '20px' }} onClick={endWorkout}>
+            <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={endWorkout}>
                 🏁 Termina Sessione
+            </button>
+            <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
+                🗑️ Elimina Sessione
             </button>
         </div>
     );

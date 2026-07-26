@@ -13,6 +13,26 @@ export const AuthProvider = ({ children }) => {
     const [syncing, setSyncing] = useState(false);
     const [saveError, setSaveError] = useState(null);
     const [pendingSave, setPendingSave] = useState(false);
+    
+    // Inizializza il workout in bozza dal localStorage, se presente
+    const [localWorkout, setLocalWorkout] = useState(() => {
+        try {
+            const saved = localStorage.getItem('logbook_local_workout');
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) {
+            return null;
+        }
+    });
+
+    // Sincronizza localWorkout col localStorage ogni volta che cambia
+    useEffect(() => {
+        if (localWorkout) {
+            localStorage.setItem('logbook_local_workout', JSON.stringify(localWorkout));
+        } else {
+            localStorage.removeItem('logbook_local_workout');
+        }
+    }, [localWorkout]);
+
 
     const loadData = async (user) => {
         if (!user) return;
@@ -123,7 +143,9 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         saveUserData,
-        setUserData // Expose for edge cases
+        setUserData, // Expose for edge cases
+        localWorkout,
+        setLocalWorkout
     };
 
     return (
