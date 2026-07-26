@@ -270,20 +270,28 @@ input:focus, select:focus, textarea:focus {
 
 
 .bottom-nav { 
-    position: fixed; 
-    bottom: 0; 
-    left: 0; 
-    width: 100%; 
-    background: rgba(30, 41, 59, 0.85); 
+    position: fixed !important; 
+    bottom: 0 !important; 
+    left: 0 !important; 
+    width: 100% !important; 
+    background: rgba(30, 41, 59, 0.95); 
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
     border-top: 1px solid var(--glass-border); 
-    display: flex; 
+    display: flex !important; 
     justify-content: center; 
-    z-index: 100; 
+    align-items: center;
+    z-index: 10000 !important; 
     padding-bottom: env(safe-area-inset-bottom);
 }
-.nav-container { width: 100%; max-width: 600px; display: flex; }
+.nav-container { 
+    width: 100%; 
+    max-width: 600px; 
+    display: flex !important; 
+    flex-direction: row !important; 
+    justify-content: space-around !important;
+    align-items: center !important;
+}
 .nav-item { 
     flex: 1; 
     padding: 14px 0; 
