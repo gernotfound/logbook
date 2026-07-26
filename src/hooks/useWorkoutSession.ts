@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
-export function useWorkoutSession() {
-    const { userData, saveUserData, localWorkout, setLocalWorkout } = useAuth();
+export function useWorkoutSession(onFinish) {
+    const { userData, saveUserData, localWorkout, setLocalWorkout } = useAppStore();
 
     const activeWorkout = localWorkout;
     const routines = userData?.routines || [];

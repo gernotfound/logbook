@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './contexts/AuthContext';
+import { useAppStore } from './store/useAppStore';
 import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; 
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
@@ -9,7 +10,8 @@ const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'))
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
 function App() {
-  const { currentUser, loading, syncing, login } = useAuth();
+  const { currentUser, loading, login } = useAuth();
+  const syncing = useAppStore(state => state.syncing);
   const [activeTab, setActiveTab] = useState('home');
   const [trainingSubTab, setTrainingSubTab] = useState('session');
   const [nutritionSubTab, setNutritionSubTab] = useState('meals');

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from '../lib/firebase';
+import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
 import { DB } from '../lib/db';
+import { useAppStore } from '../store/useAppStore';
 
 const AuthContext = createContext();
 
@@ -8,31 +9,15 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
-    const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [syncing, setSyncing] = useState(false);
-    const [saveError, setSaveError] = useState(null);
-    const [pendingSave, setPendingSave] = useState(false);
     
-    // Inizializza il workout in bozza dal localStorage, se presente
-    const [localWorkout, setLocalWorkout] = useState(() => {
-        try {
-            const saved = localStorage.getItem('logbook_local_workout');
-            return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            return null;
-        }
-    });
-
-    // Sincronizza localWorkout col localStorage ogni volta che cambia
-    useEffect(() => {
-        if (localWorkout) {
-            localStorage.setItem('logbook_local_workout', JSON.stringify(localWorkout));
-        } else {
-            localStorage.removeItem('logbook_local_workout');
-        }
-    }, [localWorkout]);
-
+    const { 
+        userData, 
+        setUserData, 
+        setSyncing, 
+        saveError, 
+        setSaveError 
+    } = useAppStore();
 
     const loadData = async (user) => {
         if (!user) return;
@@ -67,7 +52,7 @@ export const AuthProvider = ({ children }) => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && auth.currentUser) {
                 // Only re-sync if we already have data (avoid loading state on first open)
-                if (userData !== null) {
+                if (useAppStore.getState().userData !== null) {
                     loadData(auth.currentUser);
                 }
             }
@@ -114,38 +99,12 @@ export const AuthProvider = ({ children }) => {
             setSyncing(false);
         }
     };
-    
-    // Trigger save to DB via useEffect to catch the fully merged state after React batches multiple saveUserData calls
-    useEffect(() => {
-        if (pendingSave && userData) {
-            setPendingSave(false);
-            const dataToSave = userData; // capture current state
-            DB.saveUserData(dataToSave).catch(error => {
-                console.error("Errore durante il salvataggio:", error);
-                setSaveError("Errore sincronizzazione. Verifica la connessione.");
-            });
-        }
-    }, [pendingSave, userData]);
-
-    const saveUserData = (newDataOrUpdater) => {
-        // Support functional updates to prevent race conditions when multiple components save at the same time
-        setUserData(prev => typeof newDataOrUpdater === 'function' ? newDataOrUpdater(prev) : newDataOrUpdater);
-        setSaveError(null);
-        setPendingSave(true);
-    };
 
     const value = {
         currentUser,
-        userData,
         loading,
-        syncing,
-        saveError,
         login,
-        logout,
-        saveUserData,
-        setUserData, // Expose for edge cases
-        localWorkout,
-        setLocalWorkout
+        logout
     };
 
     return (

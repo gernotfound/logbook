@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
-export function useTrainingRoutines() {
-    const { userData, saveUserData } = useAuth();
+export function useTrainingRoutines(setSubTab) {
+    const { userData, saveUserData } = useAppStore();
     const [routineName, setRoutineName] = useState('');
     const [editingRoutineId, setEditingRoutineId] = useState(null);
 

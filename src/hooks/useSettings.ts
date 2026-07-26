@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { Exporter } from '../lib/export';
 import { DB } from '../lib/db';
 
 export function useSettings() {
-    const { userData, saveUserData, currentUser, logout } = useAuth();
+    const { currentUser, logout } = useAuth();
+    const { userData, saveUserData } = useAppStore();
     
     // Fallback in case userData isn't loaded yet
     const profile = userData?.profile || { dob: '', height: '', gender: '' };

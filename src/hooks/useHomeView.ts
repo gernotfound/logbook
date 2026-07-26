@@ -1,4 +1,5 @@
-import { useAuth } from '../contexts/AuthContext';
+import { useMemo } from 'react';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
 function calcStreak(history) {
@@ -39,7 +40,7 @@ function calcStreak(history) {
 }
 
 export function useHomeView() {
-    const { userData } = useAuth();
+    const userData = useAppStore(state => state.userData);
     
     if (!userData) {
         return { loading: true };
@@ -77,22 +78,20 @@ export function useHomeView() {
         if (calcBf) bf = Number(calcBf).toFixed(1);
     }
 
-    const streak = calcStreak(history);
+    const streak = useMemo(() => calcStreak(history), [history]);
     const totalWorkouts = history.length;
 
     // Chronological array for charts and TDEE calc
-    const sortedDates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
-    
-    // Build data for calculateTDEE
-    const chronoData = sortedDates.map(d => ({
-        date: d,
-        ...nutrition[d]
-    }));
-    const tdeeCalc = Logic.calculateTDEE(chronoData);
+    const { sortedDates, chronoData, tdeeCalc } = useMemo(() => {
+        const dates = Object.keys(nutrition).sort((a,b) => new Date(a) - new Date(b));
+        const cData = dates.map(d => ({ date: d, ...nutrition[d] }));
+        const tCalc = Logic.calculateTDEE(cData);
+        return { sortedDates: dates, chronoData: cData, tdeeCalc: tCalc };
+    }, [nutrition]);
 
     // Chart Logic (Last 14 days)
-    const recentDates = sortedDates.slice(-14);
-    const chartData = {
+    const recentDates = useMemo(() => sortedDates.slice(-14), [sortedDates]);
+    const chartData = useMemo(() => ({
         labels: recentDates.map(d => d.slice(5).replace('-', '/')),
         datasets: [
             {
@@ -109,7 +108,7 @@ export function useHomeView() {
                 spanGaps: true // connect across null values
             }
         ]
-    };
+    }), [recentDates, nutrition]);
 
     return {
         loading: false,

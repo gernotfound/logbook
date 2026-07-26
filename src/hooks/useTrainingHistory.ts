@@ -1,7 +1,7 @@
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 
 export function useTrainingHistory() {
-    const { userData, saveUserData } = useAuth();
+    const { userData, saveUserData } = useAppStore();
     
     const history = [...(userData?.history || [])].sort((a,b) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
 

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionPlanning() {
-    const { userData, saveUserData } = useAuth();
+    const { userData, saveUserData } = useAppStore();
     
     const [planning, setPlanning] = useState(
         userData?.nutritionPlanning || {

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { COMMON_FOODS } from '../lib/foods';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeals() {
-    const { userData, saveUserData } = useAuth();
+    const { userData, saveUserData } = useAppStore();
     
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);

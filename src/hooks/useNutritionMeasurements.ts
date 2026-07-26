@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeasurements() {
-    const { userData, saveUserData } = useAuth();
+    const { userData, saveUserData } = useAppStore();
     
     const profile = userData?.profile || {};
     const [weight, setWeight] = useState('');

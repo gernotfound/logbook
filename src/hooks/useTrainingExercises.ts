@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
 export function useTrainingExercises() {
-    const { userData, saveUserData } = useAuth();
+    const { userData, saveUserData } = useAppStore();
     const [editingExId, setEditingExId] = useState(null);
     const [exName, setExName] = useState('');
     const [exNotes, setExNotes] = useState('');
