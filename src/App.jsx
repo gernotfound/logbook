@@ -17,7 +17,15 @@ function App() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
-      console.log('SW Registered: ' + r)
+      console.log('SW Registered: ' + r);
+      if (r) {
+        // Forza il controllo aggiornamenti ogni volta che l'app torna in primo piano (Cruciale per iOS)
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            r.update().catch(err => console.log('SW update check error:', err));
+          }
+        });
+      }
     },
     onRegisterError(error) {
       console.log('SW registration error', error)
