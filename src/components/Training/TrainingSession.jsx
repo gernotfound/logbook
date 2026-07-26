@@ -1,225 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useState } from 'react';
 import { Logic } from '../../lib/logic';
+import { useWorkoutSession } from '../../hooks/useWorkoutSession';
+import WorkoutTimer from './WorkoutTimer';
 
 const TrainingSession = () => {
-    const { userData, saveUserData, localWorkout, setLocalWorkout } = useAuth();
-    
-    const activeWorkout = localWorkout;
-    const routines = userData?.routines || [];
-    const library = userData?.library || [];
-    const history = userData?.history || [];
-
-    const [selectedRoutine, setSelectedRoutine] = useState('');
-    const [timerDisplay, setTimerDisplay] = useState('00:00');
-    
-    // Rating states
-    const [mood, setMood] = useState('');
-    const [pump, setPump] = useState('');
-    const [fatigue, setFatigue] = useState('');
-    const [water, setWater] = useState('');
+    const {
+        activeWorkout, routines, library, history,
+        selectedRoutine, setSelectedRoutine,
+        mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
+        startWorkout, endWorkout, deleteWorkout,
+        addExtraExercise, removeActiveExercise,
+        addSet, removeSet, updateSet,
+        addSpecialSet, updateSpecialSet, removeSpecialSet,
+        updateSessionNote, updateSetupNote
+    } = useWorkoutSession();
 
     // Toggle states for UI sections
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState(null);
 
-    useEffect(() => {
-        if (!activeWorkout || !activeWorkout.globalStartTime) return;
-        
-        const interval = setInterval(() => {
-            const diff = Math.floor((new Date().getTime() - activeWorkout.globalStartTime) / 1000);
-            const h = Math.floor(diff / 3600);
-            const m = Math.floor((diff % 3600) / 60);
-            const s = diff % 60;
-            if (h > 0) {
-                setTimerDisplay(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            } else {
-                setTimerDisplay(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            }
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [activeWorkout]);
-
-    const startWorkout = () => {
-        if (!selectedRoutine) {
-            alert("Seleziona una scheda per iniziare!");
-            return;
-        }
-        if (activeWorkout) {
-            alert("Hai già un allenamento in corso!");
-            return;
-        }
-
-        const routine = routines.find(r => r.id === selectedRoutine);
-        if (!routine) return;
-        
-        // BUG FIX: use setsCount from each routine exercise (defaulting to 3)
-        const newActiveWorkout = {
-            id: Logic.generateId('w'),
-            routineId: routine.id,
-            routineName: routine.name,
-            date: new Date().toISOString().split('T')[0],
-            globalStartTime: new Date().getTime(),
-            exercises: (routine.exercises || []).map(ex => {
-                const setsCount = ex.setsCount || 3;
-                const sets = [];
-                for (let i = 0; i < setsCount; i++) {
-                    sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
-                }
-                return { exId: ex.exId, sets, sessionNote: '' };
-            })
-        };
-
-        setLocalWorkout(newActiveWorkout);
-    };
-
-    const endWorkout = () => {
-        if (!confirm("Terminare l'allenamento?")) return;
-
-        const valRes = Logic.validateWorkoutRatings(
-            mood ? parseInt(mood) : null,
-            pump ? parseInt(pump) : null,
-            fatigue ? parseInt(fatigue) : null
-        );
-
-        const finishedWorkout = {
-            ...activeWorkout,
-            globalEndTime: new Date().getTime(),
-            globalDurationStr: timerDisplay,
-            moodRating: valRes.mood,
-            pumpRating: valRes.pump,
-            fatigueRating: valRes.fatigue,
-            waterLiters: water ? parseFloat(water) : 0,
-            date: activeWorkout.date || new Date().toISOString().split('T')[0]
-        };
-
-        const updatedHistory = [finishedWorkout, ...history];
-        
-        saveUserData({ ...userData, history: updatedHistory });
-        setLocalWorkout(null);
-        setMood(''); setPump(''); setFatigue(''); setWater('');
-    };
-
-    const deleteWorkout = () => {
-        if (!confirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata.")) return;
-        setLocalWorkout(null);
-        setMood(''); setPump(''); setFatigue(''); setWater('');
-    };
-
-    const addExtraExercise = (exId) => {
-        if (!exId) return;
-        const updatedActive = {
-            ...activeWorkout,
-            exercises: [
-                ...activeWorkout.exercises,
-                { exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
-            ]
-        };
-        setLocalWorkout(updatedActive);
-    };
-
-    const removeActiveExercise = (exIndex) => {
-        if (!confirm("Rimuovere questo esercizio dalla sessione corrente?")) return;
-        const updatedExercises = [...activeWorkout.exercises];
-        updatedExercises.splice(exIndex, 1);
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-        // Also close any open panels for this index
-        if (openHistoryExIndex === exIndex) setOpenHistoryExIndex(null);
-        if (openSetupExIndex === exIndex) setOpenSetupExIndex(null);
-    };
-
-    // Sets Management — always create new references (immutable update)
-    const addSet = (exIndex) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return { ...ex, sets: [...ex.sets, { id: Logic.generateId('s'), kg: '', reps: '' }] };
+    // Callbacks that also close panels
+    const handleRemoveExercise = (exIndex) => {
+        removeActiveExercise(exIndex, (idx) => {
+            if (openHistoryExIndex === idx) setOpenHistoryExIndex(null);
+            if (openSetupExIndex === idx) setOpenSetupExIndex(null);
         });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
-    const removeSet = (exIndex, setIndex) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return { ...ex, sets: ex.sets.filter((_, si) => si !== setIndex) };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
+    const handleAddSpecialSet = (exIndex, setId, type) => {
+        addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
     };
 
-    const updateSet = (exIndex, setId, field, value) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return {
-                ...ex,
-                sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: value } : s)
-            };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    // Special Sets
-    const addSpecialSet = (exIndex, setId, type) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return {
-                ...ex,
-                sets: ex.sets.map(s => {
-                    if (s.id !== setId) return s;
-                    if (type === 'dropset') {
-                        return { ...s, dropsets: [...(s.dropsets || []), { id: Logic.generateId('ds'), kg: '', reps: '' }] };
-                    } else if (type === 'isometry') {
-                        return { ...s, isometrics: [...(s.isometrics || []), { id: Logic.generateId('iso'), kg: '', time: '' }] };
-                    }
-                    return s;
-                })
-            };
-        });
-        setOpenSpecialMenuId(null);
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    const updateSpecialSet = (exIndex, setId, collection, specIndex, field, value) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return {
-                ...ex,
-                sets: ex.sets.map(s => {
-                    if (s.id !== setId || !s[collection]) return s;
-                    const newColl = s[collection].map((item, idx) => idx === specIndex ? { ...item, [field]: value } : item);
-                    return { ...s, [collection]: newColl };
-                })
-            };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    const removeSpecialSet = (exIndex, setId, collection, specIndex) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return {
-                ...ex,
-                sets: ex.sets.map(s => {
-                    if (s.id !== setId || !s[collection]) return s;
-                    return { ...s, [collection]: s[collection].filter((_, idx) => idx !== specIndex) };
-                })
-            };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    // Notes
-    const updateSessionNote = (exIndex, note) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return { ...ex, sessionNote: note };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    const updateSetupNote = (exId, note) => {
-        const updatedLibrary = library.map(l => l.id === exId ? { ...l, notes: note } : l);
-        saveUserData({ ...userData, library: updatedLibrary });
-    };
 
     if (!activeWorkout) {
         return (
@@ -289,7 +101,7 @@ const TrainingSession = () => {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                     <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>{exName}</h3>
                                     <div style={{ display: 'flex', gap: '5px' }}>
-                                        <button className="btn-small" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }} onClick={() => removeActiveExercise(exIndex)}>🗑️</button>
+                                        <button className="btn-small" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }} onClick={() => handleRemoveExercise(exIndex)}>🗑️</button>
                                         <button className="btn-small toggle-btn" onClick={() => setOpenHistoryExIndex(openHistoryExIndex === exIndex ? null : exIndex)}>🕒 Storico</button>
                                         <button className="btn-small toggle-btn" onClick={() => setOpenSetupExIndex(openSetupExIndex === exIndex ? null : exIndex)}>⚙️ Setup</button>
                                     </div>
@@ -336,19 +148,19 @@ const TrainingSession = () => {
                                                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
                                                 <button className="btn-icon" style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }} onClick={() => removeSet(exIndex, sIndex)}>🗑️</button>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
+                                            <div style={{ display: 'flex', gap: '5px', flex: 1, position: 'relative' }}>
                                                 <input type="number" step="0.25" placeholder="Kg" value={s.kg} onChange={e => updateSet(exIndex, s.id, 'kg', e.target.value)} style={{ margin: 0, flex: 1 }} />
                                                 <input type="number" placeholder="Reps" value={s.reps} onChange={e => updateSet(exIndex, s.id, 'reps', e.target.value)} style={{ margin: 0, flex: 1 }} />
                                                 <button className="btn-icon" style={{ background: 'var(--primary-color)', borderRadius: '50%', width: '36px', height: '36px', color: '#fff', flexShrink: 0 }} onClick={() => setOpenSpecialMenuId(openSpecialMenuId === s.id ? null : s.id)}>+</button>
+                                                
+                                                {openSpecialMenuId === s.id && (
+                                                    <div className="special-menu" style={{ position: 'absolute', right: 0, top: '35px', background: 'var(--surface-color)', padding: '10px', borderRadius: '8px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', border: '1px solid var(--glass-border)' }}>
+                                                        <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '5px' }} onClick={() => handleAddSpecialSet(exIndex, s.id, 'dropset')}>+ Dropset</button>
+                                                        <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => handleAddSpecialSet(exIndex, s.id, 'isometry')}>+ Isometria</button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-
-                                        {openSpecialMenuId === s.id && (
-                                            <div style={{ textAlign: 'right', marginBottom: '8px' }}>
-                                                <button className="btn-small" style={{ background: 'var(--warning-color)', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', marginRight: '5px' }} onClick={() => addSpecialSet(exIndex, s.id, 'dropset')}>Dropset</button>
-                                                <button className="btn-small" style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px' }} onClick={() => addSpecialSet(exIndex, s.id, 'isometry')}>Isometria</button>
-                                            </div>
-                                        )}
 
                                         {(s.dropsets || []).map((ds, dsIdx) => (
                                             <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
