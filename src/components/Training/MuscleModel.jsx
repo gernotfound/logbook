@@ -66,7 +66,7 @@ export default function MuscleModel({ selectedMuscles = [] }) {
     const getPathStyle = (id) => {
         const isActive = activeSvgIds.has(id);
         return {
-            fill: isActive ? 'var(--primary-color, #0ea5e9)' : 'transparent',
+            fill: isActive ? 'var(--primary-color, #00e5ff)' : 'transparent',
             transition: 'fill 0.3s ease'
         };
     };

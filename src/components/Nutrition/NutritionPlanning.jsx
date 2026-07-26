@@ -75,7 +75,7 @@ const NutritionPlanning = () => {
                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.proGrams) || 0}g</div>
                 </div>
                 <div className="macro-chip fat" style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '10px', textAlign: 'center' }}>
-                    <span style={{ fontSize: '0.7rem', color: '#f43f5e', fontWeight: 'bold' }}>GRASSI</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--danger-color)', fontWeight: 'bold' }}>GRASSI</span>
                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{Math.round(macros.fatGrams) || 0}g</div>
                 </div>
             </div>
@@ -103,7 +103,7 @@ const NutritionPlanning = () => {
             </div>
 
             <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#f43f5e' }}>Grassi (g/kg)</span>
+                <span style={{ color: 'var(--danger-color)' }}>Grassi (g/kg)</span>
                 <input 
                     type="number" min="0.2" max="3.0" step="0.1" 
                     value={planning.fatPerKg} 

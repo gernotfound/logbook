@@ -1,21 +1,21 @@
 
 :root {
-    --bg-color: #000000; 
-    --surface-color: #121212; 
-    --surface-light: #242424; 
-    --primary-color: #00ffff; 
-    --primary-dark: #00cccc; 
-    --primary-glow: rgba(0, 255, 255, 0.4);
-    --text-main: #ffffff; 
-    --text-muted: #a1a1aa; 
-    --danger-color: #ef4444; 
-    --warning-color: #f59e0b; 
-    --success-color: #22c55e; 
+    --bg-color: #000000;
+    --surface-color: #0d0d0d;
+    --surface-light: #1a1a1a;
+    --primary-color: #00e5ff;
+    --primary-dark: #00b8d4;
+    --primary-glow: rgba(0, 229, 255, 0.3);
+    --text-main: #f0f0f0;
+    --text-muted: #888899;
+    --danger-color: #ff4d6d;
+    --warning-color: #ffb703;
+    --success-color: #2ecc71;
     --border-radius: 16px;
     --spacing: 20px;
-    --glass-bg: rgba(18, 18, 18, 0.8);
-    --glass-border: rgba(255, 255, 255, 0.15);
-    --accent-color: #ff00ff; 
+    --glass-bg: rgba(13, 13, 13, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --accent-color: #cc00ff;
 }
 
 * { 
@@ -122,7 +122,7 @@ p {
 }
 .sub-nav-btn.active { 
     background: var(--primary-color); 
-    color: #fff; 
+    color: #000; 
     border-color: var(--primary-color); 
     box-shadow: 0 4px 15px var(--primary-glow);
 }
@@ -241,7 +241,7 @@ input:focus, select:focus, textarea:focus {
 .timer-btn.play { background: rgba(34, 197, 94, 0.15); color: var(--success-color); border-color: rgba(34, 197, 94, 0.3); }
 .timer-btn.pause { background: rgba(245, 158, 11, 0.15); color: var(--warning-color); border-color: rgba(245, 158, 11, 0.3); }
 .timer-btn.stop { background: rgba(239, 68, 68, 0.15); color: var(--danger-color); border-color: rgba(239, 68, 68, 0.3); }
-.timer-btn.reset { background: rgba(14, 165, 233, 0.15); color: var(--primary-color); border-color: rgba(14, 165, 233, 0.3); }
+.timer-btn.reset { background: rgba(0, 229, 255, 0.12); color: var(--primary-color); border-color: rgba(0, 229, 255, 0.3); }
 
 
 #global-timer-bar { 
@@ -274,7 +274,7 @@ input:focus, select:focus, textarea:focus {
     bottom: 0 !important; 
     left: 0 !important; 
     width: 100% !important; 
-    background: rgba(30, 41, 59, 0.95); 
+    background: rgba(0, 0, 0, 0.92); 
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
     border-top: 1px solid var(--glass-border); 
@@ -380,8 +380,8 @@ input:focus, select:focus, textarea:focus {
     transition: fill 0.3s ease, stroke 0.3s ease;
 }
 .muscle-group.active {
-    fill: var(--danger-color);
-    stroke: #ff7b7b;
+    fill: var(--primary-color);
+    stroke: rgba(0, 229, 255, 0.6);
 }
 
 
@@ -425,9 +425,9 @@ input:focus, select:focus, textarea:focus {
     border: 1px solid var(--glass-border);
 }
 .badge-primary {
-    background: rgba(14, 165, 233, 0.15);
+    background: rgba(0, 229, 255, 0.12);
     color: var(--primary-color);
-    border-color: rgba(14, 165, 233, 0.3);
+    border-color: rgba(0, 229, 255, 0.3);
 }
 .badge-success {
     background: rgba(34, 197, 94, 0.15);
@@ -605,7 +605,7 @@ input[type="range"].fat-slider::-webkit-slider-thumb {
 }
 .chart-period-btn.active {
     background: var(--primary-color);
-    color: #fff;
+    color: #000;
 }
 
 
@@ -828,7 +828,7 @@ input[type="range"].fat-slider::-webkit-slider-thumb {
     color: var(--text-main);
 }
 .toggle-btn.active {
-    background: rgba(14, 165, 233, 0.2);
+    background: rgba(0, 229, 255, 0.12);
     border-color: var(--primary-color);
     color: var(--primary-color);
     font-weight: 600;

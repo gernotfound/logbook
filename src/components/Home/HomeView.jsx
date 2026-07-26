@@ -118,11 +118,11 @@ const HomeView = ({ onNavigate }) => {
                   const w = nutrition[d]?.weight;
                   return (w && !isNaN(parseFloat(w))) ? parseFloat(w) : null;
               }),
-              borderColor: '#0ea5e9',
+              borderColor: 'var(--primary-color)',
               backgroundColor: 'rgba(14, 165, 233, 0.2)',
               tension: 0.4,
               pointRadius: 4,
-              pointBackgroundColor: '#0ea5e9',
+              pointBackgroundColor: 'var(--primary-color)',
               spanGaps: true // connect across null values
           }
       ]
@@ -135,9 +135,9 @@ const HomeView = ({ onNavigate }) => {
           legend: { display: false }
       },
       scales: {
-          x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          x: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(255,255,255,0.04)' } },
           y: { 
-              ticks: { color: '#94a3b8' }, 
+              ticks: { color: 'var(--text-muted)' },
               grid: { color: 'rgba(255,255,255,0.05)' },
               // Auto-scale based on data, avoid toFixed crash with null check
               grace: '5%'
@@ -199,14 +199,14 @@ const HomeView = ({ onNavigate }) => {
                   <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{pro}g</div>
               </div>
               <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.75rem', color: '#f43f5e', fontWeight: 'bold' }}>GRASSI</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--danger-color)', fontWeight: 'bold' }}>GRASSI</div>
                   <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{fat}g</div>
               </div>
           </div>
       </div>
 
       {/* Real TDEE Estimator Widget */}
-      <div className="card" style={{ border: '1px solid rgba(16, 185, 129, 0.3)', background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(16, 185, 129, 0.05) 100%)' }}>
+      <div className="card" style={{ border: '1px solid rgba(46, 204, 113, 0.3)', background: 'linear-gradient(145deg, rgba(0, 0, 0, 0.6) 0%, rgba(46, 204, 113, 0.05) 100%)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                   <h3 style={{ margin: 0, color: 'var(--success-color)' }}>TDEE Reale Stimato</h3>
