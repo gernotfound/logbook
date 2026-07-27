@@ -42,18 +42,20 @@ function calcStreak(history) {
 export function useHomeView() {
     const userData = useAppStore(state => state.userData);
 
+    // Always derive safe values — required before any useMemo (Rules of Hooks)
     const history = userData?.history || [];
     const nutrition = userData?.nutrition || {};
 
+    // useMemo hooks MUST be called unconditionally (before any conditional return)
     const streak = useMemo(() => calcStreak(history), [history]);
     const totalWorkouts = history.length;
 
     // Chronological array for charts and TDEE calc
-    const { sortedDates, chronoData, tdeeCalc } = useMemo(() => {
+    const { sortedDates, tdeeCalc } = useMemo(() => {
         const dates = Object.keys(nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
         const cData = dates.map(d => ({ date: d, ...nutrition[d] }));
         const tCalc = Logic.calculateTDEE(cData);
-        return { sortedDates: dates, chronoData: cData, tdeeCalc: tCalc };
+        return { sortedDates: dates, tdeeCalc: tCalc };
     }, [nutrition]);
 
     // Chart Logic (Last 14 days)
@@ -77,6 +79,7 @@ export function useHomeView() {
         ]
     }), [recentDates, nutrition]);
 
+    // Early return AFTER all hooks
     if (!userData) {
         return { loading: true };
     }
@@ -103,7 +106,7 @@ export function useHomeView() {
     
     // Get BF % — use today's or most recent measurement
     const currentWeight = todayNutrition.weight || 
-                          ((Object.values(nutrition) as any[]).reverse().find(n => n?.weight)?.weight) || 
+                          ((Object.values(nutrition) as any[]).find(n => n?.weight)?.weight) || 
                           userData?.nutritionPlanning?.weight || 80;
     let bf = "--";
     if (userData.profile && Object.keys(userData.profile).length > 0) {

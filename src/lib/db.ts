@@ -1,4 +1,4 @@
-import { auth, db, waitForPendingWrites, deleteUser } from './firebase.js';
+import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField } from "firebase/firestore";
 
 let lastSavedStateStr = null;
