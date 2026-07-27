@@ -14,9 +14,21 @@ const SettingsView = lazy(() => import('./components/SettingsView'));
 function App() {
   const { currentUser, loading, login } = useAuth();
   const syncing = useAppStore(state => state.syncing);
-  const [activeTab, setActiveTab] = useState('home');
-  const [trainingSubTab, setTrainingSubTab] = useState('session');
-  const [nutritionSubTab, setNutritionSubTab] = useState('meals');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('logbook_activeTab') || 'home');
+  const [trainingSubTab, setTrainingSubTab] = useState(() => localStorage.getItem('logbook_trainingSubTab') || 'session');
+  const [nutritionSubTab, setNutritionSubTab] = useState(() => localStorage.getItem('logbook_nutritionSubTab') || 'meals');
+
+  useEffect(() => {
+    localStorage.setItem('logbook_activeTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('logbook_trainingSubTab', trainingSubTab);
+  }, [trainingSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('logbook_nutritionSubTab', nutritionSubTab);
+  }, [nutritionSubTab]);
 
   // Scroll to top whenever the main tab changes
   useEffect(() => {
