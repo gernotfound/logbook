@@ -1,4 +1,3 @@
-import React from 'react';
 import { Logic } from '../../lib/logic';
 import { useNutritionPlanning } from '../../hooks/useNutritionPlanning';
 
@@ -89,28 +88,28 @@ const NutritionPlanning = () => {
                 <div className="input-row" style={{ marginBottom: '12px' }}>
                     <div style={{ flex: 2 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kcal Mantenimento</label>
-                        <input type="number" value={planning.normocalorica.kcal} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, kcal: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input type="number" value={planning.normocalorica?.kcal || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), kcal: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CHO (g)</label>
-                        <input type="number" value={planning.normocalorica.carbs} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, carbs: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input type="number" value={planning.normocalorica?.carbs || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), carbs: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO (g)</label>
-                        <input type="number" value={planning.normocalorica.pro} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, pro: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input type="number" value={planning.normocalorica?.pro || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), pro: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>FAT (g)</label>
-                        <input type="number" value={planning.normocalorica.fat} onChange={e => handleUpdate('normocalorica', { ...planning.normocalorica, fat: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input type="number" value={planning.normocalorica?.fat || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), fat: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                 </div>
                 
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: '10px' }}>
                     {(() => {
-                        const diff = Logic.calculateNormocaloricaDiff(macros, planning.normocalorica);
+                        const diff = Logic.calculateNormocaloricaDiff(macros, planning.normocalorica || { kcal: 0, carbs: 0, pro: 0, fat: 0 });
                         if (!diff) return null;
                         
-                        const getBadgeClass = (val) => val > 0 ? 'badge-primary' : (val < 0 ? 'badge-danger' : ''); 
+                        const getBadgeClass = (val: number) => val > 0 ? 'badge-primary' : (val < 0 ? 'badge-danger' : ''); 
                         const carbsVal = diff.carbsPct ?? 0;
                         const proVal = diff.proPct ?? 0;
                         const fatVal = diff.fatPct ?? 0;

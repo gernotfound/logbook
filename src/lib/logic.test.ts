@@ -106,9 +106,9 @@ describe('Logic Library Tests', () => {
         const current = { carbsGrams: 300, proGrams: 160, fatGrams: 70, totalKcal: 2470 };
         const normocalorica = { carbs: 250, pro: 150, fat: 60, kcal: 2140 };
         const diff = Logic.calculateNormocaloricaDiff(current, normocalorica);
-        expect(diff.carbsPct).toBeGreaterThan(0);
-        expect(diff.proPct).toBeGreaterThan(0);
-        expect(diff.fatPct).toBeGreaterThan(0);
-        expect(diff.kcalPct).toBeGreaterThan(0);
+        expect(diff!.carbsPct).toBeGreaterThan(0);
+        expect(diff!.proPct).toBeGreaterThan(0);
+        expect(diff!.fatPct).toBeGreaterThan(0);
+        expect(diff!.kcalPct).toBeGreaterThan(0);
     });
 });

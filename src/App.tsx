@@ -1,8 +1,10 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useAppStore } from './store/useAppStore';
 import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; 
 import { useRegisterSW } from 'virtual:pwa-register/react';
+
+import { GlobalDialog } from './components/UI/GlobalDialog';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
@@ -71,6 +73,7 @@ function App() {
 
   return (
     <>
+      <GlobalDialog />
       {syncing && (
         <div id="sync-overlay">
           <div className="spinner"></div>

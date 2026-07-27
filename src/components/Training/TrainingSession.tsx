@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Logic } from '../../lib/logic';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import WorkoutTimer from './WorkoutTimer';
 
@@ -12,24 +11,23 @@ const TrainingSession = () => {
         addExtraExercise, removeActiveExercise,
         addSet, removeSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet,
-        updateSessionNote, updateSetupNote
+        updateSetupNote
     } = useWorkoutSession();
 
-    // Toggle states for UI sections
-    const [openHistoryExIndex, setOpenHistoryExIndex] = useState(null);
-    const [openSetupExIndex, setOpenSetupExIndex] = useState(null);
-    const [openSpecialMenuId, setOpenSpecialMenuId] = useState(null);
+    const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
+    const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
+    const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
 
     // Callbacks that also close panels
-    const handleRemoveExercise = (exIndex) => {
+    const handleRemoveExercise = (exIndex: number) => {
         removeActiveExercise(exIndex, (idx) => {
             if (openHistoryExIndex === idx) setOpenHistoryExIndex(null);
             if (openSetupExIndex === idx) setOpenSetupExIndex(null);
         });
     };
 
-    const handleAddSpecialSet = (exIndex, setId, type) => {
-        addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
+    const handleAddSet = (exIndex: number, type: string = 'normal', setId: string | null = null) => {
+        addSpecialSet(exIndex, setId as string, type, () => setOpenSpecialMenuId(null));
     };
 
 
@@ -80,7 +78,7 @@ const TrainingSession = () => {
                 {(activeWorkout.exercises || []).length === 0 ? (
                     <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
                 ) : (
-                    (activeWorkout.exercises || []).map((exItem, exIndex) => {
+                    (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
                         const libDef = library.find(l => l.id === exItem.exId);
                         const exName = libDef ? libDef.name : "Esercizio Rimosso";
                         const exNotes = libDef ? (libDef.notes || '') : "";
@@ -88,7 +86,7 @@ const TrainingSession = () => {
                         // Fetch last 2 history entries for this exercise
                         const pastWorkouts = [];
                         for (let w of history) {
-                            const ex = (w.exercises || []).find(e => e.exId === exItem.exId);
+                            const ex = (w.exercises || []).find((e: any) => e.exId === exItem.exId);
                             if (ex) pastWorkouts.push({ date: w.date, sets: ex.sets || [], note: ex.sessionNote });
                             if (pastWorkouts.length === 2) break;
                         }
@@ -114,7 +112,7 @@ const TrainingSession = () => {
                                             pastWorkouts.map((pw, idx) => (
                                                 <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed var(--glass-border)' }}>
                                                     <strong style={{ fontSize: '0.85rem', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
-                                                    {pw.sets.map((s, sIdx) => (
+                                                    {pw.sets.map((s: any, sIdx: number) => (
                                                         <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
                                                             S{sIdx + 1}: <b>{s.kg || '?'}</b> kg × <b>{s.reps || '?'}</b>
                                                         </span>
@@ -139,7 +137,7 @@ const TrainingSession = () => {
                                     </div>
                                 )}
 
-                                {(exItem.sets || []).map((s, sIndex) => (
+                                {(exItem.sets || []).map((s: any, sIndex: number) => (
                                     <React.Fragment key={s.id}>
                                         <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '75px' }}>
@@ -153,14 +151,14 @@ const TrainingSession = () => {
                                                 
                                                 {openSpecialMenuId === s.id && (
                                                     <div className="special-menu" style={{ position: 'absolute', right: 0, top: '35px', background: 'var(--surface-color)', padding: '10px', borderRadius: '8px', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', border: '1px solid var(--glass-border)' }}>
-                                                        <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '5px' }} onClick={() => handleAddSpecialSet(exIndex, s.id, 'dropset')}>+ Dropset</button>
-                                                        <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => handleAddSpecialSet(exIndex, s.id, 'isometry')}>+ Isometria</button>
+                                                        <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '5px' }} onClick={() => handleAddSet(exIndex, 'dropset', s.id)}>+ Dropset</button>
+                                                        <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => handleAddSet(exIndex, 'isometry', s.id)}>+ Isometria</button>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
 
-                                        {(s.dropsets || []).map((ds, dsIdx) => (
+                                        {(s.dropsets || []).map((ds: any, dsIdx: number) => (
                                             <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                                                 <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '65px' }}>↳ Dropset</div>
                                                 <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
@@ -171,7 +169,7 @@ const TrainingSession = () => {
                                             </div>
                                         ))}
 
-                                        {(s.isometrics || []).map((iso, isoIdx) => (
+                                        {(s.isometrics || []).map((iso: any, isoIdx: number) => (
                                             <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                                                 <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '65px' }}>↳ Isometria</div>
                                                 <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
@@ -191,7 +189,7 @@ const TrainingSession = () => {
                                 <textarea 
                                     placeholder="Note per la prossima volta (dolori, feedback)..." 
                                     value={exItem.sessionNote || ''}
-                                    onChange={(e) => updateSessionNote(exIndex, e.target.value)}
+                                    onChange={(e: any) => updateSet(exIndex, '', 'sessionNote', e.target.value)}
                                     style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }} 
                                 />
                             </div>

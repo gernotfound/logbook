@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import CustomFoodModal from './CustomFoodModal';
 
@@ -32,8 +31,8 @@ export default function NutritionMeals() {
                         borderRadius: '10px', zIndex: 100, maxHeight: '250px', overflowY: 'auto',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.5)', marginTop: '5px'
                     }}>
-                        {searchResults.map(f => (
-                            <div key={f.id} style={{ padding: '12px', borderBottom: '1px solid var(--glass-border)' }}>
+                        {searchResults.map((f: any, idx: number) => (
+                            <div key={f.id || idx} style={{ padding: '12px', borderBottom: '1px solid var(--glass-border)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.9rem' }}>

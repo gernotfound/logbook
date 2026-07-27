@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
 import TrainingSession from './TrainingSession';
 import TrainingRoutines from './TrainingRoutines';
 import TrainingExercises from './TrainingExercises';
 import TrainingHistory from './TrainingHistory';
 
-const TrainingView = ({ subTab, setSubTab }) => {
+const TrainingView = ({ subTab = 'session', setSubTab }: any) => {
 
     return (
         <div id="view-training" className="view-section active">

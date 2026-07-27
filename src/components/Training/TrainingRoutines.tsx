@@ -1,4 +1,3 @@
-import React from 'react';
 import MuscleModel from './MuscleModel';
 import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
 
@@ -56,20 +55,19 @@ const TrainingRoutines = () => {
                                 </div>
                                 
                                 {isEditing && (() => {
-                                    const routineMuscles = new Set();
-                                    (rtn.exercises || []).forEach(ex => {
+                                    const muscles: string[] = [];
+                                    (rtn.exercises || []).forEach((ex: any) => {
                                         const libDef = library.find(l => l.id === ex.exId);
                                         if (libDef && libDef.muscles) {
-                                            libDef.muscles.forEach(mId => routineMuscles.add(mId));
+                                            libDef.muscles.forEach((mId: string) => muscles.push(mId));
                                         }
                                     });
-                                    const routineSelectedMuscles = Array.from(routineMuscles);
 
                                     return (
                                         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
                                             {(rtn.exercises || []).length > 0 && (
                                                 <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center' }}>
-                                                    <MuscleModel selectedMuscles={routineSelectedMuscles} />
+                                                    <MuscleModel selectedMuscles={Array.from(new Set(muscles)) as string[]} />
                                                 </div>
                                             )}
                                             <div style={{ marginBottom: '15px' }}>
@@ -91,7 +89,7 @@ const TrainingRoutines = () => {
                                             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nessun esercizio presente. Aggiungine uno dalla libreria!</p>
                                         ) : (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {(rtn.exercises || []).map((ex, index) => {
+                                                {(rtn.exercises || []).map((ex: { exId: string, setsCount?: number }, index: number) => {
                                                     const libDef = library.find(l => l.id === ex.exId);
                                                     return (
                                                         <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>
@@ -103,14 +101,14 @@ const TrainingRoutines = () => {
                                                                 <input 
                                                                     type="number" min="1" max="20"
                                                                     value={ex.setsCount || 3}
-                                                                    onChange={e => handleUpdateSetsCount(rtn.id, index, e.target.value)}
+                                                                    onChange={e => handleUpdateSetsCount(rtn.id, index, parseInt(e.target.value) || 3)}
                                                                     style={{ width: '50px', margin: 0, padding: '4px', textAlign: 'center' }}
                                                                     onClick={e => e.stopPropagation()}
                                                                 />
                                                             </div>
                                                             <div style={{ display: 'flex', gap: '4px' }}>
-                                                                <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(rtn.id, index, 'up')}>⬆️</button>
-                                                                <button className="btn-icon" disabled={index === (rtn.exercises || []).length - 1} style={{ opacity: index === (rtn.exercises || []).length - 1 ? 0.3 : 1 }} onClick={() => moveExercise(rtn.id, index, 'down')}>⬇️</button>
+                                                                <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(rtn.id, index, -1)}>⬆️</button>
+                                                                <button className="btn-icon" disabled={index === (rtn.exercises || []).length - 1} style={{ opacity: index === (rtn.exercises || []).length - 1 ? 0.3 : 1 }} onClick={() => moveExercise(rtn.id, index, 1)}>⬇️</button>
                                                                 <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => handleRemoveExerciseFromRoutine(rtn.id, index)}>❌</button>
                                                             </div>
                                                         </div>

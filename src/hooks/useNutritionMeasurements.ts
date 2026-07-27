@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeasurements() {
     const { userData, saveUserData } = useAppStore();
+    const { showAlert } = useDialogStore();
     
-    const profile = userData?.profile || {};
+    const profile: any = userData?.profile || {};
     const [weight, setWeight] = useState('');
     const [waist, setWaist] = useState('');
     const [neck, setNeck] = useState('');
@@ -15,23 +17,24 @@ export function useNutritionMeasurements() {
 
     const todayDateStr = Logic.getLocalDateString();
 
-    const calculateAndSave = () => {
+
+    const calculateAndSave = async () => {
         if (!weight) {
-            alert("Inserisci il peso corporeo.");
+            await showAlert("Inserisci il peso corporeo.");
             return;
         }
 
         let bf = null;
         if (method === 'manual') {
-            if (!manualBf) { alert("Inserisci la percentuale di massa grassa manuale."); return; }
+            if (!manualBf) { await showAlert("Inserisci la percentuale di massa grassa manuale."); return; }
             bf = parseFloat(manualBf);
         } else {
             if (!waist || !neck || !profile.height) {
-                alert("Compila tutti i campi (incluso altezza nei Dati Biometrici).");
+                await showAlert("Compila tutti i campi (incluso altezza nei Dati Biometrici).");
                 return;
             }
             if (method === 'navy_female' && !hip) {
-                alert("Per le donne, inserisci la circonferenza dei fianchi.");
+                await showAlert("Per le donne, inserisci la circonferenza dei fianchi.");
                 return;
             }
             // Correct method names: 'navy_male' | 'navy_female'
@@ -44,10 +47,11 @@ export function useNutritionMeasurements() {
         }
 
         if (bf === null || isNaN(bf)) {
-            alert("Impossibile calcolare la massa grassa con i dati forniti. Verifica che vita > collo.");
+            await showAlert("Impossibile calcolare la massa grassa con i dati forniti. Verifica che vita > collo.");
             return;
         }
 
+        if (!userData) return;
         const newNutrition = { ...(userData.nutrition || {}) };
         if (!newNutrition[todayDateStr]) {
             newNutrition[todayDateStr] = { kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
@@ -60,7 +64,7 @@ export function useNutritionMeasurements() {
         newNutrition[todayDateStr].bf = Math.round(bf * 10) / 10;
 
         saveUserData({ ...userData, nutrition: newNutrition });
-        alert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
+        await showAlert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
     };
 
     return {

@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
-export function useWorkoutSession(onFinish?: any) {
+export function useWorkoutSession() {
     const { userData, saveUserData, localWorkout, setLocalWorkout } = useAppStore();
+    const { showAlert, showConfirm } = useDialogStore();
 
     const activeWorkout = localWorkout;
     const routines = userData?.routines || [];
@@ -18,13 +20,13 @@ export function useWorkoutSession(onFinish?: any) {
     const [fatigue, setFatigue] = useState('');
     const [water, setWater] = useState('');
 
-    const startWorkout = () => {
+    const startWorkout = async () => {
         if (!selectedRoutine) {
-            alert("Seleziona una scheda per iniziare!");
+            await showAlert("Seleziona una scheda per iniziare!");
             return;
         }
         if (activeWorkout) {
-            alert("Hai già un allenamento in corso!");
+            await showAlert("Hai già un allenamento in corso!");
             return;
         }
 
@@ -37,7 +39,7 @@ export function useWorkoutSession(onFinish?: any) {
             routineName: routine.name,
             date: Logic.getLocalDateString(),
             globalStartTime: new Date().getTime(),
-            exercises: (routine.exercises || []).map(ex => {
+            exercises: (routine.exercises || []).map((ex: any) => {
                 const setsCount = ex.setsCount || 3;
                 const sets = [];
                 for (let i = 0; i < setsCount; i++) {
@@ -50,8 +52,8 @@ export function useWorkoutSession(onFinish?: any) {
         setLocalWorkout(newActiveWorkout);
     };
 
-    const endWorkout = () => {
-        if (!confirm("Terminare l'allenamento?")) return;
+    const endWorkout = async () => {
+        if (!(await showConfirm("Terminare l'allenamento?"))) return;
 
         const valRes = Logic.validateWorkoutRatings(
             mood ? parseInt(mood) : null,
@@ -86,67 +88,30 @@ export function useWorkoutSession(onFinish?: any) {
         setMood(''); setPump(''); setFatigue(''); setWater('');
     };
 
-    const deleteWorkout = () => {
-        if (!confirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata.")) return;
+    const deleteWorkout = async () => {
+        if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
         setLocalWorkout(null);
         setMood(''); setPump(''); setFatigue(''); setWater('');
     };
 
-    const addExtraExercise = (exId) => {
-        if (!exId) return;
+    const addExtraExercise = (ex: any) => {
+        if (!ex.exId) return;
         const updatedActive = {
             ...activeWorkout,
             exercises: [
                 ...activeWorkout.exercises,
-                { exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
+                { exId: ex.exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
             ]
         };
         setLocalWorkout(updatedActive);
     };
 
-    const removeActiveExercise = (exIndex, closePanelsCallback) => {
-        if (!confirm("Rimuovere questo esercizio dalla sessione corrente?")) return;
-        const updatedExercises = [...activeWorkout.exercises];
-        updatedExercises.splice(exIndex, 1);
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-        if (closePanelsCallback) closePanelsCallback(exIndex);
-    };
-
-    // Sets Management
-    const addSet = (exIndex) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return { ...ex, sets: [...ex.sets, { id: Logic.generateId('s'), kg: '', reps: '' }] };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    const removeSet = (exIndex, setIndex) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return { ...ex, sets: ex.sets.filter((_, si) => si !== setIndex) };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    const updateSet = (exIndex, setId, field, value) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
+    const addSpecialSet = (exIndex: number, setId: string, type: string, closePanelsCallback: any) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
                 ...ex,
-                sets: ex.sets.map(s => s.id === setId ? { ...s, [field]: value } : s)
-            };
-        });
-        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
-    };
-
-    // Special Sets
-    const addSpecialSet = (exIndex, setId, type, closeMenuCallback) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
-            if (i !== exIndex) return ex;
-            return {
-                ...ex,
-                sets: ex.sets.map(s => {
+                sets: ex.sets.map((s: any) => {
                     if (s.id !== setId) return s;
                     if (type === 'dropset') {
                         return { ...s, dropsets: [...(s.dropsets || []), { id: Logic.generateId('ds'), kg: '', reps: '' }] };
@@ -157,18 +122,62 @@ export function useWorkoutSession(onFinish?: any) {
                 })
             };
         });
-        if (closeMenuCallback) closeMenuCallback();
+        if (closePanelsCallback) closePanelsCallback();
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
-    const updateSpecialSet = (exIndex, setId, collection, specIndex, field, value) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
+    const reorderExercises = (fromIndex: number, toIndex: number) => {
+        const newExercises = [...activeWorkout.exercises];
+        const [removed] = newExercises.splice(fromIndex, 1);
+        newExercises.splice(toIndex, 0, removed);
+        setLocalWorkout({ ...activeWorkout, exercises: newExercises });
+    };
+
+    const removeActiveExercise = async (exIndex: number, closePanelsCallback: (index: number) => void) => {
+        if (!(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
+        const updatedExercises = [...activeWorkout.exercises];
+        updatedExercises.splice(exIndex, 1);
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
+        if (closePanelsCallback) closePanelsCallback(exIndex);
+    };
+
+    // Sets Management
+    const addSet = (exIndex: number) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
+            if (i !== exIndex) return ex;
+            return { ...ex, sets: [...ex.sets, { id: Logic.generateId('s'), kg: '', reps: '' }] };
+        });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
+    };
+
+    const removeSet = (exIndex: number, setIndex: number) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
+            if (i !== exIndex) return ex;
+            return { ...ex, sets: ex.sets.filter((_: any, si: number) => si !== setIndex) };
+        });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
+    };
+    const updateSet = (exIndex: number, setId: string, field: string, value: any) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
                 ...ex,
-                sets: ex.sets.map(s => {
+                sets: ex.sets.map((s: any) => s.id === setId ? { ...s, [field]: value } : s)
+            };
+        });
+        setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
+    };
+
+    // Special Sets
+
+    const updateSpecialSet = (exIndex: number, setId: string, collection: string, specIndex: number, field: string, value: any) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
+            if (i !== exIndex) return ex;
+            return {
+                ...ex,
+                sets: ex.sets.map((s: any) => {
                     if (s.id !== setId || !s[collection]) return s;
-                    const newColl = s[collection].map((item, idx) => idx === specIndex ? { ...item, [field]: value } : item);
+                    const newColl = s[collection].map((item: any, idx: number) => idx === specIndex ? { ...item, [field]: value } : item);
                     return { ...s, [collection]: newColl };
                 })
             };
@@ -176,30 +185,30 @@ export function useWorkoutSession(onFinish?: any) {
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
-    const removeSpecialSet = (exIndex, setId, collection, specIndex) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
+    const removeSpecialSet = (exIndex: number, setId: string, collection: string, specIndex: number) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
                 ...ex,
-                sets: ex.sets.map(s => {
+                sets: ex.sets.map((s: any) => {
                     if (s.id !== setId || !s[collection]) return s;
-                    return { ...s, [collection]: s[collection].filter((_, idx) => idx !== specIndex) };
+                    return { ...s, [collection]: s[collection].filter((_: any, idx: number) => idx !== specIndex) };
                 })
             };
         });
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
-    const updateSessionNote = (exIndex, note) => {
-        const updatedExercises = activeWorkout.exercises.map((ex, i) => {
+    const updateSessionNote = (exIndex: number, note: string) => {
+        const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return { ...ex, sessionNote: note };
         });
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
-    const updateSetupNote = (exId, note) => {
-        const updatedLibrary = library.map(l => l.id === exId ? { ...l, notes: note } : l);
+    const updateSetupNote = (exId: string, note: string) => {
+        const updatedLibrary = library.map((l: any) => l.id === exId ? { ...l, notes: note } : l);
         saveUserData({ ...userData, library: updatedLibrary });
     };
 
@@ -217,8 +226,7 @@ export function useWorkoutSession(onFinish?: any) {
         startWorkout,
         endWorkout,
         deleteWorkout,
-        addExtraExercise,
-        removeActiveExercise,
+        addExtraExercise, reorderExercises, removeActiveExercise,
         addSet,
         removeSet,
         updateSet,

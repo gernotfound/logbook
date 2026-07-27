@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 
 const TrainingHistory = () => {
@@ -51,16 +50,16 @@ const TrainingHistory = () => {
                                 {/* Exercise details */}
                                 {(wo.exercises || []).length > 0 && (
                                     <div style={{ marginBottom: '10px' }}>
-                                        {(wo.exercises || []).map((ex, exIdx) => {
+                                        {(wo.exercises || []).map((ex: any, exIdx: number) => {
                                             const libDef = (userData?.library || []).find(l => l.id === ex.exId);
                                             const exName = libDef ? libDef.name : (ex.name || 'Esercizio Rimosso');
-                                            const totalSets = (ex.sets || []).length;
-                                            const validSets = (ex.sets || []).filter(s => s.kg || s.reps);
+                                            
+                                            const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps);
                                             return (
                                                 <div key={exIdx} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
                                                     <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{exName}</span>
                                                     {validSets.length > 0 && (
-                                                        <span> — {validSets.map((s, si) => `${s.kg || '?'}kg×${s.reps || '?'}`).join(', ')}</span>
+                                                        <span> — {validSets.map((s: any) => `${s.kg || '?'}kg×${s.reps || '?'}`).join(', ')}</span>
                                                     )}
                                                 </div>
                                             );

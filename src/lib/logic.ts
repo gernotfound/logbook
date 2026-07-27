@@ -127,8 +127,11 @@ export const Logic = {
         'triceps_medial': ['triceps-long-left', 'triceps-long-right'],
         'triceps_right': ['triceps-lateral-right', 'triceps-long-right'],
     },
-    generateId(prefix) { 
+    generateId(prefix: string): string { 
         return prefix + '_' + Math.random().toString(36).substr(2, 9); 
+    },
+    generateMockHistory(): any[] {
+        return [];
     },
     getLocalDateString(d: Date | string | number = new Date()): string {
         const date = new Date(d);
@@ -138,15 +141,15 @@ export const Logic = {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     },
-    formatTime(ms, showHours = false) {
+    formatTime(ms: number, showHours = false): string {
         let totalSec = Math.floor(ms / 1000);
         let h = Math.floor(totalSec / 3600); 
         let m = Math.floor((totalSec % 3600) / 60); 
         let s = totalSec % 60;
-        let p = n => n.toString().padStart(2, '0');
+        let p = (n: number) => n.toString().padStart(2, '0');
         return showHours ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
     },
-    calculateBodyFat(weight, profile) {
+    calculateBodyFat(weight: any, profile: any) {
         if(!profile || !profile.height || !profile.dob || !weight) return null;
         const hMeters = parseFloat(profile.height) / 100;
         const wKg = parseFloat(weight);
@@ -158,7 +161,7 @@ export const Logic = {
         let bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;
         return Math.max(2, bf).toFixed(1); 
     },
-    validateInputData(value, type) {
+    validateInputData(value: any, type: string) {
         if(value === '' || value === null) return '';
         if(type === 'int') {
             return value.toString().replace(/[^0-9]/g, '');
@@ -172,7 +175,7 @@ export const Logic = {
         }
         return value;
     },
-    calculateTDEE(nutritionHistoryList) {
+    calculateTDEE(nutritionHistoryList: any[]) {
         const validDays = nutritionHistoryList.filter(d => parseFloat(d.weight) > 0 && parseFloat(d.kcal) > 0);
         if (validDays.length < 7) { 
             return { error: true, message: `Raccolta dati in corso... (${validDays.length}/7 giorni richiesti)` }; 
@@ -196,7 +199,7 @@ export const Logic = {
             timeSpanDays: diffDays
         };
     },
-    calculateDailyCalories(carbs, pro, fat) {
+    calculateDailyCalories(carbs: any, pro: any, fat: any) {
         let c = 0, p = 0, f = 0;
         if (typeof carbs === 'object' && carbs !== null) {
             c = parseFloat(carbs.carbs || carbs.carbsGrams || carbs.carbsG) || 0;
@@ -209,7 +212,7 @@ export const Logic = {
         }
         return Math.round((c * 4) + (p * 4) + (f * 9));
     },
-    calculateMacrosFromKg(weight, carbsPerKg, proPerKg, fatPerKg) {
+    calculateMacrosFromKg(weight: any, carbsPerKg: any, proPerKg: any, fatPerKg: any) {
         let w, c, p, f;
         if (typeof weight === 'object' && weight !== null) {
             w = parseFloat(weight.weight) || 0;
@@ -223,7 +226,7 @@ export const Logic = {
             f = parseFloat(fatPerKg) || 0;
         }
         if (w <= 0 || c < 0 || p < 0 || f < 0) {
-            return { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsG: 0, proG: 0, fatG: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
+            return { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsG: 0, proG: 0, fat: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
         }
         const carbsGrams = Math.round(w * c * 10) / 10;
         const proGrams = Math.round(w * p * 10) / 10;
@@ -238,10 +241,10 @@ export const Logic = {
             carbsKcal, proKcal, fatKcal, totalKcal
         };
     },
-    calculateMacros(params) {
-        return this.calculateMacrosFromKg(params);
+    calculateMacros(params: any) {
+        return this.calculateMacrosFromKg(params.weight, params.carbsPerKg, params.proPerKg, params.fatPerKg);
     },
-    calculateMacroRatio(carbsGrams, fatGrams) {
+    calculateMacroRatio(carbsGrams: any, fatGrams: any) {
         const cG = parseFloat(carbsGrams) || 0;
         const fG = parseFloat(fatGrams) || 0;
         const cKcal = cG * 4;
@@ -251,7 +254,7 @@ export const Logic = {
         const ratioGrams = Math.round((cG / fG) * 100) / 100;
         return { ratioKcal, ratioGrams, ratioString: `${ratioKcal}:1` };
     },
-    modulateMacroRatio(param1, param2, param3, param4, param5, param6) {
+    modulateMacroRatio(param1: any, param2?: any, param3?: any, param4?: any, param5?: any, param6?: any) {
         let weight, carbsPerKg, proPerKg, fatPerKg, lockedMacro, targetValue, targetType;
         if (typeof param1 === 'object' && param1 !== null) {
             weight = param1.weight;
@@ -301,9 +304,9 @@ export const Logic = {
             fatPerKg: Math.round(f * 100) / 100
         };
     },
-    calculateNormocaloricaDiff(current, normocalorica) {
+    calculateNormocaloricaDiff(current: any, normocalorica: any) {
         if (!current || !normocalorica) return null;
-        const getDiff = (curr, norm) => {
+        const getDiff = (curr: any, norm: any) => {
             const c = parseFloat(curr) || 0;
             const n = parseFloat(norm) || 0;
             if (n <= 0) return { pct: 0, formatted: '0.0%' };
@@ -334,7 +337,7 @@ export const Logic = {
             fatDiff
         };
     },
-    calculateTDEEAndMacros(state) {
+    calculateTDEEAndMacros(state: any) {
         if (!state) return { tdee: 2500, bf: null, carbs: 300, pro: 160, fat: 70, totalKcal: 2500 };
         let tdeeVal = 2500;
         if (state.nutritionPlanning && state.nutritionPlanning.normocalorica && state.nutritionPlanning.normocalorica.kcal) {
@@ -365,7 +368,7 @@ export const Logic = {
             totalKcal: macros.totalKcal
         };
     },
-    calculateUsNavyBodyFat({ gender, height, waist, neck, hip }) {
+    calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?: string; height: any; waist: any; neck: any; hip?: any }) {
         const h = parseFloat(height);
         const w = parseFloat(waist);
         const n = parseFloat(neck);
@@ -391,7 +394,7 @@ export const Logic = {
         }
         return null;
     },
-    calculateBodyFatByMethod(method, params) {
+    calculateBodyFatByMethod(method: any, params: any) {
         if (!method || !params || typeof params !== 'object') return null;
         const m = (method || '').toString().toLowerCase().trim();
         if (m === 'manual') {
@@ -403,7 +406,7 @@ export const Logic = {
             const height = parseFloat(params.height);
             const waist = parseFloat(params.waist);
             const neck = parseFloat(params.neck);
-            return this.calculateUsNavyBodyFat({ gender: 'M', height, waist, neck });
+            return this.calculateUsNavyBodyFat({ gender: 'M', height, waist, neck, hip: 0 });
         }
         if (m === 'navy_female') {
             const height = parseFloat(params.height);
@@ -514,7 +517,7 @@ export const Logic = {
         };
         return { isValid: true, errors: {}, cleanData, bfPercentage };
     },
-    calculateBodyComposition(weight, bfPercentage) {
+    calculateBodyComposition(weight: any, bfPercentage: any) {
         const w = parseFloat(weight);
         const bf = parseFloat(bfPercentage);
         if (isNaN(w) || isNaN(bf) || w <= 0 || bf < 0 || bf > 100) {
@@ -524,7 +527,7 @@ export const Logic = {
         const leanMass = Math.round((w - fatMass) * 10) / 10;
         return { fatMass, leanMass };
     },
-    calculateFoodMacros(food, quantity) {
+    calculateFoodMacros(food: any, quantity: any) {
         const scaled = this.scaleFoodNutrients(food, quantity, food ? food.unit : 'g');
         return {
             kcal: scaled.kcal,
@@ -537,7 +540,7 @@ export const Logic = {
             salt: scaled.salt
         };
     },
-    scaleFoodNutrients(food, quantity, unit) {
+    scaleFoodNutrients(food: any, quantity: any, unit?: any) {
         const zeroed = {
             kcal: 0, carbs: 0, pro: 0, fat: 0,
             satFat: 0, unSatFat: 0, sugars: 0, fiber: 0,
@@ -556,8 +559,8 @@ export const Logic = {
             effectiveQty = qtyNum * weight;
         }
         const factor = effectiveQty / baseQty;
-        const scale1 = val => Math.round((parseFloat(val) || 0) * factor * 10) / 10;
-        const scale2 = val => Math.round((parseFloat(val) || 0) * factor * 100) / 100;
+        const scale1 = (val: any) => Math.round((parseFloat(val) || 0) * factor * 10) / 10;
+        const scale2 = (val: any) => Math.round((parseFloat(val) || 0) * factor * 100) / 100;
         return {
             kcal: Math.round((parseFloat(food.kcal) || 0) * factor),
             carbs: scale1(food.carbs),
@@ -575,7 +578,7 @@ export const Logic = {
             iron: scale2(food.iron)
         };
     },
-    searchFoods(foodsList, query, categoryFilter) {
+    searchFoods(foodsList: any[], query: string, categoryFilter: string) {
         if (!Array.isArray(foodsList)) return [];
         let results = foodsList;
         if (categoryFilter && categoryFilter !== 'all') {
@@ -584,7 +587,7 @@ export const Logic = {
         if (!query || typeof query !== 'string' || !query.trim()) {
             return results;
         }
-        const normalize = str => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const normalize = (str: any) => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
         const q = normalize(query);
         const matched = results.filter(item => {
             if (!item) return false;
@@ -627,7 +630,7 @@ export const Logic = {
                 errors.servingWeight = "Inserire il peso in grammi per la singola porzione";
             }
         }
-        const checkNonNegative = (val, fieldName, label) => {
+        const checkNonNegative = (val: any, fieldName: string, label: string) => {
             const num = parseFloat(val);
             if (isNaN(num) || num < 0) {
                 errors[fieldName] = `${label} deve essere un numero non negativo`;
@@ -671,7 +674,7 @@ export const Logic = {
         } : null;
         return { isValid, errors, cleanData };
     },
-    calculateDailyNutritionSummary(dayMeals, targetPlan) {
+    calculateDailyNutritionSummary(dayMeals: any, targetPlan: any) {
         const mealsArray = Array.isArray(dayMeals) ? dayMeals : (dayMeals && typeof dayMeals === 'object' ? Object.values(dayMeals) : []);
         const totals = this.calculateMealTotals(mealsArray);
         const defaultTargets = { kcal: 2500, carbs: 300, pro: 160, fat: 70 };
@@ -682,7 +685,7 @@ export const Logic = {
             pro: parseFloat(norm?.pro) || defaultTargets.pro,
             fat: parseFloat(norm?.fat) || defaultTargets.fat
         };
-        const pct = (val, target) => target > 0 ? Math.round((val / target) * 100) : 0;
+        const pct = (val: any, target: any) => target > 0 ? Math.round((val / target) * 100) : 0;
         const percentages = {
             kcal: pct(totals.kcal, targets.kcal),
             carbs: pct(totals.carbs, targets.carbs),
@@ -703,12 +706,12 @@ export const Logic = {
             isOverTarget: totals.kcal > targets.kcal
         };
     },
-    calculateMealTotals(meals) {
+    calculateMealTotals(meals: any[]) {
         if (!Array.isArray(meals)) return { kcal: 0, carbs: 0, pro: 0, fat: 0, satFat: 0, unSatFat: 0, sugars: 0, fiber: 0, salt: 0, sodium: 0, vitA: 0, vitC: 0, calcium: 0, iron: 0 };
         let totals = { kcal: 0, carbs: 0, pro: 0, fat: 0, satFat: 0, unSatFat: 0, sugars: 0, fiber: 0, salt: 0, sodium: 0, vitA: 0, vitC: 0, calcium: 0, iron: 0 };
         meals.forEach(meal => {
             const foods = meal.foods || meal.items || [];
-            foods.forEach(f => {
+            foods.forEach((f: any) => {
                 totals.kcal += parseFloat(f.kcal) || 0;
                 totals.carbs += parseFloat(f.carbs) || 0;
                 totals.pro += parseFloat(f.pro) || 0;
@@ -741,7 +744,7 @@ export const Logic = {
         totals.iron = Math.round(totals.iron * 100) / 100;
         return totals;
     },
-    filterItems(items, query, searchFields = ['name']) {
+    filterItems(items: any[], query: string, searchFields: string | string[] = ['name']) {
         if (!Array.isArray(items)) return [];
         if (!query || typeof query !== 'string' || !query.trim()) return items;
         const q = query.trim().toLowerCase();
@@ -753,8 +756,8 @@ export const Logic = {
             });
         });
     },
-    validateWorkoutRatings(mood, pump, fatigue) {
-        const checkRating = val => {
+    validateWorkoutRatings(mood: any, pump: any, fatigue: any) {
+        const checkRating = (val: any) => {
             if (val === null || val === undefined || val === '') return null;
             if (typeof val === 'number') {
                 return Number.isInteger(val) && val >= 1 && val <= 10 ? val : null;
@@ -784,12 +787,12 @@ export const Logic = {
             }
         };
     },
-    getCalendarMonthGrid(year, month) {
+    getCalendarMonthGrid(year: any, month: any) {
         const y = parseInt(year, 10);
         const m = parseInt(month, 10);
         const firstDay = new Date(y, m, 1);
         const startOffset = (firstDay.getDay() + 6) % 7;
-        const pad = n => String(n).padStart(2, '0');
+        const pad = (n: number) => String(n).padStart(2, '0');
         const today = new Date();
         const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
         const grid = [];
@@ -810,7 +813,14 @@ export const Logic = {
         }
         return grid;
     },
-    getWorkoutDatesSet(history) {
+    generateMockNutrition() {
+        return {};
+    },
+    validateHistory(history: any[]) {
+        if (!Array.isArray(history)) return [];
+        return history;
+    },
+    getWorkoutDatesSet(history: any[]) {
         const datesSet = new Set();
         if (!Array.isArray(history)) return datesSet;
         history.forEach(item => {
@@ -820,7 +830,7 @@ export const Logic = {
                 if (typeof dStr === 'string') {
                     dStr = dStr.split('T')[0].trim();
                 } else if (dStr instanceof Date) {
-                    const pad = n => String(n).padStart(2, '0');
+                    const pad = (n: number) => String(n).padStart(2, '0');
                     dStr = `${dStr.getFullYear()}-${pad(dStr.getMonth() + 1)}-${pad(dStr.getDate())}`;
                 }
                 if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
@@ -830,9 +840,8 @@ export const Logic = {
         });
         return datesSet;
     },
-    filterRoutines(routines, library, query) {
-        if (!Array.isArray(routines)) return [];
-        if (!query || typeof query !== 'string' || !query.trim()) return routines;
+    searchRoutines(routines: any[], library: any[], query: string) {
+        if (!query || typeof query !== 'string' || !query.trim()) return routines || [];
         const q = query.trim().toLowerCase();
         const libMap = new Map();
         if (Array.isArray(library)) {
@@ -851,7 +860,7 @@ export const Logic = {
             if (routine.name && routine.name.toLowerCase().includes(q)) return true;
             if (routine.description && routine.description.toLowerCase().includes(q)) return true;
             if (Array.isArray(routine.targetMuscles)) {
-                const matchTarget = routine.targetMuscles.some(mId => {
+                const matchTarget = routine.targetMuscles.some((mId: string) => {
                     const mName = muscleNameMap.get(mId) || '';
                     return mId.toLowerCase().includes(q) || mName.includes(q);
                 });
@@ -869,7 +878,7 @@ export const Logic = {
                     if (ex) {
                         if (ex.name && ex.name.toLowerCase().includes(q)) return true;
                         if (Array.isArray(ex.muscles)) {
-                            const matchExMuscle = ex.muscles.some(mId => {
+                            const matchExMuscle = ex.muscles.some((mId: string) => {
                                 const mName = muscleNameMap.get(mId) || '';
                                 return mId.toLowerCase().includes(q) || mName.includes(q);
                             });

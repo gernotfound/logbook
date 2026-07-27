@@ -4,7 +4,7 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import './styles/global.css'
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
     <AuthProvider>
       <App />

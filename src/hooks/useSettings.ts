@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 import { Exporter } from '../lib/export';
 import { DB } from '../lib/db';
 
 export function useSettings() {
     const { currentUser, logout } = useAuth();
     const { userData, saveUserData } = useAppStore();
+    const { showAlert, showConfirm } = useDialogStore();
     
     // Fallback in case userData isn't loaded yet
     const profile = userData?.profile || { dob: '', height: '', gender: '' };
@@ -24,10 +26,10 @@ export function useSettings() {
         }
     }, [userData?.profile]);
 
-    const handleSaveProfile = () => {
+    const handleSaveProfile = async () => {
         const newProfile = { dob, height, gender };
         saveUserData({ ...userData, profile: newProfile });
-        alert("Profilo aggiornato!");
+        await showAlert("Profilo aggiornato!");
     };
 
     const handleExport = () => {
@@ -37,8 +39,8 @@ export function useSettings() {
     };
 
     const handleDeleteAccount = async () => {
-        if (!confirm("⚠️ ATTENZIONE: questa operazione è IRREVERSIBILE.\n\nVerranno eliminati TUTTI i tuoi dati (allenamenti, nutrizione, misurazioni).\n\nConfermi di voler eliminare il tuo account?")) return;
-        if (!confirm("Ultima conferma: eliminare definitivamente il tuo account LogBook?")) return;
+        if (!(await showConfirm("⚠️ ATTENZIONE: questa operazione è IRREVERSIBILE.\n\nVerranno eliminati TUTTI i tuoi dati (allenamenti, nutrizione, misurazioni).\n\nConfermi di voler eliminare il tuo account?"))) return;
+        if (!(await showConfirm("Ultima conferma: eliminare definitivamente il tuo account LogBook?"))) return;
         
         setDeletingAccount(true);
         try {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -14,7 +13,7 @@ import { useHomeView } from '../../hooks/useHomeView';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const HomeView = ({ onNavigate }) => {
+const HomeView = ({ onNavigate }: any) => {
   const {
       loading, isRestDay, todaysWorkout,
       kcalEaten, carbs, pro, fat, kcalTarget,
@@ -83,7 +82,7 @@ const HomeView = ({ onNavigate }) => {
           </div>
 
           <div className="progress-bg" style={{ marginBottom: '20px' }}>
-              <div className="progress-fill" style={{ width: `${kcalTarget > 0 ? Math.min((kcalEaten/kcalTarget)*100, 100) : 0}%`, background: 'linear-gradient(90deg, var(--warning-color), #fcd34d)' }}></div>
+              <div className="progress-fill" style={{ width: `${(kcalTarget || 0) > 0 ? Math.min((kcalEaten/(kcalTarget || 1))*100, 100) : 0}%`, background: 'linear-gradient(90deg, var(--warning-color), #fcd34d)' }}></div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
@@ -110,30 +109,32 @@ const HomeView = ({ onNavigate }) => {
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
               </div>
               <div style={{ textAlign: 'right' }}>
-                  {tdeeCalc.error ? (
+                  {tdeeCalc?.error ? (
                       <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>-- kcal</span>
                   ) : (
-                      <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--success-color)' }}>{tdeeCalc.tdee} <span style={{fontSize:'1rem'}}>kcal</span></span>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--success-color)' }}>{tdeeCalc?.tdee} <span style={{fontSize:'1rem'}}>kcal</span></span>
                   )}
               </div>
           </div>
           
           <div style={{ marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', fontSize: '0.85rem' }}>
-              {tdeeCalc.error ? (
+              {tdeeCalc?.error ? (
                   <div style={{ color: 'var(--warning-color)', textAlign: 'center' }}>
-                      ⏳ {tdeeCalc.message}
+                      ⏳ {tdeeCalc?.message}
                   </div>
               ) : (
                   <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Media Calorie Assunte ({tdeeCalc.daysTracked}gg):</span>
-                          <span style={{ fontWeight: 'bold' }}>{tdeeCalc.avgKcal} kcal</span>
+                          <span style={{ color: 'var(--text-muted)' }}>Media Calorie Assunte ({tdeeCalc?.daysTracked}gg):</span>
+                          <span style={{ fontWeight: 'bold' }}>{tdeeCalc?.avgKcal} kcal</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Variazione Peso Totale:</span>
+                          <span style={{ fontWeight: 'bold', color: Number(tdeeCalc?.weightDiff || 0) > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>{Number(tdeeCalc?.weightDiff || 0) > 0 ? '+' : ''}{tdeeCalc?.weightDiff} kg</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Trend Peso ({tdeeCalc.timeSpanDays}gg):</span>
-                          <span style={{ fontWeight: 'bold', color: Number(tdeeCalc.weightDiff) > 0 ? 'var(--danger-color)' : 'var(--success-color)' }}>
-                              {Number(tdeeCalc.weightDiff) > 0 ? '+' : ''}{tdeeCalc.weightDiff} kg
-                          </span>
+                          <span style={{ color: 'var(--text-muted)' }}>Deficit/Surplus Teorico:</span>
+                          <span style={{ fontWeight: 'bold' }}>{(tdeeCalc as any)?.dailyDeficit! > 0 ? '+' : ''}{(tdeeCalc as any)?.dailyDeficit} kcal/gg</span>
                       </div>
                   </div>
               )}
@@ -147,7 +148,7 @@ const HomeView = ({ onNavigate }) => {
           </div>
           <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Streak Attuale 🔥</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: streak > 0 ? 'var(--warning-color)' : 'var(--text-main)', marginTop: '5px' }}>{streak} gg</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (streak || 0) > 0 ? 'var(--warning-color)' : 'var(--text-main)', marginTop: '5px' }}>{streak || 0} gg</div>
           </div>
           <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Totale Sessioni</div>
@@ -158,8 +159,8 @@ const HomeView = ({ onNavigate }) => {
       <div className="card" id="home-chart-widget">
           <h3 style={{ marginBottom: '15px' }}>Trend Peso Corporeo (Ultimi 14gg)</h3>
           <div style={{ position: 'relative', height: '200px', width: '100%' }}>
-              {recentDates.length > 0 ? (
-                  <Line data={chartData} options={chartOptions} />
+              {recentDates && recentDates.length > 0 && chartData ? (
+                  <Line data={chartData as any} options={chartOptions as any} />
               ) : (
                   <p style={{textAlign:'center', color:'var(--text-muted)', paddingTop:'80px'}}>Nessun dato sul peso. Registra una misurazione!</p>
               )}

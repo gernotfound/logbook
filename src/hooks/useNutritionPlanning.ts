@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionPlanning() {
     const { userData, saveUserData } = useAppStore();
+    const { showAlert } = useDialogStore();
     
     const [planning, setPlanning] = useState(
         userData?.nutritionPlanning || {
@@ -32,18 +34,18 @@ export function useNutritionPlanning() {
     );
     const totalKcal = macros.totalKcal;
 
-    const handleUpdate = (field, value) => {
+    const handleUpdate = (field: string, value: any) => {
         const newPlanning = { ...planning, [field]: value };
         setPlanning(newPlanning);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         // Do NOT overwrite normocalorica. It is manually configured by the user.
         const updatedPlanning = { ...planning };
         setPlanning(updatedPlanning);
         const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
         saveUserData(newUserData);
-        alert("Pianificazione salvata sul cloud!");
+        await showAlert("Pianificazione salvata sul cloud!");
     };
 
     const handleCopyFromTDEE = () => {

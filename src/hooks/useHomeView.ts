@@ -2,14 +2,14 @@ import { useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
-function calcStreak(history) {
+function calcStreak(history: any[]) {
     if (!history || history.length === 0) return 0;
     
     // Build a set of workout date strings
     const workoutDates = new Set(
         history
-            .filter(w => w.globalStartTime)
-            .map(w => Logic.getLocalDateString(w.globalStartTime))
+            .filter((w: any) => w.globalStartTime)
+            .map((w: any) => Logic.getLocalDateString(w.globalStartTime))
     );
 
     let streak = 0;
@@ -87,7 +87,7 @@ export function useHomeView() {
     const todayStr = Logic.getLocalDateString();
     
     // Calculate today's workout
-    const todaysWorkout = history.find(s => {
+    const todaysWorkout = history.find((s: any) => {
         if (!s.globalStartTime) return false;
         return Logic.getLocalDateString(s.globalStartTime) === todayStr;
     });

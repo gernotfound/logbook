@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
 
 const NutritionMeasurements = () => {

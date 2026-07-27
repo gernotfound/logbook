@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useTrainingExercises() {
     const { userData, saveUserData } = useAppStore();
-    const [editingExId, setEditingExId] = useState(null);
+    const { showAlert, showConfirm } = useDialogStore();
+    const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState('');
     const [exNotes, setExNotes] = useState('');
     const [muscleSearch, setMuscleSearch] = useState('');
-    const [selectedMuscles, setSelectedMuscles] = useState([]);
+    const [selectedMuscles, setSelectedMuscles] = useState<any[]>([]);
 
     const library = userData?.library || [];
 
@@ -16,22 +18,22 @@ export function useTrainingExercises() {
         m.name.toLowerCase().includes(muscleSearch.toLowerCase())
     ).slice(0, 5);
 
-    const toggleMuscle = (muscle) => {
-        if (selectedMuscles.find(m => m.id === muscle.id)) {
-            setSelectedMuscles(selectedMuscles.filter(m => m.id !== muscle.id));
+    const toggleMuscle = (muscle: any) => {
+        if (selectedMuscles.find((m: any) => m.id === muscle.id)) {
+            setSelectedMuscles(selectedMuscles.filter((m: any) => m.id !== muscle.id));
         } else {
             setSelectedMuscles([...selectedMuscles, muscle]);
         }
     };
 
-    const handleEditClick = (ex) => {
+    const handleEditClick = (ex: any) => {
         setEditingExId(ex.id);
         setExName(ex.name || '');
         setExNotes(ex.notes || '');
         
         // Populate selected muscles
-        const exMuscles = [];
-        (ex.muscles || []).forEach(mId => {
+        const exMuscles: any[] = [];
+        (ex.muscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
             if(m) exMuscles.push(m);
         });
@@ -49,9 +51,9 @@ export function useTrainingExercises() {
         setMuscleSearch('');
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!exName.trim()) {
-            alert("Inserisci un nome per l'esercizio.");
+            await showAlert("Inserisci un nome per l'esercizio.");
             return;
         }
 
@@ -65,32 +67,32 @@ export function useTrainingExercises() {
                         ...ex,
                         name: exName.trim(),
                         notes: exNotes.trim(),
-                        muscles: selectedMuscles.map(m => m.id)
+                        muscles: selectedMuscles.map((m: any) => m.id)
                     };
                 }
                 return ex;
             });
             updatedLibrary.sort((a,b) => a.name.localeCompare(b.name));
-            alert("Esercizio aggiornato!");
+            await showAlert("Esercizio aggiornato!");
         } else {
             // Create new
             const newEx = {
                 id: 'ex_' + new Date().getTime(),
                 name: exName.trim(),
                 notes: exNotes.trim(),
-                muscles: selectedMuscles.map(m => m.id)
+                muscles: selectedMuscles.map((m: any) => m.id)
             };
             updatedLibrary = [...library, newEx].sort((a,b) => a.name.localeCompare(b.name));
-            alert("Esercizio aggiunto all'archivio!");
+            await showAlert("Esercizio aggiunto all'archivio!");
         }
 
         saveUserData({ ...userData, library: updatedLibrary });
         handleCancelEdit(); // Reset form
     };
 
-    const handleDelete = (id, e) => {
+    const handleDelete = async (id: string, e: any) => {
         e.stopPropagation(); // prevent triggering edit when clicking delete
-        if(confirm("Sei sicuro di voler eliminare questo esercizio dall'archivio?")) {
+        if(await showConfirm("Sei sicuro di voler eliminare questo esercizio dall'archivio?")) {
             const updatedLibrary = library.filter(ex => ex.id !== id);
             saveUserData({ ...userData, library: updatedLibrary });
             if (editingExId === id) handleCancelEdit();

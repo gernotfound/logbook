@@ -12,7 +12,6 @@ import {
     deleteUser
 } from "firebase/auth";
 import { 
-    getFirestore, 
     initializeFirestore,
     persistentLocalCache,
     persistentMultipleTabManager,

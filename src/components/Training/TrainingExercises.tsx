@@ -1,4 +1,4 @@
-import React from 'react';
+
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
@@ -63,7 +63,7 @@ const TrainingExercises = () => {
                     </div>
 
                     {/* Modello Muscolare 3D-like (SVG) */}
-                    <MuscleModel selectedMuscles={selectedMuscles.map(m => m.id)} />
+                    <MuscleModel selectedMuscles={selectedMuscles.map(m => m.id) as any} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>

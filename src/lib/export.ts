@@ -1,15 +1,17 @@
+import { useDialogStore } from '../store/useDialogStore';
+
 export const Exporter = {
-    exportToCSV(history, nutrition) {
+    async exportToCSV(history: any[], nutrition: Record<string, any>) {
         let workoutCsv = "Data,Nome Allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n";
         history.forEach(session => {
             const dateStr = session.globalStartTime ? new Date(session.globalStartTime).toLocaleString() : "Data Sconosciuta";
             const routineName = `"${session.routineName || 'Allenamento Libero'}"`;
             if (session.exercises && session.exercises.length > 0) {
-                session.exercises.forEach(ex => {
+                session.exercises.forEach((ex: any) => {
                     // Support both legacy 'name' field and new 'exId' lookup
                     const exName = `"${ex.name || ex.exId || 'Sconosciuto'}"`;
                     if (ex.sets && ex.sets.length > 0) {
-                        ex.sets.forEach((set, idx) => {
+                        ex.sets.forEach((set: any, idx: number) => {
                             // BUG FIX: new app uses set.kg (not set.weight)
                             const kg = set.kg !== undefined ? set.kg : (set.weight || 0);
                             const reps = set.reps || 0;
@@ -30,7 +32,7 @@ export const Exporter = {
         if (workoutCsv !== "Data,Nome Allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n") {
             this.downloadFile("allenamenti.csv", workoutCsv);
         } else {
-            alert("Nessun allenamento da esportare.");
+            await useDialogStore.getState().showAlert("Nessun allenamento da esportare.");
         }
         if (nutritionDates.length > 0) {
             setTimeout(() => {
@@ -38,7 +40,7 @@ export const Exporter = {
             }, 500);
         }
     },
-    downloadFile(filename, content) {
+    downloadFile(filename: string, content: string) {
         const blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' }); // \uFEFF è la BOM per Excel
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);

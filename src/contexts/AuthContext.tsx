@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
@@ -21,19 +21,18 @@ const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 
 export const useAuth = () => useContext(AuthContext) || defaultAuthContext;
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [currentUser, setCurrentUser] = useState(null);
+export const AuthProvider = ({ children }: { children: any }) => {
+    const [currentUser, setCurrentUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     
     const { 
-        userData, 
-        setUserData, 
+        setUserData,  
         setSyncing, 
         saveError, 
         setSaveError 
     } = useAppStore();
 
-    const loadData = async (user) => {
+    const loadData = async (user: any) => {
         if (!user) return;
         setSyncing(true);
         try {
@@ -52,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn("getRedirectResult error (non critico):", err);
         });
 
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
             setCurrentUser(user);
             if (user) {
                 await loadData(user);
@@ -84,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             // Try popup first; on mobile it often fails → fall back to redirect
             await signInWithPopup(auth, provider);
-        } catch (error) {
+        } catch (error: any) {
             if (error.code === 'auth/popup-blocked' || 
                 error.code === 'auth/popup-closed-by-user' ||
                 error.code === 'auth/cancelled-popup-request') {
@@ -107,8 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             await DB.secureLogOut();
             setUserData(null);
-        } catch (error) {
-            console.error("Errore in logout", error);
+        } catch (error: any) {
+            console.error("Errore iscrizione:", error);
+            throw error;
         } finally {
             setSyncing(false);
         }

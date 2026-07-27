@@ -1,6 +1,5 @@
-import React from 'react';
 
-export default function CustomFoodModal({ cfData, setCfData, saveCustomFood, showCustomModal, setShowCustomModal }) {
+export default function CustomFoodModal({ cfData, setCfData, saveCustomFood, showCustomModal }: any) {
     if (!showCustomModal) return null;
 
     return (

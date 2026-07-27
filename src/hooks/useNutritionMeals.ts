@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 import { COMMON_FOODS } from '../lib/foods';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeals() {
     const { userData, saveUserData } = useAppStore();
+    const { showAlert } = useDialogStore();
     
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
+    const [searchResults, setSearchResults] = useState<any[]>([]);
     
     const [showCustomModal, setShowCustomModal] = useState(false);
     const [cfData, setCfData] = useState({
@@ -20,15 +22,44 @@ export function useNutritionMeals() {
         kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
     };
     
-    const meals = todayNutrition.meals || [];
+    const meals = (todayNutrition.meals || []) as any[];
 
-    const handleSearch = (query) => {
+    const handleQuickAdd = async (quickData: any) => {
+        if (!userData) return;
+        const addedItem = {
+            id: Date.now(),
+            name: quickData.name,
+            meal: 'quick',
+            quantity: 100,
+            baseQty: 100,
+            unit: 'g',
+            kcal: quickData.kcal || 0,
+            carbs: quickData.carbs || 0,
+            pro: quickData.pro || 0,
+            fat: quickData.fat || 0,
+            time: new Date().getTime()
+        };
+
+        const updatedMeals = [...meals, addedItem];
+        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
+
+        const newNutritionDay = {
+            ...todayNutrition,
+            meals: updatedMeals,
+            kcal, carbs, pro, fat
+        };
+
+        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
+        saveUserData({ ...userData, nutrition: newNutritionObj });
+    };
+
+    const handleSearch = (query: string) => {
         setSearchQuery(query);
         if (query.trim().length > 1) {
             const q = query.toLowerCase();
             const customFoods = userData?.customFoods || [];
             const combined = [...COMMON_FOODS, ...customFoods];
-            const res = combined.filter(f => 
+            const res = combined.filter((f: any) => 
                 (f.name || '').toLowerCase().includes(q) || 
                 (f.category || '').toLowerCase().includes(q) ||
                 (f.brand || '').toLowerCase().includes(q)
@@ -39,9 +70,9 @@ export function useNutritionMeals() {
         }
     };
 
-    const recalcTotals = (mealsList) => {
+    const recalcTotals = (mealsList: any[]) => {
         let kcal = 0, carbs = 0, pro = 0, fat = 0;
-        mealsList.forEach(m => {
+        mealsList.forEach((m: any) => {
             const qty = m.quantity ?? m.baseQty ?? 100;
             const base = m.baseQty ?? 100;
             const ratio = qty / base;
@@ -58,7 +89,8 @@ export function useNutritionMeals() {
         };
     };
 
-    const addFood = (food, mealType) => {
+    const addFood = (food: any, mealType: string) => {
+        if (!userData) return;
         const addedItem = {
             id: food.id,
             name: food.name,
@@ -86,11 +118,15 @@ export function useNutritionMeals() {
         saveUserData({ ...userData, nutrition: newNutritionObj });
         
         setSearchQuery('');
-        setSearchResults([]);
     };
 
-    const removeFood = (itemTime) => {
-        const updatedMeals = meals.filter(m => m.time !== itemTime);
+    const clearSearch = () => {
+        setSearchQuery('');
+    };
+
+    const removeFood = (itemTime: number) => {
+        if (!userData) return;
+        const updatedMeals = meals.filter((m: any) => m.time !== itemTime);
         const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
         const newNutritionDay = {
@@ -103,7 +139,21 @@ export function useNutritionMeals() {
         saveUserData({ ...userData, nutrition: newNutritionObj });
     };
 
-    const saveCustomFood = () => {
+    const handleDeleteItem = async (itemTime: number) => {
+        removeFood(itemTime);
+    };
+
+    const clearDay = async () => {
+        if (!userData) return;
+        const newNutritionDay = {
+            kcal: 0, carbs: 0, pro: 0, fat: 0, meals: []
+        };
+        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
+        saveUserData({ ...userData, nutrition: newNutritionObj });
+    };
+
+    const saveCustomFood = async () => {
+        if (!userData) return;
         const foodData = {
             ...cfData,
             baseQty: 100,
@@ -112,7 +162,7 @@ export function useNutritionMeals() {
         
         const validation = Logic.validateCustomFood(foodData);
         if (!validation.isValid) {
-            alert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
+            await showAlert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
             return;
         }
 
@@ -122,11 +172,13 @@ export function useNutritionMeals() {
         
         setShowCustomModal(false);
         setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
-        alert("Alimento custom salvato!");
+        await showAlert("Alimento custom salvato!");
     };
 
     return {
-        searchQuery, setSearchQuery, handleSearch, searchResults,
+        searchQuery, setSearchQuery, handleSearch, searchResults, handleDeleteItem, clearSearch,
+        clearDay,
+        handleQuickAdd,
         showCustomModal, setShowCustomModal,
         cfData, setCfData, saveCustomFood,
         meals, addFood, removeFood

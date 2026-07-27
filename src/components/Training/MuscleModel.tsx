@@ -1,4 +1,4 @@
-import React from 'react';
+
 import MuscleModelPaths from './MuscleModelPaths';
 
 const GROUP_MAP = {
@@ -29,20 +29,20 @@ const GROUP_MAP = {
     'triceps_right': ['triceps-lateral-right', 'triceps-long-right'],
 };
 
-export default function MuscleModel({ selectedMuscles = [] }) {
+export default function MuscleModel({ selectedMuscles = [] }: { selectedMuscles?: string[] }) {
     // Determine which svg path IDs should be highlighted based on selectedMuscles
     const activeSvgIds = new Set();
     selectedMuscles.forEach(muscle => {
         // Find exact match in GROUP_MAP or just use the muscle ID directly
-        const mapped = GROUP_MAP[muscle];
+        const mapped = (GROUP_MAP as any)[muscle];
         if (mapped) {
-            mapped.forEach(id => activeSvgIds.add(id));
+            mapped.forEach((id: string) => activeSvgIds.add(id));
         } else {
             activeSvgIds.add(muscle);
         }
     });
 
-    const getPathStyle = (id) => {
+    const getPathStyle = (id: string) => {
         const isActive = activeSvgIds.has(id);
         return {
             fill: isActive ? 'var(--primary-color, #00e5ff)' : 'transparent',

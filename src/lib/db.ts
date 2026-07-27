@@ -1,14 +1,15 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField } from "firebase/firestore";
+import { useDialogStore } from '../store/useDialogStore';
 
-let lastSavedStateStr = null;
+let lastSavedStateStr: any = null;
 
 export const DB = {
     async loadUserData() {
         const user = auth.currentUser;
         if (!user) return null;
         try {
-            const defaultNutritionPlanning = {
+            const defaultNutritionPlanning: Record<string, any> = {
                 weight: 80,
                 carbsPerKg: 3.5,
                 proPerKg: 2.0,
@@ -17,7 +18,7 @@ export const DB = {
                 chartPeriod: 7,
                 normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
             };
-            const state = { 
+            const state: Record<string, any> = { 
                 profile: {}, 
                 library: [], 
                 routines: [], 
@@ -33,7 +34,7 @@ export const DB = {
             const docRef = doc(db, "users", user.uid);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
-                const data = docSnap.data();
+                const data = docSnap.data() as Record<string, any>;
                 if(data.profile) state.profile = data.profile;
                 if(data.library) state.library = data.library;
                 if(data.routines) state.routines = data.routines;
@@ -60,20 +61,20 @@ export const DB = {
             if (!needsMigration) {
                 // Bucketing by Month
                 const histSnap = await getDocs(collection(db, "users", user.uid, "history_months"));
-                histSnap.forEach(d => {
-                    const monthData = d.data();
-                    Object.values(monthData).forEach(h => state.history.push(h));
+                histSnap.forEach((d: any) => {
+                    const monthData = d.data() as Record<string, any>;
+                    Object.values(monthData).forEach((h: any) => state.history.push(h));
                 });
                 
                 const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months"));
-                nutSnap.forEach(d => {
-                    const monthData = d.data();
-                    Object.keys(monthData).forEach(date => {
-                        state.nutrition[date] = monthData[date];
+                nutSnap.forEach((d: any) => {
+                    const monthData = d.data() as Record<string, any>;
+                    Object.keys(monthData).forEach((date: string) => {
+                        (state.nutrition as any)[date] = monthData[date];
                     });
                 });
                 
-                state.history.sort((a,b) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
+                state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
             } else {
                 lastSavedStateStr = JSON.stringify({
                     profile: state.profile, 
@@ -89,20 +90,20 @@ export const DB = {
             }
             lastSavedStateStr = JSON.stringify(state);
             return state;
-        } catch (error) {
+        } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
             throw error;
         }
     },
-    async saveUserData(state) {
+    async saveUserData(state: Record<string, any>) {
         const user = auth.currentUser;
         if (!user) return;
         try {
-            let oldState = { profile: {}, library: [], routines: [], customFoods: [], history: [], nutrition: {}, activeWorkout: null, nutritionPlanning: null };
+            let oldState: Record<string, any> = { profile: {}, library: [], routines: [], customFoods: [], history: [], nutrition: {}, activeWorkout: null, nutritionPlanning: null };
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
             }
-            const promises = [];
+            const promises: any[] = [];
             
             // 1. User doc updates
             if (JSON.stringify(state.profile) !== JSON.stringify(oldState.profile) ||
@@ -126,16 +127,16 @@ export const DB = {
             }
 
             // 2. Group History by Month (YYYY-MM)
-            const newHistMonths = {};
-            state.history.forEach(h => {
+            const newHistMonths: Record<string, any> = {};
+            state.history.forEach((h: any) => {
                 const date = new Date(h.globalStartTime || Date.now());
                 const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 if (!newHistMonths[monthKey]) newHistMonths[monthKey] = {};
                 newHistMonths[monthKey][h.id] = h;
             });
 
-            const oldHistMonths = {};
-            (oldState.history || []).forEach(h => {
+            const oldHistMonths: Record<string, any> = {};
+            (oldState.history || []).forEach((h: any) => {
                 const date = new Date(h.globalStartTime || Date.now());
                 const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 if (!oldHistMonths[monthKey]) oldHistMonths[monthKey] = {};
@@ -154,7 +155,7 @@ export const DB = {
             });
 
             // 3. Group Nutrition by Month (YYYY-MM)
-            const newNutMonths = {};
+            const newNutMonths: Record<string, any> = {};
             Object.keys(state.nutrition || {}).forEach(date => {
                 // date format: YYYY-MM-DD
                 const monthKey = date.substring(0, 7);
@@ -162,7 +163,7 @@ export const DB = {
                 newNutMonths[monthKey][date] = state.nutrition[date];
             });
 
-            const oldNutMonths = {};
+            const oldNutMonths: Record<string, any> = {};
             Object.keys(oldState.nutrition || {}).forEach(date => {
                 const monthKey = date.substring(0, 7);
                 if (!oldNutMonths[monthKey]) oldNutMonths[monthKey] = {};
@@ -195,16 +196,16 @@ export const DB = {
             await waitForPendingWrites(db);
             console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
             await auth.signOut();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Errore durante il Log Out:", error);
-            alert("Errore durante il Log Out. Controlla la connessione.");
+            await useDialogStore.getState().showAlert("Errore durante il Log Out. Controlla la connessione.");
         }
     },
     async deleteAccount() {
         const user = auth.currentUser;
         if (!user) return;
         try {
-            const delPromises = [];
+            const delPromises: any[] = [];
             try {
                 const histSnap = await getDocs(collection(db, "users", user.uid, "history_months"));
                 histSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
@@ -224,12 +225,12 @@ export const DB = {
             } catch(e) { console.warn("Permesso negato per eliminare il doc user, proseguo...", e); }
             
             await deleteUser(user);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Errore nell'eliminazione dell'account:", error);
             if (error.code === 'auth/requires-recent-login') {
-                alert("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
+                await useDialogStore.getState().showAlert("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
             } else {
-                alert("Impossibile eliminare l'account in questo momento. Errore: " + error.message);
+                await useDialogStore.getState().showAlert("Impossibile eliminare l'account in questo momento. Errore: " + error.message);
             }
             throw error;
         }
