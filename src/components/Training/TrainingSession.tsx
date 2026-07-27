@@ -1,6 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import WorkoutTimer from './WorkoutTimer';
+
+const GlobalTimer = ({ startTime }: { startTime?: number }) => {
+    const [display, setDisplay] = useState('00:00');
+    useEffect(() => {
+        if (!startTime) return;
+        const interval = setInterval(() => {
+            const diff = Math.floor((Date.now() - startTime) / 1000);
+            const h = Math.floor(diff / 3600);
+            const m = Math.floor((diff % 3600) / 60);
+            const s = diff % 60;
+            if (h > 0) {
+                setDisplay(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+            } else {
+                setDisplay(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [startTime]);
+    return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
+};
 
 const TrainingSession = () => {
     const {
@@ -66,11 +86,8 @@ const TrainingSession = () => {
         <div className="training-sub-view active">
             {/* Sticky Timer */}
             <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Allenamento: <span style={{ color: 'var(--primary-color)' }}>{activeWorkout.routineName}</span>
-                </h3>
                 <div style={{ textAlign: 'center' }}>
-                    <WorkoutTimer globalStartTime={activeWorkout?.globalStartTime} />
+                    <WorkoutTimer />
                 </div>
             </div>
 
@@ -233,6 +250,8 @@ const TrainingSession = () => {
                     </div>
                 </div>
             </div>
+
+            <GlobalTimer startTime={activeWorkout.globalStartTime} />
 
             <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={endWorkout}>
                 🏁 Termina Sessione

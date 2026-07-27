@@ -84,13 +84,14 @@ export function useWorkoutSession() {
 
         const updatedHistory = [finishedWorkout, ...history];
         
-        saveUserData({ ...userData, history: updatedHistory });
+        saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
         setLocalWorkout(null);
         setMood(''); setPump(''); setFatigue(''); setWater('');
     };
 
     const deleteWorkout = async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
+        saveUserData({ ...userData, activeWorkout: null });
         setLocalWorkout(null);
         setMood(''); setPump(''); setFatigue(''); setWater('');
     };

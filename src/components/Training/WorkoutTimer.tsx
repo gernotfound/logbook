@@ -1,36 +1,11 @@
 import { useState, useEffect } from 'react';
 
-interface WorkoutTimerProps {
-    globalStartTime?: number;
-}
-
-export default function WorkoutTimer({ globalStartTime }: WorkoutTimerProps) {
-    const [timerDisplay, setTimerDisplay] = useState('00:00');
-
+export default function WorkoutTimer() {
     // Rest Timer State
     const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>('stopped');
     const [restStartTime, setRestStartTime] = useState<number>(0);
     const [restAccumulated, setRestAccumulated] = useState<number>(0);
     const [restDisplay, setRestDisplay] = useState('00:00');
-
-    // Workout Global Duration Ticker
-    useEffect(() => {
-        if (!globalStartTime) return;
-        
-        const interval = setInterval(() => {
-            const diff = Math.floor((Date.now() - globalStartTime) / 1000);
-            const h = Math.floor(diff / 3600);
-            const m = Math.floor((diff % 3600) / 60);
-            const s = diff % 60;
-            if (h > 0) {
-                setTimerDisplay(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            } else {
-                setTimerDisplay(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            }
-        }, 1000);
-        
-        return () => clearInterval(interval);
-    }, [globalStartTime]);
 
     // Rest Timer Ticker
     useEffect(() => {
@@ -75,11 +50,7 @@ export default function WorkoutTimer({ globalStartTime }: WorkoutTimerProps) {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', margin: 0 }}>
-                {timerDisplay}
-            </div>
-
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
             <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -89,9 +60,6 @@ export default function WorkoutTimer({ globalStartTime }: WorkoutTimerProps) {
                 borderRadius: '20px',
                 border: '1px solid var(--glass-border)'
             }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                    ⏱️ Recupero:
-                </span>
                 <span className="timer-display" style={{ fontSize: '1.2rem', fontFamily: 'monospace', fontWeight: 'bold', color: restState === 'running' ? 'var(--warning-color)' : '#fff' }}>
                     {restDisplay}
                 </span>
