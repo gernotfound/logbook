@@ -19,7 +19,7 @@ export function useNutritionMeals() {
 
     const todayDateStr = Logic.getLocalDateString();
     const todayNutrition = userData?.nutrition?.[todayDateStr] || { 
-        kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
+        date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
     };
     
     const meals = (todayNutrition.meals || []) as any[];
@@ -146,7 +146,7 @@ export function useNutritionMeals() {
     const clearDay = async () => {
         if (!userData) return;
         const newNutritionDay = {
-            kcal: 0, carbs: 0, pro: 0, fat: 0, meals: []
+            date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: []
         };
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         saveUserData({ ...userData, nutrition: newNutritionObj });
@@ -167,8 +167,10 @@ export function useNutritionMeals() {
         }
 
         const customFoods = userData?.customFoods || [];
-        const updatedCustomFoods = [...customFoods, validation.cleanData];
-        saveUserData({ ...userData, customFoods: updatedCustomFoods });
+        if (validation.cleanData) {
+            const updatedCustomFoods = [...customFoods, validation.cleanData];
+            saveUserData({ ...userData, customFoods: updatedCustomFoods });
+        }
         
         setShowCustomModal(false);
         setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });

@@ -27,14 +27,16 @@ export interface NutritionPlanning {
     totalKcal?: number;
 }
 
+import { Exercise, WorkoutRoutine, WorkoutSession, NutritionDay, Food } from '../types';
+
 export interface UserData {
     profile?: UserProfile;
-    library?: any[];
-    routines?: any[];
-    history?: any[];
-    nutrition?: Record<string, any>;
-    customFoods?: any[];
-    activeWorkout?: any;
+    library?: Exercise[];
+    routines?: WorkoutRoutine[];
+    history?: WorkoutSession[];
+    nutrition?: Record<string, NutritionDay>;
+    customFoods?: Food[];
+    activeWorkout?: WorkoutSession | null;
     nutritionPlanning?: NutritionPlanning;
 }
 
@@ -42,12 +44,12 @@ export interface AppState {
     userData: UserData | null;
     saveError: string | null;
     syncing: boolean;
-    localWorkout: any;
+    localWorkout: WorkoutSession | null;
 
     setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
     setSyncing: (val: boolean) => void;
     setSaveError: (error: string | null) => void;
-    setLocalWorkout: (workout: any) => void;
+    setLocalWorkout: (workout: WorkoutSession | null) => void;
     saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<void>;
     updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<void>;
 }
@@ -67,7 +69,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     })(),
 
-    setLocalWorkout: (workout: any) => {
+    setLocalWorkout: (workout: WorkoutSession | null) => {
         set((state) => {
             if (workout) {
                 try {

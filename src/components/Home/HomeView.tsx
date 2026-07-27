@@ -59,7 +59,7 @@ const HomeView = ({ onNavigate }: any) => {
            <div style={{ fontSize: '2.5rem' }}>💪</div>
            <div>
               <h3 style={{ margin: 0 }}>Allenamento Completato</h3>
-              <p style={{ margin: 0, fontSize: '0.85rem' }}>{todaysWorkout.routineName || 'Sessione'} — {todaysWorkout.exercises?.length || 0} Esercizi</p>
+              <p style={{ margin: 0, fontSize: '0.85rem' }}>{todaysWorkout?.routineName || 'Sessione'} — {todaysWorkout?.exercises?.length || 0} Esercizi</p>
            </div>
         </div>
       )}
@@ -72,7 +72,7 @@ const HomeView = ({ onNavigate }: any) => {
           
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <div>
-                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)' }}>{kcalEaten}</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)' }}>{kcalEaten || 0}</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>kcal assunte</div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -82,7 +82,7 @@ const HomeView = ({ onNavigate }: any) => {
           </div>
 
           <div className="progress-bg" style={{ marginBottom: '20px' }}>
-              <div className="progress-fill" style={{ width: `${(kcalTarget || 0) > 0 ? Math.min((kcalEaten/(kcalTarget || 1))*100, 100) : 0}%`, background: 'linear-gradient(90deg, var(--warning-color), #fcd34d)' }}></div>
+              <div className="progress-fill" style={{ width: `${(kcalTarget || 0) > 0 ? Math.min(((kcalEaten || 0)/(kcalTarget || 1))*100, 100) : 0}%`, background: 'linear-gradient(90deg, var(--warning-color), #fcd34d)' }}></div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>

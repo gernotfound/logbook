@@ -12,7 +12,7 @@ const TrainingHistory = () => {
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     {history.map(wo => {
-                        const date = new Date(wo.globalStartTime).toLocaleDateString('it-IT', { 
+                        const date = new Date(wo.globalStartTime || new Date()).toLocaleDateString('it-IT', { 
                             weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' 
                         });
                         const duration = (wo.globalEndTime && wo.globalStartTime) 
@@ -20,9 +20,9 @@ const TrainingHistory = () => {
                             : 0;
                         
                         // Legacy compatibility: support both moodRating and mood field names
-                        const moodVal = wo.moodRating ?? wo.mood;
-                        const pumpVal = wo.pumpRating ?? wo.pump;
-                        const fatigueVal = wo.fatigueRating ?? wo.fatigue;
+                        const moodVal = wo.moodRating ?? (wo as any).mood;
+                        const pumpVal = wo.pumpRating ?? (wo as any).pump;
+                        const fatigueVal = wo.fatigueRating ?? (wo as any).fatigue;
                         const hasRatings = moodVal || pumpVal || fatigueVal;
                         
                         return (
@@ -37,14 +37,14 @@ const TrainingHistory = () => {
                                         <button 
                                             className="btn-icon" 
                                             style={{ color: 'var(--danger-color)' }} 
-                                            onClick={() => deleteWorkout(wo.id)}
+                                            onClick={() => deleteWorkout(wo.id!)}
                                         >🗑️</button>
                                     </div>
                                 </div>
 
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
                                     {wo.exercises?.length || 0} Esercizi completati
-                                    {wo.waterLiters > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
+                                    {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
                                 </div>
 
                                 {/* Exercise details */}

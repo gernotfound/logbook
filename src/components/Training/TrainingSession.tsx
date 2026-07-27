@@ -70,7 +70,7 @@ const TrainingSession = () => {
                     Allenamento: <span style={{ color: 'var(--primary-color)' }}>{activeWorkout.routineName}</span>
                 </h3>
                 <div style={{ textAlign: 'center' }}>
-                    <WorkoutTimer globalStartTime={activeWorkout?.globalStartTime || activeWorkout?.startTime} />
+                    <WorkoutTimer globalStartTime={activeWorkout?.globalStartTime} />
                 </div>
             </div>
 

@@ -53,7 +53,7 @@ export function useWorkoutSession() {
     };
 
     const endWorkout = async () => {
-        if (!(await showConfirm("Terminare l'allenamento?"))) return;
+        if (!activeWorkout || !(await showConfirm("Terminare l'allenamento?"))) return;
 
         const valRes = Logic.validateWorkoutRatings(
             mood ? parseInt(mood) : null,
@@ -62,7 +62,8 @@ export function useWorkoutSession() {
         );
 
         const endTime = new Date().getTime();
-        const diff = Math.floor((endTime - activeWorkout.globalStartTime) / 1000);
+        const startTime = activeWorkout.globalStartTime || endTime;
+        const diff = Math.floor((endTime - startTime) / 1000);
         const h = Math.floor(diff / 3600);
         const m = Math.floor((diff % 3600) / 60);
         const s = diff % 60;
@@ -95,7 +96,7 @@ export function useWorkoutSession() {
     };
 
     const addExtraExercise = (ex: any) => {
-        if (!ex.exId) return;
+        if (!activeWorkout || !ex.exId) return;
         const updatedActive = {
             ...activeWorkout,
             exercises: [
@@ -107,6 +108,7 @@ export function useWorkoutSession() {
     };
 
     const addSpecialSet = (exIndex: number, setId: string, type: string, closePanelsCallback: any) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
@@ -127,6 +129,7 @@ export function useWorkoutSession() {
     };
 
     const reorderExercises = (fromIndex: number, toIndex: number) => {
+        if (!activeWorkout) return;
         const newExercises = [...activeWorkout.exercises];
         const [removed] = newExercises.splice(fromIndex, 1);
         newExercises.splice(toIndex, 0, removed);
@@ -134,7 +137,7 @@ export function useWorkoutSession() {
     };
 
     const removeActiveExercise = async (exIndex: number, closePanelsCallback: (index: number) => void) => {
-        if (!(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
+        if (!activeWorkout || !(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
         const updatedExercises = [...activeWorkout.exercises];
         updatedExercises.splice(exIndex, 1);
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
@@ -143,6 +146,7 @@ export function useWorkoutSession() {
 
     // Sets Management
     const addSet = (exIndex: number) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return { ...ex, sets: [...ex.sets, { id: Logic.generateId('s'), kg: '', reps: '' }] };
@@ -151,6 +155,7 @@ export function useWorkoutSession() {
     };
 
     const removeSet = (exIndex: number, setIndex: number) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return { ...ex, sets: ex.sets.filter((_: any, si: number) => si !== setIndex) };
@@ -158,6 +163,7 @@ export function useWorkoutSession() {
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
     const updateSet = (exIndex: number, setId: string, field: string, value: any) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
@@ -171,6 +177,7 @@ export function useWorkoutSession() {
     // Special Sets
 
     const updateSpecialSet = (exIndex: number, setId: string, collection: string, specIndex: number, field: string, value: any) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
@@ -186,6 +193,7 @@ export function useWorkoutSession() {
     };
 
     const removeSpecialSet = (exIndex: number, setId: string, collection: string, specIndex: number) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return {
@@ -200,6 +208,7 @@ export function useWorkoutSession() {
     };
 
     const updateSessionNote = (exIndex: number, note: string) => {
+        if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
             return { ...ex, sessionNote: note };

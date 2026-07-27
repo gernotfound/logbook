@@ -36,23 +36,50 @@ export interface Exercise {
     name: string;
     notes?: string;
     setsCount: number;
-    targetMuscles?: string[];
+    muscles?: string[];
     sets: ExerciseSet[];
+}
+
+export interface RoutineExercise {
+    exId: string;
+    setsCount: number;
 }
 
 export interface WorkoutRoutine {
     id: string;
     name: string;
-    exercises: Exercise[];
+    exercises: RoutineExercise[];
+}
+
+export interface SessionExerciseSet {
+    id: string;
+    kg: string;
+    reps: string;
+    done?: boolean;
+    dropsets?: { id: string; kg: string; reps: string }[];
+    isometrics?: { id: string; kg: string; time: string }[];
+}
+
+export interface SessionExercise {
+    exId: string;
+    sessionNote: string;
+    sets: SessionExerciseSet[];
 }
 
 export interface WorkoutSession {
-    id: string;
+    id?: string;
     routineId?: string;
     routineName?: string;
-    globalStartTime: number;
+    date?: string;
+    globalStartTime?: number;
+    globalEndTime?: number;
+    globalDurationStr?: string;
+    moodRating?: number | null;
+    pumpRating?: number | null;
+    fatigueRating?: number | null;
+    waterLiters?: number;
     endTime?: number;
-    exercises: Exercise[];
+    exercises: SessionExercise[];
 }
 
 export interface NutritionDay {
@@ -61,16 +88,49 @@ export interface NutritionDay {
     carbs: number;
     pro: number;
     fat: number;
-    weight?: string;
+    weight?: number | string;
+    bf?: number | string;
+    neck?: number | string;
+    waist?: number | string;
+    hip?: number | string;
+    meals?: Meal[];
+}
+
+export interface Food {
+    id?: string | number;
+    name: string;
+    kcal: number;
+    pro: number;
+    carbs: number;
+    fat: number;
+    brand?: string;
+    category?: string;
+    baseQty?: number;
+    unit?: string;
+    servingUnit?: string;
+    servingWeight?: number | null;
+    isCustom?: boolean;
+    satFat?: number;
+    sugars?: number;
+    sodium?: number;
+    fiber?: number;
+    iron?: number;
+}
+
+export interface Meal {
+    id: string;
+    name: string;
+    time: string;
+    foods: { food: Food; quantity: number; unit?: string }[];
 }
 
 export interface UserData {
     profile: UserProfile;
-    library: any[];
+    library: Exercise[];
     routines: WorkoutRoutine[];
     history: WorkoutSession[];
     nutrition: Record<string, NutritionDay>;
-    customFoods: any[];
+    customFoods: Food[];
     activeWorkout: WorkoutSession | null;
     nutritionPlanning: NutritionPlanning;
 }

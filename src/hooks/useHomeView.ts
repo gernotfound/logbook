@@ -53,7 +53,7 @@ export function useHomeView() {
     // Chronological array for charts and TDEE calc
     const { sortedDates, tdeeCalc } = useMemo(() => {
         const dates = Object.keys(nutrition).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
-        const cData = dates.map(d => ({ date: d, ...nutrition[d] }));
+        const cData = dates.map(d => ({ ...nutrition[d], date: d }));
         const tCalc = Logic.calculateTDEE(cData);
         return { sortedDates: dates, tdeeCalc: tCalc };
     }, [nutrition]);
@@ -67,7 +67,7 @@ export function useHomeView() {
                 label: 'Peso Corporeo (kg)',
                 data: recentDates.map(d => {
                     const w = nutrition[d]?.weight;
-                    return (w && !isNaN(parseFloat(w))) ? parseFloat(w) : null;
+                    return (w && !isNaN(parseFloat(String(w)))) ? parseFloat(String(w)) : null;
                 }),
                 borderColor: 'var(--primary-color)',
                 backgroundColor: 'rgba(14, 165, 233, 0.2)',

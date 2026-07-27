@@ -168,14 +168,14 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(() => renderWithProviders(<TrainingExercises />, { userData: emptyUserData })).not.toThrow();
     });
 
-    test('NutritionPlanning without normocalorica object in nutritionPlanning causes TypeError (Vulnerability check)', () => {
+    test('NutritionPlanning without normocalorica object in nutritionPlanning renders without TypeError (Vulnerability check)', () => {
       const incompleteUserData = {
         nutritionPlanning: {
           weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0
           // normocalorica missing!
         } as any
       };
-      expect(() => renderWithProviders(<NutritionPlanning />, { userData: incompleteUserData })).toThrow(TypeError);
+      expect(() => renderWithProviders(<NutritionPlanning />, { userData: incompleteUserData })).not.toThrow();
     });
   });
 

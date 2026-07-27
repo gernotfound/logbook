@@ -54,7 +54,7 @@ export function useNutritionMeasurements() {
         if (!userData) return;
         const newNutrition = { ...(userData.nutrition || {}) };
         if (!newNutrition[todayDateStr]) {
-            newNutrition[todayDateStr] = { kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+            newNutrition[todayDateStr] = { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
         }
         
         newNutrition[todayDateStr].weight = parseFloat(weight);

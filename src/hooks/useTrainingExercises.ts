@@ -80,7 +80,9 @@ export function useTrainingExercises() {
                 id: 'ex_' + new Date().getTime(),
                 name: exName.trim(),
                 notes: exNotes.trim(),
-                muscles: selectedMuscles.map((m: any) => m.id)
+                muscles: selectedMuscles.map((m: any) => m.id),
+                setsCount: 3,
+                sets: []
             };
             updatedLibrary = [...library, newEx].sort((a,b) => a.name.localeCompare(b.name));
             await showAlert("Esercizio aggiunto all'archivio!");
