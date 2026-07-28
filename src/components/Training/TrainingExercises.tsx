@@ -6,7 +6,7 @@ const TrainingExercises = () => {
     const {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles,
-        library, filteredMuscles,
+        library, filteredMuscles, trackingType, setTrackingType,
         toggleMuscle, handleEditClick, handleCancelEdit,
         handleSave, handleDelete
     } = useTrainingExercises();
@@ -29,6 +29,32 @@ const TrainingExercises = () => {
                     value={exNotes}
                     onChange={e => setExNotes(e.target.value)}
                 />
+                
+                <div style={{ margin: '15px 0' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Tipo di tracciamento</label>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                            <input 
+                                type="radio" 
+                                name="trackingType" 
+                                value="weight_reps" 
+                                checked={trackingType === 'weight_reps'} 
+                                onChange={() => setTrackingType('weight_reps')} 
+                            />
+                            Peso e Ripetizioni
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                            <input 
+                                type="radio" 
+                                name="trackingType" 
+                                value="time" 
+                                checked={trackingType === 'time'} 
+                                onChange={() => setTrackingType('time')} 
+                            />
+                            Tempo
+                        </label>
+                    </div>
+                </div>
                 
                 <div style={{ margin: '15px 0' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Muscoli Focus</label>

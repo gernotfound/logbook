@@ -11,6 +11,7 @@ export function useTrainingExercises() {
     const [exNotes, setExNotes] = useState('');
     const [muscleSearch, setMuscleSearch] = useState('');
     const [selectedMuscles, setSelectedMuscles] = useState<any[]>([]);
+    const [trackingType, setTrackingType] = useState<'weight_reps' | 'time'>('weight_reps');
 
     const library = userData?.library || [];
 
@@ -38,6 +39,7 @@ export function useTrainingExercises() {
             if(m) exMuscles.push(m);
         });
         setSelectedMuscles(exMuscles);
+        setTrackingType(ex.trackingType || 'weight_reps');
         
         // Scroll to top to see the form
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -49,6 +51,7 @@ export function useTrainingExercises() {
         setExNotes('');
         setSelectedMuscles([]);
         setMuscleSearch('');
+        setTrackingType('weight_reps');
     };
 
     const handleSave = async () => {
@@ -67,7 +70,8 @@ export function useTrainingExercises() {
                         ...ex,
                         name: exName.trim(),
                         notes: exNotes.trim(),
-                        muscles: selectedMuscles.map((m: any) => m.id)
+                        muscles: selectedMuscles.map((m: any) => m.id),
+                        trackingType
                     };
                 }
                 return ex;
@@ -81,6 +85,7 @@ export function useTrainingExercises() {
                 name: exName.trim(),
                 notes: exNotes.trim(),
                 muscles: selectedMuscles.map((m: any) => m.id),
+                trackingType,
                 setsCount: 3,
                 sets: []
             };
@@ -104,7 +109,7 @@ export function useTrainingExercises() {
     return {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles,
-        library, filteredMuscles,
+        library, filteredMuscles, trackingType, setTrackingType,
         toggleMuscle, handleEditClick, handleCancelEdit,
         handleSave, handleDelete
     };

@@ -54,12 +54,12 @@ const TrainingHistory = () => {
                                             const libDef = (userData?.library || []).find(l => l.id === ex.exId);
                                             const exName = libDef ? libDef.name : (ex.name || 'Esercizio Rimosso');
                                             
-                                            const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps);
+                                            const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time);
                                             return (
                                                 <div key={exIdx} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
                                                     <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{exName}</span>
                                                     {validSets.length > 0 && (
-                                                        <span> — {validSets.map((s: any) => `${s.kg || '?'}kg×${s.reps || '?'}`).join(', ')}</span>
+                                                        <span> — {validSets.map((s: any) => libDef?.trackingType === 'time' ? `${s.kg ? s.kg + 'kg ' : ''}⏱️${s.time || '?'}` : `${s.kg || '?'}kg×${s.reps || '?'}`).join(', ')}</span>
                                                     )}
                                                 </div>
                                             );

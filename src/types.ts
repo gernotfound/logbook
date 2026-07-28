@@ -28,6 +28,7 @@ export interface NutritionPlanning {
 export interface ExerciseSet {
     weight: string;
     reps: string;
+    time?: string;
     done: boolean;
 }
 
@@ -38,6 +39,7 @@ export interface Exercise {
     setsCount: number;
     muscles?: string[];
     sets: ExerciseSet[];
+    trackingType?: 'weight_reps' | 'time';
 }
 
 export interface RoutineExercise {
@@ -55,6 +57,7 @@ export interface SessionExerciseSet {
     id: string;
     kg: string;
     reps: string;
+    time?: string;
     done?: boolean;
     dropsets?: { id: string; kg: string; reps: string }[];
     isometrics?: { id: string; kg: string; time: string }[];

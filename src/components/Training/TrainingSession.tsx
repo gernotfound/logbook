@@ -131,7 +131,11 @@ const TrainingSession = () => {
                                                     <strong style={{ fontSize: '0.85rem', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
                                                     {pw.sets.map((s: any, sIdx: number) => (
                                                         <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
-                                                            S{sIdx + 1}: <b>{s.kg || '?'}</b> kg × <b>{s.reps || '?'}</b>
+                                                            S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
+                                                                <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{s.time || '?'}</b></>
+                                                            ) : (
+                                                                <><b>{s.kg || '?'}</b> kg × <b>{s.reps || '?'}</b></>
+                                                            )}
                                                         </span>
                                                     ))}
                                                     {pw.note && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>{pw.note}</div>}
@@ -162,8 +166,17 @@ const TrainingSession = () => {
                                                 <button className="btn-icon" style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }} onClick={() => removeSet(exIndex, sIndex)}>🗑️</button>
                                             </div>
                                             <div style={{ display: 'flex', gap: '5px', flex: 1, position: 'relative' }}>
-                                                <input type="number" step="0.25" placeholder="Kg" value={s.kg} onChange={e => updateSet(exIndex, s.id, 'kg', e.target.value)} style={{ margin: 0, flex: 1 }} />
-                                                <input type="number" placeholder="Reps" value={s.reps} onChange={e => updateSet(exIndex, s.id, 'reps', e.target.value)} style={{ margin: 0, flex: 1 }} />
+                                                {libDef?.trackingType === 'time' ? (
+                                                    <>
+                                                        <input type="number" step="0.25" placeholder="Kg (opz)" value={s.kg} onChange={e => updateSet(exIndex, s.id, 'kg', e.target.value)} style={{ margin: 0, flex: 1 }} />
+                                                        <input type="text" placeholder="Tempo (es. 60s)" value={s.time || ''} onChange={e => updateSet(exIndex, s.id, 'time', e.target.value)} style={{ margin: 0, flex: 2 }} />
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <input type="number" step="0.25" placeholder="Kg" value={s.kg} onChange={e => updateSet(exIndex, s.id, 'kg', e.target.value)} style={{ margin: 0, flex: 1 }} />
+                                                        <input type="number" placeholder="Reps" value={s.reps} onChange={e => updateSet(exIndex, s.id, 'reps', e.target.value)} style={{ margin: 0, flex: 1 }} />
+                                                    </>
+                                                )}
                                                 <button className="btn-icon" style={{ background: 'var(--primary-color)', borderRadius: '50%', width: '36px', height: '36px', color: '#fff', flexShrink: 0 }} onClick={() => setOpenSpecialMenuId(openSpecialMenuId === s.id ? null : s.id)}>+</button>
                                                 
                                                 {openSpecialMenuId === s.id && (
