@@ -56,6 +56,7 @@ export const Logic = {
         { id: "glutes", name: "Glutei (Globale)" },
         { id: "glutes_right", name: "Gluteo Destro" },
         { id: "glutes_left", name: "Gluteo Sinistro" },
+        { id: "legs_general", name: "Gambe (Generale)" },
         { id: "lats", name: "Gran Dorsale (Globale)" },
         { id: "lats_right", name: "Gran Dorsale Destro" },
         { id: "lats_left", name: "Gran Dorsale Sinistro" },

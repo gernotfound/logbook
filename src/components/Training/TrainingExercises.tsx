@@ -1,8 +1,9 @@
-
+import { useState } from 'react';
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
 const TrainingExercises = () => {
+    const [expandedExId, setExpandedExId] = useState<string | null>(null);
     const {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles,
@@ -105,7 +106,7 @@ const TrainingExercises = () => {
             </div>
 
             <h3 style={{ marginTop: '20px' }}>Lista Esercizi ({library.length})</h3>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Clicca su un esercizio per modificarlo.</p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Clicca su un esercizio per vederne i dettagli o sull'icona per modificarlo.</p>
             {library.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio creato.</p>
             ) : (
@@ -114,14 +115,36 @@ const TrainingExercises = () => {
                         <div 
                             key={ex.id} 
                             className="card" 
-                            style={{ padding: '15px', marginBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderLeft: editingExId === ex.id ? '3px solid var(--primary-color)' : 'none' }}
-                            onClick={() => handleEditClick(ex)}
+                            style={{ padding: '15px', marginBottom: 0 }}
                         >
-                            <div>
-                                <div style={{ fontWeight: 'bold', color: editingExId === ex.id ? 'var(--primary-color)' : 'white' }}>{ex.name}</div>
-                                {ex.notes && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ex.notes}</div>}
+                            <div 
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderLeft: editingExId === ex.id ? '3px solid var(--primary-color)' : 'none', paddingLeft: editingExId === ex.id ? '10px' : '0' }}
+                                onClick={() => setExpandedExId(expandedExId === ex.id ? null : ex.id)}
+                            >
+                                <div>
+                                    <div style={{ fontWeight: 'bold', color: (expandedExId === ex.id || editingExId === ex.id) ? 'var(--primary-color)' : 'white' }}>{ex.name}</div>
+                                    {ex.notes && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ex.notes}</div>}
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                    <button className="btn-icon" style={{ color: 'var(--primary-color)' }} onClick={(e) => { e.stopPropagation(); handleEditClick(ex); setExpandedExId(ex.id); }}>✏️</button>
+                                    <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={(e) => handleDelete(ex.id, e)}>🗑️</button>
+                                </div>
                             </div>
-                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={(e) => handleDelete(ex.id, e)}>🗑️</button>
+                            {expandedExId === ex.id && (
+                                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
+                                    <div style={{ marginBottom: '10px', fontSize: '0.85rem' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Tracciamento: </span>
+                                        <strong>{ex.trackingType === 'time' ? 'Tempo' : 'Peso e Ripetizioni'}</strong>
+                                    </div>
+                                    {(ex.muscles || []).length > 0 ? (
+                                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                            <MuscleModel selectedMuscles={ex.muscles as any} />
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: 0 }}>Nessun muscolo specificato.</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
