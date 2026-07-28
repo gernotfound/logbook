@@ -10,6 +10,11 @@ export function useTrainingRoutines() {
     const [routineName, setRoutineName] = useState('');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
+    const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
+
+    const handleRoutineClick = (id: string) => {
+        setExpandedRoutineId(prev => prev === id ? null : id);
+    };
 
     const routines = userData?.routines || [];
     const library = userData?.library || [];
@@ -95,6 +100,7 @@ export function useTrainingRoutines() {
     return {
         routineName, setRoutineName,
         editingRoutineId,
+        expandedRoutineId, handleRoutineClick,
         routineExercises,
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete,

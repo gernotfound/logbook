@@ -2,7 +2,7 @@ import { useSettings } from '../hooks/useSettings';
 
 const SettingsView = () => {
     const {
-        currentUser, logout,
+        currentUser, handleLogout,
         dob, setDob,
         height, setHeight,
         gender, setGender,
@@ -27,7 +27,7 @@ const SettingsView = () => {
                 )}
                 <p style={{ fontSize: '0.8rem' }}>I tuoi dati sono sincronizzati automaticamente sul cloud.</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={logout}>Esci dall'account</button>
+                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dall'account</button>
                 </div>
             </div>
 

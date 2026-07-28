@@ -13,6 +13,12 @@ export function useSettings() {
     // Fallback in case userData isn't loaded yet
     const profile = userData?.profile || { dob: '', height: '', gender: '' };
 
+    const handleLogout = async () => {
+        if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
+            logout();
+        }
+    };
+
     const [dob, setDob] = useState(profile.dob || '');
     const [height, setHeight] = useState(profile.height || '');
     const [gender, setGender] = useState(profile.gender || '');
@@ -53,7 +59,7 @@ export function useSettings() {
     };
 
     return {
-        currentUser, logout,
+        currentUser, handleLogout,
         dob, setDob,
         height, setHeight,
         gender, setGender,
