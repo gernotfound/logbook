@@ -93,6 +93,7 @@ export interface NutritionDay {
     neck?: number | string;
     waist?: number | string;
     hip?: number | string;
+    measurementTime?: string;
     meals?: Meal[];
 }
 

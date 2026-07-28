@@ -13,7 +13,7 @@ const TrainingExercises = () => {
 
     return (
         <div className="training-sub-view active">
-            <div className="card" style={{ border: editingExId ? '2px solid var(--primary-color)' : 'none' }}>
+            <div className="card" style={editingExId ? { border: '2px solid var(--primary-color)' } : undefined}>
                 <h3 style={{ color: editingExId ? 'var(--primary-color)' : 'white' }}>
                     {editingExId ? 'Modifica Esercizio' : 'Nuovo Esercizio'}
                 </h3>

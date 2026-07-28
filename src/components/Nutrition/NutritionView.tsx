@@ -6,7 +6,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: any) => {
 
     return (
         <div id="view-nutrition" className="view-section active">
-            <h2 style={{ marginTop: '10px', marginBottom: '20px' }}>🍎 Nutrizione & Corpo</h2>
+
 
             <div className="sub-nav">
                 <div className={`sub-nav-btn ${subTab === 'meals' ? 'active' : ''}`} onClick={() => setSubTab('meals')}>Pasti</div>
