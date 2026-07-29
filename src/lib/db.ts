@@ -1,5 +1,6 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField } from "firebase/firestore";
+import deepEqual from "fast-deep-equal";
 import { useDialogStore } from '../store/useDialogStore';
 
 let lastSavedStateStr: any = null;
@@ -106,12 +107,12 @@ export const DB = {
             const promises: any[] = [];
             
             // 1. User doc updates
-            if (JSON.stringify(state.profile) !== JSON.stringify(oldState.profile) ||
-                JSON.stringify(state.library) !== JSON.stringify(oldState.library) ||
-                JSON.stringify(state.routines) !== JSON.stringify(oldState.routines) ||
-                JSON.stringify(state.customFoods) !== JSON.stringify(oldState.customFoods) ||
-                JSON.stringify(state.activeWorkout) !== JSON.stringify(oldState.activeWorkout) ||
-                JSON.stringify(state.nutritionPlanning) !== JSON.stringify(oldState.nutritionPlanning)) {
+            if (!deepEqual(state.profile, oldState.profile) ||
+                !deepEqual(state.library, oldState.library) ||
+                !deepEqual(state.routines, oldState.routines) ||
+                !deepEqual(state.customFoods, oldState.customFoods) ||
+                !deepEqual(state.activeWorkout, oldState.activeWorkout) ||
+                !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 promises.push(setDoc(userRef, {
@@ -144,7 +145,7 @@ export const DB = {
             });
 
             Object.keys(newHistMonths).forEach(month => {
-                if (JSON.stringify(newHistMonths[month]) !== JSON.stringify(oldHistMonths[month])) {
+                if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
                     promises.push(setDoc(doc(db, "users", user.uid, "history_months", month), newHistMonths[month]));
                 }
             });
@@ -171,7 +172,7 @@ export const DB = {
             });
 
             Object.keys(newNutMonths).forEach(month => {
-                if (JSON.stringify(newNutMonths[month]) !== JSON.stringify(oldNutMonths[month])) {
+                if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
                     promises.push(setDoc(doc(db, "users", user.uid, "nutrition_months", month), newNutMonths[month]));
                 }
             });

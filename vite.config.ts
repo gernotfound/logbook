@@ -8,28 +8,37 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
+      strategies: 'networkFirst',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
-        name: 'LogBook',
+        name: 'LogBook Premium',
         short_name: 'LogBook',
-        description: 'App per allenamento e nutrizione',
-        theme_color: '#000000',
-        background_color: '#000000',
+        description: "L'app definitiva per il tracciamento di allenamento, nutrizione e progressi. Funziona anche offline in palestra.",
+        theme_color: '#0f172a',
+        background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
+        start_url: './index.html',
+        lang: 'it-IT',
+        categories: ['fitness', 'health', 'lifestyle'],
         icons: [
+          {
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
           {
             src: 'apple-touch-icon.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'apple-touch-icon.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'apple-touch-icon.png',
+            src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
