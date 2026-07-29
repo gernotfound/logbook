@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSettings } from '../hooks/useSettings';
 
 const SettingsView = () => {
@@ -12,6 +12,18 @@ const SettingsView = () => {
     } = useSettings();
 
     const [subTab, setSubTab] = useState('biometry');
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+    useEffect(() => {
+        const handleOnline = () => setIsOffline(false);
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     return (
         <div id="view-data" className="view-section active">
@@ -74,6 +86,15 @@ const SettingsView = () => {
                             <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dall'account</button>
                         </div>
                     </div>
+
+                    {isOffline && (
+                        <div className="card" style={{ border: '1px solid var(--warning-color)', marginBottom: '15px', backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
+                            <h3 style={{ color: 'var(--warning-color)' }}>⚠️ Connessione Assente</h3>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
+                                Sei attualmente offline. Puoi continuare a usare l'app: tutte le modifiche verranno salvate localmente e sincronizzate con il cloud non appena tornerà la connessione.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Danger Zone */}
                     <div className="card" style={{ border: '1px solid var(--danger-color)', marginBottom: '100px' }}>

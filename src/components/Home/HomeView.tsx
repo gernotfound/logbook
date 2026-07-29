@@ -1,17 +1,7 @@
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-} from 'chart.js';
+import { lazy, Suspense } from 'react';
 import { useHomeView } from '../../hooks/useHomeView';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+const WeightChart = lazy(() => import('./WeightChart'));
 
 const HomeView = ({ onNavigate }: any) => {
   const {
@@ -24,22 +14,6 @@ const HomeView = ({ onNavigate }: any) => {
   if (loading) {
       return <div className="view-section active"><div className="spinner"></div></div>;
   }
-
-  const chartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-          legend: { display: false }
-      },
-      scales: {
-          x: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(255,255,255,0.04)' } },
-          y: { 
-              ticks: { color: 'var(--text-muted)' },
-              grid: { color: 'rgba(255,255,255,0.05)' },
-              grace: '5%'
-          }
-      }
-  };
 
   return (
     <div id="view-home" className="view-section active">
@@ -158,9 +132,11 @@ const HomeView = ({ onNavigate }: any) => {
 
       <div className="card" id="home-chart-widget">
           <h3 style={{ marginBottom: '15px' }}>Trend Peso Corporeo (Ultimi 14gg)</h3>
-          <div style={{ position: 'relative', height: '200px', width: '100%' }}>
+          <div style={{ height: '200px', width: '100%' }}>
               {recentDates && recentDates.length > 0 && chartData ? (
-                  <Line data={chartData as any} options={chartOptions as any} />
+                  <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
+                      <WeightChart chartData={chartData} />
+                  </Suspense>
               ) : (
                   <p style={{textAlign:'center', color:'var(--text-muted)', paddingTop:'80px'}}>Nessun dato sul peso. Registra una misurazione!</p>
               )}

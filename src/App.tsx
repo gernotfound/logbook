@@ -144,6 +144,7 @@ function App() {
           {activeTab === 'settings' && <SettingsView />}
         </Suspense>
       </main>
+
       {/* Bottom Navigation */}
       <nav className="bottom-nav" aria-label="Navigazione principale">
         <div className="nav-container">
