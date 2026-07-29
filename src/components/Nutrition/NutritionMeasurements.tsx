@@ -29,7 +29,7 @@ const NutritionMeasurements = () => {
                 
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Orario</label>
-                    <input type="time" value={measureTime} onChange={e => setMeasureTime(e.target.value)} style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px' }} />
+                    <input type="time" value={measureTime} onChange={e => setMeasureTime(e.target.value)} style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '16px', fontFamily: 'inherit' }} />
                 </div>
 
                 <div style={{ marginBottom: '15px' }}>

@@ -77,7 +77,6 @@ export function useTrainingExercises() {
                 return ex;
             });
             updatedLibrary.sort((a,b) => a.name.localeCompare(b.name));
-            await showAlert("Esercizio aggiornato!");
         } else {
             // Create new
             const newEx = {
@@ -90,7 +89,6 @@ export function useTrainingExercises() {
                 sets: []
             };
             updatedLibrary = [...library, newEx].sort((a,b) => a.name.localeCompare(b.name));
-            await showAlert("Esercizio aggiunto all'archivio!");
         }
 
         saveUserData({ ...userData, library: updatedLibrary });
