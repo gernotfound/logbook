@@ -86,9 +86,7 @@ const TrainingSession = () => {
         <div className="training-sub-view active">
             {/* Sticky Timer */}
             <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
-                <div style={{ textAlign: 'center' }}>
-                    <WorkoutTimer />
-                </div>
+                <WorkoutTimer />
             </div>
 
             <div className="card" style={{ padding: '15px', marginBottom: '20px' }}>
@@ -115,8 +113,8 @@ const TrainingSession = () => {
                                     <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>{exName}</h3>
                                     <div style={{ display: 'flex', gap: '5px' }}>
                                         <button className="btn-small" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }} onClick={() => handleRemoveExercise(exIndex)}>🗑️</button>
-                                        <button className="btn-small toggle-btn" onClick={() => setOpenHistoryExIndex(openHistoryExIndex === exIndex ? null : exIndex)}>🕒 Storico</button>
-                                        <button className="btn-small toggle-btn" onClick={() => setOpenSetupExIndex(openSetupExIndex === exIndex ? null : exIndex)}>⚙️ Setup</button>
+                                        <button className={`btn-small toggle-btn ${openHistoryExIndex === exIndex ? 'active-highlight' : ''}`} style={openHistoryExIndex === exIndex ? { background: 'var(--primary-color)', color: '#000' } : {}} onClick={() => setOpenHistoryExIndex(openHistoryExIndex === exIndex ? null : exIndex)}>🕒 Storico</button>
+                                        <button className={`btn-small toggle-btn ${openSetupExIndex === exIndex ? 'active-highlight' : ''}`} style={openSetupExIndex === exIndex ? { background: 'var(--primary-color)', color: '#000' } : {}} onClick={() => setOpenSetupExIndex(openSetupExIndex === exIndex ? null : exIndex)}>⚙️ Setup</button>
                                     </div>
                                 </div>
 
