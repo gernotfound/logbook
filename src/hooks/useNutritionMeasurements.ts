@@ -4,7 +4,8 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeasurements() {
-    const { userData, saveUserData } = useAppStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
     const { showAlert } = useDialogStore();
     
     const profile: any = userData?.profile || {};
@@ -78,17 +79,22 @@ export function useNutritionMeasurements() {
 
         if (!userData) return;
         const targetDate = editingDate || todayDateStr;
-        const newNutrition = { ...(userData.nutrition || {}) };
-        if (!newNutrition[targetDate]) {
-            newNutrition[targetDate] = { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-        }
+        const existingDay = userData.nutrition?.[targetDate] || { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
         
-        newNutrition[targetDate].weight = parseFloat(weight);
-        if (waist) newNutrition[targetDate].waist = parseFloat(waist);
-        if (neck) newNutrition[targetDate].neck = parseFloat(neck);
-        if (hip && profile.gender === 'F') newNutrition[targetDate].hip = parseFloat(hip);
-        newNutrition[targetDate].bf = Math.round(bf * 10) / 10;
-        newNutrition[targetDate].measurementTime = measureTime;
+        const updatedDay = {
+            ...existingDay,
+            weight: parseFloat(weight),
+            ...(waist ? { waist: parseFloat(waist) } : {}),
+            ...(neck ? { neck: parseFloat(neck) } : {}),
+            ...(hip && profile.gender === 'F' ? { hip: parseFloat(hip) } : {}),
+            bf: Math.round(bf * 10) / 10,
+            measurementTime: measureTime
+        };
+
+        const newNutrition = {
+            ...(userData.nutrition || {}),
+            [targetDate]: updatedDay
+        };
 
         saveUserData({ ...userData, nutrition: newNutrition });
         await showAlert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);

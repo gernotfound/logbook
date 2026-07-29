@@ -4,26 +4,22 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionPlanning() {
-    const { userData, saveUserData } = useAppStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
     const { showAlert } = useDialogStore();
     
-    const [planning, setPlanning] = useState(
-        userData?.nutritionPlanning || {
-            weight: 80,
-            carbsPerKg: 3.5,
-            proPerKg: 2.0,
-            fatPerKg: 1.0,
-            lockedMacro: null,
-            chartPeriod: 7,
-            normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-        }
-    );
+    const storePlanning = userData?.nutritionPlanning;
+    const [localPlanning, setLocalPlanning] = useState<any>(null);
 
-    useEffect(() => {
-        if (userData?.nutritionPlanning) {
-            setPlanning(userData.nutritionPlanning);
-        }
-    }, [userData?.nutritionPlanning]);
+    const planning = localPlanning ?? storePlanning ?? {
+        weight: 80,
+        carbsPerKg: 3.5,
+        proPerKg: 2.0,
+        fatPerKg: 1.0,
+        lockedMacro: null,
+        chartPeriod: 7,
+        normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
+    };
 
     // Calculate current macros based on settings
     const macros = Logic.calculateMacrosFromKg(
@@ -36,13 +32,13 @@ export function useNutritionPlanning() {
 
     const handleUpdate = (field: string, value: any) => {
         const newPlanning = { ...planning, [field]: value };
-        setPlanning(newPlanning);
+        setLocalPlanning(newPlanning);
     };
 
     const handleSave = async () => {
         // Do NOT overwrite normocalorica. It is manually configured by the user.
         const updatedPlanning = { ...planning };
-        setPlanning(updatedPlanning);
+        setLocalPlanning(updatedPlanning);
         const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
         saveUserData(newUserData);
         await showAlert("Pianificazione salvata sul cloud!");

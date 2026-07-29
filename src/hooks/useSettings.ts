@@ -7,11 +7,14 @@ import { DB } from '../lib/db';
 
 export function useSettings() {
     const { currentUser, logout } = useAuth();
-    const { userData, saveUserData } = useAppStore();
-    const { showAlert, showConfirm } = useDialogStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
+    const showAlert = useDialogStore(state => state.showAlert);
+    const showConfirm = useDialogStore(state => state.showConfirm);
     
-    // Fallback in case userData isn't loaded yet
-    const profile = userData?.profile || { dob: '', height: '', gender: '' };
+    const storeProfile = userData?.profile;
+    const [localProfile, setLocalProfile] = useState<any>(null);
+    const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
 
     const handleLogout = async () => {
         if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
@@ -19,22 +22,19 @@ export function useSettings() {
         }
     };
 
-    const [dob, setDob] = useState(profile.dob || '');
-    const [height, setHeight] = useState(profile.height || '');
-    const [gender, setGender] = useState(profile.gender || '');
+    const dob = profile.dob || '';
+    const height = profile.height || '';
+    const gender = profile.gender || '';
+    
+    const setDob = (val: string) => setLocalProfile({ ...profile, dob: val });
+    const setHeight = (val: string) => setLocalProfile({ ...profile, height: val });
+    const setGender = (val: string) => setLocalProfile({ ...profile, gender: val });
     const [deletingAccount, setDeletingAccount] = useState(false);
-
-    useEffect(() => {
-        if (userData?.profile) {
-            if (userData.profile.dob !== undefined) setDob(userData.profile.dob || '');
-            if (userData.profile.height !== undefined) setHeight(userData.profile.height || '');
-            if (userData.profile.gender !== undefined) setGender(userData.profile.gender || '');
-        }
-    }, [userData?.profile]);
 
     const handleSaveProfile = async () => {
         const newProfile = { dob, height, gender };
         saveUserData({ ...userData, profile: newProfile });
+        setLocalProfile(null); // reset local so it syncs with store
         await showAlert("Profilo aggiornato!");
     };
 

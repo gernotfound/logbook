@@ -4,8 +4,12 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useWorkoutSession() {
-    const { userData, saveUserData, localWorkout, setLocalWorkout } = useAppStore();
-    const { showAlert, showConfirm } = useDialogStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
+    const localWorkout = useAppStore(state => state.localWorkout);
+    const setLocalWorkout = useAppStore(state => state.setLocalWorkout);
+    const showAlert = useDialogStore(state => state.showAlert);
+    const showConfirm = useDialogStore(state => state.showConfirm);
 
     const activeWorkout = localWorkout;
     const routines = userData?.routines || [];

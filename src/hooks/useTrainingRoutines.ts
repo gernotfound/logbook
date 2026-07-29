@@ -5,8 +5,10 @@ import { Logic } from '../lib/logic';
 import { RoutineExercise, WorkoutRoutine } from '../types';
 
 export function useTrainingRoutines() {
-    const { userData, saveUserData } = useAppStore();
-    const { showAlert, showConfirm } = useDialogStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
+    const showAlert = useDialogStore(state => state.showAlert);
+    const showConfirm = useDialogStore(state => state.showConfirm);
     const [routineName, setRoutineName] = useState('');
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);

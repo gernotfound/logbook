@@ -87,29 +87,37 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     setUserData: (dataOrUpdater) => {
         set((state) => {
-            const nextData = typeof dataOrUpdater === 'function' 
+            const rawNextData = typeof dataOrUpdater === 'function' 
                 ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData) 
                 : dataOrUpdater;
 
+            if (!rawNextData) {
+                return { userData: null, localWorkout: state.localWorkout };
+            }
+
             let syncedLocalWorkout = state.localWorkout;
+            let activeWorkout = rawNextData.activeWorkout;
             
-            if (nextData) {
-                // Priorità al localWorkout (se esiste) quando nextData non ne ha uno. Questo previene il reset della sessione su iOS PWA al ricaricamento dell'app (background refresh).
-                if (state.localWorkout && !nextData.activeWorkout) {
-                    nextData.activeWorkout = state.localWorkout;
-                } else if (nextData.activeWorkout !== undefined) {
-                    syncedLocalWorkout = nextData.activeWorkout;
-                    if (syncedLocalWorkout) {
-                        try {
-                            localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
-                        } catch (e) {
-                            console.error("Errore salvataggio localWorkout in localStorage:", e);
-                        }
-                    } else {
-                        localStorage.removeItem('logbook_local_workout');
+            // Priorità al localWorkout (se esiste) quando rawNextData non ne ha uno. Questo previene il reset della sessione su iOS PWA al ricaricamento dell'app (background refresh).
+            if (state.localWorkout && !rawNextData.activeWorkout) {
+                activeWorkout = state.localWorkout;
+            } else if (rawNextData.activeWorkout !== undefined) {
+                syncedLocalWorkout = rawNextData.activeWorkout;
+                if (syncedLocalWorkout) {
+                    try {
+                        localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
+                    } catch (e) {
+                        console.error("Errore salvataggio localWorkout in localStorage:", e);
                     }
+                } else {
+                    localStorage.removeItem('logbook_local_workout');
                 }
             }
+            
+            const nextData: UserData = {
+                ...rawNextData,
+                activeWorkout: activeWorkout ?? null
+            };
             
             return { userData: nextData, localWorkout: syncedLocalWorkout };
         });

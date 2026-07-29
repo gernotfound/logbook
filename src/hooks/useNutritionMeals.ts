@@ -5,7 +5,8 @@ import { COMMON_FOODS } from '../lib/foods';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeals() {
-    const { userData, saveUserData } = useAppStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
     const { showAlert } = useDialogStore();
     
     const [searchQuery, setSearchQuery] = useState('');

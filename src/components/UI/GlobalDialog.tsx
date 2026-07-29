@@ -1,7 +1,12 @@
 import { useDialogStore } from '../../store/useDialogStore';
 
 export const GlobalDialog: React.FC = () => {
-  const { isOpen, type, title, message, onConfirm, onCancel } = useDialogStore();
+  const isOpen = useDialogStore(state => state.isOpen);
+  const type = useDialogStore(state => state.type);
+  const title = useDialogStore(state => state.title);
+  const message = useDialogStore(state => state.message);
+  const onConfirm = useDialogStore(state => state.onConfirm);
+  const onCancel = useDialogStore(state => state.onCancel);
 
   if (!isOpen) return null;
 

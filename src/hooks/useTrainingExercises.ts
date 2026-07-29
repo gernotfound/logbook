@@ -4,8 +4,10 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useTrainingExercises() {
-    const { userData, saveUserData } = useAppStore();
-    const { showAlert, showConfirm } = useDialogStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
+    const showAlert = useDialogStore(state => state.showAlert);
+    const showConfirm = useDialogStore(state => state.showConfirm);
     const [editingExId, setEditingExId] = useState<string | null>(null);
     const [exName, setExName] = useState('');
     const [exNotes, setExNotes] = useState('');

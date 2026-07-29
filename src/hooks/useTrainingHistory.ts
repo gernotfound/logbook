@@ -3,8 +3,9 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 
 export function useTrainingHistory() {
-    const { userData, saveUserData } = useAppStore();
-    const { showConfirm } = useDialogStore();
+    const userData = useAppStore(state => state.userData);
+    const saveUserData = useAppStore(state => state.saveUserData);
+    const showConfirm = useDialogStore(state => state.showConfirm);
     
     const history = userData?.history || [];
 

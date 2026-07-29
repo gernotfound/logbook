@@ -25,12 +25,10 @@ export const AuthProvider = ({ children }: { children: any }) => {
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     
-    const { 
-        setUserData,  
-        setSyncing, 
-        saveError, 
-        setSaveError 
-    } = useAppStore();
+    const setUserData = useAppStore(state => state.setUserData);
+    const setSyncing = useAppStore(state => state.setSyncing);
+    const saveError = useAppStore(state => state.saveError);
+    const setSaveError = useAppStore(state => state.setSaveError);
 
     const loadData = async (user: any) => {
         if (!user) return;
