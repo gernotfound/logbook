@@ -88,19 +88,19 @@ const NutritionPlanning = () => {
                 <div className="input-row" style={{ marginBottom: '12px' }}>
                     <div style={{ flex: 2 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kcal Mantenimento</label>
-                        <input type="number" value={planning.normocalorica?.kcal || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), kcal: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input id="plan-normo-kcal" type="number" value={planning.normocalorica?.kcal || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), kcal: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CHO (g)</label>
-                        <input type="number" value={planning.normocalorica?.carbs || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), carbs: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input id="plan-normo-carbs" type="number" value={planning.normocalorica?.carbs || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), carbs: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO (g)</label>
-                        <input type="number" value={planning.normocalorica?.pro || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), pro: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input id="plan-normo-pro" type="number" value={planning.normocalorica?.pro || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), pro: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>FAT (g)</label>
-                        <input type="number" value={planning.normocalorica?.fat || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), fat: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
+                        <input id="plan-normo-fat" type="number" value={planning.normocalorica?.fat || 0} onChange={e => handleUpdate('normocalorica', { ...(planning.normocalorica || {}), fat: parseFloat(e.target.value) || 0 })} style={{ width: '100%' }} />
                     </div>
                 </div>
                 

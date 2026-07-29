@@ -29,7 +29,7 @@ const NutritionMeasurements = () => {
                 
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Orario</label>
-                    <input type="time" value={measureTime} onChange={e => setMeasureTime(e.target.value)} style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '16px', fontFamily: 'inherit' }} />
+                    <input id="measure-time" type="time" value={measureTime} onChange={e => setMeasureTime(e.target.value)} style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '16px', fontFamily: 'inherit' }} />
                 </div>
 
                 <div style={{ marginBottom: '15px' }}>
@@ -43,17 +43,17 @@ const NutritionMeasurements = () => {
                 <div className="input-row" style={{ marginBottom: '15px' }}>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Peso (kg)</label>
-                        <input type="number" step="0.1" placeholder="es. 80.5" value={weight} onChange={e => setWeight(e.target.value)} />
+                        <input id="measure-weight" type="number" step="0.1" placeholder="es. 80.5" value={weight} onChange={e => setWeight(e.target.value)} />
                     </div>
                     {method === 'manual' ? (
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>BF% Manuale</label>
-                            <input type="number" step="0.1" placeholder="es. 15.5" value={manualBf} onChange={e => setManualBf(e.target.value)} />
+                            <input id="measure-bf" type="number" step="0.1" placeholder="es. 15.5" value={manualBf} onChange={e => setManualBf(e.target.value)} />
                         </div>
                     ) : (
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Vita (cm)</label>
-                            <input type="number" step="0.1" value={waist} onChange={e => setWaist(e.target.value)} />
+                            <input id="measure-waist" type="number" step="0.1" value={waist} onChange={e => setWaist(e.target.value)} />
                         </div>
                     )}
                 </div>
@@ -62,12 +62,12 @@ const NutritionMeasurements = () => {
                     <div className="input-row" style={{ marginBottom: '15px' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Collo (cm)</label>
-                            <input type="number" step="0.1" value={neck} onChange={e => setNeck(e.target.value)} />
+                            <input id="measure-neck" type="number" step="0.1" value={neck} onChange={e => setNeck(e.target.value)} />
                         </div>
                         {(profile.gender === 'F' || method === 'navy_female') && (
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Fianchi (cm)</label>
-                                <input type="number" step="0.1" value={hip} onChange={e => setHip(e.target.value)} />
+                                <input id="measure-hip" type="number" step="0.1" value={hip} onChange={e => setHip(e.target.value)} />
                             </div>
                         )}
                     </div>

@@ -39,12 +39,12 @@ const SettingsView = () => {
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Utilizzati per il calcolo della massa grassa (US Navy).</p>
                         <div style={{ marginBottom: '12px' }}>
                             <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Data di Nascita</label>
-                            <input type="date" style={{ width: '100%', maxWidth: '100%' }} value={dob} onChange={e => setDob(e.target.value)} />
+                            <input id="settings-dob" type="date" style={{ width: '100%', maxWidth: '100%' }} value={dob} onChange={e => setDob(e.target.value)} />
                         </div>
                         <div className="input-row">
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Altezza (cm)</label>
-                                <input type="number" placeholder="es. 180" value={height} onChange={e => setHeight(e.target.value)} />
+                                <input id="settings-height" type="number" placeholder="es. 180" value={height} onChange={e => setHeight(e.target.value)} />
                             </div>
                             <div style={{ flex: 1 }}>
                                 <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Sesso</label>
