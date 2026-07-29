@@ -35,6 +35,8 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [activeTab]);
 
+  const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  
   // PWA Auto-Update Logic
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -42,19 +44,24 @@ function App() {
   } = useRegisterSW({
     onRegistered(r) {
       console.log('SW Registered: ' + r);
-      if (r) {
-        // Forza il controllo aggiornamenti ogni volta che l'app torna in primo piano (Cruciale per iOS)
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            r.update().catch(err => console.log('SW update check error:', err));
-          }
-        });
-      }
+      if (r) setSwRegistration(r);
     },
     onRegisterError(error) {
       console.log('SW registration error', error)
     },
   });
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && swRegistration) {
+        swRegistration.update().catch(err => console.log('SW update check error:', err));
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [swRegistration]);
 
   if (loading) {
     return (

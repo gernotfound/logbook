@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -15,9 +15,11 @@ export function useTrainingExercises() {
 
     const library = userData?.library || [];
 
-    const filteredMuscles = Logic.MUSCLES.filter(m => 
-        m.name.toLowerCase().includes(muscleSearch.toLowerCase())
-    ).slice(0, 5);
+    const filteredMuscles = useMemo(() => {
+        return Logic.MUSCLES.filter(m => 
+            m.name.toLowerCase().includes(muscleSearch.toLowerCase())
+        ).slice(0, 5);
+    }, [muscleSearch]);
 
     const toggleMuscle = (muscle: any) => {
         if (selectedMuscles.find((m: any) => m.id === muscle.id)) {
@@ -80,7 +82,7 @@ export function useTrainingExercises() {
         } else {
             // Create new
             const newEx = {
-                id: 'ex_' + new Date().getTime(),
+                id: Logic.generateId('ex'),
                 name: exName.trim(),
                 notes: exNotes.trim(),
                 muscles: selectedMuscles.map((m: any) => m.id),

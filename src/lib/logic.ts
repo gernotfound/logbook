@@ -135,7 +135,7 @@ export const Logic = {
         'triceps_right': ['triceps-lateral-right', 'triceps-long-right'],
     },
     generateId(prefix: string): string { 
-        return prefix + '_' + Math.random().toString(36).substr(2, 9); 
+        return prefix + '_' + crypto.randomUUID(); 
     },
     generateMockHistory(): any[] {
         return [];
@@ -667,7 +667,7 @@ export const Logic = {
         }
         const isValid = Object.keys(errors).length === 0;
         const cleanData = isValid ? {
-            id: foodData.id || `custom_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            id: foodData.id || `custom_${crypto.randomUUID()}`,
             name,
             brand: (foodData.brand || '').trim(),
             category: foodData.category || 'Personalizzato',
