@@ -58,7 +58,7 @@ export function useTrainingExercises() {
         setTrackingType('weight_reps');
     };
 
-    const handleSave = async () => {
+    const handleSaveExercise = async () => {
         if (!exName.trim()) {
             await showAlert("Inserisci un nome per l'esercizio.");
             return;
@@ -95,16 +95,24 @@ export function useTrainingExercises() {
             updatedLibrary = [...library, newEx].sort((a,b) => a.name.localeCompare(b.name));
         }
 
-        saveUserData({ ...userData, library: updatedLibrary });
-        handleCancelEdit(); // Reset form
+        try {
+            await saveUserData({ ...userData, library: updatedLibrary });
+            handleCancelEdit(); // Reset form
+        } catch (error) {
+            showAlert("Errore durante il salvataggio dell'esercizio.");
+        }
     };
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation(); // prevent triggering edit when clicking delete
         if(await showConfirm("Sei sicuro di voler eliminare questo esercizio dall'archivio?")) {
             const updatedLibrary = library.filter(ex => ex.id !== id);
-            saveUserData({ ...userData, library: updatedLibrary });
-            if (editingExId === id) handleCancelEdit();
+            try {
+                await saveUserData({ ...userData, library: updatedLibrary });
+                if (editingExId === id) handleCancelEdit();
+            } catch (error) {
+                showAlert("Errore durante l'eliminazione dell'esercizio.");
+            }
         }
     };
 
@@ -113,6 +121,6 @@ export function useTrainingExercises() {
         muscleSearch, setMuscleSearch, selectedMuscles,
         library, filteredMuscles, trackingType, setTrackingType,
         toggleMuscle, handleEditClick, handleCancelEdit,
-        handleSave, handleDelete
+        handleSaveExercise, handleDelete
     };
 }

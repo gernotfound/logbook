@@ -98,9 +98,13 @@ export function useNutritionMeasurements() {
             [targetDate]: updatedDay
         };
 
-        saveUserData({ ...userData, nutrition: newNutrition });
-        await showAlert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
-        handleCancelEdit();
+        try {
+            await saveUserData({ ...userData, nutrition: newNutrition });
+            await showAlert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
+            handleCancelEdit();
+        } catch (error) {
+            await showAlert("Errore durante il salvataggio della misurazione.");
+        }
     };
 
     return {

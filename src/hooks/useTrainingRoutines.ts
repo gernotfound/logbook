@@ -40,33 +40,41 @@ export function useTrainingRoutines() {
             return;
         }
 
-        if (editingRoutineId) {
-            const updatedRoutines = routines.map(r => 
-                r.id === editingRoutineId ? { ...r, name: routineName.trim(), exercises: routineExercises } : r
-            );
-            saveUserData({ ...userData, routines: updatedRoutines });
-        } else {
-            const newRoutine = {
-                id: Logic.generateId('rtn'),
-                name: routineName.trim(),
-                exercises: routineExercises
-            };
-            const updatedRoutines = [...routines, newRoutine].sort((a,b) => a.name.localeCompare(b.name));
-            saveUserData({ ...userData, routines: updatedRoutines });
+        try {
+            if (editingRoutineId) {
+                const updatedRoutines = routines.map(r => 
+                    r.id === editingRoutineId ? { ...r, name: routineName.trim(), exercises: routineExercises } : r
+                );
+                await saveUserData({ ...userData, routines: updatedRoutines });
+            } else {
+                const newRoutine = {
+                    id: Logic.generateId('rtn'),
+                    name: routineName.trim(),
+                    exercises: routineExercises
+                };
+                const updatedRoutines = [...routines, newRoutine].sort((a,b) => a.name.localeCompare(b.name));
+                await saveUserData({ ...userData, routines: updatedRoutines });
+            }
+            
+            setRoutineName('');
+            setRoutineExercises([]);
+            setEditingRoutineId(null);
+        } catch (error) {
+            showAlert("Errore durante il salvataggio della scheda.");
         }
-        
-        setRoutineName('');
-        setRoutineExercises([]);
-        setEditingRoutineId(null);
     };
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation();
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
         const updatedRoutines = routines.filter(r => r.id !== id);
-        saveUserData({ ...userData, routines: updatedRoutines });
-        if (editingRoutineId === id) {
-            handleCancelEdit();
+        try {
+            await saveUserData({ ...userData, routines: updatedRoutines });
+            if (editingRoutineId === id) {
+                handleCancelEdit();
+            }
+        } catch (error) {
+            showAlert("Errore durante l'eliminazione della scheda.");
         }
     };
 

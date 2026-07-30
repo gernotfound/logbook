@@ -51,7 +51,11 @@ export function useNutritionMeals() {
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
-        saveUserData({ ...userData, nutrition: newNutritionObj });
+        try {
+            await saveUserData({ ...userData, nutrition: newNutritionObj });
+        } catch (error) {
+            showAlert("Errore durante il salvataggio dell'alimento.");
+        }
     };
 
     const handleSearch = (query: string) => {
@@ -90,7 +94,7 @@ export function useNutritionMeals() {
         };
     };
 
-    const addFood = (food: any, mealType: string) => {
+    const addFood = async (food: any, mealType: string) => {
         if (!userData) return;
         const addedItem = {
             id: food.id,
@@ -116,16 +120,19 @@ export function useNutritionMeals() {
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
-        saveUserData({ ...userData, nutrition: newNutritionObj });
-        
-        setSearchQuery('');
+        try {
+            await saveUserData({ ...userData, nutrition: newNutritionObj });
+            setSearchQuery('');
+        } catch (error) {
+            showAlert("Errore durante il salvataggio dell'alimento.");
+        }
     };
 
     const clearSearch = () => {
         setSearchQuery('');
     };
 
-    const removeFood = (itemTime: number) => {
+    const removeFood = async (itemTime: number) => {
         if (!userData) return;
         const updatedMeals = meals.filter((m: any) => m.time !== itemTime);
         const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
@@ -137,7 +144,11 @@ export function useNutritionMeals() {
         };
 
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
-        saveUserData({ ...userData, nutrition: newNutritionObj });
+        try {
+            await saveUserData({ ...userData, nutrition: newNutritionObj });
+        } catch (error) {
+            showAlert("Errore durante la rimozione dell'alimento.");
+        }
     };
 
     const handleDeleteItem = async (itemTime: number) => {
@@ -150,7 +161,11 @@ export function useNutritionMeals() {
             date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: []
         };
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
-        saveUserData({ ...userData, nutrition: newNutritionObj });
+        try {
+            await saveUserData({ ...userData, nutrition: newNutritionObj });
+        } catch (error) {
+            showAlert("Errore durante la pulizia della giornata.");
+        }
     };
 
     const saveCustomFood = async () => {
@@ -170,12 +185,15 @@ export function useNutritionMeals() {
         const customFoods = userData?.customFoods || [];
         if (validation.cleanData) {
             const updatedCustomFoods = [...customFoods, validation.cleanData];
-            saveUserData({ ...userData, customFoods: updatedCustomFoods });
+            try {
+                await saveUserData({ ...userData, customFoods: updatedCustomFoods });
+                setShowCustomModal(false);
+                setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
+                await showAlert("Alimento custom salvato!");
+            } catch (error) {
+                await showAlert("Errore durante il salvataggio dell'alimento custom.");
+            }
         }
-        
-        setShowCustomModal(false);
-        setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
-        await showAlert("Alimento custom salvato!");
     };
 
     return {

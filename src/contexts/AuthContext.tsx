@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
+import { auth, db, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 
@@ -44,34 +44,50 @@ export const AuthProvider = ({ children }: { children: any }) => {
     };
 
     useEffect(() => {
-        // Handle redirect result first (for mobile browsers that used redirect login)
-        getRedirectResult(auth).catch(err => {
-            console.warn("getRedirectResult error (non critico):", err);
-        });
-
-        const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
-            setCurrentUser(user);
-            if (user) {
-                await loadData(user);
-            } else {
-                setUserData(null);
+        let isMounted = true;
+        
+        const initAuth = async () => {
+            try {
+                await getRedirectResult(auth);
+            } catch (err) {
+                console.warn("getRedirectResult error (non critico):", err);
             }
-            setLoading(false);
-        });
+            
+            const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
+                if (!isMounted) return;
+                setCurrentUser(user);
+                if (user) {
+                    await loadData(user);
+                } else {
+                    setUserData(null);
+                }
+                setLoading(false);
+            });
+            
+            return unsubscribe;
+        };
+
+        const authUnsubPromise = initAuth();
 
         // PWA FIX: Re-sync data when app comes back into focus (e.g. user switches tabs)
-        const handleVisibilityChange = () => {
+        const handleVisibilityChange = async () => {
             if (document.visibilityState === 'visible' && auth.currentUser) {
                 // Only re-sync if we already have data (avoid loading state on first open)
-                if (useAppStore.getState().userData !== null) {
-                    loadData(auth.currentUser);
+                if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing) {
+                    try {
+                        await waitForPendingWrites(db);
+                        await loadData(auth.currentUser);
+                    } catch (e) {
+                        console.warn("Skipping visibility reload due to pending writes", e);
+                    }
                 }
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            unsubscribe();
+            isMounted = false;
+            authUnsubPromise.then(unsub => unsub && unsub());
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps

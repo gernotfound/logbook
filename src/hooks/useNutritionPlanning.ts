@@ -40,8 +40,12 @@ export function useNutritionPlanning() {
         const updatedPlanning = { ...planning };
         setLocalPlanning(updatedPlanning);
         const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
-        saveUserData(newUserData);
-        await showAlert("Pianificazione salvata sul cloud!");
+        try {
+            await saveUserData(newUserData);
+            await showAlert("Pianificazione salvata sul cloud!");
+        } catch (error) {
+            await showAlert("Errore durante il salvataggio della pianificazione.");
+        }
     };
 
     const handleCopyFromTDEE = () => {

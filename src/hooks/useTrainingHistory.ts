@@ -13,7 +13,12 @@ export function useTrainingHistory() {
         if (!userData) return;
         if (await showConfirm("Eliminare definitivamente questo allenamento dallo storico?")) {
             const updatedHistory = (userData.history || []).filter((w: any) => w.id !== id);
-            saveUserData({ ...userData, history: updatedHistory });
+            try {
+                await saveUserData({ ...userData, history: updatedHistory });
+            } catch (error) {
+                const showAlert = useDialogStore.getState().showAlert;
+                showAlert("Errore durante l'eliminazione dell'allenamento.");
+            }
         }
     };
 

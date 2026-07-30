@@ -9,7 +9,7 @@ const TrainingExercises = () => {
         muscleSearch, setMuscleSearch, selectedMuscles,
         library, filteredMuscles, trackingType, setTrackingType,
         toggleMuscle, handleEditClick, handleCancelEdit,
-        handleSave, handleDelete
+        handleSaveExercise, handleDelete
     } = useTrainingExercises();
 
     const selectedMuscleIds = useMemo(() => selectedMuscles.map(m => m.id), [selectedMuscles]);
@@ -101,7 +101,7 @@ const TrainingExercises = () => {
                             Annulla
                         </button>
                     )}
-                    <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleSave}>
+                    <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleSaveExercise}>
                         {editingExId ? '💾 Salva Modifiche' : '+ Aggiungi in Archivio'}
                     </button>
                 </div>

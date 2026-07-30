@@ -1,9 +1,17 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { useDialogStore } from '../store/useDialogStore';
 
 let lastSavedStateStr: any = null;
+
+function checkDocSize(data: any, docName: string) {
+    const jsonStr = JSON.stringify(data);
+    const sizeBytes = new Blob([jsonStr]).size;
+    if (sizeBytes > 950000) { // Limit threshold below 1MB
+        throw new Error(`Il documento ${docName} supera il limite di dimensione di Firestore (1MB). Ridurre i dati inseriti.`);
+    }
+}
 
 export const DB = {
     async loadUserData() {
@@ -104,7 +112,9 @@ export const DB = {
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
             }
-            const promises: any[] = [];
+            
+            const batch = writeBatch(db);
+            let hasWrites = false;
             
             // 1. User doc updates
             if (!deepEqual(state.profile, oldState.profile) ||
@@ -115,16 +125,19 @@ export const DB = {
                 !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning)) {
                 
                 const userRef = doc(db, "users", user.uid);
-                promises.push(setDoc(userRef, {
+                const userDocData = {
                     profile: state.profile,
                     library: state.library,
                     routines: state.routines,
                     customFoods: state.customFoods || [],
                     activeWorkout: state.activeWorkout || null,
                     nutritionPlanning: state.nutritionPlanning || null,
-                    history: deleteField(), // Force cleanup of legacy monolithic fields
+                    history: deleteField(),
                     nutrition: deleteField() 
-                }, { merge: true }));
+                };
+                checkDocSize(userDocData, "User Profile");
+                batch.set(userRef, userDocData, { merge: true });
+                hasWrites = true;
             }
 
             // 2. Group History by Month (YYYY-MM)
@@ -146,19 +159,21 @@ export const DB = {
 
             Object.keys(newHistMonths).forEach(month => {
                 if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
-                    promises.push(setDoc(doc(db, "users", user.uid, "history_months", month), newHistMonths[month]));
+                    checkDocSize(newHistMonths[month], `History ${month}`);
+                    batch.set(doc(db, "users", user.uid, "history_months", month), newHistMonths[month]);
+                    hasWrites = true;
                 }
             });
             Object.keys(oldHistMonths).forEach(month => {
                 if (!newHistMonths[month]) {
-                    promises.push(deleteDoc(doc(db, "users", user.uid, "history_months", month)));
+                    batch.delete(doc(db, "users", user.uid, "history_months", month));
+                    hasWrites = true;
                 }
             });
 
             // 3. Group Nutrition by Month (YYYY-MM)
             const newNutMonths: Record<string, any> = {};
             Object.keys(state.nutrition || {}).forEach(date => {
-                // date format: YYYY-MM-DD
                 const monthKey = date.substring(0, 7);
                 if (!newNutMonths[monthKey]) newNutMonths[monthKey] = {};
                 newNutMonths[monthKey][date] = state.nutrition[date];
@@ -173,22 +188,26 @@ export const DB = {
 
             Object.keys(newNutMonths).forEach(month => {
                 if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
-                    promises.push(setDoc(doc(db, "users", user.uid, "nutrition_months", month), newNutMonths[month]));
+                    checkDocSize(newNutMonths[month], `Nutrition ${month}`);
+                    batch.set(doc(db, "users", user.uid, "nutrition_months", month), newNutMonths[month]);
+                    hasWrites = true;
                 }
             });
             Object.keys(oldNutMonths).forEach(month => {
                 if (!newNutMonths[month]) {
-                    promises.push(deleteDoc(doc(db, "users", user.uid, "nutrition_months", month)));
+                    batch.delete(doc(db, "users", user.uid, "nutrition_months", month));
+                    hasWrites = true;
                 }
             });
 
-            if (promises.length > 0) {
-                await Promise.all(promises);
-                console.log(`Sincronizzazione DB completata: ${promises.length} scritture eseguite.`);
+            if (hasWrites) {
+                await batch.commit();
+                console.log(`Sincronizzazione DB completata.`);
             }
             lastSavedStateStr = JSON.stringify(state);
         } catch (error) {
             console.error("Errore durante il salvataggio:", error);
+            throw error;
         }
     },
     async secureLogOut() {
@@ -206,25 +225,27 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return;
         try {
-            const delPromises: any[] = [];
-            try {
-                const histSnap = await getDocs(collection(db, "users", user.uid, "history_months"));
-                histSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
-            } catch(e) { console.warn("Permesso negato per leggere history_months, proseguo...", e); }
-            try {
-                const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months"));
-                nutSnap.forEach(d => delPromises.push(deleteDoc(d.ref)));
-            } catch(e) { console.warn("Permesso negato per leggere nutrition_months, proseguo...", e); }
+            // 1. Fetch subcollection documents while auth is valid
+            const histSnap = await getDocs(collection(db, "users", user.uid, "history_months")).catch(e => {
+                console.warn("Permesso negato per leggere history_months, proseguo...", e);
+                return { forEach: () => {} } as any;
+            });
+            const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months")).catch(e => {
+                console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
+                return { forEach: () => {} } as any;
+            });
             
-            if (delPromises.length > 0) {
-                await Promise.all(delPromises);
-            }
+            const batch = writeBatch(db);
+            histSnap.forEach((d: any) => batch.delete(d.ref));
+            nutSnap.forEach((d: any) => batch.delete(d.ref));
             
-            try {
-                const docRef = doc(db, "users", user.uid);
-                await deleteDoc(docRef);
-            } catch(e) { console.warn("Permesso negato per eliminare il doc user, proseguo...", e); }
+            // 2. Delete main user document
+            const userDocRef = doc(db, "users", user.uid);
+            batch.delete(userDocRef);
             
+            await batch.commit();
+            
+            // 3. Delete Firebase Auth user account
             await deleteUser(user);
         } catch (error: any) {
             console.error("Errore nell'eliminazione dell'account:", error);

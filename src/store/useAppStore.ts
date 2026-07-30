@@ -98,9 +98,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             let syncedLocalWorkout = state.localWorkout;
             let activeWorkout = rawNextData.activeWorkout;
             
-            // Priorità al localWorkout (se esiste) quando rawNextData non ne ha uno. Questo previene il reset della sessione su iOS PWA al ricaricamento dell'app (background refresh).
-            if (state.localWorkout && !rawNextData.activeWorkout) {
-                activeWorkout = state.localWorkout;
+            if (rawNextData.activeWorkout === null) {
+                syncedLocalWorkout = null;
+                localStorage.removeItem('logbook_local_workout');
             } else if (rawNextData.activeWorkout !== undefined) {
                 syncedLocalWorkout = rawNextData.activeWorkout;
                 if (syncedLocalWorkout) {
@@ -109,9 +109,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                     } catch (e) {
                         console.error("Errore salvataggio localWorkout in localStorage:", e);
                     }
-                } else {
-                    localStorage.removeItem('logbook_local_workout');
                 }
+            } else if (state.localWorkout) {
+                activeWorkout = state.localWorkout;
             }
             
             const nextData: UserData = {

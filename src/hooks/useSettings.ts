@@ -33,9 +33,13 @@ export function useSettings() {
 
     const handleSaveProfile = async () => {
         const newProfile = { dob, height, gender };
-        saveUserData({ ...userData, profile: newProfile });
-        setLocalProfile(null); // reset local so it syncs with store
-        await showAlert("Profilo aggiornato!");
+        try {
+            await saveUserData({ ...userData, profile: newProfile });
+            setLocalProfile(null);
+            await showAlert("Profilo aggiornato!");
+        } catch (error) {
+            await showAlert("Errore durante il salvataggio del profilo.");
+        }
     };
 
     const handleExport = () => {

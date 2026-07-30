@@ -88,16 +88,24 @@ export function useWorkoutSession() {
 
         const updatedHistory = [finishedWorkout, ...history];
         
-        saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
-        setLocalWorkout(null);
-        setMood(''); setPump(''); setFatigue(''); setWater('');
+        try {
+            await saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
+            setLocalWorkout(null);
+            setMood(''); setPump(''); setFatigue(''); setWater('');
+        } catch (error) {
+            showAlert("Errore durante il salvataggio della sessione.");
+        }
     };
 
     const deleteWorkout = async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
-        saveUserData({ ...userData, activeWorkout: null });
-        setLocalWorkout(null);
-        setMood(''); setPump(''); setFatigue(''); setWater('');
+        try {
+            await saveUserData({ ...userData, activeWorkout: null });
+            setLocalWorkout(null);
+            setMood(''); setPump(''); setFatigue(''); setWater('');
+        } catch (error) {
+            showAlert("Errore durante l'eliminazione della sessione.");
+        }
     };
 
     const addExtraExercise = (exInput: string | { exId: string }) => {
@@ -222,9 +230,13 @@ export function useWorkoutSession() {
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
 
-    const updateSetupNote = (exId: string, note: string) => {
+    const updateSetupNote = async (exId: string, note: string) => {
         const updatedLibrary = library.map((l: any) => l.id === exId ? { ...l, notes: note } : l);
-        saveUserData({ ...userData, library: updatedLibrary });
+        try {
+            await saveUserData({ ...userData, library: updatedLibrary });
+        } catch (error) {
+            showAlert("Errore durante il salvataggio della nota.");
+        }
     };
 
     return {
