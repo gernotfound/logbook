@@ -1,5 +1,5 @@
-import { useState, useEffect, Suspense, lazy } from 'react';
-import { useAuth } from './contexts/AuthContext';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; 
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -10,6 +10,29 @@ const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
 const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
+
+const BottomNav = React.memo(({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) => (
+  <nav className="bottom-nav" aria-label="Navigazione principale">
+    <div className="nav-container">
+      <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+        <Home size={24} />
+        <span>Home</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
+        <Dumbbell size={24} />
+        <span>Allenamento</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} onClick={() => setActiveTab('nutrition')}>
+        <Utensils size={24} />
+        <span>Nutrizione</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+        <Settings size={24} />
+        <span>Dati</span>
+      </div>
+    </div>
+  </nav>
+));
 
 function App() {
   const { currentUser, loading, login } = useAuth();
@@ -145,27 +168,7 @@ function App() {
         </Suspense>
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="bottom-nav" aria-label="Navigazione principale">
-        <div className="nav-container">
-          <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-            <Home size={24} />
-            <span>Home</span>
-          </div>
-          <div className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
-            <Dumbbell size={24} />
-            <span>Allenamento</span>
-          </div>
-          <div className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} onClick={() => setActiveTab('nutrition')}>
-            <Utensils size={24} />
-            <span>Nutrizione</span>
-          </div>
-          <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-            <Settings size={24} />
-            <span>Dati</span>
-          </div>
-        </div>
-      </nav>
+      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </>
   );
 }

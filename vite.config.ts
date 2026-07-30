@@ -48,10 +48,13 @@ export default defineConfig({
     })
   ],
   build: {
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('firebase')) return 'firebase';
+          if (id.includes('node_modules/firebase/auth')) return 'firebase-auth';
+          if (id.includes('node_modules/firebase/firestore')) return 'firebase-firestore';
+          if (id.includes('node_modules/firebase')) return 'firebase-core';
           if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'chartjs';
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/zustand') || id.includes('node_modules/lucide-react')) return 'vendor';
         }

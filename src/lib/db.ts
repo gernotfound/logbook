@@ -1,9 +1,7 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
-import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, deleteField, writeBatch } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, deleteField, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
-import { useDialogStore } from '../store/useDialogStore';
-
-let lastSavedStateStr: any = null;
+let lastSavedStateStr: string | null = null;
 
 function checkDocSize(data: any, docName: string) {
     const jsonStr = JSON.stringify(data);
@@ -14,6 +12,9 @@ function checkDocSize(data: any, docName: string) {
 }
 
 export const DB = {
+    resetCache() {
+        lastSavedStateStr = null;
+    },
     async loadUserData() {
         const user = auth.currentUser;
         if (!user) return null;
@@ -211,15 +212,10 @@ export const DB = {
         }
     },
     async secureLogOut() {
-        try {
-            console.log("Attendo il completamento delle scritture offline...");
-            await waitForPendingWrites(db);
-            console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
-            await auth.signOut();
-        } catch (error: any) {
-            console.error("Errore durante il Log Out:", error);
-            await useDialogStore.getState().showAlert("Errore durante il Log Out. Controlla la connessione.");
-        }
+        console.log("Attendo il completamento delle scritture offline...");
+        await waitForPendingWrites(db);
+        console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
+        await auth.signOut();
     },
     async deleteAccount() {
         const user = auth.currentUser;
@@ -250,9 +246,7 @@ export const DB = {
         } catch (error: any) {
             console.error("Errore nell'eliminazione dell'account:", error);
             if (error.code === 'auth/requires-recent-login') {
-                await useDialogStore.getState().showAlert("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
-            } else {
-                await useDialogStore.getState().showAlert("Impossibile eliminare l'account in questo momento. Errore: " + error.message);
+                throw new Error("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
             }
             throw error;
         }

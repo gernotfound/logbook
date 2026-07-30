@@ -5,17 +5,13 @@ import { renderWithProviders } from './setup';
 import { Logic } from '../src/lib/logic';
 
 import HomeView from '../src/components/Home/HomeView';
-import TrainingView from '../src/components/Training/TrainingView';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import TrainingRoutines from '../src/components/Training/TrainingRoutines';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
-import NutritionView from '../src/components/Nutrition/NutritionView';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionPlanning from '../src/components/Nutrition/NutritionPlanning';
 import NutritionMeasurements from '../src/components/Nutrition/NutritionMeasurements';
-import CustomFoodModal from '../src/components/Nutrition/CustomFoodModal';
-import SettingsView from '../src/components/SettingsView';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import MuscleModel from '../src/components/Training/MuscleModel';
 

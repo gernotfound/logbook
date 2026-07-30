@@ -7,7 +7,7 @@ import { Logic } from '../lib/logic';
 export function useNutritionMeals() {
     const userData = useAppStore(state => state.userData);
     const saveUserData = useAppStore(state => state.saveUserData);
-    const { showAlert } = useDialogStore();
+    const showAlert = useDialogStore(state => state.showAlert);
     
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);

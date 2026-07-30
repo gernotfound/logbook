@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { auth, db, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
+import { useDialogStore } from '../store/useDialogStore';
 
 export interface AuthContextType {
     currentUser: any;
@@ -10,16 +11,14 @@ export interface AuthContextType {
     logout: () => Promise<void>;
 }
 
-const defaultAuthContext: AuthContextType = {
+export const defaultAuthContext: AuthContextType = {
     currentUser: null,
     loading: false,
     login: async () => {},
     logout: async () => {}
 };
 
-const AuthContext = createContext<AuthContextType>(defaultAuthContext);
-
-export const useAuth = () => useContext(AuthContext) || defaultAuthContext;
+export const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 
 export const AuthProvider = ({ children }: { children: any }) => {
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -59,7 +58,8 @@ export const AuthProvider = ({ children }: { children: any }) => {
                 if (user) {
                     await loadData(user);
                 } else {
-                    setUserData(null);
+                    DB.resetCache();
+                    useAppStore.getState().resetStore();
                 }
                 setLoading(false);
             });
@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }: { children: any }) => {
 
         return () => {
             isMounted = false;
-            authUnsubPromise.then(unsub => unsub && unsub());
+            authUnsubPromise.then(unsub => unsub && unsub()).catch(e => console.warn(e));
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -115,14 +115,15 @@ export const AuthProvider = ({ children }: { children: any }) => {
         setSyncing(true);
         try {
             await DB.secureLogOut();
-            setUserData(null);
+            DB.resetCache();
+            useAppStore.getState().resetStore();
         } catch (error: any) {
-            console.error("Errore iscrizione:", error);
-            throw error;
+            console.error("Errore durante il Log Out:", error);
+            await useDialogStore.getState().showAlert("Errore durante il Log Out. Controlla la connessione.");
         } finally {
             setSyncing(false);
         }
-    }, [setSyncing, setUserData]);
+    }, [setSyncing]);
 
     const value = useMemo(() => ({
         currentUser,

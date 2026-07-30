@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -6,7 +6,7 @@ import { Logic } from '../lib/logic';
 export function useNutritionPlanning() {
     const userData = useAppStore(state => state.userData);
     const saveUserData = useAppStore(state => state.saveUserData);
-    const { showAlert } = useDialogStore();
+    const showAlert = useDialogStore(state => state.showAlert);
     
     const storePlanning = userData?.nutritionPlanning;
     const [localPlanning, setLocalPlanning] = useState<any>(null);

@@ -52,7 +52,25 @@ export interface AppState {
     setLocalWorkout: (workout: WorkoutSession | null) => void;
     saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<void>;
     updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<void>;
+    resetStore: () => void;
 }
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        try {
+            if (workout) {
+                localStorage.setItem('logbook_local_workout', JSON.stringify(workout));
+            } else {
+                localStorage.removeItem('logbook_local_workout');
+            }
+        } catch (e) {
+            console.error("Errore salvataggio localWorkout:", e);
+        }
+    }, 300);
+};
 
 export const useAppStore = create<AppState>((set, get) => ({
     userData: null,
@@ -71,15 +89,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     setLocalWorkout: (workout: WorkoutSession | null) => {
         set((state) => {
-            if (workout) {
-                try {
-                    localStorage.setItem('logbook_local_workout', JSON.stringify(workout));
-                } catch (e) {
-                    console.error("Errore salvataggio localWorkout in localStorage:", e);
-                }
-            } else {
-                localStorage.removeItem('logbook_local_workout');
-            }
+            debouncedSaveLocalStorage(workout);
             const nextUserData = state.userData ? { ...state.userData, activeWorkout: workout || null } : null;
             return { localWorkout: workout, userData: nextUserData };
         });
@@ -157,6 +167,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!userData) return;
         const nextData = updater(userData);
         await get().saveUserData(nextData);
+    },
+
+    resetStore: () => {
+        try {
+            localStorage.removeItem('logbook_local_workout');
+        } catch (e) {
+            console.warn("Impossibile rimuovere logbook_local_workout", e);
+        }
+        set({ userData: null, localWorkout: null, saveError: null, syncing: false });
     }
 }));
 

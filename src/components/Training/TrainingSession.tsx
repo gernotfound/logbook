@@ -61,7 +61,7 @@ const TrainingSession = () => {
                 if (!map.has(ex.exId)) map.set(ex.exId, []);
                 const list = map.get(ex.exId)!;
                 if (list.length < 2) {
-                    list.push({ date: w.date, sets: ex.sets || [], note: ex.sessionNote });
+                    list.push({ date: w.date || '', sets: ex.sets || [], note: ex.sessionNote });
                 }
             }
         }

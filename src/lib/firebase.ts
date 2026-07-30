@@ -33,11 +33,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
-let analytics = null;
+import { Analytics } from "firebase/analytics";
+let analytics: Analytics | null = null;
 isSupported().then((supported) => {
     if (supported) {
         analytics = getAnalytics(app);
     }
+}).catch(err => {
+    console.warn("Firebase Analytics non supportato o disabilitato:", err);
 });
 
 const db = initializeFirestore(app, {

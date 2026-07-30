@@ -6,7 +6,7 @@ import { Logic } from '../lib/logic';
 export function useNutritionMeasurements() {
     const userData = useAppStore(state => state.userData);
     const saveUserData = useAppStore(state => state.saveUserData);
-    const { showAlert } = useDialogStore();
+    const showAlert = useDialogStore(state => state.showAlert);
     
     const profile: any = userData?.profile || {};
     const [editingDate, setEditingDate] = useState<string | null>(null);

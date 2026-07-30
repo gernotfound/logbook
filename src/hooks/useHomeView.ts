@@ -105,8 +105,10 @@ export function useHomeView() {
                        userData?.nutritionPlanning?.totalKcal || 2500;
     
     // Get BF % — use today's or most recent measurement
+    const sortedNutritionDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
+    const recentWeight = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.weight)?.weight;
     const currentWeight = todayNutrition.weight || 
-                          ((Object.values(nutrition) as any[]).find(n => n?.weight)?.weight) || 
+                          recentWeight || 
                           userData?.nutritionPlanning?.weight || 80;
     let bf = "--";
     if (userData.profile && Object.keys(userData.profile).length > 0) {
