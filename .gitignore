@@ -19,6 +19,7 @@ dist-ssr
 
 # Agent reports
 bug_report.md
+PROJECT.md
 
 # Editor directories and files
 .vscode/*
