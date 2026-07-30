@@ -53,7 +53,7 @@ export function useNutritionMeals() {
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
             await saveUserData({ ...userData, nutrition: newNutritionObj });
-        } catch (error) {
+        } catch {
             showAlert("Errore durante il salvataggio dell'alimento.");
         }
     };
@@ -123,7 +123,7 @@ export function useNutritionMeals() {
         try {
             await saveUserData({ ...userData, nutrition: newNutritionObj });
             setSearchQuery('');
-        } catch (error) {
+        } catch {
             showAlert("Errore durante il salvataggio dell'alimento.");
         }
     };
@@ -146,7 +146,7 @@ export function useNutritionMeals() {
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
             await saveUserData({ ...userData, nutrition: newNutritionObj });
-        } catch (error) {
+        } catch {
             showAlert("Errore durante la rimozione dell'alimento.");
         }
     };
@@ -163,7 +163,7 @@ export function useNutritionMeals() {
         const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
             await saveUserData({ ...userData, nutrition: newNutritionObj });
-        } catch (error) {
+        } catch {
             showAlert("Errore durante la pulizia della giornata.");
         }
     };
@@ -190,7 +190,7 @@ export function useNutritionMeals() {
                 setShowCustomModal(false);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
                 await showAlert("Alimento custom salvato!");
-            } catch (error) {
+            } catch {
                 await showAlert("Errore durante il salvataggio dell'alimento custom.");
             }
         }

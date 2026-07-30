@@ -15,7 +15,7 @@ export function useTrainingHistory() {
             const updatedHistory = (userData.history || []).filter((w: any) => w.id !== id);
             try {
                 await saveUserData({ ...userData, history: updatedHistory });
-            } catch (error) {
+            } catch {
                 const showAlert = useDialogStore.getState().showAlert;
                 showAlert("Errore durante l'eliminazione dell'allenamento.");
             }

@@ -43,8 +43,8 @@ export function useHomeView() {
     const userData = useAppStore(state => state.userData);
 
     // Always derive safe values — required before any useMemo (Rules of Hooks)
-    const history = userData?.history || [];
-    const nutrition = userData?.nutrition || {};
+    const history = useMemo(() => userData?.history || [], [userData?.history]);
+    const nutrition = useMemo(() => userData?.nutrition || {}, [userData?.nutrition]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
     const streak = useMemo(() => calcStreak(history), [history]);

@@ -1,24 +1,9 @@
-import { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { auth, db, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
+import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
-
-export interface AuthContextType {
-    currentUser: any;
-    loading: boolean;
-    login: () => Promise<void>;
-    logout: () => Promise<void>;
-}
-
-export const defaultAuthContext: AuthContextType = {
-    currentUser: null,
-    loading: false,
-    login: async () => {},
-    logout: async () => {}
-};
-
-export const AuthContext = createContext<AuthContextType>(defaultAuthContext);
 
 export const AuthProvider = ({ children }: { children: any }) => {
     const [currentUser, setCurrentUser] = useState<any>(null);

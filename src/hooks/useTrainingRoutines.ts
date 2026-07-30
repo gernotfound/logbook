@@ -59,7 +59,7 @@ export function useTrainingRoutines() {
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
-        } catch (error) {
+        } catch {
             showAlert("Errore durante il salvataggio della scheda.");
         }
     };
@@ -73,7 +73,7 @@ export function useTrainingRoutines() {
             if (editingRoutineId === id) {
                 handleCancelEdit();
             }
-        } catch (error) {
+        } catch {
             showAlert("Errore durante l'eliminazione della scheda.");
         }
     };

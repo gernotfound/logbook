@@ -82,7 +82,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
             const saved = localStorage.getItem('logbook_local_workout');
             return saved ? JSON.parse(saved) : null;
-        } catch (e) {
+        } catch {
             return null;
         }
     })(),

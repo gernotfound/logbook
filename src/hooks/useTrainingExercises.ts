@@ -98,7 +98,7 @@ export function useTrainingExercises() {
         try {
             await saveUserData({ ...userData, library: updatedLibrary });
             handleCancelEdit(); // Reset form
-        } catch (error) {
+        } catch {
             showAlert("Errore durante il salvataggio dell'esercizio.");
         }
     };
@@ -110,7 +110,7 @@ export function useTrainingExercises() {
             try {
                 await saveUserData({ ...userData, library: updatedLibrary });
                 if (editingExId === id) handleCancelEdit();
-            } catch (error) {
+            } catch {
                 showAlert("Errore durante l'eliminazione dell'esercizio.");
             }
         }

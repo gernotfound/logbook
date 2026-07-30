@@ -102,7 +102,7 @@ export function useNutritionMeasurements() {
             await saveUserData({ ...userData, nutrition: newNutrition });
             await showAlert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
             handleCancelEdit();
-        } catch (error) {
+        } catch {
             await showAlert("Errore durante il salvataggio della misurazione.");
         }
     };

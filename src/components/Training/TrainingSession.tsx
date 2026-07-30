@@ -107,6 +107,7 @@ const TrainingSession = () => {
             </div>
 
             <div className="card" style={{ padding: '15px', marginBottom: '20px' }}>
+                {activeWorkout.routineName && <h3 style={{ marginTop: 0 }}>{activeWorkout.routineName}</h3>}
                 {(activeWorkout.exercises || []).length === 0 ? (
                     <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
                 ) : (

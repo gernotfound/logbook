@@ -18,6 +18,17 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
+export const emptyUserData: any = {
+  profile: {},
+  library: [],
+  routines: [],
+  history: [],
+  nutrition: {},
+  customFoods: [],
+  activeWorkout: null,
+  nutritionPlanning: {}
+};
+
 // Mock HTMLCanvasElement context for Chart.js
 HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(() => ({
   fillRect: vi.fn(),
@@ -65,7 +76,7 @@ const localStorageMock = {
     for (const k in localStorageStore) delete localStorageStore[k];
   }),
   length: 0,
-  key: vi.fn((index: number) => null),
+  key: vi.fn((_index: number) => null),
 };
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 

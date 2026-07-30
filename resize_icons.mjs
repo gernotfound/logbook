@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import fs from 'fs';
+
 
 const inputPath = 'C:\\Users\\gerar\\.gemini\\antigravity\\brain\\4438415c-4022-4cdc-ae25-24e7c0dde945\\neon_diary_icon_outline_1785060407852.jpg';
 const outDir = './public';

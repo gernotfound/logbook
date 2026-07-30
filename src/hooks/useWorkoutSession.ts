@@ -92,7 +92,7 @@ export function useWorkoutSession() {
             await saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
             setLocalWorkout(null);
             setMood(''); setPump(''); setFatigue(''); setWater('');
-        } catch (error) {
+        } catch {
             showAlert("Errore durante il salvataggio della sessione.");
         }
     };
@@ -103,7 +103,7 @@ export function useWorkoutSession() {
             await saveUserData({ ...userData, activeWorkout: null });
             setLocalWorkout(null);
             setMood(''); setPump(''); setFatigue(''); setWater('');
-        } catch (error) {
+        } catch {
             showAlert("Errore durante l'eliminazione della sessione.");
         }
     };
@@ -234,7 +234,7 @@ export function useWorkoutSession() {
         const updatedLibrary = library.map((l: any) => l.id === exId ? { ...l, notes: note } : l);
         try {
             await saveUserData({ ...userData, library: updatedLibrary });
-        } catch (error) {
+        } catch {
             showAlert("Errore durante il salvataggio della nota.");
         }
     };

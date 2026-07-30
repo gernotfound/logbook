@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, test, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { renderWithProviders } from './setup';
+import { renderWithProviders, emptyUserData } from './setup';
 
 import App from '../src/App';
 import HomeView from '../src/components/Home/HomeView';
@@ -89,7 +89,12 @@ describe('Render Test Suite - Zero Crash Verification', () => {
       ]
     };
     const { container } = renderWithProviders(<TrainingSession />, {
-      localWorkout: activeWorkout
+      localWorkout: activeWorkout,
+      userData: { 
+        ...emptyUserData, 
+        activeWorkout,
+        library: [{ id: 'ex1', name: 'Panca Piana' }] 
+      } as any
     });
     expect(container.textContent).toContain('Scheda A - Upper');
     expect(container.textContent).toContain('Panca Piana');
@@ -160,7 +165,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders SettingsView without crashing', () => {
     const { container } = renderWithProviders(<SettingsView />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Impostazioni/i)).toBeDefined();
+    expect(screen.getByText(/Dati Biometrici/i)).toBeDefined();
   });
 
   test('renders WorkoutTimer without crashing', () => {

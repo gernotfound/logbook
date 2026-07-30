@@ -43,7 +43,7 @@ export function useNutritionPlanning() {
         try {
             await saveUserData(newUserData);
             await showAlert("Pianificazione salvata sul cloud!");
-        } catch (error) {
+        } catch {
             await showAlert("Errore durante il salvataggio della pianificazione.");
         }
     };

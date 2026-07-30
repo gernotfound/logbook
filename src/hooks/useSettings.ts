@@ -37,7 +37,7 @@ export function useSettings() {
             await saveUserData({ ...userData, profile: newProfile });
             setLocalProfile(null);
             await showAlert("Profilo aggiornato!");
-        } catch (error) {
+        } catch {
             await showAlert("Errore durante il salvataggio del profilo.");
         }
     };
@@ -56,7 +56,7 @@ export function useSettings() {
         try {
             await DB.deleteAccount();
             // logout handled by onAuthStateChanged
-        } catch (error) {
+        } catch (error: any) {
             setDeletingAccount(false);
             console.error("Errore eliminazione account:", error);
         }
