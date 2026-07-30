@@ -1,7 +1,16 @@
+import { useMemo } from 'react';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 
 const TrainingHistory = () => {
     const { userData, history, deleteWorkout } = useTrainingHistory();
+
+    const libraryMap = useMemo(() => {
+        const map = new Map<string, any>();
+        if (userData?.library) {
+            userData.library.forEach(l => map.set(l.id, l));
+        }
+        return map;
+    }, [userData?.library]);
 
     return (
         <div className="training-sub-view active">
@@ -51,7 +60,7 @@ const TrainingHistory = () => {
                                 {(wo.exercises || []).length > 0 && (
                                     <div style={{ marginBottom: '10px' }}>
                                         {(wo.exercises || []).map((ex: any, exIdx: number) => {
-                                            const libDef = (userData?.library || []).find(l => l.id === ex.exId);
+                                            const libDef = libraryMap.get(ex.exId);
                                             const exName = libDef ? libDef.name : (ex.name || 'Esercizio Rimosso');
                                             
                                             const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time);

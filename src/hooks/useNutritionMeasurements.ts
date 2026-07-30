@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -20,9 +20,11 @@ export function useNutritionMeasurements() {
 
     const todayDateStr = Logic.getLocalDateString();
 
-    const measurementsHistory = Object.values(userData?.nutrition || {})
-        .filter((day: any) => day.weight || day.bf)
-        .sort((a: any, b: any) => b.date.localeCompare(a.date));
+    const measurementsHistory = useMemo(() => {
+        return Object.values(userData?.nutrition || {})
+            .filter((day: any) => day.weight || day.bf)
+            .sort((a: any, b: any) => b.date.localeCompare(a.date));
+    }, [userData?.nutrition]);
 
     const handleEditClick = (day: any) => {
         setEditingDate(day.date);

@@ -100,13 +100,14 @@ export function useWorkoutSession() {
         setMood(''); setPump(''); setFatigue(''); setWater('');
     };
 
-    const addExtraExercise = (ex: any) => {
-        if (!activeWorkout || !ex.exId) return;
+    const addExtraExercise = (exInput: string | { exId: string }) => {
+        const exId = typeof exInput === 'string' ? exInput : exInput?.exId;
+        if (!activeWorkout || !exId) return;
         const updatedActive = {
             ...activeWorkout,
             exercises: [
                 ...activeWorkout.exercises,
-                { exId: ex.exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
+                { exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
             ]
         };
         setLocalWorkout(updatedActive);

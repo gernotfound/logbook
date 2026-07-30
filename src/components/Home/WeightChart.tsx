@@ -12,30 +12,31 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-export default function WeightChart({ chartData }: { chartData: any }) {
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label: (ctx: any) => `${ctx.parsed.y} kg`
-                }
-            }
-        },
-        scales: {
-            y: { 
-                beginAtZero: false,
-                grid: { color: 'rgba(255,255,255,0.1)' },
-                ticks: { color: '#ccc' }
-            },
-            x: {
-                grid: { display: false },
-                ticks: { color: '#ccc', maxTicksLimit: 7 }
+const CHART_OPTIONS = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { display: false },
+        tooltip: {
+            callbacks: {
+                label: (ctx: any) => `${ctx.parsed.y} kg`
             }
         }
-    };
+    },
+    scales: {
+        y: { 
+            beginAtZero: false,
+            grid: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { color: '#ccc' }
+        },
+        x: {
+            grid: { display: false },
+            ticks: { color: '#ccc', maxTicksLimit: 7 }
+        }
+    }
+};
 
-    return <Line data={chartData} options={chartOptions as any} />;
+export default function WeightChart({ chartData }: { chartData: any }) {
+
+    return <Line data={chartData} options={CHART_OPTIONS as any} />;
 }

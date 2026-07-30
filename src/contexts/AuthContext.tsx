@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
@@ -76,16 +76,12 @@ export const AuthProvider = ({ children }: { children: any }) => {
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const login = async () => {
+    const login = useCallback(async () => {
         setSaveError(null);
         try {
-            // Try popup first; on mobile it often fails → fall back to redirect
             await signInWithPopup(auth, provider);
         } catch (error: any) {
-            if (error.code === 'auth/popup-blocked' || 
-                error.code === 'auth/popup-closed-by-user' ||
-                error.code === 'auth/cancelled-popup-request') {
-                // Mobile / popup blocked → use redirect flow
+            if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
                 try {
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError) {
@@ -97,9 +93,9 @@ export const AuthProvider = ({ children }: { children: any }) => {
                 setSaveError("Errore di accesso: " + error.message);
             }
         }
-    };
+    }, [setSaveError]);
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         setSyncing(true);
         try {
             await DB.secureLogOut();
@@ -110,14 +106,14 @@ export const AuthProvider = ({ children }: { children: any }) => {
         } finally {
             setSyncing(false);
         }
-    };
+    }, [setSyncing, setUserData]);
 
-    const value = {
+    const value = useMemo(() => ({
         currentUser,
         loading,
         login,
         logout
-    };
+    }), [currentUser, loading, login, logout]);
 
     return (
         <AuthContext.Provider value={value}>

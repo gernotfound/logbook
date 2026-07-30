@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
@@ -11,6 +11,8 @@ const TrainingExercises = () => {
         toggleMuscle, handleEditClick, handleCancelEdit,
         handleSave, handleDelete
     } = useTrainingExercises();
+
+    const selectedMuscleIds = useMemo(() => selectedMuscles.map(m => m.id), [selectedMuscles]);
 
     return (
         <div className="training-sub-view active">
@@ -90,7 +92,7 @@ const TrainingExercises = () => {
                     </div>
 
                     {/* Modello Muscolare 3D-like (SVG) */}
-                    <MuscleModel selectedMuscles={selectedMuscles.map(m => m.id) as any} />
+                    <MuscleModel selectedMuscles={selectedMuscleIds as any} />
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>

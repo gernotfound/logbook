@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import WorkoutTimer from './WorkoutTimer';
 
@@ -31,7 +31,7 @@ const TrainingSession = () => {
         addExtraExercise, removeActiveExercise,
         addSet, removeSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet,
-        updateSetupNote
+        updateSetupNote, updateSessionNote
     } = useWorkoutSession();
 
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
@@ -50,6 +50,23 @@ const TrainingSession = () => {
         addSpecialSet(exIndex, setId as string, type, () => setOpenSpecialMenuId(null));
     };
 
+    const exerciseHistoryMap = useMemo(() => {
+        const map = new Map<string, Array<{ date: string; sets: any[]; note: string }>>();
+        if (!history || history.length === 0) return map;
+
+        for (const w of history) {
+            if (!w.exercises) continue;
+            for (const ex of w.exercises) {
+                if (!ex.exId) continue;
+                if (!map.has(ex.exId)) map.set(ex.exId, []);
+                const list = map.get(ex.exId)!;
+                if (list.length < 2) {
+                    list.push({ date: w.date, sets: ex.sets || [], note: ex.sessionNote });
+                }
+            }
+        }
+        return map;
+    }, [history]);
 
     if (!activeWorkout) {
         return (
@@ -99,12 +116,7 @@ const TrainingSession = () => {
                         const exNotes = libDef ? (libDef.notes || '') : "";
 
                         // Fetch last 2 history entries for this exercise
-                        const pastWorkouts = [];
-                        for (let w of history) {
-                            const ex = (w.exercises || []).find((e: any) => e.exId === exItem.exId);
-                            if (ex) pastWorkouts.push({ date: w.date, sets: ex.sets || [], note: ex.sessionNote });
-                            if (pastWorkouts.length === 2) break;
-                        }
+                        const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || [];
                         const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
 
                         return (
@@ -217,7 +229,7 @@ const TrainingSession = () => {
                                 <textarea 
                                     placeholder="Note per la prossima volta (dolori, feedback)..." 
                                     value={exItem.sessionNote || ''}
-                                    onChange={(e: any) => updateSet(exIndex, '', 'sessionNote', e.target.value)}
+                                    onChange={(e: any) => updateSessionNote(exIndex, e.target.value)}
                                     style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }} 
                                 />
                             </div>
