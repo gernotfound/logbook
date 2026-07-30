@@ -17,9 +17,14 @@ dist-ssr
 .env.*
 !.env.example
 
-# Agent reports
+# Agent reports and AI artifacts
 bug_report.md
 PROJECT.md
+action_plan.md
+task.md
+prompt_draft.md
+walkthrough.md
+implementation_plan.md
 
 # Editor directories and files
 .vscode/*
