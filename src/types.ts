@@ -45,6 +45,8 @@ export interface Exercise {
 export interface RoutineExercise {
     exId: string;
     setsCount: number;
+    minReps?: number;
+    maxReps?: number;
 }
 
 export interface WorkoutRoutine {
@@ -67,6 +69,8 @@ export interface SessionExercise {
     exId: string;
     sessionNote: string;
     sets: SessionExerciseSet[];
+    minReps?: number;
+    maxReps?: number;
 }
 
 export interface WorkoutSession {

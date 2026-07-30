@@ -49,7 +49,10 @@ export function useWorkoutSession() {
                 for (let i = 0; i < setsCount; i++) {
                     sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
                 }
-                return { exId: ex.exId, sets, sessionNote: '' };
+                const result: any = { exId: ex.exId, sets, sessionNote: '' };
+                if (ex.minReps) result.minReps = ex.minReps;
+                if (ex.maxReps) result.maxReps = ex.maxReps;
+                return result;
             })
         };
 

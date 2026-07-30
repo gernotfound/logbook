@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -16,6 +16,32 @@ export function useTrainingExercises() {
     const [trackingType, setTrackingType] = useState<'weight_reps' | 'time'>('weight_reps');
 
     const library = userData?.library || [];
+
+    // Restore draft on mount
+    useEffect(() => {
+        const draft = localStorage.getItem('draft_exercise');
+        if (draft) {
+            try {
+                const parsed = JSON.parse(draft);
+                if (parsed.name) setExName(parsed.name);
+                if (parsed.notes) setExNotes(parsed.notes);
+                if (parsed.trackingType) setTrackingType(parsed.trackingType);
+                if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
+            } catch (e) {}
+        }
+    }, []);
+
+    // Save draft on change
+    useEffect(() => {
+        if (!editingExId) {
+            localStorage.setItem('draft_exercise', JSON.stringify({ 
+                name: exName, 
+                notes: exNotes, 
+                trackingType, 
+                selectedMuscles 
+            }));
+        }
+    }, [exName, exNotes, trackingType, selectedMuscles, editingExId]);
 
     const filteredMuscles = useMemo(() => {
         return Logic.MUSCLES.filter(m => 
@@ -56,6 +82,7 @@ export function useTrainingExercises() {
         setSelectedMuscles([]);
         setMuscleSearch('');
         setTrackingType('weight_reps');
+        localStorage.removeItem('draft_exercise');
     };
 
     const handleSaveExercise = async () => {

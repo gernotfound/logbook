@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -19,6 +19,32 @@ export function useNutritionMeasurements() {
     const [method, setMethod] = useState(profile.gender === 'F' ? 'navy_female' : 'navy_male');
 
     const todayDateStr = Logic.getLocalDateString();
+
+    // Restore draft on mount
+    useEffect(() => {
+        const draft = localStorage.getItem('draft_measurement');
+        if (draft) {
+            try {
+                const parsed = JSON.parse(draft);
+                if (parsed.weight) setWeight(parsed.weight);
+                if (parsed.waist) setWaist(parsed.waist);
+                if (parsed.neck) setNeck(parsed.neck);
+                if (parsed.hip) setHip(parsed.hip);
+                if (parsed.manualBf) setManualBf(parsed.manualBf);
+                if (parsed.measureTime) setMeasureTime(parsed.measureTime);
+                if (parsed.method) setMethod(parsed.method);
+            } catch (e) {}
+        }
+    }, []);
+
+    // Save draft on change
+    useEffect(() => {
+        if (!editingDate) {
+            localStorage.setItem('draft_measurement', JSON.stringify({ 
+                weight, waist, neck, hip, manualBf, measureTime, method 
+            }));
+        }
+    }, [weight, waist, neck, hip, manualBf, measureTime, method, editingDate]);
 
     const measurementsHistory = useMemo(() => {
         return Object.values(userData?.nutrition || {})
@@ -45,6 +71,7 @@ export function useNutritionMeasurements() {
         setHip('');
         setManualBf('');
         setMeasureTime(new Date().toTimeString().substring(0, 5));
+        localStorage.removeItem('draft_measurement');
     };
 
     const calculateAndSave = async () => {

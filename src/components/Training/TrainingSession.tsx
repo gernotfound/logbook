@@ -122,7 +122,7 @@ const TrainingSession = () => {
 
                         return (
                             <div key={exIndex} style={{ marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                                     <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>{exName}</h3>
                                     <div style={{ display: 'flex', gap: '5px' }}>
                                         <button className="btn-small" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }} onClick={() => handleRemoveExercise(exIndex)}>🗑️</button>
@@ -130,6 +130,12 @@ const TrainingSession = () => {
                                         <button className={`btn-small toggle-btn ${openSetupExIndex === exIndex ? 'active-highlight' : ''}`} style={openSetupExIndex === exIndex ? { background: 'var(--primary-color)', color: '#000' } : {}} onClick={() => setOpenSetupExIndex(openSetupExIndex === exIndex ? null : exIndex)}>⚙️ Setup</button>
                                     </div>
                                 </div>
+                                {(exItem.minReps || exItem.maxReps) && (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                                        Rep min: {exItem.minReps || '-'} | Rep max: {exItem.maxReps || '-'}
+                                    </div>
+                                )}
+                                {!(exItem.minReps || exItem.maxReps) && <div style={{ marginBottom: '15px' }}></div>}
 
                                 {openHistoryExIndex === exIndex && (
                                     <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>

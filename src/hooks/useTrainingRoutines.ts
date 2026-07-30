@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -13,6 +13,25 @@ export function useTrainingRoutines() {
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
+
+    // Restore draft on mount
+    useEffect(() => {
+        const draft = localStorage.getItem('draft_routine');
+        if (draft) {
+            try {
+                const parsed = JSON.parse(draft);
+                if (parsed.name) setRoutineName(parsed.name);
+                if (parsed.exercises) setRoutineExercises(parsed.exercises);
+            } catch (e) {}
+        }
+    }, []);
+
+    // Save draft on change
+    useEffect(() => {
+        if (!editingRoutineId) {
+            localStorage.setItem('draft_routine', JSON.stringify({ name: routineName, exercises: routineExercises }));
+        }
+    }, [routineName, routineExercises, editingRoutineId]);
 
     const handleRoutineClick = (id: string) => {
         setExpandedRoutineId(prev => prev === id ? null : id);
@@ -32,6 +51,7 @@ export function useTrainingRoutines() {
         setEditingRoutineId(null);
         setRoutineName('');
         setRoutineExercises([]);
+        localStorage.removeItem('draft_routine');
     };
 
     const handleSave = async () => {
@@ -59,6 +79,7 @@ export function useTrainingRoutines() {
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
+            localStorage.removeItem('draft_routine');
         } catch {
             showAlert("Errore durante il salvataggio della scheda.");
         }
@@ -91,6 +112,21 @@ export function useTrainingRoutines() {
         });
     };
 
+    const handleUpdateReps = (index: number, field: 'minReps' | 'maxReps', value: string) => {
+        setRoutineExercises(prev => {
+            const newExs = [...prev];
+            const parsed = parseInt(value);
+            if (isNaN(parsed)) {
+                const ex = { ...newExs[index] };
+                delete ex[field];
+                newExs[index] = ex;
+            } else {
+                newExs[index] = { ...newExs[index], [field]: parsed };
+            }
+            return newExs;
+        });
+    };
+
     const handleRemoveExerciseFromRoutine = (indexToRemove: number) => {
         setRoutineExercises(prev => prev.filter((_, idx) => idx !== indexToRemove));
     };
@@ -114,7 +150,7 @@ export function useTrainingRoutines() {
         routineExercises,
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete,
-        handleAddExerciseToRoutine, handleUpdateSetsCount,
+        handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
         handleRemoveExerciseFromRoutine, moveExercise
     };
 }

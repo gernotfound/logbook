@@ -9,7 +9,7 @@ const TrainingRoutines = () => {
         routineExercises,
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete,
-        handleAddExerciseToRoutine, handleUpdateSetsCount,
+        handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
         handleRemoveExerciseFromRoutine, moveExercise
     } = useTrainingRoutines();
 
@@ -60,28 +60,38 @@ const TrainingRoutines = () => {
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '15px' }}>Nessun esercizio presente. Aggiungine uno dalla libreria!</p>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
-                            {routineExercises.map((ex: { exId: string, setsCount?: number }, index: number) => {
+                            {routineExercises.map((ex: any, index: number) => {
                                 const libDef = library.find(l => l.id === ex.exId);
                                 return (
-                                    <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>
-                                        <div style={{ fontSize: '0.95rem', flex: 1 }}>
-                                            {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
+                                    <div key={index} style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                            <div style={{ fontSize: '0.95rem', flex: 1 }}>
+                                                {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem' }}>
+                                                <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Serie:</label>
+                                                <input 
+                                                    type="number" min="1" max="20"
+                                                    value={ex.setsCount || 3}
+                                                    onChange={e => handleUpdateSetsCount(index, parseInt(e.target.value) || 3)}
+                                                    style={{ width: '50px', margin: 0, padding: '4px', textAlign: 'center' }}
+                                                    onClick={e => e.stopPropagation()}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(index, -1)}>⬆️</button>
+                                                <button className="btn-icon" disabled={index === routineExercises.length - 1} style={{ opacity: index === routineExercises.length - 1 ? 0.3 : 1 }} onClick={() => moveExercise(index, 1)}>⬇️</button>
+                                                <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => handleRemoveExerciseFromRoutine(index)}>❌</button>
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem' }}>
-                                            <label style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Serie:</label>
-                                            <input 
-                                                type="number" min="1" max="20"
-                                                value={ex.setsCount || 3}
-                                                onChange={e => handleUpdateSetsCount(index, parseInt(e.target.value) || 3)}
-                                                style={{ width: '50px', margin: 0, padding: '4px', textAlign: 'center' }}
-                                                onClick={e => e.stopPropagation()}
-                                            />
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '4px' }}>
-                                            <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(index, -1)}>⬆️</button>
-                                            <button className="btn-icon" disabled={index === routineExercises.length - 1} style={{ opacity: index === routineExercises.length - 1 ? 0.3 : 1 }} onClick={() => moveExercise(index, 1)}>⬇️</button>
-                                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => handleRemoveExerciseFromRoutine(index)}>❌</button>
-                                        </div>
+                                        {libDef?.trackingType !== 'time' && (
+                                            <div style={{ display: 'flex', gap: '10px', fontSize: '0.8rem', alignItems: 'center' }}>
+                                                <label style={{ color: 'var(--text-muted)' }}>Rep min:</label>
+                                                <input type="number" placeholder="es. 8" value={ex.minReps || ''} onChange={e => handleUpdateReps(index, 'minReps', e.target.value)} style={{ width: '60px', margin: 0, padding: '4px', textAlign: 'center' }} />
+                                                <label style={{ color: 'var(--text-muted)', marginLeft: '10px' }}>Rep max:</label>
+                                                <input type="number" placeholder="es. 12" value={ex.maxReps || ''} onChange={e => handleUpdateReps(index, 'maxReps', e.target.value)} style={{ width: '60px', margin: 0, padding: '4px', textAlign: 'center' }} />
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -157,13 +167,20 @@ const TrainingRoutines = () => {
                                                     {(rtn.exercises || []).map((ex: { exId: string, setsCount?: number }, index: number) => {
                                                         const libDef = library.find(l => l.id === ex.exId);
                                                         return (
-                                                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>
-                                                                <div style={{ fontSize: '0.95rem', flex: 1 }}>
-                                                                    {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
+                                                            <div key={index} style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                                                    <div style={{ fontSize: '0.95rem', flex: 1 }}>
+                                                                        {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                                        {ex.setsCount || 3} serie
+                                                                    </div>
                                                                 </div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                                                    {ex.setsCount || 3} serie
-                                                                </div>
+                                                                {(ex.minReps || ex.maxReps) && (
+                                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                                        Rep min: {ex.minReps || '-'} | Rep max: {ex.maxReps || '-'}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}
