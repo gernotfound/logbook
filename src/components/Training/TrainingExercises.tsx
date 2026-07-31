@@ -119,9 +119,6 @@ const TrainingExercises = () => {
                     </div>
 
                     {/* Modello Muscolare 3D-like (SVG) interattivo */}
-                    <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '5px' }}>
-                        💡 Puoi anche toccare i muscoli sul manichino
-                    </div>
                     <MuscleModel 
                         selectedMuscles={selectedMuscleIds as any} 
                         secondaryMuscles={secondaryMuscles.map((m: any) => m.id)}
