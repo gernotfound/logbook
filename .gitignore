@@ -37,3 +37,4 @@ implementation_plan.md
 *.sln
 *.sw?
 /.agents
+/tests
