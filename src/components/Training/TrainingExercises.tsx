@@ -174,7 +174,7 @@ const TrainingExercises = () => {
                                         <strong>{ex.trackingType === 'time' ? 'Tempo' : 'Peso e Ripetizioni'}</strong>
                                     </div>
                                     {(ex.muscles || []).length > 0 || (ex.secondaryMuscles || []).length > 0 ? (
-                                        <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
                                             <MuscleModel 
                                                 selectedMuscles={ex.muscles as any} 
                                                 secondaryMuscles={ex.secondaryMuscles as any} 

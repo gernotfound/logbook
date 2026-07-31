@@ -43,7 +43,7 @@ const TrainingRoutines = () => {
 
                 <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
                     {routineExercises.length > 0 && (
-                        <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center' }}>
+                        <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center', width: '100%' }}>
                             <MuscleModel 
                                 selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
                                 secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
@@ -170,7 +170,7 @@ const TrainingRoutines = () => {
                                     return (
                                         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
                                             {(rtn.exercises || []).length > 0 && (
-                                                <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center' }}>
+                                                <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center', width: '100%' }}>
                                                     <MuscleModel 
                                                         selectedMuscles={Array.from(new Set(muscles)) as string[]} 
                                                         secondaryMuscles={Array.from(new Set(secMuscles)) as string[]} 

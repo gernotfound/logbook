@@ -970,8 +970,9 @@ input[type="range"].fat-slider::-webkit-slider-thumb {
     justify-content: center;
 }
 .muscle-map-container svg {
-    max-height: 180px;
+    max-height: none;
     max-width: 100%;
+    width: 100%;
     height: auto;
 }
 
