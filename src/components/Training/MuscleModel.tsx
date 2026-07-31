@@ -79,12 +79,15 @@ export default function MuscleModel({
             if (logicId) {
                 const muscleDef = Logic.MUSCLES.find(m => m.id === logicId);
                 const name = muscleDef ? muscleDef.name : logicId;
-                setTooltip({
-                    visible: true,
-                    text: name,
-                    x: e.clientX,
-                    y: e.clientY
-                });
+                const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+                if (!isTouch) {
+                    setTooltip({
+                        visible: true,
+                        text: name,
+                        x: e.clientX,
+                        y: e.clientY
+                    });
+                }
                 return;
             }
         }
@@ -109,7 +112,7 @@ export default function MuscleModel({
     };
 
     return (
-        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: 'calc(100% + 30px)', padding: '10px 0', margin: '0 -15px', overflowX: 'visible', textAlign: 'center' }}>
+        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: 'calc(100% + 30px)', padding: '30px 0 10px 0', margin: '0 -15px', overflowX: 'visible', textAlign: 'center' }}>
             <svg 
                 viewBox="2 5 66 89" 
                 style={{ width: '100%', height: 'auto', backgroundColor: 'transparent', borderRadius: 0, overflow: 'visible' }}
