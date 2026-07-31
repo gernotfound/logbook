@@ -106,27 +106,33 @@ export const useAppStore = create<AppState>((set, get) => ({
             }
 
             let syncedLocalWorkout = state.localWorkout;
-            let activeWorkout = rawNextData.activeWorkout;
             
-            if (rawNextData.activeWorkout === null) {
-                syncedLocalWorkout = null;
-                localStorage.removeItem('logbook_local_workout');
-            } else if (rawNextData.activeWorkout !== undefined) {
-                syncedLocalWorkout = rawNextData.activeWorkout;
-                if (syncedLocalWorkout) {
-                    try {
-                        localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
-                    } catch (e) {
-                        console.error("Errore salvataggio localWorkout in localStorage:", e);
+            // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
+            // The local device's localStorage is the source of truth for an ongoing workout.
+            if (state.localWorkout) {
+                // If we already have a local workout, KEEP IT. Ignore what comes from the network.
+                syncedLocalWorkout = state.localWorkout;
+            } else {
+                // If we DON'T have a local workout, but the network gives us one, we can adopt it.
+                if (rawNextData.activeWorkout !== undefined) {
+                    syncedLocalWorkout = rawNextData.activeWorkout;
+                    if (syncedLocalWorkout) {
+                        try {
+                            localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
+                        } catch (e) {
+                            console.error("Errore salvataggio localWorkout in localStorage:", e);
+                        }
+                    } else {
+                        try {
+                            localStorage.removeItem('logbook_local_workout');
+                        } catch (e) {}
                     }
                 }
-            } else if (state.localWorkout) {
-                activeWorkout = state.localWorkout;
             }
             
             const nextData: UserData = {
                 ...rawNextData,
-                activeWorkout: activeWorkout ?? null
+                activeWorkout: syncedLocalWorkout ?? null
             };
             
             return { userData: nextData, localWorkout: syncedLocalWorkout };
@@ -178,4 +184,22 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ userData: null, localWorkout: null, saveError: null, syncing: false });
     }
 }));
+
+// PWA FIX: Synchronously save the local workout to localStorage when the app goes into the background.
+// This ensures that if the OS suspends or kills the PWA immediately, the last keystrokes are not lost
+// due to the 300ms debounce timer.
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            const state = useAppStore.getState();
+            if (state.localWorkout) {
+                try {
+                    localStorage.setItem('logbook_local_workout', JSON.stringify(state.localWorkout));
+                } catch (e) {
+                    console.error("Errore salvataggio localWorkout su visibilitychange:", e);
+                }
+            }
+        }
+    });
+}
 
