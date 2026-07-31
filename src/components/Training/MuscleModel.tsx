@@ -111,8 +111,8 @@ export default function MuscleModel({
     return (
         <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', display: 'flex', justifyContent: 'center', padding: '10px 0', overflowX: 'auto' }}>
             <svg 
-                viewBox="-5 -5 85 110" 
-                style={{ width: '100%', minWidth: '600px', maxWidth: '800px', backgroundColor: 'transparent', borderRadius: 0 }}
+                viewBox="-7 -5 75 110" 
+                style={{ width: '100%', maxWidth: '800px', backgroundColor: 'transparent', borderRadius: 0 }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
