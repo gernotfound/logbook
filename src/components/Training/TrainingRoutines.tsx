@@ -14,10 +14,16 @@ const TrainingRoutines = () => {
     } = useTrainingRoutines();
 
     const editMuscles: string[] = [];
+    const editSecMuscles: string[] = [];
     routineExercises.forEach((ex: any) => {
         const libDef = library.find(l => l.id === ex.exId);
-        if (libDef && libDef.muscles) {
-            libDef.muscles.forEach((mId: string) => editMuscles.push(mId));
+        if (libDef) {
+            if (libDef.muscles) {
+                libDef.muscles.forEach((mId: string) => editMuscles.push(mId));
+            }
+            if (libDef.secondaryMuscles) {
+                libDef.secondaryMuscles.forEach((mId: string) => editSecMuscles.push(mId));
+            }
         }
     });
 
@@ -38,7 +44,10 @@ const TrainingRoutines = () => {
                 <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
                     {routineExercises.length > 0 && (
                         <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center' }}>
-                            <MuscleModel selectedMuscles={Array.from(new Set(editMuscles)) as string[]} />
+                            <MuscleModel 
+                                selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
+                                secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
+                            />
                         </div>
                     )}
                     <div style={{ marginBottom: '15px' }}>
@@ -145,10 +154,16 @@ const TrainingRoutines = () => {
 
                                 {isExpanded && (() => {
                                     const muscles: string[] = [];
+                                    const secMuscles: string[] = [];
                                     (rtn.exercises || []).forEach((ex: any) => {
                                         const libDef = library.find(l => l.id === ex.exId);
-                                        if (libDef && libDef.muscles) {
-                                            libDef.muscles.forEach((mId: string) => muscles.push(mId));
+                                        if (libDef) {
+                                            if (libDef.muscles) {
+                                                libDef.muscles.forEach((mId: string) => muscles.push(mId));
+                                            }
+                                            if (libDef.secondaryMuscles) {
+                                                libDef.secondaryMuscles.forEach((mId: string) => secMuscles.push(mId));
+                                            }
                                         }
                                     });
 
@@ -156,7 +171,10 @@ const TrainingRoutines = () => {
                                         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
                                             {(rtn.exercises || []).length > 0 && (
                                                 <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'center' }}>
-                                                    <MuscleModel selectedMuscles={Array.from(new Set(muscles)) as string[]} />
+                                                    <MuscleModel 
+                                                        selectedMuscles={Array.from(new Set(muscles)) as string[]} 
+                                                        secondaryMuscles={Array.from(new Set(secMuscles)) as string[]} 
+                                                    />
                                                 </div>
                                             )}
                                             

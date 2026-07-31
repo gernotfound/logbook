@@ -38,6 +38,7 @@ export interface Exercise {
     notes?: string;
     setsCount: number;
     muscles?: string[];
+    secondaryMuscles?: string[];
     sets: ExerciseSet[];
     trackingType?: 'weight_reps' | 'time';
 }

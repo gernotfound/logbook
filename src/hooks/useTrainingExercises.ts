@@ -13,6 +13,8 @@ export function useTrainingExercises() {
     const [exNotes, setExNotes] = useState('');
     const [muscleSearch, setMuscleSearch] = useState('');
     const [selectedMuscles, setSelectedMuscles] = useState<any[]>([]);
+    const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>([]);
+    const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
     const [trackingType, setTrackingType] = useState<'weight_reps' | 'time'>('weight_reps');
 
     const library = userData?.library || [];
@@ -27,6 +29,7 @@ export function useTrainingExercises() {
                 if (parsed.notes) setExNotes(parsed.notes);
                 if (parsed.trackingType) setTrackingType(parsed.trackingType);
                 if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
+                if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
             } catch (e) {}
         }
     }, []);
@@ -38,10 +41,11 @@ export function useTrainingExercises() {
                 name: exName, 
                 notes: exNotes, 
                 trackingType, 
-                selectedMuscles 
+                selectedMuscles,
+                secondaryMuscles
             }));
         }
-    }, [exName, exNotes, trackingType, selectedMuscles, editingExId]);
+    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, editingExId]);
 
     const filteredMuscles = useMemo(() => {
         return Logic.MUSCLES.filter(m => 
@@ -50,10 +54,29 @@ export function useTrainingExercises() {
     }, [muscleSearch]);
 
     const toggleMuscle = (muscle: any) => {
-        if (selectedMuscles.find((m: any) => m.id === muscle.id)) {
-            setSelectedMuscles(selectedMuscles.filter((m: any) => m.id !== muscle.id));
+        if (selectionMode === 'primary') {
+            if (selectedMuscles.find((m: any) => m.id === muscle.id)) {
+                setSelectedMuscles(selectedMuscles.filter((m: any) => m.id !== muscle.id));
+            } else {
+                setSelectedMuscles([...selectedMuscles, muscle]);
+                // Remove from secondary if it was there
+                setSecondaryMuscles(secondaryMuscles.filter((m: any) => m.id !== muscle.id));
+            }
         } else {
-            setSelectedMuscles([...selectedMuscles, muscle]);
+            if (secondaryMuscles.find((m: any) => m.id === muscle.id)) {
+                setSecondaryMuscles(secondaryMuscles.filter((m: any) => m.id !== muscle.id));
+            } else {
+                setSecondaryMuscles([...secondaryMuscles, muscle]);
+                // Remove from primary if it was there
+                setSelectedMuscles(selectedMuscles.filter((m: any) => m.id !== muscle.id));
+            }
+        }
+    };
+
+    const handleToggleMuscleById = (muscleId: string) => {
+        const m = Logic.MUSCLES.find(mu => mu.id === muscleId);
+        if (m) {
+            toggleMuscle(m);
         }
     };
 
@@ -69,7 +92,17 @@ export function useTrainingExercises() {
             if(m) exMuscles.push(m);
         });
         setSelectedMuscles(exMuscles);
+
+        // Populate secondary muscles
+        const exSecMuscles: any[] = [];
+        (ex.secondaryMuscles || []).forEach((mId: string) => {
+            const m = Logic.MUSCLES.find(mu => mu.id === mId);
+            if(m) exSecMuscles.push(m);
+        });
+        setSecondaryMuscles(exSecMuscles);
+
         setTrackingType(ex.trackingType || 'weight_reps');
+        setSelectionMode('primary');
         
         // Scroll to top to see the form
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -80,7 +113,9 @@ export function useTrainingExercises() {
         setExName('');
         setExNotes('');
         setSelectedMuscles([]);
+        setSecondaryMuscles([]);
         setMuscleSearch('');
+        setSelectionMode('primary');
         setTrackingType('weight_reps');
         localStorage.removeItem('draft_exercise');
     };
@@ -102,6 +137,7 @@ export function useTrainingExercises() {
                         name: exName.trim(),
                         notes: exNotes.trim(),
                         muscles: selectedMuscles.map((m: any) => m.id),
+                        secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
                         trackingType
                     };
                 }
@@ -115,6 +151,7 @@ export function useTrainingExercises() {
                 name: exName.trim(),
                 notes: exNotes.trim(),
                 muscles: selectedMuscles.map((m: any) => m.id),
+                secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
                 trackingType,
                 setsCount: 3,
                 sets: []
@@ -145,9 +182,10 @@ export function useTrainingExercises() {
 
     return {
         editingExId, exName, setExName, exNotes, setExNotes,
-        muscleSearch, setMuscleSearch, selectedMuscles,
+        muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
+        selectionMode, setSelectionMode,
         library, filteredMuscles, trackingType, setTrackingType,
-        toggleMuscle, handleEditClick, handleCancelEdit,
+        toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete
     };
 }

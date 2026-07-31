@@ -6,9 +6,10 @@ const TrainingExercises = () => {
     const [expandedExId, setExpandedExId] = useState<string | null>(null);
     const {
         editingExId, exName, setExName, exNotes, setExNotes,
-        muscleSearch, setMuscleSearch, selectedMuscles,
+        muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
+        selectionMode, setSelectionMode,
         library, filteredMuscles, trackingType, setTrackingType,
-        toggleMuscle, handleEditClick, handleCancelEdit,
+        toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete
     } = useTrainingExercises();
 
@@ -60,12 +61,32 @@ const TrainingExercises = () => {
                 </div>
                 
                 <div style={{ margin: '15px 0' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Muscoli Focus</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Muscoli Focus</label>
+                        <div style={{ display: 'flex', gap: '5px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '8px' }}>
+                            <button 
+                                className={`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`} 
+                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent', color: selectionMode === 'primary' ? '#000' : 'var(--text-muted)' }}
+                                onClick={() => setSelectionMode('primary')}
+                            >
+                                Primari
+                            </button>
+                            <button 
+                                className={`btn-icon ${selectionMode === 'secondary' ? 'active' : ''}`} 
+                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--secondary-color, #4db6ac)' : 'transparent', color: selectionMode === 'secondary' ? '#000' : 'var(--text-muted)' }}
+                                onClick={() => setSelectionMode('secondary')}
+                            >
+                                Secondari
+                            </button>
+                        </div>
+                    </div>
+
                     <input 
                         type="text" 
-                        placeholder="Cerca muscolo (es. Petto)..." 
+                        placeholder={selectionMode === 'primary' ? "Cerca muscolo primario..." : "Cerca muscolo secondario..."} 
                         value={muscleSearch}
                         onChange={e => setMuscleSearch(e.target.value)}
+                        style={{ borderColor: selectionMode === 'primary' ? 'var(--primary-color)' : 'var(--secondary-color, #4db6ac)' }}
                     />
                     
                     {muscleSearch && (
@@ -89,10 +110,24 @@ const TrainingExercises = () => {
                                 <span style={{ cursor: 'pointer', fontWeight: 'bold' }} onClick={() => toggleMuscle(m)}>✕</span>
                             </span>
                         ))}
+                        {secondaryMuscles.map(m => (
+                            <span key={m.id} className="badge" style={{ background: 'var(--secondary-color, rgba(0, 229, 255, 0.3))', color: '#fff', border: '1px solid var(--secondary-color, #4db6ac)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                {m.name}
+                                <span style={{ cursor: 'pointer', fontWeight: 'bold' }} onClick={() => toggleMuscle(m)}>✕</span>
+                            </span>
+                        ))}
                     </div>
 
-                    {/* Modello Muscolare 3D-like (SVG) */}
-                    <MuscleModel selectedMuscles={selectedMuscleIds as any} />
+                    {/* Modello Muscolare 3D-like (SVG) interattivo */}
+                    <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '5px' }}>
+                        💡 Puoi anche toccare i muscoli sul manichino
+                    </div>
+                    <MuscleModel 
+                        selectedMuscles={selectedMuscleIds as any} 
+                        secondaryMuscles={secondaryMuscles.map((m: any) => m.id)}
+                        interactive={true}
+                        onToggleMuscle={handleToggleMuscleById}
+                    />
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
@@ -138,9 +173,12 @@ const TrainingExercises = () => {
                                         <span style={{ color: 'var(--text-muted)' }}>Tracciamento: </span>
                                         <strong>{ex.trackingType === 'time' ? 'Tempo' : 'Peso e Ripetizioni'}</strong>
                                     </div>
-                                    {(ex.muscles || []).length > 0 ? (
+                                    {(ex.muscles || []).length > 0 || (ex.secondaryMuscles || []).length > 0 ? (
                                         <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                            <MuscleModel selectedMuscles={ex.muscles as any} />
+                                            <MuscleModel 
+                                                selectedMuscles={ex.muscles as any} 
+                                                secondaryMuscles={ex.secondaryMuscles as any} 
+                                            />
                                         </div>
                                     ) : (
                                         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: 0 }}>Nessun muscolo specificato.</p>

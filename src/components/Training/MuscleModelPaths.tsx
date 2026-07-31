@@ -49,12 +49,12 @@ export default function MuscleModelPaths({ getPathStyle }: any) { return (
                     <path id="traps-upper-right" style={getPathStyle("traps-upper-right")} d="M 55.439,14.729 L 55.376,12.104 L 56.090,13.256 L 60.470,14.754 L 59.179,16.925 L 53.844,16.925 L 53.881,14.649 Z"></path>
                     <path id="traps-mid-right" style={getPathStyle("traps-mid-right")} d="M 59.089,17.075 L 56.204,21.925 L 53.763,21.925 L 53.842,17.075 Z"></path>
                     <path id="traps-lower-right" style={getPathStyle("traps-lower-right")} d="M 56.114,22.075 L 55.492,23.121 L 53.661,28.203 L 53.761,22.075 Z"></path>
-                    <path id="lats-upper-left" style={getPathStyle("lats-upper-left")} d="M 44.144,15.285 L 39.888,20.286 L 39.426,22.749 L 41.263,21.510 L 44.025,20.355 L 45.663,23.400 L 49.103,23.400 Z"></path>
-                    <path id="deltoid-rear-left" style={getPathStyle("deltoid-rear-left")} d="M 42.201,16.586 L 40.626,18.152 L 39.736,20.156 L 43.992,15.155 Z"></path>
+                    <path id="deltoid-rear-left" style={getPathStyle("deltoid-rear-left")} d="M 44.144,15.285 L 39.888,20.286 L 39.426,22.749 L 41.263,21.510 L 44.025,20.355 L 45.663,23.400 L 49.103,23.400 Z"></path>
+                    <path id="deltoid-side-back-left" style={getPathStyle("deltoid-side-back-left")} d="M 42.201,16.586 L 40.626,18.152 L 39.736,20.156 L 43.992,15.155 Z"></path>
                     <path id="lats-mid-left" style={getPathStyle("lats-mid-left")} d="M 45.771,23.600 L 45.872,23.789 L 47.009,29.286 L 47.023,30.400 L 51.080,30.400 L 51.053,28.314 L 49.185,23.600 Z"></path>
                     <path id="lats-lower-left" style={getPathStyle("lats-lower-left")} d="M 47.026,30.600 L 47.086,35.145 L 51.156,36.255 L 51.082,30.600 Z"></path>
-                    <path id="deltoid-rear-right" style={getPathStyle("deltoid-rear-right")} d="M 62.863,16.686 L 64.438,18.251 L 65.328,20.255 L 61.073,15.254 Z"></path>
-                    <path id="lats-upper-right" style={getPathStyle("lats-upper-right")} d="M 60.921,15.384 L 65.176,20.385 L 65.290,22.849 L 63.801,21.609 L 61.039,20.454 L 59.455,23.400 L 56.022,23.400 Z"></path>
+                    <path id="deltoid-side-back-right" style={getPathStyle("deltoid-side-back-right")} d="M 62.863,16.686 L 64.438,18.251 L 65.328,20.255 L 61.073,15.254 Z"></path>
+                    <path id="deltoid-rear-right" style={getPathStyle("deltoid-rear-right")} d="M 60.921,15.384 L 65.176,20.385 L 65.290,22.849 L 63.801,21.609 L 61.039,20.454 L 59.455,23.400 L 56.022,23.400 Z"></path>
                     <path id="lats-mid-right" style={getPathStyle("lats-mid-right")} d="M 59.347,23.600 L 59.192,23.888 L 58.055,29.385 L 58.042,30.400 L 53.986,30.400 L 54.012,28.413 L 55.918,23.600 Z"></path>
                     <path id="lats-lower-right" style={getPathStyle("lats-lower-right")} d="M 58.039,30.600 L 57.979,35.245 L 53.908,36.354 L 53.983,30.600 Z"></path>
                     <path id="triceps-long-left" style={getPathStyle("triceps-long-left")} d="M 43.593,21.039 L 44.920,23.967 L 43.615,25.653 L 43.186,27.069 L 39.209,29.802 Z"></path>
