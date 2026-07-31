@@ -1,14 +1,17 @@
 import { lazy, Suspense } from 'react';
 import { useHomeView } from '../../hooks/useHomeView';
+import MuscleModel from '../Training/MuscleModel';
 
 const WeightChart = lazy(() => import('./WeightChart'));
+const VolumeChart = lazy(() => import('./VolumeChart'));
 
 const HomeView = ({ onNavigate }: any) => {
   const {
       loading, isRestDay, todaysWorkout,
       kcalEaten, carbs, pro, fat, kcalTarget,
       bf, streak, totalWorkouts,
-      tdeeCalc, recentDates, chartData
+      tdeeCalc, recentDates, chartData,
+      muscleColors, volumeChartData
   } = useHomeView();
   
   if (loading) {
@@ -127,6 +130,24 @@ const HomeView = ({ onNavigate }: any) => {
           <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Totale Sessioni</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>💪 {totalWorkouts}</div>
+          </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0 }}>
+              <h3 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Stato Muscolare (72h)</h3>
+              <div style={{ padding: '0', margin: '0 -15px' }}>
+                  <MuscleModel muscleColors={muscleColors} interactive={false} />
+              </div>
+          </div>
+          
+          <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0, display: 'flex', flexDirection: 'column' }}>
+              <h3 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Volume (7gg)</h3>
+              <div style={{ flex: 1, minHeight: '150px', width: '100%', position: 'relative' }}>
+                  <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
+                      <VolumeChart chartData={volumeChartData} />
+                  </Suspense>
+              </div>
           </div>
       </div>
 

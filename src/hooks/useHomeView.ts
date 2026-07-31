@@ -49,6 +49,87 @@ export function useHomeView() {
     // useMemo hooks MUST be called unconditionally (before any conditional return)
     const streak = useMemo(() => calcStreak(history), [history]);
     const totalWorkouts = history.length;
+    const library = useMemo(() => userData?.library || [], [userData?.library]);
+
+    // Calculate Heatmap & Volume
+    const { muscleColors, volumeChartData } = useMemo(() => {
+        const MAX_HOURS = 72;
+        const now = Date.now();
+        const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+        
+        const fatigue = new Map<string, number>();
+        const volume = new Map<string, number>();
+
+        history.forEach((w: any) => {
+            if (!w.globalStartTime) return;
+            const msPassed = now - w.globalStartTime;
+            const hoursPassed = msPassed / (1000 * 60 * 60);
+            
+            const isRecent72h = hoursPassed <= MAX_HOURS;
+            const isRecent7d = msPassed <= SEVEN_DAYS;
+            
+            if (!isRecent72h && !isRecent7d) return;
+
+            const baseFatigue = Math.max(0, 1 - (hoursPassed / MAX_HOURS));
+
+            (w.exercises || []).forEach((ex: any) => {
+                const libEx = library.find((l: any) => l.id === ex.exId);
+                if (!libEx) return;
+
+                const completedSets = ex.sets?.filter((s: any) => s.done).length || 0;
+
+                if (isRecent7d && completedSets > 0) {
+                    (libEx.muscles || []).forEach((mId: string) => {
+                        const majorId = mId.split('_')[0]; 
+                        volume.set(majorId, (volume.get(majorId) || 0) + completedSets);
+                    });
+                }
+
+                if (isRecent72h) {
+                    (libEx.muscles || []).forEach((mId: string) => {
+                        const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
+                        atomicPaths.forEach((path: string) => {
+                            fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue));
+                        });
+                    });
+                    (libEx.secondaryMuscles || []).forEach((mId: string) => {
+                        const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
+                        atomicPaths.forEach((path: string) => {
+                            fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue * 0.5));
+                        });
+                    });
+                }
+            });
+        });
+
+        const colors: Record<string, string> = {};
+        fatigue.forEach((val, path) => {
+            if (val > 0.7) colors[path] = '#ef4444'; 
+            else if (val > 0.4) colors[path] = '#f97316'; 
+            else if (val > 0.1) colors[path] = '#eab308'; 
+        });
+
+        const labelMap: Record<string, string> = {
+            'chest': 'Petto', 'back': 'Dorso', 'legs': 'Gambe', 'quads': 'Quadricipiti',
+            'hamstrings': 'Femorali', 'glutes': 'Glutei', 'calves': 'Polpacci',
+            'shoulders': 'Spalle', 'delts': 'Spalle', 'biceps': 'Bicipiti',
+            'triceps': 'Tricipiti', 'core': 'Core', 'abs': 'Addome', 'lats': 'Dorso'
+        };
+
+        const sortedVolume = Array.from(volume.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);
+        const vChartData = {
+            labels: sortedVolume.map(v => labelMap[v[0]] || v[0]),
+            datasets: [{
+                data: sortedVolume.map(v => v[1]),
+                backgroundColor: 'rgba(14, 165, 233, 0.6)',
+                borderColor: 'var(--primary-color)',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        };
+
+        return { muscleColors: colors, volumeChartData: vChartData };
+    }, [history, library]);
 
     // Chronological array for charts and TDEE calc
     const { sortedDates, tdeeCalc } = useMemo(() => {
@@ -121,6 +202,7 @@ export function useHomeView() {
         isRestDay, todaysWorkout,
         kcalEaten, carbs, pro, fat, kcalTarget,
         bf, streak, totalWorkouts,
-        tdeeCalc, recentDates, chartData
+        tdeeCalc, recentDates, chartData,
+        muscleColors, volumeChartData
     };
 }

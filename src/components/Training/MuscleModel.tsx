@@ -5,6 +5,7 @@ import { Logic } from '../../lib/logic';
 interface MuscleModelProps {
     selectedMuscles?: string[];
     secondaryMuscles?: string[];
+    muscleColors?: Record<string, string>;
     interactive?: boolean;
     onToggleMuscle?: (muscleId: string) => void;
 }
@@ -12,6 +13,7 @@ interface MuscleModelProps {
 export default function MuscleModel({ 
     selectedMuscles = [], 
     secondaryMuscles = [], 
+    muscleColors,
     interactive = false, 
     onToggleMuscle 
 }: MuscleModelProps) {
@@ -55,6 +57,17 @@ export default function MuscleModel({
     });
 
     const getPathStyle = (id: string) => {
+        const logicId = reverseMap[id];
+        
+        if (muscleColors && logicId && muscleColors[logicId]) {
+            return {
+                fill: muscleColors[logicId],
+                transition: 'fill 0.3s ease',
+                stroke: 'var(--bg-card)',
+                strokeWidth: '0.5'
+            };
+        }
+
         const isPrimary = primaryIds.has(id);
         const isSecondary = secondaryIds.has(id);
         
