@@ -125,7 +125,7 @@ export default function MuscleModel({
     };
 
     return (
-        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: 'calc(100% + 30px)', padding: '30px 0 10px 0', margin: '0 -15px', overflowX: 'visible', textAlign: 'center' }}>
+        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: '100%', padding: '30px 0 10px 0', margin: '0 auto', overflow: 'hidden', textAlign: 'center' }}>
             <svg 
                 viewBox="0 5 70 89" 
                 style={{ width: '100%', height: 'auto', backgroundColor: 'transparent', borderRadius: 0, overflow: 'visible' }}
