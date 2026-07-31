@@ -109,9 +109,9 @@ export default function MuscleModel({
     };
 
     return (
-        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', display: 'flex', justifyContent: 'center', padding: '10px 0', margin: '0 -15px', overflowX: 'visible' }}>
+        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: 'calc(100% + 30px)', padding: '10px 0', margin: '0 -15px', overflowX: 'visible', textAlign: 'center' }}>
             <svg 
-                viewBox="-6.8 -10 73.8 116" 
+                viewBox="2 5 66 89" 
                 style={{ width: '100%', maxWidth: '800px', backgroundColor: 'transparent', borderRadius: 0, overflow: 'visible' }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
