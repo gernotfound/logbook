@@ -134,9 +134,9 @@ const HomeView = ({ onNavigate }: any) => {
       </div>
 
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0 }}>
+          <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0, overflow: 'hidden' }}>
               <h3 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Stato Muscolare (72h)</h3>
-              <div style={{ padding: '0', margin: '0 -15px' }}>
+              <div style={{ padding: '0', margin: '0' }}>
                   <MuscleModel muscleColors={muscleColors} interactive={false} />
               </div>
           </div>
