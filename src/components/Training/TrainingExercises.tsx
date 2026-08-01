@@ -65,15 +65,15 @@ const TrainingExercises = () => {
                         <label className="text-muted text-sm">Muscoli Focus</label>
                         <div className="flex gap-5 bg-black-20 p-4 rounded-8">
                             <button 
-                                className={`btn-icon ${selectionMode === 'primary' ? 'active text-black' : 'text-muted'}`} 
-                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent' }}
+                                className={`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`} 
+                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent', color: selectionMode === 'primary' ? '#000' : 'rgba(255, 255, 255, 0.7)' }}
                                 onClick={() => setSelectionMode('primary')}
                             >
                                 Primari
                             </button>
                             <button 
-                                className={`btn-icon ${selectionMode === 'secondary' ? 'active text-black' : 'text-muted'}`} 
-                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--secondary-color, #4db6ac)' : 'transparent' }}
+                                className={`btn-icon ${selectionMode === 'secondary' ? 'active' : ''}`} 
+                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--secondary-color, #4db6ac)' : 'transparent', color: selectionMode === 'secondary' ? '#000' : 'rgba(255, 255, 255, 0.7)' }}
                                 onClick={() => setSelectionMode('secondary')}
                             >
                                 Secondari
