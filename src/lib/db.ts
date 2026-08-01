@@ -58,7 +58,10 @@ export const DB = {
                     }
                 }
             } else {
-                return null;
+                // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
+                // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
+                lastSavedStateStr = JSON.stringify(state);
+                return state;
             }
 
             // Bucketing by Month
