@@ -56,6 +56,8 @@ export interface AppState {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let globalSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingResolvers: (() => void)[] = [];
 
 const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
     if (saveTimer) clearTimeout(saveTimer);
@@ -160,12 +162,26 @@ export const useAppStore = create<AppState>((set, get) => ({
         
         set({ userData: finalData, saveError: null });
 
-        try {
-            await DB.saveUserData(finalData);
-        } catch (error) {
-            console.error("Errore durante il salvataggio in Zustand:", error);
-            set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
-        }
+        return new Promise<void>((resolve) => {
+            pendingResolvers.push(resolve);
+            if (globalSaveTimer) clearTimeout(globalSaveTimer);
+            globalSaveTimer = setTimeout(async () => {
+                const resolversToCall = [...pendingResolvers];
+                pendingResolvers = [];
+                try {
+                    // Always pull the freshest state at the time of execution
+                    const currentState = get().userData;
+                    if (currentState) {
+                        await DB.saveUserData(currentState);
+                    }
+                } catch (error) {
+                    console.error("Errore durante il salvataggio in Zustand:", error);
+                    set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
+                } finally {
+                    resolversToCall.forEach(res => res());
+                }
+            }, 1000);
+        });
     },
 
     updateUserData: async (updater: (prev: UserData) => UserData) => {

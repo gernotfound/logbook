@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      strategies: 'networkFirst',
+      strategies: 'StaleWhileRevalidate',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
         name: 'LogBook Premium',

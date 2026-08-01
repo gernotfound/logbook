@@ -1,5 +1,5 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
-import { doc, getDoc, collection, getDocs, deleteField, writeBatch } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 let lastSavedStateStr: string | null = null;
 
@@ -40,7 +40,6 @@ export const DB = {
                     normocalorica: Object.assign({}, defaultNutritionPlanning.normocalorica)
                 })
             };
-            let needsMigration = false;
             const docRef = doc(db, "users", user.uid);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
@@ -58,46 +57,26 @@ export const DB = {
                         state.nutritionPlanning.normocalorica = Object.assign({}, defaultNutritionPlanning.normocalorica);
                     }
                 }
-                // Check if monolithic data still exists (for future migration safety)
-                if (data.history || data.nutrition) {
-                    if (data.history) state.history = data.history;
-                    if (data.nutrition) state.nutrition = data.nutrition;
-                    needsMigration = true;
-                }
             } else {
                 return null;
             }
 
-            if (!needsMigration) {
-                // Bucketing by Month
-                const histSnap = await getDocs(collection(db, "users", user.uid, "history_months"));
-                histSnap.forEach((d: any) => {
-                    const monthData = d.data() as Record<string, any>;
-                    Object.values(monthData).forEach((h: any) => state.history.push(h));
+            // Bucketing by Month
+            const histSnap = await getDocs(collection(db, "users", user.uid, "history_months"));
+            histSnap.forEach((d: any) => {
+                const monthData = d.data() as Record<string, any>;
+                Object.values(monthData).forEach((h: any) => state.history.push(h));
+            });
+            
+            const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months"));
+            nutSnap.forEach((d: any) => {
+                const monthData = d.data() as Record<string, any>;
+                Object.keys(monthData).forEach((date: string) => {
+                    (state.nutrition as any)[date] = monthData[date];
                 });
-                
-                const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months"));
-                nutSnap.forEach((d: any) => {
-                    const monthData = d.data() as Record<string, any>;
-                    Object.keys(monthData).forEach((date: string) => {
-                        (state.nutrition as any)[date] = monthData[date];
-                    });
-                });
-                
-                state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
-            } else {
-                lastSavedStateStr = JSON.stringify({
-                    profile: state.profile, 
-                    library: state.library, 
-                    routines: state.routines, 
-                    customFoods: state.customFoods,
-                    activeWorkout: state.activeWorkout,
-                    nutritionPlanning: state.nutritionPlanning,
-                    history: [], 
-                    nutrition: {}
-                });
-                return state; // Will trigger a full resave on first interaction, migrating data.
-            }
+            });
+            
+            state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
             lastSavedStateStr = JSON.stringify(state);
             return state;
         } catch (error: any) {
@@ -132,9 +111,7 @@ export const DB = {
                     routines: state.routines,
                     customFoods: state.customFoods || [],
                     activeWorkout: state.activeWorkout || null,
-                    nutritionPlanning: state.nutritionPlanning || null,
-                    history: deleteField(),
-                    nutrition: deleteField() 
+                    nutritionPlanning: state.nutritionPlanning || null
                 };
                 checkDocSize(userDocData, "User Profile");
                 batch.set(userRef, userDocData, { merge: true });

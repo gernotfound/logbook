@@ -182,7 +182,7 @@ const TrainingRoutines = () => {
                                                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nessun esercizio presente.</p>
                                             ) : (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    {(rtn.exercises || []).map((ex: { exId: string, setsCount?: number }, index: number) => {
+                                                    {(rtn.exercises || []).map((ex: { exId: string, setsCount?: number, minReps?: number | string, maxReps?: number | string }, index: number) => {
                                                         const libDef = library.find(l => l.id === ex.exId);
                                                         return (
                                                             <div key={index} style={{ display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', gap: '10px' }}>

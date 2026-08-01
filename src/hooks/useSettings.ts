@@ -59,6 +59,10 @@ export function useSettings() {
         } catch (error: any) {
             setDeletingAccount(false);
             console.error("Errore eliminazione account:", error);
+            await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
+            if (error.message?.includes("effettuare di nuovo il login")) {
+                logout();
+            }
         }
     };
 
