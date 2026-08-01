@@ -21,48 +21,48 @@ const TrainingExercises = () => {
                 <h3 className={editingExId ? 'text-primary' : 'text-white'}>
                     {editingExId ? 'Modifica Esercizio' : 'Nuovo Esercizio'}
                 </h3>
-                <input 
-                    type="text" 
-                    placeholder="Nome Esercizio (es. Panca Piana)" 
-                    value={exName}
-                    onChange={e => setExName(e.target.value)}
-                />
-                <input 
-                    type="text" 
-                    placeholder="Note Setup (es. Inclinazione panca)" 
-                    value={exNotes}
-                    onChange={e => setExNotes(e.target.value)}
-                />
-                
-                <div className="my-15">
-                    <label className="text-muted text-sm mb-8 block">Tipo di tracciamento</label>
-                    <div className="flex gap-10">
-                        <label className="flex items-center gap-5 cursor-pointer">
-                            <input 
-                                type="radio" 
-                                name="trackingType" 
-                                value="weight_reps" 
-                                checked={trackingType === 'weight_reps'} 
-                                onChange={() => setTrackingType('weight_reps')} 
-                            />
-                            Peso e Ripetizioni
-                        </label>
-                        <label className="flex items-center gap-5 cursor-pointer">
-                            <input 
-                                type="radio" 
-                                name="trackingType" 
-                                value="time" 
-                                checked={trackingType === 'time'} 
-                                onChange={() => setTrackingType('time')} 
-                            />
-                            Tempo
-                        </label>
+                <div className="flex-col gap-10 mt-15 mb-20">
+                    <div>
+                        <label className="text-muted text-sm block mb-5">Nome dell'Esercizio *</label>
+                        <input 
+                            type="text" 
+                            placeholder="es. Panca Piana con Bilanciere" 
+                            value={exName}
+                            onChange={e => setExName(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-muted text-sm block mb-5">Note di Setup (opzionale)</label>
+                        <input 
+                            type="text" 
+                            placeholder="es. Inclinazione 30 gradi, presa media" 
+                            value={exNotes}
+                            onChange={e => setExNotes(e.target.value)}
+                        />
                     </div>
                 </div>
                 
-                <div className="my-15">
+                <div className="mb-20">
+                    <label className="text-muted text-sm mb-5 block">Tipo di tracciamento</label>
+                    <div className="flex bg-black-20 p-4 rounded-8 w-full gap-5">
+                        <button 
+                            className={`flex-1 py-8 rounded-6 text-sm transition-colors ${trackingType === 'weight_reps' ? 'bg-surface text-primary shadow-sm font-bold' : 'text-muted hover:text-white'}`}
+                            onClick={() => setTrackingType('weight_reps')}
+                        >
+                            Peso e Rip.
+                        </button>
+                        <button 
+                            className={`flex-1 py-8 rounded-6 text-sm transition-colors ${trackingType === 'time' ? 'bg-surface text-primary shadow-sm font-bold' : 'text-muted hover:text-white'}`}
+                            onClick={() => setTrackingType('time')}
+                        >
+                            Tempo
+                        </button>
+                    </div>
+                </div>
+                
+                <div className="bg-black-10 border-glass rounded-12 p-15 mb-20">
                     <div className="flex-between mb-10">
-                        <label className="text-muted text-sm">Muscoli Focus</label>
+                        <label className="text-white text-sm font-bold">Muscoli Coinvolti</label>
                         <div className="flex gap-5 bg-black-20 p-4 rounded-8">
                             <button 
                                 className={`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`} 
@@ -86,15 +86,15 @@ const TrainingExercises = () => {
                         placeholder={selectionMode === 'primary' ? "Cerca muscolo primario..." : "Cerca muscolo secondario..."} 
                         value={muscleSearch}
                         onChange={e => setMuscleSearch(e.target.value)}
-                        style={{ borderColor: selectionMode === 'primary' ? 'var(--primary-color)' : 'var(--secondary-color, #4db6ac)' }}
+                        style={{ borderColor: selectionMode === 'primary' ? 'var(--primary-color)' : 'var(--secondary-color, #4db6ac)', backgroundColor: 'rgba(0,0,0,0.2)' }}
                     />
                     
                     {muscleSearch && (
-                        <div className="bg-surface border-glass rounded-8 mb-10 overflow-y-auto" style={{ maxHeight: '150px' }}>
+                        <div className="bg-surface border-glass rounded-8 mb-10 mt-5 overflow-y-auto" style={{ maxHeight: '150px' }}>
                             {filteredMuscles.map(m => (
                                 <div 
                                     key={m.id} 
-                                    className="p-8-12 cursor-pointer border-b"
+                                    className="p-8-12 cursor-pointer border-b hover:bg-black-20 transition-colors"
                                     onClick={() => toggleMuscle(m)}
                                 >
                                     {m.name}
@@ -103,7 +103,7 @@ const TrainingExercises = () => {
                         </div>
                     )}
 
-                    <div className="flex flex-wrap gap-5 mb-15">
+                    <div className="flex flex-wrap gap-5 mt-10 mb-15">
                         {selectedMuscles.map(m => (
                             <span key={m.id} className="badge badge-primary flex items-center gap-5">
                                 {m.name}
@@ -118,13 +118,15 @@ const TrainingExercises = () => {
                         ))}
                     </div>
 
-                    {/* Modello Muscolare 3D-like (SVG) interattivo */}
-                    <MuscleModel 
-                        selectedMuscles={selectedMuscleIds as any} 
-                        secondaryMuscles={secondaryMuscles.map((m: any) => m.id)}
-                        interactive={true}
-                        onToggleMuscle={handleToggleMuscleById}
-                    />
+                    <div className="rounded-8 overflow-hidden" style={{ background: 'rgba(0,0,0,0.1)' }}>
+                        {/* Modello Muscolare 3D-like (SVG) interattivo */}
+                        <MuscleModel 
+                            selectedMuscles={selectedMuscleIds as any} 
+                            secondaryMuscles={secondaryMuscles.map((m: any) => m.id)}
+                            interactive={true}
+                            onToggleMuscle={handleToggleMuscleById}
+                        />
+                    </div>
                 </div>
 
                 <div className="flex gap-10 mt-20">
