@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '../hooks/useSettings';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 const SettingsView = () => {
     const {
@@ -10,6 +11,8 @@ const SettingsView = () => {
         deletingAccount,
         handleSaveProfile, handleExport, handleDeleteAccount
     } = useSettings();
+
+    const { isInstallable, promptInstall } = usePWAInstall();
 
     const [subTab, setSubTab] = useState('biometry');
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -64,6 +67,11 @@ const SettingsView = () => {
                         <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: '15px' }} onClick={handleExport}>
                             💾 Esporta Dati (CSV)
                         </button>
+                        {isInstallable && (
+                            <button className="btn btn-primary" style={{ width: '100%', marginBottom: '15px' }} onClick={promptInstall}>
+                                📱 Installa App sul Telefono
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

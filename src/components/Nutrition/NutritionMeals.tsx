@@ -6,6 +6,7 @@ const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 export default function NutritionMeals() {
     const {
         searchQuery, handleSearch, searchResults,
+        isSearchingOnline, handleOnlineSearch,
         showCustomModal, setShowCustomModal,
         cfData, setCfData, saveCustomFood,
         meals, addFood, removeFood
@@ -14,41 +15,50 @@ export default function NutritionMeals() {
     return (
         <div>
             {/* Search Box */}
-            <div className="card" style={{ position: 'relative', marginBottom: '15px' }}>
-                <h3 style={{ marginBottom: '12px' }}>🔍 Cerca Alimento</h3>
-                <input 
-                    type="text" 
-                    placeholder="Cerca es. Pollo, Avena, o alimento custom..." 
-                    value={searchQuery}
-                    onChange={e => handleSearch(e.target.value)}
-                    style={{ margin: 0 }} 
-                />
+            <div className="card mb-15" style={{ position: 'relative' }}>
+                <h3 className="mb-10">🔍 Cerca Alimento</h3>
+                <div className="flex gap-10">
+                    <input 
+                        type="text" 
+                        placeholder="Cerca es. Pollo, Avena, o alimento custom..." 
+                        value={searchQuery}
+                        onChange={e => handleSearch(e.target.value)}
+                        className="m-0 flex-1" 
+                    />
+                    <button 
+                        className="btn btn-primary" 
+                        onClick={handleOnlineSearch}
+                        disabled={isSearchingOnline || searchQuery.trim().length < 2}
+                        style={{ padding: '0 15px', whiteSpace: 'nowrap' }}
+                    >
+                        {isSearchingOnline ? '⏳' : '🌐 Online'}
+                    </button>
+                </div>
                 
                 {searchResults.length > 0 && (
                     <div style={{
                         position: 'absolute', top: '100%', left: 0, right: 0,
-                        background: 'var(--surface-color)', border: '1px solid var(--glass-border)',
-                        borderRadius: '10px', zIndex: 100, maxHeight: '250px', overflowY: 'auto',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)', marginTop: '5px'
-                    }}>
+                        zIndex: 100, maxHeight: '250px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                    }} className="bg-surface border-glass rounded-10 overflow-y-auto mt-5">
                         {searchResults.map((f: any, idx: number) => (
-                            <div key={f.id || idx} style={{ padding: '12px', borderBottom: '1px solid var(--glass-border)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.9rem' }}>
+                            <div key={f.id || idx} className="p-12 border-b">
+                                <div className="flex-between gap-10">
+                                    <div className="flex-1" style={{ minWidth: 0 }}>
+                                        <div className="font-bold text-md" style={{ color: 'var(--text-main)' }}>
                                             {f.name}
-                                            {f.isCustom && <span style={{ marginLeft: '5px', fontSize: '0.65rem', background: 'var(--warning-color)', color: '#000', padding: '2px 5px', borderRadius: '4px' }}>Custom</span>}
+                                            {f.isCustom && <span className="bg-warning text-black p-4 rounded-4 text-xs ml-5">Custom</span>}
+                                            {f.isOnline && <span className="p-4 rounded-4 text-xs ml-5" style={{ background: '#4db6ac', color: '#000' }}>API</span>}
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        <div className="text-muted text-sm">
                                             {f.kcal} kcal / {f.baseQty}{f.unit} • C:{f.carbs} P:{f.pro} F:{f.fat}
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                                    <div className="flex gap-4 flex-shrink-0">
                                         {MEAL_TYPES.map(mt => (
                                             <button 
                                                 key={mt}
-                                                className="btn btn-small"
-                                                style={{ padding: '4px 6px', fontSize: '0.65rem' }}
+                                                className="btn btn-small p-4 text-xs"
                                                 onClick={() => addFood(f, mt)}
                                             >
                                                 {mt.substring(0,3)}
@@ -62,8 +72,7 @@ export default function NutritionMeals() {
                 )}
 
                 <button 
-                    className="btn btn-small" 
-                    style={{ width: '100%', marginTop: '10px', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--glass-border)' }}
+                    className="btn btn-small w-full mt-10 bg-card-inner border-dashed" 
                     onClick={() => setShowCustomModal(!showCustomModal)}
                 >
                     + Crea Alimento Custom
@@ -91,25 +100,25 @@ export default function NutritionMeals() {
                 });
 
                 return (
-                    <div key={mt} className="card" style={{ marginBottom: '15px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '10px' }}>
-                            <h3 style={{ margin: 0, color: 'var(--primary-color)' }}>{mt}</h3>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <div key={mt} className="card mb-15">
+                        <div className="flex-between mb-10 pb-10 border-b">
+                            <h3 className="m-0 text-primary">{mt}</h3>
+                            <span className="text-sm text-muted">
                                 {Math.round(subKcal)} kcal • C:{Math.round(subC)} P:{Math.round(subP)} F:{Math.round(subF)}
                             </span>
                         </div>
                         
                         {mealItems.length === 0 ? (
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', margin: '10px 0' }}>Nessun alimento aggiunto.</p>
+                            <p className="text-muted text-center my-10 text-sm">Nessun alimento aggiunto.</p>
                         ) : (
                             mealItems.map((item) => {
                                 return (
-                                    <div key={item.time || item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px dashed var(--glass-border)' }}>
+                                    <div key={item.time || item.id} className="flex-between py-10 border-b-dashed">
                                         <div>
-                                            <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.quantity ?? item.baseQty}{item.unit}</div>
+                                            <div className="font-bold">{item.name}</div>
+                                            <div className="text-muted text-sm">{item.quantity ?? item.baseQty}{item.unit}</div>
                                         </div>
-                                        <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => removeFood(item.time)}>✕</button>
+                                        <button className="btn-icon text-danger" onClick={() => removeFood(item.itemId || item.time)}>✕</button>
                                     </div>
                                 )
                             })

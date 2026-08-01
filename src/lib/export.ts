@@ -1,15 +1,15 @@
 import { useDialogStore } from '../store/useDialogStore';
 
 export const Exporter = {
-    async exportToCSV(history: any[], nutrition: Record<string, any>) {
+    async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         let workoutCsv = "Data,Nome Allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n";
         history.forEach(session => {
             const dateStr = session.globalStartTime ? new Date(session.globalStartTime).toLocaleString() : "Data Sconosciuta";
             const routineName = `"${session.routineName || 'Allenamento Libero'}"`;
             if (session.exercises && session.exercises.length > 0) {
                 session.exercises.forEach((ex: any) => {
-                    // Support both legacy 'name' field and new 'exId' lookup
-                    const exName = `"${ex.name || ex.exId || 'Sconosciuto'}"`;
+                    const libEx = library.find(l => l.id === ex.exId);
+                    const exName = `"${libEx ? libEx.name : (ex.name || ex.exId || 'Sconosciuto')}"`;
                     if (ex.sets && ex.sets.length > 0) {
                         ex.sets.forEach((set: any, idx: number) => {
                             // BUG FIX: new app uses set.kg (not set.weight)

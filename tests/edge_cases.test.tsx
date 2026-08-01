@@ -112,8 +112,8 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
 
     test('Logic.calculateBodyFat behavior on invalid DOB string (Vulnerability check)', () => {
       const res = Logic.calculateBodyFat(75, { height: '175', dob: 'invalid-date', gender: 'M' });
-      // Empirical Finding: Invalid date returns string 'NaN' because dobDate.getTime() is NaN
-      expect(res).toBe('NaN');
+      // Empirical Finding: Invalid date returns null because dobDate.getTime() is NaN
+      expect(res).toBeNull();
     });
 
     test('Logic.calculateTDEEAndMacros handles missing profile and state defaults gracefully', () => {

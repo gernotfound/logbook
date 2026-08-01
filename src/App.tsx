@@ -11,6 +11,31 @@ const TrainingView = lazy(() => import('./components/Training/TrainingView'));
 const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, errorMsg: string}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorMsg: error.message };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <h2>Ops! Qualcosa è andato storto.</h2>
+          <p style={{ color: 'var(--danger-color)' }}>{this.state.errorMsg}</p>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>Ricarica l'App</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const BottomNav = React.memo(({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) => (
   <nav className="bottom-nav" aria-label="Navigazione principale">
     <div className="nav-container">
@@ -155,17 +180,19 @@ function App() {
 
       <main id="app-container">
         {/* Render Active View */}
-        <Suspense fallback={
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
-            <div className="spinner"></div>
-            <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
-          </div>
-        }>
-          {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
-          {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
-          {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
-          {activeTab === 'settings' && <SettingsView />}
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+              <div className="spinner"></div>
+              <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
+            </div>
+          }>
+            {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
+            {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
+            {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
+            {activeTab === 'settings' && <SettingsView />}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />

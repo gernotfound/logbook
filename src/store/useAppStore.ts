@@ -215,7 +215,13 @@ if (typeof document !== 'undefined') {
                     console.error("Errore salvataggio localWorkout su visibilitychange:", e);
                 }
             }
-        }
+}
     });
 }
 
+// PWA FIX: Listen for online event to clear saveError if connection is restored
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+        useAppStore.getState().setSaveError(null);
+    });
+}

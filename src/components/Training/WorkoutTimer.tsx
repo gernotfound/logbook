@@ -2,10 +2,25 @@ import { useState, useEffect } from 'react';
 
 export default function WorkoutTimer() {
     // Rest Timer State
-    const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>('stopped');
-    const [restStartTime, setRestStartTime] = useState<number>(0);
-    const [restAccumulated, setRestAccumulated] = useState<number>(0);
+    const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>(() => {
+        const saved = localStorage.getItem('logbook_timer_state');
+        return (saved as any) || 'stopped';
+    });
+    const [restStartTime, setRestStartTime] = useState<number>(() => {
+        const saved = localStorage.getItem('logbook_timer_start');
+        return saved ? parseInt(saved, 10) : 0;
+    });
+    const [restAccumulated, setRestAccumulated] = useState<number>(() => {
+        const saved = localStorage.getItem('logbook_timer_accumulated');
+        return saved ? parseInt(saved, 10) : 0;
+    });
     const [restDisplay, setRestDisplay] = useState('00:00');
+
+    useEffect(() => {
+        localStorage.setItem('logbook_timer_state', restState);
+        localStorage.setItem('logbook_timer_start', restStartTime.toString());
+        localStorage.setItem('logbook_timer_accumulated', restAccumulated.toString());
+    }, [restState, restStartTime, restAccumulated]);
 
     // Rest Timer Ticker
     useEffect(() => {

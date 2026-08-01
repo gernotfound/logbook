@@ -4,9 +4,10 @@ import WorkoutTimer from './WorkoutTimer';
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     const [display, setDisplay] = useState('00:00');
+    
     useEffect(() => {
         if (!startTime) return;
-        const interval = setInterval(() => {
+        const updateDisplay = () => {
             const diff = Math.floor((Date.now() - startTime) / 1000);
             const h = Math.floor(diff / 3600);
             const m = Math.floor((diff % 3600) / 60);
@@ -16,8 +17,22 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             } else {
                 setDisplay(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
             }
-        }, 1000);
-        return () => clearInterval(interval);
+        };
+
+        updateDisplay(); // initial call
+        const interval = setInterval(updateDisplay, 1000);
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                updateDisplay();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [startTime]);
     return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
 };

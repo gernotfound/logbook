@@ -18,7 +18,7 @@ export default defineConfig({
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: './index.html',
+        start_url: '/logbook/',
         lang: 'it-IT',
         categories: ['fitness', 'health', 'lifestyle'],
         icons: [
@@ -41,7 +41,13 @@ export default defineConfig({
             src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable'
+            purpose: 'any'
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }

@@ -55,15 +55,19 @@ export const AuthProvider = ({ children }: { children: any }) => {
         const authUnsubPromise = initAuth();
 
         // PWA FIX: Re-sync data when app comes back into focus (e.g. user switches tabs)
+        let isReloading = false;
         const handleVisibilityChange = async () => {
             if (document.visibilityState === 'visible' && auth.currentUser) {
                 // Only re-sync if we already have data (avoid loading state on first open)
-                if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing) {
+                if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
+                        isReloading = true;
                         await waitForPendingWrites(db);
                         await loadData(auth.currentUser);
                     } catch (e) {
                         console.warn("Skipping visibility reload due to pending writes", e);
+                    } finally {
+                        isReloading = false;
                     }
                 }
             }

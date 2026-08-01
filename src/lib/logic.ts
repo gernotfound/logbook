@@ -184,16 +184,19 @@ export const Logic = {
         return showHours ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
     },
     calculateBodyFat(weight: any, profile: any) {
-        if(!profile || !profile.height || !profile.dob || !weight) return null;
-        const hMeters = parseFloat(profile.height) / 100;
+        if(!profile || !profile.height || !weight) return null;
+        if(profile.manualBf) return profile.manualBf;
         const wKg = parseFloat(weight);
-        if (hMeters <= 0 || wKg <= 0) return null;
-        const bmi = wKg / (hMeters * hMeters);
-        const dobDate = new Date(profile.dob);
-        const age = Math.abs(new Date(Date.now() - dobDate.getTime()).getUTCFullYear() - 1970);
-        const sexFactor = profile.gender === 'M' ? 1 : 0;
-        let bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;
-        return Math.max(2, bf).toFixed(1); 
+        const hCm = parseFloat(profile.height);
+        if (hCm <= 0 || wKg <= 0) return null;
+        
+        if (profile.gender === 'M' && profile.neck && profile.waist) {
+            return this.calculateUsNavyBodyFat({ gender: 'M', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: 0 });
+        }
+        if (profile.gender === 'F' && profile.neck && profile.waist && profile.hip) {
+            return this.calculateUsNavyBodyFat({ gender: 'F', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: parseFloat(profile.hip) });
+        }
+        return null; 
     },
     validateInputData(value: any, type: string) {
         if(value === '' || value === null) return '';
@@ -209,7 +212,7 @@ export const Logic = {
         }
         return value;
     },
-    calculateTDEE(nutritionHistoryList: any[]) {
+    calculateTDEE(nutritionHistoryList: { date: string, weight: string | number, kcal: string | number }[]) {
         const validDays = nutritionHistoryList.filter(d => parseFloat(d.weight) > 0 && parseFloat(d.kcal) > 0);
         if (validDays.length < 7) { 
             return { error: true, message: `Raccolta dati in corso... (${validDays.length}/7 giorni richiesti)` }; 

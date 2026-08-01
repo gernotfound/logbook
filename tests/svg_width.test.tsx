@@ -125,7 +125,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       );
 
       // Expand card to view muscle model
-      const exerciseTitle = container.querySelector('.card div[style*="font-weight: bold"]');
+      const exerciseTitle = container.querySelector('.card .font-bold');
       expect(exerciseTitle).not.toBeNull();
 
       const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;

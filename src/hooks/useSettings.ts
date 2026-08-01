@@ -44,7 +44,7 @@ export function useSettings() {
 
     const handleExport = () => {
         if(userData) {
-            Exporter.exportToCSV(userData.history || [], userData.nutrition || {});
+            Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
         }
     };
 

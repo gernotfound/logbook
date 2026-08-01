@@ -24,9 +24,10 @@ describe('Logic Library Tests', () => {
         const profile = {
             gender: 'M',
             height: 180, // cm
-            dob: '1995-01-01'
+            neck: 38,
+            waist: 85
         };
-        // Expected BF based on BMI formula
+        // Expected BF based on Navy formula
         const bf = Logic.calculateBodyFat(weight, profile);
         expect(Number(bf)).toBeGreaterThan(10);
         expect(Number(bf)).toBeLessThan(25);
@@ -37,7 +38,9 @@ describe('Logic Library Tests', () => {
         const profile = {
             gender: 'F',
             height: 165, // cm
-            dob: '1995-01-01'
+            neck: 34,
+            waist: 70,
+            hip: 95
         };
         const bf = Logic.calculateBodyFat(weight, profile);
         expect(Number(bf)).toBeGreaterThan(15);

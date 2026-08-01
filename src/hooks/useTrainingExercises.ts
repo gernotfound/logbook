@@ -37,13 +37,17 @@ export function useTrainingExercises() {
     // Save draft on change
     useEffect(() => {
         if (!editingExId) {
-            localStorage.setItem('draft_exercise', JSON.stringify({ 
-                name: exName, 
-                notes: exNotes, 
-                trackingType, 
-                selectedMuscles,
-                secondaryMuscles
-            }));
+            try {
+                localStorage.setItem('draft_exercise', JSON.stringify({ 
+                    name: exName, 
+                    notes: exNotes, 
+                    trackingType, 
+                    selectedMuscles,
+                    secondaryMuscles
+                }));
+            } catch (e) {
+                console.warn("Quota exceeded or error saving draft", e);
+            }
         }
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, editingExId]);
 
@@ -84,7 +88,8 @@ export function useTrainingExercises() {
 
         const finalIds = Array.from(expanded);
         let changed = true;
-        while (changed) {
+        let maxIter = 100;
+        while (changed && maxIter-- > 0) {
             changed = false;
             for (let i = 0; i < finalIds.length; i++) {
                 const id = finalIds[i];
@@ -226,7 +231,18 @@ export function useTrainingExercises() {
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation(); // prevent triggering edit when clicking delete
-        if(await showConfirm("Sei sicuro di voler eliminare questo esercizio dall'archivio?")) {
+        
+        // Check if exercise is used in routines
+        const usedInRoutines = (userData?.routines || []).filter(rtn => 
+            (rtn.exercises || []).some(ex => ex.exId === id)
+        );
+        
+        let confirmMsg = "Sei sicuro di voler eliminare questo esercizio dall'archivio?";
+        if (usedInRoutines.length > 0) {
+            confirmMsg = `Attenzione: questo esercizio è usato in ${usedInRoutines.length} scheda/e. Se lo elimini scomparirà da quelle schede. Procedere comunque?`;
+        }
+
+        if(await showConfirm(confirmMsg)) {
             const updatedLibrary = library.filter(ex => ex.id !== id);
             try {
                 await saveUserData({ ...userData, library: updatedLibrary });
