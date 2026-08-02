@@ -39,6 +39,7 @@ export default function MuscleModel({
     const secondaryIds = new Set<string>();
 
     selectedMuscles.forEach(muscle => {
+        if (!muscle || typeof muscle !== 'string') return;
         const mapped = (Logic.GROUP_MAP as any)[muscle];
         if (mapped) {
             mapped.forEach((id: string) => primaryIds.add(id));
@@ -48,6 +49,7 @@ export default function MuscleModel({
     });
 
     secondaryMuscles.forEach(muscle => {
+        if (!muscle || typeof muscle !== 'string') return;
         const mapped = (Logic.GROUP_MAP as any)[muscle];
         if (mapped) {
             mapped.forEach((id: string) => secondaryIds.add(id));

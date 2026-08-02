@@ -80,6 +80,7 @@ export function useHomeView() {
 
                 if (isRecent7d && completedSets > 0) {
                     (libEx.muscles || []).forEach((mId: string) => {
+                        if (!mId || typeof mId !== 'string') return;
                         const majorId = mId.split('_')[0]; 
                         volume.set(majorId, (volume.get(majorId) || 0) + completedSets);
                     });
@@ -87,12 +88,14 @@ export function useHomeView() {
 
                 if (isRecent72h) {
                     (libEx.muscles || []).forEach((mId: string) => {
+                        if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
                         atomicPaths.forEach((path: string) => {
                             fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue));
                         });
                     });
                     (libEx.secondaryMuscles || []).forEach((mId: string) => {
+                        if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
                         atomicPaths.forEach((path: string) => {
                             fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue * 0.5));
