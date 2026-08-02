@@ -57,9 +57,10 @@ export function useTrainingExercises() {
         ).slice(0, 5);
     }, [muscleSearch]);
 
-    const toggleSmartMuscleSelection = (currentSelection: any[], toggledMuscle: any) => {
+    const toggleSmartMuscleSelection = (currentSelection: any[], toggledMuscle?: any) => {
         const expanded = new Set<string>();
-        for (const m of currentSelection) {
+        for (const m of currentSelection || []) {
+            if (!m || !m.id) continue;
             const leftId = m.id + '_left';
             const rightId = m.id + '_right';
             if (Logic.MUSCLES.find(x => x.id === leftId) && Logic.MUSCLES.find(x => x.id === rightId)) {
@@ -70,30 +71,32 @@ export function useTrainingExercises() {
             }
         }
         
-        const toggledIds = [];
-        const tLeftId = toggledMuscle.id + '_left';
-        const tRightId = toggledMuscle.id + '_right';
-        if (Logic.MUSCLES.find(x => x.id === tLeftId) && Logic.MUSCLES.find(x => x.id === tRightId)) {
-            toggledIds.push(tLeftId, tRightId);
-        } else {
-            toggledIds.push(toggledMuscle.id);
+        if (toggledMuscle && toggledMuscle.id) {
+            const toggledIds: string[] = [];
+            const tLeftId = toggledMuscle.id + '_left';
+            const tRightId = toggledMuscle.id + '_right';
+            if (Logic.MUSCLES.find(x => x.id === tLeftId) && Logic.MUSCLES.find(x => x.id === tRightId)) {
+                toggledIds.push(tLeftId, tRightId);
+            } else {
+                toggledIds.push(toggledMuscle.id);
+            }
+
+            const allSelected = toggledIds.every(id => expanded.has(id));
+            if (allSelected) {
+                toggledIds.forEach(id => expanded.delete(id));
+            } else {
+                toggledIds.forEach(id => expanded.add(id));
+            }
         }
 
-        const allSelected = toggledIds.every(id => expanded.has(id));
-        if (allSelected) {
-            toggledIds.forEach(id => expanded.delete(id));
-        } else {
-            toggledIds.forEach(id => expanded.add(id));
-        }
-
-        const finalIds = Array.from(expanded);
+        const finalIds = Array.from(expanded).filter((id): id is string => typeof id === 'string' && Boolean(id));
         let changed = true;
         let maxIter = 100;
         while (changed && maxIter-- > 0) {
             changed = false;
             for (let i = 0; i < finalIds.length; i++) {
                 const id = finalIds[i];
-                if (id.endsWith('_left') || id.endsWith('_right')) {
+                if (id && (id.endsWith('_left') || id.endsWith('_right'))) {
                     const baseId = id.replace(/_(left|right)$/, '');
                     const counterpart = id.endsWith('_left') ? `${baseId}_right` : `${baseId}_left`;
                     const cIndex = finalIds.indexOf(counterpart);
@@ -113,25 +116,44 @@ export function useTrainingExercises() {
         return finalIds.map(id => Logic.MUSCLES.find(m => m.id === id)).filter(Boolean);
     };
 
+    const getExpandedMuscleIds = (musclesList: any[]): Set<string> => {
+        const set = new Set<string>();
+        for (const m of musclesList || []) {
+            if (!m || !m.id) continue;
+            const leftId = m.id + '_left';
+            const rightId = m.id + '_right';
+            if (Logic.MUSCLES.find(x => x.id === leftId) && Logic.MUSCLES.find(x => x.id === rightId)) {
+                set.add(leftId);
+                set.add(rightId);
+            } else {
+                set.add(m.id);
+            }
+        }
+        return set;
+    };
+
     const toggleMuscle = (muscle: any) => {
+        if (!muscle || !muscle.id) return;
         if (selectionMode === 'primary') {
             const newSelection = toggleSmartMuscleSelection(selectedMuscles, muscle);
             setSelectedMuscles(newSelection);
             
-            // Remove toggled sub-muscles from secondary if present
-            let secExpanded = new Set(toggleSmartMuscleSelection(secondaryMuscles, []).map(m => m?.id));
-            const primExpanded = new Set(toggleSmartMuscleSelection([muscle], []).map(m => m?.id));
-            primExpanded.forEach(id => secExpanded.delete(id));
-            setSecondaryMuscles(toggleSmartMuscleSelection(Array.from(secExpanded).map(id => ({id})), []));
+            // Remove toggled muscle from secondary if present
+            const toggledIds = getExpandedMuscleIds([muscle]);
+            const secExpanded = getExpandedMuscleIds(secondaryMuscles);
+            toggledIds.forEach(id => secExpanded.delete(id));
+            const remainingSecList = Array.from(secExpanded).map(id => ({ id }));
+            setSecondaryMuscles(toggleSmartMuscleSelection(remainingSecList));
         } else {
             const newSelection = toggleSmartMuscleSelection(secondaryMuscles, muscle);
             setSecondaryMuscles(newSelection);
             
-            // Remove toggled sub-muscles from primary if present
-            let primExpanded = new Set(toggleSmartMuscleSelection(selectedMuscles, []).map(m => m?.id));
-            const secExpanded = new Set(toggleSmartMuscleSelection([muscle], []).map(m => m?.id));
-            secExpanded.forEach(id => primExpanded.delete(id));
-            setSelectedMuscles(toggleSmartMuscleSelection(Array.from(primExpanded).map(id => ({id})), []));
+            // Remove toggled muscle from primary if present
+            const toggledIds = getExpandedMuscleIds([muscle]);
+            const primExpanded = getExpandedMuscleIds(selectedMuscles);
+            toggledIds.forEach(id => primExpanded.delete(id));
+            const remainingPrimList = Array.from(primExpanded).map(id => ({ id }));
+            setSelectedMuscles(toggleSmartMuscleSelection(remainingPrimList));
         }
     };
 
