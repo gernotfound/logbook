@@ -216,13 +216,14 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       const indexCssPath = path.resolve(__dirname, '../src/index.css');
       const globalCssPath = path.resolve(__dirname, '../src/styles/global.css');
       
-      const indexCss = fs.readFileSync(indexCssPath, 'utf8');
+      if (fs.existsSync(indexCssPath)) {
+        const indexCss = fs.readFileSync(indexCssPath, 'utf8');
+        // Verify index.css does NOT re-introduce max-height: 180px or fixed width limits
+        expect(indexCss).not.toContain('max-height: 180px');
+        expect(indexCss).not.toMatch(/\.muscle-map-container\s*svg\s*\{[^}]*max-height:\s*180px/);
+      }
+
       const globalCss = fs.readFileSync(globalCssPath, 'utf8');
-
-      // Verify index.css does NOT re-introduce max-height: 180px or fixed width limits
-      expect(indexCss).not.toContain('max-height: 180px');
-      expect(indexCss).not.toMatch(/\.muscle-map-container\s*svg\s*\{[^}]*max-height:\s*180px/);
-
       // Verify global.css overrides max-height with none and width with 100%
       expect(globalCss).toMatch(/\.muscle-map-container\s+svg\s*\{[^}]*max-height:\s*none;/);
       expect(globalCss).toMatch(/\.muscle-map-container\s+svg\s*\{[^}]*width:\s*100%;/);

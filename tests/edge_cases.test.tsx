@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { Logic } from '../src/lib/logic';

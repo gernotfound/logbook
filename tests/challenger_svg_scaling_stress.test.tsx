@@ -117,7 +117,7 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
       { name: 'Desktop 1024px', width: 1024 },
     ];
 
-    keyViewports.forEach(({ name, width }) => {
+    keyViewports.forEach(({ width }) => {
       const { container } = renderWithProviders(
         <div style={{ width: `${width}px` }}>
           <TrainingRoutines />

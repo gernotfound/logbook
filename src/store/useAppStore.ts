@@ -1,44 +1,8 @@
 import { create } from 'zustand';
 import { DB } from '../lib/db';
+import type { Exercise, WorkoutRoutine, WorkoutSession, NutritionDay, Food, UserProfile, NutritionPlanning, UserData } from '../types';
 
-export interface UserProfile {
-    dob?: string;
-    height?: string;
-    gender?: string;
-    neck?: string;
-    waist?: string;
-    hip?: string;
-    manualBf?: string;
-}
-
-export interface NutritionPlanning {
-    weight?: number;
-    carbsPerKg?: number;
-    proPerKg?: number;
-    fatPerKg?: number;
-    lockedMacro?: string | null;
-    chartPeriod?: number;
-    normocalorica?: {
-        kcal?: number;
-        carbs?: number;
-        pro?: number;
-        fat?: number;
-    };
-    totalKcal?: number;
-}
-
-import { Exercise, WorkoutRoutine, WorkoutSession, NutritionDay, Food } from '../types';
-
-export interface UserData {
-    profile?: UserProfile;
-    library?: Exercise[];
-    routines?: WorkoutRoutine[];
-    history?: WorkoutSession[];
-    nutrition?: Record<string, NutritionDay>;
-    customFoods?: Food[];
-    activeWorkout?: WorkoutSession | null;
-    nutritionPlanning?: NutritionPlanning;
-}
+export type { UserProfile, NutritionPlanning, UserData };
 
 export interface AppState {
     userData: UserData | null;
@@ -127,7 +91,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                     } else {
                         try {
                             localStorage.removeItem('logbook_local_workout');
-                        } catch (e) {}
+                        } catch {
+                            // Ignore removal error
+                        }
                     }
                 }
             }

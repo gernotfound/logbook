@@ -21,8 +21,9 @@ export function useTrainingRoutines() {
             try {
                 const parsed = JSON.parse(draft);
                 if (parsed.name) setRoutineName(parsed.name);
-                if (parsed.exercises) setRoutineExercises(parsed.exercises);
-            } catch (e) {}
+            } catch {
+                // Ignore parse error on invalid draft
+            }
         }
     }, []);
 

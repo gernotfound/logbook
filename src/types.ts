@@ -1,10 +1,12 @@
 export interface UserProfile {
     dob?: string;
     height?: string;
-    gender?: 'M' | 'F' | '';
+    gender?: 'M' | 'F' | string;
     neck?: string;
     waist?: string;
+    hip?: string;
     hips?: string;
+    manualBf?: string;
 }
 
 export interface MacroTarget {
@@ -15,13 +17,13 @@ export interface MacroTarget {
 }
 
 export interface NutritionPlanning {
-    weight: number;
-    carbsPerKg: number;
-    proPerKg: number;
-    fatPerKg: number;
-    lockedMacro: 'carbs' | 'pro' | 'fat' | null;
-    chartPeriod: number;
-    normocalorica: MacroTarget;
+    weight?: number;
+    carbsPerKg?: number;
+    proPerKg?: number;
+    fatPerKg?: number;
+    lockedMacro?: 'carbs' | 'pro' | 'fat' | string | null;
+    chartPeriod?: number;
+    normocalorica?: Partial<MacroTarget>;
     totalKcal?: number;
 }
 
@@ -134,12 +136,12 @@ export interface Meal {
 }
 
 export interface UserData {
-    profile: UserProfile;
-    library: Exercise[];
-    routines: WorkoutRoutine[];
-    history: WorkoutSession[];
-    nutrition: Record<string, NutritionDay>;
-    customFoods: Food[];
-    activeWorkout: WorkoutSession | null;
-    nutritionPlanning: NutritionPlanning;
+    profile?: UserProfile;
+    library?: Exercise[];
+    routines?: WorkoutRoutine[];
+    history?: WorkoutSession[];
+    nutrition?: Record<string, NutritionDay>;
+    customFoods?: Food[];
+    activeWorkout?: WorkoutSession | null;
+    nutritionPlanning?: NutritionPlanning;
 }

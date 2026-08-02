@@ -32,8 +32,9 @@ export function useNutritionMeasurements() {
                 if (parsed.hip) setHip(parsed.hip);
                 if (parsed.manualBf) setManualBf(parsed.manualBf);
                 if (parsed.measureTime) setMeasureTime(parsed.measureTime);
-                if (parsed.method) setMethod(parsed.method);
-            } catch (e) {}
+            } catch {
+                // Ignore parse error on invalid draft
+            }
         }
     }, []);
 

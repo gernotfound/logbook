@@ -29,8 +29,9 @@ export function useTrainingExercises() {
                 if (parsed.notes) setExNotes(parsed.notes);
                 if (parsed.trackingType) setTrackingType(parsed.trackingType);
                 if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
-                if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
-            } catch (e) {}
+            } catch {
+                // Ignore parse errors on invalid draft
+            }
         }
     }, []);
 

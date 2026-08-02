@@ -111,6 +111,7 @@ export function useNutritionMeals() {
                 });
             }
         } catch (error) {
+            console.warn("Errore durante la ricerca OpenFoodFacts:", error);
             showAlert("Errore durante la ricerca online. Riprova più tardi.");
         } finally {
             setIsSearchingOnline(false);
