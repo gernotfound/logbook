@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Dumbbell, Timer } from 'lucide-react';
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
@@ -43,19 +44,27 @@ const TrainingExercises = () => {
                 </div>
                 
                 <div className="mb-20">
-                    <label className="text-muted text-sm mb-5 block">Tipo di tracciamento</label>
-                    <div className="flex bg-black-20 p-4 rounded-8 w-full gap-5">
+                    <label className="text-muted text-sm mb-8 block font-medium">Tipo di tracciamento</label>
+                    <div className="tracking-type-group">
                         <button 
-                            className={`flex-1 py-8 rounded-6 text-sm transition-colors ${trackingType === 'weight_reps' ? 'bg-surface text-primary shadow-sm font-bold' : 'text-muted hover:text-white'}`}
+                            type="button"
+                            className={`tracking-card-option ${trackingType === 'weight_reps' ? 'active' : ''}`}
                             onClick={() => setTrackingType('weight_reps')}
                         >
-                            Peso e Rip.
+                            <span className="icon">
+                                <Dumbbell size={18} />
+                            </span>
+                            <span>Peso e Ripetizioni</span>
                         </button>
                         <button 
-                            className={`flex-1 py-8 rounded-6 text-sm transition-colors ${trackingType === 'time' ? 'bg-surface text-primary shadow-sm font-bold' : 'text-muted hover:text-white'}`}
+                            type="button"
+                            className={`tracking-card-option ${trackingType === 'time' ? 'active' : ''}`}
                             onClick={() => setTrackingType('time')}
                         >
-                            Tempo
+                            <span className="icon">
+                                <Timer size={18} />
+                            </span>
+                            <span>A Tempo</span>
                         </button>
                     </div>
                 </div>

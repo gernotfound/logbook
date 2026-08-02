@@ -976,6 +976,59 @@ input[type="range"].fat-slider::-webkit-slider-thumb {
     height: auto;
 }
 
+/* Tracking Type Segmented Cards */
+.tracking-type-group {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.tracking-card-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.9rem;
+    font-weight: 500;
+    user-select: none;
+    outline: none;
+}
+
+.tracking-card-option:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-main);
+}
+
+.tracking-card-option.active {
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.14), rgba(0, 229, 255, 0.04));
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    font-weight: 700;
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.18);
+}
+
+.tracking-card-option .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.tracking-card-option.active .icon {
+    color: var(--primary-color);
+    transform: scale(1.1);
+}
+
+
 
 
 
