@@ -14,7 +14,7 @@ const TrainingHistory = () => {
 
     return (
         <div className="training-sub-view active">
-            <h3 style={{ marginBottom: '20px' }}>Storico Allenamenti</h3>
+            <h3 style={{ marginBottom: '20px' }}>Storico Allenamenti ({history.length})</h3>
 
             {history.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>Nessun allenamento registrato.</p>

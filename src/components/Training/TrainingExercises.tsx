@@ -20,27 +20,21 @@ const TrainingExercises = () => {
         <div className="training-sub-view active">
             <div className={`card ${editingExId ? 'border-primary' : ''}`}>
                 <h3 className={editingExId ? 'text-primary' : 'text-white'}>
-                    {editingExId ? 'Modifica Esercizio' : 'Nuovo Esercizio'}
+                    {editingExId ? 'Modifica Esercizio' : 'Crea nuovo esercizio'}
                 </h3>
                 <div className="flex-col gap-10 mt-15 mb-20">
-                    <div>
-                        <label className="text-muted text-sm block mb-5">Nome dell'Esercizio *</label>
-                        <input 
-                            type="text" 
-                            placeholder="es. Panca Piana con Bilanciere" 
-                            value={exName}
-                            onChange={e => setExName(e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-muted text-sm block mb-5">Note di Setup (opzionale)</label>
-                        <input 
-                            type="text" 
-                            placeholder="es. Inclinazione 30 gradi, presa media" 
-                            value={exNotes}
-                            onChange={e => setExNotes(e.target.value)}
-                        />
-                    </div>
+                    <input 
+                        type="text" 
+                        placeholder="Nome esercizio (es. Panca Piana con Bilanciere)" 
+                        value={exName}
+                        onChange={e => setExName(e.target.value)}
+                    />
+                    <input 
+                        type="text" 
+                        placeholder="Note di Setup (opzionale, es. Inclinazione 30°)" 
+                        value={exNotes}
+                        onChange={e => setExNotes(e.target.value)}
+                    />
                 </div>
                 
                 <div className="mb-20">
@@ -92,22 +86,23 @@ const TrainingExercises = () => {
 
                     <input 
                         type="text" 
-                        placeholder={selectionMode === 'primary' ? "Cerca muscolo primario..." : "Cerca muscolo secondario..."} 
-                        value={muscleSearch}
+                        placeholder="🔍 Cerca muscolo (es. Petto, Bicipiti)..." 
+                        value={muscleSearch} 
                         onChange={e => setMuscleSearch(e.target.value)}
-                        style={{ borderColor: selectionMode === 'primary' ? 'var(--primary-color)' : 'var(--secondary-color, #4db6ac)', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                        className="mb-10"
                     />
-                    
+
                     {muscleSearch && (
-                        <div className="bg-surface border-glass rounded-8 mb-10 mt-5 overflow-y-auto" style={{ maxHeight: '150px' }}>
+                        <div className="flex flex-wrap gap-5 mb-10 max-h-120 overflow-y-auto">
                             {filteredMuscles.map(m => (
-                                <div 
+                                <button 
                                     key={m.id} 
-                                    className="p-8-12 cursor-pointer border-b hover:bg-black-20 transition-colors"
+                                    className={`btn btn-small ${(selectedMuscleIds.includes(m.id) || secondaryMuscles.some(sm => sm.id === m.id)) ? 'btn-primary' : ''}`} 
+                                    style={{ margin: 0, padding: '4px 8px', fontSize: '0.75rem' }} 
                                     onClick={() => toggleMuscle(m)}
                                 >
-                                    {m.name}
-                                </div>
+                                    + {m.name}
+                                </button>
                             ))}
                         </div>
                     )}
@@ -128,7 +123,6 @@ const TrainingExercises = () => {
                     </div>
 
                     <div className="rounded-8 overflow-hidden" style={{ background: 'rgba(0,0,0,0.1)' }}>
-                        {/* Modello Muscolare 3D-like (SVG) interattivo */}
                         <MuscleModel 
                             selectedMuscles={selectedMuscleIds as any} 
                             secondaryMuscles={secondaryMuscles.map((m: any) => m.id)}
@@ -150,7 +144,7 @@ const TrainingExercises = () => {
                 </div>
             </div>
 
-            <h3 className="mt-20">Lista Esercizi ({library.length})</h3>
+            <h3 className="mt-20">Archivio Esercizi ({library.length})</h3>
             <p className="text-muted text-sm">Clicca su un esercizio per vederne i dettagli o sull'icona per modificarlo.</p>
             {library.length === 0 ? (
                 <p className="text-muted">Nessun esercizio creato.</p>
