@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DB } from '../lib/db';
-import type { Exercise, WorkoutRoutine, WorkoutSession, NutritionDay, Food, UserProfile, NutritionPlanning, UserData } from '../types';
+import type { WorkoutSession, UserProfile, NutritionPlanning, UserData } from '../types';
 
 export type { UserProfile, NutritionPlanning, UserData };
 
