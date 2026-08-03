@@ -1,7 +1,12 @@
 import { useMemo } from 'react';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
+import type { WorkoutSession } from '../../types';
 
-const TrainingHistory = () => {
+interface TrainingHistoryProps {
+    onEditWorkout?: (workout: WorkoutSession) => void;
+}
+
+const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     const { userData, history, deleteWorkout } = useTrainingHistory();
 
     const libraryMap = useMemo(() => {
@@ -24,9 +29,11 @@ const TrainingHistory = () => {
                         const date = new Date(wo.globalStartTime || new Date()).toLocaleDateString('it-IT', { 
                             weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' 
                         });
-                        const duration = (wo.globalEndTime && wo.globalStartTime) 
-                            ? Math.round((wo.globalEndTime - wo.globalStartTime) / 60000) 
-                            : 0;
+                        const durationDisplay = wo.manualDurationStr 
+                            || wo.globalDurationStr 
+                            || ((wo.globalEndTime && wo.globalStartTime) 
+                                ? `${Math.round((wo.globalEndTime - wo.globalStartTime) / 60000)} min` 
+                                : '0 min');
                         
                         // Legacy compatibility: support both moodRating and mood field names
                         const moodVal = wo.moodRating ?? (wo as any).mood;
@@ -42,10 +49,19 @@ const TrainingHistory = () => {
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{date}</div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                        <div className="badge badge-primary">{duration} min</div>
+                                        <div className="badge badge-primary">{durationDisplay}</div>
+                                        {onEditWorkout && (
+                                            <button 
+                                                className="btn-icon" 
+                                                style={{ color: 'var(--primary-color)' }} 
+                                                title="Modifica allenamento"
+                                                onClick={() => onEditWorkout(wo)}
+                                            >✏️</button>
+                                        )}
                                         <button 
                                             className="btn-icon" 
                                             style={{ color: 'var(--danger-color)' }} 
+                                            title="Elimina allenamento"
                                             onClick={() => deleteWorkout(wo.id!)}
                                         >🗑️</button>
                                     </div>

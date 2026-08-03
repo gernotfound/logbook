@@ -37,12 +37,18 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
 };
 
-const TrainingSession = () => {
+interface TrainingSessionProps {
+    onNavigateToHistory?: () => void;
+}
+
+const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
     const {
         activeWorkout, routines, library, history,
         selectedRoutine, setSelectedRoutine,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
+        manualDuration, setManualDuration,
         startWorkout, endWorkout, deleteWorkout,
+        saveHistoryEdit, cancelHistoryEdit,
         addExtraExercise, removeActiveExercise,
         addSet, removeSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet,
@@ -114,12 +120,55 @@ const TrainingSession = () => {
         );
     }
 
+    const handleSaveHistory = async () => {
+        const ok = await saveHistoryEdit();
+        if (ok && onNavigateToHistory) {
+            onNavigateToHistory();
+        }
+    };
+
+    const handleCancelHistory = async () => {
+        const ok = await cancelHistoryEdit();
+        if (ok && onNavigateToHistory) {
+            onNavigateToHistory();
+        }
+    };
+
     return (
         <div className="training-sub-view active">
             {/* Sticky Timer */}
             <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
                 <WorkoutTimer />
             </div>
+
+            {activeWorkout.isEditingHistory && (
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: 'rgba(234, 179, 8, 0.15)',
+                    border: '1px solid var(--warning-color, #eab308)',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    marginBottom: '15px'
+                }}>
+                    <div>
+                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
+                            ✏️ Modifica Allenamento dello Storico
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {activeWorkout.routineName || 'Sessione'} • {activeWorkout.date || ''}
+                        </div>
+                    </div>
+                    <button 
+                        className="btn btn-small" 
+                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.1)' }}
+                        onClick={handleCancelHistory}
+                    >
+                        Annulla
+                    </button>
+                </div>
+            )}
 
             <div className="card" style={{ padding: '15px', marginBottom: '20px' }}>
                 {activeWorkout.routineName && <h3 style={{ marginTop: 0 }}>{activeWorkout.routineName}</h3>}
@@ -296,14 +345,52 @@ const TrainingSession = () => {
                 </div>
             </div>
 
-            <GlobalTimer startTime={activeWorkout.globalStartTime} />
+            {activeWorkout.isEditingHistory ? (
+                <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
+                        ⏱️ Durata Sessione (HH:MM:SS oppure MM:SS)
+                    </label>
+                    <input 
+                        id="workout-manual-duration"
+                        type="text" 
+                        value={manualDuration} 
+                        onChange={e => setManualDuration(e.target.value)} 
+                        placeholder="es. 01:15:00 o 45:00"
+                        style={{ 
+                            fontSize: '1.8rem', 
+                            fontFamily: 'monospace', 
+                            fontWeight: 'bold', 
+                            color: 'var(--primary-color)', 
+                            textAlign: 'center', 
+                            maxWidth: '240px', 
+                            margin: '0 auto', 
+                            padding: '8px 12px' 
+                        }} 
+                    />
+                </div>
+            ) : (
+                <GlobalTimer startTime={activeWorkout.globalStartTime} />
+            )}
 
-            <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={endWorkout}>
-                🏁 Termina Sessione
-            </button>
-            <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
-                🗑️ Elimina Sessione
-            </button>
+            {activeWorkout.isEditingHistory ? (
+                <>
+                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
+                        💾 Salva Modifica
+                    </button>
+                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
+                        Annulla Modifica
+                    </button>
+                </>
+            ) : (
+                <>
+                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={endWorkout}>
+                        🏁 Termina Sessione
+                    </button>
+                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
+                        🗑️ Elimina Sessione
+                    </button>
+                </>
+            )}
         </div>
     );
 };

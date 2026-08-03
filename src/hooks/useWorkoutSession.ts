@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { resetGlobalWorkoutTimer } from '../components/Training/WorkoutTimer';
+import type { WorkoutSession } from '../types';
 
 export function useWorkoutSession() {
     const userData = useAppStore(state => state.userData);
@@ -23,6 +25,24 @@ export function useWorkoutSession() {
     const [pump, setPump] = useState('');
     const [fatigue, setFatigue] = useState('');
     const [water, setWater] = useState('');
+    const [manualDuration, setManualDuration] = useState('00:00');
+
+    // Sincronizza i campi quando activeWorkout cambia (es. caricamento o avvio)
+    useEffect(() => {
+        if (activeWorkout) {
+            setMood(activeWorkout.moodRating !== undefined && activeWorkout.moodRating !== null ? activeWorkout.moodRating.toString() : '');
+            setPump(activeWorkout.pumpRating !== undefined && activeWorkout.pumpRating !== null ? activeWorkout.pumpRating.toString() : '');
+            setFatigue(activeWorkout.fatigueRating !== undefined && activeWorkout.fatigueRating !== null ? activeWorkout.fatigueRating.toString() : '');
+            setWater(activeWorkout.waterLiters !== undefined && activeWorkout.waterLiters !== null ? activeWorkout.waterLiters.toString() : '');
+            setManualDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00');
+        } else {
+            setMood('');
+            setPump('');
+            setFatigue('');
+            setWater('');
+            setManualDuration('00:00');
+        }
+    }, [activeWorkout?.id, activeWorkout?.originalHistoryId, activeWorkout?.isEditingHistory]);
 
     const startWorkout = async () => {
         if (!selectedRoutine) {
@@ -37,7 +57,9 @@ export function useWorkoutSession() {
         const routine = routines.find(r => r.id === selectedRoutine);
         if (!routine) return;
         
-        const newActiveWorkout = {
+        resetGlobalWorkoutTimer();
+
+        const newActiveWorkout: WorkoutSession = {
             id: Logic.generateId('w'),
             routineId: routine.id,
             routineName: routine.name,
@@ -59,6 +81,97 @@ export function useWorkoutSession() {
         setLocalWorkout(newActiveWorkout);
     };
 
+    const startEditHistoricalWorkout = async (workout: WorkoutSession) => {
+        if (activeWorkout && !activeWorkout.isEditingHistory) {
+            const ok = await showConfirm("Hai già una sessione attiva in corso. Vuoi sostituirla per modificare questo allenamento passato?");
+            if (!ok) return false;
+        }
+
+        resetGlobalWorkoutTimer();
+
+        let durationStr = workout.globalDurationStr || workout.manualDurationStr;
+        if (!durationStr && workout.globalStartTime && workout.globalEndTime) {
+            const diff = Math.max(0, Math.floor((workout.globalEndTime - workout.globalStartTime) / 1000));
+            const h = Math.floor(diff / 3600);
+            const m = Math.floor((diff % 3600) / 60);
+            const s = diff % 60;
+            durationStr = h > 0 
+                ? `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
+                : `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+        if (!durationStr) durationStr = '00:00';
+
+        const editingWorkout: WorkoutSession = {
+            ...workout,
+            isEditingHistory: true,
+            originalHistoryId: workout.id,
+            manualDurationStr: durationStr
+        };
+
+        setLocalWorkout(editingWorkout);
+        setMood(workout.moodRating !== undefined && workout.moodRating !== null ? workout.moodRating.toString() : '');
+        setPump(workout.pumpRating !== undefined && workout.pumpRating !== null ? workout.pumpRating.toString() : '');
+        setFatigue(workout.fatigueRating !== undefined && workout.fatigueRating !== null ? workout.fatigueRating.toString() : '');
+        setWater(workout.waterLiters !== undefined && workout.waterLiters !== null ? workout.waterLiters.toString() : '');
+        setManualDuration(durationStr);
+        return true;
+    };
+
+    const saveHistoryEdit = async () => {
+        if (!activeWorkout) return false;
+        const targetId = activeWorkout.originalHistoryId || activeWorkout.id;
+        if (!targetId) return false;
+
+        const valRes = Logic.validateWorkoutRatings(
+            mood ? parseInt(mood) : null,
+            pump ? parseInt(pump) : null,
+            fatigue ? parseInt(fatigue) : null
+        );
+
+        const durationStr = manualDuration?.trim() || activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00';
+
+        const updatedWorkout: WorkoutSession = {
+            ...activeWorkout,
+            id: targetId,
+            globalDurationStr: durationStr,
+            manualDurationStr: durationStr,
+            moodRating: valRes.mood,
+            pumpRating: valRes.pump,
+            fatigueRating: valRes.fatigue,
+            waterLiters: water ? parseFloat(water) : 0,
+            date: activeWorkout.date || Logic.getLocalDateString()
+        };
+
+        delete updatedWorkout.isEditingHistory;
+        delete updatedWorkout.originalHistoryId;
+
+        const updatedHistory = history.map(w => (w.id === targetId ? updatedWorkout : w));
+
+        try {
+            await saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
+            setLocalWorkout(null);
+            resetGlobalWorkoutTimer();
+            setMood(''); setPump(''); setFatigue(''); setWater('');
+            setManualDuration('00:00');
+            await showAlert("Modifiche salvate con successo!");
+            return true;
+        } catch {
+            showAlert("Errore durante il salvataggio delle modifiche.");
+            return false;
+        }
+    };
+
+    const cancelHistoryEdit = async () => {
+        if (await showConfirm("Annullare le modifiche a questo allenamento?")) {
+            setLocalWorkout(null);
+            resetGlobalWorkoutTimer();
+            setMood(''); setPump(''); setFatigue(''); setWater('');
+            setManualDuration('00:00');
+            return true;
+        }
+        return false;
+    };
+
     const endWorkout = async () => {
         if (!activeWorkout || !(await showConfirm("Terminare l'allenamento?"))) return;
 
@@ -78,7 +191,7 @@ export function useWorkoutSession() {
             ? `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
             : `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
 
-        const finishedWorkout = {
+        const finishedWorkout: WorkoutSession = {
             ...activeWorkout,
             globalEndTime: endTime,
             globalDurationStr: durationStr,
@@ -89,11 +202,15 @@ export function useWorkoutSession() {
             date: activeWorkout.date || Logic.getLocalDateString()
         };
 
+        delete finishedWorkout.isEditingHistory;
+        delete finishedWorkout.originalHistoryId;
+
         const updatedHistory = [finishedWorkout, ...history];
         
         try {
             await saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
             setLocalWorkout(null);
+            resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
         } catch {
             showAlert("Errore durante il salvataggio della sessione.");
@@ -105,6 +222,7 @@ export function useWorkoutSession() {
         try {
             await saveUserData({ ...userData, activeWorkout: null });
             setLocalWorkout(null);
+            resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
         } catch {
             showAlert("Errore durante l'eliminazione della sessione.");
@@ -253,9 +371,13 @@ export function useWorkoutSession() {
         pump, setPump,
         fatigue, setFatigue,
         water, setWater,
+        manualDuration, setManualDuration,
         startWorkout,
         endWorkout,
         deleteWorkout,
+        startEditHistoricalWorkout,
+        saveHistoryEdit,
+        cancelHistoryEdit,
         addExtraExercise, reorderExercises, removeActiveExercise,
         addSet,
         removeSet,

@@ -42,14 +42,12 @@ const TrainingRoutines = () => {
                 />
 
                 <div className="mt-15 pt-15 border-t">
-                    {routineExercises.length > 0 && (
-                        <div className="mb-15 flex-center w-full">
-                            <MuscleModel 
-                                selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
-                                secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
-                            />
-                        </div>
-                    )}
+                    <div className="mb-15 flex-center w-full">
+                        <MuscleModel 
+                            selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
+                            secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
+                        />
+                    </div>
                     <div className="mb-15">
                         <select 
                             onChange={(e) => {
@@ -72,20 +70,10 @@ const TrainingRoutines = () => {
                             {routineExercises.map((ex: any, index: number) => {
                                 const libDef = library.find(l => l.id === ex.exId);
                                 return (
-                                    <div key={index} className="flex-col bg-card-inner p-10 rounded-8 gap-10">
-                                        <div className="flex-between gap-10">
-                                            <div className="text-md flex-1">
+                                    <div key={index} className="flex-col bg-card-inner p-10 rounded-8 gap-8">
+                                        <div className="flex-between gap-10 items-center">
+                                            <div className="text-md font-semibold flex-1">
                                                 {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
-                                            </div>
-                                            <div className="flex items-center gap-5 text-sm">
-                                                <label className="text-muted white-space-nowrap">Serie:</label>
-                                                <input 
-                                                    type="number" min="1" max="20"
-                                                    value={ex.setsCount || 3}
-                                                    onChange={e => handleUpdateSetsCount(index, parseInt(e.target.value) || 3)}
-                                                    className="w-50 m-0 p-4 text-center"
-                                                    onClick={e => e.stopPropagation()}
-                                                />
                                             </div>
                                             <div className="flex gap-4">
                                                 <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(index, -1)}>⬆️</button>
@@ -93,14 +81,44 @@ const TrainingRoutines = () => {
                                                 <button className="btn-icon text-danger" onClick={() => handleRemoveExerciseFromRoutine(index)}>❌</button>
                                             </div>
                                         </div>
-                                        {libDef?.trackingType !== 'time' && (
-                                            <div className="flex items-center gap-10 text-sm">
-                                                <label className="text-muted">Rep min:</label>
-                                                <input type="number" placeholder="es. 8" value={ex.minReps || ''} onChange={e => handleUpdateReps(index, 'minReps', e.target.value)} className="w-60 m-0 p-4 text-center" />
-                                                <label className="text-muted" style={{ marginLeft: '10px' }}>Rep max:</label>
-                                                <input type="number" placeholder="es. 12" value={ex.maxReps || ''} onChange={e => handleUpdateReps(index, 'maxReps', e.target.value)} className="w-60 m-0 p-4 text-center" />
+                                        <div className="flex items-center gap-12 flex-wrap text-sm">
+                                            <div className="flex items-center gap-5">
+                                                <label className="text-muted white-space-nowrap text-xs font-semibold">Serie:</label>
+                                                <input 
+                                                    type="number" min="1" max="20"
+                                                    value={ex.setsCount || 3}
+                                                    onChange={e => handleUpdateSetsCount(index, parseInt(e.target.value) || 3)}
+                                                    className="input-compact w-50"
+                                                    onClick={e => e.stopPropagation()}
+                                                />
                                             </div>
-                                        )}
+                                            {libDef?.trackingType !== 'time' ? (
+                                                <div className="flex items-center gap-8">
+                                                    <div className="flex items-center gap-5">
+                                                        <label className="text-muted white-space-nowrap text-xs font-semibold">Rep min:</label>
+                                                        <input 
+                                                            type="number" 
+                                                            placeholder="es. 8" 
+                                                            value={ex.minReps || ''} 
+                                                            onChange={e => handleUpdateReps(index, 'minReps', e.target.value)} 
+                                                            className="input-compact w-60" 
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-5">
+                                                        <label className="text-muted white-space-nowrap text-xs font-semibold">Rep max:</label>
+                                                        <input 
+                                                            type="number" 
+                                                            placeholder="es. 12" 
+                                                            value={ex.maxReps || ''} 
+                                                            onChange={e => handleUpdateReps(index, 'maxReps', e.target.value)} 
+                                                            className="input-compact w-60" 
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted text-xs italic">Tracciamento a tempo</span>
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             })}

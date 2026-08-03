@@ -15,6 +15,10 @@ export function useTrainingHistory() {
             const updatedHistory = (userData.history || []).filter((w: any) => w.id !== id);
             try {
                 await saveUserData({ ...userData, history: updatedHistory });
+                const localWorkout = useAppStore.getState().localWorkout;
+                if (localWorkout && (localWorkout.id === id || localWorkout.originalHistoryId === id)) {
+                    useAppStore.getState().setLocalWorkout(null);
+                }
             } catch {
                 const showAlert = useDialogStore.getState().showAlert;
                 showAlert("Errore durante l'eliminazione dell'allenamento.");

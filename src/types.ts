@@ -84,12 +84,15 @@ export interface WorkoutSession {
     globalStartTime?: number;
     globalEndTime?: number;
     globalDurationStr?: string;
+    manualDurationStr?: string;
     moodRating?: number | null;
     pumpRating?: number | null;
     fatigueRating?: number | null;
     waterLiters?: number;
     endTime?: number;
     exercises: SessionExercise[];
+    isEditingHistory?: boolean;
+    originalHistoryId?: string;
 }
 
 export interface NutritionDay {

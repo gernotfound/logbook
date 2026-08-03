@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
 
+export const resetGlobalWorkoutTimer = () => {
+    try {
+        localStorage.removeItem('logbook_timer_state');
+        localStorage.removeItem('logbook_timer_start');
+        localStorage.removeItem('logbook_timer_accumulated');
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('logbook_reset_timer'));
+        }
+    } catch (e) {
+        console.error("Errore reset timer:", e);
+    }
+};
+
 export default function WorkoutTimer() {
     // Rest Timer State
     const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>(() => {
@@ -17,6 +30,23 @@ export default function WorkoutTimer() {
     const [restDisplay, setRestDisplay] = useState('00:00');
 
     useEffect(() => {
+        const handleReset = () => {
+            setRestState('stopped');
+            setRestStartTime(0);
+            setRestAccumulated(0);
+            setRestDisplay('00:00');
+        };
+        window.addEventListener('logbook_reset_timer', handleReset);
+        return () => window.removeEventListener('logbook_reset_timer', handleReset);
+    }, []);
+
+    useEffect(() => {
+        if (restState === 'stopped' && restStartTime === 0 && restAccumulated === 0) {
+            localStorage.removeItem('logbook_timer_state');
+            localStorage.removeItem('logbook_timer_start');
+            localStorage.removeItem('logbook_timer_accumulated');
+            return;
+        }
         localStorage.setItem('logbook_timer_state', restState);
         localStorage.setItem('logbook_timer_start', restStartTime.toString());
         localStorage.setItem('logbook_timer_accumulated', restAccumulated.toString());

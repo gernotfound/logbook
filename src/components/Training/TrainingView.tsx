@@ -2,8 +2,18 @@ import TrainingSession from './TrainingSession';
 import TrainingRoutines from './TrainingRoutines';
 import TrainingExercises from './TrainingExercises';
 import TrainingHistory from './TrainingHistory';
+import { useWorkoutSession } from '../../hooks/useWorkoutSession';
+import type { WorkoutSession } from '../../types';
 
 const TrainingView = ({ subTab = 'session', setSubTab }: any) => {
+    const { startEditHistoricalWorkout } = useWorkoutSession();
+
+    const handleEditWorkout = async (wo: WorkoutSession) => {
+        const ok = await startEditHistoricalWorkout(wo);
+        if (ok) {
+            setSubTab('session');
+        }
+    };
 
     return (
         <div id="view-training" className="view-section active">
@@ -14,10 +24,10 @@ const TrainingView = ({ subTab = 'session', setSubTab }: any) => {
                 <div className={`sub-nav-btn ${subTab === 'history' ? 'active' : ''}`} onClick={() => setSubTab('history')}>Storico</div>
             </div>
 
-            {subTab === 'session' && <TrainingSession />}
+            {subTab === 'session' && <TrainingSession onNavigateToHistory={() => setSubTab('history')} />}
             {subTab === 'routines' && <TrainingRoutines />}
             {subTab === 'exercises' && <TrainingExercises />}
-            {subTab === 'history' && <TrainingHistory />}
+            {subTab === 'history' && <TrainingHistory onEditWorkout={handleEditWorkout} />}
         </div>
     );
 };

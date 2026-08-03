@@ -795,32 +795,36 @@ export const Logic = {
     },
     validateWorkoutRatings(mood: any, pump: any, fatigue: any) {
         const checkRating = (val: any) => {
-            if (val === null || val === undefined || val === '') return null;
+            if (val === null || val === undefined || val === '') return { val: null, invalid: false };
             if (typeof val === 'number') {
-                return Number.isInteger(val) && val >= 1 && val <= 10 ? val : null;
+                const ok = Number.isInteger(val) && val >= 1 && val <= 10;
+                return { val: ok ? val : null, invalid: !ok };
             }
             if (typeof val === 'string') {
                 const trimmed = val.trim();
+                if (trimmed === '') return { val: null, invalid: false };
                 if (/^\d+$/.test(trimmed)) {
                     const num = parseInt(trimmed, 10);
-                    return num >= 1 && num <= 10 ? num : null;
+                    const ok = num >= 1 && num <= 10;
+                    return { val: ok ? num : null, invalid: !ok };
                 }
+                return { val: null, invalid: true };
             }
-            return null;
+            return { val: null, invalid: true };
         };
         const m = checkRating(mood);
         const p = checkRating(pump);
         const f = checkRating(fatigue);
-        const isValid = m !== null && p !== null && f !== null;
+        const isValid = !m.invalid && !p.invalid && !f.invalid;
         return {
             isValid,
-            mood: m,
-            pump: p,
-            fatigue: f,
+            mood: m.val,
+            pump: p.val,
+            fatigue: f.val,
             errors: {
-                mood: m === null ? "Voto umore deve essere un intero da 1 a 10" : null,
-                pump: p === null ? "Voto pump deve essere un intero da 1 a 10" : null,
-                fatigue: f === null ? "Voto stanchezza deve essere un intero da 1 a 10" : null
+                mood: m.invalid ? "Voto umore deve essere un intero da 1 a 10" : null,
+                pump: p.invalid ? "Voto pump deve essere un intero da 1 a 10" : null,
+                fatigue: f.invalid ? "Voto stanchezza deve essere un intero da 1 a 10" : null
             }
         };
     },

@@ -149,6 +149,17 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 0 3px var(--primary-glow);
 }
 .input-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;}
+.input-compact {
+    width: auto !important;
+    margin-bottom: 0 !important;
+    padding: 6px 8px !important;
+    font-size: 0.9rem !important;
+    text-align: center;
+}
+.w-50 { width: 50px !important; }
+.w-60 { width: 60px !important; }
+.w-70 { width: 70px !important; }
+
 
 
 .btn { 
