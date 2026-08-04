@@ -9,6 +9,8 @@ import TrainingHistory from '../src/components/Training/TrainingHistory';
 import TrainingView from '../src/components/Training/TrainingView';
 import WorkoutTimer, { resetGlobalWorkoutTimer } from '../src/components/Training/WorkoutTimer';
 import SettingsView from '../src/components/SettingsView';
+import MuscleModel from '../src/components/Training/MuscleModel';
+import { useHomeView } from '../src/hooks/useHomeView';
 import type { WorkoutSession, UserData } from '../src/types';
 
 describe('Workout Improvements & History Edit Suite', () => {
@@ -236,6 +238,98 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(csvBtn).not.toBeNull();
       expect(screen.getByText('Account Google')).not.toBeNull();
       expect(screen.getByText(/Zona Pericolosa/i)).not.toBeNull();
+    });
+  });
+
+  describe('6. MuscleModel Custom Colors & useHomeView Volume/Dropset/Fatigue', () => {
+    test('MuscleModel applies custom colors from both atomic SVG path IDs and logical muscle IDs', () => {
+      const customColors: Record<string, string> = {
+        'chest-upper-left': '#ef4444',
+        'back': '#f97316'
+      };
+
+      const { container } = renderWithProviders(
+        <MuscleModel muscleColors={customColors} interactive={false} />
+      );
+
+      const chestPath = container.querySelector('#chest-upper-left');
+      expect(chestPath).not.toBeNull();
+      expect(chestPath?.getAttribute('style')).toContain('fill: rgb(239, 68, 68)');
+
+      // 'back' is a logical group mapping to lats, traps, etc.
+      const latsPath = container.querySelector('#lats-mid-left');
+      expect(latsPath).not.toBeNull();
+      expect(latsPath?.getAttribute('style')).toContain('fill: rgb(249, 115, 22)');
+    });
+
+    test('useHomeView accurately computes muscleColors and volume with dropsets', () => {
+      const now = Date.now();
+      const mockLibrary = [
+        {
+          id: 'ex_bench',
+          name: 'Panca Piana',
+          muscles: ['chest_lower', 'chest_upper'],
+          secondaryMuscles: ['triceps', 'delts_front']
+        },
+        {
+          id: 'ex_curl',
+          name: 'Curl Bicipiti',
+          muscles: ['biceps'],
+          secondaryMuscles: ['forearms']
+        }
+      ];
+
+      // Workout done 24 hours ago (yesterday)
+      const yesterdayWorkout = {
+        id: 'w_yesterday',
+        date: Logic.getLocalDateString(new Date(now - 24 * 3600 * 1000)),
+        globalStartTime: now - (24 * 3600 * 1000),
+        exercises: [
+          {
+            exId: 'ex_bench',
+            sets: [
+              { id: 's1', kg: '80', reps: '10' },
+              { id: 's2', kg: '80', reps: '10' },
+              { 
+                id: 's3', 
+                kg: '80', 
+                reps: '8', 
+                dropsets: [
+                  { id: 'ds1', kg: '60', reps: '6' },
+                  { id: 'ds2', kg: '40', reps: '6' }
+                ] 
+              }
+            ]
+          }
+        ]
+      };
+
+      // Test component consuming useHomeView
+      let hookResult: any = null;
+      function TestHomeComponent() {
+        const res = useHomeView();
+        hookResult = res;
+        return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
+      }
+
+      renderWithProviders(<TestHomeComponent />, {
+        userData: {
+          ...emptyUserData,
+          library: mockLibrary,
+          history: [yesterdayWorkout]
+        } as any
+      });
+
+      expect(hookResult.loading).toBe(false);
+      
+      // Volume calculation: 3 main sets + 2 dropsets = 5 sets for Petto
+      expect(hookResult.volumeChartData.labels).toContain('Petto');
+      const pettoIndex = hookResult.volumeChartData.labels.indexOf('Petto');
+      expect(hookResult.volumeChartData.datasets[0].data[pettoIndex]).toBe(5);
+
+      // Fatigue / MuscleColors: 24h passed -> baseFatigue = 1 - 24/72 = 0.667 (> 0.35) -> #f97316 (orange)
+      expect(hookResult.muscleColors['chest-lower-left']).toBe('#f97316');
+      expect(hookResult.muscleColors['chest_lower']).toBe('#f97316');
     });
   });
 });

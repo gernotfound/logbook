@@ -61,13 +61,25 @@ export default function MuscleModel({
     const getPathStyle = (id: string) => {
         const logicId = reverseMap[id];
         
-        if (muscleColors && logicId && muscleColors[logicId]) {
-            return {
-                fill: muscleColors[logicId],
-                transition: 'fill 0.3s ease',
-                stroke: 'var(--bg-card)',
-                strokeWidth: '0.5'
-            };
+        if (muscleColors) {
+            let customColor = muscleColors[id] || (logicId ? muscleColors[logicId] : undefined);
+            if (!customColor) {
+                for (const [groupKey, color] of Object.entries(muscleColors)) {
+                    const paths = (Logic.GROUP_MAP as any)[groupKey];
+                    if (paths && Array.isArray(paths) && paths.includes(id)) {
+                        customColor = color;
+                        break;
+                    }
+                }
+            }
+            if (customColor) {
+                return {
+                    fill: customColor,
+                    transition: 'fill 0.3s ease',
+                    stroke: 'var(--bg-card)',
+                    strokeWidth: '0.5'
+                };
+            }
         }
 
         const isPrimary = primaryIds.has(id);

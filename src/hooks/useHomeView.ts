@@ -2,14 +2,53 @@ import { useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
+function getWorkoutTimestamp(w: any): number | null {
+    if (!w) return null;
+    if (typeof w.globalStartTime === 'number' && !isNaN(w.globalStartTime)) return w.globalStartTime;
+    if (typeof w.globalEndTime === 'number' && !isNaN(w.globalEndTime)) return w.globalEndTime;
+    if (typeof w.endTime === 'number' && !isNaN(w.endTime)) return w.endTime;
+    if (w.date) {
+        const parsed = new Date(w.date.includes('T') ? w.date : `${w.date}T12:00:00`).getTime();
+        if (!isNaN(parsed)) return parsed;
+    }
+    return null;
+}
+
+function getWorkoutDateStr(w: any): string | null {
+    if (!w) return null;
+    if (w.date) return w.date;
+    const ts = getWorkoutTimestamp(w);
+    return ts ? Logic.getLocalDateString(ts) : null;
+}
+
+function getMuscleCategory(mId: string): { key: string; label: string } {
+    if (!mId) return { key: 'other', label: 'Altro' };
+    const id = mId.toLowerCase();
+    if (id.startsWith('chest')) return { key: 'chest', label: 'Petto' };
+    if (id.startsWith('lat') || id.startsWith('back') || id.startsWith('rhomboid') || id.startsWith('lower_back')) return { key: 'back', label: 'Dorso' };
+    if (id.startsWith('delt') || id.startsWith('shoulder')) return { key: 'shoulders', label: 'Spalle' };
+    if (id.startsWith('trap')) return { key: 'traps', label: 'Trapezi' };
+    if (id.startsWith('bicep') || id.startsWith('brachial')) return { key: 'biceps', label: 'Bicipiti' };
+    if (id.startsWith('tricep')) return { key: 'triceps', label: 'Tricipiti' };
+    if (id.startsWith('quad')) return { key: 'quads', label: 'Quadricipiti' };
+    if (id.startsWith('hamstring')) return { key: 'hamstrings', label: 'Femorali' };
+    if (id.startsWith('glute') || id.startsWith('abductor')) return { key: 'glutes', label: 'Glutei' };
+    if (id.startsWith('calv')) return { key: 'calves', label: 'Polpacci' };
+    if (id.startsWith('ab') || id.startsWith('oblique') || id.startsWith('core')) return { key: 'abs', label: 'Addome' };
+    if (id.startsWith('forearm') || id.startsWith('hand')) return { key: 'forearms', label: 'Avambracci' };
+    if (id.startsWith('adductor')) return { key: 'adductors', label: 'Adduttori' };
+    if (id.startsWith('leg')) return { key: 'legs', label: 'Gambe' };
+    return { key: id, label: id.charAt(0).toUpperCase() + id.slice(1) };
+}
+
 function calcStreak(history: any[]) {
     if (!history || history.length === 0) return 0;
     
     // Build a set of workout date strings
     const workoutDates = new Set(
         history
-            .filter((w: any) => w.globalStartTime)
-            .map((w: any) => Logic.getLocalDateString(w.globalStartTime))
+            .map((w: any) => getWorkoutDateStr(w))
+            .filter((d): d is string => Boolean(d))
     );
 
     let streak = 0;
@@ -61,12 +100,14 @@ export function useHomeView() {
         const volume = new Map<string, number>();
 
         history.forEach((w: any) => {
-            if (!w.globalStartTime) return;
-            const msPassed = now - w.globalStartTime;
+            const workoutTime = getWorkoutTimestamp(w);
+            if (!workoutTime) return;
+
+            const msPassed = now - workoutTime;
             const hoursPassed = msPassed / (1000 * 60 * 60);
             
-            const isRecent72h = hoursPassed <= MAX_HOURS;
-            const isRecent7d = msPassed <= SEVEN_DAYS;
+            const isRecent72h = hoursPassed >= 0 && hoursPassed <= MAX_HOURS;
+            const isRecent7d = msPassed >= 0 && msPassed <= SEVEN_DAYS;
             
             if (!isRecent72h && !isRecent7d) return;
 
@@ -76,52 +117,64 @@ export function useHomeView() {
                 const libEx = library.find((l: any) => l.id === ex.exId);
                 if (!libEx) return;
 
-                const completedSets = ex.sets?.filter((s: any) => s.done).length || 0;
+                // Calculate completed sets (regular sets + dropsets)
+                let completedSets = 0;
+                (ex.sets || []).forEach((s: any) => {
+                    const hasValues = (s.kg !== undefined && s.kg !== '') || (s.reps !== undefined && s.reps !== '') || (s.time !== undefined && s.time !== '');
+                    const isDone = s.done === true || hasValues || s.done === undefined;
+                    if (isDone) {
+                        completedSets += 1;
+                        if (Array.isArray(s.dropsets)) {
+                            completedSets += s.dropsets.length;
+                        }
+                    }
+                });
 
                 if (isRecent7d && completedSets > 0) {
+                    const uniqueCategories = new Set<string>();
                     (libEx.muscles || []).forEach((mId: string) => {
                         if (!mId || typeof mId !== 'string') return;
-                        const majorId = mId.split('_')[0]; 
-                        volume.set(majorId, (volume.get(majorId) || 0) + completedSets);
+                        const { label } = getMuscleCategory(mId);
+                        uniqueCategories.add(label);
+                    });
+                    uniqueCategories.forEach((label) => {
+                        volume.set(label, (volume.get(label) || 0) + completedSets);
                     });
                 }
 
-                if (isRecent72h) {
+                if (isRecent72h && completedSets > 0) {
+                    // Primary muscles
                     (libEx.muscles || []).forEach((mId: string) => {
                         if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
                         atomicPaths.forEach((path: string) => {
                             fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue));
                         });
+                        fatigue.set(mId, Math.max(fatigue.get(mId) || 0, baseFatigue));
                     });
+                    // Secondary muscles (50% fatigue)
                     (libEx.secondaryMuscles || []).forEach((mId: string) => {
                         if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
                         atomicPaths.forEach((path: string) => {
                             fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue * 0.5));
                         });
+                        fatigue.set(mId, Math.max(fatigue.get(mId) || 0, baseFatigue * 0.5));
                     });
                 }
             });
         });
 
         const colors: Record<string, string> = {};
-        fatigue.forEach((val, path) => {
-            if (val > 0.7) colors[path] = '#ef4444'; 
-            else if (val > 0.4) colors[path] = '#f97316'; 
-            else if (val > 0.1) colors[path] = '#eab308'; 
+        fatigue.forEach((val, pathOrId) => {
+            if (val > 0.7) colors[pathOrId] = '#ef4444'; // Affaticamento alto (oggi/recente)
+            else if (val > 0.35) colors[pathOrId] = '#f97316'; // Affaticamento medio (ieri)
+            else if (val > 0.05) colors[pathOrId] = '#eab308'; // Affaticamento lieve (recupero quasi completo)
         });
-
-        const labelMap: Record<string, string> = {
-            'chest': 'Petto', 'back': 'Dorso', 'legs': 'Gambe', 'quads': 'Quadricipiti',
-            'hamstrings': 'Femorali', 'glutes': 'Glutei', 'calves': 'Polpacci',
-            'shoulders': 'Spalle', 'delts': 'Spalle', 'biceps': 'Bicipiti',
-            'triceps': 'Tricipiti', 'core': 'Core', 'abs': 'Addome', 'lats': 'Dorso'
-        };
 
         const sortedVolume = Array.from(volume.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);
         const vChartData = {
-            labels: sortedVolume.map(v => labelMap[v[0]] || v[0]),
+            labels: sortedVolume.map(v => v[0]),
             datasets: [{
                 data: sortedVolume.map(v => v[1]),
                 backgroundColor: 'rgba(14, 165, 233, 0.6)',
@@ -172,8 +225,7 @@ export function useHomeView() {
     
     // Calculate today's workout
     const todaysWorkout = history.find((s: any) => {
-        if (!s.globalStartTime) return false;
-        return Logic.getLocalDateString(s.globalStartTime) === todayStr;
+        return getWorkoutDateStr(s) === todayStr;
     });
     const isRestDay = !todaysWorkout;
 
