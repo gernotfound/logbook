@@ -1,63 +1,17 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { Dumbbell, Utensils, Home, Settings } from 'lucide-react'; 
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
+import ErrorBoundary from './components/UI/ErrorBoundary';
+import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
 const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'));
+const DataView = lazy(() => import('./components/Data/DataView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
-
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, errorMsg: string}> {
-  constructor(props: {children: React.ReactNode}) {
-    super(props);
-    this.state = { hasError: false, errorMsg: '' };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, errorMsg: error.message };
-  }
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error("ErrorBoundary caught an error", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <h2>Ops! Qualcosa è andato storto.</h2>
-          <p style={{ color: 'var(--danger-color)' }}>{this.state.errorMsg}</p>
-          <button className="btn btn-primary" onClick={() => window.location.reload()}>Ricarica l'App</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const BottomNav = React.memo(({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) => (
-  <nav className="bottom-nav" aria-label="Navigazione principale">
-    <div className="nav-container">
-      <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-        <Home size={24} />
-        <span>Home</span>
-      </div>
-      <div className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
-        <Dumbbell size={24} />
-        <span>Allenamento</span>
-      </div>
-      <div className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} onClick={() => setActiveTab('nutrition')}>
-        <Utensils size={24} />
-        <span>Nutrizione</span>
-      </div>
-      <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-        <Settings size={24} />
-        <span>Dati</span>
-      </div>
-    </div>
-  </nav>
-));
 
 function App() {
   const { currentUser, loading, login } = useAuth();
@@ -65,6 +19,7 @@ function App() {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('logbook_activeTab') || 'home');
   const [trainingSubTab, setTrainingSubTab] = useState(() => localStorage.getItem('logbook_trainingSubTab') || 'session');
   const [nutritionSubTab, setNutritionSubTab] = useState(() => localStorage.getItem('logbook_nutritionSubTab') || 'meals');
+  const [dataSubTab, setDataSubTab] = useState(() => localStorage.getItem('logbook_dataSubTab') || 'measurements');
 
   useEffect(() => {
     localStorage.setItem('logbook_activeTab', activeTab);
@@ -77,6 +32,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('logbook_nutritionSubTab', nutritionSubTab);
   }, [nutritionSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('logbook_dataSubTab', dataSubTab);
+  }, [dataSubTab]);
 
   // Scroll to top whenever the main tab changes
   useEffect(() => {
@@ -95,7 +54,7 @@ function App() {
       if (r) setSwRegistration(r);
     },
     onRegisterError(error) {
-      console.log('SW registration error', error)
+      console.log('SW registration error', error);
     },
   });
 
@@ -190,6 +149,7 @@ function App() {
             {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
             {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
             {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
+            {activeTab === 'data' && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
             {activeTab === 'settings' && <SettingsView />}
           </Suspense>
         </ErrorBoundary>

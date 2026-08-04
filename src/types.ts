@@ -47,9 +47,9 @@ export interface Exercise {
 
 export interface RoutineExercise {
     exId: string;
-    setsCount: number;
-    minReps?: number;
-    maxReps?: number;
+    setsCount: number | string;
+    minReps?: number | string;
+    maxReps?: number | string;
 }
 
 export interface WorkoutRoutine {
@@ -124,11 +124,15 @@ export interface Food {
     servingUnit?: string;
     servingWeight?: number | null;
     isCustom?: boolean;
-    satFat?: number;
-    sugars?: number;
-    sodium?: number;
-    fiber?: number;
-    iron?: number;
+    satFat?: number | null;
+    sugars?: number | null;
+    sodium?: number | null;
+    fiber?: number | null;
+    iron?: number | null;
+    potassium?: number | null;
+    calcium?: number | null;
+    magnesium?: number | null;
+    cholesterol?: number | null;
 }
 
 export interface Meal {

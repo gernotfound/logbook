@@ -5,6 +5,13 @@ import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
 import './styles/global.css'
 
+// Prevent gesture/pinch zoom on iOS PWA
+if (typeof window !== 'undefined') {
+  document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+  });
+}
+
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
     <ErrorBoundary>

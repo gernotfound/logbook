@@ -221,19 +221,10 @@ describe('Workout Improvements & History Edit Suite', () => {
   });
 
   describe('5. SettingsView CSV Export Button Location', () => {
-    test('Esporta Dati CSV button is in Account tab, not in Biometria tab', () => {
+    test('Esporta Dati CSV button is directly present in SettingsView', () => {
       renderWithProviders(<SettingsView />);
 
-      // Initially in Biometria tab: CSV button should NOT be present
-      expect(screen.queryByText(/Esporta Dati \(CSV\)/i)).toBeNull();
-
-      // Click on Account sub-nav
-      const accountTabBtn = screen.getByText('Account');
-      act(() => {
-        fireEvent.click(accountTabBtn);
-      });
-
-      // Now in Account tab: CSV button must be present between Account Google and Zona Pericolosa
+      // CSV button must be present between Account Google and Zona Pericolosa
       const csvBtn = screen.getByText(/Esporta Dati \(CSV\)/i);
       expect(csvBtn).not.toBeNull();
       expect(screen.getByText('Account Google')).not.toBeNull();

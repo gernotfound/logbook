@@ -15,6 +15,7 @@ import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionPlanning from '../src/components/Nutrition/NutritionPlanning';
 import NutritionMeasurements from '../src/components/Nutrition/NutritionMeasurements';
 import CustomFoodModal from '../src/components/Nutrition/CustomFoodModal';
+import DataView from '../src/components/Data/DataView';
 import SettingsView from '../src/components/SettingsView';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import MuscleModel from '../src/components/Training/MuscleModel';
@@ -165,7 +166,13 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders SettingsView without crashing', () => {
     const { container } = renderWithProviders(<SettingsView />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Dati Biometrici/i)).toBeDefined();
+    expect(screen.getByText(/Account Google/i)).toBeDefined();
+  });
+
+  test('renders DataView without crashing', () => {
+    const { container } = renderWithProviders(<DataView />);
+    expect(container).toBeDefined();
+    expect(screen.getByText(/Nuova Misurazione/i)).toBeDefined();
   });
 
   test('renders WorkoutTimer without crashing', () => {

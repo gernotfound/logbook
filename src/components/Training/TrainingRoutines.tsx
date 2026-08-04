@@ -1,5 +1,6 @@
 import MuscleModel from './MuscleModel';
 import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
+import { RoutineExercise } from '../../types';
 
 const TrainingRoutines = () => {
     const {
@@ -86,8 +87,10 @@ const TrainingRoutines = () => {
                                                 <label className="text-muted white-space-nowrap text-xs font-semibold">Serie:</label>
                                                 <input 
                                                     type="number" min="1" max="20"
-                                                    value={ex.setsCount || 3}
-                                                    onChange={e => handleUpdateSetsCount(index, parseInt(e.target.value) || 3)}
+                                                    placeholder="3"
+                                                    value={ex.setsCount !== undefined && ex.setsCount !== null ? ex.setsCount : ''}
+                                                    onChange={e => handleUpdateSetsCount(index, e.target.value)}
+                                                    onFocus={e => e.target.select()}
                                                     className="input-compact w-50"
                                                     onClick={e => e.stopPropagation()}
                                                 />
@@ -199,7 +202,7 @@ const TrainingRoutines = () => {
                                                 <p className="text-muted text-md">Nessun esercizio presente.</p>
                                             ) : (
                                                 <div className="flex-col gap-8">
-                                                    {(rtn.exercises || []).map((ex: { exId: string, setsCount?: number, minReps?: number | string, maxReps?: number | string }, index: number) => {
+                                                    {(rtn.exercises || []).map((ex: RoutineExercise, index: number) => {
                                                         const libDef = library.find(l => l.id === ex.exId);
                                                         return (
                                                             <div key={index} className="flex-col bg-card-inner p-10 rounded-8 gap-10">

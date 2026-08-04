@@ -1,0 +1,36 @@
+import React from 'react';
+import { Dumbbell, Utensils, Home, Settings, Activity } from 'lucide-react';
+
+interface BottomNavProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+}
+
+export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setActiveTab }) => (
+  <nav className="bottom-nav" aria-label="Navigazione principale">
+    <div className="nav-container">
+      <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+        <Home size={24} />
+        <span>Home</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
+        <Dumbbell size={24} />
+        <span>Allenamento</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} onClick={() => setActiveTab('nutrition')}>
+        <Utensils size={24} />
+        <span>Nutrizione</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'data' ? 'active' : ''}`} onClick={() => setActiveTab('data')}>
+        <Activity size={24} />
+        <span>Dati</span>
+      </div>
+      <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+        <Settings size={24} />
+        <span>Impostazioni</span>
+      </div>
+    </div>
+  </nav>
+));
+
+export default BottomNav;

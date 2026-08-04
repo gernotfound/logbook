@@ -23,6 +23,15 @@
     margin: 0; 
     padding: 0; 
     font-family: 'Inter', -apple-system, sans-serif; 
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
 }
 
 body { 
@@ -31,6 +40,12 @@ body {
     padding-bottom: calc(80px + env(safe-area-inset-bottom)); 
     -webkit-tap-highlight-color: transparent; 
     overflow-x: hidden;
+    touch-action: manipulation;
+}
+
+input, select, textarea {
+    font-size: 16px !important;
+    touch-action: manipulation;
 }
 
 #app-container { 
@@ -139,8 +154,9 @@ input[type="text"], input[type="number"], input[type="date"], select, textarea {
     border: 1px solid var(--glass-border); 
     color: var(--text-main); 
     border-radius: 12px; 
-    font-size: 1rem;
+    font-size: 16px;
     transition: all 0.2s ease;
+    touch-action: manipulation;
 }
 input:focus, select:focus, textarea:focus { 
     outline: none; 
@@ -152,13 +168,13 @@ input:focus, select:focus, textarea:focus {
 .input-compact {
     width: auto !important;
     margin-bottom: 0 !important;
-    padding: 6px 8px !important;
-    font-size: 0.9rem !important;
+    padding: 6px 6px !important;
+    font-size: 16px !important;
     text-align: center;
 }
-.w-50 { width: 50px !important; }
-.w-60 { width: 60px !important; }
-.w-70 { width: 70px !important; }
+.w-50 { width: 52px !important; }
+.w-60 { width: 62px !important; }
+.w-70 { width: 72px !important; }
 
 
 
@@ -516,7 +532,7 @@ input:focus, select:focus, textarea:focus {
     margin-bottom: 0 !important;
     text-align: center;
     font-weight: bold;
-    font-size: 0.95rem !important;
+    font-size: 16px !important;
     border-radius: 8px !important;
 }
 .macro-slider-val-wrap .unit {

@@ -21,6 +21,7 @@ export function useTrainingRoutines() {
             try {
                 const parsed = JSON.parse(draft);
                 if (parsed.name) setRoutineName(parsed.name);
+                if (parsed.exercises && Array.isArray(parsed.exercises)) setRoutineExercises(parsed.exercises);
             } catch {
                 // Ignore parse error on invalid draft
             }
@@ -62,16 +63,24 @@ export function useTrainingRoutines() {
         }
 
         try {
+            const sanitizedExercises: RoutineExercise[] = routineExercises.map(ex => {
+                const num = typeof ex.setsCount === 'number' ? ex.setsCount : parseInt(String(ex.setsCount), 10);
+                return {
+                    ...ex,
+                    setsCount: !isNaN(num) && num >= 1 ? Math.min(20, Math.floor(num)) : 3
+                };
+            });
+
             if (editingRoutineId) {
                 const updatedRoutines = routines.map(r => 
-                    r.id === editingRoutineId ? { ...r, name: routineName.trim(), exercises: routineExercises } : r
+                    r.id === editingRoutineId ? { ...r, name: routineName.trim(), exercises: sanitizedExercises } : r
                 );
                 await saveUserData({ ...userData, routines: updatedRoutines });
             } else {
                 const newRoutine = {
                     id: Logic.generateId('rtn'),
                     name: routineName.trim(),
-                    exercises: routineExercises
+                    exercises: sanitizedExercises
                 };
                 const updatedRoutines = [...routines, newRoutine].sort((a,b) => a.name.localeCompare(b.name));
                 await saveUserData({ ...userData, routines: updatedRoutines });
@@ -105,10 +114,15 @@ export function useTrainingRoutines() {
         setRoutineExercises(prev => [...prev, { exId, setsCount: 3 }]);
     };
 
-    const handleUpdateSetsCount = (index: number, count: number) => {
+    const handleUpdateSetsCount = (index: number, count: string | number) => {
         setRoutineExercises(prev => {
             const newExs = [...prev];
-            newExs[index] = { ...newExs[index], setsCount: Math.max(1, count) };
+            if (count === '' || count === undefined || count === null) {
+                newExs[index] = { ...newExs[index], setsCount: '' };
+            } else {
+                const parsed = parseInt(count.toString(), 10);
+                newExs[index] = { ...newExs[index], setsCount: isNaN(parsed) ? '' : parsed };
+            }
             return newExs;
         });
     };
