@@ -63,16 +63,13 @@ const SettingsView = () => {
                         </button>
                     </div>
 
-                    <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-                        <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: '15px' }} onClick={handleExport}>
-                            💾 Esporta Dati (CSV)
-                        </button>
-                        {isInstallable && (
+                    {isInstallable && (
+                        <div style={{ marginTop: '20px', marginBottom: '20px' }}>
                             <button className="btn btn-primary" style={{ width: '100%', marginBottom: '15px' }} onClick={promptInstall}>
                                 📱 Installa App sul Telefono
                             </button>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -93,6 +90,12 @@ const SettingsView = () => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
                             <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dall'account</button>
                         </div>
+                    </div>
+
+                    <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+                        <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleExport}>
+                            💾 Esporta Dati (CSV)
+                        </button>
                     </div>
 
                     {isOffline && (
