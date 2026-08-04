@@ -1,12 +1,27 @@
-
 export default function CustomFoodModal({ cfData, setCfData, saveCustomFood, showCustomModal }: any) {
     if (!showCustomModal) return null;
 
     return (
         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
             <div style={{ marginBottom: '10px' }}>
-                <input id="cf-name" type="text" placeholder="Nome alimento (obbligatorio)" value={cfData.name} onChange={e => setCfData({...cfData, name: e.target.value})} style={{ marginBottom: '8px' }} />
-                <input id="cf-brand" type="text" placeholder="Marca (opzionale)" value={cfData.brand} onChange={e => setCfData({...cfData, brand: e.target.value})} style={{ marginBottom: '8px' }} />
+                <input 
+                    id="cf-name" 
+                    type="text" 
+                    placeholder="Nome alimento (obbligatorio)" 
+                    value={cfData.name} 
+                    onChange={e => setCfData({...cfData, name: e.target.value})} 
+                    onFocus={e => e.target.select()}
+                    style={{ marginBottom: '8px' }} 
+                />
+                <input 
+                    id="cf-brand" 
+                    type="text" 
+                    placeholder="Marca (opzionale)" 
+                    value={cfData.brand} 
+                    onChange={e => setCfData({...cfData, brand: e.target.value})} 
+                    onFocus={e => e.target.select()}
+                    style={{ marginBottom: '8px' }} 
+                />
             </div>
             
             <div className="input-row" style={{ marginBottom: '10px' }}>
@@ -19,7 +34,14 @@ export default function CustomFoodModal({ cfData, setCfData, saveCustomFood, sho
                 </div>
                 {cfData.unit === 'pezzo' && (
                     <div style={{ flex: 1 }}>
-                        <input id="cf-piece-weight" type="number" placeholder="Peso 1 pezzo (g)" value={cfData.pieceWeight} onChange={e => setCfData({...cfData, pieceWeight: e.target.value})} />
+                        <input 
+                            id="cf-piece-weight" 
+                            type="number" 
+                            placeholder="Peso 1 pezzo (g)" 
+                            value={cfData.pieceWeight} 
+                            onChange={e => setCfData({...cfData, pieceWeight: e.target.value})} 
+                            onFocus={e => e.target.select()}
+                        />
                     </div>
                 )}
             </div>
@@ -27,10 +49,42 @@ export default function CustomFoodModal({ cfData, setCfData, saveCustomFood, sho
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Valori per 100 {cfData.unit !== 'pezzo' ? cfData.unit : 'g'}:</div>
             
             <div className="input-row" style={{ marginBottom: '10px' }}>
-                <input id="cf-kcal" type="number" placeholder="Kcal" value={cfData.kcal} onChange={e => setCfData({...cfData, kcal: e.target.value})} style={{ flex: 1 }} />
-                <input id="cf-carbs" type="number" placeholder="Carbo (g)" value={cfData.carbs} onChange={e => setCfData({...cfData, carbs: e.target.value})} style={{ flex: 1 }} />
-                <input id="cf-pro" type="number" placeholder="Pro (g)" value={cfData.pro} onChange={e => setCfData({...cfData, pro: e.target.value})} style={{ flex: 1 }} />
-                <input id="cf-fat" type="number" placeholder="Grassi (g)" value={cfData.fat} onChange={e => setCfData({...cfData, fat: e.target.value})} style={{ flex: 1 }} />
+                <input 
+                    id="cf-kcal" 
+                    type="number" 
+                    placeholder="Kcal" 
+                    value={cfData.kcal} 
+                    onChange={e => setCfData({...cfData, kcal: e.target.value})} 
+                    onFocus={e => e.target.select()}
+                    style={{ flex: 1 }} 
+                />
+                <input 
+                    id="cf-carbs" 
+                    type="number" 
+                    placeholder="Carbo (g)" 
+                    value={cfData.carbs} 
+                    onChange={e => setCfData({...cfData, carbs: e.target.value})} 
+                    onFocus={e => e.target.select()}
+                    style={{ flex: 1 }} 
+                />
+                <input 
+                    id="cf-pro" 
+                    type="number" 
+                    placeholder="Pro (g)" 
+                    value={cfData.pro} 
+                    onChange={e => setCfData({...cfData, pro: e.target.value})} 
+                    onFocus={e => e.target.select()}
+                    style={{ flex: 1 }} 
+                />
+                <input 
+                    id="cf-fat" 
+                    type="number" 
+                    placeholder="Grassi (g)" 
+                    value={cfData.fat} 
+                    onChange={e => setCfData({...cfData, fat: e.target.value})} 
+                    onFocus={e => e.target.select()}
+                    style={{ flex: 1 }} 
+                />
             </div>
 
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={saveCustomFood}>

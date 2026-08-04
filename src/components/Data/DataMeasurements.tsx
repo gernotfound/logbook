@@ -76,6 +76,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                         placeholder="es. 80.5" 
                         value={weight} 
                         onChange={e => setWeight(e.target.value)} 
+                        onFocus={e => e.target.select()}
                     />
                 </div>
                 {method === 'manual' ? (
@@ -88,6 +89,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             placeholder="es. 15.5" 
                             value={manualBf} 
                             onChange={e => setManualBf(e.target.value)} 
+                            onFocus={e => e.target.select()}
                         />
                     </div>
                 ) : (
@@ -99,6 +101,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             step="0.1" 
                             value={waist} 
                             onChange={e => setWaist(e.target.value)} 
+                            onFocus={e => e.target.select()}
                         />
                     </div>
                 )}
@@ -114,6 +117,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             step="0.1" 
                             value={neck} 
                             onChange={e => setNeck(e.target.value)} 
+                            onFocus={e => e.target.select()}
                         />
                     </div>
                     {(profile.gender === 'F' || method === 'navy_female') && (
@@ -125,6 +129,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                                 step="0.1" 
                                 value={hip} 
                                 onChange={e => setHip(e.target.value)} 
+                                onFocus={e => e.target.select()}
                             />
                         </div>
                     )}

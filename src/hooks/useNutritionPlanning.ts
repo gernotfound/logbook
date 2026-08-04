@@ -36,8 +36,20 @@ export function useNutritionPlanning() {
     };
 
     const handleSave = async () => {
-        // Do NOT overwrite normocalorica. It is manually configured by the user.
-        const updatedPlanning = { ...planning };
+        const sanitizedNormo = {
+            kcal: parseFloat(planning.normocalorica?.kcal) || 0,
+            carbs: parseFloat(planning.normocalorica?.carbs) || 0,
+            pro: parseFloat(planning.normocalorica?.pro) || 0,
+            fat: parseFloat(planning.normocalorica?.fat) || 0
+        };
+        const updatedPlanning = {
+            ...planning,
+            weight: parseFloat(planning.weight) || 80,
+            carbsPerKg: parseFloat(planning.carbsPerKg) || 0,
+            proPerKg: parseFloat(planning.proPerKg) || 0,
+            fatPerKg: parseFloat(planning.fatPerKg) || 0,
+            normocalorica: sanitizedNormo
+        };
         setLocalPlanning(updatedPlanning);
         const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
         try {

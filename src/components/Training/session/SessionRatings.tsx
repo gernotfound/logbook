@@ -34,6 +34,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                     placeholder="es. 1.5" 
                     value={water} 
                     onChange={e => setWater(e.target.value)} 
+                    onFocus={e => e.target.select()}
                     style={{ margin: 0, width: '100%', borderColor: 'var(--primary-color)' }} 
                 />
             </div>
@@ -52,6 +53,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             max="10" 
                             value={mood} 
                             onChange={e => setMood(e.target.value)} 
+                            onFocus={e => e.target.select()}
                             style={{ margin: 0, textAlign: 'center' }} 
                         />
                     </div>
@@ -66,6 +68,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             max="10" 
                             value={pump} 
                             onChange={e => setPump(e.target.value)} 
+                            onFocus={e => e.target.select()}
                             style={{ margin: 0, textAlign: 'center' }} 
                         />
                     </div>
@@ -80,6 +83,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             max="10" 
                             value={fatigue} 
                             onChange={e => setFatigue(e.target.value)} 
+                            onFocus={e => e.target.select()}
                             style={{ margin: 0, textAlign: 'center' }} 
                         />
                     </div>

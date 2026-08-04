@@ -35,6 +35,7 @@ const DataBiometry = () => {
                         placeholder="es. 180" 
                         value={height} 
                         onChange={e => setHeight(e.target.value)} 
+                        onFocus={e => e.target.select()}
                     />
                 </div>
                 <div style={{ flex: 1 }}>
