@@ -6,7 +6,6 @@ const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 export default function NutritionMeals() {
     const {
         searchQuery, handleSearch, searchResults, clearSearch,
-        isSearchingOnline, handleOnlineSearch,
         showCustomModal, setShowCustomModal,
         cfData, setCfData, saveCustomFood,
         meals, addFood, removeFood
@@ -17,71 +16,45 @@ export default function NutritionMeals() {
             {/* Search Box */}
             <div className="card mb-15">
                 <h3 className="mb-10">🔍 Cerca Alimento</h3>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                        <input 
-                            type="text" 
-                            placeholder="Cerca alimento (es. Pollo, Riso, Avena...)" 
-                            value={searchQuery}
-                            onChange={e => handleSearch(e.target.value)}
-                            onFocus={e => e.target.select()}
-                            style={{ 
-                                width: '100%', 
-                                margin: 0, 
-                                height: '44px',
-                                paddingLeft: '14px', 
-                                paddingRight: searchQuery ? '36px' : '14px',
-                                fontSize: '16px',
-                                borderRadius: '10px'
-                            }}
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={clearSearch}
-                                style={{
-                                    position: 'absolute',
-                                    right: '8px',
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '1rem',
-                                    cursor: 'pointer',
-                                    padding: '4px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}
-                                aria-label="Cancella ricerca"
-                            >
-                                ✕
-                            </button>
-                        )}
-                    </div>
-                    <button 
-                        className="btn btn-primary" 
-                        onClick={handleOnlineSearch}
-                        disabled={isSearchingOnline || searchQuery.trim().length < 2}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input 
+                        type="text" 
+                        placeholder="Cerca alimento (es. Pollo, Riso, Avena...)" 
+                        value={searchQuery}
+                        onChange={e => handleSearch(e.target.value)}
+                        onFocus={e => e.target.select()}
                         style={{ 
-                            width: 'auto',
-                            minWidth: 'max-content',
-                            flexShrink: 0,
-                            height: '44px',
-                            padding: '0 16px', 
+                            width: '100%', 
                             margin: 0, 
-                            fontSize: '0.85rem',
-                            fontWeight: 600,
-                            borderRadius: '10px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            whiteSpace: 'nowrap',
-                            opacity: (isSearchingOnline || searchQuery.trim().length < 2) ? 0.5 : 1
+                            height: '44px',
+                            paddingLeft: '14px', 
+                            paddingRight: searchQuery ? '36px' : '14px',
+                            fontSize: '16px',
+                            borderRadius: '10px'
                         }}
-                    >
-                        {isSearchingOnline ? '⏳ Ricerca...' : '🌐 Online'}
-                    </button>
+                    />
+                    {searchQuery && (
+                        <button
+                            type="button"
+                            onClick={clearSearch}
+                            style={{
+                                position: 'absolute',
+                                right: '8px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                fontSize: '1rem',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                            aria-label="Cancella ricerca"
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
                 
                 {/* Search Results List (In-Flow, Solid Opaque Background) */}
@@ -114,7 +87,6 @@ export default function NutritionMeals() {
                                         <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                                             <span>{f.name}</span>
                                             {f.isCustom && <span style={{ background: 'var(--warning-color)', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>Custom</span>}
-                                            {f.isOnline && <span style={{ background: '#4db6ac', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>API</span>}
                                         </div>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                                             {f.kcal} kcal / {f.baseQty || 100}{f.unit || 'g'} • C:{f.carbs || 0}g P:{f.pro || 0}g F:{f.fat || 0}g
@@ -146,9 +118,9 @@ export default function NutritionMeals() {
                     </div>
                 )}
 
-                {searchQuery.trim().length >= 2 && searchResults.length === 0 && !isSearchingOnline && (
+                {searchQuery.trim().length >= 2 && searchResults.length === 0 && (
                     <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed var(--glass-border)' }}>
-                        Nessun alimento trovato in locale. Clicca <b>🌐 Online</b> per cercare nel database.
+                        Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea Alimento Custom</b>.
                     </div>
                 )}
 

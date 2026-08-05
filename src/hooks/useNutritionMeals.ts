@@ -11,7 +11,6 @@ export function useNutritionMeals() {
     
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [isSearchingOnline, setIsSearchingOnline] = useState(false);
     
     const [showCustomModal, setShowCustomModal] = useState(false);
     const [cfData, setCfData] = useState({
@@ -76,47 +75,6 @@ export function useNutritionMeals() {
         }
     };
 
-    const handleOnlineSearch = async () => {
-        if (searchQuery.trim().length < 2) return;
-        setIsSearchingOnline(true);
-        try {
-            const url = `https://world.openfoodfacts.org/api/v2/search?categories_tags_en=${encodeURIComponent(searchQuery)}&fields=product_name,brands,nutriments,code&page_size=15`;
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            if (data && data.products) {
-                const apiResults = data.products
-                    .filter((p: any) => p.nutriments && p.nutriments['energy-kcal_100g'] !== undefined)
-                    .map((p: any) => ({
-                        id: `off_${p.code}`,
-                        name: p.product_name ? `${p.brands ? p.brands + ' ' : ''}${p.product_name}` : 'Prodotto Sconosciuto',
-                        brand: p.brands || '',
-                        kcal: Math.round(p.nutriments['energy-kcal_100g'] || 0).toString(),
-                        carbs: Math.round(p.nutriments.carbohydrates_100g || 0).toString(),
-                        pro: Math.round(p.nutriments.proteins_100g || 0).toString(),
-                        fat: Math.round(p.nutriments.fat_100g || 0).toString(),
-                        baseQty: 100,
-                        unit: 'g',
-                        isOnline: true
-                    }));
-                
-                setSearchResults(prev => {
-                    const combined = [...prev];
-                    apiResults.forEach((apiItem: any) => {
-                        if (!combined.some(c => c.id === apiItem.id || c.name.toLowerCase() === apiItem.name.toLowerCase())) {
-                            combined.push(apiItem);
-                        }
-                    });
-                    return combined;
-                });
-            }
-        } catch (error) {
-            console.warn("Errore durante la ricerca OpenFoodFacts:", error);
-            showAlert("Errore durante la ricerca online. Riprova più tardi.");
-        } finally {
-            setIsSearchingOnline(false);
-        }
-    };
 
     const recalcTotals = (mealsList: any[]) => {
         let kcal = 0, carbs = 0, pro = 0, fat = 0;
@@ -241,7 +199,6 @@ export function useNutritionMeals() {
 
     return {
         searchQuery, setSearchQuery, handleSearch, searchResults, handleDeleteItem, clearSearch,
-        isSearchingOnline, handleOnlineSearch,
         clearDay,
         handleQuickAdd,
         showCustomModal, setShowCustomModal,
