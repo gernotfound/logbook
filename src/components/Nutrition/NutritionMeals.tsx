@@ -17,15 +17,23 @@ export default function NutritionMeals() {
             {/* Search Box */}
             <div className="card mb-15">
                 <h3 className="mb-10">🔍 Cerca Alimento</h3>
-                <div className="flex gap-10">
-                    <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                         <input 
                             type="text" 
-                            placeholder="Cerca es. Pollo, Avena, o alimento custom..." 
+                            placeholder="Cerca alimento (es. Pollo, Riso, Avena...)" 
                             value={searchQuery}
                             onChange={e => handleSearch(e.target.value)}
-                            className="m-0"
-                            style={{ width: '100%', paddingRight: searchQuery ? '36px' : '12px' }}
+                            onFocus={e => e.target.select()}
+                            style={{ 
+                                width: '100%', 
+                                margin: 0, 
+                                height: '44px',
+                                paddingLeft: '14px', 
+                                paddingRight: searchQuery ? '36px' : '14px',
+                                fontSize: '16px',
+                                borderRadius: '10px'
+                            }}
                         />
                         {searchQuery && (
                             <button
@@ -39,7 +47,10 @@ export default function NutritionMeals() {
                                     color: 'var(--text-muted)',
                                     fontSize: '1rem',
                                     cursor: 'pointer',
-                                    padding: '4px'
+                                    padding: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
                                 }}
                                 aria-label="Cancella ricerca"
                             >
@@ -51,7 +62,23 @@ export default function NutritionMeals() {
                         className="btn btn-primary" 
                         onClick={handleOnlineSearch}
                         disabled={isSearchingOnline || searchQuery.trim().length < 2}
-                        style={{ padding: '0 15px', whiteSpace: 'nowrap', marginBottom: 0 }}
+                        style={{ 
+                            width: 'auto',
+                            minWidth: 'max-content',
+                            flexShrink: 0,
+                            height: '44px',
+                            padding: '0 16px', 
+                            margin: 0, 
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            borderRadius: '10px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                            opacity: (isSearchingOnline || searchQuery.trim().length < 2) ? 0.5 : 1
+                        }}
                     >
                         {isSearchingOnline ? '⏳ Ricerca...' : '🌐 Online'}
                     </button>
