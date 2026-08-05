@@ -139,7 +139,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
     return (
         <div className="training-sub-view active">
             {/* Sticky Timer */}
-            <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
+            <div style={{ position: 'sticky', top: 'env(safe-area-inset-top, 0px)', zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
                 <WorkoutTimer />
             </div>
 

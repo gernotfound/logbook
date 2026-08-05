@@ -111,7 +111,7 @@ function App() {
       {/* PWA Update Prompt */}
       {needRefresh && (
         <div style={{
-          position: 'fixed', top: '15px', left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', top: 'calc(15px + env(safe-area-inset-top, 0px))', left: '50%', transform: 'translateX(-50%)',
           background: 'var(--accent-color)', color: '#fff', padding: '12px 20px', borderRadius: '12px',
           boxShadow: '0 4px 15px rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '15px',
           width: '90%', maxWidth: '400px'
