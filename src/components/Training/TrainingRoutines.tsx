@@ -11,6 +11,7 @@ const TrainingRoutines = () => {
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
+        handleUpdateTechnique,
         handleRemoveExerciseFromRoutine, moveExercise
     } = useTrainingRoutines();
 
@@ -30,24 +31,33 @@ const TrainingRoutines = () => {
 
     return (
         <div className="training-sub-view active">
-            <div className={`card ${editingRoutineId ? 'border-primary' : ''}`}>
-                <h3 className={editingRoutineId ? 'text-primary' : 'text-white'}>
-                    {editingRoutineId ? 'Modifica Scheda' : 'Crea Nuova Scheda'}
-                </h3>
-                <input 
-                    type="text" 
-                    placeholder="Nome Scheda (es. Push Day, Full Body)" 
-                    value={routineName}
-                    onChange={e => setRoutineName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSave()}
-                />
+            <div className="card">
+                <h3>{editingRoutineId ? '✏️ Modifica Scheda' : '➕ Crea Nuova Scheda'}</h3>
+                <p className="text-muted text-sm mb-15">Crea o modifica la tua scheda di allenamento.</p>
 
-                <div className="mt-15 pt-15 border-t">
+                <div className="mb-15">
+                    <label className="text-muted text-xs block mb-4">Nome Scheda</label>
+                    <input 
+                        type="text" 
+                        placeholder="es. Spinta (Push), Gambe (Legs)..." 
+                        value={routineName} 
+                        onChange={e => setRoutineName(e.target.value)}
+                        onFocus={e => e.target.select()}
+                    />
+                </div>
+
+                {routineExercises.length > 0 && (
                     <div className="mb-15 flex-center w-full">
                         <MuscleModel 
                             selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
                             secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
                         />
+                    </div>
+                )}
+
+                <div className="mb-15">
+                    <div className="flex-between items-center mb-10">
+                        <label className="text-muted text-xs block">Esercizi nella scheda ({routineExercises.length})</label>
                     </div>
                     <div className="mb-15">
                         <select 
@@ -67,11 +77,11 @@ const TrainingRoutines = () => {
                     {routineExercises.length === 0 ? (
                         <p className="text-muted text-md mb-15">Nessun esercizio presente. Aggiungine uno dalla libreria!</p>
                     ) : (
-                        <div className="flex-col gap-8 mb-15">
+                        <div className="flex-col gap-10 mb-15">
                             {routineExercises.map((ex: any, index: number) => {
                                 const libDef = library.find(l => l.id === ex.exId);
                                 return (
-                                    <div key={index} className="flex-col bg-card-inner p-10 rounded-8 gap-8">
+                                    <div key={index} className="flex-col bg-card-inner p-12 rounded-8 gap-10" style={{ border: '1px solid var(--glass-border)' }}>
                                         <div className="flex-between gap-10 items-center">
                                             <div className="text-md font-semibold flex-1">
                                                 {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
@@ -82,45 +92,91 @@ const TrainingRoutines = () => {
                                                 <button className="btn-icon text-danger" onClick={() => handleRemoveExerciseFromRoutine(index)}>❌</button>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-12 flex-wrap text-sm">
-                                            <div className="flex items-center gap-5">
-                                                <label className="text-muted white-space-nowrap text-xs font-semibold">Serie:</label>
-                                                <input 
-                                                    type="number" min="1" max="20"
-                                                    placeholder="3"
-                                                    value={ex.setsCount !== undefined && ex.setsCount !== null ? ex.setsCount : ''}
-                                                    onChange={e => handleUpdateSetsCount(index, e.target.value)}
-                                                    onFocus={e => e.target.select()}
-                                                    className="input-compact w-50"
-                                                    onClick={e => e.stopPropagation()}
-                                                />
-                                            </div>
-                                            {libDef?.trackingType !== 'time' ? (
+
+                                        {/* Riga 1: Serie */}
+                                        <div className="flex items-center gap-8">
+                                            <label className="text-muted text-xs font-semibold" style={{ minWidth: '70px' }}>Serie:</label>
+                                            <input 
+                                                type="number" min="1" max="20"
+                                                placeholder="3"
+                                                value={ex.setsCount !== undefined && ex.setsCount !== null ? ex.setsCount : ''}
+                                                onChange={e => handleUpdateSetsCount(index, e.target.value)}
+                                                onFocus={e => e.target.select()}
+                                                className="input-compact"
+                                                style={{ width: '80px', margin: 0 }}
+                                                onClick={e => e.stopPropagation()}
+                                            />
+                                        </div>
+
+                                        {/* Riga 2: Rep min e Rep max */}
+                                        {libDef?.trackingType !== 'time' ? (
+                                            <div className="flex items-center gap-12 flex-wrap">
                                                 <div className="flex items-center gap-8">
-                                                    <div className="flex items-center gap-5">
-                                                        <label className="text-muted white-space-nowrap text-xs font-semibold">Rep min:</label>
-                                                        <input 
-                                                            type="number" 
-                                                            placeholder="es. 8" 
-                                                            value={ex.minReps || ''} 
-                                                            onChange={e => handleUpdateReps(index, 'minReps', e.target.value)} 
-                                                            className="input-compact w-60" 
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center gap-5">
-                                                        <label className="text-muted white-space-nowrap text-xs font-semibold">Rep max:</label>
-                                                        <input 
-                                                            type="number" 
-                                                            placeholder="es. 12" 
-                                                            value={ex.maxReps || ''} 
-                                                            onChange={e => handleUpdateReps(index, 'maxReps', e.target.value)} 
-                                                            className="input-compact w-60" 
-                                                        />
-                                                    </div>
+                                                    <label className="text-muted text-xs font-semibold" style={{ minWidth: '70px' }}>Rep min:</label>
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="es. 8" 
+                                                        value={ex.minReps || ''} 
+                                                        onChange={e => handleUpdateReps(index, 'minReps', e.target.value)} 
+                                                        onFocus={e => e.target.select()}
+                                                        className="input-compact"
+                                                        style={{ width: '80px', margin: 0 }}
+                                                    />
                                                 </div>
-                                            ) : (
-                                                <span className="text-muted text-xs italic">Tracciamento a tempo</span>
-                                            )}
+                                                <div className="flex items-center gap-8">
+                                                    <label className="text-muted text-xs font-semibold">Rep max:</label>
+                                                    <input 
+                                                        type="number" 
+                                                        placeholder="es. 12" 
+                                                        value={ex.maxReps || ''} 
+                                                        onChange={e => handleUpdateReps(index, 'maxReps', e.target.value)} 
+                                                        onFocus={e => e.target.select()}
+                                                        className="input-compact"
+                                                        style={{ width: '80px', margin: 0 }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-muted text-xs italic">Tracciamento a tempo</div>
+                                        )}
+
+                                        {/* Riga 3: Tecniche speciali pre-attivate */}
+                                        <div className="flex items-center gap-8 pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                                            <span className="text-muted text-xs font-semibold" style={{ minWidth: '70px' }}>Tecnica:</span>
+                                            <div className="flex gap-6 flex-wrap">
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-small ${ex.defaultTechnique === 'dropset' ? 'btn-primary' : ''}`}
+                                                    style={{ 
+                                                        margin: 0, 
+                                                        padding: '4px 10px', 
+                                                        fontSize: '0.75rem',
+                                                        background: ex.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
+                                                        color: ex.defaultTechnique === 'dropset' ? '#000' : 'var(--text-main)',
+                                                        fontWeight: ex.defaultTechnique === 'dropset' ? 700 : 500,
+                                                        border: '1px solid rgba(255,255,255,0.1)'
+                                                    }}
+                                                    onClick={() => handleUpdateTechnique(index, 'dropset')}
+                                                >
+                                                    🔻 Dropset {ex.defaultTechnique === 'dropset' ? '✓' : ''}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`btn btn-small ${ex.defaultTechnique === 'isometrics' ? 'btn-primary' : ''}`}
+                                                    style={{ 
+                                                        margin: 0, 
+                                                        padding: '4px 10px', 
+                                                        fontSize: '0.75rem',
+                                                        background: ex.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
+                                                        color: ex.defaultTechnique === 'isometrics' ? '#fff' : 'var(--text-main)',
+                                                        fontWeight: ex.defaultTechnique === 'isometrics' ? 700 : 500,
+                                                        border: '1px solid rgba(255,255,255,0.1)'
+                                                    }}
+                                                    onClick={() => handleUpdateTechnique(index, 'isometrics')}
+                                                >
+                                                    ⏱️ Isometria {ex.defaultTechnique === 'isometrics' ? '✓' : ''}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -214,11 +270,17 @@ const TrainingRoutines = () => {
                                                                         {ex.setsCount || 3} serie
                                                                     </div>
                                                                 </div>
-                                                                {(ex.minReps || ex.maxReps) && (
-                                                                    <div className="text-sm text-muted">
-                                                                        Rep min: {ex.minReps || '-'} | Rep max: {ex.maxReps || '-'}
-                                                                    </div>
-                                                                )}
+                                                                <div className="flex items-center gap-10 flex-wrap text-sm text-muted">
+                                                                    {(ex.minReps || ex.maxReps) && (
+                                                                        <span>Rep min: {ex.minReps || '-'} | Rep max: {ex.maxReps || '-'}</span>
+                                                                    )}
+                                                                    {ex.defaultTechnique === 'dropset' && (
+                                                                        <span className="badge" style={{ background: 'var(--warning-color)', color: '#000', fontWeight: 600 }}>🔻 Dropset</span>
+                                                                    )}
+                                                                    {ex.defaultTechnique === 'isometrics' && (
+                                                                        <span className="badge" style={{ background: 'var(--accent-color)', color: '#fff', fontWeight: 600 }}>⏱️ Isometria</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         );
                                                     })}

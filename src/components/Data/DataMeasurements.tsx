@@ -43,23 +43,21 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 Registra il peso e la percentuale di massa grassa.
             </p>
             
-            <div style={{ marginBottom: '15px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Orario</label>
+            <div className="mb-15">
+                <label className="text-muted text-xs block mb-4">Orario</label>
                 <input 
                     id="measure-time" 
                     type="time" 
                     value={measureTime} 
                     onChange={e => setMeasureTime(e.target.value)} 
-                    style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px', boxSizing: 'border-box', fontSize: '16px', fontFamily: 'inherit' }} 
                 />
             </div>
 
-            <div style={{ marginBottom: '15px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Metodo calcolo BF</label>
+            <div className="mb-15">
+                <label className="text-muted text-xs block mb-4">Metodo calcolo BF</label>
                 <select 
                     value={method} 
                     onChange={e => setMethod(e.target.value)} 
-                    style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px' }}
                 >
                     <option value={profile.gender === 'F' ? 'navy_female' : 'navy_male'}>US Navy (Misurazioni)</option>
                     <option value="manual">Inserimento Manuale</option>

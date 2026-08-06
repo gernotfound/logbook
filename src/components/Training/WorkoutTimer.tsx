@@ -13,6 +13,13 @@ export const resetGlobalWorkoutTimer = () => {
     }
 };
 
+const formatMs = (ms: number) => {
+    const elapsed = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
 export default function WorkoutTimer() {
     // Rest Timer State
     const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>(() => {
@@ -27,7 +34,20 @@ export default function WorkoutTimer() {
         const saved = localStorage.getItem('logbook_timer_accumulated');
         return saved ? parseInt(saved, 10) : 0;
     });
-    const [restDisplay, setRestDisplay] = useState('00:00');
+    const [restDisplay, setRestDisplay] = useState<string>(() => {
+        const savedState = localStorage.getItem('logbook_timer_state');
+        const savedStart = localStorage.getItem('logbook_timer_start');
+        const savedAcc = localStorage.getItem('logbook_timer_accumulated');
+        const start = savedStart ? parseInt(savedStart, 10) : 0;
+        const acc = savedAcc ? parseInt(savedAcc, 10) : 0;
+        
+        if (savedState === 'running' && start > 0) {
+            return formatMs(Date.now() - start + acc);
+        } else if (savedState === 'paused' && acc > 0) {
+            return formatMs(acc);
+        }
+        return '00:00';
+    });
 
     useEffect(() => {
         const handleReset = () => {
@@ -54,14 +74,22 @@ export default function WorkoutTimer() {
 
     // Rest Timer Ticker
     useEffect(() => {
-        if (restState !== 'running') return;
+        if (restState !== 'running') {
+            if (restState === 'paused') {
+                setRestDisplay(formatMs(restAccumulated));
+            } else if (restState === 'stopped') {
+                setRestDisplay('00:00');
+            }
+            return;
+        }
 
-        const interval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - restStartTime + restAccumulated) / 1000);
-            const m = Math.floor(elapsed / 60);
-            const s = elapsed % 60;
-            setRestDisplay(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-        }, 1000);
+        const tick = () => {
+            const ms = Date.now() - restStartTime + restAccumulated;
+            setRestDisplay(formatMs(ms));
+        };
+
+        tick();
+        const interval = setInterval(tick, 500);
 
         return () => clearInterval(interval);
     }, [restState, restStartTime, restAccumulated]);

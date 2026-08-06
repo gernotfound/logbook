@@ -37,10 +37,20 @@ function App() {
     localStorage.setItem('logbook_dataSubTab', dataSubTab);
   }, [dataSubTab]);
 
-  // Scroll to top whenever the main tab changes
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  }, [activeTab]);
+  // Preserve and restore scroll position across tabs
+  const tabScrollPositions = useState<Record<string, number>>(() => ({}))[0];
+  const currentTabRef = useState<{ current: string }>({ current: activeTab })[0];
+
+  const handleTabChange = (newTab: string) => {
+    if (newTab === activeTab) return;
+    tabScrollPositions[activeTab] = window.scrollY;
+    setActiveTab(newTab);
+    currentTabRef.current = newTab;
+    requestAnimationFrame(() => {
+      const savedPos = tabScrollPositions[newTab] || 0;
+      window.scrollTo({ top: savedPos, behavior: 'instant' });
+    });
+  };
 
   const [swRegistration, setSwRegistration] = useState<ServiceWorkerRegistration | null>(null);
   
@@ -146,7 +156,7 @@ function App() {
               <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
             </div>
           }>
-            {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
+            {activeTab === 'home' && <HomeView onNavigate={handleTabChange} />}
             {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
             {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
             {activeTab === 'data' && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
@@ -155,7 +165,7 @@ function App() {
         </ErrorBoundary>
       </main>
 
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
     </>
   );
 }

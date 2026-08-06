@@ -69,7 +69,13 @@ export function useWorkoutSession() {
                 const setsCount = ex.setsCount || 3;
                 const sets = [];
                 for (let i = 0; i < setsCount; i++) {
-                    sets.push({ id: Logic.generateId('s'), kg: '', reps: '' });
+                    const setObj: any = { id: Logic.generateId('s'), kg: '', reps: '' };
+                    if (ex.defaultTechnique === 'dropset') {
+                        setObj.dropsets = [{ id: Logic.generateId('ds'), kg: '', reps: '' }];
+                    } else if (ex.defaultTechnique === 'isometrics') {
+                        setObj.isometrics = [{ id: Logic.generateId('iso'), kg: '', time: '' }];
+                    }
+                    sets.push(setObj);
                 }
                 const result: any = { exId: ex.exId, sets, sessionNote: '' };
                 if (ex.minReps) result.minReps = ex.minReps;

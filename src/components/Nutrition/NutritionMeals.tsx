@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import CustomFoodModal from './CustomFoodModal';
+import EditMealItemModal from './EditMealItemModal';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
@@ -8,8 +10,10 @@ export default function NutritionMeals() {
         searchQuery, handleSearch, searchResults, clearSearch,
         showCustomModal, setShowCustomModal,
         cfData, setCfData, saveCustomFood,
-        meals, addFood, removeFood
+        meals, addFood, removeFood, updateMealItem
     } = useNutritionMeals();
+
+    const [editingMealItem, setEditingMealItem] = useState<any | null>(null);
 
     return (
         <div>
@@ -57,7 +61,7 @@ export default function NutritionMeals() {
                     )}
                 </div>
                 
-                {/* Search Results List (In-Flow, Solid Opaque Background) */}
+                {/* Search Results List */}
                 {searchResults.length > 0 && (
                     <div 
                         id="active-search-results"
@@ -120,16 +124,17 @@ export default function NutritionMeals() {
 
                 {searchQuery.trim().length >= 2 && searchResults.length === 0 && (
                     <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed var(--glass-border)' }}>
-                        Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea Alimento Custom</b>.
+                        Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea Alimento</b>.
                     </div>
                 )}
 
                 <button 
-                    className="btn btn-small" 
-                    style={{ width: '100%', marginTop: '10px', background: 'rgba(255, 255, 255, 0.04)', border: '1px dashed var(--glass-border)', marginBottom: 0 }}
+                    type="button"
+                    className="btn btn-primary" 
+                    style={{ width: '100%', marginTop: '10px', marginBottom: 0 }}
                     onClick={() => setShowCustomModal(!showCustomModal)}
                 >
-                    {showCustomModal ? '✕ Chiudi Alimento Custom' : '+ Crea Alimento Custom'}
+                    {showCustomModal ? '✕ Chiudi Creazione Alimento' : '+ Crea Alimento'}
                 </button>
                 
                 <CustomFoodModal 
@@ -146,7 +151,7 @@ export default function NutritionMeals() {
                 mealItems.forEach(m => {
                     const qty = m.quantity ?? m.baseQty ?? 100;
                     const base = m.baseQty ?? 100;
-                    const ratio = qty / base;
+                    const ratio = base > 0 ? qty / base : 1;
                     subKcal += (parseFloat(m.kcal) || 0) * ratio;
                     subC += (parseFloat(m.carbs) || 0) * ratio;
                     subP += (parseFloat(m.pro) || 0) * ratio;
@@ -166,13 +171,39 @@ export default function NutritionMeals() {
                             <p className="text-muted text-center my-10 text-sm">Nessun alimento aggiunto.</p>
                         ) : (
                             mealItems.map((item) => {
+                                const qty = item.quantity ?? item.baseQty ?? 100;
+                                const base = item.baseQty ?? 100;
+                                const ratio = base > 0 ? qty / base : 1;
+                                const itemKcal = Math.round((parseFloat(item.kcal) || 0) * ratio);
+
                                 return (
-                                    <div key={item.time || item.id} className="flex-between py-10 border-b-dashed">
-                                        <div>
-                                            <div className="font-bold">{item.name}</div>
-                                            <div className="text-muted text-sm">{item.quantity ?? item.baseQty}{item.unit}</div>
+                                    <div 
+                                        key={item.time || item.id} 
+                                        className="flex-between py-10 border-b-dashed"
+                                        style={{ cursor: 'pointer', transition: 'background 0.2s', padding: '10px 6px', borderRadius: '8px' }}
+                                        onClick={() => setEditingMealItem(item)}
+                                        title="Clicca per modificare la porzione"
+                                    >
+                                        <div style={{ flex: 1 }}>
+                                            <div className="font-bold flex items-center gap-6">
+                                                <span>{item.name}</span>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>✏️</span>
+                                            </div>
+                                            <div className="text-muted text-sm mt-2">
+                                                {qty}{item.unit || 'g'} • {itemKcal} kcal
+                                            </div>
                                         </div>
-                                        <button className="btn-icon text-danger" onClick={() => removeFood(item.itemId || item.time)}>✕</button>
+                                        <button 
+                                            type="button"
+                                            className="btn-icon text-danger" 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFood(item.itemId || item.time || item.id);
+                                            }}
+                                            aria-label="Rimuovi alimento"
+                                        >
+                                            ✕
+                                        </button>
                                     </div>
                                 );
                             })
@@ -180,6 +211,16 @@ export default function NutritionMeals() {
                     </div>
                 );
             })}
+
+            {/* Modal to edit logged meal item on click */}
+            {editingMealItem && (
+                <EditMealItemModal 
+                    item={editingMealItem}
+                    onClose={() => setEditingMealItem(null)}
+                    onSave={updateMealItem}
+                    onDelete={removeFood}
+                />
+            )}
         </div>
     );
 }

@@ -133,9 +133,32 @@ export function useNutritionMeals() {
         setSearchQuery('');
     };
 
+    const updateMealItem = async (updatedItem: any) => {
+        if (!userData) return;
+        const targetId = updatedItem.itemId || updatedItem.time || updatedItem.id;
+        const updatedMeals = meals.map((m: any) => {
+            const mId = m.itemId || m.time || m.id;
+            return mId === targetId ? { ...m, ...updatedItem } : m;
+        });
+
+        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
+        const newNutritionDay = {
+            ...todayNutrition,
+            meals: updatedMeals,
+            kcal, carbs, pro, fat
+        };
+
+        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
+        try {
+            await saveUserData({ ...userData, nutrition: newNutritionObj });
+        } catch {
+            showAlert("Errore durante l'aggiornamento dell'alimento.");
+        }
+    };
+
     const removeFood = async (itemTime: number) => {
         if (!userData) return;
-        const updatedMeals = meals.filter((m: any) => m.time !== itemTime);
+        const updatedMeals = meals.filter((m: any) => (m.itemId || m.time || m.id) !== itemTime);
         const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
         const newNutritionDay = {
@@ -190,9 +213,9 @@ export function useNutritionMeals() {
                 await saveUserData({ ...userData, customFoods: updatedCustomFoods });
                 setShowCustomModal(false);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
-                await showAlert("Alimento custom salvato!");
+                await showAlert("Alimento salvato nei tuoi alimenti!");
             } catch {
-                await showAlert("Errore durante il salvataggio dell'alimento custom.");
+                await showAlert("Errore durante il salvataggio dell'alimento.");
             }
         }
     };
@@ -203,6 +226,6 @@ export function useNutritionMeals() {
         handleQuickAdd,
         showCustomModal, setShowCustomModal,
         cfData, setCfData, saveCustomFood,
-        meals, addFood, removeFood
+        meals, addFood, removeFood, updateMealItem
     };
 }

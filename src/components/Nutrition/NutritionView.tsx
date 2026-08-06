@@ -1,5 +1,6 @@
 import NutritionPlanning from './NutritionPlanning';
 import NutritionMeals from './NutritionMeals';
+import NutritionFoodArchive from './NutritionFoodArchive';
 
 interface NutritionViewProps {
     subTab?: string;
@@ -7,7 +8,7 @@ interface NutritionViewProps {
 }
 
 const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
-    const activeSubTab = (subTab === 'planning') ? 'planning' : 'meals';
+    const activeSubTab = (subTab === 'planning' || subTab === 'archive') ? subTab : 'meals';
 
     return (
         <div id="view-nutrition" className="view-section active">
@@ -24,6 +25,12 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                 >
                     Pianificazione
                 </div>
+                <div 
+                    className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`} 
+                    onClick={() => setSubTab && setSubTab('archive')}
+                >
+                    Archivio alimenti
+                </div>
             </div>
 
             {activeSubTab === 'meals' && (
@@ -35,6 +42,12 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             {activeSubTab === 'planning' && (
                 <div className="nutrition-sub-view active">
                     <NutritionPlanning />
+                </div>
+            )}
+
+            {activeSubTab === 'archive' && (
+                <div className="nutrition-sub-view active">
+                    <NutritionFoodArchive />
                 </div>
             )}
         </div>

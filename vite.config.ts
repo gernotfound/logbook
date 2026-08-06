@@ -9,7 +9,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       strategies: 'StaleWhileRevalidate',
-      includeAssets: ['apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'favicon.svg', 'icons.svg'],
       manifest: {
         name: 'LogBook Premium',
         short_name: 'LogBook',

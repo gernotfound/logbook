@@ -50,6 +50,7 @@ export interface RoutineExercise {
     setsCount: number | string;
     minReps?: number | string;
     maxReps?: number | string;
+    defaultTechnique?: 'none' | 'dropset' | 'isometrics';
 }
 
 export interface WorkoutRoutine {

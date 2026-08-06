@@ -93,17 +93,34 @@ const TrainingExercises = () => {
                     />
 
                     {muscleSearch && (
-                        <div className="flex flex-wrap gap-5 mb-10 max-h-120 overflow-y-auto">
-                            {filteredMuscles.map(m => (
-                                <button 
-                                    key={m.id} 
-                                    className={`btn btn-small ${(selectedMuscleIds.includes(m.id) || secondaryMuscles.some(sm => sm.id === m.id)) ? 'btn-primary' : ''}`} 
-                                    style={{ margin: 0, padding: '4px 8px', fontSize: '0.75rem' }} 
-                                    onClick={() => toggleMuscle(m)}
-                                >
-                                    + {m.name}
-                                </button>
-                            ))}
+                        <div className="flex-col gap-6 mb-12 max-h-160 overflow-y-auto p-4 rounded-8" style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--glass-border)' }}>
+                            {filteredMuscles.length === 0 ? (
+                                <div className="text-muted text-xs p-8 text-center">Nessun muscolo trovato</div>
+                            ) : (
+                                filteredMuscles.map(m => {
+                                    const isPrimary = selectedMuscleIds.includes(m.id);
+                                    const isSecondary = secondaryMuscles.some(sm => sm.id === m.id);
+                                    const isSelected = isPrimary || isSecondary;
+                                    return (
+                                        <button 
+                                            key={m.id} 
+                                            type="button"
+                                            className={`flex-between items-center w-full p-8 rounded-8 text-sm transition ${isSelected ? 'btn-primary' : 'bg-surface text-white'}`}
+                                            style={{ 
+                                                border: isSelected ? '1px solid var(--primary-color)' : '1px solid rgba(255,255,255,0.06)',
+                                                cursor: 'pointer',
+                                                textAlign: 'left'
+                                            }}
+                                            onClick={() => toggleMuscle(m)}
+                                        >
+                                            <span className="font-semibold">{m.name}</span>
+                                            <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                                {isPrimary ? '✓ Primario' : isSecondary ? '✓ Secondario' : '+ Aggiungi'}
+                                            </span>
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     )}
 

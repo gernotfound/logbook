@@ -149,7 +149,7 @@ p {
 .training-sub-view.active { display: block; animation: fadeSlideUp 0.3s ease; }
 
 
-input[type="text"], input[type="number"], input[type="date"], select, textarea {
+input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="password"], input[type="email"], select, textarea {
     width: 100%; 
     padding: 14px; 
     margin-bottom: 12px; 
@@ -157,9 +157,18 @@ input[type="text"], input[type="number"], input[type="date"], select, textarea {
     border: 1px solid var(--glass-border); 
     color: var(--text-main); 
     border-radius: 12px; 
-    font-size: 16px;
+    font-size: 16px !important;
+    min-height: 48px;
+    box-sizing: border-box;
+    display: block;
+    font-family: inherit;
     transition: all 0.2s ease;
     touch-action: manipulation;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+    text-align: left;
+    min-height: 1.5em;
 }
 input:focus, select:focus, textarea:focus { 
     outline: none; 

@@ -15,12 +15,11 @@ const DataBiometry = () => {
                 I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
             </p>
             
-            <div style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Data di Nascita</label>
+            <div className="mb-15">
+                <label className="text-muted text-xs block mb-4">Data di Nascita</label>
                 <input 
                     id="biometry-dob" 
                     type="date" 
-                    style={{ width: '100%', maxWidth: '100%' }} 
                     value={dob} 
                     onChange={e => setDob(e.target.value)} 
                 />

@@ -124,27 +124,33 @@ export const SessionSetRow: React.FC<SessionSetRowProps> = ({
                 </div>
             </div>
 
-            {(s.dropsets || []).map((ds: any, dsIdx: number) => (
-                <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '65px' }}>↳ Dropset</div>
-                    <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
-                        <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
-                        <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
-                        <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet('dropsets', dsIdx)}>✕</button>
+            {(s.dropsets || []).map((ds: any, dsIdx: number) => {
+                const label = (s.dropsets && s.dropsets.length > 1) ? `↳ Dropset ${dsIdx + 1}` : '↳ Dropset';
+                return (
+                    <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
+                        <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
+                            <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
+                            <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
+                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet('dropsets', dsIdx)}>✕</button>
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
 
-            {(s.isometrics || []).map((iso: any, isoIdx: number) => (
-                <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '65px' }}>↳ Isometria</div>
-                    <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
-                        <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
-                        <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
-                        <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet('isometrics', isoIdx)}>✕</button>
+            {(s.isometrics || []).map((iso: any, isoIdx: number) => {
+                const label = (s.isometrics && s.isometrics.length > 1) ? `↳ Isometria ${isoIdx + 1}` : '↳ Isometria';
+                return (
+                    <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
+                        <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
+                            <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
+                            <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
+                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet('isometrics', isoIdx)}>✕</button>
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </React.Fragment>
     );
 };
