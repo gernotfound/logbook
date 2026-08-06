@@ -78,6 +78,7 @@ export function useWorkoutSession() {
                     sets.push(setObj);
                 }
                 const result: any = { exId: ex.exId, sets, sessionNote: '' };
+                if (ex.defaultTechnique) result.defaultTechnique = ex.defaultTechnique;
                 if (ex.minReps) result.minReps = ex.minReps;
                 if (ex.maxReps) result.maxReps = ex.maxReps;
                 return result;
@@ -290,7 +291,13 @@ export function useWorkoutSession() {
         if (!activeWorkout) return;
         const updatedExercises = activeWorkout.exercises.map((ex: any, i: number) => {
             if (i !== exIndex) return ex;
-            return { ...ex, sets: [...ex.sets, { id: Logic.generateId('s'), kg: '', reps: '' }] };
+            const newSet: any = { id: Logic.generateId('s'), kg: '', reps: '' };
+            if (ex.defaultTechnique === 'dropset') {
+                newSet.dropsets = [{ id: Logic.generateId('ds'), kg: '', reps: '' }];
+            } else if (ex.defaultTechnique === 'isometrics') {
+                newSet.isometrics = [{ id: Logic.generateId('iso'), kg: '', time: '' }];
+            }
+            return { ...ex, sets: [...ex.sets, newSet] };
         });
         setLocalWorkout({ ...activeWorkout, exercises: updatedExercises });
     };
