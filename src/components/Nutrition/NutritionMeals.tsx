@@ -5,13 +5,20 @@ import EditMealItemModal from './EditMealItemModal';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
-export default function NutritionMeals() {
+interface NutritionMealsProps {
+    mealsHook?: ReturnType<typeof useNutritionMeals>;
+}
+
+export default function NutritionMeals({ mealsHook }: NutritionMealsProps) {
+    const internalHook = useNutritionMeals();
+    const hook = mealsHook || internalHook;
     const {
         searchQuery, handleSearch, searchResults, clearSearch,
         showCustomModal, setShowCustomModal,
+        editingFoodId, cancelCustomFood,
         cfData, setCfData, saveCustomFood,
         meals, addFood, removeFood, updateMealItem
-    } = useNutritionMeals();
+    } = hook;
 
     const [editingMealItem, setEditingMealItem] = useState<any | null>(null);
 
@@ -132,15 +139,23 @@ export default function NutritionMeals() {
                     type="button"
                     className="btn btn-primary" 
                     style={{ width: '100%', marginTop: '10px', marginBottom: 0 }}
-                    onClick={() => setShowCustomModal(!showCustomModal)}
+                    onClick={() => {
+                        if (showCustomModal) {
+                            cancelCustomFood();
+                        } else {
+                            setShowCustomModal(true);
+                        }
+                    }}
                 >
-                    {showCustomModal ? '✕ Chiudi Creazione Alimento' : '+ Crea Alimento'}
+                    {showCustomModal ? '✕ Chiudi' : (editingFoodId ? '✏️ Modifica Alimento' : '+ Crea Alimento')}
                 </button>
                 
                 <CustomFoodModal 
                     cfData={cfData} setCfData={setCfData} 
                     saveCustomFood={saveCustomFood} 
                     showCustomModal={showCustomModal} setShowCustomModal={setShowCustomModal} 
+                    isEditing={!!editingFoodId}
+                    onCancel={cancelCustomFood}
                 />
             </div>
 

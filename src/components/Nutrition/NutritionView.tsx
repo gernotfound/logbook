@@ -1,3 +1,4 @@
+import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import NutritionPlanning from './NutritionPlanning';
 import NutritionMeals from './NutritionMeals';
 import NutritionFoodArchive from './NutritionFoodArchive';
@@ -9,6 +10,14 @@ interface NutritionViewProps {
 
 const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
     const activeSubTab = (subTab === 'planning' || subTab === 'archive') ? subTab : 'meals';
+    const mealsHook = useNutritionMeals();
+
+    const handleEditFoodFromArchive = (food: any) => {
+        mealsHook.startEditCustomFood(food);
+        if (setSubTab) {
+            setSubTab('meals');
+        }
+    };
 
     return (
         <div id="view-nutrition" className="view-section active">
@@ -35,7 +44,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'meals' && (
                 <div className="nutrition-sub-view active">
-                    <NutritionMeals />
+                    <NutritionMeals mealsHook={mealsHook} />
                 </div>
             )}
 
@@ -47,7 +56,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'archive' && (
                 <div className="nutrition-sub-view active">
-                    <NutritionFoodArchive />
+                    <NutritionFoodArchive onEditFood={handleEditFoodFromArchive} />
                 </div>
             )}
         </div>

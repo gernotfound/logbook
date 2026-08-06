@@ -13,6 +13,7 @@ export function useNutritionMeals() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     
     const [showCustomModal, setShowCustomModal] = useState(false);
+    const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
     const [cfData, setCfData] = useState({
         name: '', brand: '', unit: 'g', pieceWeight: '',
         kcal: '', carbs: '', pro: '', fat: ''
@@ -24,6 +25,27 @@ export function useNutritionMeals() {
     };
     
     const meals = (todayNutrition.meals || []) as any[];
+
+    const startEditCustomFood = (food: any) => {
+        setEditingFoodId(food.id);
+        setCfData({
+            name: food.name || '',
+            brand: food.brand || '',
+            unit: food.unit || 'g',
+            pieceWeight: food.servingWeight || food.pieceWeight || '',
+            kcal: food.kcal !== undefined ? food.kcal.toString() : '',
+            carbs: food.carbs !== undefined ? food.carbs.toString() : '',
+            pro: food.pro !== undefined ? food.pro.toString() : '',
+            fat: food.fat !== undefined ? food.fat.toString() : ''
+        });
+        setShowCustomModal(true);
+    };
+
+    const cancelCustomFood = () => {
+        setShowCustomModal(false);
+        setEditingFoodId(null);
+        setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
+    };
 
     const handleQuickAdd = async (quickData: any) => {
         if (!userData) return;
@@ -81,7 +103,7 @@ export function useNutritionMeals() {
         mealsList.forEach((m: any) => {
             const qty = m.quantity ?? m.baseQty ?? 100;
             const base = m.baseQty ?? 100;
-            const ratio = qty / base;
+            const ratio = base > 0 ? qty / base : 1;
             kcal += (parseFloat(m.kcal) || 0) * ratio;
             carbs += (parseFloat(m.carbs) || 0) * ratio;
             pro += (parseFloat(m.pro) || 0) * ratio;
@@ -206,14 +228,23 @@ export function useNutritionMeals() {
             return;
         }
 
-        const customFoods = userData?.customFoods || [];
+        const customFoods = (userData?.customFoods || []) as any[];
         if (validation.cleanData) {
-            const updatedCustomFoods = [...customFoods, validation.cleanData];
+            let updatedCustomFoods: any[];
+            if (editingFoodId) {
+                updatedCustomFoods = customFoods.map((f: any) =>
+                    f.id === editingFoodId ? { ...validation.cleanData, id: editingFoodId } : f
+                );
+            } else {
+                updatedCustomFoods = [...customFoods, validation.cleanData];
+            }
+
             try {
                 await saveUserData({ ...userData, customFoods: updatedCustomFoods });
                 setShowCustomModal(false);
+                setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
-                await showAlert("Alimento salvato nei tuoi alimenti!");
+                await showAlert(editingFoodId ? "Alimento aggiornato con successo!" : "Alimento salvato nei tuoi alimenti!");
             } catch {
                 await showAlert("Errore durante il salvataggio dell'alimento.");
             }
@@ -225,6 +256,7 @@ export function useNutritionMeals() {
         clearDay,
         handleQuickAdd,
         showCustomModal, setShowCustomModal,
+        editingFoodId, setEditingFoodId, startEditCustomFood, cancelCustomFood,
         cfData, setCfData, saveCustomFood,
         meals, addFood, removeFood, updateMealItem
     };

@@ -7,7 +7,11 @@ import CustomFoodModal from './CustomFoodModal';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
-export default function NutritionFoodArchive() {
+interface NutritionFoodArchiveProps {
+    onEditFood?: (food: any) => void;
+}
+
+export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiveProps) {
     const userData = useAppStore(state => state.userData);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
@@ -16,7 +20,7 @@ export default function NutritionFoodArchive() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState<'all' | 'custom' | 'common'>('all');
     
-    // Modal states
+    // Modal states (used if onEditFood not provided)
     const [showModal, setShowModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
     const [cfData, setCfData] = useState({
@@ -53,6 +57,10 @@ export default function NutritionFoodArchive() {
     };
 
     const openEditModal = (food: any) => {
+        if (onEditFood) {
+            onEditFood(food);
+            return;
+        }
         setEditingFoodId(food.id);
         setCfData({
             name: food.name || '',
