@@ -28,10 +28,14 @@ export function useTrainingRoutines() {
         }
     }, []);
 
-    // Save draft on change
+    // Salva la bozza solo se non stiamo modificando una scheda esistente
     useEffect(() => {
         if (!editingRoutineId) {
-            localStorage.setItem('draft_routine', JSON.stringify({ name: routineName, exercises: routineExercises }));
+            if (routineName.trim() !== '' || routineExercises.length > 0) {
+                localStorage.setItem('draft_routine', JSON.stringify({ name: routineName, exercises: routineExercises }));
+            } else {
+                localStorage.removeItem('draft_routine');
+            }
         }
     }, [routineName, routineExercises, editingRoutineId]);
 

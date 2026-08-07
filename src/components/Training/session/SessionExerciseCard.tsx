@@ -23,7 +23,7 @@ interface SessionExerciseCardProps {
     onToggleSpecialMenu: (setId: string) => void;
 }
 
-export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
+const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     exItem,
     exIndex,
     libDef,
@@ -53,23 +53,23 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                 <h3 style={{ color: 'var(--primary-color)', margin: 0 }}>{exName}</h3>
                 <div style={{ display: 'flex', gap: '5px' }}>
-                    <button 
-                        className="btn-small" 
-                        style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }} 
+                    <button
+                        className="btn-small"
+                        style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
                         onClick={onRemoveExercise}
                     >
                         🗑️
                     </button>
-                    <button 
-                        className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`} 
-                        style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}} 
+                    <button
+                        className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
+                        style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
                         onClick={onToggleHistory}
                     >
                         🕒 Storico
                     </button>
-                    <button 
-                        className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`} 
-                        style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}} 
+                    <button
+                        className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
+                        style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
                         onClick={onToggleSetup}
                     >
                         ⚙️ Setup
@@ -112,13 +112,13 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
             {isSetupOpen && (
                 <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <h5 style={{ marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)' }}>Modifica setup (globale):</h5>
-                    <input 
-                        id={`setup-${exItem.exId}`} 
-                        type="text" 
-                        defaultValue={exNotes} 
-                        placeholder="Note di setup (es. altezza sedile...)" 
-                        onBlur={(e) => onUpdateSetupNote(e.target.value)} 
-                        style={{ margin: 0, width: '100%' }} 
+                    <input
+                        id={`setup-${exItem.exId}`}
+                        type="text"
+                        defaultValue={exNotes}
+                        placeholder="Note di setup (es. altezza sedile...)"
+                        onBlur={(e) => onUpdateSetupNote(e.target.value)}
+                        style={{ margin: 0, width: '100%' }}
                     />
                 </div>
             )}
@@ -146,22 +146,38 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
                 />
             ))}
 
-            <button 
-                className="btn btn-small" 
-                style={{ border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginTop: '10px', width: '100%' }} 
+            <button
+                className="btn btn-small"
+                style={{ border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginTop: '10px', width: '100%' }}
                 onClick={onAddSet}
             >
                 + Aggiungi serie
             </button>
-            
-            <textarea 
-                placeholder="Note per la prossima volta (dolori, feedback)..." 
+
+            <textarea
+                placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={(e: any) => onUpdateSessionNote(e.target.value)}
-                style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }} 
+                style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
             />
         </div>
     );
 };
+
+// React.memo con comparatore personalizzato:
+// Si ri-renderizza SOLO quando cambiano i dati reali (exItem, libDef, stato pannelli).
+// Le callback inline di TrainingSession vengono ignorate — questo evita che ogni
+// battitura in un esercizio ri-renderizzi TUTTI gli altri esercizi della sessione.
+export const SessionExerciseCard = React.memo(SessionExerciseCardInner, (prev, next) => {
+    return (
+        prev.exItem === next.exItem &&
+        prev.libDef === next.libDef &&
+        prev.pastWorkouts === next.pastWorkouts &&
+        prev.isHistoryOpen === next.isHistoryOpen &&
+        prev.isSetupOpen === next.isSetupOpen &&
+        prev.openSpecialMenuId === next.openSpecialMenuId &&
+        prev.exIndex === next.exIndex
+    );
+});
 
 export default SessionExerciseCard;

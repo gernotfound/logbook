@@ -14,7 +14,7 @@ interface SessionSetRowProps {
     onRemoveSpecialSet: (type: 'dropsets' | 'isometrics', idx: number) => void;
 }
 
-export const SessionSetRow: React.FC<SessionSetRowProps> = ({
+const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     set: s,
     sIndex,
     trackingType,
@@ -154,5 +154,17 @@ export const SessionSetRow: React.FC<SessionSetRowProps> = ({
         </React.Fragment>
     );
 };
+
+// React.memo con comparatore personalizzato:
+// Rende la digitazione delle serie fluidissima. Solo la serie modificata si ri-renderizza.
+export const SessionSetRow = React.memo(SessionSetRowInner, (prev, next) => {
+    return (
+        prev.set === next.set &&
+        prev.sIndex === next.sIndex &&
+        prev.exIndex === next.exIndex &&
+        prev.trackingType === next.trackingType &&
+        prev.isOpenMenu === next.isOpenMenu
+    );
+});
 
 export default SessionSetRow;
