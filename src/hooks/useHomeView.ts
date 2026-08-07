@@ -237,10 +237,36 @@ export function useHomeView() {
     const currentWeight = todayNutrition.weight || 
                           recentWeight || 
                           userData?.nutritionPlanning?.weight || 80;
+    
     let bf = "--";
-    if (userData.profile && Object.keys(userData.profile).length > 0) {
-        const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
-        if (calcBf) bf = Number(calcBf).toFixed(1);
+    const recentNutritionWithBf = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
+    const directBf = (todayNutrition.bf !== undefined && todayNutrition.bf !== null && todayNutrition.bf !== '')
+        ? todayNutrition.bf
+        : recentNutritionWithBf?.bf;
+
+    if (directBf !== undefined && directBf !== null && directBf !== '') {
+        const num = parseFloat(String(directBf));
+        if (!isNaN(num)) {
+            bf = num.toFixed(1);
+        }
+    } else {
+        // Calcola da circonferenze recenti o profilo se bf non precalcolato
+        const recentMeasurement = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.waist && n?.neck);
+        if (recentMeasurement?.waist && recentMeasurement?.neck && userData.profile?.height) {
+            const calc = Logic.calculateUsNavyBodyFat({
+                gender: userData.profile.gender || 'M',
+                height: parseFloat(userData.profile.height),
+                waist: parseFloat(recentMeasurement.waist),
+                neck: parseFloat(recentMeasurement.neck),
+                hip: recentMeasurement.hip ? parseFloat(recentMeasurement.hip) : undefined
+            });
+            if (calc !== null && !isNaN(calc)) {
+                bf = Number(calc).toFixed(1);
+            }
+        } else if (userData.profile && Object.keys(userData.profile).length > 0) {
+            const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
+            if (calcBf) bf = Number(calcBf).toFixed(1);
+        }
     }
 
     return {

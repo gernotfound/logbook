@@ -322,5 +322,34 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(hookResult.muscleColors['chest-lower-left']).toBe('#f97316');
       expect(hookResult.muscleColors['chest_lower']).toBe('#f97316');
     });
+
+    test('useHomeView correctly exposes estimated BF from recent nutrition measurements', () => {
+      let hookResult: any = null;
+      function TestHomeComponent() {
+        const res = useHomeView();
+        hookResult = res;
+        return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
+      }
+
+      renderWithProviders(<TestHomeComponent />, {
+        userData: {
+          ...emptyUserData,
+          profile: { height: '180', gender: 'M', dob: '1995-05-10' },
+          nutrition: {
+            '2026-08-05': {
+              date: '2026-08-05',
+              weight: 80.5,
+              waist: 84,
+              neck: 39,
+              bf: 15.2,
+              kcal: 2200, carbs: 250, pro: 160, fat: 60
+            }
+          }
+        } as any
+      });
+
+      expect(hookResult.loading).toBe(false);
+      expect(hookResult.bf).toBe('15.2');
+    });
   });
 });
