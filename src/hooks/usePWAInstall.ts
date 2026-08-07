@@ -27,20 +27,26 @@ export function usePWAInstall() {
     const promptInstall = async () => {
         if (!deferredPrompt) return;
 
-        // Show the install prompt
-        deferredPrompt.prompt();
+        try {
+            // Mostra il prompt di installazione PWA
+            deferredPrompt.prompt();
 
-        // Wait for the user to respond to the prompt
-        const { outcome } = await deferredPrompt.userChoice;
-        
-        if (outcome === 'accepted') {
-            console.log('User accepted the install prompt');
-        } else {
-            console.log('User dismissed the install prompt');
+            // Attende la risposta dell'utente
+            const { outcome } = await deferredPrompt.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('Utente ha accettato l\'installazione PWA');
+            } else {
+                console.log('Utente ha rifiutato l\'installazione PWA');
+            }
+        } catch (e) {
+            // Il browser può revocare il permesso o la PWA è già installata:
+            // in questi casi ignoriamo silenziosamente senza crashare.
+            console.warn('Installazione PWA non disponibile:', e);
+        } finally {
+            // Il prompt può essere usato una sola volta: lo azzeriamo sempre
+            setDeferredPrompt(null);
         }
-
-        // We've used the prompt, and can't use it again, throw it away
-        setDeferredPrompt(null);
     };
 
     return {

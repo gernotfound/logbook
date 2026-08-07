@@ -152,10 +152,13 @@ export function useWorkoutSession() {
         delete updatedWorkout.isEditingHistory;
         delete updatedWorkout.originalHistoryId;
 
-        const updatedHistory = history.map(w => (w.id === targetId ? updatedWorkout : w));
-
         try {
-            await saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
+            // Usa functional updater per leggere lo storico aggiornato al momento del salvataggio
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const updatedHistory = (prev.history || []).map(w => (w.id === targetId ? updatedWorkout : w));
+                return { ...prev, history: updatedHistory, activeWorkout: null };
+            });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
@@ -212,10 +215,13 @@ export function useWorkoutSession() {
         delete finishedWorkout.isEditingHistory;
         delete finishedWorkout.originalHistoryId;
 
-        const updatedHistory = [finishedWorkout, ...history];
-        
         try {
-            await saveUserData({ ...userData, history: updatedHistory, activeWorkout: null });
+            // Usa functional updater: aggiunge la sessione allo storico più recente di Zustand,
+            // non allo snapshot 'history' catturato all'inizio dell'allenamento.
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                return { ...prev, history: [finishedWorkout, ...(prev.history || [])], activeWorkout: null };
+            });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
@@ -227,7 +233,10 @@ export function useWorkoutSession() {
     const deleteWorkout = async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
         try {
-            await saveUserData({ ...userData, activeWorkout: null });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                return { ...prev, activeWorkout: null };
+            });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
@@ -365,9 +374,12 @@ export function useWorkoutSession() {
     };
 
     const updateSetupNote = async (exId: string, note: string) => {
-        const updatedLibrary = library.map((l: any) => l.id === exId ? { ...l, notes: note } : l);
         try {
-            await saveUserData({ ...userData, library: updatedLibrary });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const updatedLibrary = (prev.library || []).map((l: any) => l.id === exId ? { ...l, notes: note } : l);
+                return { ...prev, library: updatedLibrary };
+            });
         } catch {
             showAlert("Errore durante il salvataggio della nota.");
         }

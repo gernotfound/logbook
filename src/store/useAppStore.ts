@@ -158,6 +158,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
 
     resetStore: () => {
+        // Cancella i timer pendenti prima di pulire il localStorage,
+        // così nessun salvataggio "fantasma" può riscrivere il workout dopo il logout.
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        if (globalSaveTimer) { clearTimeout(globalSaveTimer); globalSaveTimer = null; }
+        pendingResolvers = [];
         try {
             localStorage.removeItem('logbook_local_workout');
         } catch (e) {

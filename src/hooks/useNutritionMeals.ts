@@ -50,7 +50,7 @@ export function useNutritionMeals() {
     const handleQuickAdd = async (quickData: any) => {
         if (!userData) return;
         const addedItem = {
-            id: Date.now(),
+            id: Logic.generateId('food'),
             name: quickData.name,
             meal: 'quick',
             quantity: 100,
@@ -63,18 +63,16 @@ export function useNutritionMeals() {
             time: new Date().getTime()
         };
 
-        const updatedMeals = [...meals, addedItem];
-        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
-
-        const newNutritionDay = {
-            ...todayNutrition,
-            meals: updatedMeals,
-            kcal, carbs, pro, fat
-        };
-
-        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
-            await saveUserData({ ...userData, nutrition: newNutritionObj });
+            // Usa functional updater: legge sempre lo stato più recente da Zustand,
+            // evitando la race condition su doppio tap rapido.
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const todayData = prev.nutrition?.[todayDateStr] || { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+                const updatedMeals = [...(todayData.meals || []), addedItem];
+                const totals = recalcTotals(updatedMeals);
+                return { ...prev, nutrition: { ...(prev.nutrition || {}), [todayDateStr]: { ...todayData, meals: updatedMeals, ...totals } } };
+            });
         } catch {
             showAlert("Errore durante il salvataggio dell'alimento.");
         }
@@ -119,7 +117,7 @@ export function useNutritionMeals() {
     const addFood = async (food: any, mealType: string) => {
         if (!userData) return;
         const addedItem = {
-            id: food.id,
+            id: Logic.generateId('food'),
             name: food.name,
             meal: mealType,
             quantity: food.baseQty || 100,
@@ -132,18 +130,14 @@ export function useNutritionMeals() {
             time: new Date().getTime()
         };
 
-        const updatedMeals = [...meals, addedItem];
-        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
-
-        const newNutritionDay = {
-            ...todayNutrition,
-            meals: updatedMeals,
-            kcal, carbs, pro, fat
-        };
-
-        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
-            await saveUserData({ ...userData, nutrition: newNutritionObj });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const todayData = prev.nutrition?.[todayDateStr] || { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+                const updatedMeals = [...(todayData.meals || []), addedItem];
+                const totals = recalcTotals(updatedMeals);
+                return { ...prev, nutrition: { ...(prev.nutrition || {}), [todayDateStr]: { ...todayData, meals: updatedMeals, ...totals } } };
+            });
             setSearchQuery('');
         } catch {
             showAlert("Errore durante il salvataggio dell'alimento.");
@@ -157,21 +151,18 @@ export function useNutritionMeals() {
     const updateMealItem = async (updatedItem: any) => {
         if (!userData) return;
         const targetId = updatedItem.itemId || updatedItem.time || updatedItem.id;
-        const updatedMeals = meals.map((m: any) => {
-            const mId = m.itemId || m.time || m.id;
-            return mId === targetId ? { ...m, ...updatedItem } : m;
-        });
 
-        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
-        const newNutritionDay = {
-            ...todayNutrition,
-            meals: updatedMeals,
-            kcal, carbs, pro, fat
-        };
-
-        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
-            await saveUserData({ ...userData, nutrition: newNutritionObj });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const todayData = prev.nutrition?.[todayDateStr] || { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+                const updatedMeals = (todayData.meals || []).map((m: any) => {
+                    const mId = m.itemId || m.time || m.id;
+                    return mId === targetId ? { ...m, ...updatedItem } : m;
+                });
+                const totals = recalcTotals(updatedMeals);
+                return { ...prev, nutrition: { ...(prev.nutrition || {}), [todayDateStr]: { ...todayData, meals: updatedMeals, ...totals } } };
+            });
         } catch {
             showAlert("Errore durante l'aggiornamento dell'alimento.");
         }
@@ -179,18 +170,15 @@ export function useNutritionMeals() {
 
     const removeFood = async (itemTime: number) => {
         if (!userData) return;
-        const updatedMeals = meals.filter((m: any) => (m.itemId || m.time || m.id) !== itemTime);
-        const { kcal, carbs, pro, fat } = recalcTotals(updatedMeals);
 
-        const newNutritionDay = {
-            ...todayNutrition,
-            meals: updatedMeals,
-            kcal, carbs, pro, fat
-        };
-
-        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
-            await saveUserData({ ...userData, nutrition: newNutritionObj });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const todayData = prev.nutrition?.[todayDateStr] || { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+                const updatedMeals = (todayData.meals || []).filter((m: any) => (m.itemId || m.time || m.id) !== itemTime);
+                const totals = recalcTotals(updatedMeals);
+                return { ...prev, nutrition: { ...(prev.nutrition || {}), [todayDateStr]: { ...todayData, meals: updatedMeals, ...totals } } };
+            });
         } catch {
             showAlert("Errore durante la rimozione dell'alimento.");
         }
@@ -202,12 +190,12 @@ export function useNutritionMeals() {
 
     const clearDay = async () => {
         if (!userData) return;
-        const newNutritionDay = {
-            date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: []
-        };
-        const newNutritionObj = { ...(userData.nutrition || {}), [todayDateStr]: newNutritionDay };
         try {
-            await saveUserData({ ...userData, nutrition: newNutritionObj });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const emptyDay = { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+                return { ...prev, nutrition: { ...(prev.nutrition || {}), [todayDateStr]: emptyDay } };
+            });
         } catch {
             showAlert("Errore durante la pulizia della giornata.");
         }
@@ -229,21 +217,21 @@ export function useNutritionMeals() {
 
         const customFoods = (userData?.customFoods || []) as any[];
         if (validation.cleanData) {
-            let updatedCustomFoods: any[];
-            if (editingFoodId) {
-                updatedCustomFoods = customFoods.map((f: any) =>
-                    f.id === editingFoodId ? { ...validation.cleanData, id: editingFoodId } : f
-                );
-            } else {
-                updatedCustomFoods = [...customFoods, validation.cleanData];
-            }
-
+            const cleanData = validation.cleanData;
+            const currentEditingId = editingFoodId;
             try {
-                await saveUserData({ ...userData, customFoods: updatedCustomFoods });
+                await saveUserData((prev) => {
+                    if (!prev) return prev;
+                    const foods = (prev.customFoods || []) as any[];
+                    const updatedFoods = currentEditingId
+                        ? foods.map((f: any) => f.id === currentEditingId ? { ...cleanData, id: currentEditingId } : f)
+                        : [...foods, cleanData];
+                    return { ...prev, customFoods: updatedFoods };
+                });
                 setShowCustomModal(false);
                 setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
-                await showAlert(editingFoodId ? "Alimento aggiornato con successo!" : "Alimento salvato nei tuoi alimenti!");
+                await showAlert(currentEditingId ? "Alimento aggiornato con successo!" : "Alimento salvato nei tuoi alimenti!");
             } catch {
                 await showAlert("Errore durante il salvataggio dell'alimento.");
             }
