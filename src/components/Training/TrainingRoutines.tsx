@@ -92,67 +92,115 @@ const TrainingRoutines = () => {
                                         </div>
 
                                         {/* Riga 1: Serie */}
-                                        <div className="flex items-center gap-8">
-                                            <label className="text-muted text-xs font-semibold" style={{ minWidth: '70px' }}>Serie:</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                                                Serie:
+                                            </label>
                                             <input 
                                                 type="number" min="1" max="20"
                                                 placeholder="3"
                                                 value={ex.setsCount !== undefined && ex.setsCount !== null ? ex.setsCount : ''}
                                                 onChange={e => handleUpdateSetsCount(index, e.target.value)}
                                                 onFocus={e => e.target.select()}
-                                                className="input-compact"
-                                                style={{ width: '80px', margin: 0 }}
+                                                style={{ 
+                                                    width: '90px', 
+                                                    height: '42px', 
+                                                    minHeight: '42px', 
+                                                    margin: 0, 
+                                                    padding: '8px 12px',
+                                                    fontSize: '1rem',
+                                                    textAlign: 'center',
+                                                    borderRadius: '8px',
+                                                    background: 'rgba(0,0,0,0.3)',
+                                                    border: '1px solid var(--glass-border)',
+                                                    color: 'var(--text-main)',
+                                                    boxSizing: 'border-box'
+                                                }}
                                                 onClick={e => e.stopPropagation()}
                                             />
                                         </div>
 
                                         {/* Riga 2: Rep min e Rep max */}
                                         {libDef?.trackingType !== 'time' ? (
-                                            <div className="flex items-center gap-12 flex-wrap">
-                                                <div className="flex items-center gap-8">
-                                                    <label className="text-muted text-xs font-semibold" style={{ minWidth: '70px' }}>Rep min:</label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+                                                <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                                                    Ripetizioni:
+                                                </label>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                                                     <input 
                                                         type="number" 
-                                                        placeholder="es. 8" 
+                                                        placeholder="Min (es. 8)" 
                                                         value={ex.minReps || ''} 
                                                         onChange={e => handleUpdateReps(index, 'minReps', e.target.value)} 
                                                         onFocus={e => e.target.select()}
-                                                        className="input-compact"
-                                                        style={{ width: '80px', margin: 0 }}
+                                                        style={{ 
+                                                            flex: 1, 
+                                                            minWidth: 0, 
+                                                            height: '42px', 
+                                                            minHeight: '42px', 
+                                                            margin: 0, 
+                                                            padding: '8px 8px',
+                                                            fontSize: '0.95rem',
+                                                            textAlign: 'center',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(0,0,0,0.3)',
+                                                            border: '1px solid var(--glass-border)',
+                                                            color: 'var(--text-main)',
+                                                            boxSizing: 'border-box'
+                                                        }}
                                                     />
-                                                </div>
-                                                <div className="flex items-center gap-8">
-                                                    <label className="text-muted text-xs font-semibold">Rep max:</label>
+                                                    <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: '1rem' }}>-</span>
                                                     <input 
                                                         type="number" 
-                                                        placeholder="es. 12" 
+                                                        placeholder="Max (es. 12)" 
                                                         value={ex.maxReps || ''} 
                                                         onChange={e => handleUpdateReps(index, 'maxReps', e.target.value)} 
                                                         onFocus={e => e.target.select()}
-                                                        className="input-compact"
-                                                        style={{ width: '80px', margin: 0 }}
+                                                        style={{ 
+                                                            flex: 1, 
+                                                            minWidth: 0, 
+                                                            height: '42px', 
+                                                            minHeight: '42px', 
+                                                            margin: 0, 
+                                                            padding: '8px 8px',
+                                                            fontSize: '0.95rem',
+                                                            textAlign: 'center',
+                                                            borderRadius: '8px',
+                                                            background: 'rgba(0,0,0,0.3)',
+                                                            border: '1px solid var(--glass-border)',
+                                                            color: 'var(--text-main)',
+                                                            boxSizing: 'border-box'
+                                                        }}
                                                     />
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="text-muted text-xs italic">Tracciamento a tempo</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                                                    Tipo:
+                                                </label>
+                                                <span className="text-muted text-xs italic">Tracciamento a tempo</span>
+                                            </div>
                                         )}
 
                                         {/* Riga 3: Tecniche speciali pre-attivate */}
-                                        <div className="flex items-center gap-8 pt-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                                            <span className="text-muted text-xs font-semibold" style={{ minWidth: '70px' }}>Tecnica:</span>
-                                            <div className="flex gap-6 flex-wrap">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                                                Tecnica:
+                                            </span>
+                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
                                                 <button
                                                     type="button"
                                                     className={`btn btn-small ${ex.defaultTechnique === 'dropset' ? 'btn-primary' : ''}`}
                                                     style={{ 
                                                         margin: 0, 
-                                                        padding: '4px 10px', 
-                                                        fontSize: '0.75rem',
+                                                        padding: '6px 12px', 
+                                                        fontSize: '0.8rem',
                                                         background: ex.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
                                                         color: ex.defaultTechnique === 'dropset' ? '#000' : 'var(--text-main)',
                                                         fontWeight: ex.defaultTechnique === 'dropset' ? 700 : 500,
-                                                        border: '1px solid rgba(255,255,255,0.1)'
+                                                        border: '1px solid rgba(255,255,255,0.1)',
+                                                        borderRadius: '8px'
                                                     }}
                                                     onClick={() => handleUpdateTechnique(index, 'dropset')}
                                                 >
@@ -163,12 +211,13 @@ const TrainingRoutines = () => {
                                                     className={`btn btn-small ${ex.defaultTechnique === 'isometrics' ? 'btn-primary' : ''}`}
                                                     style={{ 
                                                         margin: 0, 
-                                                        padding: '4px 10px', 
-                                                        fontSize: '0.75rem',
+                                                        padding: '6px 12px', 
+                                                        fontSize: '0.8rem',
                                                         background: ex.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
                                                         color: ex.defaultTechnique === 'isometrics' ? '#fff' : 'var(--text-main)',
                                                         fontWeight: ex.defaultTechnique === 'isometrics' ? 700 : 500,
-                                                        border: '1px solid rgba(255,255,255,0.1)'
+                                                        border: '1px solid rgba(255,255,255,0.1)',
+                                                        borderRadius: '8px'
                                                     }}
                                                     onClick={() => handleUpdateTechnique(index, 'isometrics')}
                                                 >
