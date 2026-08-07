@@ -103,7 +103,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                             <select 
                                 value={selectedRoutine} 
                                 onChange={e => setSelectedRoutine(e.target.value)}
-                                style={{ width: '100%', marginBottom: '15px', padding: '12px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px' }}
+                                className="w-full p-10 bg-surface text-white border-b rounded-8 mb-15"
                             >
                                 <option value="">-- Seleziona Scheda --</option>
                                 {routines.map(r => (
@@ -212,9 +212,9 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                     <h4 style={{ marginBottom: '10px' }}>Aggiungi Esercizio Extra</h4>
                     <select 
                         onChange={e => { if(e.target.value) addExtraExercise(e.target.value); e.target.value = ''; }}
-                        style={{ width: '100%', padding: '10px', background: 'var(--surface-color)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '8px' }}
+                        className="w-full p-10 bg-surface text-white border-b rounded-8"
                     >
-                        <option value="">-- Seleziona dalla libreria --</option>
+                        <option value="">+ Aggiungi Esercizio dalla Libreria</option>
                         {library.map(l => (
                             <option key={l.id} value={l.id}>{l.name}</option>
                         ))}
