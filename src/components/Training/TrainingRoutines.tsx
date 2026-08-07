@@ -46,14 +46,12 @@ const TrainingRoutines = () => {
                     />
                 </div>
 
-                {routineExercises.length > 0 && (
-                    <div className="mb-15 flex-center w-full">
-                        <MuscleModel 
-                            selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
-                            secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
-                        />
-                    </div>
-                )}
+                <div className="mb-15 flex-center w-full">
+                    <MuscleModel 
+                        selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
+                        secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
+                    />
+                </div>
 
                 <div className="mb-15">
                     <div className="flex-between items-center mb-10">
@@ -245,14 +243,12 @@ const TrainingRoutines = () => {
 
                                     return (
                                         <div className="mt-15 pt-15 border-t">
-                                            {(rtn.exercises || []).length > 0 && (
-                                                <div className="mb-15 flex-center w-full">
-                                                    <MuscleModel 
-                                                        selectedMuscles={Array.from(new Set(muscles)) as string[]} 
-                                                        secondaryMuscles={Array.from(new Set(secMuscles)) as string[]} 
-                                                    />
-                                                </div>
-                                            )}
+                                            <div className="mb-15 flex-center w-full">
+                                                <MuscleModel 
+                                                    selectedMuscles={Array.from(new Set(muscles)) as string[]} 
+                                                    secondaryMuscles={Array.from(new Set(secMuscles)) as string[]} 
+                                                />
+                                            </div>
                                             
                                             {(rtn.exercises || []).length === 0 ? (
                                                 <p className="text-muted text-md">Nessun esercizio presente.</p>
