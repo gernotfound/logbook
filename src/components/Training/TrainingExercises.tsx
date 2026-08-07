@@ -149,13 +149,23 @@ const TrainingExercises = () => {
                     </div>
                 </div>
 
-                <div className="flex gap-10 mt-20">
+                <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>
                     {editingExId && (
-                        <button className="btn flex-1" style={{ background: 'rgba(255,255,255,0.1)' }} onClick={handleCancelEdit}>
+                        <button 
+                            type="button" 
+                            className="btn flex-1 mb-0" 
+                            style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                            onClick={handleCancelEdit}
+                        >
                             Annulla
                         </button>
                     )}
-                    <button className="btn btn-primary flex-2" onClick={handleSaveExercise}>
+                    <button 
+                        type="button" 
+                        className={`btn btn-primary ${editingExId ? 'flex-2' : 'w-full'} mb-0`} 
+                        style={{ whiteSpace: 'nowrap', margin: 0 }} 
+                        onClick={handleSaveExercise}
+                    >
                         {editingExId ? '💾 Salva modifiche' : '+ Aggiungi in archivio'}
                     </button>
                 </div>
@@ -166,11 +176,12 @@ const TrainingExercises = () => {
             {library.length === 0 ? (
                 <p className="text-muted">Nessun esercizio creato.</p>
             ) : (
-                <div className="flex-col gap-10">
+                <div className="flex-col gap-8">
                     {library.map(ex => (
                         <div 
                             key={ex.id} 
                             className="card p-15 mb-0"
+                            style={{ marginBottom: 0 }}
                         >
                             <div 
                                 className="flex-between cursor-pointer"

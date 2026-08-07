@@ -232,13 +232,23 @@ const TrainingRoutines = () => {
                     )}
                 </div>
 
-                <div className="flex gap-10 mt-10">
+                <div className="flex gap-10 mt-10" style={{ width: '100%', minWidth: 0 }}>
                     {editingRoutineId && (
-                        <button className="btn flex-1" style={{ background: 'rgba(255,255,255,0.1)' }} onClick={handleCancelEdit}>
+                        <button 
+                            type="button" 
+                            className="btn flex-1 mb-0" 
+                            style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                            onClick={handleCancelEdit}
+                        >
                             Annulla
                         </button>
                     )}
-                    <button className="btn btn-primary flex-2" onClick={handleSave}>
+                    <button 
+                        type="button" 
+                        className={`btn btn-primary ${editingRoutineId ? 'flex-2' : 'w-full'} mb-0`} 
+                        style={{ whiteSpace: 'nowrap', margin: 0 }} 
+                        onClick={handleSave}
+                    >
                         {editingRoutineId ? '💾 Salva modifiche' : '➕ Salva nuova scheda'}
                     </button>
                 </div>
@@ -249,13 +259,14 @@ const TrainingRoutines = () => {
             {routines.length === 0 ? (
                 <p className="text-muted">Nessuna scheda creata.</p>
             ) : (
-                <div className="flex-col gap-10">
+                <div className="flex-col gap-8">
                     {routines.map(rtn => {
                         const isExpanded = expandedRoutineId === rtn.id;
                         return (
                             <div 
                                 key={rtn.id} 
                                 className="card p-15 mb-0"
+                                style={{ marginBottom: 0 }}
                             >
                                 <div 
                                     className="flex-between cursor-pointer"
