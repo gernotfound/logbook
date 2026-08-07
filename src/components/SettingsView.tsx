@@ -114,7 +114,7 @@ const SettingsView = () => {
                         flexDirection: 'column',
                         animation: 'fadeIn 0.2s ease-out'
                     }}>
-                        <h2 style={{ color: 'var(--text-main)', margin: '0 0 15px 0', fontSize: '1.3rem', textAlign: 'center' }}>📄 Informativa sulla Privacy</h2>
+                        <h2 style={{ color: 'var(--text-main)', margin: '0 0 15px 0', fontSize: '1.3rem', textAlign: 'center' }}>📄 Informativa sulla privacy</h2>
                         
                         <div style={{ 
                             flex: 1, 
@@ -126,28 +126,28 @@ const SettingsView = () => {
                             paddingRight: '10px',
                             marginBottom: '20px'
                         }}>
-                            <p><b>1. Titolare del Trattamento</b><br />
+                            <p><b>1. Titolare del trattamento</b><br />
                             Il titolare del trattamento dei dati è lo sviluppatore di questo servizio (LogBook). Per qualsiasi domanda o per esercitare i tuoi diritti, puoi contattare l'amministratore.</p>
 
-                            <p><b>2. Dati Raccolti</b><br />
+                            <p><b>2. Dati raccolti</b><br />
                             Raccogliamo ed elaboriamo esclusivamente i dati strettamente necessari per il funzionamento dell'applicazione:
                             <ul>
-                                <li><b>Dati di Autenticazione:</b> Indirizzo email, nome e foto profilo (forniti tramite Google Login).</li>
-                                <li><b>Dati Biometrici:</b> Peso corporeo e altre misurazioni antropometriche inserite volontariamente.</li>
-                                <li><b>Dati di Allenamento e Nutrizione:</b> Schede, storico esercizi, carichi, ripetizioni, note e diario alimentare quotidiano.</li>
+                                <li><b>Dati di autenticazione:</b> Indirizzo email, nome e foto profilo (forniti tramite Google Login).</li>
+                                <li><b>Dati biometrici:</b> Peso corporeo e altre misurazioni antropometriche inserite volontariamente.</li>
+                                <li><b>Dati di allenamento e nutrizione:</b> Schede, storico esercizi, carichi, ripetizioni, note e diario alimentare quotidiano.</li>
                             </ul>
                             </p>
 
-                            <p><b>3. Finalità e Base Giuridica</b><br />
+                            <p><b>3. Finalità e base giuridica</b><br />
                             I dati vengono raccolti esclusivamente per consentirti di tracciare e monitorare i tuoi allenamenti e la tua alimentazione. La base giuridica del trattamento è il tuo consenso esplicito, fornito creando un account e inserendo i dati nell'app.</p>
 
-                            <p><b>4. Conservazione dei Dati</b><br />
+                            <p><b>4. Conservazione dei dati</b><br />
                             Tutti i dati vengono memorizzati e conservati in modo sicuro sui server cloud di Google Firebase, ospitati all'interno dell'Unione Europea o in conformità con i requisiti del Data Privacy Framework. Nessun dato viene venduto o condiviso con terze parti o per scopi pubblicitari.</p>
 
-                            <p><b>5. Sicurezza dei Dati</b><br />
+                            <p><b>5. Sicurezza dei dati</b><br />
                             L'app utilizza protocolli sicuri (HTTPS) per il trasferimento dei dati e le funzionalità di sicurezza integrate di Google Firebase. I dati sono associati in modo univoco al tuo account protetto.</p>
 
-                            <p><b>6. Diritti dell'Utente (GDPR)</b><br />
+                            <p><b>6. Diritti dell'utente (GDPR)</b><br />
                             In conformità al Regolamento Europeo (GDPR), hai il diritto di:
                             <ul>
                                 <li>Accedere a tutti i tuoi dati esportandoli in formato CSV tramite l'apposito tasto in Impostazioni.</li>
@@ -156,7 +156,7 @@ const SettingsView = () => {
                             </ul>
                             </p>
 
-                            <p><b>7. Cookie, Analitica e Memoria Locale</b><br />
+                            <p><b>7. Cookie, analitica e memoria locale</b><br />
                             Questo sito utilizza:<br />
                             - Memoria locale (LocalStorage) e identificatori tecnici essenziali per consentirti l'accesso persistente e la gestione offline delle sessioni.<br />
                             - <b>Google Analytics per Firebase</b> per raccogliere informazioni statistiche aggregate e anonime sull'utilizzo dell'app (es. flussi di navigazione, durata delle sessioni, arresti anomali). Questi dati ci consentono di ottimizzare le prestazioni dell'applicazione e non vengono mai utilizzati per scopi di marketing, tracciamento pubblicitario o profilazione commerciale.</p>
