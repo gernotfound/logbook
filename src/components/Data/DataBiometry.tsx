@@ -15,19 +15,29 @@ const DataBiometry = () => {
                 I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
             </p>
             
-            <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">Data di Nascita</label>
-                <input 
-                    id="biometry-dob" 
-                    type="date" 
-                    value={dob} 
-                    onChange={e => setDob(e.target.value)} 
-                />
+            <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
+                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Data di Nascita</label>
+                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <input 
+                        id="biometry-dob" 
+                        type="date" 
+                        value={dob} 
+                        onChange={e => setDob(e.target.value)} 
+                        style={{
+                            width: '100%',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box',
+                            textAlign: 'center',
+                            margin: '0 auto',
+                            display: 'block'
+                        }}
+                    />
+                </div>
             </div>
             
-            <div className="input-row" style={{ marginBottom: '15px' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Altezza (cm)</label>
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Altezza (cm)</label>
                     <input 
                         id="biometry-height" 
                         type="number" 
@@ -35,11 +45,16 @@ const DataBiometry = () => {
                         value={height} 
                         onChange={e => setHeight(e.target.value)} 
                         onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                     />
                 </div>
-                <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Sesso</label>
-                    <select value={gender} onChange={e => setGender(e.target.value)}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sesso</label>
+                    <select 
+                        value={gender} 
+                        onChange={e => setGender(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
+                    >
                         <option value="">Non Specificato</option>
                         <option value="M">Uomo</option>
                         <option value="F">Donna</option>

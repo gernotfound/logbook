@@ -151,6 +151,7 @@ p {
 
 input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="password"], input[type="email"], select, textarea {
     width: 100%; 
+    max-width: 100%;
     padding: 14px; 
     margin-bottom: 12px; 
     background: rgba(0,0,0,0.2);
@@ -164,11 +165,14 @@ input[type="text"], input[type="number"], input[type="date"], input[type="time"]
     font-family: inherit;
     transition: all 0.2s ease;
     touch-action: manipulation;
+    -webkit-appearance: none;
+    appearance: none;
 }
 input[type="date"]::-webkit-date-and-time-value,
 input[type="time"]::-webkit-date-and-time-value {
-    text-align: left;
+    text-align: center;
     min-height: 1.5em;
+    width: 100%;
 }
 input:focus, select:focus, textarea:focus { 
     outline: none; 
