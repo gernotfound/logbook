@@ -7,7 +7,20 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setActiveTab }) => (
-  <nav className="bottom-nav" aria-label="Navigazione principale">
+  <nav
+    className="bottom-nav"
+    aria-label="Navigazione principale"
+    style={{
+      position: 'fixed',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      width: '100%',
+      zIndex: 10000,
+      transform: 'translateZ(0)',
+      WebkitTransform: 'translateZ(0)'
+    }}
+  >
     <div className="nav-container">
       <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
         <Home size={24} />

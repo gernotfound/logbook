@@ -32,6 +32,8 @@ html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     touch-action: manipulation;
+    overflow-x: hidden;
+    width: 100%;
 }
 
 body { 
@@ -44,6 +46,7 @@ body {
     -webkit-tap-highlight-color: transparent; 
     overflow-x: hidden;
     touch-action: manipulation;
+    width: 100%;
 }
 
 input, select, textarea {
@@ -320,16 +323,20 @@ input:focus, select:focus, textarea:focus {
     position: fixed !important; 
     bottom: 0 !important; 
     left: 0 !important; 
+    right: 0 !important;
     width: 100% !important; 
-    background: rgba(0, 0, 0, 0.92); 
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
+    background: rgba(0, 0, 0, 0.94) !important; 
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--glass-border); 
     display: flex !important; 
     justify-content: center; 
     align-items: center;
     z-index: 10000 !important; 
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
 }
 .nav-container { 
     width: 100%; 
