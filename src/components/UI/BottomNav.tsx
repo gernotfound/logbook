@@ -16,9 +16,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       left: 0,
       right: 0,
       width: '100%',
-      zIndex: 10000,
-      transform: 'translateZ(0)',
-      WebkitTransform: 'translateZ(0)'
+      zIndex: 10000
     }}
   >
     <div className="nav-container">
