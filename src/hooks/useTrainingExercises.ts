@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import Fuse from 'fuse.js';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -89,14 +90,45 @@ export function useTrainingExercises() {
         const stemmedQuery = normalizeStem(rawQuery);
         const queryTokens = stemmedQuery.split(/\s+/).filter(Boolean);
 
-        const matches = Logic.MUSCLES.filter(m => {
+        // 1. Direct matches
+        const directMatches = Logic.MUSCLES.filter(m => {
             const mNameLower = m.name.toLowerCase();
             if (mNameLower.includes(rawQuery)) return true;
             const mNameNorm = normalizeStem(mNameLower);
             return queryTokens.every(tok => mNameNorm.includes(tok));
         });
 
-        matches.sort((a, b) => {
+        // 2. Fuzzy matches with Fuse.js (typo tolerance)
+        const preparedMuscles = Logic.MUSCLES.map(m => ({
+            ...m,
+            _stemmedName: normalizeStem(m.name.toLowerCase())
+        }));
+
+        const fuse = new Fuse(preparedMuscles, {
+            keys: [
+                { name: 'name', weight: 0.6 },
+                { name: '_stemmedName', weight: 0.4 }
+            ],
+            threshold: 0.38,
+            ignoreLocation: true,
+            minMatchCharLength: 2
+        });
+
+        const fuzzyMatches = fuse.search(stemmedQuery).map(res => {
+            const { _stemmedName, ...original } = res.item;
+            return original;
+        });
+
+        const seen = new Set<string>();
+        const merged: any[] = [];
+        for (const m of [...directMatches, ...fuzzyMatches]) {
+            if (!seen.has(m.id)) {
+                seen.add(m.id);
+                merged.push(m);
+            }
+        }
+
+        merged.sort((a, b) => {
             const aName = a.name.toLowerCase();
             const bName = b.name.toLowerCase();
             if (aName === rawQuery) return -1;
@@ -112,7 +144,7 @@ export function useTrainingExercises() {
             return a.name.localeCompare(b.name, 'it');
         });
 
-        return matches.slice(0, 10);
+        return merged.slice(0, 10);
     }, [muscleSearch]);
 
     const toggleSmartMuscleSelection = (currentSelection: any[], toggledMuscle?: any) => {

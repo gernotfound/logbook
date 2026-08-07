@@ -1,3 +1,4 @@
+import Fuse from 'fuse.js';
 import { calculateBodyFat } from './bodyFat';
 
 export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: string | number; kcal?: string | number }[]) {
@@ -315,22 +316,48 @@ export function searchFoods(foodsList: any[], query: string, categoryFilter?: st
     }
     const normalize = (str: any) => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     const q = normalize(query);
-    const matched = results.filter(item => {
+
+    // Direct matches
+    const directMatched = results.filter(item => {
         if (!item) return false;
         const name = normalize(item.name);
         const category = normalize(item.category);
-        const servingUnit = normalize(item.servingUnit);
+        const servingUnit = normalize(item.servingUnit || item.unit);
         const brand = normalize(item.brand);
         return name.includes(q) || category.includes(q) || servingUnit.includes(q) || brand.includes(q);
     });
-    return matched.sort((a, b) => {
+
+    // Fuzzy matches with Fuse.js
+    const fuse = new Fuse(results, {
+        keys: [
+            { name: 'name', weight: 0.6 },
+            { name: 'brand', weight: 0.25 },
+            { name: 'category', weight: 0.15 }
+        ],
+        threshold: 0.38,
+        ignoreLocation: true,
+        minMatchCharLength: 2
+    });
+    const fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
+
+    const seen = new Set<any>();
+    const merged: any[] = [];
+    for (const f of [...directMatched, ...fuzzyMatched]) {
+        const key = f.id ?? f.name;
+        if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(f);
+        }
+    }
+
+    return merged.sort((a, b) => {
         const aName = normalize(a.name);
         const bName = normalize(b.name);
         const aStarts = aName.startsWith(q);
         const bStarts = bName.startsWith(q);
         if (aStarts && !bStarts) return -1;
         if (!aStarts && bStarts) return 1;
-        return aName.localeCompare(bName);
+        return aName.localeCompare(bName, 'it');
     });
 }
 

@@ -114,4 +114,47 @@ describe('Logic Library Tests', () => {
         expect(diff!.fatPct).toBeGreaterThan(0);
         expect(diff!.kcalPct).toBeGreaterThan(0);
     });
+
+    it('filterItems: fuzzy search handles typos for exercises', () => {
+        const library = [
+            { id: '1', name: 'Panca piana bilanciere' },
+            { id: '2', name: 'Squat con bilanciere' },
+            { id: '3', name: 'Trazioni alla sbarra' }
+        ];
+
+        // Exact search
+        expect(Logic.filterItems(library, 'Panca').length).toBe(1);
+
+        // Typo search: "pancca" instead of "panca"
+        const typoResults = Logic.filterItems(library, 'pancca');
+        expect(typoResults.length).toBeGreaterThan(0);
+        expect(typoResults[0].id).toBe('1');
+
+        // Typo search: "squatt" instead of "squat"
+        const squatResults = Logic.filterItems(library, 'squatt');
+        expect(squatResults.length).toBeGreaterThan(0);
+        expect(squatResults[0].id).toBe('2');
+    });
+
+    it('searchFoods: fuzzy search handles typos for food items', () => {
+        const foods = [
+            { id: 'f1', name: 'Petto di pollo', brand: 'Aia', category: 'Carne' },
+            { id: 'f2', name: 'Fiocchi di avena', brand: 'Quaker', category: 'Cereali' },
+            { id: 'f3', name: 'Olio extravergine di oliva', brand: 'Monini', category: 'Grassi' }
+        ];
+
+        // Exact match
+        expect(Logic.searchFoods(foods, 'pollo').length).toBe(1);
+
+        // Typo match: "peto di polo" -> "Petto di pollo"
+        const polloTypo = Logic.searchFoods(foods, 'peto polo');
+        expect(polloTypo.length).toBeGreaterThan(0);
+        expect(polloTypo[0].id).toBe('f1');
+
+        // Typo match: "avenna" -> "Fiocchi di avena"
+        const avenaTypo = Logic.searchFoods(foods, 'avenna');
+        expect(avenaTypo.length).toBeGreaterThan(0);
+        expect(avenaTypo[0].id).toBe('f2');
+    });
 });
+

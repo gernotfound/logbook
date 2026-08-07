@@ -81,13 +81,8 @@ export function useNutritionMeals() {
     const handleSearch = (query: string) => {
         setSearchQuery(query);
         if (query.trim().length > 0) {
-            const q = query.toLowerCase();
             const customFoods = (userData?.customFoods || []) as any[];
-            const res = customFoods.filter((f: any) => 
-                (f.name || '').toLowerCase().includes(q) || 
-                (f.category || '').toLowerCase().includes(q) ||
-                (f.brand || '').toLowerCase().includes(q)
-            ).slice(0, 15);
+            const res = Logic.searchFoods(customFoods, query).slice(0, 15);
             setSearchResults(res);
         } else {
             setSearchResults([]);

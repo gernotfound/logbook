@@ -27,16 +27,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     });
 
     const customFoods = (userData?.customFoods || []) as any[];
-
-    const filteredFoods = customFoods.filter(f => {
-        if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-            (f.name || '').toLowerCase().includes(q) ||
-            (f.brand || '').toLowerCase().includes(q) ||
-            (f.category || '').toLowerCase().includes(q)
-        );
-    });
+    const filteredFoods = Logic.searchFoods(customFoods, searchQuery);
 
     const openCreateModal = () => {
         setEditingFoodId(null);
