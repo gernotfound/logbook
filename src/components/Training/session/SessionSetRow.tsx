@@ -90,7 +90,7 @@ export const SessionSetRow: React.FC<SessionSetRowProps> = ({
                         className="btn-icon" 
                         style={{ background: 'var(--primary-color)', borderRadius: '50%', width: '36px', height: '36px', color: '#fff', flexShrink: 0 }} 
                         onClick={onToggleMenu}
-                        aria-label="Aggiungi Dropset o Isometria"
+                        aria-label="Aggiungi dropset o isometria"
                     >
                         +
                     </button>

@@ -201,7 +201,7 @@ export function useHomeView() {
         labels: recentDates.map(d => d.slice(5).replace('-', '/')),
         datasets: [
             {
-                label: 'Peso Corporeo (kg)',
+                label: 'Peso corporeo (kg)',
                 data: recentDates.map(d => {
                     const w = nutrition[d]?.weight;
                     return (w && !isNaN(parseFloat(String(w)))) ? parseFloat(String(w)) : null;

@@ -2,10 +2,10 @@ import { useDialogStore } from '../store/useDialogStore';
 
 export const Exporter = {
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
-        let workoutCsv = "Data,Nome Allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n";
+        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n";
         history.forEach(session => {
-            const dateStr = session.globalStartTime ? new Date(session.globalStartTime).toLocaleString() : "Data Sconosciuta";
-            const routineName = `"${session.routineName || 'Allenamento Libero'}"`;
+            const dateStr = session.globalStartTime ? new Date(session.globalStartTime).toLocaleString() : "Data sconosciuta";
+            const routineName = `"${session.routineName || 'Allenamento libero'}"`;
             if (session.exercises && session.exercises.length > 0) {
                 session.exercises.forEach((ex: any) => {
                     const libEx = library.find(l => l.id === ex.exId);
@@ -29,7 +29,7 @@ export const Exporter = {
             const notes = n.notes ? `"${n.notes.replace(/"/g, '""')}"` : "";
             nutritionCsv += `${date},${n.weight || ''},${n.kcal || ''},${n.carbs || ''},${n.pro || ''},${n.fat || ''},${n.bf || ''},${notes}\n`;
         });
-        if (workoutCsv !== "Data,Nome Allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n") {
+        if (workoutCsv !== "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n") {
             this.downloadFile("allenamenti.csv", workoutCsv);
         } else {
             await useDialogStore.getState().showAlert("Nessun allenamento da esportare.");
