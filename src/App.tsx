@@ -2,6 +2,8 @@ import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { analytics } from './lib/firebase';
+import { logEvent } from 'firebase/analytics';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
@@ -36,6 +38,28 @@ function App() {
   useEffect(() => {
     localStorage.setItem('logbook_dataSubTab', dataSubTab);
   }, [dataSubTab]);
+
+  // Tracciamento dei tab su Google Analytics (SPA tab tracking)
+  useEffect(() => {
+    if (analytics) {
+      logEvent(analytics, 'screen_view', {
+        screen_name: activeTab,
+        screen_class: 'App'
+      });
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (analytics) {
+      const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
+      if (subTab) {
+        logEvent(analytics, 'sub_tab_view', {
+          tab: activeTab,
+          sub_tab: subTab
+        });
+      }
+    }
+  }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab]);
 
   // Preserve and restore scroll position across tabs
   const tabScrollPositions = useState<Record<string, number>>(() => ({}))[0];
