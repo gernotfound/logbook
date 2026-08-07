@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
@@ -186,26 +186,93 @@ export function useHomeView() {
         return { sortedDates: dates, tdeeCalc: tCalc };
     }, [nutrition]);
 
-    // Chart Logic (Last 14 days)
+    // Chart Logic (Configured period: 7d, 30d, 180d, 365d)
+    const [weightPeriod, setWeightPeriod] = useState<'7d' | '30d' | '180d' | '365d'>('7d');
     const recentDates = useMemo(() => sortedDates.slice(-14), [sortedDates]);
-    const chartData = useMemo(() => ({
-        labels: recentDates.map(d => d.slice(5).replace('-', '/')),
-        datasets: [
-            {
-                label: 'Peso corporeo (kg)',
-                data: recentDates.map(d => {
-                    const w = nutrition[d]?.weight;
-                    return (w && !isNaN(parseFloat(String(w)))) ? parseFloat(String(w)) : null;
-                }),
-                borderColor: 'var(--primary-color)',
-                backgroundColor: 'rgba(14, 165, 233, 0.2)',
-                tension: 0.4,
-                pointRadius: 4,
-                pointBackgroundColor: 'var(--primary-color)',
-                spanGaps: true // connect across null values
+
+    const { chartData, weightStats } = useMemo(() => {
+        const daysMap: Record<string, number> = {
+            '7d': 7,
+            '30d': 30,
+            '180d': 180,
+            '365d': 365
+        };
+        const numDays = daysMap[weightPeriod] || 7;
+        const today = new Date();
+
+        const dateRange: string[] = [];
+        for (let i = numDays - 1; i >= 0; i--) {
+            dateRange.push(format(subDays(today, i), 'yyyy-MM-dd'));
+        }
+
+        const points: (number | null)[] = [];
+        const validWeights: number[] = [];
+
+        dateRange.forEach(d => {
+            const w = nutrition[d]?.weight;
+            if (w !== undefined && w !== null && w !== '' && !isNaN(parseFloat(String(w)))) {
+                const parsedWeight = parseFloat(String(w));
+                points.push(parsedWeight);
+                validWeights.push(parsedWeight);
+            } else {
+                points.push(null);
             }
-        ]
-    }), [recentDates, nutrition]);
+        });
+
+        const hasDataInPeriod = validWeights.length > 0;
+        const latestWeight = hasDataInPeriod ? validWeights[validWeights.length - 1] : null;
+        const firstWeight = hasDataInPeriod ? validWeights[0] : null;
+        const weightDelta = (hasDataInPeriod && validWeights.length >= 2 && latestWeight !== null && firstWeight !== null)
+            ? (latestWeight - firstWeight)
+            : null;
+        const minWeight = hasDataInPeriod ? Math.min(...validWeights) : null;
+        const maxWeight = hasDataInPeriod ? Math.max(...validWeights) : null;
+
+        const labels = dateRange.map(d => {
+            const parts = d.split('-');
+            if (numDays <= 180) {
+                return `${parts[2]}/${parts[1]}`;
+            } else {
+                return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`;
+            }
+        });
+
+        const cData = {
+            labels,
+            datasets: [
+                {
+                    label: 'Peso corporeo (kg)',
+                    data: points,
+                    borderColor: '#0ea5e9',
+                    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2.5,
+                    pointRadius: numDays <= 7 ? 5 : (numDays <= 30 ? 4 : (numDays <= 180 ? 3 : 2)),
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#0284c7',
+                    pointBorderWidth: 2,
+                    pointHoverBackgroundColor: '#ffffff',
+                    pointHoverBorderColor: '#38bdf8',
+                    pointHoverBorderWidth: 3,
+                    spanGaps: true
+                }
+            ]
+        };
+
+        return {
+            chartData: cData,
+            weightStats: {
+                hasDataInPeriod,
+                latestWeight,
+                firstWeight,
+                weightDelta,
+                minWeight,
+                maxWeight
+            }
+        };
+    }, [nutrition, weightPeriod]);
 
     // Early return AFTER all hooks
     if (!userData) {
@@ -275,6 +342,7 @@ export function useHomeView() {
         kcalEaten, carbs, pro, fat, kcalTarget,
         bf, streak, totalWorkouts,
         tdeeCalc, recentDates, chartData,
+        weightPeriod, setWeightPeriod, weightStats,
         muscleColors, volumeChartData
     };
 }

@@ -351,5 +351,50 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(hookResult.loading).toBe(false);
       expect(hookResult.bf).toBe('15.2');
     });
+
+    test('useHomeView generates proper chartData and periods (7d, 30d, 180d, 365d) with white points', () => {
+      let hookResult: any = null;
+      function TestHomeComponent() {
+        const res = useHomeView();
+        hookResult = res;
+        return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
+      }
+
+      const { rerender } = renderWithProviders(<TestHomeComponent />, {
+        userData: {
+          ...emptyUserData,
+          nutrition: {
+            '2026-08-01': { date: '2026-08-01', weight: 81.0 },
+            '2026-08-07': { date: '2026-08-07', weight: 79.8 }
+          }
+        } as any
+      });
+
+      expect(hookResult.loading).toBe(false);
+      expect(hookResult.weightPeriod).toBe('7d');
+      expect(hookResult.chartData.datasets[0].pointBackgroundColor).toBe('#ffffff');
+      expect(hookResult.chartData.labels.length).toBe(7);
+
+      // Change period to 30d
+      act(() => {
+        hookResult.setWeightPeriod('30d');
+      });
+      expect(hookResult.weightPeriod).toBe('30d');
+      expect(hookResult.chartData.labels.length).toBe(30);
+
+      // Change period to 180d
+      act(() => {
+        hookResult.setWeightPeriod('180d');
+      });
+      expect(hookResult.weightPeriod).toBe('180d');
+      expect(hookResult.chartData.labels.length).toBe(180);
+
+      // Change period to 365d
+      act(() => {
+        hookResult.setWeightPeriod('365d');
+      });
+      expect(hookResult.weightPeriod).toBe('365d');
+      expect(hookResult.chartData.labels.length).toBe(365);
+    });
   });
 });
