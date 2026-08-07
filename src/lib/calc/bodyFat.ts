@@ -1,3 +1,5 @@
+import { calculateAge } from '../utils/date';
+
 export function calculateUsNavyBodyFat({ gender, height, waist, neck, hip }: { gender?: string; height: any; waist: any; neck: any; hip?: any }): number | null {
     const h = parseFloat(height);
     const w = parseFloat(waist);
@@ -56,10 +58,7 @@ export function calculateBodyFatByMethod(method: any, params: any): number | nul
         if (params.age !== undefined && !isNaN(parseFloat(params.age))) {
             age = parseFloat(params.age);
         } else if (params.dob) {
-            const dobDate = new Date(params.dob);
-            if (!isNaN(dobDate.getTime())) {
-                age = Math.abs(new Date(Date.now() - dobDate.getTime()).getUTCFullYear() - 1970);
-            }
+            age = calculateAge(params.dob);
         }
         const sexFactor = (params.gender === 'F' || params.gender === 'female') ? 0 : 1;
         const bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;

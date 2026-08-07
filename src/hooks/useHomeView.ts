@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
 
@@ -23,29 +24,19 @@ function getWorkoutDateStr(w: any): string | null {
 
 function getMuscleCategory(mId: string): { key: string; label: string } {
     if (!mId) return { key: 'other', label: 'Altro' };
-    const id = mId.toLowerCase();
-    if (id.startsWith('chest')) return { key: 'chest', label: 'Petto' };
-    if (id.startsWith('lat') || id.startsWith('back') || id.startsWith('rhomboid') || id.startsWith('lower_back')) return { key: 'back', label: 'Dorso' };
-    if (id.startsWith('delt') || id.startsWith('shoulder')) return { key: 'shoulders', label: 'Spalle' };
-    if (id.startsWith('trap')) return { key: 'traps', label: 'Trapezi' };
-    if (id.startsWith('bicep') || id.startsWith('brachial')) return { key: 'biceps', label: 'Bicipiti' };
-    if (id.startsWith('tricep')) return { key: 'triceps', label: 'Tricipiti' };
-    if (id.startsWith('quad')) return { key: 'quads', label: 'Quadricipiti' };
-    if (id.startsWith('hamstring')) return { key: 'hamstrings', label: 'Femorali' };
-    if (id.startsWith('glute') || id.startsWith('abductor')) return { key: 'glutes', label: 'Glutei' };
-    if (id.startsWith('calv')) return { key: 'calves', label: 'Polpacci' };
-    if (id.startsWith('ab') || id.startsWith('oblique') || id.startsWith('core')) return { key: 'abs', label: 'Addome' };
-    if (id.startsWith('forearm') || id.startsWith('hand')) return { key: 'forearms', label: 'Avambracci' };
-    if (id.startsWith('adductor')) return { key: 'adductors', label: 'Adduttori' };
-    if (id.startsWith('leg')) return { key: 'legs', label: 'Gambe' };
-    return { key: id, label: id.charAt(0).toUpperCase() + id.slice(1) };
+    const low = mId.toLowerCase();
+    if (low.includes('pett') || low.includes('chest')) return { key: 'chest', label: 'Petto' };
+    if (low.includes('dors') || low.includes('schien') || low.includes('lat') || low.includes('back')) return { key: 'back', label: 'Dorso' };
+    if (low.includes('spall') || low.includes('delt') || low.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
+    if (low.includes('quad') || low.includes('femoral') || low.includes('glute') || low.includes('polp') || low.includes('leg') || low.includes('gamb')) return { key: 'legs', label: 'Gambe' };
+    if (low.includes('bicip') || low.includes('tricip') || low.includes('avambr') || low.includes('arm') || low.includes('bracc')) return { key: 'arms', label: 'Braccia' };
+    if (low.includes('addom') || low.includes('core') || low.includes('abs')) return { key: 'core', label: 'Addome' };
+    return { key: 'other', label: 'Altro' };
 }
 
-function calcStreak(history: any[]) {
+function calcStreak(history: any[]): number {
     if (!history || history.length === 0) return 0;
-    
-    // Build a set of workout date strings
-    const workoutDates = new Set(
+    const workoutDates = new Set<string>(
         history
             .map((w: any) => getWorkoutDateStr(w))
             .filter((d): d is string => Boolean(d))
@@ -53,24 +44,21 @@ function calcStreak(history: any[]) {
 
     let streak = 0;
     const today = new Date();
-    const todayStr = Logic.getLocalDateString(today);
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
     
     // Check if worked out today or yesterday to begin streak count
-    const startDate = workoutDates.has(todayStr) ? new Date(today) : (() => {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yStr = Logic.getLocalDateString(yesterday);
-        return workoutDates.has(yStr) ? yesterday : null;
-    })();
+    let cur = workoutDates.has(todayStr) 
+        ? today 
+        : (workoutDates.has(yesterdayStr) ? subDays(today, 1) : null);
     
-    if (!startDate) return 0;
+    if (!cur) return 0;
     
-    const cur = new Date(startDate);
     while (true) {
-        const dateStr = Logic.getLocalDateString(cur);
+        const dateStr = format(cur, 'yyyy-MM-dd');
         if (workoutDates.has(dateStr)) {
             streak++;
-            cur.setDate(cur.getDate() - 1);
+            cur = subDays(cur, 1);
         } else {
             break;
         }

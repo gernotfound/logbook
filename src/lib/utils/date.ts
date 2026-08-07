@@ -1,14 +1,60 @@
+import { 
+    format, 
+    isValid, 
+    parseISO, 
+    differenceInYears, 
+    startOfMonth, 
+    endOfMonth, 
+    startOfWeek, 
+    endOfWeek, 
+    eachDayOfInterval, 
+    isSameMonth, 
+    isToday, 
+    addDays 
+} from 'date-fns';
+
 export function generateId(prefix: string): string {
     return prefix + '_' + crypto.randomUUID();
 }
 
 export function getLocalDateString(d: Date | string | number = new Date()): string {
-    const date = new Date(d);
-    if (isNaN(date.getTime())) return new Date().toISOString().split('T')[0];
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    let date: Date;
+    if (d instanceof Date) {
+        date = d;
+    } else if (typeof d === 'string') {
+        date = d.includes('T') ? new Date(d) : parseISO(d);
+        if (!isValid(date)) {
+            date = new Date(d);
+        }
+    } else if (typeof d === 'number') {
+        date = new Date(d);
+    } else {
+        date = new Date();
+    }
+    if (!isValid(date)) {
+        return format(new Date(), 'yyyy-MM-dd');
+    }
+    return format(date, 'yyyy-MM-dd');
+}
+
+export function calculateAge(dob: string | Date | number): number {
+    if (!dob) return 30;
+    let date: Date;
+    if (dob instanceof Date) {
+        date = dob;
+    } else if (typeof dob === 'string') {
+        date = dob.includes('T') ? new Date(dob) : parseISO(dob);
+        if (!isValid(date)) {
+            date = new Date(dob);
+        }
+    } else if (typeof dob === 'number') {
+        date = new Date(dob);
+    } else {
+        return 30;
+    }
+    if (!isValid(date)) return 30;
+    const age = differenceInYears(new Date(), date);
+    return isNaN(age) || age < 0 ? 30 : age;
 }
 
 export function formatTime(ms: number, showHours = false): string {
@@ -45,26 +91,28 @@ export interface CalendarDayCell {
 export function getCalendarMonthGrid(year: any, month: any): CalendarDayCell[] {
     const y = parseInt(year, 10);
     const m = parseInt(month, 10);
-    const firstDay = new Date(y, m, 1);
-    const startOffset = (firstDay.getDay() + 6) % 7;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-    const grid: CalendarDayCell[] = [];
-    let cellCount = 0;
-    const lastDayOfMonth = new Date(y, m + 1, 0);
-    while (cellCount < 35 || (cellCount % 7 !== 0) || (new Date(y, m, 1 - startOffset + cellCount - 1) < lastDayOfMonth)) {
-        const curDate = new Date(y, m, 1 - startOffset + cellCount);
-        const curYear = curDate.getFullYear();
-        const curMonth = curDate.getMonth();
-        const dateStr = `${curYear}-${pad(curMonth + 1)}-${pad(curDate.getDate())}`;
-        grid.push({
-            dayNum: curDate.getDate(),
-            dateStr,
-            isCurrentMonth: curMonth === m && curYear === y,
-            isToday: dateStr === todayStr
+    const targetMonth = new Date(y, m, 1);
+    const monthStart = startOfMonth(targetMonth);
+    const monthEnd = endOfMonth(targetMonth);
+    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    
+    let days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+    
+    // Ensure minimum 35 cells for UI consistency
+    while (days.length < 35) {
+        const lastDay = days[days.length - 1];
+        const nextWeek = eachDayOfInterval({
+            start: addDays(lastDay, 1),
+            end: addDays(lastDay, 7)
         });
-        cellCount++;
+        days = days.concat(nextWeek);
     }
-    return grid;
+
+    return days.map(d => ({
+        dayNum: d.getDate(),
+        dateStr: format(d, 'yyyy-MM-dd'),
+        isCurrentMonth: isSameMonth(d, monthStart),
+        isToday: isToday(d)
+    }));
 }

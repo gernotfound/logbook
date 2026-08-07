@@ -156,5 +156,46 @@ describe('Logic Library Tests', () => {
         expect(avenaTypo.length).toBeGreaterThan(0);
         expect(avenaTypo[0].id).toBe('f2');
     });
+
+    it('calculateAge: computes age accurately from various inputs', () => {
+        // Person born in 1990
+        const age1990 = Logic.calculateAge('1990-01-01');
+        expect(age1990).toBeGreaterThanOrEqual(34);
+
+        // Person born exactly 20 years ago
+        const twentyYearsAgo = new Date();
+        twentyYearsAgo.setFullYear(twentyYearsAgo.getFullYear() - 20);
+        const age20 = Logic.calculateAge(twentyYearsAgo.toISOString().split('T')[0]);
+        expect(age20).toBe(20);
+
+        // Fallback for invalid/empty inputs
+        expect(Logic.calculateAge('')).toBe(30);
+        expect(Logic.calculateAge('invalid-date')).toBe(30);
+    });
+
+    it('getLocalDateString: handles strings, numbers, dates and invalid input', () => {
+        expect(Logic.getLocalDateString('2025-12-31')).toBe('2025-12-31');
+        expect(Logic.getLocalDateString(new Date(2025, 11, 31))).toBe('2025-12-31');
+        const nowStr = Logic.getLocalDateString();
+        expect(nowStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('getCalendarMonthGrid: creates a valid grid starting from Monday with at least 35 cells', () => {
+        // August 2026 (month 7)
+        const grid = Logic.getCalendarMonthGrid(2026, 7);
+        expect(grid.length).toBeGreaterThanOrEqual(35);
+        expect(grid.length % 7).toBe(0);
+
+        // Ensure days have valid structure
+        const firstCell = grid[0];
+        expect(firstCell).toHaveProperty('dayNum');
+        expect(firstCell).toHaveProperty('dateStr');
+        expect(firstCell).toHaveProperty('isCurrentMonth');
+        expect(firstCell).toHaveProperty('isToday');
+
+        // Check that dates are sequential
+        expect(firstCell.dateStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
 });
+
 
