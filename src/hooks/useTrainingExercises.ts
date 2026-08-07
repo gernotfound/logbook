@@ -53,20 +53,56 @@ export function useTrainingExercises() {
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, editingExId]);
 
     const filteredMuscles = useMemo(() => {
-        const query = muscleSearch.trim().toLowerCase();
-        if (!query) return [];
-        
-        const matches = Logic.MUSCLES.filter(m => 
-            m.name.toLowerCase().includes(query)
-        );
+        const rawQuery = muscleSearch.trim().toLowerCase();
+        if (!rawQuery) return [];
+
+        const normalizeStem = (str: string) => {
+            return str
+                .replace(/\bdeltoidi\b/g, 'deltoid')
+                .replace(/\bdeltoide\b/g, 'deltoid')
+                .replace(/\bfrontali\b/g, 'frontal')
+                .replace(/\bfrontale\b/g, 'frontal')
+                .replace(/\banteriori\b/g, 'anterior')
+                .replace(/\banteriore\b/g, 'anterior')
+                .replace(/\blaterali\b/g, 'lateral')
+                .replace(/\blaterale\b/g, 'lateral')
+                .replace(/\bposteriori\b/g, 'posterior')
+                .replace(/\bposteriore\b/g, 'posterior')
+                .replace(/\btrapezi\b/g, 'trapez')
+                .replace(/\btrapezio\b/g, 'trapez')
+                .replace(/\bpettorali\b/g, 'petto')
+                .replace(/\bpettorale\b/g, 'petto')
+                .replace(/\bbicipiti\b/g, 'bicipit')
+                .replace(/\bbicipite\b/g, 'bicipit')
+                .replace(/\btricipiti\b/g, 'tricipit')
+                .replace(/\btricipite\b/g, 'tricipit')
+                .replace(/\bquadricipiti\b/g, 'quadricipit')
+                .replace(/\bquadricipite\b/g, 'quadricipit')
+                .replace(/\bfemorali\b/g, 'femoral')
+                .replace(/\bfemorale\b/g, 'femoral')
+                .replace(/\bpolpacci\b/g, 'polpacc')
+                .replace(/\bpolpaccio\b/g, 'polpacc')
+                .replace(/\baddominali\b/g, 'addom')
+                .replace(/\baddominale\b/g, 'addom');
+        };
+
+        const stemmedQuery = normalizeStem(rawQuery);
+        const queryTokens = stemmedQuery.split(/\s+/).filter(Boolean);
+
+        const matches = Logic.MUSCLES.filter(m => {
+            const mNameLower = m.name.toLowerCase();
+            if (mNameLower.includes(rawQuery)) return true;
+            const mNameNorm = normalizeStem(mNameLower);
+            return queryTokens.every(tok => mNameNorm.includes(tok));
+        });
 
         matches.sort((a, b) => {
             const aName = a.name.toLowerCase();
             const bName = b.name.toLowerCase();
-            if (aName === query) return -1;
-            if (bName === query) return 1;
-            const aStarts = aName.startsWith(query);
-            const bStarts = bName.startsWith(query);
+            if (aName === rawQuery) return -1;
+            if (bName === rawQuery) return 1;
+            const aStarts = aName.startsWith(rawQuery);
+            const bStarts = bName.startsWith(rawQuery);
             if (aStarts && !bStarts) return -1;
             if (!aStarts && bStarts) return 1;
             const aIsBase = !a.id.endsWith('_left') && !a.id.endsWith('_right');
