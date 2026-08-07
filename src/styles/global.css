@@ -56,7 +56,7 @@ input, select, textarea {
     position: relative; 
     min-height: 100vh;
     display: block;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 h1, h2, h3, h4, h5 { 
