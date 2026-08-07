@@ -30,11 +30,11 @@ export default function CustomFoodModal({
     return (
         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
             <h4 style={{ color: 'var(--primary-color)', marginBottom: '12px', fontSize: '1rem' }}>
-                {isEditing ? '✏️ Modifica Alimento' : '➕ Nuovo Alimento Personalizzato'}
+                {isEditing ? '✏️ Modifica alimento' : '➕ Nuovo alimento personalizzato'}
             </h4>
             
             <div style={{ marginBottom: '10px' }}>
-                <label className="text-muted text-xs block mb-4">Nome Alimento *</label>
+                <label className="text-muted text-xs block mb-4">Nome alimento *</label>
                 <input 
                     id="cf-name" 
                     type="text" 
@@ -66,7 +66,7 @@ export default function CustomFoodModal({
                     >
                         <option value="g">Grammi (g)</option>
                         <option value="ml">Millilitri (ml)</option>
-                        <option value="pezzo">A pezzo / Unità</option>
+                        <option value="pezzo">A pezzo / unità</option>
                     </select>
                 </div>
                 {cfData.unit === 'pezzo' && (
@@ -79,7 +79,7 @@ export default function CustomFoodModal({
                             value={cfData.pieceWeight || ''} 
                             onChange={e => setCfData({...cfData, pieceWeight: e.target.value})} 
                             onFocus={e => e.target.select()}
-                            style={{ marginBottom: 0 }}
+                            style={{ marginBottom: 0 }} 
                         />
                     </div>
                 )}
@@ -158,7 +158,7 @@ export default function CustomFoodModal({
                     style={{ marginBottom: 0 }} 
                     onClick={saveCustomFood}
                 >
-                    {isEditing ? '💾 Salva Modifiche' : '💾 Salva Alimento'}
+                    {isEditing ? '💾 Salva modifiche' : '💾 Salva alimento'}
                 </button>
             </div>
         </div>

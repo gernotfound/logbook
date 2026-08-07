@@ -20,7 +20,7 @@ const TrainingExercises = () => {
         <div className="training-sub-view active">
             <div className={`card ${editingExId ? 'border-primary' : ''}`}>
                 <h3 className={editingExId ? 'text-primary' : 'text-white'}>
-                    {editingExId ? 'Modifica Esercizio' : 'Crea nuovo esercizio'}
+                    {editingExId ? 'Modifica esercizio' : 'Crea nuovo esercizio'}
                 </h3>
                 <div className="flex-col gap-10 mt-15 mb-20">
                     <input 
@@ -31,7 +31,7 @@ const TrainingExercises = () => {
                     />
                     <input 
                         type="text" 
-                        placeholder="Note di Setup (opzionale, es. Inclinazione 30°)" 
+                        placeholder="Note di setup (opzionale, es. Inclinazione 30°)" 
                         value={exNotes}
                         onChange={e => setExNotes(e.target.value)}
                     />
@@ -48,7 +48,7 @@ const TrainingExercises = () => {
                             <span className="icon">
                                 <Dumbbell size={18} />
                             </span>
-                            <span>Peso e Ripetizioni</span>
+                            <span>Peso e ripetizioni</span>
                         </button>
                         <button 
                             type="button"
@@ -58,14 +58,14 @@ const TrainingExercises = () => {
                             <span className="icon">
                                 <Timer size={18} />
                             </span>
-                            <span>A Tempo</span>
+                            <span>A tempo</span>
                         </button>
                     </div>
                 </div>
                 
                 <div className="bg-black-10 border-glass rounded-12 p-15 mb-20">
                     <div className="flex-between mb-10">
-                        <label className="text-white text-sm font-bold">Muscoli Coinvolti</label>
+                        <label className="text-white text-sm font-bold">Muscoli coinvolti</label>
                         <div className="flex gap-5 bg-black-20 p-4 rounded-8">
                             <button 
                                 className={`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`} 
@@ -156,12 +156,12 @@ const TrainingExercises = () => {
                         </button>
                     )}
                     <button className="btn btn-primary flex-2" onClick={handleSaveExercise}>
-                        {editingExId ? '💾 Salva Modifiche' : '+ Aggiungi in Archivio'}
+                        {editingExId ? '💾 Salva modifiche' : '+ Aggiungi in archivio'}
                     </button>
                 </div>
             </div>
 
-            <h3 className="mt-20">Archivio Esercizi ({library.length})</h3>
+            <h3 className="mt-20">Archivio esercizi ({library.length})</h3>
             <p className="text-muted text-sm">Clicca su un esercizio per vederne i dettagli o sull'icona per modificarlo.</p>
             {library.length === 0 ? (
                 <p className="text-muted">Nessun esercizio creato.</p>
@@ -190,7 +190,7 @@ const TrainingExercises = () => {
                                 <div className="mt-15 pt-15 border-t">
                                     <div className="mb-10 text-sm">
                                         <span className="text-muted">Tracciamento: </span>
-                                        <strong>{ex.trackingType === 'time' ? 'Tempo' : 'Peso e Ripetizioni'}</strong>
+                                        <strong>{ex.trackingType === 'time' ? 'Tempo' : 'Peso e ripetizioni'}</strong>
                                     </div>
                                     {(ex.muscles || []).length > 0 || (ex.secondaryMuscles || []).length > 0 ? (
                                         <div className="flex-center w-full">

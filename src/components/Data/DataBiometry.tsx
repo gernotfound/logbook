@@ -10,13 +10,13 @@ const DataBiometry = () => {
 
     return (
         <div className="card">
-            <h3>Dati Biometrici</h3>
+            <h3>Dati biometrici</h3>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
             </p>
             
             <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
-                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Data di Nascita</label>
+                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Data di nascita</label>
                 <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
                     <input 
                         id="biometry-dob" 
@@ -55,7 +55,7 @@ const DataBiometry = () => {
                         onChange={e => setGender(e.target.value)}
                         style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                     >
-                        <option value="">Non Specificato</option>
+                        <option value="">Non specificato</option>
                         <option value="M">Uomo</option>
                         <option value="F">Donna</option>
                     </select>
@@ -63,7 +63,7 @@ const DataBiometry = () => {
             </div>
 
             <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleSaveProfile}>
-                💾 Salva Profilo Biometrico
+                💾 Salva profilo biometrico
             </button>
         </div>
     );

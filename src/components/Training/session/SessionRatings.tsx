@@ -25,7 +25,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
         <>
             <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
                 <label htmlFor="water-intake" style={{ fontSize: '0.85rem', color: 'var(--primary-color)', display: 'block', marginBottom: '8px' }}>
-                    💧 Acqua bevuta (Litri)
+                    💧 Acqua bevuta (litri)
                 </label>
                 <input 
                     id="water-intake" 
@@ -40,7 +40,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
             </div>
 
             <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                <h4 style={{ marginTop: 0, marginBottom: '12px' }}>Valuta Sessione (1-10) — Opzionale</h4>
+                <h4 style={{ marginTop: 0, marginBottom: '12px' }}>Valuta sessione (1-10) — Opzionale</h4>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <div style={{ flex: 1 }}>
                         <label htmlFor="mood-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>

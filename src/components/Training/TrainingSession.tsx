@@ -113,7 +113,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                                 ))}
                             </select>
                             <button className="btn btn-primary" style={{ width: '100%' }} onClick={startWorkout}>
-                                🏋️ Inizia Allenamento
+                                🏋️ Inizia allenamento
                             </button>
                         </div>
                     )}
@@ -156,7 +156,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                 }}>
                     <div>
                         <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
-                            ✏️ Modifica Allenamento dello Storico
+                            ✏️ Modifica allenamento dello storico
                         </div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                             {activeWorkout.routineName || 'Sessione'} • {activeWorkout.date || ''}
@@ -209,12 +209,12 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                 )}
 
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
-                    <h4 style={{ marginBottom: '10px' }}>Aggiungi Esercizio Extra</h4>
+                    <h4 style={{ marginBottom: '10px' }}>Aggiungi esercizio extra</h4>
                     <select 
                         onChange={e => { if(e.target.value) addExtraExercise(e.target.value); e.target.value = ''; }}
                         className="w-full p-10 bg-surface text-white border-b rounded-8"
                     >
-                        <option value="">+ Aggiungi Esercizio dalla Libreria</option>
+                        <option value="">+ Aggiungi esercizio dalla libreria</option>
                         {library.map(l => (
                             <option key={l.id} value={l.id}>{l.name}</option>
                         ))}
@@ -236,7 +236,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
             {activeWorkout.isEditingHistory ? (
                 <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
                     <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        ⏱️ Durata Sessione (HH:MM:SS oppure MM:SS)
+                        ⏱️ Durata sessione (HH:MM:SS oppure MM:SS)
                     </label>
                     <input 
                         id="workout-manual-duration"
@@ -263,19 +263,19 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
             {activeWorkout.isEditingHistory ? (
                 <>
                     <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
-                        💾 Salva Modifica
+                        💾 Salva modifiche
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
-                        Annulla Modifica
+                        Annulla modifica
                     </button>
                 </>
             ) : (
                 <>
                     <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={endWorkout}>
-                        🏁 Termina Sessione
+                        🏁 Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
-                        🗑️ Elimina Sessione
+                        🗑️ Elimina sessione
                     </button>
                 </>
             )}

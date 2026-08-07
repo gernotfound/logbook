@@ -28,8 +28,8 @@ export const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
         <div className="card" id="home-workout-widget" style={{ display: 'flex', alignItems: 'center', gap: '15px', borderLeft: '4px solid var(--success-color)' }}>
             <div style={{ fontSize: '2.5rem' }}>💪</div>
             <div>
-                <h3 style={{ margin: 0 }}>Allenamento Completato</h3>
-                <p style={{ margin: 0, fontSize: '0.85rem' }}>{todaysWorkout?.routineName || 'Sessione'} — {todaysWorkout?.exercises?.length || 0} Esercizi</p>
+                <h3 style={{ margin: 0 }}>Allenamento completato</h3>
+                <p style={{ margin: 0, fontSize: '0.85rem' }}>{todaysWorkout?.routineName || 'Sessione'} — {todaysWorkout?.exercises?.length || 0} esercizi</p>
             </div>
         </div>
     );

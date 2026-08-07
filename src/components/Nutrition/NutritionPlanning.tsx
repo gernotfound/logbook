@@ -10,7 +10,7 @@ const NutritionPlanning = () => {
     return (
         <div className="card planning-target-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h3 style={{ margin: 0, color: 'var(--text-main)' }}>🎯 Target Calorico & Macro</h3>
+                <h3 style={{ margin: 0, color: 'var(--text-main)' }}>🎯 Target calorico e macro</h3>
             </div>
 
             <div className="input-row" style={{ marginBottom: '20px' }}>
@@ -18,15 +18,15 @@ const NutritionPlanning = () => {
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Peso di calcolo (kg)</label>
                     <input 
                         type="number" 
-                        step="0.1"
+                        step="0.1" 
                         value={planning.weight !== undefined && planning.weight !== null ? planning.weight : ''} 
-                        onChange={e => handleUpdate('weight', e.target.value)}
+                        onChange={e => handleUpdate('weight', e.target.value)} 
                         onFocus={e => e.target.select()}
                         style={{ fontSize: '1.2rem', fontWeight: 'bold' }}
                     />
                 </div>
                 <div style={{ flex: 1, textAlign: 'right' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Target Totale</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Target totale</span>
                     <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--primary-color)' }}>
                         {Math.round(totalKcal) || 0} <span style={{ fontSize: '1rem', fontWeight: 'normal', color: 'var(--text-muted)' }}>kcal</span>
                     </div>
@@ -48,14 +48,14 @@ const NutritionPlanning = () => {
                 </div>
             </div>
 
-            <h3 style={{ marginTop: '30px', marginBottom: '20px' }}>⚖️ Configurazione Macro per kg</h3>
+            <h3 style={{ marginTop: '30px', marginBottom: '20px' }}>⚖️ Configurazione macro per kg</h3>
 
             <div style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--primary-color)' }}>Carboidrati (g/kg)</span>
                 <input 
                     type="number" min="0" max="10" step="0.1" 
                     value={planning.carbsPerKg !== undefined && planning.carbsPerKg !== null ? planning.carbsPerKg : ''} 
-                    onChange={e => handleUpdate('carbsPerKg', e.target.value)}
+                    onChange={e => handleUpdate('carbsPerKg', e.target.value)} 
                     onFocus={e => e.target.select()}
                     style={{ width: '100px', textAlign: 'right' }}
                 />
@@ -66,7 +66,7 @@ const NutritionPlanning = () => {
                 <input 
                     type="number" min="0.5" max="4.0" step="0.1" 
                     value={planning.proPerKg !== undefined && planning.proPerKg !== null ? planning.proPerKg : ''} 
-                    onChange={e => handleUpdate('proPerKg', e.target.value)}
+                    onChange={e => handleUpdate('proPerKg', e.target.value)} 
                     onFocus={e => e.target.select()}
                     style={{ width: '100px', textAlign: 'right' }}
                 />
@@ -77,7 +77,7 @@ const NutritionPlanning = () => {
                 <input 
                     type="number" min="0.2" max="3.0" step="0.1" 
                     value={planning.fatPerKg !== undefined && planning.fatPerKg !== null ? planning.fatPerKg : ''} 
-                    onChange={e => handleUpdate('fatPerKg', e.target.value)}
+                    onChange={e => handleUpdate('fatPerKg', e.target.value)} 
                     onFocus={e => e.target.select()}
                     style={{ width: '100px', textAlign: 'right' }}
                 />
@@ -85,14 +85,14 @@ const NutritionPlanning = () => {
 
             <div className="card" style={{ marginTop: '30px', padding: '15px', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <h3 style={{ margin: 0 }}>🔥 Normocalorica di Riferimento</h3>
+                    <h3 style={{ margin: 0 }}>🔥 Normocalorica di riferimento</h3>
                     <button className="btn btn-small" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--primary-color)' }} onClick={handleCopyFromTDEE}>
                         Copia da TDEE
                     </button>
                 </div>
                 <div className="input-row" style={{ marginBottom: '12px' }}>
                     <div style={{ flex: 2 }}>
-                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kcal Mantenimento</label>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kcal mantenimento</label>
                         <input 
                             id="plan-normo-kcal" 
                             type="number" 
@@ -168,7 +168,7 @@ const NutritionPlanning = () => {
             </div>
 
             <button className="btn btn-primary" style={{ width: '100%', marginTop: '20px' }} onClick={handleSave}>
-                💾 Salva Pianificazione
+                💾 Salva pianificazione
             </button>
         </div>
     );

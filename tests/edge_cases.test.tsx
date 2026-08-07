@@ -254,7 +254,7 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
   describe('5. Component Boundary States & Stress Inputs', () => {
     test('NutritionMeals handles special regex characters in search query', () => {
       const { container } = renderWithProviders(<NutritionMeals />);
-      const searchInput = screen.getByPlaceholderText(/Cerca es\. Pollo/i) as HTMLInputElement;
+      const searchInput = screen.getByPlaceholderText(/Cerca alimento/i) as HTMLInputElement;
 
       act(() => {
         fireEvent.change(searchInput, { target: { value: '[.*+?^${}()|[\\]\\\\]' } });

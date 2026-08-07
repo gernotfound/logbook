@@ -174,16 +174,16 @@ describe('Workout Improvements & History Edit Suite', () => {
       });
 
       // Verify banner
-      expect(container.textContent).toContain('Modifica Allenamento dello Storico');
+      expect(container.textContent).toContain('Modifica allenamento dello storico');
 
       // Verify manual duration input exists
       const durationInput = container.querySelector('#workout-manual-duration') as HTMLInputElement;
       expect(durationInput).not.toBeNull();
       expect(durationInput.value).toBe('00:45:00');
 
-      // Verify "Salva Modifica" button is present instead of "Termina Sessione"
-      expect(screen.getByText(/Salva Modifica/i)).not.toBeNull();
-      expect(screen.queryByText(/Termina Sessione/i)).toBeNull();
+      // Verify "Salva modifiche" button is present instead of "Termina sessione"
+      expect(screen.getByText(/Salva modifiche/i)).not.toBeNull();
+      expect(screen.queryByText(/Termina sessione/i)).toBeNull();
     });
 
     test('TrainingView full integration: edit from history switches sub-tab to session in edit mode', async () => {

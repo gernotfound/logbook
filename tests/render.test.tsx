@@ -160,7 +160,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
       />
     );
     expect(container).toBeDefined();
-    expect(screen.getByPlaceholderText(/Nome alimento/i)).toBeDefined();
+    expect(container.querySelector('#cf-name')).not.toBeNull();
   });
 
   test('renders SettingsView without crashing', () => {
@@ -172,7 +172,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders DataView without crashing', () => {
     const { container } = renderWithProviders(<DataView />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Nuova Misurazione/i)).toBeDefined();
+    expect(screen.getByText(/Nuova misurazione/i)).toBeDefined();
   });
 
   test('renders WorkoutTimer without crashing', () => {

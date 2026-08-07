@@ -44,7 +44,7 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
     onRemoveSpecialSet,
     onToggleSpecialMenu
 }) => {
-    const exName = libDef ? libDef.name : "Esercizio Rimosso";
+    const exName = libDef ? libDef.name : "Esercizio rimosso";
     const exNotes = libDef ? (libDef.notes || '') : "";
     const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
 
@@ -86,7 +86,7 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
 
             {isHistoryOpen && (
                 <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h5 style={{ marginBottom: '8px', marginTop: 0 }}>Ultimi 2 Allenamenti:</h5>
+                    <h5 style={{ marginBottom: '8px', marginTop: 0 }}>Ultimi 2 allenamenti:</h5>
                     {pastWorkouts.length === 0 ? (
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
                     ) : (
@@ -111,7 +111,7 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h5 style={{ marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)' }}>Modifica Setup (Globale):</h5>
+                    <h5 style={{ marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)' }}>Modifica setup (globale):</h5>
                     <input 
                         id={`setup-${exItem.exId}`} 
                         type="text" 
@@ -151,7 +151,7 @@ export const SessionExerciseCard: React.FC<SessionExerciseCardProps> = ({
                 style={{ border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginTop: '10px', width: '100%' }} 
                 onClick={onAddSet}
             >
-                + Aggiungi Serie
+                + Aggiungi serie
             </button>
             
             <textarea 

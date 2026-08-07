@@ -87,7 +87,7 @@ export function useNutritionMeasurements() {
             bf = parseFloat(manualBf);
         } else {
             if (!waist || !neck || !profile.height) {
-                await showAlert("Compila tutti i campi (incluso altezza nei Dati Biometrici).");
+                await showAlert("Compila tutti i campi (inclusa altezza nei dati biometrici).");
                 return;
             }
             if (method === 'navy_female' && !hip) {
@@ -128,7 +128,7 @@ export function useNutritionMeasurements() {
 
         try {
             await saveUserData({ ...userData, nutrition: newNutrition });
-            await showAlert(`Misurazione salvata! BF Calcolata: ${Number(bf).toFixed(1)}%`);
+            await showAlert(`Misurazione salvata! BF calcolata: ${Number(bf).toFixed(1)}%`);
             handleCancelEdit();
         } catch {
             await showAlert("Errore durante il salvataggio della misurazione.");

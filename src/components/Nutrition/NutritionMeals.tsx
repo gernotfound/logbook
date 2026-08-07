@@ -26,7 +26,7 @@ export default function NutritionMeals({ mealsHook }: NutritionMealsProps) {
         <div>
             {/* Search Box */}
             <div className="card mb-15">
-                <h3 className="mb-10">🔍 Cerca Alimento</h3>
+                <h3 className="mb-10">🔍 Cerca alimento</h3>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input 
                         type="text" 
@@ -131,7 +131,7 @@ export default function NutritionMeals({ mealsHook }: NutritionMealsProps) {
 
                 {searchQuery.trim().length >= 2 && searchResults.length === 0 && (
                     <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed var(--glass-border)' }}>
-                        Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea Alimento</b>.
+                        Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea alimento</b>.
                     </div>
                 )}
 
@@ -147,7 +147,7 @@ export default function NutritionMeals({ mealsHook }: NutritionMealsProps) {
                         }
                     }}
                 >
-                    {showCustomModal ? '✕ Chiudi' : (editingFoodId ? '✏️ Modifica Alimento' : '+ Crea Alimento')}
+                    {showCustomModal ? '✕ Chiudi' : (editingFoodId ? '✏️ Modifica alimento' : '+ Crea alimento')}
                 </button>
                 
                 <CustomFoodModal 

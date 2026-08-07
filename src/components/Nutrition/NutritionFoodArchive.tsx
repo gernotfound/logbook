@@ -184,7 +184,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                         onClick={openCreateModal}
                         style={{ marginBottom: 0 }}
                     >
-                        ➕ Crea Alimento
+                        ➕ Crea alimento
                     </button>
                 </div>
 
@@ -213,7 +213,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                         style={{ 
                             width: '100%', 
                             margin: 0, 
-                            height: '44px',
+                            height: '44px', 
                             paddingLeft: '14px', 
                             paddingRight: searchQuery ? '36px' : '14px',
                             fontSize: '16px',
@@ -249,7 +249,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             <div className="card">
                 <div className="flex-between mb-10 pb-10 border-b">
                     <span className="text-sm font-bold text-muted">
-                        I tuoi Alimenti ({filteredFoods.length})
+                        I tuoi alimenti ({filteredFoods.length})
                     </span>
                 </div>
 
@@ -258,7 +258,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                         <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🥗</div>
                         <p className="m-0 text-sm font-semibold text-white">Nessun alimento presente.</p>
                         <p className="m-0 text-xs text-muted mt-4">
-                            Clicca su <strong>+ Crea Alimento</strong> in alto per iniziare a inserire i tuoi alimenti.
+                            Clicca su <strong>+ Crea alimento</strong> in alto per iniziare a inserire i tuoi alimenti.
                         </p>
                     </div>
                 ) : filteredFoods.length === 0 ? (

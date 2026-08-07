@@ -19,7 +19,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
 
     return (
         <div className="training-sub-view active">
-            <h3 style={{ marginBottom: '20px' }}>Storico Allenamenti ({history.length})</h3>
+            <h3 style={{ marginBottom: '20px' }}>Storico allenamenti ({history.length})</h3>
 
             {history.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>Nessun allenamento registrato.</p>
@@ -45,7 +45,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                             <div key={wo.id} className="card" style={{ marginBottom: 0, borderLeft: '4px solid var(--primary-dark)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                     <div>
-                                        <h4 style={{ margin: 0 }}>{wo.routineName || 'Sessione Personalizzata'}</h4>
+                                        <h4 style={{ margin: 0 }}>{wo.routineName || 'Sessione personalizzata'}</h4>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{date}</div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -68,7 +68,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                 </div>
 
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
-                                    {wo.exercises?.length || 0} Esercizi completati
+                                    {wo.exercises?.length || 0} esercizi completati
                                     {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
                                 </div>
 
@@ -77,7 +77,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                     <div style={{ marginBottom: '10px' }}>
                                         {(wo.exercises || []).map((ex: any, exIdx: number) => {
                                             const libDef = libraryMap.get(ex.exId);
-                                            const exName = libDef ? libDef.name : (ex.name || 'Esercizio Rimosso');
+                                            const exName = libDef ? libDef.name : (ex.name || 'Esercizio rimosso');
                                             
                                             const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time);
                                             return (

@@ -37,7 +37,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     return (
         <div className="card" id="measurement-form-card" style={editingDate ? { border: '2px solid var(--primary-color)' } : undefined}>
             <h3 style={{ color: editingDate ? 'var(--primary-color)' : 'white' }}>
-                {editingDate ? `✏️ Modifica Misurazione (${editingDate})` : '📏 Nuova Misurazione'}
+                {editingDate ? `✏️ Modifica misurazione (${editingDate})` : '📏 Nuova misurazione'}
             </h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Registra il peso e la percentuale di massa grassa.
@@ -78,7 +78,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     }}
                 >
                     <option value={profile.gender === 'F' ? 'navy_female' : 'navy_male'}>US Navy (Misurazioni)</option>
-                    <option value="manual">Inserimento Manuale</option>
+                    <option value="manual">Inserimento manuale</option>
                 </select>
             </div>
 
@@ -98,7 +98,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 </div>
                 {method === 'manual' ? (
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>BF% Manuale</label>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>BF% manuale</label>
                         <input 
                             id="measure-bf" 
                             type="number" 
@@ -164,7 +164,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     </button>
                 )}
                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={calculateAndSave}>
-                    {editingDate ? '💾 Salva Modifiche' : '💾 Salva Misurazione'}
+                    {editingDate ? '💾 Salva modifiche' : '💾 Salva misurazione'}
                 </button>
             </div>
         </div>

@@ -107,8 +107,8 @@ export const AuthProvider = ({ children }: { children: any }) => {
             DB.resetCache();
             useAppStore.getState().resetStore();
         } catch (error: any) {
-            console.error("Errore durante il Log Out:", error);
-            await useDialogStore.getState().showAlert("Errore durante il Log Out. Controlla la connessione.");
+            console.error("Errore durante il logout:", error);
+            await useDialogStore.getState().showAlert("Errore durante il logout. Controlla la connessione.");
         } finally {
             setSyncing(false);
         }

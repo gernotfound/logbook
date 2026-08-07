@@ -32,11 +32,11 @@ const TrainingRoutines = () => {
     return (
         <div className="training-sub-view active">
             <div className="card">
-                <h3>{editingRoutineId ? '✏️ Modifica Scheda' : '➕ Crea Nuova Scheda'}</h3>
+                <h3>{editingRoutineId ? '✏️ Modifica scheda' : '➕ Crea nuova scheda'}</h3>
                 <p className="text-muted text-sm mb-15">Crea o modifica la tua scheda di allenamento.</p>
 
                 <div className="mb-15">
-                    <label className="text-muted text-xs block mb-4">Nome Scheda</label>
+                    <label className="text-muted text-xs block mb-4">Nome scheda</label>
                     <input 
                         type="text" 
                         placeholder="es. Spinta (Push), Gambe (Legs)..." 
@@ -65,7 +65,7 @@ const TrainingRoutines = () => {
                             }}
                             className="w-full p-10 bg-surface text-white border-b rounded-8"
                         >
-                            <option value="">+ Aggiungi Esercizio dalla Libreria</option>
+                            <option value="">+ Aggiungi esercizio dalla libreria</option>
                             {library.map(l => (
                                 <option key={l.id} value={l.id}>{l.name}</option>
                             ))}
@@ -82,7 +82,7 @@ const TrainingRoutines = () => {
                                     <div key={index} className="flex-col bg-card-inner p-12 rounded-8 gap-10" style={{ border: '1px solid var(--glass-border)' }}>
                                         <div className="flex-between gap-10 items-center">
                                             <div className="text-md font-semibold flex-1">
-                                                {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
+                                                {index + 1}. {libDef ? libDef.name : 'Esercizio rimosso'}
                                             </div>
                                             <div className="flex gap-4">
                                                 <button className="btn-icon" disabled={index === 0} style={{ opacity: index === 0 ? 0.3 : 1 }} onClick={() => moveExercise(index, -1)}>⬆️</button>
@@ -239,12 +239,12 @@ const TrainingRoutines = () => {
                         </button>
                     )}
                     <button className="btn btn-primary flex-2" onClick={handleSave}>
-                        {editingRoutineId ? '💾 Salva Modifiche' : '➕ Salva Nuova Scheda'}
+                        {editingRoutineId ? '💾 Salva modifiche' : '➕ Salva nuova scheda'}
                     </button>
                 </div>
             </div>
 
-            <h3 className="mt-20">Archivio Schede ({routines.length})</h3>
+            <h3 className="mt-20">Archivio schede ({routines.length})</h3>
             <p className="text-muted text-sm">Clicca su una scheda per vederne i dettagli.</p>
             {routines.length === 0 ? (
                 <p className="text-muted">Nessuna scheda creata.</p>
@@ -309,7 +309,7 @@ const TrainingRoutines = () => {
                                                             <div key={index} className="flex-col bg-card-inner p-10 rounded-8 gap-10">
                                                                 <div className="flex-between gap-10">
                                                                     <div className="text-md flex-1">
-                                                                        {index + 1}. {libDef ? libDef.name : 'Esercizio Rimosso'}
+                                                                        {index + 1}. {libDef ? libDef.name : 'Esercizio rimosso'}
                                                                     </div>
                                                                     <div className="flex items-center gap-5 text-sm text-muted">
                                                                         {ex.setsCount || 3} serie

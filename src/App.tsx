@@ -127,7 +127,7 @@ function App() {
           width: '92%', maxWidth: '420px', boxSizing: 'border-box'
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{fontWeight: 'bold', fontSize: '0.95rem', lineHeight: '1.2'}}>Aggiornamento Disponibile!</div>
+            <div style={{fontWeight: 'bold', fontSize: '0.95rem', lineHeight: '1.2'}}>Aggiornamento disponibile!</div>
             <div style={{fontSize: '0.8rem', opacity: 0.9, marginTop: '2px'}}>Ricarica l'app per avere l'ultima versione.</div>
           </div>
           <button 

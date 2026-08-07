@@ -47,20 +47,20 @@ const SettingsView = () => {
             {isInstallable && (
                 <div style={{ marginTop: '15px' }}>
                     <button className="btn btn-primary" style={{ width: '100%' }} onClick={promptInstall}>
-                        📱 Installa App sul Telefono
+                        📱 Installa app sul telefono
                     </button>
                 </div>
             )}
 
             <div style={{ marginTop: '15px' }}>
                 <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleExport}>
-                    💾 Esporta Dati (CSV)
+                    💾 Esporta dati (CSV)
                 </button>
             </div>
 
             {isOffline && (
                 <div className="card" style={{ border: '1px solid var(--warning-color)', marginTop: '15px', backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
-                    <h3 style={{ color: 'var(--warning-color)' }}>⚠️ Connessione Assente</h3>
+                    <h3 style={{ color: 'var(--warning-color)' }}>⚠️ Connessione assente</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
                         Sei attualmente offline. Puoi continuare a usare l'app: tutte le modifiche verranno salvate localmente e sincronizzate con il cloud non appena tornerà la connessione.
                     </p>
@@ -69,7 +69,7 @@ const SettingsView = () => {
 
             {/* Danger Zone */}
             <div className="card" style={{ border: '1px solid var(--danger-color)', marginTop: '20px', marginBottom: '100px' }}>
-                <h3 style={{ color: 'var(--danger-color)' }}>⚠️ Zona Pericolosa</h3>
+                <h3 style={{ color: 'var(--danger-color)' }}>⚠️ Zona pericolosa</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                     Elimina permanentemente il tuo account e tutti i dati associati. Questa azione è irreversibile.
                 </p>
@@ -79,7 +79,7 @@ const SettingsView = () => {
                     onClick={handleDeleteAccount}
                     disabled={deletingAccount}
                 >
-                    {deletingAccount ? '⏳ Eliminazione...' : '🗑️ Elimina Account e Dati'}
+                    {deletingAccount ? '⏳ Eliminazione...' : '🗑️ Elimina account e dati'}
                 </button>
             </div>
         </div>

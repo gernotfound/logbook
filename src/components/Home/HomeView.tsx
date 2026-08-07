@@ -23,7 +23,7 @@ const HomeView = ({ onNavigate }: any) => {
 
   return (
     <div id="view-home" className="view-section active">
-      <h2 style={{ marginTop: '10px', marginBottom: '25px' }}>Panoramica di Oggi</h2>
+      <h2 style={{ marginTop: '10px', marginBottom: '25px' }}>Panoramica di oggi</h2>
       
       <HomeWorkoutWidget
         isRestDay={isRestDay}
@@ -44,22 +44,22 @@ const HomeView = ({ onNavigate }: any) => {
 
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
           <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Massa Grassa (Stima)</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Massa grassa (stima)</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>{bf} %</div>
           </div>
           <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Streak Attuale 🔥</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Streak attuale 🔥</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (streak || 0) > 0 ? 'var(--warning-color)' : 'var(--text-main)', marginTop: '5px' }}>{streak || 0} gg</div>
           </div>
           <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Totale Sessioni</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Totale sessioni</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>💪 {totalWorkouts}</div>
           </div>
       </div>
 
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
           <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0, overflow: 'hidden' }}>
-              <h3 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Stato Muscolare (72h)</h3>
+              <h3 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Stato muscolare (72h)</h3>
               <div style={{ padding: '0', margin: '0' }}>
                   <MuscleModel muscleColors={muscleColors} interactive={false} />
               </div>
@@ -76,7 +76,7 @@ const HomeView = ({ onNavigate }: any) => {
       </div>
 
       <div className="card" id="home-chart-widget">
-          <h3 style={{ marginBottom: '15px' }}>Trend Peso Corporeo (Ultimi 14gg)</h3>
+          <h3 style={{ marginBottom: '15px' }}>Trend peso corporeo (ultimi 14gg)</h3>
           <div style={{ height: '200px', width: '100%' }}>
               {recentDates && recentDates.length > 0 && chartData ? (
                   <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>

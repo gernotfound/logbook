@@ -20,7 +20,7 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
     return (
         <div className="card" id="home-nutrition-widget">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h3 style={{ margin: 0 }}>Nutrizione Odierna</h3>
+                <h3 style={{ margin: 0 }}>Nutrizione odierna</h3>
                 <button className="btn-icon" style={{ color: 'var(--primary-color)' }} onClick={() => onNavigate('nutrition')}>✏️</button>
             </div>
             

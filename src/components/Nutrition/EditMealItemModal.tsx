@@ -67,7 +67,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             >
                 <div className="flex-between mb-15 pb-10 border-b">
                     <h3 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem' }}>
-                        ✏️ Modifica Porzione
+                        ✏️ Modifica porzione
                     </h3>
                     <button 
                         type="button" 
