@@ -60,8 +60,8 @@ export function useTrainingExercises() {
             return str
                 .replace(/\bdeltoidi\b/g, 'deltoid')
                 .replace(/\bdeltoide\b/g, 'deltoid')
-                .replace(/\bfrontali\b/g, 'frontal')
-                .replace(/\bfrontale\b/g, 'frontal')
+                .replace(/\bfrontali\b/g, 'anterior')
+                .replace(/\bfrontale\b/g, 'anterior')
                 .replace(/\banteriori\b/g, 'anterior')
                 .replace(/\banteriore\b/g, 'anterior')
                 .replace(/\blaterali\b/g, 'lateral')
