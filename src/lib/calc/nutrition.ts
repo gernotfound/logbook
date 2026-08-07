@@ -338,7 +338,18 @@ export function searchFoods(foodsList: any[], query: string, categoryFilter?: st
         ignoreLocation: true,
         minMatchCharLength: 2
     });
-    const fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
+
+    const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
+    let fuzzyMatched: any[] = [];
+    if (tokens.length > 1) {
+        // Find items that match all tokens
+        const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
+        const allMatch = results.filter(item => tokenMatches.every(set => set.has(item)));
+        const singleMatches = fuse.search(query.trim()).map(res => res.item);
+        fuzzyMatched = [...allMatch, ...singleMatches];
+    } else {
+        fuzzyMatched = fuse.search(query.trim()).map(res => res.item);
+    }
 
     const seen = new Set<any>();
     const merged: any[] = [];

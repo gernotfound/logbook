@@ -17,13 +17,23 @@ export function filterItems(items: any[], query: string, searchFields: string | 
     });
 
     // Fuzzy matches with Fuse.js
+    // Fuse.js fuzzy search with multi-token support
     const fuse = new Fuse(items, {
         keys: fields,
         threshold: 0.38,
         ignoreLocation: true,
         minMatchCharLength: 2,
     });
-    const fuzzy = fuse.search(query.trim()).map(res => res.item);
+    const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
+    let fuzzy: any[] = [];
+    if (tokens.length > 1) {
+        const tokenMatches = tokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
+        const allMatch = items.filter(item => tokenMatches.every(set => set.has(item)));
+        const singleMatches = fuse.search(query.trim()).map(res => res.item);
+        fuzzy = [...allMatch, ...singleMatches];
+    } else {
+        fuzzy = fuse.search(query.trim()).map(res => res.item);
+    }
 
     // Merge direct + fuzzy without duplicates, keeping direct first
     const seen = new Set<any>();
@@ -98,13 +108,16 @@ export function searchRoutines(routines: any[], libraryOrQuery: any, queryMaybe?
         return false;
     });
 
+    // Fuzzy search with Fuse.js on augmented routine representations
     const preparedRoutines = (routines || []).map(r => {
+        if (!r) return r;
         let exNames = '';
         if (Array.isArray(r.exercises)) {
             exNames = r.exercises.map((re: any) => {
-                const ex = typeof re === 'string' ? libMap.get(re) : (libMap.get(re.id) || libMap.get(re.exerciseId) || re);
-                return ex ? (ex.name || '') : '';
-            }).join(' ');
+                if (!re) return '';
+                if (typeof re === 'string') return libMap.get(re)?.name || '';
+                return (re.id ? libMap.get(re.id)?.name : null) || re.name || '';
+            }).filter(Boolean).join(' ');
         }
         let targetMuscleNames = '';
         if (Array.isArray(r.targetMuscles)) {
@@ -129,10 +142,22 @@ export function searchRoutines(routines: any[], libraryOrQuery: any, queryMaybe?
         minMatchCharLength: 2
     });
 
-    const fuzzyMatches = fuse.search(query.trim()).map(res => {
-        const { _searchEx, _searchMuscles, ...original } = res.item;
-        return original;
-    });
+    const routineTokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
+    let fuzzyMatches: any[] = [];
+    if (routineTokens.length > 1) {
+        const tokenMatches = routineTokens.map(tok => new Set(fuse.search(tok).map(r => r.item)));
+        const allMatch = preparedRoutines.filter(item => tokenMatches.every(set => set.has(item)));
+        const singleMatches = fuse.search(query.trim()).map(res => res.item);
+        fuzzyMatches = [...allMatch, ...singleMatches].map(item => {
+            const { _searchEx, _searchMuscles, ...original } = item;
+            return original;
+        });
+    } else {
+        fuzzyMatches = fuse.search(query.trim()).map(res => {
+            const { _searchEx, _searchMuscles, ...original } = res.item;
+            return original;
+        });
+    }
 
     const seen = new Set<any>();
     const result: any[] = [];
