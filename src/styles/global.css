@@ -224,7 +224,7 @@ input:focus, select:focus, textarea:focus {
 .btn-primary:active { box-shadow: 0 2px 8px var(--primary-glow); }
 .btn-danger { background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
 .btn-success { background: linear-gradient(135deg, var(--success-color), #16a34a); color: #fff; border:none;}
-.btn-small { padding: 8px 12px; font-size: 0.85rem; width: auto; margin-bottom:0;}
+.btn-small { padding: 8px 14px; font-size: 0.85rem; width: auto; margin-bottom: 0; white-space: nowrap; flex-shrink: 0; }
 .btn-icon { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; padding: 6px; border-radius: 50%; transition: background 0.2s;}
 .btn-icon:hover { background: rgba(255,255,255,0.1); }
 

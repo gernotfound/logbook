@@ -105,7 +105,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                                 onChange={e => setSelectedRoutine(e.target.value)}
                                 className="w-full p-10 bg-surface text-white border-b rounded-8 mb-15"
                             >
-                                <option value="">-- Seleziona Scheda --</option>
+                                <option value="">+ Seleziona scheda</option>
                                 {routines.map(r => (
                                     <option key={r.id} value={r.id}>
                                         {r.name} ({(r.exercises || []).length} es.)

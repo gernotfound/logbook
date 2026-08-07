@@ -122,24 +122,24 @@ function App() {
       {needRefresh && (
         <div style={{
           position: 'fixed', top: 'calc(15px + env(safe-area-inset-top, 0px))', left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--accent-color)', color: '#fff', padding: '12px 20px', borderRadius: '12px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '15px',
-          width: '90%', maxWidth: '400px'
+          background: 'var(--accent-color)', color: '#fff', padding: '12px 16px', borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '12px',
+          width: '92%', maxWidth: '420px', boxSizing: 'border-box'
         }}>
-          <div>
-            <div style={{fontWeight: 'bold', fontSize: '0.95rem'}}>Aggiornamento Disponibile!</div>
-            <div style={{fontSize: '0.8rem', opacity: 0.9}}>Ricarica l'app per avere l'ultima versione.</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{fontWeight: 'bold', fontSize: '0.95rem', lineHeight: '1.2'}}>Aggiornamento Disponibile!</div>
+            <div style={{fontSize: '0.8rem', opacity: 0.9, marginTop: '2px'}}>Ricarica l'app per avere l'ultima versione.</div>
           </div>
           <button 
             className="btn btn-small" 
-            style={{background: '#fff', color: 'var(--accent-color)', border: 'none', marginLeft: 'auto'}} 
+            style={{background: '#fff', color: 'var(--accent-color)', border: 'none', marginLeft: 'auto', flexShrink: 0, whiteSpace: 'nowrap'}} 
             onClick={() => updateServiceWorker(true)}
           >
             Aggiorna
           </button>
           <button 
             className="btn-icon" 
-            style={{color: '#fff', marginLeft: '5px'}} 
+            style={{color: '#fff', marginLeft: '2px', flexShrink: 0, padding: '4px'}} 
             onClick={() => setNeedRefresh(false)}
           >
             ✕
