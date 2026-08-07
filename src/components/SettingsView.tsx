@@ -11,6 +11,7 @@ const SettingsView = () => {
 
     const { isInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
+    const [showPrivacy, setShowPrivacy] = useState(false);
 
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
@@ -58,6 +59,12 @@ const SettingsView = () => {
                 </button>
             </div>
 
+            <div style={{ marginTop: '10px' }}>
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={() => setShowPrivacy(true)}>
+                    📄 Informativa sulla privacy
+                </button>
+            </div>
+
             {isOffline && (
                 <div className="card" style={{ border: '1px solid var(--warning-color)', marginTop: '15px', backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
                     <h3 style={{ color: 'var(--warning-color)' }}>⚠️ Connessione assente</h3>
@@ -82,6 +89,87 @@ const SettingsView = () => {
                     {deletingAccount ? '⏳ Eliminazione...' : '🗑️ Elimina account e dati'}
                 </button>
             </div>
+
+            {showPrivacy && (
+                <div className="dialog-overlay" style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(5px)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 99999
+                }}>
+                    <div className="dialog-box card" style={{
+                        width: '90%',
+                        maxWidth: '500px',
+                        maxHeight: '80vh',
+                        background: 'var(--surface-color)',
+                        border: '1px solid var(--glass-border)',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        <h2 style={{ color: 'var(--text-main)', margin: '0 0 15px 0', fontSize: '1.3rem', textAlign: 'center' }}>📄 Informativa sulla Privacy</h2>
+                        
+                        <div style={{ 
+                            flex: 1, 
+                            overflowY: 'auto', 
+                            textAlign: 'left', 
+                            fontSize: '0.85rem', 
+                            lineHeight: '1.5', 
+                            color: 'var(--text-muted)',
+                            paddingRight: '10px',
+                            marginBottom: '20px'
+                        }}>
+                            <p><b>1. Titolare del Trattamento</b><br />
+                            Il titolare del trattamento dei dati è lo sviluppatore di questo servizio (LogBook). Per qualsiasi domanda o per esercitare i tuoi diritti, puoi contattare l'amministratore.</p>
+
+                            <p><b>2. Dati Raccolti</b><br />
+                            Raccogliamo ed elaboriamo esclusivamente i dati strettamente necessari per il funzionamento dell'applicazione:
+                            <ul>
+                                <li><b>Dati di Autenticazione:</b> Indirizzo email, nome e foto profilo (forniti tramite Google Login).</li>
+                                <li><b>Dati Biometrici:</b> Peso corporeo e altre misurazioni antropometriche inserite volontariamente.</li>
+                                <li><b>Dati di Allenamento e Nutrizione:</b> Schede, storico esercizi, carichi, ripetizioni, note e diario alimentare quotidiano.</li>
+                            </ul>
+                            </p>
+
+                            <p><b>3. Finalità e Base Giuridica</b><br />
+                            I dati vengono raccolti esclusivamente per consentirti di tracciare e monitorare i tuoi allenamenti e la tua alimentazione. La base giuridica del trattamento è il tuo consenso esplicito, fornito creando un account e inserendo i dati nell'app.</p>
+
+                            <p><b>4. Conservazione dei Dati</b><br />
+                            Tutti i dati vengono memorizzati e conservati in modo sicuro sui server cloud di Google Firebase, ospitati all'interno dell'Unione Europea o in conformità con i requisiti del Data Privacy Framework. Nessun dato viene venduto o condiviso con terze parti o per scopi pubblicitari.</p>
+
+                            <p><b>5. Sicurezza dei Dati</b><br />
+                            L'app utilizza protocolli sicuri (HTTPS) per il trasferimento dei dati e le funzionalità di sicurezza integrate di Google Firebase. I dati sono associati in modo univoco al tuo account protetto.</p>
+
+                            <p><b>6. Diritti dell'Utente (GDPR)</b><br />
+                            In conformità al Regolamento Europeo (GDPR), hai il diritto di:
+                            <ul>
+                                <li>Accedere a tutti i tuoi dati esportandoli in formato CSV tramite l'apposito tasto in Impostazioni.</li>
+                                <li>Rettificare o modificare qualsiasi dato direttamente dall'interfaccia dell'applicazione.</li>
+                                <li>Chiedere la cancellazione totale e definitiva dei tuoi dati. Puoi farlo autonomamente e in tempo reale premendo il pulsante "Elimina account e dati" in Impostazioni. Questa azione rimuoverà permanentemente la tua email e ogni dato di allenamento/nutrizione dai server di Firebase.</li>
+                            </ul>
+                            </p>
+
+                            <p><b>7. Cookie e Memoria Locale</b><br />
+                            Questo sito non utilizza cookie di profilazione o tracciamento pubblicitario. Utilizza esclusivamente memoria locale (LocalStorage) e cookie tecnici di sessione essenziali per mantenerti autenticato e gestire i salvataggi offline.</p>
+                        </div>
+
+                        <button 
+                            className="btn btn-primary" 
+                            onClick={() => setShowPrivacy(false)}
+                            style={{ padding: '12px', width: '100%', flexShrink: 0 }}
+                        >
+                            Chiudi
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
