@@ -40,7 +40,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         🗑️
                     </button>
                 </div>
-                <div style={{ display: 'flex', gap: '5px', flex: 1, position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '5px', flex: 1, position: 'relative', minWidth: 0 }}>
                     {trackingType === 'time' ? (
                         <>
                             <input 
@@ -48,19 +48,19 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 type="number" 
                                 step="0.25" 
                                 placeholder="Kg (opz)" 
-                                value={s.kg} 
+                                value={s.kg ?? ''} 
                                 onChange={e => onUpdateSet('kg', e.target.value)} 
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 1 }} 
+                                style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
                             <input 
                                 id={`time-${s.id}`} 
                                 type="text" 
                                 placeholder="Tempo (es. 60s)" 
-                                value={s.time || ''} 
+                                value={s.time ?? ''} 
                                 onChange={e => onUpdateSet('time', e.target.value)} 
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 2 }} 
+                                style={{ margin: 0, flex: 2, minWidth: 0 }} 
                             />
                         </>
                     ) : (
@@ -70,19 +70,19 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 type="number" 
                                 step="0.25" 
                                 placeholder="Kg" 
-                                value={s.kg} 
+                                value={s.kg ?? ''} 
                                 onChange={e => onUpdateSet('kg', e.target.value)} 
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 1 }} 
+                                style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
                             <input 
                                 id={`reps-${s.id}`} 
                                 type="number" 
                                 placeholder="Reps" 
-                                value={s.reps} 
+                                value={s.reps ?? ''} 
                                 onChange={e => onUpdateSet('reps', e.target.value)} 
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 1 }} 
+                                style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
                         </>
                     )}
@@ -129,9 +129,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 return (
                     <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
-                        <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
-                            <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
-                            <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
+                        <div style={{ display: 'flex', gap: '5px', flex: 1, minWidth: 0 }}>
+                            <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
                             <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet('dropsets', dsIdx)}>✕</button>
                         </div>
                     </div>
@@ -143,9 +143,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 return (
                     <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
-                        <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
-                            <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
-                            <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1 }} />
+                        <div style={{ display: 'flex', gap: '5px', flex: 1, minWidth: 0 }}>
+                            <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
                             <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet('isometrics', isoIdx)}>✕</button>
                         </div>
                     </div>

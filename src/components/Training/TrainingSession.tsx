@@ -186,7 +186,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
 
                         return (
                             <SessionExerciseCard
-                                key={exItem.exId}
+                                key={exItem.id || `${exItem.exId}_${exIndex}`}
                                 exItem={exItem}
                                 exIndex={exIndex}
                                 libDef={libDef}

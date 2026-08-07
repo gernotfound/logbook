@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DB } from '../lib/db';
+import { Logic } from '../lib/logic';
 import type { WorkoutSession, UserProfile, NutritionPlanning, UserData } from '../types';
 
 export type { UserProfile, NutritionPlanning, UserData };
@@ -13,7 +14,7 @@ export interface AppState {
     setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
     setSyncing: (val: boolean) => void;
     setSaveError: (error: string | null) => void;
-    setLocalWorkout: (workout: WorkoutSession | null) => void;
+    setLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => void;
     saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<void>;
     updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<void>;
     resetStore: () => void;
@@ -43,21 +44,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveError: null,
     syncing: false,
     
-    // Inizializza il workout in bozza dal localStorage, se presente
+    // Inizializza il workout in bozza dal localStorage, se presente (con ID univoci garantiti)
     localWorkout: (() => {
         try {
             const saved = localStorage.getItem('logbook_local_workout');
-            return saved ? JSON.parse(saved) : null;
+            if (!saved) return null;
+            const parsed = JSON.parse(saved);
+            if (parsed && Array.isArray(parsed.exercises)) {
+                parsed.exercises = parsed.exercises.map((ex: any) => ({
+                    ...ex,
+                    sets: (ex.sets || []).map((s: any) => ({
+                        ...s,
+                        id: s.id || Logic.generateId('s'),
+                        dropsets: (s.dropsets || []).map((ds: any) => ({ ...ds, id: ds.id || Logic.generateId('ds') })),
+                        isometrics: (s.isometrics || []).map((iso: any) => ({ ...iso, id: iso.id || Logic.generateId('iso') }))
+                    }))
+                }));
+            }
+            return parsed;
         } catch {
             return null;
         }
     })(),
 
-    setLocalWorkout: (workout: WorkoutSession | null) => {
+    setLocalWorkout: (workoutOrUpdater) => {
         set((state) => {
-            debouncedSaveLocalStorage(workout);
-            const nextUserData = state.userData ? { ...state.userData, activeWorkout: workout || null } : null;
-            return { localWorkout: workout, userData: nextUserData };
+            const nextWorkout = typeof workoutOrUpdater === 'function'
+                ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(state.localWorkout)
+                : workoutOrUpdater;
+            debouncedSaveLocalStorage(nextWorkout);
+            const nextUserData = state.userData ? { ...state.userData, activeWorkout: nextWorkout || null } : null;
+            return { localWorkout: nextWorkout, userData: nextUserData };
         });
     },
 

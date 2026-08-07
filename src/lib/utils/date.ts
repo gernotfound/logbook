@@ -14,7 +14,10 @@ import {
 } from 'date-fns';
 
 export function generateId(prefix: string): string {
-    return prefix + '_' + crypto.randomUUID();
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return prefix + '_' + crypto.randomUUID();
+    }
+    return prefix + '_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
 }
 
 export function getLocalDateString(d: Date | string | number = new Date()): string {
