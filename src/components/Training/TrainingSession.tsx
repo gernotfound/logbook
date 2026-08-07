@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import WorkoutTimer from './WorkoutTimer';
 import SessionExerciseCard from './session/SessionExerciseCard';
@@ -61,17 +61,17 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
 
-    // Callbacks that also close panels
-    const handleRemoveExercise = (exIndex: number) => {
+    // Callbacks che chiudono i pannelli — memoizzate per non ricrearle ad ogni render
+    const handleRemoveExercise = useCallback((exIndex: number) => {
         removeActiveExercise(exIndex, (idx) => {
             if (openHistoryExIndex === idx) setOpenHistoryExIndex(null);
             if (openSetupExIndex === idx) setOpenSetupExIndex(null);
         });
-    };
+    }, [removeActiveExercise, openHistoryExIndex, openSetupExIndex]);
 
-    const handleAddSet = (exIndex: number, type: string = 'normal', setId: string | null = null) => {
+    const handleAddSet = useCallback((exIndex: number, type: string = 'normal', setId: string | null = null) => {
         addSpecialSet(exIndex, setId as string, type, () => setOpenSpecialMenuId(null));
-    };
+    }, [addSpecialSet]);
 
     const exerciseHistoryMap = useMemo(() => {
         const map = new Map<string, Array<{ date: string; sets: any[]; note: string }>>();
@@ -90,6 +90,9 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
         }
         return map;
     }, [history]);
+
+    // Pre-calcola la mappa libreria per evitare library.find() ad ogni render
+    const libraryMap = useMemo(() => new Map(library.map(l => [l.id, l])), [library]);
 
     if (!activeWorkout) {
         return (
@@ -178,7 +181,7 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                     <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
                 ) : (
                     (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
-                        const libDef = library.find(l => l.id === exItem.exId);
+                        const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || [];
 
                         return (

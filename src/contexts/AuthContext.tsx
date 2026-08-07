@@ -14,18 +14,23 @@ export const AuthProvider = ({ children }: { children: any }) => {
     const saveError = useAppStore(state => state.saveError);
     const setSaveError = useAppStore(state => state.setSaveError);
 
-    const loadData = async (user: any) => {
+    // useCallback: dipendenze stabili (selector Zustand), evita closure stale nel listener visibilitychange
+    const loadData = useCallback(async (user: any) => {
         if (!user) return;
         setSyncing(true);
         try {
             const data = await DB.loadUserData();
             setUserData(data);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Errore caricamento dati in AuthContext:", error);
+            // Se offline, Firestore serve i dati dalla cache locale — non è un errore critico
+            if (error?.code === 'unavailable' || !navigator.onLine) {
+                setSaveError("📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.");
+            }
         } finally {
             setSyncing(false);
         }
-    };
+    }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
         let isMounted = true;
@@ -79,7 +84,7 @@ export const AuthProvider = ({ children }: { children: any }) => {
             authUnsubPromise.then(unsub => unsub && unsub()).catch(e => console.warn(e));
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [loadData]); // loadData è stabile grazie a useCallback
 
     const login = useCallback(async () => {
         setSaveError(null);
@@ -114,6 +119,14 @@ export const AuthProvider = ({ children }: { children: any }) => {
         }
     }, [setSyncing]);
 
+    // Determina l'icona e il testo del toast in base al tipo di errore
+    const getErrorDisplay = (error: string) => {
+        if (error.startsWith('📶')) return { icon: '', text: error.replace('📶 ', ''), bg: '#0ea5e9' };
+        if (error.includes('quota') || error.includes('resource-exhausted')) return { icon: '⚠️', text: 'Limite Firebase raggiunto. Riprova tra qualche minuto.', bg: '#f97316' };
+        if (error.includes('auth') || error.includes('sessione') || error.includes('permission')) return { icon: '🔒', text: 'Sessione scaduta. Rieffettua il login.', bg: '#8b5cf6' };
+        return { icon: '⚠️', text: error, bg: '#ef4444' };
+    };
+
     const value = useMemo(() => ({
         currentUser,
         loading,
@@ -124,18 +137,22 @@ export const AuthProvider = ({ children }: { children: any }) => {
     return (
         <AuthContext.Provider value={value}>
             {children}
-            {/* Non-blocking save error toast */}
-            {saveError && (
-                <div style={{
-                    position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
-                    background: '#ef4444', color: '#fff', padding: '10px 20px', borderRadius: '8px',
-                    fontSize: '0.85rem', zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                    display: 'flex', alignItems: 'center', gap: '10px'
-                }}>
-                    ⚠️ {saveError}
-                    <button onClick={() => setSaveError(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
-                </div>
-            )}
+            {/* Non-blocking save error toast con messaggi contestuali */}
+            {saveError && (() => {
+                const { icon, text, bg } = getErrorDisplay(saveError);
+                return (
+                    <div style={{
+                        position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+                        background: bg, color: '#fff', padding: '10px 20px', borderRadius: '8px',
+                        fontSize: '0.85rem', zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        maxWidth: 'calc(100vw - 40px)', textAlign: 'center'
+                    }}>
+                        {icon} {text}
+                        <button onClick={() => setSaveError(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>✕</button>
+                    </div>
+                );
+            })()}
         </AuthContext.Provider>
     );
 };

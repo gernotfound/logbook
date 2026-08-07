@@ -90,6 +90,9 @@ export function useHomeView() {
     const totalWorkouts = history.length;
     const library = useMemo(() => userData?.library || [], [userData?.library]);
 
+    // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
+    const libraryMap = useMemo(() => new Map(library.map((l: any) => [l.id, l])), [library]);
+
     // Calculate Heatmap & Volume
     const { muscleColors, volumeChartData } = useMemo(() => {
         const MAX_HOURS = 72;
@@ -114,7 +117,7 @@ export function useHomeView() {
             const baseFatigue = Math.max(0, 1 - (hoursPassed / MAX_HOURS));
 
             (w.exercises || []).forEach((ex: any) => {
-                const libEx = library.find((l: any) => l.id === ex.exId);
+                const libEx = libraryMap.get(ex.exId);
                 if (!libEx) return;
 
                 // Calculate completed sets (regular sets + dropsets)
@@ -185,7 +188,7 @@ export function useHomeView() {
         };
 
         return { muscleColors: colors, volumeChartData: vChartData };
-    }, [history, library]);
+    }, [history, libraryMap]);
 
     // Chronological array for charts and TDEE calc
     const { sortedDates, tdeeCalc } = useMemo(() => {
