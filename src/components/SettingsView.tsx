@@ -156,8 +156,10 @@ const SettingsView = () => {
                             </ul>
                             </p>
 
-                            <p><b>7. Cookie e Memoria Locale</b><br />
-                            Questo sito non utilizza cookie di profilazione o tracciamento pubblicitario. Utilizza esclusivamente memoria locale (LocalStorage) e cookie tecnici di sessione essenziali per mantenerti autenticato e gestire i salvataggi offline.</p>
+                            <p><b>7. Cookie, Analitica e Memoria Locale</b><br />
+                            Questo sito utilizza:<br />
+                            - Memoria locale (LocalStorage) e identificatori tecnici essenziali per consentirti l'accesso persistente e la gestione offline delle sessioni.<br />
+                            - <b>Google Analytics per Firebase</b> per raccogliere informazioni statistiche aggregate e anonime sull'utilizzo dell'app (es. flussi di navigazione, durata delle sessioni, arresti anomali). Questi dati ci consentono di ottimizzare le prestazioni dell'applicazione e non vengono mai utilizzati per scopi di marketing, tracciamento pubblicitario o profilazione commerciale.</p>
                         </div>
 
                         <button 
