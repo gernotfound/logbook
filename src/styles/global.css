@@ -208,6 +208,9 @@ input:focus, select:focus, textarea:focus {
     justify-content: center; 
     gap: 8px; 
     width: 100%; 
+    max-width: 100%;
+    white-space: normal;
+    word-break: break-word;
     margin-bottom: 12px; 
     transition: all 0.2s ease; 
 }
