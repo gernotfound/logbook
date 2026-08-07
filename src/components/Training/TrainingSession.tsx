@@ -1,24 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
+import { Logic } from '../../lib/logic';
 import WorkoutTimer from './WorkoutTimer';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
-    const [display, setDisplay] = useState('00:00');
+    const [display, setDisplay] = useState('00:00:00');
     
     useEffect(() => {
         if (!startTime) return;
         const updateDisplay = () => {
-            const diff = Math.floor((Date.now() - startTime) / 1000);
-            const h = Math.floor(diff / 3600);
-            const m = Math.floor((diff % 3600) / 60);
-            const s = diff % 60;
-            if (h > 0) {
-                setDisplay(`${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            } else {
-                setDisplay(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
-            }
+            const diff = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+            setDisplay(Logic.formatDuration(diff));
         };
 
         updateDisplay(); // initial call
@@ -239,14 +233,16 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
             {activeWorkout.isEditingHistory ? (
                 <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
                     <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        ⏱️ Durata sessione (HH:MM:SS oppure MM:SS)
+                        ⏱️ Durata della sessione
                     </label>
                     <input 
                         id="workout-manual-duration"
                         type="text" 
                         value={manualDuration} 
                         onChange={e => setManualDuration(e.target.value)} 
-                        placeholder="es. 01:15:00 o 45:00"
+                        onBlur={() => setManualDuration(prev => Logic.normalizeDuration(prev))}
+                        onFocus={e => e.target.select()}
+                        placeholder="00:00:00"
                         style={{ 
                             fontSize: '1.8rem', 
                             fontFamily: 'monospace', 
@@ -254,8 +250,11 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
                             color: 'var(--primary-color)', 
                             textAlign: 'center', 
                             maxWidth: '240px', 
+                            width: '100%',
                             margin: '0 auto', 
-                            padding: '8px 12px' 
+                            padding: '8px 12px',
+                            display: 'block',
+                            boxSizing: 'border-box'
                         }} 
                     />
                 </div>

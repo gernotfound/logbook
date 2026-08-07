@@ -60,6 +60,50 @@ export function calculateAge(dob: string | Date | number): number {
     return isNaN(age) || age < 0 ? 30 : age;
 }
 
+export function formatDuration(secondsOrMs: number, isMs = false): string {
+    const totalSec = Math.max(0, isMs ? Math.floor(secondsOrMs / 1000) : Math.floor(secondsOrMs));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const p = (n: number) => n.toString().padStart(2, '0');
+    return `${p(h)}:${p(m)}:${p(s)}`;
+}
+
+export function normalizeDuration(input: string | undefined | null): string {
+    if (!input || typeof input !== 'string' || !input.trim()) return '00:00:00';
+    const cleaned = input.trim();
+    
+    // Riconosce formati con 'min' (es. '45 min', '75 min')
+    if (/^\d+\s*min/i.test(cleaned)) {
+        const m = parseInt(cleaned, 10) || 0;
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        const p = (n: number) => n.toString().padStart(2, '0');
+        return `${p(h)}:${p(remM)}:00`;
+    }
+
+    const parts = cleaned.split(':').map(p => parseInt(p.trim(), 10) || 0);
+    const p = (n: number) => n.toString().padStart(2, '0');
+
+    if (parts.length >= 3) {
+        const [h, m, s] = parts;
+        return `${p(h)}:${p(m)}:${p(s)}`;
+    }
+    if (parts.length === 2) {
+        const [m, s] = parts;
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        return `${p(h)}:${p(remM)}:${p(s)}`;
+    }
+    if (parts.length === 1) {
+        const m = parts[0];
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        return `${p(h)}:${p(remM)}:00`;
+    }
+    return '00:00:00';
+}
+
 export function formatTime(ms: number, showHours = false): string {
     let totalSec = Math.floor(ms / 1000);
     let h = Math.floor(totalSec / 3600);

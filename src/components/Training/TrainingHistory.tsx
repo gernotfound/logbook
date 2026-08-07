@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
+import { Logic } from '../../lib/logic';
 import type { WorkoutSession } from '../../types';
 
 interface TrainingHistoryProps {
@@ -29,11 +30,12 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                         const date = new Date(wo.globalStartTime || new Date()).toLocaleDateString('it-IT', { 
                             weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' 
                         });
-                        const durationDisplay = wo.manualDurationStr 
+                        const rawDuration = wo.manualDurationStr 
                             || wo.globalDurationStr 
                             || ((wo.globalEndTime && wo.globalStartTime) 
-                                ? `${Math.round((wo.globalEndTime - wo.globalStartTime) / 60000)} min` 
-                                : '0 min');
+                                ? Logic.formatDuration(Math.max(0, Math.floor((wo.globalEndTime - wo.globalStartTime) / 1000)))
+                                : '00:00:00');
+                        const durationDisplay = Logic.normalizeDuration(rawDuration);
                         
                         // Legacy compatibility: support both moodRating and mood field names
                         const moodVal = wo.moodRating ?? (wo as any).mood;

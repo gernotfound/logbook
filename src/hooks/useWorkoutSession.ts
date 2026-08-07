@@ -25,7 +25,7 @@ export function useWorkoutSession() {
     const [pump, setPump] = useState('');
     const [fatigue, setFatigue] = useState('');
     const [water, setWater] = useState('');
-    const [manualDuration, setManualDuration] = useState('00:00');
+    const [manualDuration, setManualDuration] = useState('00:00:00');
 
     // Sincronizza i campi quando activeWorkout cambia (es. caricamento o avvio)
     useEffect(() => {
@@ -34,13 +34,13 @@ export function useWorkoutSession() {
             setPump(activeWorkout.pumpRating !== undefined && activeWorkout.pumpRating !== null ? activeWorkout.pumpRating.toString() : '');
             setFatigue(activeWorkout.fatigueRating !== undefined && activeWorkout.fatigueRating !== null ? activeWorkout.fatigueRating.toString() : '');
             setWater(activeWorkout.waterLiters !== undefined && activeWorkout.waterLiters !== null ? activeWorkout.waterLiters.toString() : '');
-            setManualDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00');
+            setManualDuration(Logic.normalizeDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00:00'));
         } else {
             setMood('');
             setPump('');
             setFatigue('');
             setWater('');
-            setManualDuration('00:00');
+            setManualDuration('00:00:00');
         }
     }, [activeWorkout?.id, activeWorkout?.originalHistoryId, activeWorkout?.isEditingHistory]);
 
@@ -102,14 +102,10 @@ export function useWorkoutSession() {
         let durationStr = workout.globalDurationStr || workout.manualDurationStr;
         if (!durationStr && workout.globalStartTime && workout.globalEndTime) {
             const diff = Math.max(0, Math.floor((workout.globalEndTime - workout.globalStartTime) / 1000));
-            const h = Math.floor(diff / 3600);
-            const m = Math.floor((diff % 3600) / 60);
-            const s = diff % 60;
-            durationStr = h > 0 
-                ? `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
-                : `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            durationStr = Logic.formatDuration(diff);
+        } else {
+            durationStr = Logic.normalizeDuration(durationStr);
         }
-        if (!durationStr) durationStr = '00:00';
 
         const sanitizedExercises = (workout.exercises || []).map((ex: any) => ({
             ...ex,
@@ -163,7 +159,7 @@ export function useWorkoutSession() {
             fatigue ? parseInt(fatigue) : null
         );
 
-        const durationStr = manualDuration?.trim() || currentWorkout.manualDurationStr || currentWorkout.globalDurationStr || '00:00';
+        const durationStr = Logic.normalizeDuration(manualDuration?.trim() || currentWorkout.manualDurationStr || currentWorkout.globalDurationStr || '00:00:00');
 
         const updatedWorkout: WorkoutSession = {
             ...currentWorkout,
@@ -190,7 +186,7 @@ export function useWorkoutSession() {
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
-            setManualDuration('00:00');
+            setManualDuration('00:00:00');
             await showAlert("Modifiche salvate con successo!");
             return true;
         } catch {
@@ -204,7 +200,7 @@ export function useWorkoutSession() {
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             setMood(''); setPump(''); setFatigue(''); setWater('');
-            setManualDuration('00:00');
+            setManualDuration('00:00:00');
             return true;
         }
         return false;
@@ -222,13 +218,8 @@ export function useWorkoutSession() {
 
         const endTime = new Date().getTime();
         const startTime = currentWorkout.globalStartTime || endTime;
-        const diff = Math.floor((endTime - startTime) / 1000);
-        const h = Math.floor(diff / 3600);
-        const m = Math.floor((diff % 3600) / 60);
-        const s = diff % 60;
-        const durationStr = h > 0 
-            ? `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
-            : `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        const diff = Math.max(0, Math.floor((endTime - startTime) / 1000));
+        const durationStr = Logic.formatDuration(diff);
 
         const finishedWorkout: WorkoutSession = {
             ...currentWorkout,

@@ -1,5 +1,5 @@
 import { MUSCLES, GROUP_MAP, MuscleDef } from './constants/muscles';
-import { generateId, getLocalDateString, calculateAge, formatTime, validateInputData, getCalendarMonthGrid, CalendarDayCell } from './utils/date';
+import { generateId, getLocalDateString, calculateAge, formatTime, formatDuration, normalizeDuration, validateInputData, getCalendarMonthGrid, CalendarDayCell } from './utils/date';
 import { 
     calculateUsNavyBodyFat, 
     calculateBodyFatByMethod, 
@@ -41,6 +41,8 @@ export {
     getLocalDateString,
     calculateAge,
     formatTime,
+    formatDuration,
+    normalizeDuration,
     validateInputData,
     getCalendarMonthGrid,
     calculateUsNavyBodyFat,
@@ -80,6 +82,8 @@ export const Logic = {
     getLocalDateString,
     calculateAge,
     formatTime,
+    formatDuration,
+    normalizeDuration,
     validateInputData,
     getCalendarMonthGrid,
     generateMockHistory: (): any[] => [],
