@@ -45,6 +45,21 @@ body {
     touch-action: manipulation;
 }
 
+input, select, textarea, button {
+    font-family: inherit;
+    color: inherit;
+    box-sizing: border-box;
+}
+
+button {
+    color: var(--text-main);
+}
+
+select option {
+    background-color: var(--surface-light);
+    color: var(--text-main);
+}
+
 input, select, textarea {
     font-size: 16px !important;
     touch-action: manipulation;
@@ -1122,11 +1137,24 @@ input[type="range"].fat-slider::-webkit-slider-thumb {
 .text-danger { color: var(--danger-color); }
 .text-success { color: var(--success-color); }
 .text-warning { color: var(--warning-color); }
+.text-white { color: #ffffff !important; }
 .text-black { color: #000; }
 .font-bold { font-weight: bold; }
+.font-semibold { font-weight: 600; }
+.font-medium { font-weight: 500; }
 .text-center { text-align: center; }
 .overflow-y-auto { overflow-y: auto; }
 .bg-warning { background: var(--warning-color); }
+.bg-black-10 { background: rgba(0, 0, 0, 0.1); }
+.bg-black-20 { background: rgba(0, 0, 0, 0.2); }
+.bg-black-25 { background: rgba(0, 0, 0, 0.25); }
+.max-h-160 { max-height: 160px; }
+.max-h-200 { max-height: 200px; }
+.items-center { align-items: center; }
+.transition { transition: all 0.2s ease; }
+.cursor-pointer { cursor: pointer; }
+.flex-wrap { flex-wrap: wrap; }
+.block { display: block; }
 
 
 

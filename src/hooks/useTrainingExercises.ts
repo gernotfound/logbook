@@ -53,9 +53,30 @@ export function useTrainingExercises() {
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, editingExId]);
 
     const filteredMuscles = useMemo(() => {
-        return Logic.MUSCLES.filter(m => 
-            m.name.toLowerCase().includes(muscleSearch.toLowerCase())
-        ).slice(0, 5);
+        const query = muscleSearch.trim().toLowerCase();
+        if (!query) return [];
+        
+        const matches = Logic.MUSCLES.filter(m => 
+            m.name.toLowerCase().includes(query)
+        );
+
+        matches.sort((a, b) => {
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+            if (aName === query) return -1;
+            if (bName === query) return 1;
+            const aStarts = aName.startsWith(query);
+            const bStarts = bName.startsWith(query);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            const aIsBase = !a.id.endsWith('_left') && !a.id.endsWith('_right');
+            const bIsBase = !b.id.endsWith('_left') && !b.id.endsWith('_right');
+            if (aIsBase && !bIsBase) return -1;
+            if (!aIsBase && bIsBase) return 1;
+            return a.name.localeCompare(b.name, 'it');
+        });
+
+        return matches.slice(0, 10);
     }, [muscleSearch]);
 
     const toggleSmartMuscleSelection = (currentSelection: any[], toggledMuscle?: any) => {

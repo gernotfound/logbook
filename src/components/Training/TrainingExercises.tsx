@@ -83,38 +83,94 @@ const TrainingExercises = () => {
                             </button>
                         </div>
                     </div>
-
-                    <input 
-                        type="text" 
-                        placeholder="🔍 Cerca muscolo (es. Petto, Bicipiti)..." 
-                        value={muscleSearch} 
-                        onChange={e => setMuscleSearch(e.target.value)}
-                        className="mb-10"
-                    />
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} className="mb-10">
+                        <input 
+                            type="text" 
+                            placeholder="🔍 Cerca muscolo (es. Petto, Bicipiti)..." 
+                            value={muscleSearch} 
+                            onChange={e => setMuscleSearch(e.target.value)}
+                            style={{ 
+                                width: '100%', 
+                                margin: 0, 
+                                paddingRight: muscleSearch ? '36px' : '14px',
+                                fontSize: '16px'
+                            }}
+                        />
+                        {muscleSearch && (
+                            <button
+                                type="button"
+                                onClick={() => setMuscleSearch('')}
+                                style={{
+                                    position: 'absolute',
+                                    right: '8px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-muted)',
+                                    fontSize: '1rem',
+                                    cursor: 'pointer',
+                                    padding: '6px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                aria-label="Cancella ricerca"
+                            >
+                                ✕
+                            </button>
+                        )}
+                    </div>
 
                     {muscleSearch && (
-                        <div className="flex-col gap-6 mb-12 max-h-160 overflow-y-auto p-4 rounded-8" style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--glass-border)' }}>
+                        <div 
+                            className="flex-col gap-6 mb-12 overflow-y-auto p-6 rounded-8" 
+                            style={{ 
+                                background: 'rgba(0, 0, 0, 0.35)', 
+                                border: '1px solid var(--glass-border)',
+                                maxHeight: '220px'
+                            }}
+                        >
                             {filteredMuscles.length === 0 ? (
                                 <div className="text-muted text-xs p-8 text-center">Nessun muscolo trovato</div>
                             ) : (
                                 filteredMuscles.map(m => {
                                     const isPrimary = selectedMuscleIds.includes(m.id);
                                     const isSecondary = secondaryMuscles.some(sm => sm.id === m.id);
-                                    const isSelected = isPrimary || isSecondary;
+
+                                    let btnBackground = 'var(--surface-light, #1a1a1a)';
+                                    let btnColor = '#ffffff';
+                                    let btnBorder = '1px solid rgba(255, 255, 255, 0.08)';
+                                    let badgeColor = 'rgba(255, 255, 255, 0.7)';
+
+                                    if (isPrimary) {
+                                        btnBackground = 'linear-gradient(135deg, var(--primary-color), var(--primary-dark))';
+                                        btnColor = '#000000';
+                                        btnBorder = '1px solid var(--primary-color)';
+                                        badgeColor = '#000000';
+                                    } else if (isSecondary) {
+                                        btnBackground = 'rgba(0, 229, 255, 0.15)';
+                                        btnColor = '#ffffff';
+                                        btnBorder = '1px solid var(--secondary-color, #4db6ac)';
+                                        badgeColor = 'var(--secondary-color, #4db6ac)';
+                                    }
+
                                     return (
                                         <button 
                                             key={m.id} 
-                                            type="button"
-                                            className={`flex-between items-center w-full p-8 rounded-8 text-sm transition ${isSelected ? 'btn-primary' : 'bg-surface text-white'}`}
+                                            type="button" 
+                                            className="flex-between items-center w-full rounded-8 text-sm transition"
                                             style={{ 
-                                                border: isSelected ? '1px solid var(--primary-color)' : '1px solid rgba(255,255,255,0.06)',
+                                                background: btnBackground,
+                                                color: btnColor,
+                                                border: btnBorder,
+                                                padding: '10px 12px',
                                                 cursor: 'pointer',
-                                                textAlign: 'left'
+                                                textAlign: 'left',
+                                                boxSizing: 'border-box'
                                             }}
                                             onClick={() => toggleMuscle(m)}
                                         >
-                                            <span className="font-semibold">{m.name}</span>
-                                            <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                            <span style={{ fontWeight: 600, color: btnColor }}>{m.name}</span>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: badgeColor }}>
                                                 {isPrimary ? '✓ Primario' : isSecondary ? '✓ Secondario' : '+ Aggiungi'}
                                             </span>
                                         </button>
