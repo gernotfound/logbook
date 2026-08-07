@@ -43,30 +43,48 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 Registra il peso e la percentuale di massa grassa.
             </p>
             
-            <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">Orario</label>
-                <input 
-                    id="measure-time" 
-                    type="time" 
-                    value={measureTime} 
-                    onChange={e => setMeasureTime(e.target.value)} 
-                />
+            <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
+                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Orario</label>
+                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <input 
+                        id="measure-time" 
+                        type="time" 
+                        value={measureTime} 
+                        onChange={e => setMeasureTime(e.target.value)} 
+                        style={{
+                            width: '100%',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box',
+                            textAlign: 'center',
+                            margin: '0 auto',
+                            display: 'block'
+                        }}
+                    />
+                </div>
             </div>
 
-            <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">Metodo calcolo BF</label>
+            <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
+                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Metodo calcolo BF</label>
                 <select 
                     value={method} 
-                    onChange={e => setMethod(e.target.value)} 
+                    onChange={e => setMethod(e.target.value)}
+                    style={{
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        textAlign: 'center',
+                        margin: '0 auto',
+                        display: 'block'
+                    }}
                 >
                     <option value={profile.gender === 'F' ? 'navy_female' : 'navy_male'}>US Navy (Misurazioni)</option>
                     <option value="manual">Inserimento Manuale</option>
                 </select>
             </div>
 
-            <div className="input-row" style={{ marginBottom: '15px' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Peso (kg)</label>
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Peso (kg)</label>
                     <input 
                         id="measure-weight" 
                         type="number" 
@@ -75,11 +93,12 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                         value={weight} 
                         onChange={e => setWeight(e.target.value)} 
                         onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                     />
                 </div>
                 {method === 'manual' ? (
-                    <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>BF% Manuale</label>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>BF% Manuale</label>
                         <input 
                             id="measure-bf" 
                             type="number" 
@@ -88,11 +107,12 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             value={manualBf} 
                             onChange={e => setManualBf(e.target.value)} 
                             onFocus={e => e.target.select()}
+                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                         />
                     </div>
                 ) : (
-                    <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Vita (cm)</label>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Vita (cm)</label>
                         <input 
                             id="measure-waist" 
                             type="number" 
@@ -100,15 +120,16 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             value={waist} 
                             onChange={e => setWaist(e.target.value)} 
                             onFocus={e => e.target.select()}
+                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                         />
                     </div>
                 )}
             </div>
 
             {method !== 'manual' && (
-                <div className="input-row" style={{ marginBottom: '15px' }}>
-                    <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Collo (cm)</label>
+                <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Collo (cm)</label>
                         <input 
                             id="measure-neck" 
                             type="number" 
@@ -116,11 +137,12 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             value={neck} 
                             onChange={e => setNeck(e.target.value)} 
                             onFocus={e => e.target.select()}
+                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                         />
                     </div>
                     {(profile.gender === 'F' || method === 'navy_female') && (
-                        <div style={{ flex: 1 }}>
-                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Fianchi (cm)</label>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Fianchi (cm)</label>
                             <input 
                                 id="measure-hip" 
                                 type="number" 
@@ -128,6 +150,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                                 value={hip} 
                                 onChange={e => setHip(e.target.value)} 
                                 onFocus={e => e.target.select()}
+                                style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
                             />
                         </div>
                     )}
