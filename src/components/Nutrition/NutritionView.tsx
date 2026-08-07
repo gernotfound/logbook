@@ -38,7 +38,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                     className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`} 
                     onClick={() => setSubTab && setSubTab('archive')}
                 >
-                    Archivio alimenti
+                    Alimenti
                 </div>
             </div>
 

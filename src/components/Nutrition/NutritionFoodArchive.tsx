@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
-import { COMMON_FOODS } from '../../lib/foods';
 import { Logic } from '../../lib/logic';
 import CustomFoodModal from './CustomFoodModal';
 
@@ -18,7 +17,6 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     const showConfirm = useDialogStore(state => state.showConfirm);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterType, setFilterType] = useState<'all' | 'custom' | 'common'>('all');
     
     // Modal states (used if onEditFood not provided)
     const [showModal, setShowModal] = useState(false);
@@ -29,16 +27,9 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     });
 
     const customFoods = (userData?.customFoods || []) as any[];
-    const combinedFoods = [
-        ...customFoods.map(f => ({ ...f, isCustom: true })),
-        ...COMMON_FOODS.map(f => ({ ...f, isCustom: false }))
-    ];
 
-    const filteredFoods = combinedFoods.filter(f => {
-        if (filterType === 'custom' && !f.isCustom) return false;
-        if (filterType === 'common' && f.isCustom) return false;
+    const filteredFoods = customFoods.filter(f => {
         if (!searchQuery.trim()) return true;
-
         const q = searchQuery.toLowerCase();
         return (
             (f.name || '').toLowerCase().includes(q) ||
@@ -104,7 +95,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             await saveUserData({ ...userData, customFoods: updatedCustomFoods });
             setShowModal(false);
             setEditingFoodId(null);
-            await showAlert(editingFoodId ? "Alimento aggiornato con successo!" : "Alimento creato e salvato nell'archivio!");
+            await showAlert(editingFoodId ? "Alimento aggiornato con successo!" : "Alimento creato e salvato!");
         } catch {
             await showAlert("Errore durante il salvataggio dell'alimento.");
         }
@@ -112,13 +103,13 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
     const handleDeleteFood = async (food: any) => {
         if (!userData) return;
-        const confirmed = await showConfirm(`Sei sicuro di voler eliminare l'alimento "${food.name}" dal tuo archivio?`);
+        const confirmed = await showConfirm(`Sei sicuro di voler eliminare l'alimento "${food.name}"?`);
         if (!confirmed) return;
 
         const updatedCustomFoods = customFoods.filter(f => f.id !== food.id);
         try {
             await saveUserData({ ...userData, customFoods: updatedCustomFoods });
-            await showAlert("Alimento eliminato dall'archivio.");
+            await showAlert("Alimento eliminato con successo.");
         } catch {
             await showAlert("Errore durante l'eliminazione dell'alimento.");
         }
@@ -180,11 +171,11 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         <div>
             {/* Header & Create Button */}
             <div className="card mb-15">
-                <div className="flex-between mb-15">
+                <div className="flex-between mb-15 items-center">
                     <div>
-                        <h3 className="m-0" style={{ color: 'var(--primary-color)' }}>📚 Archivio Alimenti</h3>
+                        <h3 className="m-0" style={{ color: 'var(--primary-color)' }}>🥗 Alimenti</h3>
                         <p className="text-muted text-xs m-0 mt-4">
-                            Consulta, cerca, crea e gestisci i tuoi alimenti
+                            Gestisci, crea e consulta i tuoi alimenti personalizzati
                         </p>
                     </div>
                     <button 
@@ -215,7 +206,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginTop: '10px' }}>
                     <input 
                         type="text" 
-                        placeholder="Cerca per nome, marca o categoria..." 
+                        placeholder="Cerca per nome o marca..." 
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         onFocus={e => e.target.select()}
@@ -252,66 +243,28 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                         </button>
                     )}
                 </div>
-
-                {/* Filter Tabs */}
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <button 
-                        type="button"
-                        className="btn btn-small"
-                        style={{ 
-                            flex: 1, 
-                            marginBottom: 0,
-                            background: filterType === 'all' ? 'var(--primary-color)' : 'rgba(255,255,255,0.06)',
-                            color: filterType === 'all' ? '#fff' : 'var(--text-muted)',
-                            border: '1px solid var(--glass-border)'
-                        }}
-                        onClick={() => setFilterType('all')}
-                    >
-                        Tutti ({combinedFoods.length})
-                    </button>
-                    <button 
-                        type="button"
-                        className="btn btn-small"
-                        style={{ 
-                            flex: 1, 
-                            marginBottom: 0,
-                            background: filterType === 'custom' ? 'var(--primary-color)' : 'rgba(255,255,255,0.06)',
-                            color: filterType === 'custom' ? '#fff' : 'var(--text-muted)',
-                            border: '1px solid var(--glass-border)'
-                        }}
-                        onClick={() => setFilterType('custom')}
-                    >
-                        I Miei ({customFoods.length})
-                    </button>
-                    <button 
-                        type="button"
-                        className="btn btn-small"
-                        style={{ 
-                            flex: 1, 
-                            marginBottom: 0,
-                            background: filterType === 'common' ? 'var(--primary-color)' : 'rgba(255,255,255,0.06)',
-                            color: filterType === 'common' ? '#fff' : 'var(--text-muted)',
-                            border: '1px solid var(--glass-border)'
-                        }}
-                        onClick={() => setFilterType('common')}
-                    >
-                        Base ({COMMON_FOODS.length})
-                    </button>
-                </div>
             </div>
 
             {/* Food Items List */}
             <div className="card">
                 <div className="flex-between mb-10 pb-10 border-b">
                     <span className="text-sm font-bold text-muted">
-                        Risultati ({filteredFoods.length})
+                        I tuoi Alimenti ({filteredFoods.length})
                     </span>
                 </div>
 
-                {filteredFoods.length === 0 ? (
+                {customFoods.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🥗</div>
+                        <p className="m-0 text-sm font-semibold text-white">Nessun alimento presente.</p>
+                        <p className="m-0 text-xs text-muted mt-4">
+                            Clicca su <strong>+ Crea Alimento</strong> in alto per iniziare a inserire i tuoi alimenti.
+                        </p>
+                    </div>
+                ) : filteredFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
                         <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔍</div>
-                        <p className="m-0 text-sm">Nessun alimento trovato.</p>
+                        <p className="m-0 text-sm">Nessun alimento trovato per "{searchQuery}".</p>
                     </div>
                 ) : (
                     filteredFoods.map((f: any, idx: number) => (
@@ -329,15 +282,6 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                                 <div>
                                     <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                         <span>{f.name}</span>
-                                        {f.isCustom ? (
-                                            <span style={{ background: 'var(--warning-color)', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold' }}>
-                                                Custom
-                                            </span>
-                                        ) : (
-                                            <span style={{ background: 'rgba(255,255,255,0.1)', color: 'var(--text-muted)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>
-                                                {f.category || 'Base'}
-                                            </span>
-                                        )}
                                     </div>
                                     {f.brand && (
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -346,28 +290,26 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                                     )}
                                 </div>
 
-                                {f.isCustom && (
-                                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                        <button 
-                                            type="button" 
-                                            className="btn btn-small" 
-                                            style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
-                                            onClick={() => openEditModal(f)}
-                                            title="Modifica alimento"
-                                        >
-                                            ✏️ Modifica
-                                        </button>
-                                        <button 
-                                            type="button" 
-                                            className="btn-icon" 
-                                            style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }}
-                                            onClick={() => handleDeleteFood(f)}
-                                            title="Elimina alimento"
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                )}
+                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                    <button 
+                                        type="button" 
+                                        className="btn btn-small" 
+                                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
+                                        onClick={() => openEditModal(f)}
+                                        title="Modifica alimento"
+                                    >
+                                        ✏️ Modifica
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        className="btn-icon" 
+                                        style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }}
+                                        onClick={() => handleDeleteFood(f)}
+                                        title="Elimina alimento"
+                                    >
+                                        🗑️
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Macro details */}
