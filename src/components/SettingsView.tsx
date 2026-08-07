@@ -127,7 +127,7 @@ const SettingsView = () => {
                             marginBottom: '20px'
                         }}>
                             <p><b>1. Titolare del trattamento</b><br />
-                            Il titolare del trattamento dei dati è lo sviluppatore di questo servizio (LogBook). Per qualsiasi domanda o per esercitare i tuoi diritti, puoi contattare l'amministratore.</p>
+                            L'applicazione LogBook è fornita come servizio di utilità personale. Ciascun utente mantiene il controllo diretto e autonomo sui propri dati, che possono essere gestiti, esportati o cancellati in qualsiasi momento tramite le funzionalità integrate nell'applicazione.</p>
 
                             <p><b>2. Dati raccolti</b><br />
                             Raccogliamo ed elaboriamo esclusivamente i dati strettamente necessari per il funzionamento dell'applicazione:
