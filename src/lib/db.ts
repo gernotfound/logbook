@@ -217,8 +217,12 @@ export const DB = {
             });
 
             if (hasWrites) {
-                await batch.commit();
-                console.log(`Sincronizzazione DB completata.`);
+                try {
+                    await withTimeout(batch.commit(), 7000, "Timeout sincronizzazione Firestore");
+                    console.log(`Sincronizzazione DB completata.`);
+                } catch (batchErr) {
+                    console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
+                }
             }
             lastSavedStateStr = JSON.stringify(state);
         } catch (error) {
@@ -228,8 +232,12 @@ export const DB = {
     },
     async secureLogOut() {
         console.log("Attendo il completamento delle scritture offline...");
-        await waitForPendingWrites(db);
-        console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
+        try {
+            await withTimeout(waitForPendingWrites(db), 2500, "Timeout scritture offline");
+            console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
+        } catch (err) {
+            console.warn("Disconnessione con scritture in cache locale:", err);
+        }
         await auth.signOut();
     },
     async deleteAccount() {

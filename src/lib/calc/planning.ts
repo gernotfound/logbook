@@ -1,6 +1,6 @@
 import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
 import { GROUP_MAP } from '../constants/muscles';
-import type { TrainingCycle, WorkoutRoutine, Exercise } from '../../types';
+import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../types';
 
 export interface MuscleVolumeDetail {
     key: string;

@@ -11,7 +11,6 @@ export default function TrainingPlanning() {
     const userData = useAppStore(state => state.userData);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
-    const showConfirm = useDialogStore(state => state.showConfirm);
 
     const routines: WorkoutRoutine[] = userData?.routines || [];
     const library: Exercise[] = userData?.library || [];
@@ -43,12 +42,14 @@ export default function TrainingPlanning() {
         setEditingCycle(null);
         setIsEditing(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.getElementById('view-training')?.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleEditCycle = (cycle: TrainingCycle) => {
         setEditingCycle(cycle);
         setIsEditing(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.getElementById('view-training')?.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {
@@ -71,8 +72,8 @@ export default function TrainingPlanning() {
             });
             setIsEditing(false);
             setEditingCycle(null);
-        } catch {
-            await showAlert("Errore durante il salvataggio del ciclo.");
+        } catch (e) {
+            console.error("Errore salvataggio ciclo:", e);
         }
     };
 
@@ -85,8 +86,8 @@ export default function TrainingPlanning() {
                     activeCycleId: cycleId
                 };
             });
-        } catch {
-            await showAlert("Errore durante l'attivazione del ciclo.");
+        } catch (e) {
+            console.error("Errore attivazione ciclo:", e);
         }
     };
 
@@ -99,8 +100,8 @@ export default function TrainingPlanning() {
                     activeCycleId: null
                 };
             });
-        } catch {
-            await showAlert("Errore durante la disattivazione del ciclo.");
+        } catch (e) {
+            console.error("Errore disattivazione ciclo:", e);
         }
     };
 
@@ -122,15 +123,12 @@ export default function TrainingPlanning() {
                     trainingCycles: [...currentCycles, duplicated]
                 };
             });
-        } catch {
-            await showAlert("Errore durante la duplicazione del ciclo.");
+        } catch (e) {
+            console.error("Errore duplicazione ciclo:", e);
         }
     };
 
     const handleDeleteCycle = async (cycle: TrainingCycle) => {
-        const confirmed = await showConfirm(`Sei sicuro di voler eliminare il ciclo "${cycle.name}"?`);
-        if (!confirmed) return;
-
         try {
             await saveUserData((prev) => {
                 if (!prev) return null;
@@ -145,8 +143,8 @@ export default function TrainingPlanning() {
                     activeCycleId: nextActiveId
                 };
             });
-        } catch {
-            await showAlert("Errore durante l'eliminazione del ciclo.");
+        } catch (e) {
+            console.error("Errore eliminazione ciclo:", e);
         }
     };
 

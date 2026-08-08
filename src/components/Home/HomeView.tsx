@@ -16,18 +16,20 @@ const PERIOD_OPTIONS = [
 ] as const;
 
 const HomeView = ({ onNavigate }: any) => {
-  const {
-      loading, isRestDay, todaysWorkout,
-      kcalEaten, carbs, pro, fat, kcalTarget,
-      bf, streak, totalWorkouts,
-      tdeeCalc, recentDates, chartData,
-      weightPeriod, setWeightPeriod, weightStats,
-      muscleColors, volumeChartData
-  } = useHomeView();
+  const homeState = useHomeView();
   
-  if (loading) {
+  if (homeState.loading) {
       return <div className="view-section active"><div className="spinner"></div></div>;
   }
+
+  const {
+      isRestDay, todaysWorkout,
+      kcalEaten, carbs, pro, fat, kcalTarget,
+      bf, streak, totalWorkouts,
+      tdeeCalc, chartData,
+      weightPeriod, setWeightPeriod, weightStats,
+      muscleColors, volumeChartData
+  } = homeState;
 
   return (
     <div id="view-home" className="view-section active">

@@ -48,9 +48,23 @@ export function usePWAInstall() {
             setDeferredPrompt(null);
         }
     };
+    const isIOS = typeof navigator !== 'undefined' && (
+        /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase()) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
+    
+    const isStandalone = typeof window !== 'undefined' && (
+        (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches) || 
+        Boolean((navigator as any)?.standalone)
+    );
+
+    const isIOSInstallable = isIOS && !isStandalone;
 
     return {
         isInstallable: !!deferredPrompt,
+        isIOSInstallable,
+        isStandalone,
         promptInstall
     };
 }
+

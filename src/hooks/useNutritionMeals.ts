@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
-import { COMMON_FOODS } from '../lib/foods';
 import { Logic } from '../lib/logic';
 
 export function useNutritionMeals() {
@@ -210,7 +209,6 @@ export function useNutritionMeals() {
             return;
         }
 
-        const customFoods = (userData?.customFoods || []) as any[];
         if (validation.cleanData) {
             const cleanData = validation.cleanData;
             const currentEditingId = editingFoodId;

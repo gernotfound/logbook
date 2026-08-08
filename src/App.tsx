@@ -42,7 +42,7 @@ function App() {
   // Tracciamento dei tab su Google Analytics (SPA tab tracking)
   useEffect(() => {
     if (analytics) {
-      logEvent(analytics, 'screen_view', {
+      (logEvent as any)(analytics, 'screen_view', {
         screen_name: activeTab,
         screen_class: 'App'
       });
@@ -53,7 +53,7 @@ function App() {
     if (analytics) {
       const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
       if (subTab) {
-        logEvent(analytics, 'sub_tab_view', {
+        (logEvent as any)(analytics, 'sub_tab_view', {
           tab: activeTab,
           sub_tab: subTab
         });

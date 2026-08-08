@@ -76,10 +76,6 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         }).filter(item => item.routine !== undefined);
     }, [activeCycle, routines]);
 
-    const cycleTimeline = useMemo(() => {
-        return Logic.calculateCycleTimeline(activeCycle);
-    }, [activeCycle]);
-
     const nextScheduled = useMemo(() => {
         return Logic.getNextScheduledRoutine(activeCycle, routines, history);
     }, [activeCycle, routines, history]);
@@ -103,18 +99,6 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             if (openSetupExIndex === idx) setOpenSetupExIndex(null);
         });
     }, [removeActiveExercise, openHistoryExIndex, openSetupExIndex]);
-
-    const handleOpenHistory = useCallback((exIndex: number) => {
-        setOpenHistoryExIndex(prev => prev === exIndex ? null : exIndex);
-    }, []);
-
-    const handleOpenSetup = useCallback((exIndex: number) => {
-        setOpenSetupExIndex(prev => prev === exIndex ? null : exIndex);
-    }, []);
-
-    const handleToggleSpecialMenu = useCallback((key: string) => {
-        setOpenSpecialMenuId(prev => prev === key ? null : key);
-    }, []);
 
     const handleAddSet = useCallback((exIndex: number, type: string = 'normal', setId: string | null = null) => {
         addSpecialSet(exIndex, setId as string, type, () => setOpenSpecialMenuId(null));

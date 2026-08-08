@@ -66,7 +66,31 @@ function calcStreak(history: any[]): number {
     return streak;
 }
 
-export function useHomeView() {
+export type HomeViewState = 
+    | { loading: true }
+    | {
+        loading: false;
+        isRestDay: boolean;
+        todaysWorkout: any;
+        kcalEaten: number;
+        carbs: number;
+        pro: number;
+        fat: number;
+        kcalTarget: number;
+        bf: string;
+        streak: number;
+        totalWorkouts: number;
+        tdeeCalc: any;
+        recentDates: string[];
+        chartData: any;
+        weightPeriod: string;
+        setWeightPeriod: (p: any) => void;
+        weightStats: any;
+        muscleColors: any;
+        volumeChartData: any;
+    };
+
+export function useHomeView(): HomeViewState {
     const userData = useAppStore(state => state.userData);
 
     // Always derive safe values — required before any useMemo (Rules of Hooks)
@@ -322,10 +346,10 @@ export function useHomeView() {
         if (recentMeasurement?.waist && recentMeasurement?.neck && userData?.profile?.height) {
             const calc = Logic.calculateUsNavyBodyFat({
                 gender: userData.profile.gender || 'M',
-                height: parseFloat(userData.profile.height),
-                waist: parseFloat(recentMeasurement.waist),
-                neck: parseFloat(recentMeasurement.neck),
-                hip: recentMeasurement.hip ? parseFloat(recentMeasurement.hip) : undefined
+                height: parseFloat(String(userData.profile.height)),
+                waist: parseFloat(String(recentMeasurement.waist)),
+                neck: parseFloat(String(recentMeasurement.neck)),
+                hip: recentMeasurement.hip ? parseFloat(String(recentMeasurement.hip)) : undefined
             });
             if (calc !== null && !isNaN(calc)) {
                 bf = Number(calc).toFixed(1);

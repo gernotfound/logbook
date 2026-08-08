@@ -9,7 +9,7 @@ const SettingsView = () => {
         handleExport, handleDeleteAccount
     } = useSettings();
 
-    const { isInstallable, promptInstall } = usePWAInstall();
+    const { isInstallable, isIOSInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
 
@@ -50,6 +50,17 @@ const SettingsView = () => {
                     <button className="btn btn-primary" style={{ width: '100%' }} onClick={promptInstall}>
                         📱 Installa app sul telefono
                     </button>
+                </div>
+            )}
+
+            {isIOSInstallable && (
+                <div className="card" style={{ marginTop: '15px', border: '1px solid var(--primary-color)', background: 'rgba(14, 165, 233, 0.08)' }}>
+                    <h4 style={{ margin: '0 0 8px 0', color: 'var(--primary-color)', fontSize: '0.95rem' }}>
+                        📱 Installa su iPhone / iPad
+                    </h4>
+                    <p style={{ fontSize: '0.85rem', margin: 0, lineHeight: 1.4, color: 'var(--text-main)' }}>
+                        Per installare LogBook come app a schermo intero: tocca l'icona <strong>Condividi</strong> in Safari e seleziona <strong>"Aggiungi alla schermata Home"</strong>.
+                    </p>
                 </div>
             )}
 

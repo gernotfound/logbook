@@ -98,6 +98,26 @@ export interface WorkoutSession {
     originalHistoryId?: string;
 }
 
+export interface LoggedMealItem {
+    id: string;
+    name: string;
+    meal: string; // 'colazione' | 'pranzo' | 'cena' | 'spuntino' | 'quick' | string
+    quantity: number;
+    baseQty?: number;
+    unit?: string;
+    kcal: number;
+    carbs: number;
+    pro: number;
+    fat: number;
+    time?: number;
+    foodId?: string | number;
+    brand?: string;
+}
+
+export type Meal = LoggedMealItem;
+export type Routine = WorkoutRoutine;
+export type ExerciseLibraryItem = Exercise;
+
 export interface NutritionDay {
     date: string;
     kcal: number;
@@ -110,7 +130,7 @@ export interface NutritionDay {
     waist?: number | string;
     hip?: number | string;
     measurementTime?: string;
-    meals?: Meal[];
+    meals?: LoggedMealItem[];
 }
 
 export interface Food {
@@ -136,13 +156,6 @@ export interface Food {
     calcium?: number | null;
     magnesium?: number | null;
     cholesterol?: number | null;
-}
-
-export interface Meal {
-    id: string;
-    name: string;
-    time: string;
-    foods: { food: Food; quantity: number; unit?: string }[];
 }
 
 export interface TrainingCycleRoutineItem {
