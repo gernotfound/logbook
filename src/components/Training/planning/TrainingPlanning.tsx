@@ -307,18 +307,11 @@ export default function TrainingPlanning() {
                         </div>
                     </div>
                 ) : (
-                    <div style={{ textAlign: 'center', padding: '20px 10px', color: 'var(--text-muted)' }}>
-                        <p className="m-0 text-sm font-semibold text-white">Nessun ciclo di allenamento attivo.</p>
+                    <div style={{ textAlign: 'center', padding: '15px 10px', color: 'var(--text-muted)' }}>
+                        <p className="m-0 text-sm font-semibold text-white">Nessun ciclo di allenamento attivo</p>
                         <p className="m-0 text-xs text-muted mt-4">
-                            Crea il tuo primo ciclo per visualizzare il volume settimanale e la distribuzione muscolare.
+                            Utilizza il pulsante &quot;+ Nuovo ciclo&quot; in alto per impostare la tua prima programmazione.
                         </p>
-                        <button
-                            type="button"
-                            className="btn btn-primary btn-small mt-10"
-                            onClick={handleCreateNew}
-                        >
-                            ➕ Crea ciclo di allenamento
-                        </button>
                     </div>
                 )}
             </div>
