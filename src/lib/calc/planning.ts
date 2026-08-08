@@ -344,14 +344,15 @@ export function getNextScheduledRoutine(
         if (r?.id) routineMap.set(r.id, r);
     });
 
-    const cycleRoutineIds = new Set(cycle.routines.map(r => r.routineId).filter(Boolean));
-    if (cycleRoutineIds.size === 0) return null;
+    const validCycleRoutines = cycle.routines.filter(r => r && r.routineId);
+    if (validCycleRoutines.length === 0) return null;
 
-    const N = cycle.routines.length;
+    const cycleRoutineIds = new Set(validCycleRoutines.map(r => r.routineId));
+    const N = validCycleRoutines.length;
     const durationWeeks = Math.max(1, Number(cycle.durationWeeks) || 4);
     let sessionsPerWeek = Number(cycle.sessionsPerWeek);
     if (!sessionsPerWeek || sessionsPerWeek < 1) {
-        const sumFreq = cycle.routines.reduce((sum, r) => sum + (Number(r.frequencyPerWeek) || 1), 0);
+        const sumFreq = validCycleRoutines.reduce((sum, r) => sum + (Number(r.frequencyPerWeek) || 1), 0);
         sessionsPerWeek = sumFreq > 0 ? sumFreq : N;
     }
     const totalSessions = durationWeeks * sessionsPerWeek;
@@ -361,9 +362,11 @@ export function getNextScheduledRoutine(
     if (Array.isArray(history) && history.length > 0) {
         completedCount = history.filter(w => {
             if (!w) return false;
-            // Explicit cycleId match
-            if (w.cycleId === cycle.id) return true;
-            // If cycle has a startDate, match routines of this cycle completed on or after startDate
+            // Explicit cycleId match (if tagged with a cycle, must match this cycle.id)
+            if (w.cycleId) {
+                return w.cycleId === cycle.id;
+            }
+            // If cycle has a startDate, match routines of this cycle completed on or after startDate (legacy fallback)
             if (cycle.startDate && w.date && w.date >= cycle.startDate && w.routineId && cycleRoutineIds.has(w.routineId)) {
                 return true;
             }
@@ -375,7 +378,7 @@ export function getNextScheduledRoutine(
     const isCycleCompleted = completedCount >= totalSessions;
 
     const routineIdx = completedCount % N;
-    const nextItem = cycle.routines[routineIdx];
+    const nextItem = validCycleRoutines[routineIdx];
     const nextRoutine = nextItem ? routineMap.get(nextItem.routineId) : undefined;
     const rotationNumber = Math.floor(completedCount / N) + 1;
     const positionInRotation = routineIdx + 1;

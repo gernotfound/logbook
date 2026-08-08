@@ -97,21 +97,14 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
 
     const handleAddRoutineById = (routineId: string) => {
         if (!routineId) return;
-        const exists = cycleRoutines.find(r => r.routineId === routineId);
-        if (exists) {
-            setCycleRoutines(prev =>
-                prev.map(r => r.routineId === routineId ? { ...r, frequencyPerWeek: r.frequencyPerWeek + 1 } : r)
-            );
-        } else {
-            setCycleRoutines(prev => [
-                ...prev,
-                { routineId, frequencyPerWeek: 1 }
-            ]);
-            // If sessionsPerWeek is not customized or is equal to old length, update it gracefully
-            const newCount = cycleRoutines.length + 1;
-            if (!initialCycle?.sessionsPerWeek && parseInt(sessionsPerWeek, 10) === cycleRoutines.length) {
-                setSessionsPerWeek(String(newCount));
-            }
+        setCycleRoutines(prev => [
+            ...prev,
+            { routineId, frequencyPerWeek: 1 }
+        ]);
+        // If sessionsPerWeek is not customized or is equal to old length, update it gracefully
+        const newCount = cycleRoutines.length + 1;
+        if (!initialCycle?.sessionsPerWeek && parseInt(sessionsPerWeek, 10) === cycleRoutines.length) {
+            setSessionsPerWeek(String(newCount));
         }
     };
 
@@ -126,8 +119,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         });
     };
 
-    const handleRemoveRoutine = (routineId: string) => {
-        setCycleRoutines(prev => prev.filter(r => r.routineId !== routineId));
+    const handleRemoveRoutine = (index: number) => {
+        setCycleRoutines(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -509,7 +502,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                             type="button"
                                             className="btn-icon"
                                             style={{ color: 'var(--danger-color)', fontSize: '1rem', padding: '4px', marginLeft: '4px' }}
-                                            onClick={() => handleRemoveRoutine(item.routineId)}
+                                            onClick={() => handleRemoveRoutine(idx)}
                                             title="Rimuovi scheda dalla sequenza"
                                         >
                                             🗑️

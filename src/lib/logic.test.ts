@@ -399,6 +399,58 @@ describe('Logic Library Tests', () => {
             expect(schedule.weeks[2].sessions.map(s => s.routineName)).toEqual(['Scheda C']);
             expect(schedule.weeks[3].sessions.map(s => s.routineName)).toEqual(['Scheda D']);
         });
+
+        it('isolates workouts belonging to other cycles correctly', () => {
+            const cycleA = {
+                id: 'cycleA',
+                name: 'Ciclo A',
+                durationWeeks: 4,
+                sessionsPerWeek: 3,
+                routines: [
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rB', frequencyPerWeek: 1 },
+                    { routineId: 'rC', frequencyPerWeek: 1 },
+                ]
+            };
+
+            const historyWithOtherCycle = [
+                { id: 'w1', cycleId: 'cycle_OTHER', routineId: 'rA', date: '2026-08-10' },
+                { id: 'w2', cycleId: 'cycle_OTHER', routineId: 'rB', date: '2026-08-11' },
+                { id: 'w3', cycleId: 'cycleA', routineId: 'rA', date: '2026-08-12' },
+            ];
+
+            const next = Logic.getNextScheduledRoutine(cycleA, mockRoutines as any, historyWithOtherCycle as any);
+            // Only w3 belongs to cycleA -> completedCount = 1 -> next is Scheda B
+            expect(next?.completedCount).toBe(1);
+            expect(next?.nextRoutine?.name).toBe('Scheda B');
+            expect(next?.nextSessionIndex).toBe(2);
+        });
+
+        it('supports repeating routines in sequence (e.g., A, B, A, C)', () => {
+            const cycle = {
+                id: 'cycle-repeat',
+                name: 'Ciclo Split ABAC',
+                durationWeeks: 4,
+                sessionsPerWeek: 4,
+                routines: [
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rB', frequencyPerWeek: 1 },
+                    { routineId: 'rA', frequencyPerWeek: 1 },
+                    { routineId: 'rC', frequencyPerWeek: 1 },
+                ]
+            };
+
+            const schedule = Logic.calculateCycleSchedule(cycle, mockRoutines as any);
+            expect(schedule.weeks[0].sessions.map(s => s.routineName)).toEqual(['Scheda A', 'Scheda B', 'Scheda A', 'Scheda C']);
+
+            const history2 = [
+                { id: 'w1', cycleId: 'cycle-repeat', routineId: 'rA' },
+                { id: 'w2', cycleId: 'cycle-repeat', routineId: 'rB' },
+            ];
+            const next = Logic.getNextScheduledRoutine(cycle, mockRoutines as any, history2 as any);
+            expect(next?.nextRoutine?.name).toBe('Scheda A');
+            expect(next?.positionInRotation).toBe(3);
+        });
     });
 });
 

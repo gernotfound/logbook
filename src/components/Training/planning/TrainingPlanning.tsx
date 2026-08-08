@@ -60,7 +60,9 @@ export default function TrainingPlanning() {
                 const updatedCycles = isUpdate
                     ? currentCycles.map(c => c.id === savedCycle.id ? savedCycle : c)
                     : [...currentCycles, savedCycle];
-                const newActiveId = prev.activeCycleId || savedCycle.id;
+                const newActiveId = prev.activeCycleId !== undefined && prev.activeCycleId !== null
+                    ? prev.activeCycleId
+                    : (updatedCycles.length === 1 ? savedCycle.id : null);
                 return {
                     ...prev,
                     trainingCycles: updatedCycles,
@@ -323,11 +325,12 @@ export default function TrainingPlanning() {
                                 Schede assegnate a questo ciclo
                             </span>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {(activeCycle.routines || []).map(item => {
+                                {(activeCycle.routines || []).map((item, idx) => {
                                     const routine = routines.find(r => r.id === item.routineId);
+                                    const letterIndex = String.fromCharCode(65 + (idx % 26));
                                     return (
                                         <div
-                                            key={item.routineId}
+                                            key={`${item.routineId}-${idx}`}
                                             style={{
                                                 padding: '6px 10px',
                                                 borderRadius: '8px',
@@ -339,19 +342,8 @@ export default function TrainingPlanning() {
                                                 gap: '6px'
                                             }}
                                         >
+                                            <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{letterIndex}.</span>
                                             <span style={{ fontWeight: 'bold' }}>{routine?.name || 'Scheda'}</span>
-                                            <span
-                                                style={{
-                                                    fontSize: '0.7rem',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '4px',
-                                                    background: 'rgba(14, 165, 233, 0.15)',
-                                                    color: 'var(--primary-color)',
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                {item.frequencyPerWeek}x / sett.
-                                            </span>
                                         </div>
                                     );
                                 })}
