@@ -3,6 +3,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Logic } from '../../lib/logic';
 import CustomFoodModal from './CustomFoodModal';
+import { FoodArchiveSearch } from './archive/FoodArchiveSearch';
+import { FoodItemRow } from './archive/FoodItemRow';
 
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
@@ -194,46 +196,10 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 />
 
                 {/* Search Bar */}
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginTop: '10px' }}>
-                    <input 
-                        type="text" 
-                        placeholder="Cerca per nome o marca..." 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        onFocus={e => e.target.select()}
-                        style={{ 
-                            width: '100%', 
-                            margin: 0, 
-                            height: '44px', 
-                            paddingLeft: '14px', 
-                            paddingRight: searchQuery ? '36px' : '14px',
-                            fontSize: '16px',
-                            borderRadius: '10px'
-                        }}
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={() => setSearchQuery('')}
-                            style={{
-                                position: 'absolute',
-                                right: '8px',
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'var(--text-muted)',
-                                fontSize: '1rem',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                            aria-label="Cancella ricerca"
-                        >
-                            ✕
-                        </button>
-                    )}
-                </div>
+                <FoodArchiveSearch 
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                />
             </div>
 
             {/* Food Items List */}
@@ -259,85 +225,15 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     </div>
                 ) : (
                     filteredFoods.map((f: any, idx: number) => (
-                        <div 
+                        <FoodItemRow
                             key={f.id || idx}
-                            style={{
-                                padding: '14px 0',
-                                borderBottom: idx === filteredFoods.length - 1 ? 'none' : '1px solid var(--glass-border)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '8px'
-                            }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-                                <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                        <span>{f.name}</span>
-                                    </div>
-                                    {f.brand && (
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                            {f.brand}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                    <button 
-                                        type="button" 
-                                        className="btn btn-small" 
-                                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
-                                        onClick={() => openEditModal(f)}
-                                        title="Modifica alimento"
-                                    >
-                                        ✏️ Modifica
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        className="btn-icon" 
-                                        style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }}
-                                        onClick={() => handleDeleteFood(f)}
-                                        title="Elimina alimento"
-                                    >
-                                        🗑️
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Macro details */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                                <span style={{ fontWeight: 'bold', color: 'var(--warning-color)' }}>
-                                    {f.kcal} kcal
-                                </span>
-                                <span>/ {f.baseQty || 100}{f.unit || 'g'}</span>
-                                <span>•</span>
-                                <span>Carbo: <b style={{ color: 'var(--text-main)' }}>{f.carbs || 0}g</b></span>
-                                <span>Pro: <b style={{ color: 'var(--text-main)' }}>{f.pro || 0}g</b></span>
-                                <span>Grassi: <b style={{ color: 'var(--text-main)' }}>{f.fat || 0}g</b></span>
-                            </div>
-
-                            {/* Quick Add buttons */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '4px' }}>+ Aggiungi a:</span>
-                                {MEAL_TYPES.map(mt => (
-                                    <button 
-                                        key={mt}
-                                        type="button"
-                                        className="btn btn-small"
-                                        style={{ 
-                                            padding: '4px 8px', 
-                                            fontSize: '0.75rem', 
-                                            marginBottom: 0,
-                                            background: 'rgba(255,255,255,0.06)',
-                                            border: '1px solid var(--glass-border)',
-                                            color: 'var(--text-main)'
-                                        }}
-                                        onClick={() => handleQuickAddToMeal(f, mt)}
-                                    >
-                                        {mt}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                            food={f}
+                            isLast={idx === filteredFoods.length - 1}
+                            mealTypes={MEAL_TYPES}
+                            onEdit={openEditModal}
+                            onDelete={handleDeleteFood}
+                            onQuickAddToMeal={handleQuickAddToMeal}
+                        />
                     ))
                 )}
             </div>
