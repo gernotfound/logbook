@@ -16,7 +16,7 @@ const DataView = lazy(() => import('./components/Data/DataView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
 function App() {
-  const { currentUser, loading, login, loginAnonymously, linkGoogleAccount, isAnonymous } = useAuth();
+  const { currentUser, loading, login, loginAsGuest, linkGoogleAccount, isGuest } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('logbook_activeTab') || 'home');
   const [trainingSubTab, setTrainingSubTab] = useState(() => localStorage.getItem('logbook_trainingSubTab') || 'session');
@@ -120,7 +120,7 @@ function App() {
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser && !isGuest) {
     return (
       <div id="auth-overlay">
         <div id="auth-login-box" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
@@ -139,7 +139,7 @@ function App() {
                 id="btn-login-anonymous"
                 className="btn"
                 style={{ width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--text-main)', fontSize: '0.95rem', padding: '13px' }}
-                onClick={loginAnonymously}
+                onClick={loginAsGuest}
             >
                 Continua senza account
             </button>
@@ -154,8 +154,8 @@ function App() {
   return (
     <>
       <GlobalDialog />
-      {/* Banner utente anonimo — visibile finché non collega Google */}
-      {isAnonymous && (
+      {/* Banner utente guest — visibile finché non collega Google */}
+      {isGuest && (
         <div style={{
           position: 'fixed',
           top: 'env(safe-area-inset-top, 0px)',
@@ -229,7 +229,7 @@ function App() {
         </div>
       )}
 
-      <main id="app-container">
+      <main id="app-container" style={isGuest ? { paddingTop: '36px' } : undefined}>
         {/* Render Active View */}
         <ErrorBoundary>
           <Suspense fallback={

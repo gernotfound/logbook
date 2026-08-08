@@ -10,7 +10,7 @@ const SettingsView = () => {
         handleExport, handleDeleteAccount
     } = useSettings();
 
-    const { isAnonymous, linkGoogleAccount } = useAuth();
+    const { isGuest, linkGoogleAccount } = useAuth();
     const { isInstallable, isIOSInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
@@ -30,7 +30,7 @@ const SettingsView = () => {
         <div id="view-settings" className="view-section active">
             <h2 style={{ marginBottom: '15px' }}>⚙️ Impostazioni</h2>
 
-            {isAnonymous ? (
+            {isGuest ? (
                 <div className="card" style={{ border: '1px solid var(--warning-color)' }}>
                     <h3 style={{ color: 'var(--warning-color)' }}>⚠️ Modalità locale</h3>
                     <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
@@ -47,6 +47,9 @@ const SettingsView = () => {
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '10px', textAlign: 'center' }}>
                         Il collegamento trasferisce i tuoi dati sul cloud senza perdere nulla.
                     </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
+                        <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dalla modalità locale</button>
+                    </div>
                 </div>
             ) : (
                 <div className="card" style={{ border: '1px solid var(--primary-color)' }}>
@@ -111,7 +114,10 @@ const SettingsView = () => {
             <div className="card" style={{ border: '1px solid var(--danger-color)', marginTop: '20px', marginBottom: '100px' }}>
                 <h3 style={{ color: 'var(--danger-color)' }}>⚠️ Zona pericolosa</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                    Elimina permanentemente il tuo account e tutti i dati associati. Questa azione è irreversibile.
+                    {isGuest
+                        ? "Elimina permanentemente tutti i dati salvati su questo dispositivo. Questa azione è irreversibile."
+                        : "Elimina permanentemente il tuo account e tutti i dati associati. Questa azione è irreversibile."
+                    }
                 </p>
                 <button 
                     className="btn" 
@@ -119,7 +125,7 @@ const SettingsView = () => {
                     onClick={handleDeleteAccount}
                     disabled={deletingAccount}
                 >
-                    {deletingAccount ? '⏳ Eliminazione...' : '🗑️ Elimina account e dati'}
+                    {deletingAccount ? '⏳ Eliminazione...' : (isGuest ? '🗑️ Elimina dati locali' : '🗑️ Elimina account e dati')}
                 </button>
             </div>
 

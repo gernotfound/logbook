@@ -4,9 +4,9 @@ import type { User } from 'firebase/auth';
 export interface AuthContextType {
     currentUser: User | null;
     loading: boolean;
-    isAnonymous: boolean;
+    isGuest: boolean;
     login: () => Promise<void>;
-    loginAnonymously: () => Promise<void>;
+    loginAsGuest: () => void;
     linkGoogleAccount: () => Promise<void>;
     logout: () => Promise<void>;
 }
@@ -14,9 +14,9 @@ export interface AuthContextType {
 export const defaultAuthContext: AuthContextType = {
     currentUser: null,
     loading: false,
-    isAnonymous: false,
+    isGuest: false,
     login: async () => {},
-    loginAnonymously: async () => {},
+    loginAsGuest: () => {},
     linkGoogleAccount: async () => {},
     logout: async () => {}
 };
