@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Logic } from '../../../lib/logic';
+import { useDialogStore } from '../../../store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine, TrainingCycleRoutineItem } from '../../../types';
 
 interface CycleEditorProps {
@@ -15,6 +16,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     onSave,
     onCancel
 }) => {
+    const showAlert = useDialogStore(state => state.showAlert);
     const [name, setName] = useState(initialCycle?.name || '');
     const [durationWeeks, setDurationWeeks] = useState(
         initialCycle?.durationWeeks !== undefined ? String(initialCycle.durationWeeks) : '6'
@@ -55,11 +57,11 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         setCycleRoutines(prev => prev.filter(r => r.routineId !== routineId));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmedName = name.trim();
         if (!trimmedName) {
-            alert("Inserisci un nome per il ciclo di allenamento.");
+            await showAlert("Inserisci un nome per il ciclo di allenamento.");
             return;
         }
 
@@ -108,7 +110,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         onChange={e => setName(e.target.value)}
                         onFocus={e => e.target.select()}
                         required
-                        style={{ width: '100%', fontSize: '16px' }}
+                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                     />
                 </div>
 
@@ -124,7 +126,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         onChange={e => setDurationWeeks(e.target.value)}
                         onFocus={e => e.target.select()}
                         required
-                        style={{ width: '100%', fontSize: '16px' }}
+                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                     />
                 </div>
             </div>
@@ -138,7 +140,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     rows={2}
-                    style={{ width: '100%', fontSize: '16px', borderRadius: '8px', padding: '10px' }}
+                    style={{ width: '100%', fontSize: '16px', borderRadius: '8px', padding: '10px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                 />
             </div>
 
@@ -178,7 +180,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                 >
                                     <div style={{ minWidth: 0, flex: 1 }}>
                                         <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                                            {routine?.name || 'Scheda non trovata'}
+                                            {routine?.name || 'Scheda'}
                                         </div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                             {routine?.exercises?.length || 0} esercizi
@@ -232,7 +234,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 <select
                     value={selectedRoutineToAdd}
                     onChange={e => setSelectedRoutineToAdd(e.target.value)}
-                    style={{ flex: 1, minWidth: 0, fontSize: '16px', marginBottom: 0 }}
+                    style={{ flex: 1, minWidth: 0, fontSize: '16px', marginBottom: 0, boxSizing: 'border-box', maxWidth: '100%' }}
                 >
                     <option value="">-- Seleziona una scheda da aggiungere --</option>
                     {routines.map(r => (

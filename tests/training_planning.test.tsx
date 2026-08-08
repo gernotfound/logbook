@@ -94,6 +94,22 @@ describe('Training Planning & Volume Calculations', () => {
         expect(result.highlightedMuscles).toEqual([]);
     });
 
+    it('calculateCycleVolume gracefully handles deleted routines and exercises', () => {
+        const cycleWithMissingRefs: TrainingCycle = {
+            id: 'cycle_missing',
+            name: 'Ciclo Test',
+            durationWeeks: 4,
+            routines: [
+                { routineId: 'non_existent_routine', frequencyPerWeek: 3 },
+                { routineId: 'r_push', frequencyPerWeek: 1 }
+            ]
+        };
+
+        const result = calculateCycleVolume(cycleWithMissingRefs, mockRoutines, mockLibrary);
+        expect(result.totalWorkoutsPerWeek).toBe(1);
+        expect(result.totalSetsPerWeek).toBe(7); // 4 bench + 3 ohp
+    });
+
     it('calculateCycleVolume correctly calculates weekly sets for multiple routines with frequencies', () => {
         const cycle: TrainingCycle = {
             id: 'cycle_1',
@@ -194,6 +210,18 @@ describe('Training Planning & Volume Calculations', () => {
             await waitFor(() => {
                 const cycles = useAppStore.getState().userData?.trainingCycles || [];
                 expect(cycles.some(c => c.name === 'Nuovo Ciclo Forza')).toBe(true);
+            });
+        });
+
+        it('supports duplicating and deleting a cycle', async () => {
+            render(<TrainingPlanning />);
+
+            const dupBtn = screen.getByTitle('Duplica ciclo');
+            fireEvent.click(dupBtn);
+
+            await waitFor(() => {
+                const cycles = useAppStore.getState().userData?.trainingCycles || [];
+                expect(cycles.some(c => c.name.includes('(Copia)'))).toBe(true);
             });
         });
 
