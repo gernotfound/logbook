@@ -21,8 +21,9 @@ export function getDetailedMuscleCategory(mId: string): { key: string; label: st
     const low = mId.toLowerCase();
 
     if (low.includes('pett') || low.includes('chest')) return { key: 'chest', label: 'Petto' };
-    if (low.includes('lat') || low.includes('dors') || low.includes('schien') || low.includes('back') || low.includes('rhomboid') || low.includes('trap')) {
-        return { key: 'back', label: 'Dorso e Trapezi' };
+    if (low.includes('trap')) return { key: 'traps', label: 'Trapezi' };
+    if (low.includes('lat') || low.includes('dors') || low.includes('schien') || low.includes('back') || low.includes('rhomboid')) {
+        return { key: 'back', label: 'Dorso' };
     }
     if (low.includes('delt') || low.includes('spall') || low.includes('shoulder')) return { key: 'shoulders', label: 'Spalle' };
     if (low.includes('quad')) return { key: 'quads', label: 'Quadricipiti' };

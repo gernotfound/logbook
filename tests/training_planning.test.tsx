@@ -79,7 +79,8 @@ describe('Training Planning & Volume Calculations', () => {
 
     it('getDetailedMuscleCategory correctly classifies muscles', () => {
         expect(getDetailedMuscleCategory('chest').label).toBe('Petto');
-        expect(getDetailedMuscleCategory('lats').label).toBe('Dorso e Trapezi');
+        expect(getDetailedMuscleCategory('lats').label).toBe('Dorso');
+        expect(getDetailedMuscleCategory('traps').label).toBe('Trapezi');
         expect(getDetailedMuscleCategory('delts_side').label).toBe('Spalle');
         expect(getDetailedMuscleCategory('quads').label).toBe('Quadricipiti');
         expect(getDetailedMuscleCategory('biceps').label).toBe('Bicipiti');
@@ -136,7 +137,7 @@ describe('Training Planning & Volume Calculations', () => {
         const spalle = result.muscleVolumes.find(m => m.label === 'Spalle');
         expect(spalle?.sets).toBe(6);
 
-        const dorso = result.muscleVolumes.find(m => m.label === 'Dorso e Trapezi');
+        const dorso = result.muscleVolumes.find(m => m.label === 'Dorso');
         expect(dorso?.sets).toBe(4);
 
         const quadricipiti = result.muscleVolumes.find(m => m.label === 'Quadricipiti');
