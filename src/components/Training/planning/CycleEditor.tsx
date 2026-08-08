@@ -35,7 +35,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     const [cycleRoutines, setCycleRoutines] = useState<TrainingCycleRoutineItem[]>(
         initialCycle?.routines ? JSON.parse(JSON.stringify(initialCycle.routines)) : []
     );
-    const [showSchedulePreview, setShowSchedulePreview] = useState(true);
+    const [showSchedulePreview, setShowSchedulePreview] = useState(false);
 
     useEffect(() => {
         if (initialCycle) {
@@ -308,39 +308,17 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         {tempFreq} {tempFreq === 1 ? 'seduta' : 'sedute'} / sett.
                     </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <input
-                        type="number"
-                        min="1"
-                        max="14"
-                        value={sessionsPerWeek}
-                        onChange={e => setSessionsPerWeek(e.target.value)}
-                        onFocus={e => e.target.select()}
-                        placeholder="Es. 4"
-                        required
-                        style={{ flex: 1, fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                    />
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                        {[1, 2, 3, 4, 5, 6].map(num => (
-                            <button
-                                key={num}
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                style={{
-                                    padding: '6px 10px',
-                                    marginBottom: 0,
-                                    fontSize: '0.85rem',
-                                    fontWeight: parseInt(sessionsPerWeek, 10) === num ? 'bold' : 'normal',
-                                    background: parseInt(sessionsPerWeek, 10) === num ? 'var(--primary-color)' : undefined,
-                                    color: parseInt(sessionsPerWeek, 10) === num ? '#000' : undefined
-                                }}
-                                onClick={() => setSessionsPerWeek(String(num))}
-                            >
-                                {num}x
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                <input
+                    type="number"
+                    min="1"
+                    max="14"
+                    value={sessionsPerWeek}
+                    onChange={e => setSessionsPerWeek(e.target.value)}
+                    onFocus={e => e.target.select()}
+                    placeholder="Es. 4"
+                    required
+                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                />
                 <p className="text-xs text-muted mt-4 mb-0">
                     Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
                 </p>
