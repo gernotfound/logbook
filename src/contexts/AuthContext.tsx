@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { auth, db, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
+import { auth, db, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInAnonymously, linkWithPopup } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { AuthContext } from './AuthContextDef';
@@ -120,7 +120,44 @@ export const AuthProvider = ({ children }: { children: any }) => {
         }
     }, [setSaveError]);
 
+    const loginAnonymously = useCallback(async () => {
+        setSaveError(null);
+        try {
+            await signInAnonymously(auth);
+        } catch (error: any) {
+            console.error("Errore login anonimo:", error);
+            setSaveError("Errore di accesso. Riprova.");
+        }
+    }, [setSaveError]);
+
+    const linkGoogleAccount = useCallback(async () => {
+        setSaveError(null);
+        const user = auth.currentUser;
+        if (!user) return;
+        try {
+            await linkWithPopup(user, provider);
+        } catch (error: any) {
+            if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+                // Ignorato silenziosamente — utente ha chiuso il popup
+                return;
+            }
+            if (error.code === 'auth/credential-already-in-use') {
+                setSaveError("Questo account Google è già registrato. Esci e accedi direttamente con Google per recuperare i tuoi dati.");
+                return;
+            }
+            console.error("Errore collegamento account Google:", error);
+            setSaveError("Collegamento fallito. Riprova.");
+        }
+    }, [setSaveError]);
+
     const logout = useCallback(async () => {
+        // Se utente anonimo, avvisare che i dati locali andranno persi
+        if (auth.currentUser?.isAnonymous) {
+            const confirmed = await useDialogStore.getState().showConfirm(
+                "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
+            );
+            if (!confirmed) return;
+        }
         setSyncing(true);
         try {
             await DB.secureLogOut();
@@ -142,12 +179,17 @@ export const AuthProvider = ({ children }: { children: any }) => {
         return { icon: '⚠️', text: error, bg: '#ef4444' };
     };
 
+    const isAnonymous = currentUser?.isAnonymous === true;
+
     const value = useMemo(() => ({
         currentUser,
         loading,
+        isAnonymous,
         login,
+        loginAnonymously,
+        linkGoogleAccount,
         logout
-    }), [currentUser, loading, login, logout]);
+    }), [currentUser, loading, isAnonymous, login, loginAnonymously, linkGoogleAccount, logout]);
 
     return (
         <AuthContext.Provider value={value}>
