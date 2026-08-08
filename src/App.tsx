@@ -61,6 +61,9 @@ function App() {
     }
   }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab]);
 
+  // Track visited tabs for lazy Keep-Alive rendering
+  const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
+
   // Preserve and restore scroll position across tabs
   const tabScrollPositions = useState<Record<string, number>>(() => ({}))[0];
   const currentTabRef = useState<{ current: string }>({ current: activeTab })[0];
@@ -68,6 +71,7 @@ function App() {
   const handleTabChange = (newTab: string) => {
     if (newTab === activeTab) return;
     tabScrollPositions[activeTab] = window.scrollY;
+    setVisitedTabs(prev => prev[newTab] ? prev : { ...prev, [newTab]: true });
     setActiveTab(newTab);
     currentTabRef.current = newTab;
     requestAnimationFrame(() => {
@@ -180,11 +184,21 @@ function App() {
               <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
             </div>
           }>
-            {activeTab === 'home' && <HomeView onNavigate={handleTabChange} />}
-            {activeTab === 'training' && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
-            {activeTab === 'nutrition' && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
-            {activeTab === 'data' && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
-            {activeTab === 'settings' && <SettingsView />}
+            <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
+              {(visitedTabs.home || activeTab === 'home') && <HomeView onNavigate={handleTabChange} />}
+            </div>
+            <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
+              {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
+            </div>
+            <div style={{ display: activeTab === 'nutrition' ? 'block' : 'none' }}>
+              {(visitedTabs.nutrition || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
+            </div>
+            <div style={{ display: activeTab === 'data' ? 'block' : 'none' }}>
+              {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
+            </div>
+            <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
+              {(visitedTabs.settings || activeTab === 'settings') && <SettingsView />}
+            </div>
           </Suspense>
         </ErrorBoundary>
       </main>

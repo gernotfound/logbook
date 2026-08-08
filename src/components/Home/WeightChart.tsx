@@ -16,6 +16,14 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const CHART_OPTIONS = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: {
+        duration: 400,
+        easing: 'easeOutQuart'
+    },
+    interaction: {
+        mode: 'index',
+        intersect: false
+    },
     plugins: {
         legend: { display: false },
         tooltip: {
@@ -25,6 +33,7 @@ const CHART_OPTIONS = {
             borderColor: 'rgba(255, 255, 255, 0.15)',
             borderWidth: 1,
             padding: 10,
+            cornerRadius: 8,
             displayColors: false,
             callbacks: {
                 title: (items: any) => {

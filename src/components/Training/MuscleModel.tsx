@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import MuscleModelPaths from './MuscleModelPaths';
 import { Logic } from '../../lib/logic';
+
+const MUSCLE_NAMES_MAP = new Map<string, string>(Logic.MUSCLES.map(m => [m.id, m.name]));
 
 interface MuscleModelProps {
     selectedMuscles?: string[];
@@ -35,30 +37,35 @@ export default function MuscleModel({
         return map;
     }, []);
 
-    const primaryIds = new Set<string>();
-    const secondaryIds = new Set<string>();
+    const primaryIds = useMemo(() => {
+        const set = new Set<string>();
+        selectedMuscles.forEach(muscle => {
+            if (!muscle || typeof muscle !== 'string') return;
+            const mapped = (Logic.GROUP_MAP as any)[muscle];
+            if (mapped) {
+                mapped.forEach((id: string) => set.add(id));
+            } else {
+                set.add(muscle);
+            }
+        });
+        return set;
+    }, [selectedMuscles]);
 
-    selectedMuscles.forEach(muscle => {
-        if (!muscle || typeof muscle !== 'string') return;
-        const mapped = (Logic.GROUP_MAP as any)[muscle];
-        if (mapped) {
-            mapped.forEach((id: string) => primaryIds.add(id));
-        } else {
-            primaryIds.add(muscle);
-        }
-    });
+    const secondaryIds = useMemo(() => {
+        const set = new Set<string>();
+        secondaryMuscles.forEach(muscle => {
+            if (!muscle || typeof muscle !== 'string') return;
+            const mapped = (Logic.GROUP_MAP as any)[muscle];
+            if (mapped) {
+                mapped.forEach((id: string) => set.add(id));
+            } else {
+                set.add(muscle);
+            }
+        });
+        return set;
+    }, [secondaryMuscles]);
 
-    secondaryMuscles.forEach(muscle => {
-        if (!muscle || typeof muscle !== 'string') return;
-        const mapped = (Logic.GROUP_MAP as any)[muscle];
-        if (mapped) {
-            mapped.forEach((id: string) => secondaryIds.add(id));
-        } else {
-            secondaryIds.add(muscle);
-        }
-    });
-
-    const getPathStyle = (id: string) => {
+    const getPathStyle = useCallback((id: string) => {
         const logicId = reverseMap[id];
         
         if (muscleColors) {
@@ -97,15 +104,14 @@ export default function MuscleModel({
             transition: 'all 0.3s ease',
             cursor: interactive ? 'pointer' : 'default',
         };
-    };
+    }, [reverseMap, muscleColors, primaryIds, secondaryIds, interactive]);
 
-    const handleMouseMove = (e: React.MouseEvent) => {
+    const handleMouseMove = useCallback((e: React.MouseEvent) => {
         const target = e.target as SVGElement;
         if (target.tagName === 'path' && target.id) {
             const logicId = reverseMap[target.id];
             if (logicId) {
-                const muscleDef = Logic.MUSCLES.find(m => m.id === logicId);
-                const name = muscleDef ? muscleDef.name : logicId;
+                const name = MUSCLE_NAMES_MAP.get(logicId) || logicId;
                 const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
                 if (!isTouch) {
                     setTooltip({
@@ -121,13 +127,13 @@ export default function MuscleModel({
         if (tooltip.visible) {
             setTooltip(prev => ({ ...prev, visible: false }));
         }
-    };
+    }, [reverseMap, tooltip.visible]);
 
-    const handleMouseLeave = () => {
+    const handleMouseLeave = useCallback(() => {
         setTooltip(prev => ({ ...prev, visible: false }));
-    };
+    }, []);
 
-    const handleClick = (e: React.MouseEvent) => {
+    const handleClick = useCallback((e: React.MouseEvent) => {
         if (!interactive || !onToggleMuscle) return;
         const target = e.target as SVGElement;
         if (target.tagName === 'path' && target.id) {
@@ -136,7 +142,7 @@ export default function MuscleModel({
                 onToggleMuscle(logicId);
             }
         }
-    };
+    }, [interactive, onToggleMuscle, reverseMap]);
 
     return (
         <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: '100%', padding: '30px 0 10px 0', margin: '0 auto', overflow: 'hidden', textAlign: 'center' }}>
