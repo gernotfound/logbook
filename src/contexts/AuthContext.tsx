@@ -17,10 +17,13 @@ export const AuthProvider = ({ children }: { children: any }) => {
     // useCallback: dipendenze stabili (selector Zustand), evita closure stale nel listener visibilitychange
     const loadData = useCallback(async (user: any) => {
         if (!user) return;
-        setSyncing(true);
+        const currentData = useAppStore.getState().userData;
+        if (!currentData) {
+            setSyncing(true);
+        }
         try {
             const data = await DB.loadUserData();
-            if (data) {
+            if (data && data !== currentData) {
                 setUserData(data);
             }
         } catch (error: any) {

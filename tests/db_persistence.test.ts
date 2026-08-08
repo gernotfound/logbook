@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { getDoc, getDocs, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
 import { DB } from '../src/lib/db';
-import { auth } from '../src/lib/firebase';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {

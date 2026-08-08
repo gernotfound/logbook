@@ -147,7 +147,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
     },
 
-    setSyncing: (val: boolean) => set({ syncing: val }),
+    setSyncing: (val: boolean) => set((state) => state.syncing === val ? state : { syncing: val }),
     setSaveError: (error: string | null) => set({ saveError: error }),
 
     saveUserData: async (newDataOrUpdater) => {

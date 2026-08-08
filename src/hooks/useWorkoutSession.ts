@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { resetGlobalWorkoutTimer } from '../components/Training/WorkoutTimer';
+import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
 import type { WorkoutSession } from '../types';
 
@@ -43,7 +43,7 @@ export function useWorkoutSession() {
             setWater('');
             setManualDuration('00:00:00');
         }
-    }, [activeWorkout?.id, activeWorkout?.originalHistoryId, activeWorkout?.isEditingHistory]);
+    }, [activeWorkout]);
 
     // Sub-hook per la manipolazione granulare delle serie ed esercizi
     const {

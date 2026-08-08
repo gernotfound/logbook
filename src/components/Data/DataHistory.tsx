@@ -27,9 +27,9 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {measurementsHistory.map((day: any) => (
+                    {measurementsHistory.map((day: any, idx: number) => (
                         <div 
-                            key={day.date} 
+                            key={day.date ? `${day.date}-${day.measurementTime || ''}-${idx}` : `hist-${idx}`} 
                             className="card" 
                             style={{ 
                                 padding: '15px', 

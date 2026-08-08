@@ -14,9 +14,30 @@ export const Exporter = {
                         ex.sets.forEach((set: any, idx: number) => {
                             // BUG FIX: new app uses set.kg (not set.weight)
                             const kg = set.kg !== undefined ? set.kg : (set.weight || 0);
-                            const reps = set.reps || 0;
-                            if (!reps && !kg) return;
-                            workoutCsv += `${dateStr},${routineName},${exName},${idx + 1},${reps},${kg}\n`;
+                            const repsOrTime = (set.time !== undefined && set.time !== '' && set.time !== null) ? set.time : (set.reps || 0);
+                            if (repsOrTime || kg) {
+                                workoutCsv += `${dateStr},${routineName},${exName},${idx + 1},${repsOrTime},${kg}\n`;
+                            }
+
+                            // Serie speciali: Dropsets
+                            if (Array.isArray(set.dropsets)) {
+                                set.dropsets.forEach((ds: any, dsIdx: number) => {
+                                    const dsKg = ds.kg !== undefined ? ds.kg : 0;
+                                    const dsReps = ds.reps || 0;
+                                    const label = set.dropsets.length > 1 ? `${idx + 1} (Dropset ${dsIdx + 1})` : `${idx + 1} (Dropset)`;
+                                    workoutCsv += `${dateStr},${routineName},${exName},"${label}",${dsReps},${dsKg}\n`;
+                                });
+                            }
+
+                            // Serie speciali: Isometrie
+                            if (Array.isArray(set.isometrics)) {
+                                set.isometrics.forEach((iso: any, isoIdx: number) => {
+                                    const isoKg = iso.kg !== undefined ? iso.kg : 0;
+                                    const isoTime = iso.time ? `${iso.time}s` : '0s';
+                                    const label = set.isometrics.length > 1 ? `${idx + 1} (Isometria ${isoIdx + 1})` : `${idx + 1} (Isometria)`;
+                                    workoutCsv += `${dateStr},${routineName},${exName},"${label}",${isoTime},${isoKg}\n`;
+                                });
+                            }
                         });
                     }
                 });

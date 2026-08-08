@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';

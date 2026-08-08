@@ -7,11 +7,12 @@ import TrainingSession from '../src/components/Training/TrainingSession';
 import TrainingRoutines from '../src/components/Training/TrainingRoutines';
 import TrainingHistory from '../src/components/Training/TrainingHistory';
 import TrainingView from '../src/components/Training/TrainingView';
-import WorkoutTimer, { resetGlobalWorkoutTimer } from '../src/components/Training/WorkoutTimer';
+import WorkoutTimer from '../src/components/Training/WorkoutTimer';
+import { resetGlobalWorkoutTimer } from '../src/lib/utils/timer';
 import SettingsView from '../src/components/SettingsView';
 import MuscleModel from '../src/components/Training/MuscleModel';
 import { useHomeView } from '../src/hooks/useHomeView';
-import type { WorkoutSession, UserData } from '../src/types';
+import type { WorkoutSession } from '../src/types';
 
 describe('Workout Improvements & History Edit Suite', () => {
 
@@ -360,7 +361,7 @@ describe('Workout Improvements & History Edit Suite', () => {
         return <div data-testid="home-loaded">{res.loading ? 'loading' : 'ready'}</div>;
       }
 
-      const { rerender } = renderWithProviders(<TestHomeComponent />, {
+      renderWithProviders(<TestHomeComponent />, {
         userData: {
           ...emptyUserData,
           nutrition: {

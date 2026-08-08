@@ -1,24 +1,5 @@
 import { useState, useEffect } from 'react';
-
-export const resetGlobalWorkoutTimer = () => {
-    try {
-        localStorage.removeItem('logbook_timer_state');
-        localStorage.removeItem('logbook_timer_start');
-        localStorage.removeItem('logbook_timer_accumulated');
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('logbook_reset_timer'));
-        }
-    } catch (e) {
-        console.error("Errore reset timer:", e);
-    }
-};
-
-const formatMs = (ms: number) => {
-    const elapsed = Math.max(0, Math.floor(ms / 1000));
-    const m = Math.floor(elapsed / 60);
-    const s = elapsed % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-};
+import { formatTimerMs } from '../../lib/utils/timer';
 
 export default function WorkoutTimer() {
     // Rest Timer State
@@ -42,9 +23,9 @@ export default function WorkoutTimer() {
         const acc = savedAcc ? parseInt(savedAcc, 10) : 0;
         
         if (savedState === 'running' && start > 0) {
-            return formatMs(Date.now() - start + acc);
+            return formatTimerMs(Date.now() - start + acc);
         } else if (savedState === 'paused' && acc > 0) {
-            return formatMs(acc);
+            return formatTimerMs(acc);
         }
         return '00:00';
     });
@@ -72,11 +53,11 @@ export default function WorkoutTimer() {
         localStorage.setItem('logbook_timer_accumulated', restAccumulated.toString());
     }, [restState, restStartTime, restAccumulated]);
 
-    // Rest Timer Ticker
+    // Rest Timer Ticker con aggiornamento istantaneo al ripristino da background
     useEffect(() => {
         if (restState !== 'running') {
             if (restState === 'paused') {
-                setRestDisplay(formatMs(restAccumulated));
+                setRestDisplay(formatTimerMs(restAccumulated));
             } else if (restState === 'stopped') {
                 setRestDisplay('00:00');
             }
@@ -85,13 +66,23 @@ export default function WorkoutTimer() {
 
         const tick = () => {
             const ms = Date.now() - restStartTime + restAccumulated;
-            setRestDisplay(formatMs(ms));
+            setRestDisplay(formatTimerMs(ms));
         };
 
         tick();
         const interval = setInterval(tick, 500);
 
-        return () => clearInterval(interval);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                tick();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [restState, restStartTime, restAccumulated]);
 
     const startRest = () => {

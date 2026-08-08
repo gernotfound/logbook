@@ -85,12 +85,12 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     useEffect(() => {
         if (nextScheduled?.nextRoutineId) {
             setSelectedPlannedRoutine(nextScheduled.nextRoutineId);
-        } else if (plannedRoutines.length > 0) {
-            setSelectedPlannedRoutine(plannedRoutines[0].routine!.id);
+        } else if (plannedRoutines.length > 0 && plannedRoutines[0].routine?.id) {
+            setSelectedPlannedRoutine(plannedRoutines[0].routine.id);
         } else {
             setSelectedPlannedRoutine('');
         }
-    }, [activeCycle?.id, nextScheduled?.nextRoutineId]);
+    }, [activeCycle?.id, nextScheduled?.nextRoutineId, plannedRoutines]);
 
     // Callbacks che chiudono i pannelli — memoizzate per non ricrearle ad ogni render
     const handleRemoveExercise = useCallback((exIndex: number) => {

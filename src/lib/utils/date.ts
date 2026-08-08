@@ -78,7 +78,7 @@ export function parseDateInput(input: string | undefined | null): string | null 
     }
 
     // Pattern DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
-    const dmyMatch = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    const dmyMatch = trimmed.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
     if (dmyMatch) {
         const day = parseInt(dmyMatch[1], 10);
         const month = parseInt(dmyMatch[2], 10);

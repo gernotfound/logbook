@@ -12,9 +12,9 @@ export default function TrainingPlanning() {
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
 
-    const routines: WorkoutRoutine[] = userData?.routines || [];
-    const library: Exercise[] = userData?.library || [];
-    const trainingCycles: TrainingCycle[] = userData?.trainingCycles || [];
+    const routines: WorkoutRoutine[] = useMemo(() => userData?.routines || [], [userData?.routines]);
+    const library: Exercise[] = useMemo(() => userData?.library || [], [userData?.library]);
+    const trainingCycles: TrainingCycle[] = useMemo(() => userData?.trainingCycles || [], [userData?.trainingCycles]);
     const activeCycleId = userData?.activeCycleId ?? null;
 
     const [isEditing, setIsEditing] = useState(false);
