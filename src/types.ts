@@ -143,6 +143,21 @@ export interface Meal {
     foods: { food: Food; quantity: number; unit?: string }[];
 }
 
+export interface TrainingCycleRoutineItem {
+    routineId: string;
+    frequencyPerWeek: number; // es. 1, 2, 3
+}
+
+export interface TrainingCycle {
+    id: string;
+    name: string;
+    durationWeeks: number; // es. 4, 6, 8, 12
+    notes?: string;
+    routines: TrainingCycleRoutineItem[];
+    createdAt?: number;
+    isActive?: boolean;
+}
+
 export interface UserData {
     profile?: UserProfile;
     library?: Exercise[];
@@ -152,4 +167,7 @@ export interface UserData {
     customFoods?: Food[];
     activeWorkout?: WorkoutSession | null;
     nutritionPlanning?: NutritionPlanning;
+    trainingCycles?: TrainingCycle[];
+    activeCycleId?: string | null;
 }
+

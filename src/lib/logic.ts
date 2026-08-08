@@ -30,6 +30,10 @@ import {
     searchRoutines,
     filterItems
 } from './calc/workout';
+import {
+    calculateCycleVolume,
+    getDetailedMuscleCategory
+} from './calc/planning';
 
 // Re-export all constants and types
 export { MUSCLES, GROUP_MAP };
@@ -68,7 +72,9 @@ export {
     validateHistory,
     getWorkoutDatesSet,
     searchRoutines,
-    filterItems
+    filterItems,
+    calculateCycleVolume,
+    getDetailedMuscleCategory
 };
 
 // Aggregated Logic object for full backward compatibility
@@ -111,10 +117,13 @@ export const Logic = {
     calculateMealTotals,
     generateMockNutrition,
 
-    // Workouts
+    // Workouts & Planning
     validateWorkoutRatings,
     validateHistory,
     getWorkoutDatesSet,
     searchRoutines,
-    filterItems
+    filterItems,
+    calculateCycleVolume,
+    getDetailedMuscleCategory
 };
+
