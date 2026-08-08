@@ -319,7 +319,7 @@ export function useHomeView() {
     } else {
         // Calcola da circonferenze recenti o profilo se bf non precalcolato
         const recentMeasurement = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.waist && n?.neck);
-        if (recentMeasurement?.waist && recentMeasurement?.neck && userData.profile?.height) {
+        if (recentMeasurement?.waist && recentMeasurement?.neck && userData?.profile?.height) {
             const calc = Logic.calculateUsNavyBodyFat({
                 gender: userData.profile.gender || 'M',
                 height: parseFloat(userData.profile.height),
@@ -330,7 +330,7 @@ export function useHomeView() {
             if (calc !== null && !isNaN(calc)) {
                 bf = Number(calc).toFixed(1);
             }
-        } else if (userData.profile && Object.keys(userData.profile).length > 0) {
+        } else if (userData?.profile && Object.keys(userData.profile).length > 0) {
             const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
             if (calcBf) bf = Number(calcBf).toFixed(1);
         }

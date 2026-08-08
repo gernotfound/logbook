@@ -39,8 +39,31 @@ const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
     }, 300);
 };
 
+const getInitialUserData = (): UserData | null => {
+    try {
+        const cached = localStorage.getItem('logbook_cached_user_data');
+        if (!cached) return null;
+        const parsed = JSON.parse(cached);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+
+const saveUserDataToLocalStorage = (data: UserData | null) => {
+    try {
+        if (data) {
+            localStorage.setItem('logbook_cached_user_data', JSON.stringify(data));
+        } else {
+            localStorage.removeItem('logbook_cached_user_data');
+        }
+    } catch (e) {
+        console.warn("Errore salvataggio cache userData in localStorage:", e);
+    }
+};
+
 export const useAppStore = create<AppState>((set, get) => ({
-    userData: null,
+    userData: getInitialUserData(),
     saveError: null,
     syncing: false,
     
@@ -119,7 +142,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 ...rawNextData,
                 activeWorkout: syncedLocalWorkout ?? null
             };
-            
+            saveUserDataToLocalStorage(nextData);
             return { userData: nextData, localWorkout: syncedLocalWorkout };
         });
     },
@@ -134,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             : newDataOrUpdater;
         
         if (!nextData) {
+            saveUserDataToLocalStorage(null);
             set({ userData: null, saveError: null });
             return;
         }
@@ -143,6 +167,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
         };
         
+        saveUserDataToLocalStorage(finalData);
         set({ userData: finalData, saveError: null });
 
         return new Promise<void>((resolve) => {
@@ -182,8 +207,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         pendingResolvers = [];
         try {
             localStorage.removeItem('logbook_local_workout');
+            localStorage.removeItem('logbook_cached_user_data');
         } catch (e) {
-            console.warn("Impossibile rimuovere logbook_local_workout", e);
+            console.warn("Impossibile rimuovere cache da localStorage", e);
         }
         set({ userData: null, localWorkout: null, saveError: null, syncing: false });
     }

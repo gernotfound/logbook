@@ -20,10 +20,12 @@ export const AuthProvider = ({ children }: { children: any }) => {
         setSyncing(true);
         try {
             const data = await DB.loadUserData();
-            setUserData(data);
+            if (data) {
+                setUserData(data);
+            }
         } catch (error: any) {
-            console.error("Errore caricamento dati in AuthContext:", error);
-            // Se offline, Firestore serve i dati dalla cache locale — non è un errore critico
+            console.warn("Errore caricamento dati in AuthContext (uso dati locali/offline):", error);
+            // Se offline o timeout, Firestore serve i dati dalla cache locale — non è un errore critico
             if (error?.code === 'unavailable' || !navigator.onLine) {
                 setSaveError("📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.");
             }
@@ -35,29 +37,35 @@ export const AuthProvider = ({ children }: { children: any }) => {
     useEffect(() => {
         let isMounted = true;
         
-        const initAuth = async () => {
-            try {
-                await getRedirectResult(auth);
-            } catch (err) {
-                console.warn("getRedirectResult error (non critico):", err);
-            }
+        // 1. NON-BLOCKING: Gestisci il risultato del redirect in background senza bloccare il listener di stato
+        getRedirectResult(auth).catch(err => {
+            console.warn("getRedirectResult error (non critico):", err);
+        });
+        
+        // 2. IMMEDIATE: Registra il listener auth immediatamente
+        const unsubscribe = onAuthStateChanged(auth, (user: any) => {
+            if (!isMounted) return;
+            setCurrentUser(user);
             
-            const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
-                if (!isMounted) return;
-                setCurrentUser(user);
-                if (user) {
-                    await loadData(user);
-                } else {
-                    DB.resetCache();
-                    useAppStore.getState().resetStore();
-                }
-                setLoading(false);
-            });
-            
-            return unsubscribe;
-        };
+            // Sblocca immediatamente la schermata di login/app senza attendere query di rete
+            setLoading(false);
 
-        const authUnsubPromise = initAuth();
+            if (user) {
+                // Carica i dati dal cloud in background
+                loadData(user);
+            } else {
+                DB.resetCache();
+                useAppStore.getState().resetStore();
+            }
+        });
+
+        // 3. Fallback di sicurezza: se WebKit su iOS dovesse avere un ritardo di inizializzazione,
+        // garantisci che la schermata di caricamento non rimanga bloccata all'infinito.
+        const safetyTimer = setTimeout(() => {
+            if (isMounted) {
+                setLoading(false);
+            }
+        }, 3000);
 
         // PWA FIX: Re-sync data when app comes back into focus (e.g. user switches tabs)
         let isReloading = false;
@@ -67,10 +75,13 @@ export const AuthProvider = ({ children }: { children: any }) => {
                 if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
                         isReloading = true;
-                        await waitForPendingWrites(db);
+                        await Promise.race([
+                            waitForPendingWrites(db),
+                            new Promise(resolve => setTimeout(resolve, 1500))
+                        ]);
                         await loadData(auth.currentUser);
                     } catch (e) {
-                        console.warn("Skipping visibility reload due to pending writes", e);
+                        console.warn("Skipping visibility reload due to pending writes / timeout", e);
                     } finally {
                         isReloading = false;
                     }
@@ -81,7 +92,8 @@ export const AuthProvider = ({ children }: { children: any }) => {
 
         return () => {
             isMounted = false;
-            authUnsubPromise.then(unsub => unsub && unsub()).catch(e => console.warn(e));
+            clearTimeout(safetyTimer);
+            unsubscribe();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [loadData]); // loadData è stabile grazie a useCallback

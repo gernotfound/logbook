@@ -3,6 +3,14 @@ import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore
 import deepEqual from "fast-deep-equal";
 let lastSavedStateStr: string | null = null;
 
+function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
+    let timer: any;
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(errMsg)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function checkDocSize(data: any, docName: string) {
     const jsonStr = JSON.stringify(data);
     const sizeBytes = new Blob([jsonStr]).size;
@@ -41,7 +49,7 @@ export const DB = {
                 })
             };
             const docRef = doc(db, "users", user.uid);
-            const docSnap = await getDoc(docRef);
+            const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
             if (docSnap.exists()) {
                 const data = docSnap.data() as Record<string, any>;
                 if(data.profile) state.profile = data.profile;
@@ -65,13 +73,21 @@ export const DB = {
             }
 
             // Bucketing by Month
-            const histSnap = await getDocs(collection(db, "users", user.uid, "history_months"));
+            const histSnap = await withTimeout(
+                getDocs(collection(db, "users", user.uid, "history_months")),
+                6000,
+                "Timeout recupero storico"
+            );
             histSnap.forEach((d: any) => {
                 const monthData = d.data() as Record<string, any>;
                 Object.values(monthData).forEach((h: any) => state.history.push(h));
             });
             
-            const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months"));
+            const nutSnap = await withTimeout(
+                getDocs(collection(db, "users", user.uid, "nutrition_months")),
+                6000,
+                "Timeout recupero nutrizione"
+            );
             nutSnap.forEach((d: any) => {
                 const monthData = d.data() as Record<string, any>;
                 Object.keys(monthData).forEach((date: string) => {
