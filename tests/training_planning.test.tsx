@@ -206,6 +206,10 @@ describe('Training Planning & Volume Calculations', () => {
             const nameInput = screen.getByPlaceholderText('Es. Mesociclo ipertrofia 4 giorni');
             fireEvent.change(nameInput, { target: { value: 'Nuovo Ciclo Forza' } });
 
+            // Select a routine to add
+            const selectRoutine = screen.getByRole('combobox');
+            fireEvent.change(selectRoutine, { target: { value: 'r_push' } });
+
             const saveBtn = screen.getByText('💾 Salva ciclo');
             fireEvent.click(saveBtn);
 
@@ -265,14 +269,15 @@ describe('Training Planning & Volume Calculations', () => {
             expect(screen.getByText(/Avvia sessione pianificata/i)).toBeDefined();
             expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
 
-            // Check planned routines in select
-            const startPlannedBtn = screen.getByText('🏋️ Inizia sessione pianificata');
+            // Check next scheduled routine button
+            const startPlannedBtn = screen.getByText(/🏋️ Avvia Spinta \(Push\)/i);
             fireEvent.click(startPlannedBtn);
 
             await waitFor(() => {
                 const active = useAppStore.getState().localWorkout;
                 expect(active).not.toBeNull();
                 expect(active?.routineName).toBe('Spinta (Push)');
+                expect(active?.cycleId).toBe('cycle_active');
             });
         });
 

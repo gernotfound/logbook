@@ -64,11 +64,14 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
     const plannedRoutines = useMemo(() => {
         if (!activeCycle || !activeCycle.routines) return [];
-        return activeCycle.routines.map(item => {
+        return activeCycle.routines.map((item, idx) => {
             const found = routines.find(r => r.id === item.routineId);
+            const letter = String.fromCharCode(65 + (idx % 26));
             return {
                 cycleItem: item,
-                routine: found
+                routine: found,
+                letter,
+                position: idx + 1
             };
         }).filter(item => item.routine !== undefined);
     }, [activeCycle, routines]);
@@ -77,13 +80,19 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         return Logic.calculateCycleTimeline(activeCycle);
     }, [activeCycle]);
 
+    const nextScheduled = useMemo(() => {
+        return Logic.getNextScheduledRoutine(activeCycle, routines, history);
+    }, [activeCycle, routines, history]);
+
     const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState('');
 
     useEffect(() => {
-        if (plannedRoutines.length > 0 && (!selectedPlannedRoutine || !plannedRoutines.some(p => p.routine!.id === selectedPlannedRoutine))) {
+        if (nextScheduled?.nextRoutineId) {
+            setSelectedPlannedRoutine(nextScheduled.nextRoutineId);
+        } else if (plannedRoutines.length > 0 && (!selectedPlannedRoutine || !plannedRoutines.some(p => p.routine!.id === selectedPlannedRoutine))) {
             setSelectedPlannedRoutine(plannedRoutines[0].routine!.id);
         }
-    }, [plannedRoutines, selectedPlannedRoutine]);
+    }, [nextScheduled, plannedRoutines, selectedPlannedRoutine]);
 
     // Callbacks che chiudono i pannelli — memoizzate per non ricrearle ad ogni render
     const handleRemoveExercise = useCallback((exIndex: number) => {
@@ -183,34 +192,78 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                             </div>
                         ) : (
                             <div>
-                                <p className="text-xs text-muted mb-10">
-                                    Seleziona una scheda prevista nel ciclo <strong>{activeCycle.name}</strong> ({activeCycle.startDate ? `${cycleTimeline.formattedRange} • ${cycleTimeline.statusLabel}` : `${activeCycle.durationWeeks} sett.`}):
-                                </p>
-
-                                <div className="form-group mb-12">
-                                    <select
-                                        value={selectedPlannedRoutine}
-                                        onChange={e => setSelectedPlannedRoutine(e.target.value)}
-                                        className="w-full p-10 bg-surface text-white border-b rounded-8"
-                                        style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                                {nextScheduled?.nextRoutine && (
+                                    <div
+                                        style={{
+                                            padding: '12px',
+                                            background: 'rgba(14, 165, 233, 0.1)',
+                                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                                            borderRadius: '8px',
+                                            marginBottom: '15px'
+                                        }}
                                     >
-                                        <option value="">+ Seleziona scheda pianificata</option>
-                                        {plannedRoutines.map(({ cycleItem, routine }) => (
-                                            <option key={routine!.id} value={routine!.id}>
-                                                {routine!.name} ({cycleItem.frequencyPerWeek}x/sett. • {(routine!.exercises || []).length} es.)
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                        <div className="flex-between items-center mb-6">
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                Prossima in programma
+                                            </span>
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                Seduta #{nextScheduled.nextSessionIndex} di {nextScheduled.totalSessions}
+                                            </span>
+                                        </div>
 
-                                <button
-                                    type="button"
-                                    className="btn btn-primary"
-                                    style={{ width: '100%', marginBottom: 0 }}
-                                    onClick={() => startWorkout(selectedPlannedRoutine)}
-                                >
-                                    🏋️ Inizia sessione pianificata
-                                </button>
+                                        <div className="flex-between items-center mb-10">
+                                            <div>
+                                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
+                                                    {nextScheduled.nextRoutine.name}
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                    Rotazione {nextScheduled.rotationNumber} • Scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle} • {(nextScheduled.nextRoutine.exercises || []).length} esercizi
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary"
+                                            style={{ width: '100%', marginBottom: 0, fontWeight: 'bold' }}
+                                            onClick={() => startWorkout(nextScheduled.nextRoutine!.id, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
+                                        >
+                                            🏋️ Avvia {nextScheduled.nextRoutine.name} (Seduta #{nextScheduled.nextSessionIndex})
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="border-t pt-10">
+                                    <label className="text-xs text-muted font-bold block mb-6">
+                                        Oppure scegli un'altra scheda della rotazione:
+                                    </label>
+                                    <div className="form-group mb-10">
+                                        <select
+                                            value={selectedPlannedRoutine}
+                                            onChange={e => setSelectedPlannedRoutine(e.target.value)}
+                                            className="w-full p-10 bg-surface text-white border-b rounded-8"
+                                            style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                                        >
+                                            <option value="">+ Seleziona scheda della rotazione</option>
+                                            {plannedRoutines.map(({ routine, letter, position }) => (
+                                                <option key={routine!.id} value={routine!.id}>
+                                                    {letter}. {routine!.name} (Posizione {position}/{plannedRoutines.length} • {(routine!.exercises || []).length} es.)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {selectedPlannedRoutine && selectedPlannedRoutine !== nextScheduled?.nextRoutineId && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ width: '100%', marginBottom: 0 }}
+                                            onClick={() => startWorkout(selectedPlannedRoutine, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
+                                        >
+                                            🏋️ Avvia scheda selezionata
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )
                     ) : (

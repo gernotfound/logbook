@@ -34,12 +34,26 @@ import {
     calculateCycleVolume,
     getDetailedMuscleCategory,
     calculateCycleTimeline,
-    CycleTimelineInfo
+    CycleTimelineInfo,
+    calculateCycleSchedule,
+    getNextScheduledRoutine,
+    ScheduledCycleSession,
+    WeeklyCycleSchedule,
+    CycleScheduleResult,
+    NextScheduledRoutineResult
 } from './calc/planning';
 
 // Re-export all constants and types
 export { MUSCLES, GROUP_MAP };
-export type { MuscleDef, CalendarDayCell, CycleTimelineInfo };
+export type { 
+    MuscleDef, 
+    CalendarDayCell, 
+    CycleTimelineInfo,
+    ScheduledCycleSession,
+    WeeklyCycleSchedule,
+    CycleScheduleResult,
+    NextScheduledRoutineResult
+};
 
 // Re-export all functions
 export {
@@ -79,7 +93,9 @@ export {
     filterItems,
     calculateCycleVolume,
     getDetailedMuscleCategory,
-    calculateCycleTimeline
+    calculateCycleTimeline,
+    calculateCycleSchedule,
+    getNextScheduledRoutine
 };
 
 // Aggregated Logic object for full backward compatibility
@@ -132,6 +148,8 @@ export const Logic = {
     filterItems,
     calculateCycleVolume,
     getDetailedMuscleCategory,
-    calculateCycleTimeline
+    calculateCycleTimeline,
+    calculateCycleSchedule,
+    getNextScheduledRoutine
 };
 

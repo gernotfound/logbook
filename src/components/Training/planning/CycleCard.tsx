@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
 
@@ -23,8 +23,12 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     onDuplicate,
     onDelete
 }) => {
-    const totalWorkouts = (cycle.routines || []).reduce((sum, r) => sum + (r.frequencyPerWeek || 1), 0);
+    const [showSchedule, setShowSchedule] = useState(false);
+    const sessionsPerWeek = cycle.sessionsPerWeek || (cycle.routines ? cycle.routines.length : 4);
     const timeline = Logic.calculateCycleTimeline(cycle);
+    const schedule = useMemo(() => {
+        return Logic.calculateCycleSchedule(cycle, routines);
+    }, [cycle, routines]);
 
     return (
         <div
@@ -58,11 +62,11 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                         {cycle.startDate ? (
                             <>
-                                <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{totalWorkouts} {totalWorkouts === 1 ? 'sessione' : 'sessioni'} / sett.</span>
+                                <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
                             </>
                         ) : (
                             <>
-                                Durata: <strong>{cycle.durationWeeks} settimane</strong> • {totalWorkouts} {totalWorkouts === 1 ? 'sessione' : 'sessioni'} / sett.
+                                Durata: <strong>{cycle.durationWeeks} settimane</strong> • {sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.
                             </>
                         )}
                     </div>
@@ -105,13 +109,14 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 </p>
             )}
 
-            {/* Schede nel ciclo */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-                {(cycle.routines || []).map(item => {
+            {/* Sequenza ordinata delle schede nel ciclo */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                {(cycle.routines || []).map((item, idx) => {
                     const routine = routines.find(r => r.id === item.routineId);
+                    const letterIndex = String.fromCharCode(65 + (idx % 26));
                     return (
                         <span
-                            key={item.routineId}
+                            key={`${item.routineId}-${idx}`}
                             style={{
                                 fontSize: '0.75rem',
                                 padding: '3px 8px',
@@ -121,15 +126,76 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                 color: 'var(--text-main)',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '4px'
+                                gap: '5px'
                             }}
                         >
+                            <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{letterIndex}.</span>
                             <span>{routine?.name || 'Scheda'}</span>
-                            <strong style={{ color: 'var(--primary-color)' }}>({item.frequencyPerWeek}x)</strong>
                         </span>
                     );
                 })}
             </div>
+
+            {/* Pulsante per mostrare/nascondere la programmazione settimanale */}
+            {schedule.weeks.length > 0 && (
+                <div style={{ marginBottom: '10px' }}>
+                    <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        style={{
+                            width: '100%',
+                            fontSize: '0.75rem',
+                            padding: '4px 8px',
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px dashed var(--glass-border)',
+                            color: 'var(--text-muted)',
+                            marginBottom: 0
+                        }}
+                        onClick={() => setShowSchedule(!showSchedule)}
+                    >
+                        {showSchedule ? '▲ Nascondi programmazione' : `🔄 Vedi programmazione (${schedule.totalSessions} sedute su ${cycle.durationWeeks} sett.)`}
+                    </button>
+
+                    {showSchedule && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                            {schedule.weeks.map(week => (
+                                <div
+                                    key={week.weekNumber}
+                                    style={{
+                                        padding: '6px 8px',
+                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        borderRadius: '6px',
+                                        fontSize: '0.75rem'
+                                    }}
+                                >
+                                    <div className="flex-between mb-4">
+                                        <strong style={{ color: 'var(--primary-color)' }}>
+                                            Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
+                                        </strong>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                        {week.sessions.map((sess) => (
+                                            <span
+                                                key={sess.globalSessionIndex}
+                                                style={{
+                                                    padding: '2px 6px',
+                                                    background: 'rgba(14, 165, 233, 0.1)',
+                                                    border: '1px solid rgba(14, 165, 233, 0.25)',
+                                                    borderRadius: '4px',
+                                                    color: '#fff',
+                                                    fontSize: '0.7rem'
+                                                }}
+                                            >
+                                                #{sess.globalSessionIndex} {sess.routineName}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {isActive && cycle.startDate && (
                 <div style={{ marginBottom: '10px' }}>

@@ -59,7 +59,7 @@ export function useWorkoutSession() {
         updateSessionNote
     } = useWorkoutSetMutations({ setLocalWorkout, showConfirm });
 
-    const startWorkout = useCallback(async (routineIdToStart?: string) => {
+    const startWorkout = useCallback(async (routineIdToStart?: string, cycleInfo?: { cycleId?: string; cycleName?: string }) => {
         const currentLocal = useAppStore.getState().localWorkout;
         const targetId = (typeof routineIdToStart === 'string' && routineIdToStart) ? routineIdToStart : selectedRoutine;
         if (!targetId) {
@@ -71,7 +71,8 @@ export function useWorkoutSession() {
             return;
         }
 
-        const currentRoutines = useAppStore.getState().userData?.routines || [];
+        const userData = useAppStore.getState().userData;
+        const currentRoutines = userData?.routines || [];
         const routine = currentRoutines.find(r => r.id === targetId);
         if (!routine) {
             await showAlert("Scheda non trovata.");
@@ -80,10 +81,19 @@ export function useWorkoutSession() {
         
         resetGlobalWorkoutTimer();
 
+        const activeCycleId = userData?.activeCycleId;
+        const activeCycle = activeCycleId ? (userData?.trainingCycles || []).find(c => c.id === activeCycleId) : null;
+        const belongsToActiveCycle = activeCycle && (activeCycle.routines || []).some(r => r.routineId === routine.id);
+
+        const assignedCycleId = cycleInfo?.cycleId || (belongsToActiveCycle ? activeCycle.id : undefined);
+        const assignedCycleName = cycleInfo?.cycleName || (belongsToActiveCycle ? activeCycle.name : undefined);
+
         const newActiveWorkout: WorkoutSession = {
             id: Logic.generateId('w'),
             routineId: routine.id,
             routineName: routine.name,
+            cycleId: assignedCycleId,
+            cycleName: assignedCycleName,
             date: Logic.getLocalDateString(),
             globalStartTime: new Date().getTime(),
             exercises: (routine.exercises || []).map((ex: any) => {
