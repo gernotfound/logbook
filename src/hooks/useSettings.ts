@@ -9,7 +9,6 @@ export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
     const userData = useAppStore(state => state.userData);
     const saveUserData = useAppStore(state => state.saveUserData);
-    const resetStore = useAppStore(state => state.resetStore);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     
@@ -21,7 +20,7 @@ export function useSettings() {
         if (isGuest) {
             await logout();
         } else if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
-            await logout();
+            await logout(true);
         }
     };
 
@@ -54,8 +53,7 @@ export function useSettings() {
     const handleDeleteAccount = async () => {
         if (isGuest) {
             if (!(await showConfirm("⚠️ ATTENZIONE: Questa operazione eliminerà permanentemente tutti i dati salvati su questo dispositivo.\n\nConfermi l'eliminazione dei dati locali?"))) return;
-            localStorage.removeItem('logbook_is_guest');
-            resetStore();
+            await logout(true);
             return;
         }
 

@@ -74,32 +74,66 @@ export const AuthProvider = ({ children }: { children: any }) => {
             setLoading(false);
 
             if (user) {
-                // Caso: transizione da guest a Google (migrazione dati)
-                if (migrationDataRef.current) {
-                    const dataToMigrate = migrationDataRef.current;
-                    migrationDataRef.current = null;
-                    // Rimuove il flag guest
+                const wasGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+                if (wasGuest) {
+                    // Rimuove subito il flag guest
                     localStorage.removeItem(GUEST_KEY);
                     isGuestRef.current = false;
                     setIsGuest(false);
-                    // Salva i dati locali del guest su Firestore
+
+                    const guestData = migrationDataRef.current || useAppStore.getState().userData;
+                    migrationDataRef.current = null;
+
                     try {
                         setSyncing(true);
-                        await DB.saveUserData(dataToMigrate);
+                        // Carica i dati esistenti sul cloud (se presenti)
+                        const cloudData = await DB.loadUserData();
+                        
+                        const cloudHasData = cloudData && (
+                            (cloudData.history && cloudData.history.length > 0) ||
+                            (cloudData.routines && cloudData.routines.length > 0) ||
+                            (cloudData.library && cloudData.library.length > 0)
+                        );
+                        
+                        const guestHasData = guestData && (
+                            (guestData.history && guestData.history.length > 0) ||
+                            (guestData.routines && guestData.routines.length > 0) ||
+                            (guestData.library && guestData.library.length > 0)
+                        );
+
+                        if (cloudHasData && !guestHasData) {
+                            // Se il cloud ha già dati e il guest era vuoto, adotta i dati del cloud
+                            setUserData(cloudData);
+                        } else if (guestHasData) {
+                            // Se il guest ha dati creati, salva sul cloud con eventuale merge
+                            let mergedData = guestData;
+                            if (cloudHasData && cloudData) {
+                                const combinedHistory = [...(guestData.history || []), ...(cloudData.history || [])];
+                                const uniqueHistory = Array.from(new Map(combinedHistory.map((h: any) => [h.id, h])).values());
+                                mergedData = {
+                                    ...cloudData,
+                                    ...guestData,
+                                    history: uniqueHistory
+                                };
+                            }
+                            await DB.saveUserData(mergedData);
+                            setUserData(mergedData);
+                        } else {
+                            setUserData(cloudData || defaultUserData as any);
+                        }
                     } catch (e) {
-                        console.warn("Errore migrazione dati guest su Firestore:", e);
+                        console.warn("Errore sincronizzazione iniziale post-link:", e);
+                        if (guestData) setUserData(guestData);
                     } finally {
                         setSyncing(false);
                     }
-                    // Mantieni i dati già presenti nello store (sono quelli del guest)
-                    setUserData(dataToMigrate);
                 } else {
                     // Login normale con Google
                     loadData(user);
                 }
             } else {
                 // Nessun utente Firebase: resetta solo se NON siamo in modalità guest
-                if (!isGuestRef.current) {
+                if (!isGuestRef.current && localStorage.getItem(GUEST_KEY) !== 'true') {
                     DB.resetCache();
                     useAppStore.getState().resetStore();
                 }
@@ -114,7 +148,7 @@ export const AuthProvider = ({ children }: { children: any }) => {
         let isReloading = false;
         const handleVisibilityChange = async () => {
             // Guest: niente re-sync dal cloud
-            if (isGuestRef.current) return;
+            if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') return;
             if (document.visibilityState === 'visible' && auth.currentUser) {
                 if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
@@ -176,15 +210,19 @@ export const AuthProvider = ({ children }: { children: any }) => {
     // Collega account Google: migra i dati locali su Firestore
     const linkGoogleAccount = useCallback(async () => {
         setSaveError(null);
-        // Cattura i dati guest prima del login (il popup potrebbe svuotare lo stato)
+        // Cattura i dati guest prima del login (il popup/redirect potrebbe ricaricare la pagina)
         migrationDataRef.current = useAppStore.getState().userData;
         try {
             await signInWithPopup(auth, provider);
-            // onAuthStateChanged gestirà la migrazione tramite migrationDataRef
         } catch (error: any) {
-            migrationDataRef.current = null; // Annulla migrazione in caso di errore
             if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-                return; // Utente ha chiuso il popup, nessun messaggio
+                try {
+                    await signInWithRedirect(auth, provider);
+                } catch (redirectError) {
+                    console.error("Errore collegamento redirect:", redirectError);
+                    setSaveError("Accesso fallito. Riprova.");
+                }
+                return;
             }
             console.error("Errore collegamento account Google:", error);
             setSaveError("Collegamento fallito. Riprova.");
@@ -192,13 +230,15 @@ export const AuthProvider = ({ children }: { children: any }) => {
     }, [setSaveError]);
 
     // Logout
-    const logout = useCallback(async () => {
+    const logout = useCallback(async (skipConfirm?: boolean) => {
         // Logout guest: avvisa e poi pulisce il localStorage
-        if (isGuestRef.current) {
-            const confirmed = await useDialogStore.getState().showConfirm(
-                "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
-            );
-            if (!confirmed) return;
+        if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
+            if (!skipConfirm) {
+                const confirmed = await useDialogStore.getState().showConfirm(
+                    "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
+                );
+                if (!confirmed) return;
+            }
             localStorage.removeItem(GUEST_KEY);
             isGuestRef.current = false;
             setIsGuest(false);
