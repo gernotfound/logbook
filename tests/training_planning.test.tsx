@@ -270,13 +270,34 @@ describe('Training Planning & Volume Calculations', () => {
             expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
 
             // Check next scheduled routine button
-            const startPlannedBtn = screen.getByText(/🏋️ Avvia Spinta \(Push\)/i);
+            const startPlannedBtn = screen.getByText(/🏋️ Avvia Spinta \(Push\) \(Seduta #/i);
             fireEvent.click(startPlannedBtn);
 
             await waitFor(() => {
                 const active = useAppStore.getState().localWorkout;
                 expect(active).not.toBeNull();
                 expect(active?.routineName).toBe('Spinta (Push)');
+                expect(active?.cycleId).toBe('cycle_active');
+            });
+        });
+
+        it('allows selecting another routine from the rotation dropdown and starting it', async () => {
+            render(<TrainingSession />);
+
+            const select = screen.getByRole('combobox', { name: /Seleziona scheda della rotazione/i });
+            // Select routine 'r_pull' (Trazione (Pull))
+            fireEvent.change(select, { target: { value: 'r_pull' } });
+
+            // Button should display and allow starting Trazione (Pull)
+            const startSelectedBtn = screen.getByText(/🏋️ Avvia Trazione \(Pull\)/i);
+            expect(startSelectedBtn).toBeDefined();
+
+            fireEvent.click(startSelectedBtn);
+
+            await waitFor(() => {
+                const active = useAppStore.getState().localWorkout;
+                expect(active).not.toBeNull();
+                expect(active?.routineName).toBe('Trazione (Pull)');
                 expect(active?.cycleId).toBe('cycle_active');
             });
         });

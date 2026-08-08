@@ -89,10 +89,12 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     useEffect(() => {
         if (nextScheduled?.nextRoutineId) {
             setSelectedPlannedRoutine(nextScheduled.nextRoutineId);
-        } else if (plannedRoutines.length > 0 && (!selectedPlannedRoutine || !plannedRoutines.some(p => p.routine!.id === selectedPlannedRoutine))) {
+        } else if (plannedRoutines.length > 0) {
             setSelectedPlannedRoutine(plannedRoutines[0].routine!.id);
+        } else {
+            setSelectedPlannedRoutine('');
         }
-    }, [nextScheduled, plannedRoutines, selectedPlannedRoutine]);
+    }, [activeCycle?.id, nextScheduled?.nextRoutineId]);
 
     // Callbacks che chiudono i pannelli — memoizzate per non ricrearle ad ogni render
     const handleRemoveExercise = useCallback((exIndex: number) => {
@@ -239,6 +241,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                     </label>
                                     <div className="form-group mb-10">
                                         <select
+                                            aria-label="Seleziona scheda della rotazione"
                                             value={selectedPlannedRoutine}
                                             onChange={e => setSelectedPlannedRoutine(e.target.value)}
                                             className="w-full p-10 bg-surface text-white border-b rounded-8"
@@ -253,14 +256,14 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                         </select>
                                     </div>
 
-                                    {selectedPlannedRoutine && selectedPlannedRoutine !== nextScheduled?.nextRoutineId && (
+                                    {selectedPlannedRoutine && (
                                         <button
                                             type="button"
                                             className="btn btn-secondary"
                                             style={{ width: '100%', marginBottom: 0 }}
                                             onClick={() => startWorkout(selectedPlannedRoutine, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
                                         >
-                                            🏋️ Avvia scheda selezionata
+                                            🏋️ Avvia {plannedRoutines.find(p => p.routine?.id === selectedPlannedRoutine)?.routine?.name || 'scheda selezionata'}
                                         </button>
                                     )}
                                 </div>
@@ -305,6 +308,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         <div>
                             <div className="form-group mb-12">
                                 <select 
+                                    aria-label="Seleziona scheda dall'archivio"
                                     value={selectedRoutine} 
                                     onChange={e => setSelectedRoutine(e.target.value)}
                                     className="w-full p-10 bg-surface text-white border-b rounded-8"
