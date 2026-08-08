@@ -6,6 +6,7 @@ interface CycleCardProps {
     isActive: boolean;
     routines: WorkoutRoutine[];
     onSetActive: (cycleId: string) => void;
+    onDeactivate: (cycleId: string) => void;
     onEdit: (cycle: TrainingCycle) => void;
     onDuplicate: (cycle: TrainingCycle) => void;
     onDelete: (cycle: TrainingCycle) => void;
@@ -16,6 +17,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     isActive,
     routines,
     onSetActive,
+    onDeactivate,
     onEdit,
     onDuplicate,
     onDelete
@@ -119,8 +121,17 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 })}
             </div>
 
-            {!isActive && (
-                <div style={{ paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+            <div style={{ paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                {isActive ? (
+                    <button
+                        type="button"
+                        className="btn btn-secondary btn-small"
+                        style={{ width: '100%', marginBottom: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}
+                        onClick={() => onDeactivate(cycle.id)}
+                    >
+                        ⏸️ Disattiva ciclo
+                    </button>
+                ) : (
                     <button
                         type="button"
                         className="btn btn-secondary btn-small"
@@ -129,8 +140,8 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     >
                         ⭐ Imposta come ciclo attivo
                     </button>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };

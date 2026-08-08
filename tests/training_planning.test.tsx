@@ -226,6 +226,26 @@ describe('Training Planning & Volume Calculations', () => {
             });
         });
 
+        it('supports activating and deactivating a training cycle', async () => {
+            render(<TrainingPlanning />);
+
+            // Check deactivation button
+            const deactivateBtn = screen.getByText('⏸️ Disattiva ciclo');
+            fireEvent.click(deactivateBtn);
+
+            await waitFor(() => {
+                expect(useAppStore.getState().userData?.activeCycleId).toBeNull();
+            });
+
+            // Reactivate cycle
+            const activateBtn = screen.getByText('⭐ Imposta come ciclo attivo');
+            fireEvent.click(activateBtn);
+
+            await waitFor(() => {
+                expect(useAppStore.getState().userData?.activeCycleId).toBe('cycle_active');
+            });
+        });
+
         it('integrates seamlessly inside TrainingView under subTab planning', () => {
             const setSubTab = vi.fn();
             render(<TrainingView subTab="planning" setSubTab={setSubTab} />);

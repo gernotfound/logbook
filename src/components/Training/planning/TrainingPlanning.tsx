@@ -16,13 +16,14 @@ export default function TrainingPlanning() {
     const routines: WorkoutRoutine[] = userData?.routines || [];
     const library: Exercise[] = userData?.library || [];
     const trainingCycles: TrainingCycle[] = userData?.trainingCycles || [];
-    const activeCycleId = userData?.activeCycleId || (trainingCycles.length > 0 ? trainingCycles[0].id : null);
+    const activeCycleId = userData?.activeCycleId ?? null;
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);
 
     const activeCycle = useMemo(() => {
-        return trainingCycles.find(c => c.id === activeCycleId) || (trainingCycles.length > 0 ? trainingCycles[0] : null);
+        if (!activeCycleId) return null;
+        return trainingCycles.find(c => c.id === activeCycleId) || null;
     }, [trainingCycles, activeCycleId]);
 
     // Volume and muscle mapping for active cycle
@@ -83,6 +84,19 @@ export default function TrainingPlanning() {
             await showAlert("Ciclo impostato come attivo!");
         } catch {
             await showAlert("Errore durante l'attivazione del ciclo.");
+        }
+    };
+
+    const handleDeactivateCycle = async () => {
+        if (!userData) return;
+        try {
+            await saveUserData({
+                ...userData,
+                activeCycleId: null
+            });
+            await showAlert("Ciclo disattivato con successo.");
+        } catch {
+            await showAlert("Errore durante la disattivazione del ciclo.");
         }
     };
 
@@ -179,10 +193,21 @@ export default function TrainingPlanning() {
                         </h3>
                     </div>
                     {activeCycle && (
-                        <div style={{ textAlign: 'right' }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                                {activeCycle.durationWeeks} settimane
-                            </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                                    {activeCycle.durationWeeks} settimane
+                                </span>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-small"
+                                    style={{ padding: '3px 8px', fontSize: '0.75rem', marginBottom: 0, color: 'var(--text-muted)' }}
+                                    onClick={handleDeactivateCycle}
+                                    title="Disattiva ciclo attivo"
+                                >
+                                    ⏸️ Disattiva
+                                </button>
+                            </div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                                 {cycleVolumeData.totalWorkoutsPerWeek} sessioni • {cycleVolumeData.totalSetsPerWeek} serie / sett.
                             </div>
@@ -336,6 +361,7 @@ export default function TrainingPlanning() {
                             isActive={cycle.id === activeCycleId}
                             routines={routines}
                             onSetActive={handleSetActiveCycle}
+                            onDeactivate={handleDeactivateCycle}
                             onEdit={handleEditCycle}
                             onDuplicate={handleDuplicateCycle}
                             onDelete={handleDeleteCycle}
