@@ -40,6 +40,60 @@ export function getLocalDateString(d: Date | string | number = new Date()): stri
     return format(date, 'yyyy-MM-dd');
 }
 
+export function formatItalianDate(d: Date | string | number | undefined | null): string {
+    if (!d) return '';
+    let date: Date;
+    if (d instanceof Date) {
+        date = d;
+    } else if (typeof d === 'string') {
+        const cleaned = d.trim();
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(cleaned)) {
+            return cleaned;
+        }
+        date = cleaned.includes('T') ? new Date(cleaned) : parseISO(cleaned);
+        if (!isValid(date)) {
+            date = new Date(cleaned);
+        }
+    } else if (typeof d === 'number') {
+        date = new Date(d);
+    } else {
+        return '';
+    }
+    if (!isValid(date)) return '';
+    return format(date, 'dd/MM/yyyy');
+}
+
+export function parseDateInput(input: string | undefined | null): string | null {
+    if (!input || typeof input !== 'string') return null;
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+
+    // Pattern YYYY-MM-DD
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
+        const [y, m, d] = trimmed.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        if (isValid(dateObj) && dateObj.getFullYear() === y && dateObj.getMonth() === m - 1 && dateObj.getDate() === d) {
+            return format(dateObj, 'yyyy-MM-dd');
+        }
+    }
+
+    // Pattern DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    const dmyMatch = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (dmyMatch) {
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10);
+        const year = parseInt(dmyMatch[3], 10);
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+            const dateObj = new Date(year, month - 1, day);
+            if (isValid(dateObj) && dateObj.getFullYear() === year && dateObj.getMonth() === month - 1 && dateObj.getDate() === day) {
+                return format(dateObj, 'yyyy-MM-dd');
+            }
+        }
+    }
+
+    return null;
+}
+
 export function calculateAge(dob: string | Date | number): number {
     if (!dob) return 30;
     let date: Date;

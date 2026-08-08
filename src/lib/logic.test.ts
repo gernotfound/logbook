@@ -197,6 +197,28 @@ describe('Logic Library Tests', () => {
         expect(firstCell.dateStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
+    it('formatItalianDate: formats ISO string or Date to DD/MM/YYYY', () => {
+        expect(Logic.formatItalianDate('2026-08-08')).toBe('08/08/2026');
+        expect(Logic.formatItalianDate('08/08/2026')).toBe('08/08/2026');
+        expect(Logic.formatItalianDate(new Date(2026, 8, 15))).toBe('15/09/2026');
+        expect(Logic.formatItalianDate('')).toBe('');
+        expect(Logic.formatItalianDate(null)).toBe('');
+    });
+
+    it('parseDateInput: parses various date string formats to YYYY-MM-DD', () => {
+        expect(Logic.parseDateInput('08/08/2026')).toBe('2026-08-08');
+        expect(Logic.parseDateInput('8/8/2026')).toBe('2026-08-08');
+        expect(Logic.parseDateInput('15-09-2026')).toBe('2026-09-15');
+        expect(Logic.parseDateInput('15.09.2026')).toBe('2026-09-15');
+        expect(Logic.parseDateInput('2026-09-15')).toBe('2026-09-15');
+
+        // Invalid dates
+        expect(Logic.parseDateInput('31/02/2026')).toBe(null);
+        expect(Logic.parseDateInput('invalid')).toBe(null);
+        expect(Logic.parseDateInput('')).toBe(null);
+        expect(Logic.parseDateInput(null)).toBe(null);
+    });
+
     describe('calculateCycleTimeline', () => {
         it('handles null/undefined or cycles without startDate gracefully', () => {
             const res = Logic.calculateCycleTimeline(null);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Logic } from '../../../lib/logic';
 import { useDialogStore } from '../../../store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine, TrainingCycleRoutineItem } from '../../../types';
@@ -17,8 +17,12 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     onCancel
 }) => {
     const showAlert = useDialogStore(state => state.showAlert);
+    const datePickerRef = useRef<HTMLInputElement>(null);
+
+    const initialIso = initialCycle?.startDate || Logic.getLocalDateString();
     const [name, setName] = useState(initialCycle?.name || '');
-    const [startDate, setStartDate] = useState(initialCycle?.startDate || Logic.getLocalDateString());
+    const [startDate, setStartDate] = useState(initialIso);
+    const [dateTextInput, setDateTextInput] = useState(Logic.formatItalianDate(initialIso));
     const [durationWeeks, setDurationWeeks] = useState(
         initialCycle?.durationWeeks !== undefined ? String(initialCycle.durationWeeks) : '6'
     );
@@ -26,6 +30,59 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     const [cycleRoutines, setCycleRoutines] = useState<TrainingCycleRoutineItem[]>(
         initialCycle?.routines ? JSON.parse(JSON.stringify(initialCycle.routines)) : []
     );
+
+    useEffect(() => {
+        if (initialCycle) {
+            setName(initialCycle.name || '');
+            const iso = initialCycle.startDate || Logic.getLocalDateString();
+            setStartDate(iso);
+            setDateTextInput(Logic.formatItalianDate(iso));
+            setDurationWeeks(initialCycle.durationWeeks !== undefined ? String(initialCycle.durationWeeks) : '6');
+            setNotes(initialCycle.notes || '');
+            setCycleRoutines(initialCycle.routines ? JSON.parse(JSON.stringify(initialCycle.routines)) : []);
+        }
+    }, [initialCycle]);
+
+    const handleDateTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setDateTextInput(val);
+        const parsedIso = Logic.parseDateInput(val);
+        if (parsedIso) {
+            setStartDate(parsedIso);
+        }
+    };
+
+    const handleDateTextBlur = () => {
+        const parsedIso = Logic.parseDateInput(dateTextInput);
+        if (parsedIso) {
+            setStartDate(parsedIso);
+            setDateTextInput(Logic.formatItalianDate(parsedIso));
+        } else if (startDate) {
+            setDateTextInput(Logic.formatItalianDate(startDate));
+        }
+    };
+
+    const handleCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val) {
+            setStartDate(val);
+            setDateTextInput(Logic.formatItalianDate(val));
+        }
+    };
+
+    const handleOpenCalendar = () => {
+        if (datePickerRef.current) {
+            if (typeof datePickerRef.current.showPicker === 'function') {
+                try {
+                    datePickerRef.current.showPicker();
+                } catch {
+                    datePickerRef.current.focus();
+                }
+            } else {
+                datePickerRef.current.focus();
+            }
+        }
+    };
 
     const handleAddRoutineById = (routineId: string) => {
         if (!routineId) return;
@@ -65,12 +122,13 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         }
 
         const weeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
+        const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
 
         const cycle: TrainingCycle = {
             id: initialCycle?.id || Logic.generateId('cycle'),
             name: trimmedName,
             durationWeeks: weeks,
-            startDate: startDate || undefined,
+            startDate: validStartDate,
             notes: notes.trim(),
             routines: cycleRoutines,
             createdAt: initialCycle?.createdAt || Date.now(),
@@ -126,13 +184,68 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     <label className="text-xs text-muted font-bold block mb-4">
                         Data di inizio
                     </label>
-                    <input
-                        type="date"
-                        value={startDate}
-                        onChange={e => setStartDate(e.target.value)}
-                        required
-                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', minWidth: 0 }}>
+                        <input
+                            type="text"
+                            placeholder="GG/MM/AAAA"
+                            value={dateTextInput}
+                            onChange={handleDateTextChange}
+                            onBlur={handleDateTextBlur}
+                            onFocus={e => e.target.select()}
+                            required
+                            style={{
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: '16px',
+                                boxSizing: 'border-box',
+                                maxWidth: '100%',
+                                display: 'block'
+                            }}
+                        />
+                        <div style={{ position: 'relative', flexShrink: 0, width: '46px' }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={handleOpenCalendar}
+                                title="Scegli data dal calendario"
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    padding: 0,
+                                    fontSize: '1.2rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginBottom: 0,
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--glass-border)',
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                📅
+                            </button>
+                            <input
+                                ref={datePickerRef}
+                                type="date"
+                                value={startDate}
+                                onChange={handleCalendarDateChange}
+                                tabIndex={-1}
+                                aria-label="Scegli data dal calendario"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    opacity: 0,
+                                    pointerEvents: 'auto',
+                                    cursor: 'pointer',
+                                    fontSize: '16px'
+                                }}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 <div>
