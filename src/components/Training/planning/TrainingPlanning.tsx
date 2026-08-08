@@ -38,11 +38,13 @@ export default function TrainingPlanning() {
         }
         setEditingCycle(null);
         setIsEditing(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleEditCycle = (cycle: TrainingCycle) => {
         setEditingCycle(cycle);
         setIsEditing(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {

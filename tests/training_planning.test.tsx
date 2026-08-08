@@ -227,6 +227,18 @@ describe('Training Planning & Volume Calculations', () => {
             });
         });
 
+        it('scrolls to top and opens editor when clicking Modifica on a cycle', () => {
+            const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+            render(<TrainingPlanning />);
+
+            const editBtns = screen.getAllByText('✏️ Modifica');
+            fireEvent.click(editBtns[0]);
+
+            expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+            expect(screen.getByText('✏️ Modifica ciclo di allenamento')).toBeDefined();
+            scrollToSpy.mockRestore();
+        });
+
         it('supports activating and deactivating a training cycle', async () => {
             render(<TrainingPlanning />);
 
