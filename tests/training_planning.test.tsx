@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { calculateCycleVolume, getDetailedMuscleCategory } from '../src/lib/calc/planning';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
+import TrainingSession from '../src/components/Training/TrainingSession';
 import TrainingView from '../src/components/Training/TrainingView';
 import { useAppStore } from '../src/store/useAppStore';
 import type { TrainingCycle, WorkoutRoutine, Exercise, UserData } from '../src/types';
@@ -175,7 +176,7 @@ describe('Training Planning & Volume Calculations', () => {
                 ],
                 activeCycleId: 'cycle_active'
             };
-            useAppStore.setState({ userData: initialUserData });
+            useAppStore.setState({ userData: initialUserData, localWorkout: null });
         });
 
         it('renders active cycle, MuscleModel, and weekly volume list', () => {
@@ -244,6 +245,40 @@ describe('Training Planning & Volume Calculations', () => {
             await waitFor(() => {
                 expect(useAppStore.getState().userData?.activeCycleId).toBe('cycle_active');
             });
+        });
+
+        it('renders "Avvia sessione pianificata" in TrainingSession and starts planned routine', async () => {
+            render(<TrainingSession />);
+
+            expect(screen.getByText(/Avvia sessione pianificata/i)).toBeDefined();
+            expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
+
+            // Check planned routines in select
+            const startPlannedBtn = screen.getByText('🏋️ Inizia sessione pianificata');
+            fireEvent.click(startPlannedBtn);
+
+            await waitFor(() => {
+                const active = useAppStore.getState().localWorkout;
+                expect(active).not.toBeNull();
+                expect(active?.routineName).toBe('Spinta (Push)');
+            });
+        });
+
+        it('shows message and navigation to planning when no active cycle is set', () => {
+            useAppStore.setState({
+                userData: {
+                    ...useAppStore.getState().userData!,
+                    activeCycleId: null
+                }
+            });
+
+            const onNavPlanning = vi.fn();
+            render(<TrainingSession onNavigateToPlanning={onNavPlanning} />);
+
+            expect(screen.getByText(/Nessun ciclo di allenamento attivo al momento/i)).toBeDefined();
+            const navBtn = screen.getByText('🎯 Vai a Pianificazione');
+            fireEvent.click(navBtn);
+            expect(onNavPlanning).toHaveBeenCalled();
         });
 
         it('integrates seamlessly inside TrainingView under subTab planning', () => {

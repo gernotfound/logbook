@@ -59,9 +59,10 @@ export function useWorkoutSession() {
         updateSessionNote
     } = useWorkoutSetMutations({ setLocalWorkout, showConfirm });
 
-    const startWorkout = useCallback(async () => {
+    const startWorkout = useCallback(async (routineIdToStart?: string) => {
         const currentLocal = useAppStore.getState().localWorkout;
-        if (!selectedRoutine) {
+        const targetId = (typeof routineIdToStart === 'string' && routineIdToStart) ? routineIdToStart : selectedRoutine;
+        if (!targetId) {
             await showAlert("Seleziona una scheda per iniziare!");
             return;
         }
@@ -71,8 +72,11 @@ export function useWorkoutSession() {
         }
 
         const currentRoutines = useAppStore.getState().userData?.routines || [];
-        const routine = currentRoutines.find(r => r.id === selectedRoutine);
-        if (!routine) return;
+        const routine = currentRoutines.find(r => r.id === targetId);
+        if (!routine) {
+            await showAlert("Scheda non trovata.");
+            return;
+        }
         
         resetGlobalWorkoutTimer();
 

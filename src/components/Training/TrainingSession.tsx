@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useAppStore } from '../../store/useAppStore';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { Logic } from '../../lib/logic';
 import WorkoutTimer from './WorkoutTimer';
@@ -35,9 +36,15 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
+    onNavigateToPlanning?: () => void;
 }
 
-const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
+const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
+    const userData = useAppStore(state => state.userData);
+    const trainingCycles = userData?.trainingCycles || [];
+    const activeCycleId = userData?.activeCycleId ?? null;
+    const activeCycle = activeCycleId ? trainingCycles.find(c => c.id === activeCycleId) : null;
+
     const {
         activeWorkout, routines, library, history,
         selectedRoutine, setSelectedRoutine,
@@ -54,6 +61,25 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
+
+    const plannedRoutines = useMemo(() => {
+        if (!activeCycle || !activeCycle.routines) return [];
+        return activeCycle.routines.map(item => {
+            const found = routines.find(r => r.id === item.routineId);
+            return {
+                cycleItem: item,
+                routine: found
+            };
+        }).filter(item => item.routine !== undefined);
+    }, [activeCycle, routines]);
+
+    const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState('');
+
+    useEffect(() => {
+        if (plannedRoutines.length > 0 && (!selectedPlannedRoutine || !plannedRoutines.some(p => p.routine!.id === selectedPlannedRoutine))) {
+            setSelectedPlannedRoutine(plannedRoutines[0].routine!.id);
+        }
+    }, [plannedRoutines, selectedPlannedRoutine]);
 
     // Callbacks che chiudono i pannelli — memoizzate per non ricrearle ad ogni render
     const handleRemoveExercise = useCallback((exIndex: number) => {
@@ -91,25 +117,144 @@ const TrainingSession = ({ onNavigateToHistory }: TrainingSessionProps) => {
     if (!activeWorkout) {
         return (
             <div className="training-sub-view active">
+                {/* 1. Sezione Avvia sessione pianificata */}
+                <div
+                    className="card mb-15"
+                    style={{
+                        border: activeCycle ? '1px solid var(--primary-color)' : '1px solid var(--glass-border)',
+                        background: activeCycle ? 'rgba(14, 165, 233, 0.05)' : 'var(--glass-bg)'
+                    }}
+                >
+                    <div className="flex-between items-center mb-10 pb-8 border-b">
+                        <div>
+                            <span className="text-xs text-primary font-bold uppercase tracking-wider block">
+                                Programmazione
+                            </span>
+                            <h3 className="m-0 text-white" style={{ fontSize: '1.15rem' }}>
+                                🎯 Avvia sessione pianificata
+                            </h3>
+                        </div>
+                        {activeCycle && (
+                            <span
+                                style={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    padding: '3px 10px',
+                                    borderRadius: '12px',
+                                    background: 'var(--primary-color)',
+                                    color: '#000'
+                                }}
+                            >
+                                {activeCycle.name}
+                            </span>
+                        )}
+                    </div>
+
+                    {activeCycle ? (
+                        plannedRoutines.length === 0 ? (
+                            <div style={{ padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                <p className="m-0 mb-8">Nessuna scheda valida trovata nel ciclo attivo "{activeCycle.name}".</p>
+                                {onNavigateToPlanning && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-small"
+                                        style={{ fontSize: '0.8rem', marginBottom: 0 }}
+                                        onClick={onNavigateToPlanning}
+                                    >
+                                        Modifica ciclo in Pianificazione
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div>
+                                <p className="text-xs text-muted mb-10">
+                                    Seleziona una scheda prevista nel ciclo <strong>{activeCycle.name}</strong> ({activeCycle.durationWeeks} sett.):
+                                </p>
+
+                                <div className="form-group mb-12">
+                                    <select
+                                        value={selectedPlannedRoutine}
+                                        onChange={e => setSelectedPlannedRoutine(e.target.value)}
+                                        className="w-full p-10 bg-surface text-white border-b rounded-8"
+                                        style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                                    >
+                                        <option value="">+ Seleziona scheda pianificata</option>
+                                        {plannedRoutines.map(({ cycleItem, routine }) => (
+                                            <option key={routine!.id} value={routine!.id}>
+                                                {routine!.name} ({cycleItem.frequencyPerWeek}x/sett. • {(routine!.exercises || []).length} es.)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ width: '100%', marginBottom: 0 }}
+                                    onClick={() => startWorkout(selectedPlannedRoutine)}
+                                >
+                                    🏋️ Inizia sessione pianificata
+                                </button>
+                            </div>
+                        )
+                    ) : (
+                        <div style={{ padding: '8px 0', color: 'var(--text-muted)' }}>
+                            <p className="text-xs m-0 mb-10">
+                                Nessun ciclo di allenamento attivo al momento.
+                            </p>
+                            {onNavigateToPlanning && (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary btn-small"
+                                    style={{ fontSize: '0.8rem', marginBottom: 0 }}
+                                    onClick={onNavigateToPlanning}
+                                >
+                                    🎯 Vai a Pianificazione
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* 2. Sezione Avvia nuova sessione (Tutte le schede / Libera) */}
                 <div className="card">
-                    <h3 style={{ marginTop: 0, marginBottom: '15px' }}>Avvia nuova sessione</h3>
+                    <div className="flex-between items-center mb-10 pb-8 border-b">
+                        <div>
+                            <h3 className="m-0" style={{ fontSize: '1.1rem' }}>
+                                Avvia nuova sessione
+                            </h3>
+                            <p className="text-muted text-xs m-0 mt-4">
+                                Seleziona liberamente qualsiasi scheda dal tuo archivio
+                            </p>
+                        </div>
+                    </div>
                     {routines.length === 0 ? (
-                        <p style={{ color: 'var(--text-muted)' }}>Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.</p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                            Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.
+                        </p>
                     ) : (
                         <div>
-                            <select 
-                                value={selectedRoutine} 
-                                onChange={e => setSelectedRoutine(e.target.value)}
-                                className="w-full p-10 bg-surface text-white border-b rounded-8 mb-15"
+                            <div className="form-group mb-12">
+                                <select 
+                                    value={selectedRoutine} 
+                                    onChange={e => setSelectedRoutine(e.target.value)}
+                                    className="w-full p-10 bg-surface text-white border-b rounded-8"
+                                    style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                                >
+                                    <option value="">+ Seleziona scheda</option>
+                                    {routines.map(r => (
+                                        <option key={r.id} value={r.id}>
+                                            {r.name} ({(r.exercises || []).length} es.)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ width: '100%', marginBottom: 0 }}
+                                onClick={() => startWorkout(selectedRoutine)}
                             >
-                                <option value="">+ Seleziona scheda</option>
-                                {routines.map(r => (
-                                    <option key={r.id} value={r.id}>
-                                        {r.name} ({(r.exercises || []).length} es.)
-                                    </option>
-                                ))}
-                            </select>
-                            <button className="btn btn-primary" style={{ width: '100%' }} onClick={startWorkout}>
                                 🏋️ Inizia allenamento
                             </button>
                         </div>

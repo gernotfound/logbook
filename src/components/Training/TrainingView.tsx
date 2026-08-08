@@ -26,7 +26,12 @@ const TrainingView = ({ subTab = 'session', setSubTab }: any) => {
                 <div className={`sub-nav-btn ${subTab === 'history' ? 'active' : ''}`} onClick={() => setSubTab('history')}>Storico</div>
             </div>
 
-            {subTab === 'session' && <TrainingSession onNavigateToHistory={() => setSubTab('history')} />}
+            {subTab === 'session' && (
+                <TrainingSession
+                    onNavigateToHistory={() => setSubTab('history')}
+                    onNavigateToPlanning={() => setSubTab('planning')}
+                />
+            )}
             {subTab === 'planning' && <TrainingPlanning />}
             {subTab === 'routines' && <TrainingRoutines />}
             {subTab === 'exercises' && <TrainingExercises />}
