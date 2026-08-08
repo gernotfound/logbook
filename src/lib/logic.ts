@@ -32,12 +32,14 @@ import {
 } from './calc/workout';
 import {
     calculateCycleVolume,
-    getDetailedMuscleCategory
+    getDetailedMuscleCategory,
+    calculateCycleTimeline,
+    CycleTimelineInfo
 } from './calc/planning';
 
 // Re-export all constants and types
 export { MUSCLES, GROUP_MAP };
-export type { MuscleDef, CalendarDayCell };
+export type { MuscleDef, CalendarDayCell, CycleTimelineInfo };
 
 // Re-export all functions
 export {
@@ -74,7 +76,8 @@ export {
     searchRoutines,
     filterItems,
     calculateCycleVolume,
-    getDetailedMuscleCategory
+    getDetailedMuscleCategory,
+    calculateCycleTimeline
 };
 
 // Aggregated Logic object for full backward compatibility
@@ -124,6 +127,7 @@ export const Logic = {
     searchRoutines,
     filterItems,
     calculateCycleVolume,
-    getDetailedMuscleCategory
+    getDetailedMuscleCategory,
+    calculateCycleTimeline
 };
 

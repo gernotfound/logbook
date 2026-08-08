@@ -196,6 +196,79 @@ describe('Logic Library Tests', () => {
         // Check that dates are sequential
         expect(firstCell.dateStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
+
+    describe('calculateCycleTimeline', () => {
+        it('handles null/undefined or cycles without startDate gracefully', () => {
+            const res = Logic.calculateCycleTimeline(null);
+            expect(res.currentWeek).toBe(1);
+            expect(res.totalWeeks).toBe(4);
+            expect(res.progressPercent).toBe(0);
+
+            const cycleWithoutStart = {
+                id: 'c1',
+                name: 'Test Cycle',
+                durationWeeks: 8,
+                routines: []
+            };
+            const res2 = Logic.calculateCycleTimeline(cycleWithoutStart);
+            expect(res2.currentWeek).toBe(1);
+            expect(res2.totalWeeks).toBe(8);
+            expect(res2.formattedRange).toBe('8 settimane');
+        });
+
+        it('calculates correct timeline for future cycle (not started)', () => {
+            const cycle = {
+                id: 'c2',
+                name: 'Future Cycle',
+                durationWeeks: 4,
+                startDate: '2026-09-01',
+                routines: []
+            };
+            const res = Logic.calculateCycleTimeline(cycle, new Date('2026-08-25'));
+            expect(res.isStarted).toBe(false);
+            expect(res.isEnded).toBe(false);
+            expect(res.daysRemaining).toBe(7);
+            expect(res.statusLabel).toBe('Inizia tra 7 giorni');
+            expect(res.formattedStartDate).toBe('01/09/2026');
+            expect(res.formattedEndDate).toBe('28/09/2026');
+            expect(res.formattedRange).toBe('dal 01/09/2026 al 28/09/2026');
+        });
+
+        it('calculates correct timeline during active cycle', () => {
+            const cycle = {
+                id: 'c3',
+                name: 'Active Cycle',
+                durationWeeks: 6,
+                startDate: '2026-08-01',
+                routines: []
+            };
+            // 15th of August -> day 15 -> week 3
+            const res = Logic.calculateCycleTimeline(cycle, new Date('2026-08-15'));
+            expect(res.isStarted).toBe(true);
+            expect(res.isEnded).toBe(false);
+            expect(res.currentWeek).toBe(3);
+            expect(res.totalWeeks).toBe(6);
+            expect(res.statusLabel).toBe('Settimana 3 di 6');
+            expect(res.progressPercent).toBeGreaterThan(0);
+            expect(res.formattedStartDate).toBe('01/08/2026');
+            expect(res.formattedEndDate).toBe('11/09/2026');
+        });
+
+        it('calculates correct timeline for completed cycle', () => {
+            const cycle = {
+                id: 'c4',
+                name: 'Completed Cycle',
+                durationWeeks: 4,
+                startDate: '2026-06-01',
+                routines: []
+            };
+            const res = Logic.calculateCycleTimeline(cycle, new Date('2026-08-01'));
+            expect(res.isStarted).toBe(true);
+            expect(res.isEnded).toBe(true);
+            expect(res.progressPercent).toBe(100);
+            expect(res.statusLabel).toBe('Ciclo completato');
+        });
+    });
 });
 
 

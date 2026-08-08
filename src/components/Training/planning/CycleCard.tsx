@@ -1,4 +1,5 @@
 import React from 'react';
+import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
 
 interface CycleCardProps {
@@ -23,6 +24,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     onDelete
 }) => {
     const totalWorkouts = (cycle.routines || []).reduce((sum, r) => sum + (r.frequencyPerWeek || 1), 0);
+    const timeline = Logic.calculateCycleTimeline(cycle);
 
     return (
         <div
@@ -54,7 +56,15 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         )}
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Durata: <strong>{cycle.durationWeeks} settimane</strong> • {totalWorkouts} {totalWorkouts === 1 ? 'sessione' : 'sessioni'} / sett.
+                        {cycle.startDate ? (
+                            <>
+                                <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{totalWorkouts} {totalWorkouts === 1 ? 'sessione' : 'sessioni'} / sett.</span>
+                            </>
+                        ) : (
+                            <>
+                                Durata: <strong>{cycle.durationWeeks} settimane</strong> • {totalWorkouts} {totalWorkouts === 1 ? 'sessione' : 'sessioni'} / sett.
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -120,6 +130,29 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     );
                 })}
             </div>
+
+            {isActive && cycle.startDate && (
+                <div style={{ marginBottom: '10px' }}>
+                    <div className="flex-between text-xs mb-4">
+                        <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                            {timeline.statusLabel}
+                        </span>
+                        <span className="text-muted">
+                            {timeline.progressPercent}% completato
+                        </span>
+                    </div>
+                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div
+                            style={{
+                                height: '100%',
+                                width: `${timeline.progressPercent}%`,
+                                background: 'var(--primary-color)',
+                                transition: 'width 0.3s ease'
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
 
             <div style={{ paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
                 {isActive ? (

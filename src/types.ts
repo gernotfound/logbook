@@ -152,6 +152,7 @@ export interface TrainingCycle {
     id: string;
     name: string;
     durationWeeks: number; // es. 4, 6, 8, 12
+    startDate?: string; // es. YYYY-MM-DD
     notes?: string;
     routines: TrainingCycleRoutineItem[];
     createdAt?: number;

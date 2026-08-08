@@ -18,6 +18,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
 }) => {
     const showAlert = useDialogStore(state => state.showAlert);
     const [name, setName] = useState(initialCycle?.name || '');
+    const [startDate, setStartDate] = useState(initialCycle?.startDate || Logic.getLocalDateString());
     const [durationWeeks, setDurationWeeks] = useState(
         initialCycle?.durationWeeks !== undefined ? String(initialCycle.durationWeeks) : '6'
     );
@@ -69,6 +70,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             id: initialCycle?.id || Logic.generateId('cycle'),
             name: trimmedName,
             durationWeeks: weeks,
+            startDate: startDate || undefined,
             notes: notes.trim(),
             routines: cycleRoutines,
             createdAt: initialCycle?.createdAt || Date.now(),
@@ -79,6 +81,14 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     };
 
     const totalWorkouts = cycleRoutines.reduce((sum, r) => sum + (r.frequencyPerWeek || 1), 0);
+    const tempWeeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
+    const timeline = Logic.calculateCycleTimeline({
+        id: 'preview',
+        name: name || 'Ciclo',
+        durationWeeks: tempWeeks,
+        startDate: startDate || undefined,
+        routines: cycleRoutines
+    });
 
     return (
         <form onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
@@ -96,17 +106,30 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 </button>
             </div>
 
+            <div className="mb-15">
+                <label className="text-xs text-muted font-bold block mb-4">
+                    Nome ciclo
+                </label>
+                <input
+                    type="text"
+                    placeholder="Es. Mesociclo ipertrofia 4 giorni"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    onFocus={e => e.target.select()}
+                    required
+                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                />
+            </div>
+
             <div className="grid-2 gap-15 mb-15">
                 <div>
                     <label className="text-xs text-muted font-bold block mb-4">
-                        Nome ciclo
+                        Data di inizio
                     </label>
                     <input
-                        type="text"
-                        placeholder="Es. Mesociclo ipertrofia 4 giorni"
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                        onFocus={e => e.target.select()}
+                        type="date"
+                        value={startDate}
+                        onChange={e => setStartDate(e.target.value)}
                         required
                         style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                     />
@@ -128,6 +151,28 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     />
                 </div>
             </div>
+
+            {startDate && (
+                <div
+                    style={{
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        background: 'rgba(14, 165, 233, 0.08)',
+                        border: '1px solid rgba(14, 165, 233, 0.2)',
+                        fontSize: '0.8rem',
+                        color: 'var(--primary-color)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        marginBottom: '15px'
+                    }}
+                >
+                    <span>📅</span>
+                    <span>
+                        Periodo programmato: <strong>{timeline.formattedRange}</strong> ({tempWeeks} {tempWeeks === 1 ? 'settimana' : 'settimane'})
+                    </span>
+                </div>
+            )}
 
             <div className="mb-15">
                 <label className="text-xs text-muted font-bold block mb-4">

@@ -1,3 +1,4 @@
+import { format, isValid, parseISO, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
 import { GROUP_MAP } from '../constants/muscles';
 import type { TrainingCycle, WorkoutRoutine, Exercise } from '../../types';
 
@@ -14,6 +15,131 @@ export interface CycleVolumeResult {
     muscleVolumes: MuscleVolumeDetail[];
     muscleColors: Record<string, string>;
     highlightedMuscles: string[];
+}
+
+export interface CycleTimelineInfo {
+    startDate?: string;
+    endDate?: string;
+    formattedStartDate: string;
+    formattedEndDate: string;
+    formattedRange: string;
+    currentWeek: number;
+    totalWeeks: number;
+    isStarted: boolean;
+    isEnded: boolean;
+    progressPercent: number;
+    statusLabel: string;
+    daysRemaining?: number;
+}
+
+export function calculateCycleTimeline(
+    cycle: TrainingCycle | null | undefined,
+    currentDate: Date | string = new Date()
+): CycleTimelineInfo {
+    const totalWeeks = Math.max(1, Number(cycle?.durationWeeks) || 4);
+
+    if (!cycle?.startDate) {
+        return {
+            formattedStartDate: '',
+            formattedEndDate: '',
+            formattedRange: `${totalWeeks} settimane`,
+            currentWeek: 1,
+            totalWeeks,
+            isStarted: true,
+            isEnded: false,
+            progressPercent: 0,
+            statusLabel: `${totalWeeks} settimane`
+        };
+    }
+
+    let parsedStart: Date;
+    try {
+        parsedStart = typeof cycle.startDate === 'string' && !cycle.startDate.includes('T')
+            ? parseISO(cycle.startDate)
+            : new Date(cycle.startDate);
+        if (!isValid(parsedStart)) {
+            parsedStart = new Date();
+        }
+    } catch {
+        parsedStart = new Date();
+    }
+
+    let today: Date;
+    try {
+        today = typeof currentDate === 'string'
+            ? (!currentDate.includes('T') ? parseISO(currentDate) : new Date(currentDate))
+            : currentDate;
+        if (!isValid(today)) {
+            today = new Date();
+        }
+    } catch {
+        today = new Date();
+    }
+
+    const start = startOfDay(parsedStart);
+    const end = addDays(start, totalWeeks * 7 - 1);
+    const now = startOfDay(today);
+
+    const formattedStartDate = format(start, 'dd/MM/yyyy');
+    const formattedEndDate = format(end, 'dd/MM/yyyy');
+    const formattedRange = `dal ${formattedStartDate} al ${formattedEndDate}`;
+
+    const diffDays = differenceInCalendarDays(now, start);
+    const totalDays = totalWeeks * 7;
+
+    if (diffDays < 0) {
+        const daysToStart = Math.abs(diffDays);
+        return {
+            startDate: format(start, 'yyyy-MM-dd'),
+            endDate: format(end, 'yyyy-MM-dd'),
+            formattedStartDate,
+            formattedEndDate,
+            formattedRange,
+            currentWeek: 0,
+            totalWeeks,
+            isStarted: false,
+            isEnded: false,
+            progressPercent: 0,
+            statusLabel: daysToStart === 1 ? 'Inizia domani' : `Inizia tra ${daysToStart} giorni`,
+            daysRemaining: daysToStart
+        };
+    }
+
+    if (diffDays >= totalDays) {
+        return {
+            startDate: format(start, 'yyyy-MM-dd'),
+            endDate: format(end, 'yyyy-MM-dd'),
+            formattedStartDate,
+            formattedEndDate,
+            formattedRange,
+            currentWeek: totalWeeks,
+            totalWeeks,
+            isStarted: true,
+            isEnded: true,
+            progressPercent: 100,
+            statusLabel: 'Ciclo completato',
+            daysRemaining: 0
+        };
+    }
+
+    const currentWeek = Math.min(totalWeeks, Math.floor(diffDays / 7) + 1);
+    const progressPercent = Math.min(100, Math.max(1, Math.round(((diffDays + 1) / totalDays) * 100)));
+    const daysRemaining = totalDays - (diffDays + 1);
+
+    return {
+        startDate: format(start, 'yyyy-MM-dd'),
+        endDate: format(end, 'yyyy-MM-dd'),
+        formattedStartDate,
+        formattedEndDate,
+        formattedRange,
+        currentWeek,
+        totalWeeks,
+        isStarted: true,
+        isEnded: false,
+        progressPercent,
+        statusLabel: `Settimana ${currentWeek} di ${totalWeeks}`,
+        daysRemaining
+    };
 }
 
 export function getDetailedMuscleCategory(mId: string): { key: string; label: string } {

@@ -31,6 +31,10 @@ export default function TrainingPlanning() {
         return Logic.calculateCycleVolume(activeCycle, routines, library);
     }, [activeCycle, routines, library]);
 
+    const activeCycleTimeline = useMemo(() => {
+        return Logic.calculateCycleTimeline(activeCycle);
+    }, [activeCycle]);
+
     const handleCreateNew = () => {
         if (routines.length === 0) {
             showAlert("Crea almeno una scheda prima di pianificare un ciclo di allenamento.");
@@ -214,6 +218,29 @@ export default function TrainingPlanning() {
                         </div>
                     )}
                 </div>
+
+                {activeCycle?.startDate && (
+                    <div style={{ marginBottom: '15px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                        <div className="flex-between text-xs mb-6">
+                            <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                                📅 {activeCycleTimeline.formattedRange}
+                            </span>
+                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>
+                                {activeCycleTimeline.statusLabel} ({activeCycleTimeline.progressPercent}%)
+                            </span>
+                        </div>
+                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div
+                                style={{
+                                    height: '100%',
+                                    width: `${activeCycleTimeline.progressPercent}%`,
+                                    background: 'var(--primary-color)',
+                                    transition: 'width 0.3s ease'
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {activeCycle?.notes && (
                     <p className="text-xs text-muted mb-15" style={{ fontStyle: 'italic' }}>
