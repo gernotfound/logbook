@@ -190,7 +190,12 @@ describe('Training Planning & Volume Calculations', () => {
             // Muscle model present
             expect(document.querySelector('.muscle-map-container') || document.querySelector('svg')).toBeDefined();
 
-            // Volume per muscle
+            // Volume section: bottone accordion deve essere presente
+            const volumeBtn = screen.getByRole('button', { name: /Volume settimanale per muscolo/i });
+            expect(volumeBtn).toBeDefined();
+
+            // Apertura della tendina per verificare il contenuto del volume
+            fireEvent.click(volumeBtn);
             expect(screen.getByText('Petto')).toBeDefined();
             expect(screen.getByText('Spalle')).toBeDefined();
         });

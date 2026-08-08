@@ -19,6 +19,7 @@ export default function TrainingPlanning() {
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);
+    const [isVolumeOpen, setIsVolumeOpen] = useState(false);
 
     const activeCycle = useMemo(() => {
         if (!activeCycleId) return null;
@@ -261,59 +262,98 @@ export default function TrainingPlanning() {
                     </div>
                 </div>
 
-                {/* Dettaglio Volume Muscolare per Gruppo */}
+                {/* Dettaglio Volume Muscolare per Gruppo - collassabile */}
                 {activeCycle ? (
                     <div>
-                        <h4 className="text-sm font-bold text-white mb-10" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span>📊 Volume settimanale per muscolo</span>
-                            <span className="text-xs text-muted font-normal">(serie a settimana)</span>
-                        </h4>
+                        <button
+                            type="button"
+                            onClick={() => setIsVolumeOpen(prev => !prev)}
+                            style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '10px 12px',
+                                background: 'rgba(255,255,255,0.04)',
+                                border: '1px solid var(--glass-border)',
+                                borderRadius: isVolumeOpen ? '8px 8px 0 0' : '8px',
+                                cursor: 'pointer',
+                                color: 'var(--text-main)',
+                                transition: 'background 0.2s ease, border-radius 0.2s ease',
+                                marginBottom: isVolumeOpen ? '0' : '0',
+                            }}
+                            aria-expanded={isVolumeOpen}
+                        >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>📊 Volume settimanale per muscolo</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(serie a settimana)</span>
+                            </span>
+                            <span style={{
+                                display: 'inline-block',
+                                transform: isVolumeOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.25s ease',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.85rem',
+                                lineHeight: 1
+                            }}>▼</span>
+                        </button>
 
-                        {cycleVolumeData.muscleVolumes.length === 0 ? (
-                            <p className="text-xs text-muted">
-                                Nessun esercizio presente nelle schede di questo ciclo.
-                            </p>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {cycleVolumeData.muscleVolumes.map((item, idx) => (
-                                    <div
-                                        key={item.key || idx}
-                                        style={{
-                                            padding: '8px 12px',
-                                            background: 'rgba(255,255,255,0.04)',
-                                            borderRadius: '8px',
-                                            border: '1px solid var(--glass-border)'
-                                        }}
-                                    >
-                                        <div className="flex-between items-center mb-4">
-                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                                {item.label}
-                                            </span>
-                                            <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--primary-color)' }}>
-                                                {item.sets} {item.sets === 1 ? 'serie' : 'serie'} / sett.
-                                            </span>
-                                        </div>
-                                        {/* Barra proporzionale */}
+                        {isVolumeOpen && (
+                            <div style={{
+                                border: '1px solid var(--glass-border)',
+                                borderTop: 'none',
+                                borderRadius: '0 0 8px 8px',
+                                padding: '8px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px',
+                                marginBottom: '0'
+                            }}>
+                                {cycleVolumeData.muscleVolumes.length === 0 ? (
+                                    <p className="text-xs text-muted" style={{ padding: '4px 4px' }}>
+                                        Nessun esercizio presente nelle schede di questo ciclo.
+                                    </p>
+                                ) : (
+                                    cycleVolumeData.muscleVolumes.map((item, idx) => (
                                         <div
+                                            key={item.key || idx}
                                             style={{
-                                                width: '100%',
-                                                height: '6px',
-                                                background: 'rgba(255,255,255,0.1)',
-                                                borderRadius: '3px',
-                                                overflow: 'hidden'
+                                                padding: '8px 12px',
+                                                background: 'rgba(255,255,255,0.04)',
+                                                borderRadius: '8px',
+                                                border: '1px solid var(--glass-border)'
                                             }}
                                         >
+                                            <div className="flex-between items-center mb-4">
+                                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                                    {item.label}
+                                                </span>
+                                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--primary-color)' }}>
+                                                    {item.sets} {item.sets === 1 ? 'serie' : 'serie'} / sett.
+                                                </span>
+                                            </div>
+                                            {/* Barra proporzionale */}
                                             <div
                                                 style={{
-                                                    width: `${Math.min(100, Math.max(8, item.percentage * 2.5))}%`,
-                                                    height: '100%',
-                                                    background: 'linear-gradient(90deg, var(--primary-color), #38bdf8)',
-                                                    borderRadius: '3px'
+                                                    width: '100%',
+                                                    height: '6px',
+                                                    background: 'rgba(255,255,255,0.1)',
+                                                    borderRadius: '3px',
+                                                    overflow: 'hidden'
                                                 }}
-                                            />
+                                            >
+                                                <div
+                                                    style={{
+                                                        width: `${Math.min(100, Math.max(8, item.percentage * 2.5))}%`,
+                                                        height: '100%',
+                                                        background: 'linear-gradient(90deg, var(--primary-color), #38bdf8)',
+                                                        borderRadius: '3px'
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))
+                                )}
                             </div>
                         )}
 
