@@ -44,6 +44,8 @@ export const DB = {
                 nutrition: {}, 
                 customFoods: [],
                 activeWorkout: null,
+                trainingCycles: [],
+                activeCycleId: null,
                 nutritionPlanning: Object.assign({}, defaultNutritionPlanning, {
                     normocalorica: Object.assign({}, defaultNutritionPlanning.normocalorica)
                 })
@@ -57,6 +59,8 @@ export const DB = {
                 if(data.routines) state.routines = data.routines;
                 if(data.customFoods) state.customFoods = data.customFoods;
                 if(data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
+                if(data.trainingCycles) state.trainingCycles = data.trainingCycles;
+                if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
                 if (data.nutritionPlanning) {
                     state.nutritionPlanning = Object.assign({}, defaultNutritionPlanning, data.nutritionPlanning);
                     if (data.nutritionPlanning.normocalorica && typeof data.nutritionPlanning.normocalorica === 'object') {
@@ -107,7 +111,18 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return;
         try {
-            let oldState: Record<string, any> = { profile: {}, library: [], routines: [], customFoods: [], history: [], nutrition: {}, activeWorkout: null, nutritionPlanning: null };
+            let oldState: Record<string, any> = { 
+                profile: {}, 
+                library: [], 
+                routines: [], 
+                customFoods: [], 
+                history: [], 
+                nutrition: {}, 
+                activeWorkout: null, 
+                trainingCycles: [],
+                activeCycleId: null,
+                nutritionPlanning: null 
+            };
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
             }
@@ -121,15 +136,19 @@ export const DB = {
                 !deepEqual(state.routines, oldState.routines) ||
                 !deepEqual(state.customFoods, oldState.customFoods) ||
                 !deepEqual(state.activeWorkout, oldState.activeWorkout) ||
+                !deepEqual(state.trainingCycles, oldState.trainingCycles) ||
+                !deepEqual(state.activeCycleId, oldState.activeCycleId) ||
                 !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 const userDocData = {
-                    profile: state.profile,
-                    library: state.library,
-                    routines: state.routines,
+                    profile: state.profile || {},
+                    library: state.library || [],
+                    routines: state.routines || [],
                     customFoods: state.customFoods || [],
                     activeWorkout: state.activeWorkout || null,
+                    trainingCycles: state.trainingCycles || [],
+                    activeCycleId: state.activeCycleId !== undefined ? state.activeCycleId : null,
                     nutritionPlanning: state.nutritionPlanning || null
                 };
                 checkDocSize(userDocData, "User Profile");

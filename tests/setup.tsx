@@ -126,6 +126,11 @@ vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
   getDocs: vi.fn().mockResolvedValue({ docs: [] }),
   deleteField: vi.fn(),
+  writeBatch: vi.fn().mockReturnValue({
+    set: vi.fn(),
+    delete: vi.fn(),
+    commit: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 // Mock DB module

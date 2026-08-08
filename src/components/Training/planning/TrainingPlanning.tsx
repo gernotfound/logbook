@@ -48,40 +48,38 @@ export default function TrainingPlanning() {
     };
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {
-        if (!userData) return;
-
-        let updatedCycles: TrainingCycle[];
-        const exists = trainingCycles.some(c => c.id === savedCycle.id);
-
-        if (exists) {
-            updatedCycles = trainingCycles.map(c => c.id === savedCycle.id ? savedCycle : c);
-        } else {
-            updatedCycles = [...trainingCycles, savedCycle];
-        }
-
-        // Set as active if it's the only cycle or newly created and no active cycle set
-        const newActiveId = activeCycleId || savedCycle.id;
-
+        let isUpdate = false;
         try {
-            await saveUserData({
-                ...userData,
-                trainingCycles: updatedCycles,
-                activeCycleId: newActiveId
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                const currentCycles = prev.trainingCycles || [];
+                isUpdate = currentCycles.some(c => c.id === savedCycle.id);
+                const updatedCycles = isUpdate
+                    ? currentCycles.map(c => c.id === savedCycle.id ? savedCycle : c)
+                    : [...currentCycles, savedCycle];
+                const newActiveId = prev.activeCycleId || savedCycle.id;
+                return {
+                    ...prev,
+                    trainingCycles: updatedCycles,
+                    activeCycleId: newActiveId
+                };
             });
             setIsEditing(false);
             setEditingCycle(null);
-            await showAlert(exists ? "Ciclo di allenamento aggiornato!" : "Nuovo ciclo salvato con successo!");
+            await showAlert(isUpdate ? "Ciclo di allenamento aggiornato!" : "Nuovo ciclo salvato con successo!");
         } catch {
             await showAlert("Errore durante il salvataggio del ciclo.");
         }
     };
 
     const handleSetActiveCycle = async (cycleId: string) => {
-        if (!userData) return;
         try {
-            await saveUserData({
-                ...userData,
-                activeCycleId: cycleId
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    activeCycleId: cycleId
+                };
             });
             await showAlert("Ciclo impostato come attivo!");
         } catch {
@@ -90,11 +88,13 @@ export default function TrainingPlanning() {
     };
 
     const handleDeactivateCycle = async () => {
-        if (!userData) return;
         try {
-            await saveUserData({
-                ...userData,
-                activeCycleId: null
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    activeCycleId: null
+                };
             });
             await showAlert("Ciclo disattivato con successo.");
         } catch {
@@ -103,7 +103,6 @@ export default function TrainingPlanning() {
     };
 
     const handleDuplicateCycle = async (cycle: TrainingCycle) => {
-        if (!userData) return;
         const duplicated: TrainingCycle = {
             ...cycle,
             id: Logic.generateId('cycle'),
@@ -112,11 +111,14 @@ export default function TrainingPlanning() {
             isActive: false
         };
 
-        const updatedCycles = [...trainingCycles, duplicated];
         try {
-            await saveUserData({
-                ...userData,
-                trainingCycles: updatedCycles
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                const currentCycles = prev.trainingCycles || [];
+                return {
+                    ...prev,
+                    trainingCycles: [...currentCycles, duplicated]
+                };
             });
             await showAlert(`Ciclo "${duplicated.name}" duplicato con successo.`);
         } catch {
@@ -125,20 +127,22 @@ export default function TrainingPlanning() {
     };
 
     const handleDeleteCycle = async (cycle: TrainingCycle) => {
-        if (!userData) return;
         const confirmed = await showConfirm(`Sei sicuro di voler eliminare il ciclo "${cycle.name}"?`);
         if (!confirmed) return;
 
-        const updatedCycles = trainingCycles.filter(c => c.id !== cycle.id);
-        const nextActiveId = activeCycleId === cycle.id 
-            ? (updatedCycles.length > 0 ? updatedCycles[0].id : null) 
-            : activeCycleId;
-
         try {
-            await saveUserData({
-                ...userData,
-                trainingCycles: updatedCycles,
-                activeCycleId: nextActiveId
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                const currentCycles = prev.trainingCycles || [];
+                const updatedCycles = currentCycles.filter(c => c.id !== cycle.id);
+                const nextActiveId = prev.activeCycleId === cycle.id 
+                    ? (updatedCycles.length > 0 ? updatedCycles[0].id : null) 
+                    : prev.activeCycleId;
+                return {
+                    ...prev,
+                    trainingCycles: updatedCycles,
+                    activeCycleId: nextActiveId
+                };
             });
             await showAlert("Ciclo eliminato con successo.");
         } catch {
