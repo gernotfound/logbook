@@ -294,9 +294,26 @@ export function useTrainingExercises() {
         localStorage.removeItem('draft_exercise');
     };
 
+    const isDuplicateName = useMemo(() => {
+        const trimmed = exName.trim().toLowerCase();
+        if (!trimmed) return false;
+        return library.some(ex => ex.id !== editingExId && ex.name.trim().toLowerCase() === trimmed);
+    }, [exName, library, editingExId]);
+
     const handleSaveExercise = async () => {
-        if (!exName.trim()) {
+        const trimmedName = exName.trim();
+        if (!trimmedName) {
             await showAlert("Inserisci un nome per l'esercizio.");
+            return;
+        }
+
+        const isDuplicate = library.some(ex => 
+            ex.id !== editingExId && 
+            ex.name.trim().toLowerCase() === trimmedName.toLowerCase()
+        );
+
+        if (isDuplicate) {
+            await showAlert("Esiste già un esercizio con questo nome nell'archivio.");
             return;
         }
 
@@ -308,7 +325,7 @@ export function useTrainingExercises() {
                 if (ex.id === editingExId) {
                     return {
                         ...ex,
-                        name: exName.trim(),
+                        name: trimmedName,
                         notes: exNotes.trim(),
                         muscles: selectedMuscles.map((m: any) => m.id),
                         secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
@@ -322,7 +339,7 @@ export function useTrainingExercises() {
             // Create new
             const newEx = {
                 id: Logic.generateId('ex'),
-                name: exName.trim(),
+                name: trimmedName,
                 notes: exNotes.trim(),
                 muscles: selectedMuscles.map((m: any) => m.id),
                 secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
@@ -368,7 +385,7 @@ export function useTrainingExercises() {
     return {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
-        selectionMode, setSelectionMode,
+        selectionMode, setSelectionMode, isDuplicateName,
         library, filteredMuscles, trackingType, setTrackingType,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete

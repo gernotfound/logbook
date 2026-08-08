@@ -8,7 +8,7 @@ const TrainingExercises = () => {
     const {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
-        selectionMode, setSelectionMode,
+        selectionMode, setSelectionMode, isDuplicateName,
         library, filteredMuscles, trackingType, setTrackingType,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete
@@ -23,12 +23,20 @@ const TrainingExercises = () => {
                     {editingExId ? 'Modifica esercizio' : 'Crea nuovo esercizio'}
                 </h3>
                 <div className="flex-col gap-10 mt-15 mb-20">
-                    <input 
-                        type="text" 
-                        placeholder="Nome esercizio (es. Panca Piana con Bilanciere)" 
-                        value={exName}
-                        onChange={e => setExName(e.target.value)}
-                    />
+                    <div>
+                        <input 
+                            type="text" 
+                            placeholder="Nome esercizio (es. Panca piana con bilanciere)" 
+                            value={exName}
+                            style={isDuplicateName ? { borderColor: 'var(--danger-color)' } : undefined}
+                            onChange={e => setExName(e.target.value)}
+                        />
+                        {isDuplicateName && (
+                            <div style={{ color: 'var(--danger-color)', fontSize: '0.8rem', marginTop: '6px' }}>
+                                ⚠️ Esiste già un esercizio con questo nome nell'archivio.
+                            </div>
+                        )}
+                    </div>
                     <input 
                         type="text" 
                         placeholder="Note di setup (opzionale, es. Inclinazione 30°)" 
