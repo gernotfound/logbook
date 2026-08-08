@@ -25,22 +25,20 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     const [cycleRoutines, setCycleRoutines] = useState<TrainingCycleRoutineItem[]>(
         initialCycle?.routines ? JSON.parse(JSON.stringify(initialCycle.routines)) : []
     );
-    const [selectedRoutineToAdd, setSelectedRoutineToAdd] = useState('');
 
-    const handleAddRoutine = () => {
-        if (!selectedRoutineToAdd) return;
-        const exists = cycleRoutines.find(r => r.routineId === selectedRoutineToAdd);
+    const handleAddRoutineById = (routineId: string) => {
+        if (!routineId) return;
+        const exists = cycleRoutines.find(r => r.routineId === routineId);
         if (exists) {
             setCycleRoutines(prev =>
-                prev.map(r => r.routineId === selectedRoutineToAdd ? { ...r, frequencyPerWeek: r.frequencyPerWeek + 1 } : r)
+                prev.map(r => r.routineId === routineId ? { ...r, frequencyPerWeek: r.frequencyPerWeek + 1 } : r)
             );
         } else {
             setCycleRoutines(prev => [
                 ...prev,
-                { routineId: selectedRoutineToAdd, frequencyPerWeek: 1 }
+                { routineId, frequencyPerWeek: 1 }
             ]);
         }
-        setSelectedRoutineToAdd('');
     };
 
     const handleUpdateFrequency = (routineId: string, delta: number) => {
@@ -94,7 +92,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     onClick={onCancel}
                     style={{ marginBottom: 0 }}
                 >
-                    ✕ Annulla
+                    ✕ Chiudi
                 </button>
             </div>
 
@@ -155,9 +153,40 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     </span>
                 </div>
 
+                {/* Selettore schede rapido ed ordinato */}
+                <div className="mb-12">
+                    <select
+                        onChange={e => {
+                            if (e.target.value) {
+                                handleAddRoutineById(e.target.value);
+                                e.target.value = '';
+                            }
+                        }}
+                        style={{
+                            width: '100%',
+                            fontSize: '16px',
+                            boxSizing: 'border-box',
+                            maxWidth: '100%',
+                            display: 'block',
+                            padding: '10px 12px',
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '8px',
+                            color: '#fff'
+                        }}
+                    >
+                        <option value="">+ Aggiungi scheda al ciclo</option>
+                        {routines.map(r => (
+                            <option key={r.id} value={r.id}>
+                                {r.name} ({r.exercises?.length || 0} es.)
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
                 {cycleRoutines.length === 0 ? (
                     <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        <p className="m-0 text-xs">Nessuna scheda aggiunta al ciclo. Seleziona una scheda qui sotto per iniziare.</p>
+                        <p className="m-0 text-xs">Nessuna scheda aggiunta al ciclo. Seleziona una scheda dal menu in alto per iniziare.</p>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -167,60 +196,58 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                 <div
                                     key={item.routineId}
                                     style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
                                         padding: '10px 12px',
-                                        background: 'rgba(255,255,255,0.05)',
+                                        background: 'rgba(255,255,255,0.04)',
                                         border: '1px solid var(--glass-border)',
-                                        borderRadius: '8px',
-                                        gap: '10px',
-                                        minWidth: 0
+                                        borderRadius: '8px'
                                     }}
                                 >
-                                    <div style={{ minWidth: 0, flex: 1 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                                            {routine?.name || 'Scheda'}
+                                    <div className="flex-between items-center mb-6">
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                                                {routine?.name || 'Scheda'}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                {routine?.exercises?.length || 0} esercizi
+                                            </div>
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                            {routine?.exercises?.length || 0} esercizi
-                                        </div>
-                                    </div>
-
-                                    {/* Frequenza controller */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: '2px' }}>
-                                            Frequenza:
-                                        </span>
-                                        <button
-                                            type="button"
-                                            className="btn btn-secondary btn-small"
-                                            style={{ padding: '4px 10px', minWidth: '32px', marginBottom: 0 }}
-                                            onClick={() => handleUpdateFrequency(item.routineId, -1)}
-                                            disabled={item.frequencyPerWeek <= 1}
-                                        >
-                                            -
-                                        </button>
-                                        <span style={{ fontWeight: 'bold', minWidth: '30px', textAlign: 'center', color: 'var(--primary-color)' }}>
-                                            {item.frequencyPerWeek}x
-                                        </span>
-                                        <button
-                                            type="button"
-                                            className="btn btn-secondary btn-small"
-                                            style={{ padding: '4px 10px', minWidth: '32px', marginBottom: 0 }}
-                                            onClick={() => handleUpdateFrequency(item.routineId, 1)}
-                                        >
-                                            +
-                                        </button>
                                         <button
                                             type="button"
                                             className="btn-icon"
-                                            style={{ color: 'var(--danger-color)', marginLeft: '6px', fontSize: '0.9rem' }}
+                                            style={{ color: 'var(--danger-color)', fontSize: '1rem', padding: '4px' }}
                                             onClick={() => handleRemoveRoutine(item.routineId)}
                                             title="Rimuovi scheda dal ciclo"
                                         >
                                             🗑️
                                         </button>
+                                    </div>
+
+                                    <div className="flex-between items-center pt-6 border-t" style={{ fontSize: '0.8rem' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>
+                                            Frequenza settimanale:
+                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary btn-small"
+                                                style={{ padding: '3px 10px', minWidth: '32px', marginBottom: 0, fontSize: '0.85rem' }}
+                                                onClick={() => handleUpdateFrequency(item.routineId, -1)}
+                                                disabled={item.frequencyPerWeek <= 1}
+                                            >
+                                                -
+                                            </button>
+                                            <span style={{ fontWeight: 'bold', minWidth: '30px', textAlign: 'center', color: 'var(--primary-color)' }}>
+                                                {item.frequencyPerWeek}x
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary btn-small"
+                                                style={{ padding: '3px 10px', minWidth: '32px', marginBottom: 0, fontSize: '0.85rem' }}
+                                                onClick={() => handleUpdateFrequency(item.routineId, 1)}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -229,37 +256,22 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 )}
             </div>
 
-            {/* Aggiunta scheda */}
-            <div className="flex gap-10 items-center mb-20" style={{ minWidth: 0 }}>
-                <select
-                    value={selectedRoutineToAdd}
-                    onChange={e => setSelectedRoutineToAdd(e.target.value)}
-                    style={{ flex: 1, minWidth: 0, fontSize: '16px', marginBottom: 0, boxSizing: 'border-box', maxWidth: '100%' }}
-                >
-                    <option value="">-- Seleziona una scheda da aggiungere --</option>
-                    {routines.map(r => (
-                        <option key={r.id} value={r.id}>
-                            {r.name} ({r.exercises?.length || 0} es.)
-                        </option>
-                    ))}
-                </select>
+            {/* Pulsanti di azione ordinati e bilanciati */}
+            <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>
                 <button
                     type="button"
-                    className="btn btn-secondary"
-                    onClick={handleAddRoutine}
-                    disabled={!selectedRoutineToAdd}
-                    style={{ flexShrink: 0, marginBottom: 0 }}
+                    className="btn flex-1"
+                    style={{ background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
+                    onClick={onCancel}
                 >
-                    + Aggiungi
-                </button>
-            </div>
-
-            <div className="flex gap-10">
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, marginBottom: 0 }}>
-                    💾 Salva ciclo
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={onCancel} style={{ marginBottom: 0 }}>
                     Annulla
+                </button>
+                <button
+                    type="submit"
+                    className="btn btn-primary flex-2"
+                    style={{ marginBottom: 0 }}
+                >
+                    {initialCycle ? '💾 Salva modifiche' : '💾 Salva ciclo'}
                 </button>
             </div>
         </form>
