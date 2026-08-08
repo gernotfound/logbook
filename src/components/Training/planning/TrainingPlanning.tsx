@@ -48,12 +48,11 @@ export default function TrainingPlanning() {
     };
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {
-        let isUpdate = false;
         try {
             await saveUserData((prev) => {
                 if (!prev) return null;
                 const currentCycles = prev.trainingCycles || [];
-                isUpdate = currentCycles.some(c => c.id === savedCycle.id);
+                const isUpdate = currentCycles.some(c => c.id === savedCycle.id);
                 const updatedCycles = isUpdate
                     ? currentCycles.map(c => c.id === savedCycle.id ? savedCycle : c)
                     : [...currentCycles, savedCycle];
@@ -66,7 +65,6 @@ export default function TrainingPlanning() {
             });
             setIsEditing(false);
             setEditingCycle(null);
-            await showAlert(isUpdate ? "Ciclo di allenamento aggiornato!" : "Nuovo ciclo salvato con successo!");
         } catch {
             await showAlert("Errore durante il salvataggio del ciclo.");
         }
@@ -81,7 +79,6 @@ export default function TrainingPlanning() {
                     activeCycleId: cycleId
                 };
             });
-            await showAlert("Ciclo impostato come attivo!");
         } catch {
             await showAlert("Errore durante l'attivazione del ciclo.");
         }
@@ -96,7 +93,6 @@ export default function TrainingPlanning() {
                     activeCycleId: null
                 };
             });
-            await showAlert("Ciclo disattivato con successo.");
         } catch {
             await showAlert("Errore durante la disattivazione del ciclo.");
         }
@@ -120,7 +116,6 @@ export default function TrainingPlanning() {
                     trainingCycles: [...currentCycles, duplicated]
                 };
             });
-            await showAlert(`Ciclo "${duplicated.name}" duplicato con successo.`);
         } catch {
             await showAlert("Errore durante la duplicazione del ciclo.");
         }
@@ -144,7 +139,6 @@ export default function TrainingPlanning() {
                     activeCycleId: nextActiveId
                 };
             });
-            await showAlert("Ciclo eliminato con successo.");
         } catch {
             await showAlert("Errore durante l'eliminazione del ciclo.");
         }
