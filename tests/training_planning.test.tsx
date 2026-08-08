@@ -235,7 +235,7 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(editBtns[0]);
 
             expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
-            expect(screen.getByText('✏️ Modifica ciclo di allenamento')).toBeDefined();
+            expect(screen.getByText('✏️ Modifica ciclo')).toBeDefined();
             scrollToSpy.mockRestore();
         });
 
