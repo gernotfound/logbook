@@ -3,12 +3,15 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
+const EMPTY_NUTRITION = {};
+const EMPTY_PROFILE = {};
+
 export function useNutritionMeasurements() {
-    const userData = useAppStore(state => state.userData);
+    const profile: any = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
+    const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     
-    const profile: any = userData?.profile || {};
     const [editingDate, setEditingDate] = useState<string | null>(null);
     const [weight, setWeight] = useState('');
     const [waist, setWaist] = useState('');
@@ -48,10 +51,10 @@ export function useNutritionMeasurements() {
     }, [weight, waist, neck, hip, manualBf, measureTime, method, editingDate]);
 
     const measurementsHistory = useMemo(() => {
-        return Object.values(userData?.nutrition || {})
-            .filter((day: any) => day.weight || day.bf)
-            .sort((a: any, b: any) => b.date.localeCompare(a.date));
-    }, [userData?.nutrition]);
+        return Object.values(nutrition)
+            .filter((day: any) => day && (day.weight || day.bf))
+            .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
+    }, [nutrition]);
 
     const handleEditClick = (day: any) => {
         setEditingDate(day.date);
@@ -75,27 +78,27 @@ export function useNutritionMeasurements() {
         localStorage.removeItem('draft_measurement');
     };
 
-    const calculateAndSave = async () => {
-        if (!weight) {
-            await showAlert("Inserisci il peso corporeo.");
+    const calculateAndSave = async (e?: any) => {
+        if (e) e.preventDefault();
+        const height = parseFloat(profile.height);
+        if (!height || isNaN(height)) {
+            await showAlert("Attenzione: imposta la tua altezza nelle Impostazioni per calcolare la massa grassa.");
             return;
         }
 
-        let bf = null;
+        if (!weight || isNaN(parseFloat(weight))) {
+            await showAlert("Inserisci un valore valido per il peso.");
+            return;
+        }
+
+        let bf: number | null = null;
         if (method === 'manual') {
-            if (!manualBf) { await showAlert("Inserisci la percentuale di massa grassa manuale."); return; }
             bf = parseFloat(manualBf);
         } else {
-            if (!waist || !neck || !profile.height) {
-                await showAlert("Compila tutti i campi (inclusa altezza nei dati biometrici).");
-                return;
-            }
-            if (method === 'navy_female' && !hip) {
-                await showAlert("Per le donne, inserisci la circonferenza dei fianchi.");
-                return;
-            }
             bf = Logic.calculateBodyFatByMethod(method, {
-                height: parseFloat(profile.height),
+                gender: profile.gender || 'M',
+                height,
+                weight: parseFloat(weight),
                 waist: parseFloat(waist),
                 neck: parseFloat(neck),
                 hip: hip ? parseFloat(hip) : undefined
@@ -107,27 +110,29 @@ export function useNutritionMeasurements() {
             return;
         }
 
-        if (!userData) return;
         const targetDate = editingDate || todayDateStr;
-        const existingDay = userData.nutrition?.[targetDate] || { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-        
-        const updatedDay = {
-            ...existingDay,
-            weight: parseFloat(weight),
-            ...(waist ? { waist: parseFloat(waist) } : {}),
-            ...(neck ? { neck: parseFloat(neck) } : {}),
-            ...(hip && profile.gender === 'F' ? { hip: parseFloat(hip) } : {}),
-            bf: Math.round(bf * 10) / 10,
-            measurementTime: measureTime
-        };
-
-        const newNutrition = {
-            ...(userData.nutrition || {}),
-            [targetDate]: updatedDay
-        };
 
         try {
-            await saveUserData({ ...userData, nutrition: newNutrition });
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                const existingDay = prev.nutrition?.[targetDate] || { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
+                const updatedDay = {
+                    ...existingDay,
+                    weight: parseFloat(weight),
+                    ...(waist ? { waist: parseFloat(waist) } : {}),
+                    ...(neck ? { neck: parseFloat(neck) } : {}),
+                    ...(hip && profile.gender === 'F' ? { hip: parseFloat(hip) } : {}),
+                    bf: Math.round(bf! * 10) / 10,
+                    measurementTime: measureTime
+                };
+                return {
+                    ...prev,
+                    nutrition: {
+                        ...(prev.nutrition || {}),
+                        [targetDate]: updatedDay
+                    }
+                };
+            });
             await showAlert(`Misurazione salvata! BF calcolata: ${Number(bf).toFixed(1)}%`);
             handleCancelEdit();
         } catch {

@@ -4,11 +4,10 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
 export function useNutritionPlanning() {
-    const userData = useAppStore(state => state.userData);
+    const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     
-    const storePlanning = userData?.nutritionPlanning;
     const [localPlanning, setLocalPlanning] = useState<any>(null);
 
     const planning = localPlanning ?? storePlanning ?? {
@@ -35,7 +34,8 @@ export function useNutritionPlanning() {
         setLocalPlanning(newPlanning);
     };
 
-    const handleSave = async () => {
+    const handleSave = async (e?: any) => {
+        if (e) e.preventDefault();
         const sanitizedNormo = {
             kcal: parseFloat(planning.normocalorica?.kcal) || 0,
             carbs: parseFloat(planning.normocalorica?.carbs) || 0,
@@ -51,9 +51,8 @@ export function useNutritionPlanning() {
             normocalorica: sanitizedNormo
         };
         setLocalPlanning(updatedPlanning);
-        const newUserData = { ...userData, nutritionPlanning: updatedPlanning };
         try {
-            await saveUserData(newUserData);
+            await saveUserData(prev => ({ ...prev, nutritionPlanning: updatedPlanning } as any));
             await showAlert("Pianificazione salvata sul cloud!");
         } catch {
             await showAlert("Errore durante il salvataggio della pianificazione.");
@@ -61,6 +60,7 @@ export function useNutritionPlanning() {
     };
 
     const handleCopyFromTDEE = () => {
+        const userData = useAppStore.getState().userData;
         const calc = Logic.calculateTDEEAndMacros(userData);
         const tdee = calc.tdee || 2500;
         const carbs = calc.carbs || 300;

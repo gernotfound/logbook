@@ -3,8 +3,14 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
+const EMPTY_FOODS: any[] = [];
+
 export function useNutritionMeals() {
-    const userData = useAppStore(state => state.userData);
+    const todayDateStr = Logic.getLocalDateString();
+    const todayNutrition = useAppStore(state => state.userData?.nutrition?.[todayDateStr]) || { 
+        date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
+    };
+    const customFoods = useAppStore(state => state.userData?.customFoods || EMPTY_FOODS);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     
@@ -18,11 +24,6 @@ export function useNutritionMeals() {
         kcal: '', carbs: '', pro: '', fat: ''
     });
 
-    const todayDateStr = Logic.getLocalDateString();
-    const todayNutrition = userData?.nutrition?.[todayDateStr] || { 
-        date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
-    };
-    
     const meals = (todayNutrition.meals || []) as any[];
 
     const startEditCustomFood = (food: any) => {
@@ -47,7 +48,6 @@ export function useNutritionMeals() {
     };
 
     const handleQuickAdd = async (quickData: any) => {
-        if (!userData) return;
         const addedItem = {
             id: Logic.generateId('food'),
             name: quickData.name,
@@ -63,8 +63,6 @@ export function useNutritionMeals() {
         };
 
         try {
-            // Usa functional updater: legge sempre lo stato più recente da Zustand,
-            // evitando la race condition su doppio tap rapido.
             await saveUserData((prev) => {
                 if (!prev) return prev;
                 const todayData = prev.nutrition?.[todayDateStr] || { date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
@@ -80,7 +78,6 @@ export function useNutritionMeals() {
     const handleSearch = (query: string) => {
         setSearchQuery(query);
         if (query.trim().length > 0) {
-            const customFoods = (userData?.customFoods || []) as any[];
             const res = Logic.searchFoods(customFoods, query).slice(0, 15);
             setSearchResults(res);
         } else {
@@ -109,7 +106,6 @@ export function useNutritionMeals() {
     };
 
     const addFood = async (food: any, mealType: string) => {
-        if (!userData) return;
         const addedItem = {
             id: Logic.generateId('food'),
             name: food.name,
@@ -143,7 +139,6 @@ export function useNutritionMeals() {
     };
 
     const updateMealItem = async (updatedItem: any) => {
-        if (!userData) return;
         const targetId = updatedItem.itemId || updatedItem.time || updatedItem.id;
 
         try {
@@ -163,8 +158,6 @@ export function useNutritionMeals() {
     };
 
     const removeFood = async (itemTime: number) => {
-        if (!userData) return;
-
         try {
             await saveUserData((prev) => {
                 if (!prev) return prev;
@@ -183,7 +176,6 @@ export function useNutritionMeals() {
     };
 
     const clearDay = async () => {
-        if (!userData) return;
         try {
             await saveUserData((prev) => {
                 if (!prev) return prev;
@@ -196,7 +188,6 @@ export function useNutritionMeals() {
     };
 
     const saveCustomFood = async () => {
-        if (!userData) return;
         const foodData = {
             ...cfData,
             baseQty: 100,

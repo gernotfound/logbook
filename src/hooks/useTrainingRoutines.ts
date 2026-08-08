@@ -4,8 +4,12 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { RoutineExercise, WorkoutRoutine } from '../types';
 
+const EMPTY_ROUTINES: WorkoutRoutine[] = [];
+const EMPTY_LIBRARY: any[] = [];
+
 export function useTrainingRoutines() {
-    const userData = useAppStore(state => state.userData);
+    const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
@@ -43,9 +47,6 @@ export function useTrainingRoutines() {
         setExpandedRoutineId(prev => prev === id ? null : id);
     };
 
-    const routines = userData?.routines || [];
-    const library = userData?.library || [];
-
     const handleEditClick = (rtn: WorkoutRoutine) => {
         setEditingRoutineId(rtn.id);
         setRoutineName(rtn.name);
@@ -60,7 +61,8 @@ export function useTrainingRoutines() {
         localStorage.removeItem('draft_routine');
     };
 
-    const handleSave = async () => {
+    const handleSave = async (e?: any) => {
+        if (e) e.preventDefault();
         if (!routineName.trim()) {
             await showAlert("Inserisci il nome della scheda");
             return;
@@ -79,7 +81,7 @@ export function useTrainingRoutines() {
                 const updatedRoutines = routines.map(r => 
                     r.id === editingRoutineId ? { ...r, name: routineName.trim(), exercises: sanitizedExercises } : r
                 );
-                await saveUserData({ ...userData, routines: updatedRoutines });
+                await saveUserData(prev => ({ ...prev, routines: updatedRoutines } as any));
             } else {
                 const newRoutine = {
                     id: Logic.generateId('rtn'),
@@ -87,7 +89,7 @@ export function useTrainingRoutines() {
                     exercises: sanitizedExercises
                 };
                 const updatedRoutines = [...routines, newRoutine].sort((a,b) => a.name.localeCompare(b.name));
-                await saveUserData({ ...userData, routines: updatedRoutines });
+                await saveUserData(prev => ({ ...prev, routines: updatedRoutines } as any));
             }
             
             setRoutineName('');
@@ -104,7 +106,7 @@ export function useTrainingRoutines() {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
         const updatedRoutines = routines.filter(r => r.id !== id);
         try {
-            await saveUserData({ ...userData, routines: updatedRoutines });
+            await saveUserData(prev => ({ ...prev, routines: updatedRoutines } as any));
             if (editingRoutineId === id) {
                 handleCancelEdit();
             }

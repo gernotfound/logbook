@@ -2,13 +2,14 @@ import { useDialogStore } from '../store/useDialogStore';
 
 export const Exporter = {
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
+        const libMap = new Map<string, any>(library.map(l => [l.id, l]));
         let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Peso (kg)\n";
         history.forEach(session => {
             const dateStr = session.globalStartTime ? new Date(session.globalStartTime).toLocaleString() : "Data sconosciuta";
             const routineName = `"${session.routineName || 'Allenamento libero'}"`;
             if (session.exercises && session.exercises.length > 0) {
                 session.exercises.forEach((ex: any) => {
-                    const libEx = library.find(l => l.id === ex.exId);
+                    const libEx = libMap.get(ex.exId);
                     const exName = `"${libEx ? libEx.name : (ex.name || ex.exId || 'Sconosciuto')}"`;
                     if (ex.sets && ex.sets.length > 0) {
                         ex.sets.forEach((set: any, idx: number) => {

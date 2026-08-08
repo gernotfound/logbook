@@ -7,15 +7,17 @@ import { CycleEditor } from './CycleEditor';
 import { CycleCard } from './CycleCard';
 import type { TrainingCycle, WorkoutRoutine, Exercise } from '../../../types';
 
+const EMPTY_ROUTINES: WorkoutRoutine[] = [];
+const EMPTY_LIBRARY: Exercise[] = [];
+const EMPTY_CYCLES: TrainingCycle[] = [];
+
 export default function TrainingPlanning() {
-    const userData = useAppStore(state => state.userData);
+    const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
+    const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
+    const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
-
-    const routines: WorkoutRoutine[] = useMemo(() => userData?.routines || [], [userData?.routines]);
-    const library: Exercise[] = useMemo(() => userData?.library || [], [userData?.library]);
-    const trainingCycles: TrainingCycle[] = useMemo(() => userData?.trainingCycles || [], [userData?.trainingCycles]);
-    const activeCycleId = userData?.activeCycleId ?? null;
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);

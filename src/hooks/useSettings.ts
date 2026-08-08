@@ -7,12 +7,11 @@ import { DB } from '../lib/db';
 
 export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
-    const userData = useAppStore(state => state.userData);
+    const storeProfile = useAppStore(state => state.userData?.profile);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     
-    const storeProfile = userData?.profile;
     const [localProfile, setLocalProfile] = useState<any>(null);
     const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
 
@@ -33,10 +32,11 @@ export function useSettings() {
     const setGender = (val: string) => setLocalProfile({ ...profile, gender: val });
     const [deletingAccount, setDeletingAccount] = useState(false);
 
-    const handleSaveProfile = async () => {
+    const handleSaveProfile = async (e?: any) => {
+        if (e) e.preventDefault();
         const newProfile = { dob, height, gender };
         try {
-            await saveUserData({ ...userData, profile: newProfile });
+            await saveUserData(prev => ({ ...prev, profile: newProfile } as any));
             setLocalProfile(null);
             await showAlert("Profilo aggiornato!");
         } catch {
@@ -45,6 +45,7 @@ export function useSettings() {
     };
 
     const handleExport = () => {
+        const userData = useAppStore.getState().userData;
         if(userData) {
             Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
         }

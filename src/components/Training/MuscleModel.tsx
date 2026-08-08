@@ -4,6 +4,22 @@ import { Logic } from '../../lib/logic';
 
 const MUSCLE_NAMES_MAP = new Map<string, string>(Logic.MUSCLES.map(m => [m.id, m.name]));
 
+const REVERSE_GROUP_MAP: Record<string, string> = (() => {
+    const map: Record<string, string> = {};
+    const keys = Object.keys(Logic.GROUP_MAP).sort((a, b) => 
+        (Logic.GROUP_MAP as any)[a].length - (Logic.GROUP_MAP as any)[b].length
+    );
+    for (const key of keys) {
+        const paths = (Logic.GROUP_MAP as any)[key];
+        for (const p of paths) {
+            if (!map[p]) {
+                map[p] = key;
+            }
+        }
+    }
+    return map;
+})();
+
 interface MuscleModelProps {
     selectedMuscles?: string[];
     secondaryMuscles?: string[];
@@ -20,22 +36,6 @@ export default function MuscleModel({
     onToggleMuscle 
 }: MuscleModelProps) {
     const [tooltip, setTooltip] = useState({ visible: false, text: '', x: 0, y: 0 });
-
-    const reverseMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        const keys = Object.keys(Logic.GROUP_MAP).sort((a, b) => 
-            (Logic.GROUP_MAP as any)[a].length - (Logic.GROUP_MAP as any)[b].length
-        );
-        for (const key of keys) {
-            const paths = (Logic.GROUP_MAP as any)[key];
-            for (const p of paths) {
-                if (!map[p]) {
-                    map[p] = key;
-                }
-            }
-        }
-        return map;
-    }, []);
 
     const primaryIds = useMemo(() => {
         const set = new Set<string>();
@@ -66,7 +66,7 @@ export default function MuscleModel({
     }, [secondaryMuscles]);
 
     const getPathStyle = useCallback((id: string) => {
-        const logicId = reverseMap[id];
+        const logicId = REVERSE_GROUP_MAP[id];
         
         if (muscleColors) {
             let customColor = muscleColors[id] || (logicId ? muscleColors[logicId] : undefined);
@@ -104,12 +104,12 @@ export default function MuscleModel({
             transition: 'all 0.3s ease',
             cursor: interactive ? 'pointer' : 'default',
         };
-    }, [reverseMap, muscleColors, primaryIds, secondaryIds, interactive]);
+    }, [muscleColors, primaryIds, secondaryIds, interactive]);
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         const target = e.target as SVGElement;
         if (target.tagName === 'path' && target.id) {
-            const logicId = reverseMap[target.id];
+            const logicId = REVERSE_GROUP_MAP[target.id];
             if (logicId) {
                 const name = MUSCLE_NAMES_MAP.get(logicId) || logicId;
                 const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -127,7 +127,7 @@ export default function MuscleModel({
         if (tooltip.visible) {
             setTooltip(prev => ({ ...prev, visible: false }));
         }
-    }, [reverseMap, tooltip.visible]);
+    }, [tooltip.visible]);
 
     const handleMouseLeave = useCallback(() => {
         setTooltip(prev => ({ ...prev, visible: false }));
@@ -137,12 +137,12 @@ export default function MuscleModel({
         if (!interactive || !onToggleMuscle) return;
         const target = e.target as SVGElement;
         if (target.tagName === 'path' && target.id) {
-            const logicId = reverseMap[target.id];
+            const logicId = REVERSE_GROUP_MAP[target.id];
             if (logicId) {
                 onToggleMuscle(logicId);
             }
         }
-    }, [interactive, onToggleMuscle, reverseMap]);
+    }, [interactive, onToggleMuscle]);
 
     return (
         <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: '100%', padding: '30px 0 10px 0', margin: '0 auto', overflow: 'hidden', textAlign: 'center' }}>

@@ -4,8 +4,56 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 
+const normalizeStem = (str: string) => {
+    return str
+        .replace(/\bdeltoidi\b/g, 'deltoid')
+        .replace(/\bdeltoide\b/g, 'deltoid')
+        .replace(/\bfrontali\b/g, 'anterior')
+        .replace(/\bfrontale\b/g, 'anterior')
+        .replace(/\banteriori\b/g, 'anterior')
+        .replace(/\banteriore\b/g, 'anterior')
+        .replace(/\blaterali\b/g, 'lateral')
+        .replace(/\blaterale\b/g, 'lateral')
+        .replace(/\bposteriori\b/g, 'posterior')
+        .replace(/\bposteriore\b/g, 'posterior')
+        .replace(/\btrapezi\b/g, 'trapez')
+        .replace(/\btrapezio\b/g, 'trapez')
+        .replace(/\bpettorali\b/g, 'petto')
+        .replace(/\bpettorale\b/g, 'petto')
+        .replace(/\bbicipiti\b/g, 'bicipit')
+        .replace(/\bbicipite\b/g, 'bicipit')
+        .replace(/\btricipiti\b/g, 'tricipit')
+        .replace(/\btricipite\b/g, 'tricipit')
+        .replace(/\bquadricipiti\b/g, 'quadricipit')
+        .replace(/\bquadricipite\b/g, 'quadricipit')
+        .replace(/\bfemorali\b/g, 'femoral')
+        .replace(/\bfemorale\b/g, 'femoral')
+        .replace(/\bpolpacci\b/g, 'polpacc')
+        .replace(/\bpolpaccio\b/g, 'polpacc')
+        .replace(/\baddominali\b/g, 'addom')
+        .replace(/\baddominale\b/g, 'addom');
+};
+
+const PREPARED_MUSCLES = Logic.MUSCLES.map(m => ({
+    ...m,
+    _stemmedName: normalizeStem(m.name.toLowerCase())
+}));
+
+const STATIC_MUSCLE_FUSE = new Fuse(PREPARED_MUSCLES, {
+    keys: [
+        { name: 'name', weight: 0.6 },
+        { name: '_stemmedName', weight: 0.4 }
+    ],
+    threshold: 0.38,
+    ignoreLocation: true,
+    minMatchCharLength: 2
+});
+
+const EMPTY_ARRAY: any[] = [];
+
 export function useTrainingExercises() {
-    const userData = useAppStore(state => state.userData);
+    const library = useAppStore(state => state.userData?.library || EMPTY_ARRAY);
+    const routines = useAppStore(state => state.userData?.routines || EMPTY_ARRAY);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
@@ -17,8 +65,6 @@ export function useTrainingExercises() {
     const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>([]);
     const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
     const [trackingType, setTrackingType] = useState<'weight_reps' | 'time'>('weight_reps');
-
-    const library = userData?.library || [];
 
     // Restore draft on mount
     useEffect(() => {
@@ -57,36 +103,6 @@ export function useTrainingExercises() {
         const rawQuery = muscleSearch.trim().toLowerCase();
         if (!rawQuery) return [];
 
-        const normalizeStem = (str: string) => {
-            return str
-                .replace(/\bdeltoidi\b/g, 'deltoid')
-                .replace(/\bdeltoide\b/g, 'deltoid')
-                .replace(/\bfrontali\b/g, 'anterior')
-                .replace(/\bfrontale\b/g, 'anterior')
-                .replace(/\banteriori\b/g, 'anterior')
-                .replace(/\banteriore\b/g, 'anterior')
-                .replace(/\blaterali\b/g, 'lateral')
-                .replace(/\blaterale\b/g, 'lateral')
-                .replace(/\bposteriori\b/g, 'posterior')
-                .replace(/\bposteriore\b/g, 'posterior')
-                .replace(/\btrapezi\b/g, 'trapez')
-                .replace(/\btrapezio\b/g, 'trapez')
-                .replace(/\bpettorali\b/g, 'petto')
-                .replace(/\bpettorale\b/g, 'petto')
-                .replace(/\bbicipiti\b/g, 'bicipit')
-                .replace(/\bbicipite\b/g, 'bicipit')
-                .replace(/\btricipiti\b/g, 'tricipit')
-                .replace(/\btricipite\b/g, 'tricipit')
-                .replace(/\bquadricipiti\b/g, 'quadricipit')
-                .replace(/\bquadricipite\b/g, 'quadricipit')
-                .replace(/\bfemorali\b/g, 'femoral')
-                .replace(/\bfemorale\b/g, 'femoral')
-                .replace(/\bpolpacci\b/g, 'polpacc')
-                .replace(/\bpolpaccio\b/g, 'polpacc')
-                .replace(/\baddominali\b/g, 'addom')
-                .replace(/\baddominale\b/g, 'addom');
-        };
-
         const stemmedQuery = normalizeStem(rawQuery);
         const queryTokens = stemmedQuery.split(/\s+/).filter(Boolean);
 
@@ -98,23 +114,8 @@ export function useTrainingExercises() {
             return queryTokens.every(tok => mNameNorm.includes(tok));
         });
 
-        // 2. Fuzzy matches with Fuse.js (typo tolerance)
-        const preparedMuscles = Logic.MUSCLES.map(m => ({
-            ...m,
-            _stemmedName: normalizeStem(m.name.toLowerCase())
-        }));
-
-        const fuse = new Fuse(preparedMuscles, {
-            keys: [
-                { name: 'name', weight: 0.6 },
-                { name: '_stemmedName', weight: 0.4 }
-            ],
-            threshold: 0.38,
-            ignoreLocation: true,
-            minMatchCharLength: 2
-        });
-
-        const fuzzyMatches = fuse.search(stemmedQuery).map(res => {
+        // 2. Fuzzy matches with precomputed static Fuse.js
+        const fuzzyMatches = STATIC_MUSCLE_FUSE.search(stemmedQuery).map(res => {
             const { _stemmedName, ...original } = res.item;
             return original;
         });
@@ -351,7 +352,7 @@ export function useTrainingExercises() {
         }
 
         try {
-            await saveUserData({ ...userData, library: updatedLibrary });
+            await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
             handleCancelEdit(); // Reset form
         } catch {
             showAlert("Errore durante il salvataggio dell'esercizio.");
@@ -362,8 +363,8 @@ export function useTrainingExercises() {
         e.stopPropagation(); // prevent triggering edit when clicking delete
         
         // Check if exercise is used in routines
-        const usedInRoutines = (userData?.routines || []).filter(rtn => 
-            (rtn.exercises || []).some(ex => ex.exId === id)
+        const usedInRoutines = routines.filter(rtn => 
+            (rtn.exercises || []).some((ex: any) => ex.exId === id)
         );
         
         let confirmMsg = "Sei sicuro di voler eliminare questo esercizio dall'archivio?";
@@ -374,7 +375,7 @@ export function useTrainingExercises() {
         if(await showConfirm(confirmMsg)) {
             const updatedLibrary = library.filter(ex => ex.id !== id);
             try {
-                await saveUserData({ ...userData, library: updatedLibrary });
+                await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
                 if (editingExId === id) handleCancelEdit();
             } catch {
                 showAlert("Errore durante l'eliminazione dell'esercizio.");

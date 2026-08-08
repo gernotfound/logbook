@@ -90,17 +90,21 @@ export type HomeViewState =
         volumeChartData: any;
     };
 
-export function useHomeView(): HomeViewState {
-    const userData = useAppStore(state => state.userData);
+const EMPTY_HISTORY: any[] = [];
+const EMPTY_NUTRITION: Record<string, any> = {};
+const EMPTY_LIBRARY: any[] = [];
 
-    // Always derive safe values — required before any useMemo (Rules of Hooks)
-    const history = useMemo(() => userData?.history || [], [userData?.history]);
-    const nutrition = useMemo(() => userData?.nutrition || {}, [userData?.nutrition]);
+export function useHomeView(): HomeViewState {
+    const hasUserData = useAppStore(state => !!state.userData);
+    const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
+    const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
+    const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
+    const profile = useAppStore(state => state.userData?.profile);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
     const streak = useMemo(() => calcStreak(history), [history]);
     const totalWorkouts = history.length;
-    const library = useMemo(() => userData?.library || [], [userData?.library]);
 
     // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
     const libraryMap = useMemo(() => new Map(library.map((l: any) => [l.id, l])), [library]);
@@ -299,7 +303,7 @@ export function useHomeView(): HomeViewState {
     }, [nutrition, weightPeriod]);
 
     // Early return AFTER all hooks
-    if (!userData) {
+    if (!hasUserData) {
         return { loading: true };
     }
 
@@ -319,15 +323,15 @@ export function useHomeView(): HomeViewState {
     const fat = todayNutrition.fat || 0;
 
     // Get Targets from planning
-    const kcalTarget = userData?.nutritionPlanning?.normocalorica?.kcal || 
-                       userData?.nutritionPlanning?.totalKcal || 2500;
+    const kcalTarget = nutritionPlanning?.normocalorica?.kcal || 
+                       nutritionPlanning?.totalKcal || 2500;
     
     // Get BF % — use today's or most recent measurement
     const sortedNutritionDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
     const recentWeight = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.weight)?.weight;
     const currentWeight = todayNutrition.weight || 
                           recentWeight || 
-                          userData?.nutritionPlanning?.weight || 80;
+                          nutritionPlanning?.weight || 80;
     
     let bf = "--";
     const recentNutritionWithBf = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
@@ -343,10 +347,10 @@ export function useHomeView(): HomeViewState {
     } else {
         // Calcola da circonferenze recenti o profilo se bf non precalcolato
         const recentMeasurement = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.waist && n?.neck);
-        if (recentMeasurement?.waist && recentMeasurement?.neck && userData?.profile?.height) {
+        if (recentMeasurement?.waist && recentMeasurement?.neck && profile?.height) {
             const calc = Logic.calculateUsNavyBodyFat({
-                gender: userData.profile.gender || 'M',
-                height: parseFloat(String(userData.profile.height)),
+                gender: profile.gender || 'M',
+                height: parseFloat(String(profile.height)),
                 waist: parseFloat(String(recentMeasurement.waist)),
                 neck: parseFloat(String(recentMeasurement.neck)),
                 hip: recentMeasurement.hip ? parseFloat(String(recentMeasurement.hip)) : undefined
@@ -354,8 +358,8 @@ export function useHomeView(): HomeViewState {
             if (calc !== null && !isNaN(calc)) {
                 bf = Number(calc).toFixed(1);
             }
-        } else if (userData?.profile && Object.keys(userData.profile).length > 0) {
-            const calcBf = Logic.calculateBodyFat(currentWeight, userData.profile);
+        } else if (profile && Object.keys(profile).length > 0) {
+            const calcBf = Logic.calculateBodyFat(currentWeight, profile);
             if (calcBf) bf = Number(calcBf).toFixed(1);
         }
     }

@@ -4,10 +4,16 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
-import type { WorkoutSession } from '../types';
+import type { WorkoutSession, WorkoutRoutine, Exercise } from '../types';
+
+const EMPTY_ROUTINES: WorkoutRoutine[] = [];
+const EMPTY_LIBRARY: Exercise[] = [];
+const EMPTY_HISTORY: WorkoutSession[] = [];
 
 export function useWorkoutSession() {
-    const userData = useAppStore(state => state.userData);
+    const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
+    const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
     const saveUserData = useAppStore(state => state.saveUserData);
     const localWorkout = useAppStore(state => state.localWorkout);
     const setLocalWorkout = useAppStore(state => state.setLocalWorkout);
@@ -15,9 +21,6 @@ export function useWorkoutSession() {
     const showConfirm = useDialogStore(state => state.showConfirm);
 
     const activeWorkout = localWorkout;
-    const routines = userData?.routines || [];
-    const library = userData?.library || [];
-    const history = userData?.history || [];
 
     const [selectedRoutine, setSelectedRoutine] = useState('');
     

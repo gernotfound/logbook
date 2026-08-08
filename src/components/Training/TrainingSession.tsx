@@ -34,15 +34,25 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
 };
 
+import type { TrainingCycle, WorkoutRoutine } from '../../types';
+
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
     onNavigateToPlanning?: () => void;
 }
 
+const EMPTY_CYCLES: TrainingCycle[] = [];
+
+interface PlannedRoutineItem {
+    cycleItem: any;
+    routine: WorkoutRoutine;
+    letter: string;
+    position: number;
+}
+
 const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
-    const userData = useAppStore(state => state.userData);
-    const trainingCycles = userData?.trainingCycles || [];
-    const activeCycleId = userData?.activeCycleId ?? null;
+    const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
+    const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
     const activeCycle = activeCycleId ? trainingCycles.find(c => c.id === activeCycleId) : null;
 
     const {
@@ -62,18 +72,20 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
 
-    const plannedRoutines = useMemo(() => {
+    const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle || !activeCycle.routines) return [];
-        return activeCycle.routines.map((item, idx) => {
-            const found = routines.find(r => r.id === item.routineId);
-            const letter = String.fromCharCode(65 + (idx % 26));
-            return {
-                cycleItem: item,
-                routine: found,
-                letter,
-                position: idx + 1
-            };
-        }).filter(item => item.routine !== undefined);
+        return activeCycle.routines
+            .map((item: any, idx: number) => {
+                const found = routines.find(r => r.id === item.routineId);
+                const letter = String.fromCharCode(65 + (idx % 26));
+                return {
+                    cycleItem: item,
+                    routine: found,
+                    letter,
+                    position: idx + 1
+                };
+            })
+            .filter((item): item is PlannedRoutineItem => item.routine !== undefined);
     }, [activeCycle, routines]);
 
     const nextScheduled = useMemo(() => {

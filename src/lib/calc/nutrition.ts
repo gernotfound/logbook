@@ -305,8 +305,21 @@ export function calculateFoodMacros(food: any, quantity: any) {
     };
 }
 
+const normalizeFoodStr = (str: any) => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+const FUSE_FOOD_OPTIONS = {
+    keys: [
+        { name: 'name', weight: 0.6 },
+        { name: 'brand', weight: 0.25 },
+        { name: 'category', weight: 0.15 }
+    ],
+    threshold: 0.38,
+    ignoreLocation: true,
+    minMatchCharLength: 2
+};
+
 export function searchFoods(foodsList: any[], query: string, categoryFilter?: string) {
-    if (!Array.isArray(foodsList)) return [];
+    if (!Array.isArray(foodsList) || foodsList.length === 0) return [];
     let results = foodsList;
     if (categoryFilter && categoryFilter !== 'all') {
         results = results.filter(item => item && item.category === categoryFilter);
@@ -314,30 +327,33 @@ export function searchFoods(foodsList: any[], query: string, categoryFilter?: st
     if (!query || typeof query !== 'string' || !query.trim()) {
         return results;
     }
-    const normalize = (str: any) => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-    const q = normalize(query);
+    const q = normalizeFoodStr(query);
+    if (!q) return results;
 
-    // Direct matches
+    // Direct substring matches
     const directMatched = results.filter(item => {
         if (!item) return false;
-        const name = normalize(item.name);
-        const category = normalize(item.category);
-        const servingUnit = normalize(item.servingUnit || item.unit);
-        const brand = normalize(item.brand);
+        const name = normalizeFoodStr(item.name);
+        const category = normalizeFoodStr(item.category);
+        const servingUnit = normalizeFoodStr(item.servingUnit || item.unit);
+        const brand = normalizeFoodStr(item.brand);
         return name.includes(q) || category.includes(q) || servingUnit.includes(q) || brand.includes(q);
     });
 
+    if (q.length < 2) {
+        return directMatched.sort((a, b) => {
+            const aName = normalizeFoodStr(a.name);
+            const bName = normalizeFoodStr(b.name);
+            const aStarts = aName.startsWith(q);
+            const bStarts = bName.startsWith(q);
+            if (aStarts && !bStarts) return -1;
+            if (!aStarts && bStarts) return 1;
+            return aName.localeCompare(bName, 'it');
+        });
+    }
+
     // Fuzzy matches with Fuse.js
-    const fuse = new Fuse(results, {
-        keys: [
-            { name: 'name', weight: 0.6 },
-            { name: 'brand', weight: 0.25 },
-            { name: 'category', weight: 0.15 }
-        ],
-        threshold: 0.38,
-        ignoreLocation: true,
-        minMatchCharLength: 2
-    });
+    const fuse = new Fuse(results, FUSE_FOOD_OPTIONS);
 
     const tokens = query.trim().split(/\s+/).filter(t => t.length >= 2);
     let fuzzyMatched: any[] = [];
@@ -362,8 +378,8 @@ export function searchFoods(foodsList: any[], query: string, categoryFilter?: st
     }
 
     return merged.sort((a, b) => {
-        const aName = normalize(a.name);
-        const bName = normalize(b.name);
+        const aName = normalizeFoodStr(a.name);
+        const bName = normalizeFoodStr(b.name);
         const aStarts = aName.startsWith(q);
         const bStarts = bName.startsWith(q);
         if (aStarts && !bStarts) return -1;
