@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react';
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
     const [storedValue, setStoredValue] = useState<T>(() => {
+        const item = window.localStorage.getItem(key);
+        if (item === null) return initialValue;
+
         try {
-            const item = window.localStorage.getItem(key);
-            return item ? (JSON.parse(item) as T) : initialValue;
+            return JSON.parse(item) as T;
         } catch (error) {
-            console.error(`Errore di parsing del localStorage key "${key}":`, error);
-            // Fallback to string if not JSON
-            const item = window.localStorage.getItem(key);
-            if (item !== null && typeof initialValue === 'string') {
+            // Se fallisce il parsing JSON e il valore iniziale era una stringa,
+            // probabilmente è stato salvato come plain text intenzionalmente.
+            if (typeof initialValue === 'string') {
                 return item as unknown as T;
             }
+            console.error(`Errore di parsing del localStorage key "${key}":`, error);
             return initialValue;
         }
     });
