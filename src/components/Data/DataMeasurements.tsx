@@ -1,0 +1,254 @@
+import React from 'react';
+
+interface DataMeasurementsProps {
+    profile: any;
+    editingDate: string | null;
+    measureTime: string;
+    setMeasureTime: (val: string) => void;
+    weight: string;
+    setWeight: (val: string) => void;
+    waist: string;
+    setWaist: (val: string) => void;
+    neck: string;
+    setNeck: (val: string) => void;
+    hip: string;
+    setHip: (val: string) => void;
+    manualBf: string;
+    setManualBf: (val: string) => void;
+    chest: string;
+    setChest: (val: string) => void;
+    shoulders: string;
+    setShoulders: (val: string) => void;
+    biceps: string;
+    setBiceps: (val: string) => void;
+    thighs: string;
+    setThighs: (val: string) => void;
+    calves: string;
+    setCalves: (val: string) => void;
+    handleCancelEdit: () => void;
+    calculateAndSave: () => Promise<void>;
+}
+
+const DataMeasurements: React.FC<DataMeasurementsProps> = ({
+    profile,
+    editingDate,
+    measureTime, setMeasureTime,
+    weight, setWeight,
+    waist, setWaist,
+    neck, setNeck,
+    hip, setHip,
+    manualBf, setManualBf,
+    chest, setChest,
+    shoulders, setShoulders,
+    biceps, setBiceps,
+    thighs, setThighs,
+    calves, setCalves,
+    handleCancelEdit,
+    calculateAndSave
+}) => {
+    return (
+        <div className="card" id="measurement-form-card" style={editingDate ? { border: '2px solid var(--primary-color)' } : undefined}>
+            <h2 style={{ color: editingDate ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px' }}>
+                {editingDate ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                Registra il tuo peso, la massa grassa e le circonferenze corporee.
+            </p>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '0 5px' }}>
+                <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0 }}>Orario rilevazione</label>
+                <input 
+                    id="measure-time" 
+                    type="time" 
+                    value={measureTime} 
+                    onChange={e => setMeasureTime(e.target.value)} 
+                    style={{
+                        width: 'auto',
+                        textAlign: 'center',
+                        margin: 0,
+                        padding: '8px 12px',
+                        minHeight: 'auto'
+                    }}
+                />
+            </div>
+
+            {/* SEZIONE 1: Dati principali */}
+            <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Dati principali</h3>
+            
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Peso (kg)</label>
+                    <input 
+                        id="measure-weight" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        placeholder="0.0" 
+                        value={weight} 
+                        onChange={e => setWeight(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', margin: 0, lineHeight: 1 }}
+                    />
+                </div>
+                
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>BF % (Bilancia)</label>
+                    <input 
+                        id="measure-bf" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        placeholder="Opzionale" 
+                        value={manualBf} 
+                        onChange={e => setManualBf(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', margin: 0, lineHeight: 1 }}
+                    />
+                </div>
+            </div>
+
+            {/* SEZIONE 2: Circonferenze opzionali */}
+            <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Misure circonferenze (Opzionali)</h3>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                Se inserisci questi dati ma non la BF % dalla bilancia, la massa grassa verrà calcolata automaticamente (Metodo US Navy).
+            </p>
+
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Vita (cm)</label>
+                    <input 
+                        id="measure-waist" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={waist} 
+                        onChange={e => setWaist(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Collo (cm)</label>
+                    <input 
+                        id="measure-neck" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={neck} 
+                        onChange={e => setNeck(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+            </div>
+            
+            {profile.gender === 'F' && (
+                <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <div style={{ width: '50%', minWidth: 0 }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Fianchi (cm)</label>
+                        <input 
+                            id="measure-hip" 
+                            type="number" 
+                            inputMode="decimal"
+                            step="0.1" 
+                            value={hip} 
+                            onChange={e => setHip(e.target.value)} 
+                            onFocus={e => e.target.select()}
+                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                        />
+                    </div>
+                </div>
+            )}
+
+            <div style={{ width: '100%', height: '1px', background: 'var(--glass-border)', margin: '20px 0' }}></div>
+            <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Altre misure (Bodybuilding)</h3>
+
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Torace (cm)</label>
+                    <input 
+                        id="measure-chest" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={chest} 
+                        onChange={e => setChest(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Spalle (cm)</label>
+                    <input 
+                        id="measure-shoulders" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={shoulders} 
+                        onChange={e => setShoulders(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+            </div>
+
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Braccia (cm)</label>
+                    <input 
+                        id="measure-biceps" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={biceps} 
+                        onChange={e => setBiceps(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Cosce (cm)</label>
+                    <input 
+                        id="measure-thighs" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={thighs} 
+                        onChange={e => setThighs(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+            </div>
+
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <div style={{ width: '50%', minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Polpacci (cm)</label>
+                    <input 
+                        id="measure-calves" 
+                        type="number" 
+                        inputMode="decimal"
+                        step="0.1" 
+                        value={calves} 
+                        onChange={e => setCalves(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
+                    />
+                </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+                {editingDate && (
+                    <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={handleCancelEdit}>
+                        Annulla
+                    </button>
+                )}
+                <button className="btn btn-primary" style={{ flex: 2 }} onClick={calculateAndSave}>
+                    {editingDate ? '💾 Salva modifiche' : '💾 Salva misurazione'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+export default DataMeasurements;

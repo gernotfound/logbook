@@ -1,0 +1,242 @@
+import { create } from 'zustand';
+import { DB } from '../lib/db';
+import { Logic } from '../lib/logic';
+import type { WorkoutSession, UserProfile, NutritionPlanning, UserData, SessionExercise, SessionExerciseSet } from '../types';
+import { DEBOUNCE_DELAY_LOCAL, DEBOUNCE_DELAY_GLOBAL } from '../constants';
+
+export type { UserProfile, NutritionPlanning, UserData };
+
+export interface AppState {
+    userData: UserData | null;
+    saveError: string | null;
+    syncing: boolean;
+    localWorkout: WorkoutSession | null;
+
+    setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
+    setSyncing: (val: boolean) => void;
+    setSaveError: (error: string | null) => void;
+    setLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => void;
+    saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<void>;
+    updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<void>;
+    resetStore: () => void;
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let globalSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingResolvers: (() => void)[] = [];
+
+const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        try {
+            if (workout) {
+                localStorage.setItem('logbook_local_workout', JSON.stringify(workout));
+            } else {
+                localStorage.removeItem('logbook_local_workout');
+            }
+        } catch (e) {
+            console.error("Errore salvataggio localWorkout:", e);
+        }
+    }, DEBOUNCE_DELAY_LOCAL);
+};
+
+const getInitialUserData = (): UserData | null => {
+    try {
+        const cached = localStorage.getItem('logbook_cached_user_data');
+        if (!cached) return null;
+        const parsed = JSON.parse(cached);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+
+const saveUserDataToLocalStorage = (data: UserData | null) => {
+    try {
+        if (data) {
+            localStorage.setItem('logbook_cached_user_data', JSON.stringify(data));
+        } else {
+            localStorage.removeItem('logbook_cached_user_data');
+        }
+    } catch (e) {
+        console.warn("Errore salvataggio cache userData in localStorage:", e);
+    }
+};
+
+export const useAppStore = create<AppState>((set, get) => ({
+    userData: getInitialUserData(),
+    saveError: null,
+    syncing: false,
+    
+    // Inizializza il workout in bozza dal localStorage, se presente (con ID univoci garantiti)
+    localWorkout: (() => {
+        try {
+            const saved = localStorage.getItem('logbook_local_workout');
+            if (!saved) return null;
+            const parsed = JSON.parse(saved);
+            if (parsed && Array.isArray(parsed.exercises)) {
+                parsed.exercises = parsed.exercises.map((ex: SessionExercise) => ({
+                    ...ex,
+                    sets: (ex.sets || []).map((s: SessionExerciseSet) => ({
+                        ...s,
+                        id: s.id || Logic.generateId('s'),
+                        dropsets: (s.dropsets || []).map((ds: any) => ({ ...ds, id: ds.id || Logic.generateId('ds') })),
+                        isometrics: (s.isometrics || []).map((iso: any) => ({ ...iso, id: iso.id || Logic.generateId('iso') }))
+                    }))
+                }));
+            }
+            return parsed;
+        } catch {
+            return null;
+        }
+    })(),
+
+    setLocalWorkout: (workoutOrUpdater) => {
+        set((state) => {
+            const nextWorkout = typeof workoutOrUpdater === 'function'
+                ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(state.localWorkout)
+                : workoutOrUpdater;
+            debouncedSaveLocalStorage(nextWorkout);
+            const nextUserData = state.userData ? { ...state.userData, activeWorkout: nextWorkout || null } : null;
+            return { localWorkout: nextWorkout, userData: nextUserData };
+        });
+    },
+
+    setUserData: (dataOrUpdater) => {
+        set((state) => {
+            const rawNextData = typeof dataOrUpdater === 'function' 
+                ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData) 
+                : dataOrUpdater;
+
+            if (!rawNextData) {
+                return { userData: null, localWorkout: state.localWorkout };
+            }
+
+            let syncedLocalWorkout = state.localWorkout;
+            
+            // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
+            // The local device's localStorage is the source of truth for an ongoing workout.
+            if (state.localWorkout) {
+                // If we already have a local workout, KEEP IT. Ignore what comes from the network.
+                syncedLocalWorkout = state.localWorkout;
+            } else {
+                // If we DON'T have a local workout, but the network gives us one, we can adopt it.
+                if (rawNextData.activeWorkout !== undefined) {
+                    syncedLocalWorkout = rawNextData.activeWorkout;
+                    if (syncedLocalWorkout) {
+                        try {
+                            localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
+                        } catch (e) {
+                            console.error("Errore salvataggio localWorkout in localStorage:", e);
+                        }
+                    } else {
+                        try {
+                            localStorage.removeItem('logbook_local_workout');
+                        } catch {
+                            // Ignore removal error
+                        }
+                    }
+                }
+            }
+            
+            const nextData: UserData = {
+                ...rawNextData,
+                activeWorkout: syncedLocalWorkout ?? null
+            };
+            saveUserDataToLocalStorage(nextData);
+            return { userData: nextData, localWorkout: syncedLocalWorkout };
+        });
+    },
+
+    setSyncing: (val: boolean) => set((state) => state.syncing === val ? state : { syncing: val }),
+    setSaveError: (error: string | null) => set({ saveError: error }),
+
+    saveUserData: async (newDataOrUpdater) => {
+        const { userData, localWorkout } = get();
+        const nextData = typeof newDataOrUpdater === 'function' 
+            ? (newDataOrUpdater as (prev: UserData | null) => UserData | null)(userData) 
+            : newDataOrUpdater;
+        
+        if (!nextData) {
+            saveUserDataToLocalStorage(null);
+            set({ userData: null, saveError: null });
+            return;
+        }
+
+        const finalData: UserData = {
+            ...nextData,
+            activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
+        };
+        
+        saveUserDataToLocalStorage(finalData);
+        set({ userData: finalData, saveError: null });
+
+        return new Promise<void>((resolve) => {
+            pendingResolvers.push(resolve);
+            if (globalSaveTimer) clearTimeout(globalSaveTimer);
+            globalSaveTimer = setTimeout(async () => {
+                const resolversToCall = [...pendingResolvers];
+                pendingResolvers = [];
+                try {
+                    // Always pull the freshest state at the time of execution
+                    const currentState = get().userData;
+                    if (currentState) {
+                        await DB.saveUserData(currentState);
+                    }
+                } catch (error) {
+                    console.error("Errore durante il salvataggio in Zustand:", error);
+                    set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
+                } finally {
+                    resolversToCall.forEach(res => res());
+                }
+            }, DEBOUNCE_DELAY_GLOBAL);
+        });
+    },
+
+    updateUserData: async (updater: (prev: UserData) => UserData) => {
+        const { userData } = get();
+        if (!userData) return;
+        const nextData = updater(userData);
+        await get().saveUserData(nextData);
+    },
+
+    resetStore: () => {
+        // Cancella i timer pendenti prima di pulire il localStorage,
+        // così nessun salvataggio "fantasma" può riscrivere il workout dopo il logout.
+        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+        if (globalSaveTimer) { clearTimeout(globalSaveTimer); globalSaveTimer = null; }
+        pendingResolvers = [];
+        try {
+            localStorage.removeItem('logbook_local_workout');
+            localStorage.removeItem('logbook_cached_user_data');
+        } catch (e) {
+            console.warn("Impossibile rimuovere cache da localStorage", e);
+        }
+        set({ userData: null, localWorkout: null, saveError: null, syncing: false });
+    }
+}));
+
+// PWA FIX: Synchronously save the local workout to localStorage when the app goes into the background.
+// This ensures that if the OS suspends or kills the PWA immediately, the last keystrokes are not lost
+// due to the 300ms debounce timer.
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            const state = useAppStore.getState();
+            if (state.localWorkout) {
+                try {
+                    localStorage.setItem('logbook_local_workout', JSON.stringify(state.localWorkout));
+                } catch (e) {
+                    console.error("Errore salvataggio localWorkout su visibilitychange:", e);
+                }
+            }
+}
+    });
+}
+
+// PWA FIX: Listen for online event to clear saveError if connection is restored
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => {
+        useAppStore.getState().setSaveError(null);
+    });
+}
