@@ -1,0 +1,72 @@
+import { useSettings } from '../../hooks/useSettings';
+
+const DataBiometry = () => {
+    const {
+        dob, setDob,
+        height, setHeight,
+        gender, setGender,
+        handleSaveProfile
+    } = useSettings();
+
+    return (
+        <div className="card">
+            <h1 style={{ fontSize: '1.4rem' }}>Dati biometrici</h1>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
+            </p>
+            
+            <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
+                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Data di nascita</label>
+                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <input 
+                        id="biometry-dob" 
+                        type="date" 
+                        value={dob} 
+                        onChange={e => setDob(e.target.value)} 
+                        style={{
+                            width: '100%',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box',
+                            textAlign: 'center',
+                            margin: '0 auto',
+                            display: 'block'
+                        }}
+                    />
+                </div>
+            </div>
+            
+            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Altezza (cm)</label>
+                    <input 
+                        id="biometry-height" 
+                        type="number" 
+                        placeholder="es. 180" 
+                        value={height} 
+                        onChange={e => setHeight(e.target.value)} 
+                        onFocus={e => e.target.select()}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
+                    />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sesso</label>
+                    <select 
+                        value={gender} 
+                        onChange={e => setGender(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
+                    >
+                        <option value="">Non specificato</option>
+                        <option value="M">Uomo</option>
+                        <option value="F">Donna</option>
+                    </select>
+                </div>
+            </div>
+
+            <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleSaveProfile}>
+                💾 Salva profilo biometrico
+            </button>
+        </div>
+    );
+};
+
+export default DataBiometry;
