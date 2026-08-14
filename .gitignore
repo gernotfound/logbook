@@ -27,6 +27,7 @@ task.md
 prompt_draft.md
 walkthrough.md
 implementation_plan.md
+ORIGINAL_REQUEST.md
 
 # Editor directories and files
 .vscode/*

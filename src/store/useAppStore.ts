@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { set as idbSet, del as idbDel } from 'idb-keyval';
 import { DB } from '../lib/db';
 import { Logic } from '../lib/logic';
 import { UserDataSchema, WorkoutSessionSchema } from '../lib/schema';
@@ -43,9 +44,10 @@ const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
 
 const getInitialUserData = (): UserData | null => {
     try {
-        const cached = localStorage.getItem('logbook_cached_user_data');
+        if (typeof window === 'undefined') return null;
+        const cached = window.__INITIAL_USER_DATA__;
         if (!cached) return null;
-        const parsed = JSON.parse(cached);
+        const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
         if (!parsed || typeof parsed !== 'object') return null;
         return UserDataSchema.parse(parsed) as unknown as UserData;
     } catch {
@@ -53,15 +55,19 @@ const getInitialUserData = (): UserData | null => {
     }
 };
 
-const saveUserDataToLocalStorage = (data: UserData | null) => {
+const saveUserDataToCache = (data: UserData | null) => {
     try {
         if (data) {
-            localStorage.setItem('logbook_cached_user_data', JSON.stringify(data));
+            idbSet('logbook_cached_user_data', data).catch((e) => {
+                console.warn("Errore salvataggio cache userData in IndexedDB:", e);
+            });
         } else {
-            localStorage.removeItem('logbook_cached_user_data');
+            idbDel('logbook_cached_user_data').catch((e) => {
+                console.warn("Errore rimozione cache userData da IndexedDB:", e);
+            });
         }
     } catch (e) {
-        console.warn("Errore salvataggio cache userData in localStorage:", e);
+        console.warn("Errore salvataggio cache userData in IndexedDB:", e);
     }
 };
 
@@ -147,7 +153,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 ...rawNextData,
                 activeWorkout: syncedLocalWorkout ?? null
             };
-            saveUserDataToLocalStorage(nextData);
+            saveUserDataToCache(nextData);
             return { userData: nextData, localWorkout: syncedLocalWorkout };
         });
     },
@@ -162,7 +168,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             : newDataOrUpdater;
         
         if (!nextData) {
-            saveUserDataToLocalStorage(null);
+            saveUserDataToCache(null);
             set({ userData: null, saveError: null });
             return;
         }
@@ -172,7 +178,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
         };
         
-        saveUserDataToLocalStorage(finalData);
+        saveUserDataToCache(finalData);
         set({ userData: finalData, saveError: null });
 
         return new Promise<void>((resolve) => {
@@ -212,9 +218,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         pendingResolvers = [];
         try {
             localStorage.removeItem('logbook_local_workout');
-            localStorage.removeItem('logbook_cached_user_data');
+            idbDel('logbook_cached_user_data').catch((e) => {
+                console.warn("Impossibile rimuovere cache da IndexedDB", e);
+            });
         } catch (e) {
-            console.warn("Impossibile rimuovere cache da localStorage", e);
+            console.warn("Impossibile rimuovere cache", e);
         }
         set({ userData: null, localWorkout: null, saveError: null, syncing: false });
     }
