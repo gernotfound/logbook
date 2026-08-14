@@ -228,3 +228,9 @@ export interface UserData {
     supplements?: Supplement[];
 }
 
+declare global {
+    interface Window {
+        __INITIAL_USER_DATA__?: UserData | null;
+    }
+}
+

@@ -99,6 +99,20 @@ function App() {
     };
   }, [swRegistration]);
 
+  // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (useAppStore.getState().syncing) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div id="auth-overlay">
