@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { DB } from '../lib/db';
 import { Logic } from '../lib/logic';
+import { UserDataSchema, WorkoutSessionSchema } from '../lib/schema';
 import type { WorkoutSession, UserProfile, NutritionPlanning, UserData, SessionExercise, SessionExerciseSet } from '../types';
 import { DEBOUNCE_DELAY_LOCAL, DEBOUNCE_DELAY_GLOBAL } from '../constants';
 
@@ -45,7 +46,8 @@ const getInitialUserData = (): UserData | null => {
         const cached = localStorage.getItem('logbook_cached_user_data');
         if (!cached) return null;
         const parsed = JSON.parse(cached);
-        return parsed && typeof parsed === 'object' ? parsed : null;
+        if (!parsed || typeof parsed !== 'object') return null;
+        return UserDataSchema.parse(parsed) as unknown as UserData;
     } catch {
         return null;
     }
@@ -74,8 +76,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             const saved = localStorage.getItem('logbook_local_workout');
             if (!saved) return null;
             const parsed = JSON.parse(saved);
-            if (parsed && Array.isArray(parsed.exercises)) {
-                parsed.exercises = parsed.exercises.map((ex: SessionExercise) => ({
+            if (!parsed || typeof parsed !== 'object') return null;
+            const validated = WorkoutSessionSchema.parse(parsed) as unknown as WorkoutSession;
+            if (validated && Array.isArray(validated.exercises)) {
+                validated.exercises = validated.exercises.map((ex: SessionExercise) => ({
                     ...ex,
                     sets: (ex.sets || []).map((s: SessionExerciseSet) => ({
                         ...s,
@@ -85,7 +89,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     }))
                 }));
             }
-            return parsed;
+            return validated;
         } catch {
             return null;
         }

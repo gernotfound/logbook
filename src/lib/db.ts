@@ -1,6 +1,8 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
+import { UserDataSchema } from './schema';
+import type { UserData } from '../types';
 let lastSavedStateStr: string | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
@@ -23,7 +25,7 @@ export const DB = {
     resetCache() {
         lastSavedStateStr = null;
     },
-    async loadUserData() {
+    async loadUserData(): Promise<UserData | null> {
         const user = auth.currentUser;
         if (!user) return null;
         try {
@@ -74,8 +76,9 @@ export const DB = {
             } else {
                 // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
                 // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
-                lastSavedStateStr = JSON.stringify(state);
-                return state;
+                const parsedState = UserDataSchema.parse(state) as unknown as UserData;
+                lastSavedStateStr = JSON.stringify(parsedState);
+                return parsedState;
             }
 
             // Bucketing by Month
@@ -102,8 +105,9 @@ export const DB = {
             });
             
             state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
-            lastSavedStateStr = JSON.stringify(state);
-            return state;
+            const parsedState = UserDataSchema.parse(state) as unknown as UserData;
+            lastSavedStateStr = JSON.stringify(parsedState);
+            return parsedState;
         } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
             throw error;
