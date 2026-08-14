@@ -185,6 +185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             pendingResolvers.push(resolve);
             if (globalSaveTimer) clearTimeout(globalSaveTimer);
             globalSaveTimer = setTimeout(async () => {
+                globalSaveTimer = null;
                 const resolversToCall = [...pendingResolvers];
                 pendingResolvers = [];
                 try {
@@ -197,7 +198,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                     console.error("Errore durante il salvataggio in Zustand:", error);
                     set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
                 } finally {
-                    set({ syncing: false });
+                    if (!globalSaveTimer && pendingResolvers.length === 0) {
+                        set({ syncing: false });
+                    }
                     resolversToCall.forEach(res => res());
                 }
             }, DEBOUNCE_DELAY_GLOBAL);
