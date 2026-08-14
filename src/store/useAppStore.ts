@@ -42,7 +42,7 @@ const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
     }, DEBOUNCE_DELAY_LOCAL);
 };
 
-const getInitialUserData = (): UserData | null => {
+export const getInitialUserData = (): UserData | null => {
     try {
         if (typeof window === 'undefined') return null;
         const cached = window.__INITIAL_USER_DATA__;
@@ -169,7 +169,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         
         if (!nextData) {
             saveUserDataToCache(null);
-            set({ userData: null, saveError: null });
+            set({ userData: null, saveError: null, syncing: false });
             return;
         }
 
@@ -179,7 +179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         };
         
         saveUserDataToCache(finalData);
-        set({ userData: finalData, saveError: null });
+        set({ userData: finalData, saveError: null, syncing: true });
 
         return new Promise<void>((resolve) => {
             pendingResolvers.push(resolve);
@@ -197,6 +197,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                     console.error("Errore durante il salvataggio in Zustand:", error);
                     set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
                 } finally {
+                    set({ syncing: false });
                     resolversToCall.forEach(res => res());
                 }
             }, DEBOUNCE_DELAY_GLOBAL);
