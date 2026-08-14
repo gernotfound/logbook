@@ -119,6 +119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 : dataOrUpdater;
 
             if (!rawNextData) {
+                saveUserDataToCache(null);
                 return { userData: null, localWorkout: state.localWorkout };
             }
 
@@ -168,6 +169,13 @@ export const useAppStore = create<AppState>((set, get) => ({
             : newDataOrUpdater;
         
         if (!nextData) {
+            if (globalSaveTimer) {
+                clearTimeout(globalSaveTimer);
+                globalSaveTimer = null;
+            }
+            const resolvers = [...pendingResolvers];
+            pendingResolvers = [];
+            resolvers.forEach(res => res());
             saveUserDataToCache(null);
             set({ userData: null, saveError: null, syncing: false });
             return;
