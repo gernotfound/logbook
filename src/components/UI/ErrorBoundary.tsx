@@ -41,12 +41,26 @@ class ErrorBoundary extends Component<Props, State> {
             Si è verificato un errore imprevisto. Prova a ricaricare la pagina.
           </p>
 
-          <button 
-            className="btn btn-primary" 
-            onClick={() => window.location.reload()}
-          >
-            Ricarica app
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
+            <button 
+              className="btn btn-primary" 
+              onClick={() => window.location.reload()}
+            >
+              🔄 Ricarica pagina
+            </button>
+            <button 
+              className="btn" 
+              style={{ background: 'transparent', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', fontSize: '0.85rem' }}
+              onClick={() => {
+                if(window.confirm('ATTENZIONE: Questo cancellerà tutti i dati non sincronizzati col cloud. Procedere?')) {
+                  window.localStorage.clear();
+                  window.location.reload();
+                }
+              }}
+            >
+              ⚠️ Hard Reset (Dati Corrotti)
+            </button>
+          </div>
         </div>
       );
     }
