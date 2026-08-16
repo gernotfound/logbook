@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Dumbbell, Timer, Activity } from 'lucide-react';
+
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
@@ -47,35 +47,29 @@ const TrainingExercises = () => {
                 
                 <div className="mb-20">
                     <label className="text-muted text-sm mb-8 block font-medium">Tipo di tracciamento</label>
-                    <div className="tracking-type-group" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div className="tracking-type-group" style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap' }}>
                         <button 
                             type="button"
                             className={`tracking-card-option ${trackingType === 'weight_reps' ? 'active' : ''}`}
                             onClick={() => setTrackingType('weight_reps')}
+                            style={{ padding: '10px 4px', fontSize: '0.85rem' }}
                         >
-                            <span className="icon">
-                                <Dumbbell size={18} />
-                            </span>
-                            <span>Peso e ripetizioni</span>
+                            <span>Peso e rip.</span>
                         </button>
                         <button 
                             type="button"
                             className={`tracking-card-option ${trackingType === 'time' ? 'active' : ''}`}
                             onClick={() => setTrackingType('time')}
+                            style={{ padding: '10px 4px', fontSize: '0.85rem' }}
                         >
-                            <span className="icon">
-                                <Timer size={18} />
-                            </span>
                             <span>Tempo</span>
                         </button>
                         <button 
                             type="button"
                             className={`tracking-card-option ${trackingType === 'cardio' ? 'active' : ''}`}
                             onClick={() => setTrackingType('cardio' as any)}
+                            style={{ padding: '10px 4px', fontSize: '0.85rem' }}
                         >
-                            <span className="icon">
-                                <Activity size={18} />
-                            </span>
                             <span>Cardio</span>
                         </button>
                     </div>
