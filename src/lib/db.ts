@@ -1,8 +1,10 @@
 import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
-import { UserDataSchema } from './schema';
+import { DomainParsers } from './schema';
 import type { UserData } from '../types';
+import { getLocalDateString } from './utils/date';
+
 let lastSavedStateStr: string | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
@@ -29,15 +31,7 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return null;
         try {
-            const defaultNutritionPlanning: Record<string, any> = {
-                weight: 80,
-                carbsPerKg: 3.5,
-                proPerKg: 2.0,
-                fatPerKg: 1.0,
-                lockedMacro: null,
-                chartPeriod: 7,
-                normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-            };
+
             const state: Record<string, any> = { 
                 profile: {}, 
                 library: [], 
@@ -48,14 +42,12 @@ export const DB = {
                 activeWorkout: null,
                 trainingCycles: [],
                 activeCycleId: null,
-                nutritionPlanning: Object.assign({}, defaultNutritionPlanning, {
-                    normocalorica: Object.assign({}, defaultNutritionPlanning.normocalorica)
-                }),
+                nutritionPlanning: null,
                 supplements: []
             };
             const docRef = doc(db, "users", user.uid);
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
-            if (docSnap.exists()) {
+            if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
                 const data = docSnap.data() as Record<string, any>;
                 if(data.profile) state.profile = data.profile;
                 if(data.library) state.library = data.library;
@@ -65,49 +57,77 @@ export const DB = {
                 if(data.trainingCycles) state.trainingCycles = data.trainingCycles;
                 if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
                 if(data.supplements) state.supplements = data.supplements;
-                if (data.nutritionPlanning) {
-                    state.nutritionPlanning = Object.assign({}, defaultNutritionPlanning, data.nutritionPlanning);
-                    if (data.nutritionPlanning.normocalorica && typeof data.nutritionPlanning.normocalorica === 'object') {
-                        state.nutritionPlanning.normocalorica = Object.assign({}, defaultNutritionPlanning.normocalorica, data.nutritionPlanning.normocalorica);
-                    } else {
-                        state.nutritionPlanning.normocalorica = Object.assign({}, defaultNutritionPlanning.normocalorica);
-                    }
-                }
-            } else {
+                if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
+            } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
                 // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
                 // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
-                const parsedState = UserDataSchema.parse(state) as unknown as UserData;
-                lastSavedStateStr = JSON.stringify(parsedState);
-                return parsedState;
+                state.profile = DomainParsers.parseProfile(state.profile);
+                state.library = DomainParsers.parseLibrary(state.library);
+                state.routines = DomainParsers.parseRoutines(state.routines);
+                state.history = DomainParsers.parseHistory(state.history);
+                state.nutrition = DomainParsers.parseNutrition(state.nutrition);
+                state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
+                state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
+                state.supplements = DomainParsers.parseSupplements(state.supplements);
+                if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
+                if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
+                
+                lastSavedStateStr = JSON.stringify(state);
+                return state as unknown as UserData;
             }
 
-            // Bucketing by Month
-            const histSnap = await withTimeout(
-                getDocs(collection(db, "users", user.uid, "history_months")),
+            // Windowed loading: target current month and previous 2 months (O(1) reads)
+            const now = new Date();
+            const targetMonths = [0, 1, 2].map(offset => {
+                const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            });
+
+            const historyDocs = await withTimeout(
+                Promise.all(targetMonths.map(m => getDoc(doc(db, "users", user.uid, "history_months", m)))),
                 6000,
                 "Timeout recupero storico"
             );
-            histSnap.forEach((d: any) => {
-                const monthData = d.data() as Record<string, any>;
-                Object.values(monthData).forEach((h: any) => state.history.push(h));
+            historyDocs.forEach(d => {
+                if (d && typeof d.exists === 'function' && d.exists()) {
+                    const monthData = d.data() as Record<string, any>;
+                    if (monthData) {
+                        Object.values(monthData).forEach((h: any) => state.history.push(h));
+                    }
+                }
             });
             
-            const nutSnap = await withTimeout(
-                getDocs(collection(db, "users", user.uid, "nutrition_months")),
+            const nutritionDocs = await withTimeout(
+                Promise.all(targetMonths.map(m => getDoc(doc(db, "users", user.uid, "nutrition_months", m)))),
                 6000,
                 "Timeout recupero nutrizione"
             );
-            nutSnap.forEach((d: any) => {
-                const monthData = d.data() as Record<string, any>;
-                Object.keys(monthData).forEach((date: string) => {
-                    (state.nutrition as any)[date] = monthData[date];
-                });
+            nutritionDocs.forEach(d => {
+                if (d && typeof d.exists === 'function' && d.exists()) {
+                    const monthData = d.data() as Record<string, any>;
+                    if (monthData) {
+                        Object.keys(monthData).forEach((date: string) => {
+                            (state.nutrition as any)[date] = monthData[date];
+                        });
+                    }
+                }
             });
             
             state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
-            const parsedState = UserDataSchema.parse(state) as unknown as UserData;
-            lastSavedStateStr = JSON.stringify(parsedState);
-            return parsedState;
+            
+            state.profile = DomainParsers.parseProfile(state.profile);
+            state.library = DomainParsers.parseLibrary(state.library);
+            state.routines = DomainParsers.parseRoutines(state.routines);
+            state.history = DomainParsers.parseHistory(state.history);
+            state.nutrition = DomainParsers.parseNutrition(state.nutrition);
+            state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
+            state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
+            state.supplements = DomainParsers.parseSupplements(state.supplements);
+            if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
+            if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
+            
+            lastSavedStateStr = JSON.stringify(state);
+            return state as unknown as UserData;
         } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
             throw error;
@@ -166,19 +186,21 @@ export const DB = {
                 hasWrites = true;
             }
 
-            // 2. Group History by Month (YYYY-MM)
+            // 2. Group History by Month (YYYY-MM) with timezone-safe monthKey
             const newHistMonths: Record<string, any> = {};
             state.history.forEach((h: any) => {
-                const date = new Date(h.globalStartTime || Date.now());
-                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
+                    ? h.date.substring(0, 7)
+                    : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
                 if (!newHistMonths[monthKey]) newHistMonths[monthKey] = {};
                 newHistMonths[monthKey][h.id] = h;
             });
 
             const oldHistMonths: Record<string, any> = {};
             (oldState.history || []).forEach((h: any) => {
-                const date = new Date(h.globalStartTime || Date.now());
-                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
+                    ? h.date.substring(0, 7)
+                    : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
                 if (!oldHistMonths[monthKey]) oldHistMonths[monthKey] = {};
                 oldHistMonths[monthKey][h.id] = h;
             });
@@ -232,11 +254,19 @@ export const DB = {
                 try {
                     await withTimeout(batch.commit(), 7000, "Timeout sincronizzazione Firestore");
                     console.log(`Sincronizzazione DB completata.`);
-                } catch (batchErr) {
-                    console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
+                    lastSavedStateStr = JSON.stringify(state);
+                } catch (batchErr: any) {
+                    if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+                        console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
+                        // Do NOT update lastSavedStateStr: diffing will retry when back online
+                    } else {
+                        console.error("Errore critico durante il salvataggio Firestore:", batchErr);
+                        throw batchErr;
+                    }
                 }
+            } else {
+                lastSavedStateStr = JSON.stringify(state);
             }
-            lastSavedStateStr = JSON.stringify(state);
         } catch (error) {
             console.error("Errore durante il salvataggio:", error);
             throw error;
@@ -254,30 +284,37 @@ export const DB = {
     },
     async deleteAccount() {
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) throw new Error("Nessun utente autenticato.");
         try {
             // 1. Fetch subcollection documents while auth is valid
-            const histSnap = await getDocs(collection(db, "users", user.uid, "history_months")).catch(e => {
-                console.warn("Permesso negato per leggere history_months, proseguo...", e);
-                return { forEach: () => {} } as any;
-            });
-            const nutSnap = await getDocs(collection(db, "users", user.uid, "nutrition_months")).catch(e => {
-                console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
-                return { forEach: () => {} } as any;
-            });
-            
-            const batch = writeBatch(db);
-            histSnap.forEach((d: any) => batch.delete(d.ref));
-            nutSnap.forEach((d: any) => batch.delete(d.ref));
-            
-            // 2. Delete main user document
-            const userDocRef = doc(db, "users", user.uid);
-            batch.delete(userDocRef);
-            
-            await batch.commit();
-            
-            // 3. Delete Firebase Auth user account
+            const [histSnap, nutSnap] = await Promise.all([
+                getDocs(collection(db, "users", user.uid, "history_months")).catch(e => {
+                    console.warn("Permesso negato per leggere history_months, proseguo...", e);
+                    return { forEach: () => {} } as any;
+                }),
+                getDocs(collection(db, "users", user.uid, "nutrition_months")).catch(e => {
+                    console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
+                    return { forEach: () => {} } as any;
+                })
+            ]);
+
+            const allRefs: any[] = [];
+            histSnap.forEach((d: any) => allRefs.push(d.ref));
+            nutSnap.forEach((d: any) => allRefs.push(d.ref));
+            allRefs.push(doc(db, "users", user.uid));
+
+            // Chunk in max 400 operations per batch to strictly adhere to Firestore 500 limit
+            const CHUNK_SIZE = 400;
+            for (let i = 0; i < allRefs.length; i += CHUNK_SIZE) {
+                const chunk = allRefs.slice(i, i + CHUNK_SIZE);
+                const batch = writeBatch(db);
+                chunk.forEach(ref => batch.delete(ref));
+                await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
+            }
+
+            // 2. Delete Firebase Auth user account
             await deleteUser(user);
+            console.log("Account e relative subcollection eliminati con successo.");
         } catch (error: any) {
             console.error("Errore nell'eliminazione dell'account:", error);
             if (error.code === 'auth/requires-recent-login') {

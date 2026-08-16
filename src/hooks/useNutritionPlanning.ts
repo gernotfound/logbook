@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -6,19 +6,20 @@ import type { NutritionPlanning } from '../types';
 
 export function useNutritionPlanning() {
     const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
+    const nutritionMap = useAppStore(state => state.userData?.nutrition);
+    const profile = useAppStore(state => state.userData?.profile);
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
-    const userData = useAppStore(state => state.userData);
     
     const [localPlanning, setLocalPlanning] = useState<NutritionPlanning | null>(null);
 
     // Trova l'ultimo peso inserito nello storico nutrizione/misurazioni
     let latestWeight = 80;
-    if (userData?.nutrition) {
-        const dates = Object.keys(userData.nutrition).sort((a, b) => b.localeCompare(a));
+    if (nutritionMap) {
+        const dates = Object.keys(nutritionMap).sort((a, b) => b.localeCompare(a));
         for (const d of dates) {
-            if (userData.nutrition[d].weight) {
-                latestWeight = parseFloat(userData.nutrition[d].weight as string) || latestWeight;
+            if (nutritionMap[d].weight) {
+                latestWeight = parseFloat(nutritionMap[d].weight as string) || latestWeight;
                 break;
             }
         }
@@ -27,18 +28,22 @@ export function useNutritionPlanning() {
     const defaultPlanning: NutritionPlanning = {
         weight: latestWeight,
         onDaysCount: 4,
-        avgMacros: storePlanning?.avgMacros || { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
-        onBoost: storePlanning?.onBoost || { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
-        normocalorica: storePlanning?.normocalorica || { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
+        avgMacros: { carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0 },
+        onBoost: { carbsPercent: 20, proPercent: 0, fatPercent: 0 },
+        normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
     };
 
-    const planning = localPlanning ?? storePlanning ?? defaultPlanning;
+    const basePlanning = localPlanning ?? storePlanning ?? defaultPlanning;
     
-    // Assicura l'esistenza degli oggetti
-    if (!planning.avgMacros) planning.avgMacros = defaultPlanning.avgMacros;
-    if (!planning.onBoost) planning.onBoost = defaultPlanning.onBoost;
-    if (planning.onDaysCount === undefined) planning.onDaysCount = 4;
-    if (!planning.weight) planning.weight = latestWeight;
+    // Assicura l'esistenza degli oggetti senza mutare lo stato dello store in-place
+    const planning: NutritionPlanning = {
+        ...basePlanning,
+        avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
+        onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
+        onDaysCount: basePlanning.onDaysCount !== undefined ? basePlanning.onDaysCount : 4,
+        weight: basePlanning.weight || latestWeight,
+        normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
+    };
 
     // Calcolo matematico dei macro ON e OFF
     const N = planning.onDaysCount || 0;
@@ -69,7 +74,12 @@ export function useNutritionPlanning() {
     const avgMacrosCalc = Logic.calculateMacrosFromKg(w, avgC, avgP, avgF);
     
     // Calcolo automatico in tempo reale
-    const tdeeCalc = Logic.calculateTDEEAndMacros(userData);
+    const tdeeUserData = useMemo(() => ({
+        nutritionPlanning: storePlanning,
+        nutrition: nutritionMap,
+        profile: profile
+    }), [storePlanning, nutritionMap, profile]);
+    const tdeeCalc = useMemo(() => Logic.calculateTDEEAndMacros(tdeeUserData as any), [tdeeUserData]);
 
     const handleUpdate = (field: string, value: any) => {
         setLocalPlanning({ ...planning, [field]: value });

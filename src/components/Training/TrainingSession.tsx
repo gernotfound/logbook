@@ -42,6 +42,7 @@ interface TrainingSessionProps {
 }
 
 const EMPTY_CYCLES: TrainingCycle[] = [];
+const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: any[]; note: string }> = [];
 
 interface PlannedRoutineItem {
     cycleItem: any;
@@ -390,7 +391,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 ) : (
                     (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
-                        const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || [];
+                        const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
 
                         return (
                             <SessionExerciseCard
