@@ -25,7 +25,7 @@ export function useNutritionMeals(dateStr?: string) {
     });
 
     const planning = useAppStore(state => state.userData?.nutritionPlanning);
-    const userData = useAppStore(state => state.userData);
+    const nutritionMap = useAppStore(state => state.userData?.nutrition);
     
     // Local override per non sporcare il database quando la giornata è vuota
     const [localDayOnMap, setLocalDayOnMap] = useState<Record<string, boolean>>({});
@@ -33,11 +33,11 @@ export function useNutritionMeals(dateStr?: string) {
     const isDayOn = localDayOnMap[targetDateStr] !== undefined ? localDayOnMap[targetDateStr] : (dbIsDayOn ?? true);
 
     let latestWeight = 80;
-    if (userData?.nutrition) {
-        const dates = Object.keys(userData.nutrition).sort((a, b) => b.localeCompare(a));
+    if (nutritionMap) {
+        const dates = Object.keys(nutritionMap).sort((a, b) => b.localeCompare(a));
         for (const d of dates) {
-            if (userData.nutrition[d].weight) {
-                latestWeight = parseFloat(userData.nutrition[d].weight as string) || latestWeight;
+            if (nutritionMap[d].weight) {
+                latestWeight = parseFloat(nutritionMap[d].weight as string) || latestWeight;
                 break;
             }
         }

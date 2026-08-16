@@ -48,13 +48,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadData = useCallback(async (user: User) => {
         if (!user) return;
         const currentData = useAppStore.getState().userData;
+        const isSyncing = useAppStore.getState().syncing;
         if (!currentData) {
             setSyncing(true);
         }
         try {
-            const data = await DB.loadUserData();
-            if (data && data !== currentData) {
-                setUserData(data);
+            const cloudData = await DB.loadUserData();
+            if (cloudData && cloudData !== currentData) {
+                const latestData = useAppStore.getState().userData;
+                const isCurrentlySyncing = isSyncing || useAppStore.getState().syncing;
+                if (isCurrentlySyncing && latestData) {
+                    console.log("Riconciliazione: fusione modifiche locali pendenti con dati cloud.");
+                    const merged = mergeUserData(cloudData, latestData);
+                    setUserData(merged);
+                } else {
+                    setUserData(cloudData);
+                }
             }
         } catch (error: any) {
             console.warn("Errore caricamento dati in AuthContext (uso dati locali/offline):", error);

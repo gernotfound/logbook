@@ -342,3 +342,17 @@ export const UserDataSchema = z.object({
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
     supplements: z.array(SupplementSchema).optional().catch([]).default([]),
 }).passthrough().catch(defaultUserDataFallback).default(defaultUserDataFallback);
+
+export const DomainParsers = {
+    parseProfile: (data: unknown) => UserProfileSchema.parse(data),
+    parseWorkoutSession: (data: unknown) => WorkoutSessionSchema.parse(data),
+    parseHistory: (data: unknown) => z.array(WorkoutSessionSchema).parse(data),
+    parseNutrition: (data: unknown) => z.record(z.string(), NutritionDaySchema).parse(data),
+    parseLibrary: (data: unknown) => z.array(ExerciseSchema).parse(data),
+    parseCustomFoods: (data: unknown) => z.array(FoodSchema).parse(data),
+    parseRoutines: (data: unknown) => z.array(WorkoutRoutineSchema).parse(data),
+    parseTrainingCycles: (data: unknown) => z.array(TrainingCycleSchema).parse(data),
+    parseSupplements: (data: unknown) => z.array(SupplementSchema).parse(data),
+    parseNutritionPlanning: (data: unknown) => NutritionPlanningSchema.parse(data),
+};
+
