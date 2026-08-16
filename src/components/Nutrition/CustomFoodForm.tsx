@@ -29,7 +29,7 @@ export default function CustomFoodForm({
 
     return (
         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
-            <h3 style={{ color: 'var(--primary-color)', marginBottom: '12px', fontSize: '1rem' }}>
+            <h3 style={{ color: 'var(--text-main)', marginBottom: '12px', fontSize: '1rem' }}>
                 {isEditing ? '✏️ Modifica alimento' : '➕ Nuovo alimento personalizzato'}
             </h3>
             
