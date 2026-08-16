@@ -178,7 +178,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             <div className="card mb-15">
                 <div className="flex-between mb-15 items-center">
                     <div>
-                        <h1 className="m-0" style={{ color: 'var(--primary-color)', fontSize: '1.4rem' }}>🥗 Alimenti</h1>
+                        <h1 className="m-0" style={{ color: 'var(--text-main)', fontSize: '1.4rem' }}>🥗 Alimenti</h1>
                         <p className="text-muted text-xs m-0 mt-4">
                             Gestisci, crea e consulta i tuoi alimenti personalizzati
                         </p>

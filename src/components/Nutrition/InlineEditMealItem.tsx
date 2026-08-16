@@ -66,7 +66,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--primary-color)', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-main)', marginBottom: '4px' }}>
                     {item.name}
                 </div>
                 {item.brand && (
@@ -121,19 +121,19 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             >
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>KCAL</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--warning-color)', fontSize: '0.95rem' }}>{currentKcal}</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentKcal}</div>
                 </div>
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>PRO</div>
-                    <div style={{ fontWeight: 'bold', color: '#34d399', fontSize: '0.95rem' }}>{currentPro}g</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentPro}g</div>
                 </div>
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>CARBO</div>
-                    <div style={{ fontWeight: 'bold', color: '#60a5fa', fontSize: '0.95rem' }}>{currentCarbs}g</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentCarbs}g</div>
                 </div>
                 <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>GRASSI</div>
-                    <div style={{ fontWeight: 'bold', color: '#f87171', fontSize: '0.95rem' }}>{currentFat}g</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentFat}g</div>
                 </div>
             </div>
 

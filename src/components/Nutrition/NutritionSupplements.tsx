@@ -127,7 +127,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                 </button>
             ) : (
                 <div className="card mb-15" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--primary-color)' }}>
-                    <h2 className="mb-15" style={{ fontSize: '1.1rem', color: 'var(--primary-color)' }}>
+                    <h2 className="mb-15" style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>
                         {editingSuppId ? 'Modifica integratore' : 'Crea nuovo integratore'}
                     </h2>
                     
@@ -201,7 +201,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                         <div key={supp.id} className="card mb-15">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                                 <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--primary-color)' }}>{supp.name}</div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-main)' }}>{supp.name}</div>
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                         Assunto: <strong style={{ color: 'var(--text-main)' }}>{Math.round(totalAssunto * 10) / 10}</strong> {supp.unit} 
                                         {supp.target ? ` / ${supp.target} ${supp.unit}` : ''}

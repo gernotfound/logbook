@@ -64,7 +64,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
 
             {/* Macro details */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                <span style={{ fontWeight: 'bold', color: 'var(--warning-color)' }}>
+                <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>
                     {food.kcal} kcal
                 </span>
                 <span>/ {food.baseQty || 100}{food.unit || 'g'}</span>
