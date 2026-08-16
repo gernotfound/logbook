@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { RefreshCw } from 'lucide-react';
 
 export const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -104,61 +103,34 @@ export const ReloadPrompt: React.FC = () => {
       aria-live="polite"
       aria-atomic="true"
       className="reload-prompt-toast"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        alignItems: 'center',
+        textAlign: 'center'
+      }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'rgba(0, 229, 255, 0.12)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--primary-color)',
-            flexShrink: 0,
-          }}
-        >
-          <RefreshCw size={20} aria-hidden="true" />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontWeight: 700,
-              fontSize: '0.92rem',
-              color: 'var(--text-main)',
-              lineHeight: 1.3,
-            }}
-          >
-            Nuova versione disponibile
-          </div>
-          <div
-            style={{
-              fontSize: '0.8rem',
-              color: 'var(--text-muted)',
-              marginTop: '2px',
-              lineHeight: 1.3,
-            }}
-          >
-            Ricarica l'app per applicare l'aggiornamento.
-          </div>
-        </div>
+      <div
+        style={{
+          fontWeight: 700,
+          fontSize: '1rem',
+          color: 'var(--text-main)',
+        }}
+      >
+        Nuova versione disponibile
       </div>
 
-      <div className="reload-prompt-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <div className="reload-prompt-actions" style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
         <button
           type="button"
           aria-label="Aggiorna applicazione"
           className="btn btn-primary btn-small"
           onClick={handleUpdate}
           style={{
-            minHeight: '44px',
-            minWidth: '44px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '8px 14px',
-            fontSize: '0.82rem',
+            flex: 1,
+            padding: '10px',
+            fontSize: '0.9rem',
             margin: 0,
             cursor: 'pointer',
           }}
@@ -171,13 +143,9 @@ export const ReloadPrompt: React.FC = () => {
           className="btn btn-secondary btn-small"
           onClick={handleClose}
           style={{
-            minHeight: '44px',
-            minWidth: '44px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '8px 12px',
-            fontSize: '0.82rem',
+            flex: 1,
+            padding: '10px',
+            fontSize: '0.9rem',
             margin: 0,
             cursor: 'pointer',
           }}
