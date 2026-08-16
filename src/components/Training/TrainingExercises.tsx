@@ -75,7 +75,7 @@ const TrainingExercises = () => {
                     </div>
                 </div>
                 
-                <div className="bg-black-10 border-glass rounded-12 p-15 mb-20">
+                <div className="bg-black-10 border-glass rounded-12 p-15 mb-20" style={{ marginTop: '30px' }}>
                     <div className="flex-between mb-10">
                         <label className="text-white text-sm font-bold">Muscoli coinvolti</label>
                         <div className="flex gap-5 bg-black-20 p-4 rounded-8">
