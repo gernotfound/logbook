@@ -8,7 +8,7 @@ const NutritionPlanning = () => {
     } = useNutritionPlanning();
 
     return (
-        <div className="card">
+        <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                 <h1 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>🎯 Pianificazione macro</h1>
             </div>

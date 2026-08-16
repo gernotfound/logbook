@@ -160,8 +160,9 @@ export const DB = {
                     nutritionPlanning: state.nutritionPlanning || null,
                     supplements: state.supplements || []
                 };
-                checkDocSize(userDocData, "User Profile");
-                batch.set(userRef, userDocData, { merge: true });
+                const cleanUserDocData = JSON.parse(JSON.stringify(userDocData));
+                checkDocSize(cleanUserDocData, "User Profile");
+                batch.set(userRef, cleanUserDocData, { merge: true });
                 hasWrites = true;
             }
 
@@ -184,8 +185,9 @@ export const DB = {
 
             Object.keys(newHistMonths).forEach(month => {
                 if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
-                    checkDocSize(newHistMonths[month], `History ${month}`);
-                    batch.set(doc(db, "users", user.uid, "history_months", month), newHistMonths[month]);
+                    const cleanDoc = JSON.parse(JSON.stringify(newHistMonths[month]));
+                    checkDocSize(cleanDoc, `History ${month}`);
+                    batch.set(doc(db, "users", user.uid, "history_months", month), cleanDoc);
                     hasWrites = true;
                 }
             });
@@ -213,8 +215,9 @@ export const DB = {
 
             Object.keys(newNutMonths).forEach(month => {
                 if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
-                    checkDocSize(newNutMonths[month], `Nutrition ${month}`);
-                    batch.set(doc(db, "users", user.uid, "nutrition_months", month), newNutMonths[month]);
+                    const cleanDoc = JSON.parse(JSON.stringify(newNutMonths[month]));
+                    checkDocSize(cleanDoc, `Nutrition ${month}`);
+                    batch.set(doc(db, "users", user.uid, "nutrition_months", month), cleanDoc);
                     hasWrites = true;
                 }
             });
