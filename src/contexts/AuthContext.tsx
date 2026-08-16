@@ -4,12 +4,14 @@ import { auth, db, waitForPendingWrites, provider, signInWithPopup, signInWithRe
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
+import { UserDataSchema } from '../lib/schema';
+import { mergeUserData, hasUserData } from '../lib/merge';
 import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
 
 const GUEST_KEY = 'logbook_is_guest';
 
-const defaultUserData = {
+const defaultUserData: UserData = {
     profile: {},
     library: [],
     routines: [],
@@ -23,7 +25,8 @@ const defaultUserData = {
         weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0,
         lockedMacro: null, chartPeriod: 7,
         normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-    }
+    },
+    supplements: []
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -91,37 +94,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         // Carica i dati esistenti sul cloud (se presenti)
                         const cloudData = await DB.loadUserData();
                         
-                        const cloudHasData = cloudData && (
-                            (cloudData.history && cloudData.history.length > 0) ||
-                            (cloudData.routines && cloudData.routines.length > 0) ||
-                            (cloudData.library && cloudData.library.length > 0)
-                        );
-                        
-                        const guestHasData = guestData && (
-                            (guestData.history && guestData.history.length > 0) ||
-                            (guestData.routines && guestData.routines.length > 0) ||
-                            (guestData.library && guestData.library.length > 0)
-                        );
+                        const cloudHasData = hasUserData(cloudData);
+                        const guestHasData = hasUserData(guestData);
 
                         if (cloudHasData && !guestHasData) {
                             // Se il cloud ha già dati e il guest era vuoto, adotta i dati del cloud
-                            setUserData(cloudData);
+                            setUserData(cloudData!);
                         } else if (guestHasData) {
-                            // Se il guest ha dati creati, salva sul cloud con eventuale merge
-                            let mergedData = guestData;
-                            if (cloudHasData && cloudData) {
-                                const combinedHistory = [...(guestData.history || []), ...(cloudData.history || [])];
-                                const uniqueHistory = Array.from(new Map(combinedHistory.map((h: any) => [h.id, h])).values());
-                                mergedData = {
-                                    ...cloudData,
-                                    ...guestData,
-                                    history: uniqueHistory
-                                };
-                            }
+                            // Se il guest ha dati creati, unisce in modo deterministico con il cloud (se presente)
+                            const mergedData = (cloudHasData && cloudData)
+                                ? mergeUserData(cloudData, guestData)
+                                : (UserDataSchema.parse(guestData) as unknown as UserData);
+                            
                             await DB.saveUserData(mergedData);
                             setUserData(mergedData);
                         } else {
-                            setUserData(cloudData || defaultUserData as any);
+                            setUserData(cloudData || (UserDataSchema.parse(defaultUserData) as unknown as UserData));
                         }
                     } catch (e) {
                         console.warn("Errore sincronizzazione iniziale post-link:", e);
@@ -205,7 +193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsGuest(true);
         // Se non ci sono dati precedenti in localStorage, inizializza con i default
         if (!useAppStore.getState().userData) {
-            setUserData(defaultUserData as any);
+            setUserData(UserDataSchema.parse(defaultUserData) as unknown as UserData);
         }
     }, [setUserData]);
 
