@@ -25,7 +25,8 @@ export interface AppState {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let globalSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingResolvers: (() => void)[] = [];
+type PendingPromise = { resolve: () => void; reject: (err: unknown) => void };
+let pendingPromises: PendingPromise[] = [];
 
 const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
     if (saveTimer) clearTimeout(saveTimer);
@@ -173,9 +174,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                 clearTimeout(globalSaveTimer);
                 globalSaveTimer = null;
             }
-            const resolvers = [...pendingResolvers];
-            pendingResolvers = [];
-            resolvers.forEach(res => res());
+            const promises = [...pendingPromises];
+            pendingPromises = [];
+            promises.forEach(p => p.resolve());
             saveUserDataToCache(null);
             set({ userData: null, saveError: null, syncing: false });
             return;
@@ -189,27 +190,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         saveUserDataToCache(finalData);
         set({ userData: finalData, saveError: null, syncing: true });
 
-        return new Promise<void>((resolve) => {
-            pendingResolvers.push(resolve);
+        return new Promise<void>((resolve, reject) => {
+            pendingPromises.push({ resolve, reject });
             if (globalSaveTimer) clearTimeout(globalSaveTimer);
             globalSaveTimer = setTimeout(async () => {
                 globalSaveTimer = null;
-                const resolversToCall = [...pendingResolvers];
-                pendingResolvers = [];
+                const promisesToCall = [...pendingPromises];
+                pendingPromises = [];
                 try {
                     // Always pull the freshest state at the time of execution
                     const currentState = get().userData;
                     if (currentState) {
                         await DB.saveUserData(currentState);
                     }
+                    promisesToCall.forEach(p => p.resolve());
                 } catch (error) {
                     console.error("Errore durante il salvataggio in Zustand:", error);
                     set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
+                    promisesToCall.forEach(p => p.reject(error));
                 } finally {
-                    if (!globalSaveTimer && pendingResolvers.length === 0) {
+                    if (!globalSaveTimer && pendingPromises.length === 0) {
                         set({ syncing: false });
                     }
-                    resolversToCall.forEach(res => res());
                 }
             }, DEBOUNCE_DELAY_GLOBAL);
         });
@@ -227,7 +229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         // così nessun salvataggio "fantasma" può riscrivere il workout dopo il logout.
         if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
         if (globalSaveTimer) { clearTimeout(globalSaveTimer); globalSaveTimer = null; }
-        pendingResolvers = [];
+        pendingPromises = [];
         try {
             localStorage.removeItem('logbook_local_workout');
             idbDel('logbook_cached_user_data').catch((e) => {

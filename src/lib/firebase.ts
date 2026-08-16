@@ -19,15 +19,35 @@ import {
     waitForPendingWrites
 } from "firebase/firestore";
 
+const requiredEnvVars = [
+    'VITE_FIREBASE_API_KEY',
+    'VITE_FIREBASE_AUTH_DOMAIN',
+    'VITE_FIREBASE_DATABASE_URL',
+    'VITE_FIREBASE_PROJECT_ID',
+    'VITE_FIREBASE_STORAGE_BUCKET',
+    'VITE_FIREBASE_MESSAGING_SENDER_ID',
+    'VITE_FIREBASE_APP_ID',
+    'VITE_FIREBASE_MEASUREMENT_ID'
+] as const;
+
+const missingEnvVars = requiredEnvVars.filter((key) => {
+    const value = import.meta.env[key];
+    return typeof value !== 'string' || value.trim() === '';
+});
+
+if (missingEnvVars.length > 0) {
+    throw new Error(`Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: ${missingEnvVars.join(', ')}`);
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD3kkRIXqIZAbpBNGTYkumYa_pr31naRD4",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "logbook-db-98cc4.firebaseapp.com",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://logbook-db-98cc4-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "logbook-db-98cc4",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "logbook-db-98cc4.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "135243298458",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:135243298458:web:ee8346adb4634ff953d123",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-560HT9M19Y"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);
