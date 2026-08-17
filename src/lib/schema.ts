@@ -344,15 +344,86 @@ export const UserDataSchema = z.object({
 }).passthrough().catch(defaultUserDataFallback).default(defaultUserDataFallback);
 
 export const DomainParsers = {
-    parseProfile: (data: unknown) => UserProfileSchema.parse(data),
-    parseWorkoutSession: (data: unknown) => WorkoutSessionSchema.parse(data),
-    parseHistory: (data: unknown) => z.array(WorkoutSessionSchema).parse(data),
-    parseNutrition: (data: unknown) => z.record(z.string(), NutritionDaySchema).parse(data),
-    parseLibrary: (data: unknown) => z.array(ExerciseSchema).parse(data),
-    parseCustomFoods: (data: unknown) => z.array(FoodSchema).parse(data),
-    parseRoutines: (data: unknown) => z.array(WorkoutRoutineSchema).parse(data),
-    parseTrainingCycles: (data: unknown) => z.array(TrainingCycleSchema).parse(data),
-    parseSupplements: (data: unknown) => z.array(SupplementSchema).parse(data),
-    parseNutritionPlanning: (data: unknown) => NutritionPlanningSchema.parse(data),
+    // Oggetti singoli: fallback al default schema in caso di dato corrotto
+    parseProfile: (data: unknown) => {
+        const result = UserProfileSchema.safeParse(data);
+        if (!result.success) { console.warn('[DomainParsers] parseProfile fallback:', result.error.issues[0]?.message); }
+        return result.success ? result.data : UserProfileSchema.parse({});
+    },
+    parseWorkoutSession: (data: unknown) => {
+        const result = WorkoutSessionSchema.safeParse(data);
+        if (!result.success) { console.warn('[DomainParsers] parseWorkoutSession fallback:', result.error.issues[0]?.message); }
+        return result.success ? result.data : WorkoutSessionSchema.parse({});
+    },
+    parseNutritionPlanning: (data: unknown) => {
+        const result = NutritionPlanningSchema.safeParse(data);
+        if (!result.success) { console.warn('[DomainParsers] parseNutritionPlanning fallback:', result.error.issues[0]?.message); }
+        return result.success ? result.data : null;
+    },
+    // Array: filtra i singoli elementi malformati invece di bloccare tutto
+    parseHistory: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.reduce<z.infer<typeof WorkoutSessionSchema>[]>((acc, item) => {
+            const r = WorkoutSessionSchema.safeParse(item);
+            if (r.success) acc.push(r.data);
+            else console.warn('[DomainParsers] parseHistory: elemento scartato:', r.error.issues[0]?.message);
+            return acc;
+        }, []);
+    },
+    parseLibrary: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.reduce<z.infer<typeof ExerciseSchema>[]>((acc, item) => {
+            const r = ExerciseSchema.safeParse(item);
+            if (r.success) acc.push(r.data);
+            else console.warn('[DomainParsers] parseLibrary: elemento scartato:', r.error.issues[0]?.message);
+            return acc;
+        }, []);
+    },
+    parseCustomFoods: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.reduce<z.infer<typeof FoodSchema>[]>((acc, item) => {
+            const r = FoodSchema.safeParse(item);
+            if (r.success) acc.push(r.data);
+            else console.warn('[DomainParsers] parseCustomFoods: elemento scartato:', r.error.issues[0]?.message);
+            return acc;
+        }, []);
+    },
+    parseRoutines: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.reduce<z.infer<typeof WorkoutRoutineSchema>[]>((acc, item) => {
+            const r = WorkoutRoutineSchema.safeParse(item);
+            if (r.success) acc.push(r.data);
+            else console.warn('[DomainParsers] parseRoutines: elemento scartato:', r.error.issues[0]?.message);
+            return acc;
+        }, []);
+    },
+    parseTrainingCycles: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.reduce<z.infer<typeof TrainingCycleSchema>[]>((acc, item) => {
+            const r = TrainingCycleSchema.safeParse(item);
+            if (r.success) acc.push(r.data);
+            else console.warn('[DomainParsers] parseTrainingCycles: elemento scartato:', r.error.issues[0]?.message);
+            return acc;
+        }, []);
+    },
+    parseSupplements: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.reduce<z.infer<typeof SupplementSchema>[]>((acc, item) => {
+            const r = SupplementSchema.safeParse(item);
+            if (r.success) acc.push(r.data);
+            else console.warn('[DomainParsers] parseSupplements: elemento scartato:', r.error.issues[0]?.message);
+            return acc;
+        }, []);
+    },
+    parseNutrition: (data: unknown) => {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+        const result: Record<string, z.infer<typeof NutritionDaySchema>> = {};
+        for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
+            const r = NutritionDaySchema.safeParse(val);
+            if (r.success) result[key] = r.data;
+            else console.warn(`[DomainParsers] parseNutrition: giorno ${key} scartato:`, r.error.issues[0]?.message);
+        }
+        return result;
+    },
 };
 
