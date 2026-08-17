@@ -89,7 +89,7 @@ export function useNutritionMeasurements() {
             if (todayData?.thighs) setThighs(todayData.thighs.toString());
             if (todayData?.calves) setCalves(todayData.calves.toString());
         }
-    }, [todayDateStr]);
+    }, [todayDateStr, nutrition]);
 
     useEffect(() => {
         if (!editingDate) {
