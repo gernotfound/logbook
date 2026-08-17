@@ -2,8 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const basePath = process.env.VITE_BASE_PATH || '/'
+
 export default defineConfig({
-  base: '/logbook/', // GitHub Pages base path
+  base: basePath,
   plugins: [
     react(),
     VitePWA({
@@ -47,7 +49,8 @@ export default defineConfig({
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/logbook/',
+        start_url: basePath,
+        scope: basePath,
         lang: 'it-IT',
         categories: ['fitness', 'health', 'lifestyle'],
         icons: [
