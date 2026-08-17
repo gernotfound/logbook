@@ -33,7 +33,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     );
     const [notes, setNotes] = useState(initialCycle?.notes || '');
     const [cycleRoutines, setCycleRoutines] = useState<TrainingCycleRoutineItem[]>(
-        initialCycle?.routines ? JSON.parse(JSON.stringify(initialCycle.routines)) : []
+        initialCycle?.routines ? structuredClone(initialCycle.routines) : []
     );
     const [showSchedulePreview, setShowSchedulePreview] = useState(false);
 
@@ -50,7 +50,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     : String(initialCycle.routines?.length || 4)
             );
             setNotes(initialCycle.notes || '');
-            setCycleRoutines(initialCycle.routines ? JSON.parse(JSON.stringify(initialCycle.routines)) : []);
+            setCycleRoutines(initialCycle.routines ? structuredClone(initialCycle.routines) : []);
         }
     }, [initialCycle]);
 
