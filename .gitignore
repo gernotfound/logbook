@@ -41,5 +41,4 @@ ORIGINAL_REQUEST.md
 *.sw?
 /.agents
 coverage/
-tests/
 audit_architetturale.md
