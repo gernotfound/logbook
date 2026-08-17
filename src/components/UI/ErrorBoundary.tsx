@@ -1,4 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { useDialogStore } from '../../store/useDialogStore';
+import { GlobalDialog } from './GlobalDialog';
 
 interface Props {
   children?: ReactNode;
@@ -22,6 +24,17 @@ class ErrorBoundary extends Component<Props, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
+  private handleHardReset = async () => {
+    const confirmed = await useDialogStore.getState().showConfirm(
+      'Questo cancellerà tutti i dati non sincronizzati con il cloud. Procedere?',
+      'Attenzione'
+    );
+    if (confirmed) {
+      window.localStorage.clear();
+      window.location.reload();
+    }
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -36,6 +49,7 @@ class ErrorBoundary extends Component<Props, State> {
           color: 'var(--text-main)',
           textAlign: 'center'
         }}>
+          <GlobalDialog />
           <h1 style={{ color: 'var(--danger-color)', marginBottom: '10px' }}>Ops, qualcosa è andato storto!</h1>
           <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
             Si è verificato un errore imprevisto. Prova a ricaricare la pagina.
@@ -51,14 +65,9 @@ class ErrorBoundary extends Component<Props, State> {
             <button 
               className="btn" 
               style={{ background: 'transparent', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', fontSize: '0.85rem' }}
-              onClick={() => {
-                if(window.confirm('ATTENZIONE: Questo cancellerà tutti i dati non sincronizzati col cloud. Procedere?')) {
-                  window.localStorage.clear();
-                  window.location.reload();
-                }
-              }}
+              onClick={this.handleHardReset}
             >
-              ⚠️ Hard Reset (Dati Corrotti)
+              ⚠️ Hard reset (dati corrotti)
             </button>
           </div>
         </div>
@@ -70,3 +79,4 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
+

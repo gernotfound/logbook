@@ -4,6 +4,7 @@ import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
+import { removeUndefinedValues } from './utils/object';
 
 let lastSavedStateStr: string | null = null;
 
@@ -31,7 +32,6 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return null;
         try {
-
             const state: Record<string, any> = { 
                 profile: {}, 
                 library: [], 
@@ -180,7 +180,7 @@ export const DB = {
                     nutritionPlanning: state.nutritionPlanning || null,
                     supplements: state.supplements || []
                 };
-                const cleanUserDocData = JSON.parse(JSON.stringify(userDocData));
+                const cleanUserDocData = removeUndefinedValues(userDocData);
                 checkDocSize(cleanUserDocData, "User Profile");
                 batch.set(userRef, cleanUserDocData, { merge: true });
                 hasWrites = true;
@@ -207,7 +207,7 @@ export const DB = {
 
             Object.keys(newHistMonths).forEach(month => {
                 if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
-                    const cleanDoc = JSON.parse(JSON.stringify(newHistMonths[month]));
+                    const cleanDoc = removeUndefinedValues(newHistMonths[month]);
                     checkDocSize(cleanDoc, `History ${month}`);
                     batch.set(doc(db, "users", user.uid, "history_months", month), cleanDoc);
                     hasWrites = true;
@@ -237,7 +237,7 @@ export const DB = {
 
             Object.keys(newNutMonths).forEach(month => {
                 if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
-                    const cleanDoc = JSON.parse(JSON.stringify(newNutMonths[month]));
+                    const cleanDoc = removeUndefinedValues(newNutMonths[month]);
                     checkDocSize(cleanDoc, `Nutrition ${month}`);
                     batch.set(doc(db, "users", user.uid, "nutrition_months", month), cleanDoc);
                     hasWrites = true;

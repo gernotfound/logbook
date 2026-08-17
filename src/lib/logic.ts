@@ -1,5 +1,6 @@
 import { MUSCLES, GROUP_MAP, MuscleDef } from './constants/muscles';
 import { generateId, getLocalDateString, formatItalianDate, parseDateInput, calculateAge, formatTime, formatDuration, normalizeDuration, validateInputData, getCalendarMonthGrid, CalendarDayCell } from './utils/date';
+import { isPlainObject, removeUndefinedValues } from './utils/object';
 import { 
     calculateUsNavyBodyFat, 
     calculateBodyFatByMethod, 
@@ -67,6 +68,8 @@ export {
     normalizeDuration,
     validateInputData,
     getCalendarMonthGrid,
+    isPlainObject,
+    removeUndefinedValues,
     calculateUsNavyBodyFat,
     calculateBodyFatByMethod,
     calculateBodyFat,
@@ -116,6 +119,8 @@ export const Logic = {
     validateInputData,
     getCalendarMonthGrid,
     generateMockHistory: (): any[] => [],
+    isPlainObject,
+    removeUndefinedValues,
 
     // Body Fat & Composition
     calculateUsNavyBodyFat,
@@ -152,4 +157,5 @@ export const Logic = {
     calculateCycleSchedule,
     getNextScheduledRoutine
 };
+
 
