@@ -1,245 +1,19 @@
 import { create } from 'zustand';
-import { set as idbSet, del as idbDel } from 'idb-keyval';
-import { DB } from '../lib/db';
-import { Logic } from '../lib/logic';
-import { UserDataSchema, WorkoutSessionSchema } from '../lib/schema';
-import type { WorkoutSession, UserProfile, NutritionPlanning, UserData, SessionExercise, SessionExerciseSet } from '../types';
-import { DEBOUNCE_DELAY_LOCAL, DEBOUNCE_DELAY_GLOBAL } from '../constants';
+import type { UserProfile, NutritionPlanning, UserData } from '../types';
+import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
+import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
+import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
 
 export type { UserProfile, NutritionPlanning, UserData };
 
-export interface AppState {
-    userData: UserData | null;
-    saveError: string | null;
-    syncing: boolean;
-    localWorkout: WorkoutSession | null;
+export interface AppState extends DataSlice, WorkoutSlice, SyncSlice {}
 
-    setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
-    setSyncing: (val: boolean) => void;
-    setSaveError: (error: string | null) => void;
-    setLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => void;
-    saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<void>;
-    updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<void>;
-    resetStore: () => void;
-}
+export { getInitialUserData };
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let globalSaveTimer: ReturnType<typeof setTimeout> | null = null;
-type PendingPromise = { resolve: () => void; reject: (err: unknown) => void };
-let pendingPromises: PendingPromise[] = [];
-
-const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-        try {
-            if (workout) {
-                localStorage.setItem('logbook_local_workout', JSON.stringify(workout));
-            } else {
-                localStorage.removeItem('logbook_local_workout');
-            }
-        } catch (e) {
-            console.error("Errore salvataggio localWorkout:", e);
-        }
-    }, DEBOUNCE_DELAY_LOCAL);
-};
-
-export const getInitialUserData = (): UserData | null => {
-    try {
-        if (typeof window === 'undefined') return null;
-        const cached = window.__INITIAL_USER_DATA__;
-        if (!cached) return null;
-        const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
-        if (!parsed || typeof parsed !== 'object') return null;
-        return UserDataSchema.parse(parsed) as unknown as UserData;
-    } catch {
-        return null;
-    }
-};
-
-const saveUserDataToCache = (data: UserData | null) => {
-    try {
-        if (data) {
-            idbSet('logbook_cached_user_data', data).catch((e) => {
-                console.warn("Errore salvataggio cache userData in IndexedDB:", e);
-            });
-        } else {
-            idbDel('logbook_cached_user_data').catch((e) => {
-                console.warn("Errore rimozione cache userData da IndexedDB:", e);
-            });
-        }
-    } catch (e) {
-        console.warn("Errore salvataggio cache userData in IndexedDB:", e);
-    }
-};
-
-export const useAppStore = create<AppState>((set, get) => ({
-    userData: getInitialUserData(),
-    saveError: null,
-    syncing: false,
-    
-    // Inizializza il workout in bozza dal localStorage, se presente (con ID univoci garantiti)
-    localWorkout: (() => {
-        try {
-            const saved = localStorage.getItem('logbook_local_workout');
-            if (!saved) return null;
-            const parsed = JSON.parse(saved);
-            if (!parsed || typeof parsed !== 'object') return null;
-            const validated = WorkoutSessionSchema.parse(parsed) as unknown as WorkoutSession;
-            if (validated && Array.isArray(validated.exercises)) {
-                validated.exercises = validated.exercises.map((ex: SessionExercise) => ({
-                    ...ex,
-                    sets: (ex.sets || []).map((s: SessionExerciseSet) => ({
-                        ...s,
-                        id: s.id || Logic.generateId('s'),
-                        dropsets: (s.dropsets || []).map((ds: any) => ({ ...ds, id: ds.id || Logic.generateId('ds') })),
-                        isometrics: (s.isometrics || []).map((iso: any) => ({ ...iso, id: iso.id || Logic.generateId('iso') }))
-                    }))
-                }));
-            }
-            return validated;
-        } catch {
-            return null;
-        }
-    })(),
-
-    setLocalWorkout: (workoutOrUpdater) => {
-        set((state) => {
-            const nextWorkout = typeof workoutOrUpdater === 'function'
-                ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(state.localWorkout)
-                : workoutOrUpdater;
-            debouncedSaveLocalStorage(nextWorkout);
-            const nextUserData = state.userData ? { ...state.userData, activeWorkout: nextWorkout || null } : null;
-            return { localWorkout: nextWorkout, userData: nextUserData };
-        });
-    },
-
-    setUserData: (dataOrUpdater) => {
-        set((state) => {
-            const rawNextData = typeof dataOrUpdater === 'function' 
-                ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData) 
-                : dataOrUpdater;
-
-            if (!rawNextData) {
-                saveUserDataToCache(null);
-                return { userData: null, localWorkout: state.localWorkout };
-            }
-
-            let syncedLocalWorkout = state.localWorkout;
-            
-            // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
-            // The local device's localStorage is the source of truth for an ongoing workout.
-            if (state.localWorkout) {
-                // If we already have a local workout, KEEP IT. Ignore what comes from the network.
-                syncedLocalWorkout = state.localWorkout;
-            } else {
-                // If we DON'T have a local workout, but the network gives us one, we can adopt it.
-                if (rawNextData.activeWorkout !== undefined) {
-                    syncedLocalWorkout = rawNextData.activeWorkout;
-                    if (syncedLocalWorkout) {
-                        try {
-                            localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
-                        } catch (e) {
-                            console.error("Errore salvataggio localWorkout in localStorage:", e);
-                        }
-                    } else {
-                        try {
-                            localStorage.removeItem('logbook_local_workout');
-                        } catch {
-                            // Ignore removal error
-                        }
-                    }
-                }
-            }
-            
-            const nextData: UserData = {
-                ...rawNextData,
-                activeWorkout: syncedLocalWorkout ?? null
-            };
-            saveUserDataToCache(nextData);
-            return { userData: nextData, localWorkout: syncedLocalWorkout };
-        });
-    },
-
-    setSyncing: (val: boolean) => set((state) => state.syncing === val ? state : { syncing: val }),
-    setSaveError: (error: string | null) => set({ saveError: error }),
-
-    saveUserData: async (newDataOrUpdater) => {
-        const { userData, localWorkout } = get();
-        const nextData = typeof newDataOrUpdater === 'function' 
-            ? (newDataOrUpdater as (prev: UserData | null) => UserData | null)(userData) 
-            : newDataOrUpdater;
-        
-        if (!nextData) {
-            if (globalSaveTimer) {
-                clearTimeout(globalSaveTimer);
-                globalSaveTimer = null;
-            }
-            const promises = [...pendingPromises];
-            pendingPromises = [];
-            promises.forEach(p => p.resolve());
-            saveUserDataToCache(null);
-            set({ userData: null, saveError: null, syncing: false });
-            return;
-        }
-
-        const finalData: UserData = {
-            ...nextData,
-            activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
-        };
-        
-        saveUserDataToCache(finalData);
-        set({ userData: finalData, saveError: null, syncing: true });
-
-        return new Promise<void>((resolve, reject) => {
-            pendingPromises.push({ resolve, reject });
-            if (globalSaveTimer) clearTimeout(globalSaveTimer);
-            globalSaveTimer = setTimeout(async () => {
-                globalSaveTimer = null;
-                const promisesToCall = [...pendingPromises];
-                pendingPromises = [];
-                try {
-                    // Always pull the freshest state at the time of execution
-                    const currentState = get().userData;
-                    if (currentState) {
-                        await DB.saveUserData(currentState);
-                    }
-                    promisesToCall.forEach(p => p.resolve());
-                } catch (error) {
-                    console.error("Errore durante il salvataggio in Zustand:", error);
-                    set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
-                    promisesToCall.forEach(p => p.reject(error));
-                } finally {
-                    if (!globalSaveTimer && pendingPromises.length === 0) {
-                        set({ syncing: false });
-                    }
-                }
-            }, DEBOUNCE_DELAY_GLOBAL);
-        });
-    },
-
-    updateUserData: async (updater: (prev: UserData) => UserData) => {
-        const { userData } = get();
-        if (!userData) return;
-        const nextData = updater(userData);
-        await get().saveUserData(nextData);
-    },
-
-    resetStore: () => {
-        // Cancella i timer pendenti prima di pulire il localStorage,
-        // così nessun salvataggio "fantasma" può riscrivere il workout dopo il logout.
-        if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-        if (globalSaveTimer) { clearTimeout(globalSaveTimer); globalSaveTimer = null; }
-        pendingPromises = [];
-        try {
-            localStorage.removeItem('logbook_local_workout');
-            idbDel('logbook_cached_user_data').catch((e) => {
-                console.warn("Impossibile rimuovere cache da IndexedDB", e);
-            });
-        } catch (e) {
-            console.warn("Impossibile rimuovere cache", e);
-        }
-        set({ userData: null, localWorkout: null, saveError: null, syncing: false });
-    }
+export const useAppStore = create<AppState>()((...a) => ({
+    ...createDataSlice(...a),
+    ...createWorkoutSlice(...a),
+    ...createSyncSlice(...a),
 }));
 
 // PWA FIX: Synchronously save the local workout to localStorage when the app goes into the background.
@@ -256,7 +30,7 @@ if (typeof document !== 'undefined') {
                     console.error("Errore salvataggio localWorkout su visibilitychange:", e);
                 }
             }
-}
+        }
     });
 }
 
