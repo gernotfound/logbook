@@ -370,7 +370,7 @@ input:focus, select:focus, textarea:focus {
     justify-content: center; 
     align-items: center;
     z-index: 10000 !important; 
-    padding-bottom: max(calc(env(safe-area-inset-bottom, 0px) - 6px), 8px) !important;
+    padding-bottom: max(calc(env(safe-area-inset-bottom, 0px) - 8px), 6px) !important;
 }
 .nav-container { 
     width: 100%; 
