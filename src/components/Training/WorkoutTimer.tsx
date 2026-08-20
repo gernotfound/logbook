@@ -9,18 +9,18 @@ export default function WorkoutTimer() {
     });
     const [restStartTime, setRestStartTime] = useState<number>(() => {
         const saved = localStorage.getItem('logbook_timer_start');
-        return saved ? parseInt(saved, 10) : 0;
+        return saved ? (parseInt(saved, 10) || 0) : 0;
     });
     const [restAccumulated, setRestAccumulated] = useState<number>(() => {
         const saved = localStorage.getItem('logbook_timer_accumulated');
-        return saved ? parseInt(saved, 10) : 0;
+        return saved ? (parseInt(saved, 10) || 0) : 0;
     });
     const [restDisplay, setRestDisplay] = useState<string>(() => {
         const savedState = localStorage.getItem('logbook_timer_state');
         const savedStart = localStorage.getItem('logbook_timer_start');
         const savedAcc = localStorage.getItem('logbook_timer_accumulated');
-        const start = savedStart ? parseInt(savedStart, 10) : 0;
-        const acc = savedAcc ? parseInt(savedAcc, 10) : 0;
+        const start = savedStart ? (parseInt(savedStart, 10) || 0) : 0;
+        const acc = savedAcc ? (parseInt(savedAcc, 10) || 0) : 0;
         
         if (savedState === 'running' && start > 0) {
             return formatTimerMs(Date.now() - start + acc);
