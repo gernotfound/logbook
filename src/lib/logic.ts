@@ -1,5 +1,20 @@
 import { MUSCLES, GROUP_MAP, MuscleDef } from './constants/muscles';
-import { generateId, getLocalDateString, formatItalianDate, parseDateInput, calculateAge, formatTime, formatDuration, normalizeDuration, validateInputData, getCalendarMonthGrid, CalendarDayCell } from './utils/date';
+import { 
+    generateId, 
+    getLocalDateString, 
+    formatItalianDate, 
+    parseDateInput, 
+    calculateAge, 
+    formatTime, 
+    formatDuration, 
+    normalizeDuration, 
+    validateInputData, 
+    getCalendarMonthGrid, 
+    CalendarDayCell,
+    formatSleepTime,
+    parseSleepInput,
+    isSleepTimeValid
+} from './utils/date';
 import { isPlainObject, removeUndefinedValues } from './utils/object';
 import { 
     calculateUsNavyBodyFat, 
@@ -29,7 +44,9 @@ import {
     validateHistory,
     getWorkoutDatesSet,
     searchRoutines,
-    filterItems
+    filterItems,
+    searchExerciseLibrary,
+    normalizeStem
 } from './calc/workout';
 import {
     calculateCycleVolume,
@@ -68,6 +85,9 @@ export {
     normalizeDuration,
     validateInputData,
     getCalendarMonthGrid,
+    formatSleepTime,
+    parseSleepInput,
+    isSleepTimeValid,
     isPlainObject,
     removeUndefinedValues,
     calculateUsNavyBodyFat,
@@ -94,6 +114,8 @@ export {
     getWorkoutDatesSet,
     searchRoutines,
     filterItems,
+    searchExerciseLibrary,
+    normalizeStem,
     calculateCycleVolume,
     getDetailedMuscleCategory,
     calculateCycleTimeline,
@@ -118,6 +140,9 @@ export const Logic = {
     normalizeDuration,
     validateInputData,
     getCalendarMonthGrid,
+    formatSleepTime,
+    parseSleepInput,
+    isSleepTimeValid,
     generateMockHistory: (): any[] => [],
     isPlainObject,
     removeUndefinedValues,
@@ -151,11 +176,14 @@ export const Logic = {
     getWorkoutDatesSet,
     searchRoutines,
     filterItems,
+    searchExerciseLibrary,
+    normalizeStem,
     calculateCycleVolume,
     getDetailedMuscleCategory,
     calculateCycleTimeline,
     calculateCycleSchedule,
     getNextScheduledRoutine
 };
+
 
 

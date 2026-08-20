@@ -56,6 +56,7 @@ export function useWorkoutSession() {
         addExtraExercise,
         addSpecialSet,
         reorderExercises,
+        moveExercise,
         removeActiveExercise,
         addSet,
         removeSet,
@@ -117,7 +118,7 @@ export function useWorkoutSession() {
                     }
                     sets.push(setObj);
                 }
-                const result: any = { exId: ex.exId, sets, sessionNote: '' };
+                const result: any = { id: Logic.generateId('se'), exId: ex.exId, sets, sessionNote: '' };
                 if (ex.defaultTechnique) result.defaultTechnique = ex.defaultTechnique;
                 if (ex.minReps) result.minReps = ex.minReps;
                 if (ex.maxReps) result.maxReps = ex.maxReps;
@@ -147,6 +148,7 @@ export function useWorkoutSession() {
 
         const sanitizedExercises = (workout.exercises || []).map((ex: any) => ({
             ...ex,
+            id: ex.id || Logic.generateId('se'),
             sets: (ex.sets || []).map((s: any) => ({
                 ...s,
                 id: s.id || Logic.generateId('s'),
@@ -321,6 +323,7 @@ export function useWorkoutSession() {
         cancelHistoryEdit,
         addExtraExercise,
         reorderExercises,
+        moveExercise,
         removeActiveExercise,
         addSet,
         removeSet,

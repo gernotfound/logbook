@@ -44,6 +44,7 @@ export const getInitialLocalWorkout = (): WorkoutSession | null => {
         if (validated && Array.isArray(validated.exercises)) {
             validated.exercises = validated.exercises.map((ex: SessionExercise) => ({
                 ...ex,
+                id: ex.id || Logic.generateId('se'),
                 sets: (ex.sets || []).map((s: SessionExerciseSet) => ({
                     ...s,
                     id: s.id || Logic.generateId('s'),

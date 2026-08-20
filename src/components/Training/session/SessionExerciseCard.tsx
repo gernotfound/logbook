@@ -1,15 +1,18 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useDialogStore } from '../../../store/useDialogStore';
+import { Logic } from '../../../lib/logic';
 import SessionSetRow from './SessionSetRow';
 
 interface SessionExerciseCardProps {
     exItem: any;
     exIndex: number;
+    totalExercises?: number;
     libDef: any;
     pastWorkouts: Array<{ date: string; sets: any[]; note: string }>;
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
+    onMoveExercise?: (index: number, direction: 'up' | 'down') => void;
     onToggleHistory: () => void;
     onToggleSetup: () => void;
     onRemoveExercise: () => void;
@@ -28,11 +31,13 @@ interface SessionExerciseCardProps {
 const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     exItem,
     exIndex,
+    totalExercises,
     libDef,
     pastWorkouts,
     isHistoryOpen,
     isSetupOpen,
     openSpecialMenuId,
+    onMoveExercise,
     onToggleHistory,
     onToggleSetup,
     onRemoveExercise,
@@ -50,6 +55,22 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const exName = libDef ? libDef.name : "Esercizio rimosso";
     const exNotes = libDef ? (libDef.notes || '') : "";
     const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
+
+    const primaryMuscles = useMemo<{ id: string; name: string }[]>(() => {
+        if (!libDef || !Array.isArray(libDef.muscles)) return [];
+        return libDef.muscles.map((mId: string) => {
+            const found = Logic.MUSCLES.find(m => m.id === mId);
+            return found || { id: mId, name: mId };
+        });
+    }, [libDef]);
+
+    const secondaryMuscles = useMemo<{ id: string; name: string }[]>(() => {
+        if (!libDef || !Array.isArray(libDef.secondaryMuscles)) return [];
+        return libDef.secondaryMuscles.map((mId: string) => {
+            const found = Logic.MUSCLES.find(m => m.id === mId);
+            return found || { id: mId, name: mId };
+        });
+    }, [libDef]);
 
     const handleRemoveLastSet = useCallback(async () => {
         if (onRemoveLastSet) {
@@ -119,6 +140,39 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <h2 style={{ color: 'var(--primary-color)', margin: 0, fontSize: '1.15rem' }}>{exName}</h2>
                 <div style={{ display: 'flex', gap: '5px' }}>
                     <button
+                        type="button"
+                        className="btn-small"
+                        style={{
+                            borderRadius: '8px',
+                            minWidth: '36px',
+                            minHeight: '36px',
+                            opacity: exIndex === 0 ? 0.3 : 1,
+                            cursor: exIndex === 0 ? 'not-allowed' : 'pointer'
+                        }}
+                        disabled={exIndex === 0}
+                        onClick={() => onMoveExercise?.(exIndex, 'up')}
+                        aria-label="Sposta esercizio su"
+                    >
+                        ⬆️
+                    </button>
+                    <button
+                        type="button"
+                        className="btn-small"
+                        style={{
+                            borderRadius: '8px',
+                            minWidth: '36px',
+                            minHeight: '36px',
+                            opacity: (totalExercises !== undefined && exIndex >= totalExercises - 1) ? 0.3 : 1,
+                            cursor: (totalExercises !== undefined && exIndex >= totalExercises - 1) ? 'not-allowed' : 'pointer'
+                        }}
+                        disabled={totalExercises !== undefined && exIndex >= totalExercises - 1}
+                        onClick={() => onMoveExercise?.(exIndex, 'down')}
+                        aria-label="Sposta esercizio giù"
+                    >
+                        ⬇️
+                    </button>
+                    <button
+                        type="button"
                         className="btn-small"
                         style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
                         onClick={onRemoveExercise}
@@ -127,6 +181,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         🗑️
                     </button>
                     <button
+                        type="button"
                         className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
                         style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
                         onClick={onToggleHistory}
@@ -134,6 +189,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         🕒 Storico
                     </button>
                     <button
+                        type="button"
                         className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
                         style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
                         onClick={onToggleSetup}
@@ -142,6 +198,29 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     </button>
                 </div>
             </div>
+
+            {(primaryMuscles.length > 0 || secondaryMuscles.length > 0) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px', marginBottom: '8px' }}>
+                    {primaryMuscles.map(m => (
+                        <span key={m.id} className="badge badge-primary">
+                            {m.name}
+                        </span>
+                    ))}
+                    {secondaryMuscles.map(m => (
+                        <span
+                            key={m.id}
+                            className="badge"
+                            style={{
+                                background: 'var(--secondary-color, rgba(0, 229, 255, 0.3))',
+                                color: '#fff',
+                                border: '1px solid var(--secondary-color, #4db6ac)'
+                            }}
+                        >
+                            {m.name}
+                        </span>
+                    ))}
+                </div>
+            )}
 
             {(exItem.minReps || exItem.maxReps) && (
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
@@ -325,7 +404,8 @@ export const SessionExerciseCard = React.memo(SessionExerciseCardInner, (prev, n
         prev.isHistoryOpen === next.isHistoryOpen &&
         prev.isSetupOpen === next.isSetupOpen &&
         prev.openSpecialMenuId === next.openSpecialMenuId &&
-        prev.exIndex === next.exIndex
+        prev.exIndex === next.exIndex &&
+        prev.totalExercises === next.totalExercises
     );
 });
 

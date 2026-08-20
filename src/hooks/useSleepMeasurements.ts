@@ -24,11 +24,11 @@ export function useSleepMeasurements() {
         const targetData = (nutrition as any)[targetDate];
 
         if (targetData) {
-            setSleepHours(targetData.sleepHours !== undefined && targetData.sleepHours !== null ? targetData.sleepHours.toString() : '');
-            setSleepDeep(targetData.sleepDeep !== undefined && targetData.sleepDeep !== null ? targetData.sleepDeep.toString() : '');
-            setSleepLight(targetData.sleepLight !== undefined && targetData.sleepLight !== null ? targetData.sleepLight.toString() : '');
-            setSleepRem(targetData.sleepRem !== undefined && targetData.sleepRem !== null ? targetData.sleepRem.toString() : '');
-            setSleepAwake(targetData.sleepAwake !== undefined && targetData.sleepAwake !== null ? targetData.sleepAwake.toString() : '');
+            setSleepHours(Logic.formatSleepTime(targetData.sleepHours));
+            setSleepDeep(Logic.formatSleepTime(targetData.sleepDeep));
+            setSleepLight(Logic.formatSleepTime(targetData.sleepLight));
+            setSleepRem(Logic.formatSleepTime(targetData.sleepRem));
+            setSleepAwake(Logic.formatSleepTime(targetData.sleepAwake));
         } else {
             setSleepHours('');
             setSleepDeep('');
@@ -41,10 +41,38 @@ export function useSleepMeasurements() {
     const saveSleep = async (e?: any) => {
         if (e) e.preventDefault();
         
-        if (!sleepHours || isNaN(parseFloat(sleepHours))) {
-            await showAlert("Le ore di sonno sono obbligatorie e devono essere un numero valido.");
+        if (!sleepHours || !Logic.isSleepTimeValid(sleepHours)) {
+            await showAlert("Le ore di sonno sono obbligatorie e devono essere in un formato valido (HH:MM).");
             return;
         }
+
+        const parsedHours = Logic.parseSleepInput(sleepHours);
+        if (!parsedHours) {
+            await showAlert("Le ore di sonno sono obbligatorie e devono essere in un formato valido (HH:MM).");
+            return;
+        }
+
+        if (sleepDeep && !Logic.isSleepTimeValid(sleepDeep)) {
+            await showAlert("Il formato del sonno profondo non è valido (HH:MM).");
+            return;
+        }
+        if (sleepLight && !Logic.isSleepTimeValid(sleepLight)) {
+            await showAlert("Il formato del sonno leggero non è valido (HH:MM).");
+            return;
+        }
+        if (sleepRem && !Logic.isSleepTimeValid(sleepRem)) {
+            await showAlert("Il formato del sonno REM non è valido (HH:MM).");
+            return;
+        }
+        if (sleepAwake && !Logic.isSleepTimeValid(sleepAwake)) {
+            await showAlert("Il formato del tempo sveglio non è valido (HH:MM).");
+            return;
+        }
+
+        const parsedDeep = sleepDeep ? Logic.parseSleepInput(sleepDeep) || undefined : undefined;
+        const parsedLight = sleepLight ? Logic.parseSleepInput(sleepLight) || undefined : undefined;
+        const parsedRem = sleepRem ? Logic.parseSleepInput(sleepRem) || undefined : undefined;
+        const parsedAwake = sleepAwake ? Logic.parseSleepInput(sleepAwake) || undefined : undefined;
 
         const targetDate = editingDate || todayDateStr;
 
@@ -54,11 +82,11 @@ export function useSleepMeasurements() {
                 const existingDay = prev.nutrition?.[targetDate] || { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
                 const updatedDay = {
                     ...existingDay,
-                    sleepHours: parseFloat(sleepHours),
-                    sleepDeep: sleepDeep ? parseFloat(sleepDeep) : undefined,
-                    sleepLight: sleepLight ? parseFloat(sleepLight) : undefined,
-                    sleepRem: sleepRem ? parseFloat(sleepRem) : undefined,
-                    sleepAwake: sleepAwake ? parseFloat(sleepAwake) : undefined,
+                    sleepHours: parsedHours,
+                    sleepDeep: parsedDeep,
+                    sleepLight: parsedLight,
+                    sleepRem: parsedRem,
+                    sleepAwake: parsedAwake,
                 };
 
                 return {

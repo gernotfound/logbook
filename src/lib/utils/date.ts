@@ -217,3 +217,68 @@ export function getCalendarMonthGrid(year: any, month: any): CalendarDayCell[] {
         isToday: isToday(d)
     }));
 }
+
+export function formatSleepTime(val: number | string | undefined | null): string {
+    if (val === undefined || val === null) return '';
+    if (typeof val === 'number') {
+        if (isNaN(val) || !isFinite(val) || val < 0 || val > 24) return '';
+        let hours = Math.floor(val);
+        let mins = Math.round((val - hours) * 60);
+        if (mins >= 60) {
+            hours += 1;
+            mins = 0;
+        }
+        if (hours > 23) {
+            hours = 23;
+            mins = 59;
+        }
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    }
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return '';
+
+        // Match HH:MM or H:MM
+        const timeMatch = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
+        if (timeMatch) {
+            const h = parseInt(timeMatch[1], 10);
+            const m = parseInt(timeMatch[2], 10);
+            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            }
+            return '';
+        }
+
+        // Match decimal number string e.g. "7.5", "7,5", "8h", "1.25"
+        const cleaned = trimmed.replace(/h/i, '').replace(',', '.').trim();
+        if (/^\d+(\.\d+)?$/.test(cleaned)) {
+            const num = parseFloat(cleaned);
+            if (!isNaN(num) && isFinite(num) && num >= 0 && num <= 24) {
+                let hours = Math.floor(num);
+                let mins = Math.round((num - hours) * 60);
+                if (mins >= 60) {
+                    hours += 1;
+                    mins = 0;
+                }
+                if (hours > 23) {
+                    hours = 23;
+                    mins = 59;
+                }
+                return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+            }
+        }
+    }
+    return '';
+}
+
+export function parseSleepInput(val: string | number | undefined | null): string | null {
+    if (val === undefined || val === null) return null;
+    const formatted = formatSleepTime(val);
+    return formatted !== '' ? formatted : null;
+}
+
+export function isSleepTimeValid(val: string | undefined | null): boolean {
+    if (!val || typeof val !== 'string' || !val.trim()) return false;
+    return parseSleepInput(val) !== null;
+}
+

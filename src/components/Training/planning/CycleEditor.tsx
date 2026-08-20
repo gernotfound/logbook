@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { addDays, differenceInCalendarDays, parseISO, format, isValid, startOfDay } from 'date-fns';
 import { Logic } from '../../../lib/logic';
 import { useDialogStore } from '../../../store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine, TrainingCycleRoutineItem } from '../../../types';
@@ -10,6 +11,31 @@ interface CycleEditorProps {
     onCancel: () => void;
 }
 
+function computeEndDate(startIso: string, weeks: number): string {
+    try {
+        const parsed = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
+        if (!isValid(parsed)) return startIso;
+        const totalWeeks = Math.max(1, weeks);
+        const end = addDays(startOfDay(parsed), totalWeeks * 7 - 1);
+        return format(end, 'yyyy-MM-dd');
+    } catch {
+        return startIso;
+    }
+}
+
+function computeWeeksFromDates(startIso: string, endIso: string): number {
+    try {
+        const start = typeof startIso === 'string' && !startIso.includes('T') ? parseISO(startIso) : new Date(startIso);
+        const end = typeof endIso === 'string' && !endIso.includes('T') ? parseISO(endIso) : new Date(endIso);
+        if (!isValid(start) || !isValid(end)) return 1;
+        const diffDays = differenceInCalendarDays(startOfDay(end), startOfDay(start));
+        if (diffDays < 0) return 1;
+        return Math.max(1, Math.round((diffDays + 1) / 7));
+    } catch {
+        return 1;
+    }
+}
+
 export const CycleEditor: React.FC<CycleEditorProps> = ({
     initialCycle,
     routines,
@@ -17,15 +43,19 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     onCancel
 }) => {
     const showAlert = useDialogStore(state => state.showAlert);
-    const datePickerRef = useRef<HTMLInputElement>(null);
+    const startDatePickerRef = useRef<HTMLInputElement>(null);
+    const endDatePickerRef = useRef<HTMLInputElement>(null);
 
     const initialIso = initialCycle?.startDate || Logic.getLocalDateString();
+    const initialWeeksNum = initialCycle?.durationWeeks !== undefined ? initialCycle.durationWeeks : 6;
+    const initialEndIso = initialCycle?.endDate || computeEndDate(initialIso, initialWeeksNum);
+
     const [name, setName] = useState(initialCycle?.name || '');
     const [startDate, setStartDate] = useState(initialIso);
     const [dateTextInput, setDateTextInput] = useState(Logic.formatItalianDate(initialIso));
-    const [durationWeeks, setDurationWeeks] = useState(
-        initialCycle?.durationWeeks !== undefined ? String(initialCycle.durationWeeks) : '6'
-    );
+    const [endDate, setEndDate] = useState(initialEndIso);
+    const [endDateTextInput, setEndDateTextInput] = useState(Logic.formatItalianDate(initialEndIso));
+    const [durationWeeks, setDurationWeeks] = useState(String(initialWeeksNum));
     const [sessionsPerWeek, setSessionsPerWeek] = useState(
         initialCycle?.sessionsPerWeek !== undefined
             ? String(initialCycle.sessionsPerWeek)
@@ -41,9 +71,13 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         if (initialCycle) {
             setName(initialCycle.name || '');
             const iso = initialCycle.startDate || Logic.getLocalDateString();
+            const weeksNum = initialCycle.durationWeeks !== undefined ? initialCycle.durationWeeks : 6;
+            const endIso = initialCycle.endDate || computeEndDate(iso, weeksNum);
             setStartDate(iso);
             setDateTextInput(Logic.formatItalianDate(iso));
-            setDurationWeeks(initialCycle.durationWeeks !== undefined ? String(initialCycle.durationWeeks) : '6');
+            setEndDate(endIso);
+            setEndDateTextInput(Logic.formatItalianDate(endIso));
+            setDurationWeeks(String(weeksNum));
             setSessionsPerWeek(
                 initialCycle.sessionsPerWeek !== undefined
                     ? String(initialCycle.sessionsPerWeek)
@@ -54,43 +88,118 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         }
     }, [initialCycle]);
 
-    const handleDateTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleDurationWeeksChange = (val: string) => {
+        setDurationWeeks(val);
+        const w = parseInt(val, 10);
+        if (!isNaN(w) && w >= 1 && startDate) {
+            const newEnd = computeEndDate(startDate, w);
+            setEndDate(newEnd);
+            setEndDateTextInput(Logic.formatItalianDate(newEnd));
+        }
+    };
+
+    const handleStartDateTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setDateTextInput(val);
         const parsedIso = Logic.parseDateInput(val);
         if (parsedIso) {
             setStartDate(parsedIso);
+            const w = Math.max(1, parseInt(durationWeeks, 10) || 4);
+            const newEnd = computeEndDate(parsedIso, w);
+            setEndDate(newEnd);
+            setEndDateTextInput(Logic.formatItalianDate(newEnd));
         }
     };
 
-    const handleDateTextBlur = () => {
+    const handleStartDateTextBlur = () => {
         const parsedIso = Logic.parseDateInput(dateTextInput);
         if (parsedIso) {
             setStartDate(parsedIso);
             setDateTextInput(Logic.formatItalianDate(parsedIso));
+            const w = Math.max(1, parseInt(durationWeeks, 10) || 4);
+            const newEnd = computeEndDate(parsedIso, w);
+            setEndDate(newEnd);
+            setEndDateTextInput(Logic.formatItalianDate(newEnd));
         } else if (startDate) {
             setDateTextInput(Logic.formatItalianDate(startDate));
         }
     };
 
-    const handleCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleStartCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         if (val) {
             setStartDate(val);
             setDateTextInput(Logic.formatItalianDate(val));
+            const w = Math.max(1, parseInt(durationWeeks, 10) || 4);
+            const newEnd = computeEndDate(val, w);
+            setEndDate(newEnd);
+            setEndDateTextInput(Logic.formatItalianDate(newEnd));
         }
     };
 
-    const handleOpenCalendar = () => {
-        if (datePickerRef.current) {
-            if (typeof datePickerRef.current.showPicker === 'function') {
+    const handleEndDateTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setEndDateTextInput(val);
+        const parsedIso = Logic.parseDateInput(val);
+        if (parsedIso) {
+            setEndDate(parsedIso);
+            if (startDate) {
+                const w = computeWeeksFromDates(startDate, parsedIso);
+                setDurationWeeks(String(w));
+            }
+        }
+    };
+
+    const handleEndDateTextBlur = () => {
+        const parsedIso = Logic.parseDateInput(endDateTextInput);
+        if (parsedIso) {
+            setEndDate(parsedIso);
+            setEndDateTextInput(Logic.formatItalianDate(parsedIso));
+            if (startDate) {
+                const w = computeWeeksFromDates(startDate, parsedIso);
+                setDurationWeeks(String(w));
+            }
+        } else if (endDate) {
+            setEndDateTextInput(Logic.formatItalianDate(endDate));
+        }
+    };
+
+    const handleEndCalendarDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val) {
+            setEndDate(val);
+            setEndDateTextInput(Logic.formatItalianDate(val));
+            if (startDate) {
+                const w = computeWeeksFromDates(startDate, val);
+                setDurationWeeks(String(w));
+            }
+        }
+    };
+
+    const handleOpenStartCalendar = () => {
+        if (startDatePickerRef.current) {
+            if (typeof startDatePickerRef.current.showPicker === 'function') {
                 try {
-                    datePickerRef.current.showPicker();
+                    startDatePickerRef.current.showPicker();
                 } catch {
-                    datePickerRef.current.focus();
+                    startDatePickerRef.current.focus();
                 }
             } else {
-                datePickerRef.current.focus();
+                startDatePickerRef.current.focus();
+            }
+        }
+    };
+
+    const handleOpenEndCalendar = () => {
+        if (endDatePickerRef.current) {
+            if (typeof endDatePickerRef.current.showPicker === 'function') {
+                try {
+                    endDatePickerRef.current.showPicker();
+                } catch {
+                    endDatePickerRef.current.focus();
+                }
+            } else {
+                endDatePickerRef.current.focus();
             }
         }
     };
@@ -101,7 +210,6 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             ...prev,
             { routineId, frequencyPerWeek: 1 }
         ]);
-        // If sessionsPerWeek is not customized or is equal to old length, update it gracefully
         const newCount = cycleRoutines.length + 1;
         if (!initialCycle?.sessionsPerWeek && parseInt(sessionsPerWeek, 10) === cycleRoutines.length) {
             setSessionsPerWeek(String(newCount));
@@ -139,6 +247,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         const weeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
         const freqPerWeek = Math.max(1, parseInt(sessionsPerWeek, 10) || cycleRoutines.length);
         const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
+        const validEndDate = Logic.parseDateInput(endDateTextInput) || endDate || (validStartDate ? computeEndDate(validStartDate, weeks) : undefined);
 
         const cycle: TrainingCycle = {
             id: initialCycle?.id || Logic.generateId('cycle'),
@@ -147,6 +256,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             sessionsPerWeek: freqPerWeek,
             progressionMode: 'sequential',
             startDate: validStartDate,
+            endDate: validEndDate,
             notes: notes.trim(),
             routines: cycleRoutines,
             createdAt: initialCycle?.createdAt || Date.now(),
@@ -166,9 +276,10 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             durationWeeks: tempWeeks,
             sessionsPerWeek: tempFreq,
             startDate: startDate || undefined,
+            endDate: endDate || undefined,
             routines: cycleRoutines
         });
-    }, [name, tempWeeks, tempFreq, startDate, cycleRoutines]);
+    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines]);
 
     const schedule = useMemo(() => {
         return Logic.calculateCycleSchedule({
@@ -177,9 +288,10 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             durationWeeks: tempWeeks,
             sessionsPerWeek: tempFreq,
             startDate: startDate || undefined,
+            endDate: endDate || undefined,
             routines: cycleRoutines
         }, routines);
-    }, [name, tempWeeks, tempFreq, startDate, cycleRoutines, routines]);
+    }, [name, tempWeeks, tempFreq, startDate, endDate, cycleRoutines, routines]);
 
     return (
         <form onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
@@ -198,10 +310,11 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             </div>
 
             <div className="mb-15">
-                <label className="text-xs text-muted font-bold block mb-4">
+                <label htmlFor="cycle-name" className="text-xs text-muted font-bold block mb-4">
                     Nome ciclo
                 </label>
                 <input
+                    id="cycle-name"
                     type="text"
                     placeholder="Es. Mesociclo ipertrofia 4 giorni"
                     value={name}
@@ -214,16 +327,17 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
 
             <div className="grid-2 gap-15 mb-15">
                 <div>
-                    <label className="text-xs text-muted font-bold block mb-4">
+                    <label htmlFor="cycle-start-date" className="text-xs text-muted font-bold block mb-4">
                         Data di inizio
                     </label>
                     <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', minWidth: 0 }}>
                         <input
+                            id="cycle-start-date"
                             type="text"
                             placeholder="GG/MM/AAAA"
                             value={dateTextInput}
-                            onChange={handleDateTextChange}
-                            onBlur={handleDateTextBlur}
+                            onChange={handleStartDateTextChange}
+                            onBlur={handleStartDateTextBlur}
                             onFocus={e => e.target.select()}
                             required
                             style={{
@@ -239,8 +353,9 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                             <button
                                 type="button"
                                 className="btn btn-secondary"
-                                onClick={handleOpenCalendar}
-                                title="Scegli data dal calendario"
+                                onClick={handleOpenStartCalendar}
+                                title="Scegli data di inizio dal calendario"
+                                aria-label="Scegli data di inizio dal calendario"
                                 style={{
                                     width: '100%',
                                     height: '100%',
@@ -259,12 +374,12 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                 📅
                             </button>
                             <input
-                                ref={datePickerRef}
+                                ref={startDatePickerRef}
                                 type="date"
                                 value={startDate}
-                                onChange={handleCalendarDateChange}
+                                onChange={handleStartCalendarDateChange}
                                 tabIndex={-1}
-                                aria-label="Scegli data dal calendario"
+                                aria-label="Scegli data di inizio dal calendario"
                                 style={{
                                     position: 'absolute',
                                     top: 0,
@@ -282,46 +397,119 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 </div>
 
                 <div>
-                    <label className="text-xs text-muted font-bold block mb-4">
+                    <label htmlFor="cycle-end-date" className="text-xs text-muted font-bold block mb-4">
+                        Data di fine
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', minWidth: 0 }}>
+                        <input
+                            id="cycle-end-date"
+                            type="text"
+                            placeholder="GG/MM/AAAA"
+                            value={endDateTextInput}
+                            onChange={handleEndDateTextChange}
+                            onBlur={handleEndDateTextBlur}
+                            onFocus={e => e.target.select()}
+                            required
+                            style={{
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: '16px',
+                                boxSizing: 'border-box',
+                                maxWidth: '100%',
+                                display: 'block'
+                            }}
+                        />
+                        <div style={{ position: 'relative', flexShrink: 0, width: '46px' }}>
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={handleOpenEndCalendar}
+                                title="Scegli data di fine dal calendario"
+                                aria-label="Scegli data di fine dal calendario"
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    padding: 0,
+                                    fontSize: '1.2rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    marginBottom: 0,
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--glass-border)',
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                📅
+                            </button>
+                            <input
+                                ref={endDatePickerRef}
+                                type="date"
+                                value={endDate}
+                                onChange={handleEndCalendarDateChange}
+                                tabIndex={-1}
+                                aria-label="Scegli data di fine dal calendario"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    opacity: 0,
+                                    pointerEvents: 'auto',
+                                    cursor: 'pointer',
+                                    fontSize: '16px'
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid-2 gap-15 mb-15">
+                <div>
+                    <label htmlFor="cycle-duration-weeks" className="text-xs text-muted font-bold block mb-4">
                         Durata (settimane)
                     </label>
                     <input
+                        id="cycle-duration-weeks"
                         type="number"
                         min="1"
                         max="52"
                         value={durationWeeks}
-                        onChange={e => setDurationWeeks(e.target.value)}
+                        onChange={e => handleDurationWeeksChange(e.target.value)}
                         onFocus={e => e.target.select()}
                         required
                         style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                     />
                 </div>
-            </div>
 
-            {/* Frequenza di allenamento settimanale */}
-            <div className="mb-15">
-                <div className="flex-between items-center mb-4">
-                    <label className="text-xs text-muted font-bold block">
-                        Frequenza di allenamento (sedute a settimana)
-                    </label>
-                    <span className="text-xs text-primary font-bold">
-                        {tempFreq} {tempFreq === 1 ? 'seduta' : 'sedute'} / sett.
-                    </span>
+                <div>
+                    <div className="flex-between items-center mb-4">
+                        <label htmlFor="cycle-sessions-per-week" className="text-xs text-muted font-bold block">
+                            Frequenza di allenamento (sedute a settimana)
+                        </label>
+                        <span className="text-xs text-primary font-bold">
+                            {tempFreq} {tempFreq === 1 ? 'seduta' : 'sedute'} / sett.
+                        </span>
+                    </div>
+                    <input
+                        id="cycle-sessions-per-week"
+                        type="number"
+                        min="1"
+                        max="14"
+                        value={sessionsPerWeek}
+                        onChange={e => setSessionsPerWeek(e.target.value)}
+                        onFocus={e => e.target.select()}
+                        placeholder="Es. 4"
+                        required
+                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                    />
+                    <p className="text-xs text-muted mt-4 mb-0">
+                        Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
+                    </p>
                 </div>
-                <input
-                    type="number"
-                    min="1"
-                    max="14"
-                    value={sessionsPerWeek}
-                    onChange={e => setSessionsPerWeek(e.target.value)}
-                    onFocus={e => e.target.select()}
-                    placeholder="Es. 4"
-                    required
-                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                />
-                <p className="text-xs text-muted mt-4 mb-0">
-                    Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
-                </p>
             </div>
 
             {startDate && (

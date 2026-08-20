@@ -14,7 +14,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook }) => {
     return (
         <div className="card" id="sleep-form-card" style={isEditing ? { border: '2px solid var(--primary-color)' } : undefined}>
             <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px' }}>
-                {isEditing ? `✏️ Modifica sonno (${displayDate})` : `🌙 Dati Sonno (${displayDate})`}
+                {isEditing ? `✏️ Modifica sonno (${displayDate})` : `🌙 Dati sonno (${displayDate})`}
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
                 Registra la durata e la qualità del tuo sonno.
@@ -22,13 +22,11 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook }) => {
 
             <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' }}>
                 <div style={{ flex: 1, minWidth: 0, maxWidth: '200px' }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Ore Sonno (Totali) *</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Ore sonno (totali) *</label>
                     <input 
                         id="sleep-hours" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        placeholder="es. 7.5" 
+                        type="time" 
+                        placeholder="07:30" 
                         value={sleepHook.sleepHours} 
                         onChange={e => sleepHook.setSleepHours(e.target.value)} 
                         onFocus={e => e.target.select()}
@@ -38,16 +36,15 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook }) => {
             </div>
 
             <div style={{ width: '100%', height: '1px', background: 'var(--glass-border)', margin: '20px 0' }}></div>
-            <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Dettagli fasi (Opzionali)</h3>
+            <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Dettagli fasi (opzionali)</h3>
 
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno Profondo (h)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno profondo</label>
                     <input 
                         id="sleep-deep" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
+                        type="time" 
+                        placeholder="01:30" 
                         value={sleepHook.sleepDeep} 
                         onChange={e => sleepHook.setSleepDeep(e.target.value)} 
                         onFocus={e => e.target.select()}
@@ -55,12 +52,11 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook }) => {
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno Leggero (h)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno leggero</label>
                     <input 
                         id="sleep-light" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
+                        type="time" 
+                        placeholder="04:00" 
                         value={sleepHook.sleepLight} 
                         onChange={e => sleepHook.setSleepLight(e.target.value)} 
                         onFocus={e => e.target.select()}
@@ -71,12 +67,11 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook }) => {
 
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno REM (h)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno REM</label>
                     <input 
                         id="sleep-rem" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
+                        type="time" 
+                        placeholder="01:30" 
                         value={sleepHook.sleepRem} 
                         onChange={e => sleepHook.setSleepRem(e.target.value)} 
                         onFocus={e => e.target.select()}
@@ -84,12 +79,11 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook }) => {
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Tempo Sveglio (h)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Tempo sveglio</label>
                     <input 
                         id="sleep-awake" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
+                        type="time" 
+                        placeholder="00:30" 
                         value={sleepHook.sleepAwake} 
                         onChange={e => sleepHook.setSleepAwake(e.target.value)} 
                         onFocus={e => e.target.select()}
