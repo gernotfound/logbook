@@ -28,7 +28,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
 }) => {
     return (
         <React.Fragment>
-            <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px' }}>
+            <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px', border: '1px solid var(--primary-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '75px' }}>
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
                     <button 

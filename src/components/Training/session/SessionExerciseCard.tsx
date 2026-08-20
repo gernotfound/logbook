@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 
 interface SessionExerciseCardProps {
@@ -21,6 +22,7 @@ interface SessionExerciseCardProps {
     onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
     onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number) => void;
     onToggleSpecialMenu: (setId: string) => void;
+    onRemoveLastSet?: () => void;
 }
 
 const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
@@ -42,11 +44,53 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     onAddSpecialSet,
     onUpdateSpecialSet,
     onRemoveSpecialSet,
-    onToggleSpecialMenu
+    onToggleSpecialMenu,
+    onRemoveLastSet
 }) => {
     const exName = libDef ? libDef.name : "Esercizio rimosso";
     const exNotes = libDef ? (libDef.notes || '') : "";
     const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
+
+    const handleRemoveLastSet = useCallback(async () => {
+        if (onRemoveLastSet) {
+            onRemoveLastSet();
+            return;
+        }
+
+        const sets = exItem.sets || [];
+        if (sets.length === 0) return;
+        const lastIndex = sets.length - 1;
+        const lastSet = sets[lastIndex];
+
+        const checkVal = (v: any) => {
+            if (v === undefined || v === null) return false;
+            const s = String(v).trim();
+            if (s === '' || s === '0') return false;
+            const n = Number(s.replace(',', '.'));
+            return isNaN(n) ? true : n !== 0;
+        };
+        const isFilled =
+            checkVal(lastSet.kg) ||
+            checkVal(lastSet.weight) ||
+            checkVal(lastSet.reps) ||
+            checkVal(lastSet.time) ||
+            checkVal(lastSet.timeInSeconds) ||
+            checkVal(lastSet.distance) ||
+            checkVal(lastSet.speed) ||
+            checkVal(lastSet.incline) ||
+            checkVal(lastSet.kcal) ||
+            (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
+            (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds)));
+
+        if (isFilled) {
+            const confirmed = await useDialogStore.getState().showConfirm(
+                "La serie contiene dei dati. Vuoi davvero rimuoverla?"
+            );
+            if (!confirmed) return;
+        }
+
+        onRemoveSet(lastIndex);
+    }, [exItem.sets, onRemoveSet, onRemoveLastSet]);
 
     const handleCardioChange = (field: 'time' | 'distance', value: string) => {
         const setId = exItem.sets[0]?.id;
@@ -235,13 +279,27 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         />
                     ))}
 
-                    <button
-                        className="btn btn-small"
-                        style={{ border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginTop: '10px', width: '100%' }}
-                        onClick={onAddSet}
-                    >
-                        + Aggiungi serie
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                        <button
+                            type="button"
+                            className="btn btn-secondary btn-small"
+                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', marginBottom: 0 }}
+                            onClick={handleRemoveLastSet}
+                            disabled={(exItem.sets || []).length === 0}
+                            aria-label="Rimuovi serie"
+                        >
+                            - Rimuovi serie
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-small"
+                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginBottom: 0 }}
+                            onClick={onAddSet}
+                            aria-label="Aggiungi serie"
+                        >
+                            + Aggiungi serie
+                        </button>
+                    </div>
                 </>
             )}
 
