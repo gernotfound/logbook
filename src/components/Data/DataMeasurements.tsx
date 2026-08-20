@@ -124,23 +124,28 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
                     Registra il tuo peso, la massa grassa e le circonferenze corporee.
                 </p>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '0 5px' }}>
-                <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0 }}>Orario rilevazione</label>
-                <input 
-                    id="measure-time" 
-                    type="time" 
-                    value={measureTime} 
-                    onChange={e => setMeasureTime(e.target.value)} 
-                    style={{
-                        width: 'auto',
-                        textAlign: 'center',
-                        margin: 0,
-                        padding: '8px 12px',
-                        minHeight: 'auto'
-                    }}
-                />
+
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 0, maxWidth: '200px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Orario rilevazione</label>
+                    <input
+                        id="measure-time"
+                        type="time"
+                        value={measureTime}
+                        onChange={e => setMeasureTime(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', paddingRight: '30px', margin: 0 }}
+                    />
+                    {measureTime && (
+                        <button
+                            type="button"
+                            onClick={() => setMeasureTime('')}
+                            style={{ position: 'absolute', right: '8px', top: 'calc(50% + 14px)', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
+                            aria-label="Cancella orario"
+                        >×</button>
+                    )}
+                </div>
             </div>
+
 
             {/* SEZIONE 1: Dati principali */}
             <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Dati principali</h3>

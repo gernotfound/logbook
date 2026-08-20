@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect, useRef } from 'react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
 import SessionSetRow from './SessionSetRow';
@@ -13,6 +13,7 @@ interface SessionExerciseCardProps {
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
     onMoveExercise?: (index: number, direction: 'up' | 'down') => void;
+    onMoveToPosition?: (fromIndex: number, toIndex: number) => void;
     onToggleHistory: () => void;
     onToggleSetup: () => void;
     onRemoveExercise: () => void;
@@ -37,7 +38,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     isHistoryOpen,
     isSetupOpen,
     openSpecialMenuId,
-    onMoveExercise,
+    onMoveExercise: _onMoveExercise,
+    onMoveToPosition,
     onToggleHistory,
     onToggleSetup,
     onRemoveExercise,
@@ -55,6 +57,20 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const exName = libDef ? libDef.name : "Esercizio rimosso";
     const exNotes = libDef ? (libDef.notes || '') : "";
     const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
+
+    const [showPositionMenu, setShowPositionMenu] = React.useState(false);
+    const positionMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!showPositionMenu) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (positionMenuRef.current && !positionMenuRef.current.contains(e.target as Node)) {
+                setShowPositionMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showPositionMenu]);
 
     const primaryMuscles = useMemo<{ id: string; name: string }[]>(() => {
         if (!libDef || !Array.isArray(libDef.muscles)) return [];
@@ -139,38 +155,33 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                 <h2 style={{ color: 'var(--primary-color)', margin: 0, fontSize: '1.15rem' }}>{exName}</h2>
                 <div style={{ display: 'flex', gap: '5px' }}>
-                    <button
-                        type="button"
-                        className="btn-small"
-                        style={{
-                            borderRadius: '8px',
-                            minWidth: '36px',
-                            minHeight: '36px',
-                            opacity: exIndex === 0 ? 0.3 : 1,
-                            cursor: exIndex === 0 ? 'not-allowed' : 'pointer'
-                        }}
-                        disabled={exIndex === 0}
-                        onClick={() => onMoveExercise?.(exIndex, 'up')}
-                        aria-label="Sposta esercizio su"
-                    >
-                        ⬆️
-                    </button>
-                    <button
-                        type="button"
-                        className="btn-small"
-                        style={{
-                            borderRadius: '8px',
-                            minWidth: '36px',
-                            minHeight: '36px',
-                            opacity: (totalExercises !== undefined && exIndex >= totalExercises - 1) ? 0.3 : 1,
-                            cursor: (totalExercises !== undefined && exIndex >= totalExercises - 1) ? 'not-allowed' : 'pointer'
-                        }}
-                        disabled={totalExercises !== undefined && exIndex >= totalExercises - 1}
-                        onClick={() => onMoveExercise?.(exIndex, 'down')}
-                        aria-label="Sposta esercizio giù"
-                    >
-                        ⬇️
-                    </button>
+                    {/* Position dropdown */}
+                    <div style={{ position: 'relative' }} ref={positionMenuRef}>
+                        <button
+                            type="button"
+                            className="btn-small"
+                            style={{ borderRadius: '8px', minWidth: '44px', minHeight: '36px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em' }}
+                            onClick={() => setShowPositionMenu(v => !v)}
+                            aria-label="Cambia posizione esercizio"
+                        >#{exIndex + 1}</button>
+                        {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
+                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
+                                {Array.from({ length: totalExercises }, (_, i) => i).map(targetIdx => (
+                                    <button
+                                        key={targetIdx}
+                                        type="button"
+                                        onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
+                                        style={{
+                                            display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                                            background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
+                                            border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
+                                            cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: '0.85rem', borderRadius: '6px'
+                                        }}
+                                    >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <button
                         type="button"
                         className="btn-small"

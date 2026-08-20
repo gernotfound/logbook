@@ -111,7 +111,12 @@ const DataView: React.FC<DataViewProps> = ({
 
             {currentSubTab === 'sleep' && (
                 <div className="data-sub-view active">
-                    <DataSleep sleepHook={sleepHook} />
+                    <DataSleep
+                        sleepHook={sleepHook}
+                        selectedDate={sleepHook.selectedDate}
+                        setSelectedDate={sleepHook.setSelectedDate}
+                        todayDateStr={Logic.getLocalDateString()}
+                    />
                 </div>
             )}
 

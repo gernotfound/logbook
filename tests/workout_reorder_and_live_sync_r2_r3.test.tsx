@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { renderWithProviders } from './setup';
@@ -350,13 +350,14 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     describe('3. SessionExerciseCard UI Controls & Dynamic Muscle Badges', () => {
         const dummyPast = [{ date: '2026-08-15', sets: [{ kg: '90', reps: '6' }], note: 'Buone sensazioni' }];
 
-        it('3.1: Up button is disabled on index 0; Down button is disabled on last index', () => {
+        it('3.1: Position dropdown renders #N label, opens on click, and calls onMoveToPosition when a target is selected', () => {
             const onMove = vi.fn();
+            const onMoveToPosition = vi.fn();
             const exItem = { id: 'se_1', exId: 'ex_bench', sets: [{ id: 's1', kg: '80', reps: '8' }], sessionNote: '' };
             const libDef = mockLibrary[0];
 
             // Render first item of 3
-            const { rerender } = render(
+            render(
                 <SessionExerciseCard
                     exItem={exItem}
                     exIndex={0}
@@ -367,6 +368,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                     isSetupOpen={false}
                     openSpecialMenuId={null}
                     onMoveExercise={onMove}
+                    onMoveToPosition={onMoveToPosition}
                     onToggleHistory={vi.fn()}
                     onToggleSetup={vi.fn()}
                     onRemoveExercise={vi.fn()}
@@ -382,47 +384,24 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 />
             );
 
-            const upBtn = screen.getByRole('button', { name: 'Sposta esercizio su' }) as HTMLButtonElement;
-            const downBtn = screen.getByRole('button', { name: 'Sposta esercizio giù' }) as HTMLButtonElement;
+            // Position dropdown button shows current index
+            const posBtn = screen.getByRole('button', { name: 'Cambia posizione esercizio' }) as HTMLButtonElement;
+            expect(posBtn).not.toBeNull();
+            expect(posBtn.textContent?.trim()).toMatch(/#\s*1/);
 
-            expect(upBtn.disabled).toBe(true);
-            expect(downBtn.disabled).toBe(false);
+            // Open dropdown
+            fireEvent.click(posBtn);
 
-            fireEvent.click(downBtn);
-            expect(onMove).toHaveBeenCalledWith(0, 'down');
+            // Should show position options for 3 exercises
+            const posOptions = screen.getAllByRole('button', { name: /posizione/i });
+            // Current position shows checkmark, other positions are clickable targets
+            expect(posOptions.length).toBeGreaterThanOrEqual(3);
 
-            // Rerender as last item (index 2 of 3)
-            rerender(
-                <SessionExerciseCard
-                    exItem={exItem}
-                    exIndex={2}
-                    totalExercises={3}
-                    libDef={libDef}
-                    pastWorkouts={dummyPast}
-                    isHistoryOpen={false}
-                    isSetupOpen={false}
-                    openSpecialMenuId={null}
-                    onMoveExercise={onMove}
-                    onToggleHistory={vi.fn()}
-                    onToggleSetup={vi.fn()}
-                    onRemoveExercise={vi.fn()}
-                    onUpdateSetupNote={vi.fn()}
-                    onUpdateSessionNote={vi.fn()}
-                    onAddSet={vi.fn()}
-                    onRemoveSet={vi.fn()}
-                    onUpdateSet={vi.fn()}
-                    onAddSpecialSet={vi.fn()}
-                    onUpdateSpecialSet={vi.fn()}
-                    onRemoveSpecialSet={vi.fn()}
-                    onToggleSpecialMenu={vi.fn()}
-                />
-            );
-
-            expect(upBtn.disabled).toBe(false);
-            expect(downBtn.disabled).toBe(true);
-
-            fireEvent.click(upBtn);
-            expect(onMove).toHaveBeenCalledWith(2, 'up');
+            // Click "2ª posizione" (index 1) to move exercise from 0 to 1
+            const targetBtn = posOptions.find(b => b.textContent?.includes('2ª posizione'));
+            expect(targetBtn).not.toBeNull();
+            fireEvent.click(targetBtn!);
+            expect(onMoveToPosition).toHaveBeenCalledWith(0, 1);
         });
 
         it('3.2: Renders dynamic primary muscle badges (cyan) and secondary muscle badges (teal) in Italian sentence case', () => {
@@ -577,9 +556,11 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(headings[0].textContent).toBe('Panca piana con bilanciere');
             expect(headings[1].textContent).toBe('Squat con bilanciere');
 
-            // Click Down on first exercise
-            const downBtns = screen.getAllByRole('button', { name: 'Sposta esercizio giù' });
-            fireEvent.click(downBtns[0]);
+            // Click position dropdown of first exercise and move to position 2
+            const posBtns = screen.getAllByRole('button', { name: 'Cambia posizione esercizio' });
+            fireEvent.click(posBtns[0]); // open dropdown for exercise #1
+            const posOption2 = screen.getAllByRole('button', { name: /2ª posizione/i })[0];
+            fireEvent.click(posOption2);
 
             // Workout state in store should now have Squat first, Bench second
             const state = useAppStore.getState();
@@ -617,9 +598,11 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(setupInput).not.toBeNull();
             expect(setupInput.defaultValue).toBe('Gomiti a 45 gradi');
 
-            // Now move index 0 Down to index 1
-            const downBtns = screen.getAllByRole('button', { name: 'Sposta esercizio giù' });
-            fireEvent.click(downBtns[0]);
+            // Now move index 0 to position 2 via dropdown
+            const posBtns2 = screen.getAllByRole('button', { name: 'Cambia posizione esercizio' });
+            fireEvent.click(posBtns2[0]); // open dropdown for exercise #1
+            const posOption2b = screen.getAllByRole('button', { name: /2ª posizione/i })[0];
+            fireEvent.click(posOption2b);
 
             // After move, Setup panel should remain open on ex_bench (now at index 1)
             const setupInputAfter = container.querySelector('#setup-ex_bench') as HTMLInputElement;
