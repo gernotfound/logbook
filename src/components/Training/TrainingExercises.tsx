@@ -262,7 +262,9 @@ const TrainingExercises = () => {
                                 </div>
                                 <div className="flex items-center gap-10">
                                     <button className="btn-icon text-primary" aria-label="Modifica esercizio" onClick={(e) => { e.stopPropagation(); handleEditClick(ex); setExpandedExId(ex.id); }}>✏️</button>
-                                    <button className="btn-icon text-danger" aria-label="Elimina esercizio" onClick={(e) => handleDelete(ex.id, e)}>🗑️</button>
+                                    {!ex.isDefault && (
+                                        <button className="btn-icon text-danger" aria-label="Elimina esercizio" onClick={(e) => handleDelete(ex.id, e)}>🗑️</button>
+                                    )}
                                 </div>
                             </div>
                             {expandedExId === ex.id && (

@@ -136,6 +136,7 @@ export const ExerciseSchema = z.object({
     secondaryMuscles: z.array(safeString('')).optional().catch([]).default([]),
     sets: z.array(ExerciseSetSchema).catch([]).default([]),
     trackingType: z.enum(['weight_reps', 'time', 'cardio']).optional().catch(undefined),
+    isDefault: safeOptionalBoolean(),
 }).passthrough().catch({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] }).default({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] });
 
 export const RoutineExerciseSchema = z.object({

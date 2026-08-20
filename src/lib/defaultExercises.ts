@@ -3,1470 +3,1472 @@
     "id": "panca-piana-bilanciere",
     "name": "Panca Piana Bilanciere",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "panca-inclinata-bilanciere",
     "name": "Panca Inclinata Bilanciere",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "panca-declinata-bilanciere",
     "name": "Panca Declinata Bilanciere",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "spinte-manubri-panca-piana",
     "name": "Spinte Manubri Panca Piana",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "spinte-manubri-panca-inclinata",
     "name": "Spinte Manubri Panca Inclinata",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "spinte-manubri-panca-declinata",
     "name": "Spinte Manubri Panca Declinata",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "croci-panca-piana",
     "name": "Croci Panca Piana",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "croci-panca-inclinata",
     "name": "Croci Panca Inclinata",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "croci-cavi",
     "name": "Croci ai Cavi",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "chest-press",
     "name": "Chest Press",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "peck-deck",
     "name": "Peck Deck (Pectoral Machine)",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "dip-parallele",
     "name": "Dip alle Parallele",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle"
+      "triceps",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "piegamenti-sulle-braccia",
     "name": "Piegamenti sulle Braccia (Push-up)",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Spalle",
-      "Addome"
+      "triceps",
+      "shoulders",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "piegamenti-diamante",
     "name": "Piegamenti a Diamante",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [
-      "Petto",
-      "Spalle",
-      "Addome"
+      "chest",
+      "shoulders",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pullover-manubrio",
     "name": "Pullover con Manubrio",
     "muscles": [
-      "Petto"
+      "chest"
     ],
     "secondaryMuscles": [
-      "Schiena"
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "trazioni-sbarra",
     "name": "Trazioni alla Sbarra (Pull-up)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti",
-      "Avambracci"
+      "biceps",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "trazioni-sbarra-supine",
     "name": "Trazioni alla Sbarra Supine (Chin-up)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti",
-      "Avambracci"
+      "biceps",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "trazioni-presa-stretta",
     "name": "Trazioni a Presa Stretta (Close-Grip)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti",
-      "Avambracci"
+      "biceps",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "lat-machine-avanti",
     "name": "Lat Machine Avanti",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "lat-machine-inversa",
     "name": "Lat Machine Presa Inversa",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pulley-basso",
     "name": "Pulley Basso",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "rematore-bilanciere",
     "name": "Rematore con Bilanciere",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti",
-      "Addome"
+      "biceps",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "rematore-manubrio",
     "name": "Rematore con Manubrio",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "rematore-macchina",
     "name": "Rematore alla Macchina (Seated Row)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "t-bar-row",
     "name": "T-Bar Row",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "vertical-traction",
     "name": "Vertical Traction",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti"
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "face-pull",
     "name": "Face Pull",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pull-down-braccia-tese",
     "name": "Pull Down a Braccia Tese",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Addome"
+      "triceps",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "rematore-pendlay",
     "name": "Rematore Pendlay",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Bicipiti",
-      "Addome"
+      "biceps",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "stacchi-da-terra",
     "name": "Stacchi da Terra (Deadlift)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Femorali",
-      "Glutei",
-      "Quadricipiti",
-      "Avambracci"
+      "hamstrings",
+      "glutes",
+      "quads",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "rack-pull",
     "name": "Rack Pull",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Femorali",
-      "Glutei",
-      "Avambracci"
+      "hamstrings",
+      "glutes",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "iperestensioni",
     "name": "Iperestensioni (Back Extension)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Femorali",
-      "Glutei"
+      "hamstrings",
+      "glutes"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "scrollate-bilanciere",
     "name": "Scrollate con Bilanciere (Shrugs)",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Spalle",
-      "Avambracci"
+      "shoulders",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "scrollate-manubri",
     "name": "Scrollate con Manubri",
     "muscles": [
-      "Schiena"
+      "back"
     ],
     "secondaryMuscles": [
-      "Spalle",
-      "Avambracci"
+      "shoulders",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "military-press",
     "name": "Military Press",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Addome"
+      "triceps",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "push-press",
     "name": "Push Press",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Tricipiti",
-      "Quadricipiti",
-      "Addome"
+      "triceps",
+      "quads",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "lento-avanti-manubri",
     "name": "Lento Avanti con Manubri",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Tricipiti"
+      "triceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "shoulder-press-macchina",
     "name": "Shoulder Press Macchina",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Tricipiti"
+      "triceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "alzate-laterali-manubri",
     "name": "Alzate Laterali con Manubri",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "alzate-laterali-cavi",
     "name": "Alzate Laterali ai Cavi",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "alzate-laterali-macchina",
     "name": "Alzate Laterali alla Macchina",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "alzate-frontali-manubri",
     "name": "Alzate Frontali con Manubri",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "alzate-frontali-bilanciere",
     "name": "Alzate Frontali con Bilanciere",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "alzate-posteriori-manubri",
     "name": "Alzate a 90Â° con Manubri",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Schiena"
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "reverse-pec-deck",
     "name": "Reverse Pec Deck",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Schiena"
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "tirate-mento-bilanciere",
     "name": "Tirate al Mento con Bilanciere",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Bicipiti"
+      "back",
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "tirate-mento-cavi",
     "name": "Tirate al Mento ai Cavi",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Bicipiti"
+      "back",
+      "biceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "arnold-press",
     "name": "Arnold Press",
     "muscles": [
-      "Spalle"
+      "shoulders"
     ],
     "secondaryMuscles": [
-      "Tricipiti"
+      "triceps"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "curl-bilanciere",
     "name": "Curl con Bilanciere",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [
-      "Avambracci"
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "curl-manubri-alternati",
     "name": "Curl con Manubri Alternati",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [
-      "Avambracci"
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "curl-martello",
     "name": "Curl a Martello (Hammer Curl)",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [
-      "Avambracci"
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "zottman-curl",
     "name": "Zottman Curl",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [
-      "Avambracci"
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "drag-curl",
     "name": "Drag Curl con Bilanciere",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "panca-scott-bilanciere",
     "name": "Panca Scott con Bilanciere EZ",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [
-      "Avambracci"
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "curl-concentrato",
     "name": "Curl Concentrato",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "curl-cavi-basso",
     "name": "Curl ai Cavi Basso",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [
-      "Avambracci"
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "spider-curl",
     "name": "Spider Curl",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "biceps-machine",
     "name": "Biceps Machine",
     "muscles": [
-      "Bicipiti"
+      "biceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pushdown-cavi",
     "name": "Pushdown ai Cavi",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pushdown-cavi-corda",
     "name": "Pushdown ai Cavi con Corda",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "french-press-bilanciere",
     "name": "French Press con Bilanciere EZ",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "skullcrusher-manubri",
     "name": "Skullcrusher con Manubri",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "tate-press",
     "name": "Tate Press",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "estensioni-dietro-nuca-manubrio",
     "name": "Estensioni Dietro Nuca con Manubrio",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "kickback-manubrio",
     "name": "Kickback con Manubrio",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "dip-panca",
     "name": "Dip su Panca",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [
-      "Petto",
-      "Spalle"
+      "chest",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "panca-stretta",
     "name": "Panca Piana a Presa Stretta",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [
-      "Petto",
-      "Spalle"
+      "chest",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "estensioni-sopra-testa-cavi",
     "name": "Estensioni Sopra la Testa ai Cavi",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "triceps-machine",
     "name": "Triceps Machine",
     "muscles": [
-      "Tricipiti"
+      "triceps"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "squat-bilanciere",
     "name": "Squat con Bilanciere",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali",
-      "Addome"
+      "glutes",
+      "hamstrings",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "front-squat",
     "name": "Front Squat",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Addome"
+      "glutes",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "zercher-squat",
     "name": "Zercher Squat",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Addome",
-      "Schiena"
+      "glutes",
+      "abs",
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pressa-45",
     "name": "Pressa a 45Â°",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali"
+      "glutes",
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "leg-extension",
     "name": "Leg Extension",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "hack-squat",
     "name": "Hack Squat",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali"
+      "glutes",
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "affondi-manubri",
     "name": "Affondi con Manubri",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali"
+      "glutes",
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "affondi-bilanciere",
     "name": "Affondi con Bilanciere",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali"
+      "glutes",
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "affondi-bulgari",
     "name": "Affondi Bulgari",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali"
+      "glutes",
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "goblet-squat",
     "name": "Goblet Squat",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Addome"
+      "glutes",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "sissy-squat",
     "name": "Sissy Squat",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "step-up-manubri",
     "name": "Step-Up con Manubri",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Femorali"
+      "glutes",
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "pistol-squat",
     "name": "Pistol Squat",
     "muscles": [
-      "Quadricipiti"
+      "quads"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Addome"
+      "glutes",
+      "abs"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "stacchi-gambe-tese",
     "name": "Stacchi a Gambe Tese (RDL)",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Schiena"
+      "glutes",
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "stacchi-romeni-manubri",
     "name": "Stacchi Romeni con Manubri",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Schiena"
+      "glutes",
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "leg-curl-disteso",
     "name": "Leg Curl Disteso",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Polpacci"
+      "calves"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "leg-curl-seduto",
     "name": "Leg Curl Seduto",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Polpacci"
+      "calves"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "leg-curl-singolo",
     "name": "Leg Curl Singolo in Piedi",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Polpacci"
+      "calves"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "nordic-hamstring-curl",
     "name": "Nordic Hamstring Curl",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Polpacci"
+      "glutes",
+      "calves"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "good-morning",
     "name": "Good Morning",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Schiena"
+      "glutes",
+      "back"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "glute-ham-raise",
     "name": "Glute Ham Raise",
     "muscles": [
-      "Femorali"
+      "hamstrings"
     ],
     "secondaryMuscles": [
-      "Glutei",
-      "Polpacci"
+      "glutes",
+      "calves"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "calf-raise-piedi",
     "name": "Calf Raise in Piedi",
     "muscles": [
-      "Polpacci"
+      "calves"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "calf-raise-seduto",
     "name": "Calf Raise Seduto",
     "muscles": [
-      "Polpacci"
+      "calves"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "calf-raise-pressa",
     "name": "Calf Raise alla Pressa",
     "muscles": [
-      "Polpacci"
+      "calves"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "calf-raise-manubri",
     "name": "Calf Raise con Manubri",
     "muscles": [
-      "Polpacci"
+      "calves"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "donkey-calf-raise",
     "name": "Donkey Calf Raise",
     "muscles": [
-      "Polpacci"
+      "calves"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "hip-thrust-bilanciere",
     "name": "Hip Thrust con Bilanciere",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali",
-      "Quadricipiti"
+      "hamstrings",
+      "quads"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "hip-thrust-macchina",
     "name": "Hip Thrust alla Macchina",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali",
-      "Quadricipiti"
+      "hamstrings",
+      "quads"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "glute-bridge",
     "name": "Glute Bridge",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali"
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "kettlebell-swing",
     "name": "Kettlebell Swing",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali",
-      "Schiena",
-      "Cardio"
+      "hamstrings",
+      "back",
+      "cardio"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "cable-pull-through",
     "name": "Pull-through ai Cavi",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali"
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "slanci-cavi",
     "name": "Slanci ai Cavi",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali"
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "abductor-machine",
     "name": "Abductor Machine",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "kickback-macchina",
     "name": "Kickback alla Macchina",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali"
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "ponte-singolo",
     "name": "Ponte a Gamba Singola",
     "muscles": [
-      "Glutei"
+      "glutes"
     ],
     "secondaryMuscles": [
-      "Femorali"
+      "hamstrings"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "crunch",
     "name": "Crunch",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "crunch-inverso",
     "name": "Crunch Inverso",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "bicycle-crunch",
     "name": "Bicycle Crunch",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "plank",
     "name": "Plank",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [
-      "Spalle",
-      "Glutei"
+      "shoulders",
+      "glutes"
     ],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "side-plank",
     "name": "Side Plank",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "ab-roller",
     "name": "Ab Roller",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Spalle"
+      "back",
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "leg-raise-sospensione",
     "name": "Leg Raise in Sospensione",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "hanging-knee-raise",
     "name": "Hanging Knee Raise",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "toes-to-bar",
     "name": "Toes to Bar",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Avambracci"
+      "back",
+      "forearms"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "l-sit",
     "name": "L-Sit",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [
-      "Spalle",
-      "Tricipiti",
-      "Quadricipiti"
+      "shoulders",
+      "triceps",
+      "quads"
     ],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "russian-twist",
     "name": "Russian Twist",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "sit-up",
     "name": "Sit-Up",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "cable-crunch",
     "name": "Cable Crunch",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "abdominal-machine",
     "name": "Abdominal Machine",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "woodchopper-cavi",
     "name": "Woodchopper ai Cavi",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [
-      "Spalle"
+      "shoulders"
     ],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "v-up",
     "name": "V-Up",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "hollow-body-hold",
     "name": "Hollow Body Hold",
     "muscles": [
-      "Addome"
+      "abs"
     ],
     "secondaryMuscles": [],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "wrist-curl-bilanciere",
     "name": "Wrist Curl con Bilanciere",
     "muscles": [
-      "Avambracci"
+      "forearms"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "reverse-wrist-curl",
     "name": "Reverse Wrist Curl",
     "muscles": [
-      "Avambracci"
+      "forearms"
     ],
     "secondaryMuscles": [],
-    "trackingType": "weight_reps"
+    "trackingType": "weight_reps", "isDefault": true
   },
   {
     "id": "farmers-walk",
     "name": "Farmer's Walk",
     "muscles": [
-      "Avambracci"
+      "forearms"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Spalle",
-      "Quadricipiti"
+      "back",
+      "shoulders",
+      "quads"
     ],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "trattenuta-dischi",
     "name": "Trattenuta Dischi (Pinch Grip)",
     "muscles": [
-      "Avambracci"
+      "forearms"
     ],
     "secondaryMuscles": [],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "tapis-roulant",
     "name": "Tapis Roulant",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Quadricipiti",
-      "Polpacci"
+      "quads",
+      "calves"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "cyclette",
     "name": "Cyclette",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Quadricipiti",
-      "Polpacci"
+      "quads",
+      "calves"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "vogatore",
     "name": "Vogatore",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Quadricipiti",
-      "Bicipiti"
+      "back",
+      "quads",
+      "biceps"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "ellittica",
     "name": "Ellittica",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Quadricipiti",
-      "Spalle",
-      "Polpacci"
+      "quads",
+      "shoulders",
+      "calves"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "stairmaster",
     "name": "Stairmaster (Step)",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Quadricipiti",
-      "Glutei",
-      "Polpacci"
+      "quads",
+      "glutes",
+      "calves"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "air-bike",
     "name": "Air Bike (Assault Bike)",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Quadricipiti",
-      "Spalle",
-      "Schiena"
+      "quads",
+      "shoulders",
+      "back"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "skierg",
     "name": "SkiErg",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Schiena",
-      "Tricipiti",
-      "Addome"
+      "back",
+      "triceps",
+      "abs"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   },
   {
     "id": "battle-ropes",
     "name": "Battle Ropes",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Spalle",
-      "Schiena",
-      "Addome"
+      "shoulders",
+      "back",
+      "abs"
     ],
-    "trackingType": "time"
+    "trackingType": "time", "isDefault": true
   },
   {
     "id": "salto-corda",
     "name": "Salto con la Corda",
     "muscles": [
-      "Cardio"
+      "cardio"
     ],
     "secondaryMuscles": [
-      "Polpacci"
+      "calves"
     ],
-    "trackingType": "cardio"
+    "trackingType": "cardio", "isDefault": true
   }
 ];
+
+
