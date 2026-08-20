@@ -44,7 +44,8 @@ export const DB = {
                 trainingCycles: [],
                 activeCycleId: null,
                 nutritionPlanning: null,
-                supplements: []
+                supplements: [],
+                activePains: []
             };
             const docRef = doc(db, "users", user.uid);
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
@@ -71,6 +72,7 @@ export const DB = {
                 if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
                 if(data.supplements) state.supplements = data.supplements;
                 if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
+                if(data.activePains) state.activePains = data.activePains;
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
                 // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
                 // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
@@ -82,6 +84,7 @@ export const DB = {
                 state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
                 state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
                 state.supplements = DomainParsers.parseSupplements(state.supplements);
+                state.activePains = DomainParsers.parseActivePains(state.activePains);
                 if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
                 
@@ -136,6 +139,7 @@ export const DB = {
             state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
             state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
             state.supplements = DomainParsers.parseSupplements(state.supplements);
+            state.activePains = DomainParsers.parseActivePains(state.activePains);
             if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
             
@@ -161,7 +165,8 @@ export const DB = {
                 trainingCycles: [],
                 activeCycleId: null,
                 nutritionPlanning: null,
-                supplements: []
+                supplements: [],
+                activePains: []
             };
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
@@ -179,7 +184,8 @@ export const DB = {
                 !deepEqual(state.trainingCycles, oldState.trainingCycles) ||
                 !deepEqual(state.activeCycleId, oldState.activeCycleId) ||
                 !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning) ||
-                !deepEqual(state.supplements, oldState.supplements)) {
+                !deepEqual(state.supplements, oldState.supplements) ||
+                !deepEqual(state.activePains, oldState.activePains)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 const userDocData = {
@@ -191,7 +197,8 @@ export const DB = {
                     trainingCycles: state.trainingCycles || [],
                     activeCycleId: state.activeCycleId !== undefined ? state.activeCycleId : null,
                     nutritionPlanning: state.nutritionPlanning || null,
-                    supplements: state.supplements || []
+                    supplements: state.supplements || [],
+                    activePains: state.activePains || []
                 };
                 const cleanUserDocData = removeUndefinedValues(userDocData);
                 checkDocSize(cleanUserDocData, "User Profile");

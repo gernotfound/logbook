@@ -46,7 +46,15 @@ import {
     searchRoutines,
     filterItems,
     searchExerciseLibrary,
-    normalizeStem
+    normalizeStem,
+    VolumeExerciseRef,
+    getLatestUserWeight,
+    calculateEffectiveSetWeight,
+    calculateSetVolume,
+    calculateWorkoutVolume,
+    getMuscleName,
+    searchMuscles,
+    autoHealPains
 } from './calc/workout';
 import {
     calculateCycleVolume,
@@ -70,7 +78,8 @@ export type {
     ScheduledCycleSession,
     WeeklyCycleSchedule,
     CycleScheduleResult,
-    NextScheduledRoutineResult
+    NextScheduledRoutineResult,
+    VolumeExerciseRef
 };
 
 // Re-export all functions
@@ -116,11 +125,18 @@ export {
     filterItems,
     searchExerciseLibrary,
     normalizeStem,
+    getLatestUserWeight,
+    calculateEffectiveSetWeight,
+    calculateSetVolume,
+    calculateWorkoutVolume,
     calculateCycleVolume,
     getDetailedMuscleCategory,
     calculateCycleTimeline,
     calculateCycleSchedule,
-    getNextScheduledRoutine
+    getNextScheduledRoutine,
+    getMuscleName,
+    searchMuscles,
+    autoHealPains
 };
 
 // Aggregated Logic object for full backward compatibility
@@ -178,12 +194,20 @@ export const Logic = {
     filterItems,
     searchExerciseLibrary,
     normalizeStem,
+    getLatestUserWeight,
+    calculateEffectiveSetWeight,
+    calculateSetVolume,
+    calculateWorkoutVolume,
     calculateCycleVolume,
     getDetailedMuscleCategory,
     calculateCycleTimeline,
     calculateCycleSchedule,
-    getNextScheduledRoutine
+    getNextScheduledRoutine,
+    getMuscleName,
+    searchMuscles,
+    autoHealPains
 };
+
 
 
 

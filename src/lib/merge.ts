@@ -192,6 +192,7 @@ export function hasUserData(data?: UserData | null): boolean {
     if (data.trainingCycles && data.trainingCycles.length > 0) return true;
     if (data.supplements && data.supplements.length > 0) return true;
     if (data.nutrition && Object.keys(data.nutrition).length > 0) return true;
+    if (data.activePains && data.activePains.length > 0) return true;
     if (data.activeWorkout && data.activeWorkout.exercises && data.activeWorkout.exercises.length > 0) return true;
     if (data.profile && Object.values(data.profile).some(v => v !== undefined && v !== null && v !== '')) return true;
     return false;
@@ -230,6 +231,10 @@ export function mergeUserData(
             ? guest.activeCycleId
             : (cloud.activeCycleId || null),
         supplements: mergeArrayById(cloud.supplements, guest.supplements),
+        activePains: Array.from(new Set([
+            ...(cloud.activePains || []),
+            ...(guest.activePains || [])
+        ])),
     };
 
     return UserDataSchema.parse(rawMerged) as unknown as UserData;

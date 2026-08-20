@@ -62,6 +62,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         selectedRoutine, setSelectedRoutine,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
         manualDuration, setManualDuration,
+        pains, setPains, togglePain,
         startWorkout, endWorkout, deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
         addExtraExercise, moveExercise, removeActiveExercise,
@@ -460,6 +461,9 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 setPump={setPump}
                 fatigue={fatigue}
                 setFatigue={setFatigue}
+                pains={pains}
+                onTogglePain={togglePain}
+                onSetPains={setPains}
             />
 
             {activeWorkout.isEditingHistory ? (

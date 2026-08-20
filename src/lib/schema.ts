@@ -153,6 +153,8 @@ export const ExerciseSchema = z.object({
     sets: z.array(ExerciseSetSchema).catch([]).default([]),
     trackingType: z.enum(['weight_reps', 'time', 'cardio']).optional().catch(undefined),
     isDefault: safeOptionalBoolean(),
+    isBodyweight: safeOptionalBoolean(),
+    equipmentWeight: safeOptionalNumber(),
 }).passthrough().catch({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] }).default({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] });
 
 export const RoutineExerciseSchema = z.object({
@@ -223,7 +225,8 @@ export const WorkoutSessionSchema = z.object({
     exercises: z.array(SessionExerciseSchema).catch([]).default([]),
     isEditingHistory: safeOptionalBoolean(),
     originalHistoryId: safeOptionalString(),
-}).passthrough().catch({ exercises: [] }).default({ exercises: [] });
+    pains: z.array(safeString('')).optional().catch([]).default([]),
+}).passthrough().catch({ exercises: [], pains: [] }).default({ exercises: [], pains: [] });
 
 export const LoggedMealItemSchema = z.object({
     id: safeString(''),
@@ -350,7 +353,8 @@ export const defaultUserDataFallback = {
     },
     trainingCycles: [],
     activeCycleId: null,
-    supplements: []
+    supplements: [],
+    activePains: []
 };
 
 export const UserDataSchema = z.object({
@@ -365,6 +369,7 @@ export const UserDataSchema = z.object({
     trainingCycles: z.array(TrainingCycleSchema).optional().catch([]).default([]),
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
     supplements: z.array(SupplementSchema).optional().catch([]).default([]),
+    activePains: z.array(safeString('')).optional().catch([]).default([]),
 }).passthrough().catch(defaultUserDataFallback).default(defaultUserDataFallback);
 
 export const DomainParsers = {
@@ -438,6 +443,10 @@ export const DomainParsers = {
             else console.warn('[DomainParsers] parseSupplements: elemento scartato:', r.error.issues[0]?.message);
             return acc;
         }, []);
+    },
+    parseActivePains: (data: unknown) => {
+        const arr = Array.isArray(data) ? data : [];
+        return arr.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
     },
     parseNutrition: (data: unknown) => {
         if (!data || typeof data !== 'object' || Array.isArray(data)) return {};

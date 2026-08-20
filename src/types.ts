@@ -56,6 +56,8 @@ export interface Exercise {
     sets: ExerciseSet[];
     trackingType?: 'weight_reps' | 'time' | 'cardio';
     isDefault?: boolean;
+    isBodyweight?: boolean;
+    equipmentWeight?: number;
 }
 
 export interface RoutineExercise {
@@ -114,6 +116,7 @@ export interface WorkoutSession {
     exercises: SessionExercise[];
     isEditingHistory?: boolean;
     originalHistoryId?: string;
+    pains?: string[];
 }
 
 export interface LoggedMealItem {
@@ -234,6 +237,7 @@ export interface UserData {
     trainingCycles?: TrainingCycle[];
     activeCycleId?: string | null;
     supplements?: Supplement[];
+    activePains?: string[];
 }
 
 declare global {

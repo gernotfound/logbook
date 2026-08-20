@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
@@ -88,19 +88,56 @@ export type HomeViewState =
         weightStats: any;
         muscleColors: any;
         volumeChartData: any;
+        activePains: string[];
+        painColors: Record<string, string>;
+        toggleActivePain: (muscleId: string) => void;
     };
 
 const EMPTY_HISTORY: any[] = [];
 const EMPTY_NUTRITION: Record<string, any> = {};
 const EMPTY_LIBRARY: any[] = [];
+const EMPTY_PAINS: string[] = [];
 
 export function useHomeView(): HomeViewState {
     const hasUserData = useAppStore(state => !!state.userData);
     const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
+    const activePains = useAppStore(state => state.userData?.activePains || EMPTY_PAINS);
+    const saveUserData = useAppStore(state => state.saveUserData);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const profile = useAppStore(state => state.userData?.profile);
+
+    const painColors = useMemo(() => {
+        const colors: Record<string, string> = {};
+        const DANGER_COLOR = '#ef4444';
+        (activePains || []).forEach(mId => {
+            if (!mId || typeof mId !== 'string') return;
+            colors[mId] = DANGER_COLOR;
+            const atomicPaths = (Logic.GROUP_MAP as any)[mId];
+            if (Array.isArray(atomicPaths)) {
+                atomicPaths.forEach((path: string) => {
+                    colors[path] = DANGER_COLOR;
+                });
+            }
+        });
+        return colors;
+    }, [activePains]);
+
+    const toggleActivePain = useCallback((muscleId: string) => {
+        if (!muscleId || typeof muscleId !== 'string') return;
+        saveUserData(prev => {
+            if (!prev) return prev;
+            const currentPains = Array.isArray(prev.activePains) ? prev.activePains : [];
+            const nextPains = currentPains.includes(muscleId)
+                ? currentPains.filter(p => p !== muscleId)
+                : [...currentPains, muscleId];
+            return {
+                ...prev,
+                activePains: nextPains
+            };
+        });
+    }, [saveUserData]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
     const streak = useMemo(() => calcStreak(history), [history]);
@@ -392,6 +429,7 @@ export function useHomeView(): HomeViewState {
         bf, streak, totalWorkouts,
         tdeeCalc, recentDates, chartData,
         weightPeriod, setWeightPeriod, weightStats,
-        muscleColors, volumeChartData
+        muscleColors, volumeChartData,
+        activePains, painColors, toggleActivePain
     };
 }

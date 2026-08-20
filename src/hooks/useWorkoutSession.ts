@@ -30,6 +30,7 @@ export function useWorkoutSession() {
     const fatigue = activeWorkout?.fatigueRating !== undefined && activeWorkout.fatigueRating !== null ? activeWorkout.fatigueRating.toString() : '';
     const water = activeWorkout?.waterLiters !== undefined && activeWorkout.waterLiters !== null ? activeWorkout.waterLiters.toString() : '';
     const manualDuration = activeWorkout ? Logic.normalizeDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00:00') : '00:00:00';
+    const pains = (activeWorkout?.pains && Array.isArray(activeWorkout.pains)) ? activeWorkout.pains : [];
 
     const setMood = useCallback((val: string) => {
         setLocalWorkout(prev => prev ? { ...prev, moodRating: val ? parseInt(val) : null } : null);
@@ -49,6 +50,22 @@ export function useWorkoutSession() {
 
     const setManualDuration = useCallback((val: string) => {
         setLocalWorkout(prev => prev ? { ...prev, manualDurationStr: val } : null);
+    }, [setLocalWorkout]);
+
+    const setPains = useCallback((newPains: string[]) => {
+        setLocalWorkout(prev => prev ? { ...prev, pains: newPains } : null);
+    }, [setLocalWorkout]);
+
+    const togglePain = useCallback((muscleId: string) => {
+        if (!muscleId || typeof muscleId !== 'string') return;
+        setLocalWorkout(prev => {
+            if (!prev) return null;
+            const currentPains = Array.isArray(prev.pains) ? prev.pains : [];
+            const nextPains = currentPains.includes(muscleId)
+                ? currentPains.filter(p => p !== muscleId)
+                : [...currentPains, muscleId];
+            return { ...prev, pains: nextPains };
+        });
     }, [setLocalWorkout]);
 
     // Sub-hook per la manipolazione granulare delle serie ed esercizi
@@ -205,6 +222,7 @@ export function useWorkoutSession() {
             pumpRating: valRes.pump,
             fatigueRating: valRes.fatigue,
             waterLiters: water ? parseFloat(water) : 0,
+            pains: Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [],
             date: currentWorkout.date || Logic.getLocalDateString()
         };
 
@@ -251,6 +269,8 @@ export function useWorkoutSession() {
         const diff = Math.max(0, Math.floor((endTime - startTime) / 1000));
         const durationStr = Logic.formatDuration(diff);
 
+        const sessionPains = Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [];
+
         const finishedWorkout: WorkoutSession = {
             ...currentWorkout,
             globalEndTime: endTime,
@@ -259,6 +279,7 @@ export function useWorkoutSession() {
             pumpRating: valRes.pump,
             fatigueRating: valRes.fatigue,
             waterLiters: water ? parseFloat(water) : 0,
+            pains: sessionPains,
             date: currentWorkout.date || Logic.getLocalDateString()
         };
 
@@ -268,7 +289,20 @@ export function useWorkoutSession() {
         try {
             await saveUserData((prev) => {
                 if (!prev) return prev;
-                return { ...prev, history: [finishedWorkout, ...(prev.history || [])], activeWorkout: null };
+                const currentActivePains = prev.activePains || [];
+                const finalActivePains = Logic.autoHealPains(
+                    currentActivePains,
+                    finishedWorkout.exercises || [],
+                    prev.library || [],
+                    sessionPains
+                );
+
+                return {
+                    ...prev,
+                    history: [finishedWorkout, ...(prev.history || [])],
+                    activeWorkout: null,
+                    activePains: finalActivePains
+                };
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
@@ -315,6 +349,7 @@ export function useWorkoutSession() {
         fatigue, setFatigue,
         water, setWater,
         manualDuration, setManualDuration,
+        pains, setPains, togglePain,
         startWorkout,
         endWorkout,
         deleteWorkout,
