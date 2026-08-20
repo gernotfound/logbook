@@ -255,6 +255,36 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             expect(day.measurementTime).toBe('07:30'); // guest
             expect(day.isDayOn).toBe(false); // guest
         });
+
+        it('merges sleep metrics (sleepHours, sleepDeep, sleepLight, sleepRem, sleepAwake) deterministically across matching dates', () => {
+            const cloudDay = {
+                date: '2026-08-20',
+                kcal: 2000,
+                carbs: 200,
+                pro: 150,
+                fat: 50,
+                sleepHours: '07:00',
+                sleepDeep: '01:30',
+                sleepAwake: '00:20'
+            };
+            const guestDay = {
+                date: '2026-08-20',
+                sleepHours: '08:30', // guest overwrites cloud
+                sleepLight: '04:30', // guest adds new phase
+                sleepRem: '01:30',   // guest adds new phase
+                sleepAwake: ''       // guest empty string, should preserve cloud
+            };
+
+            const merged = mergeNutrition({ '2026-08-20': cloudDay as any }, { '2026-08-20': guestDay as any });
+            const day = merged['2026-08-20'];
+
+            expect(day).toBeDefined();
+            expect(day.sleepHours).toBe('08:30'); // guest priority
+            expect(day.sleepDeep).toBe('01:30');  // cloud preserved
+            expect(day.sleepLight).toBe('04:30'); // guest added
+            expect(day.sleepRem).toBe('01:30');   // guest added
+            expect(day.sleepAwake).toBe('00:20'); // cloud preserved because guest was empty string
+        });
     });
 
     describe('mergeUserData full pipeline', () => {

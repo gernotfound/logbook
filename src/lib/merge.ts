@@ -168,6 +168,11 @@ export function mergeNutrition(
                 isDayOn: guestDay.isDayOn !== undefined ? guestDay.isDayOn : cloudDay.isDayOn,
                 meals: mergedMeals,
                 supplementsIntake: mergedSupplementsIntake,
+                sleepHours: pickVal(guestDay.sleepHours, cloudDay.sleepHours),
+                sleepDeep: pickVal(guestDay.sleepDeep, cloudDay.sleepDeep),
+                sleepLight: pickVal(guestDay.sleepLight, cloudDay.sleepLight),
+                sleepRem: pickVal(guestDay.sleepRem, cloudDay.sleepRem),
+                sleepAwake: pickVal(guestDay.sleepAwake, cloudDay.sleepAwake),
             };
         }
     }

@@ -1,4 +1,5 @@
 import { useDialogStore } from '../store/useDialogStore';
+import { Logic } from './logic';
 
 export const Exporter = {
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
@@ -28,15 +29,13 @@ export const Exporter = {
                             const distance = set.distance !== undefined ? set.distance : "";
                             const speed = set.speed !== undefined ? set.speed : "";
                             const incline = set.incline !== undefined ? set.incline : "";
-                            const setKcal = set.kcal !== undefined ? set.kcal : "";
-                            
+                            const kcal = set.kcal !== undefined ? set.kcal : "";
                             const setPrefix = `${dateStr},${routineName},${exName}`;
-                            if (reps || time || kg || distance) {
-                                workoutCsv += `${setPrefix},${idx + 1},${reps},${time},${kg},${distance},${speed},${incline},${setKcal},${globalMetrics}\n`;
-                            }
-
-                            // Serie speciali: Dropsets
-                            if (Array.isArray(set.dropsets)) {
+                            
+                            workoutCsv += `${setPrefix},${idx + 1},${reps},${time},${kg},${distance},${speed},${incline},${kcal},${globalMetrics}\n`;
+                            
+                            // Gestione Dropset nel CSV
+                            if (set.dropsets && set.dropsets.length > 0) {
                                 set.dropsets.forEach((ds: any, dsIdx: number) => {
                                     const dsKg = ds.kg !== undefined ? ds.kg : "";
                                     const dsReps = ds.reps !== undefined ? ds.reps : "";
@@ -44,9 +43,9 @@ export const Exporter = {
                                     workoutCsv += `${setPrefix},"${label}",${dsReps},,${dsKg},,,,,${globalMetrics}\n`;
                                 });
                             }
-
-                            // Serie speciali: Isometrie
-                            if (Array.isArray(set.isometrics)) {
+                            
+                            // Gestione Isometrie nel CSV
+                            if (set.isometrics && set.isometrics.length > 0) {
                                 set.isometrics.forEach((iso: any, isoIdx: number) => {
                                     const isoKg = iso.kg !== undefined ? iso.kg : "";
                                     const isoTime = iso.time ? `${iso.time}s` : "";
@@ -60,7 +59,7 @@ export const Exporter = {
             }
         });
         
-        let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Ore Sonno,Sonno Profondo (h),Sonno Leggero (h),Sonno REM (h),Tempo Sveglio (h),Note\n";
+        let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Ore sonno,Sonno profondo,Sonno leggero,Sonno REM,Tempo sveglio,Note\n";
         const nutritionDates = Object.keys(nutrition).sort();
         nutritionDates.forEach(date => {
             const n = nutrition[date];
@@ -69,7 +68,12 @@ export const Exporter = {
                 // Rimuove newlines per non rompere il formato CSV, e escape di virgolette
                 safeNotes = `"${n.notes.replace(/(\r\n|\n|\r)/gm, " ").replace(/"/g, '""')}"`;
             }
-            nutritionCsv += `${date},${n.weight || ''},${n.kcal || ''},${n.carbs || ''},${n.pro || ''},${n.fat || ''},${n.bf || ''},${n.neck || ''},${n.chest || ''},${n.shoulders || ''},${n.biceps || ''},${n.waist || ''},${n.hips || n.hip || ''},${n.thighs || ''},${n.calves || ''},${n.sleepHours || ''},${n.sleepDeep || ''},${n.sleepLight || ''},${n.sleepRem || ''},${n.sleepAwake || ''},${safeNotes}\n`;
+            const sHours = Logic.formatSleepTime(n.sleepHours);
+            const sDeep = Logic.formatSleepTime(n.sleepDeep);
+            const sLight = Logic.formatSleepTime(n.sleepLight);
+            const sRem = Logic.formatSleepTime(n.sleepRem);
+            const sAwake = Logic.formatSleepTime(n.sleepAwake);
+            nutritionCsv += `${date},${n.weight || ''},${n.kcal || ''},${n.carbs || ''},${n.pro || ''},${n.fat || ''},${n.bf || ''},${n.neck || ''},${n.chest || ''},${n.shoulders || ''},${n.biceps || ''},${n.waist || ''},${n.hips || n.hip || ''},${n.thighs || ''},${n.calves || ''},${sHours},${sDeep},${sLight},${sRem},${sAwake},${safeNotes}\n`;
         });
         
         const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";

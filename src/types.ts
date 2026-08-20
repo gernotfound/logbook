@@ -87,6 +87,7 @@ export interface SessionExerciseSet {
 }
 
 export interface SessionExercise {
+    id?: string;
     exId: string;
     sessionNote: string;
     sets: SessionExerciseSet[];
@@ -214,6 +215,7 @@ export interface TrainingCycle {
     sessionsPerWeek?: number; // es. 1, 2, 3, 4, 5... (frequenza di allenamento settimanale)
     progressionMode?: 'sequential' | 'fixed'; // rotazione sequenziale continua vs fissa
     startDate?: string; // es. YYYY-MM-DD
+    endDate?: string; // es. YYYY-MM-DD
     notes?: string;
     routines: TrainingCycleRoutineItem[];
     createdAt?: number;

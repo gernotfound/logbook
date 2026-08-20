@@ -5,6 +5,7 @@ import { Logic } from '../../lib/logic';
 import WorkoutTimer from './WorkoutTimer';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
+import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     const [display, setDisplay] = useState('00:00:00');
@@ -63,7 +64,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         manualDuration, setManualDuration,
         startWorkout, endWorkout, deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
-        addExtraExercise, removeActiveExercise,
+        addExtraExercise, moveExercise, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet,
         updateSetupNote, updateSessionNote
@@ -72,6 +73,23 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
+
+    const handleMoveExercise = useCallback((fromIndex: number, direction: 'up' | 'down') => {
+        const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+        moveExercise(fromIndex, direction);
+        setOpenHistoryExIndex(prev => {
+            if (prev === null) return null;
+            if (prev === fromIndex) return toIndex;
+            if (prev === toIndex) return fromIndex;
+            return prev;
+        });
+        setOpenSetupExIndex(prev => {
+            if (prev === null) return null;
+            if (prev === fromIndex) return toIndex;
+            if (prev === toIndex) return fromIndex;
+            return prev;
+        });
+    }, [moveExercise]);
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle || !activeCycle.routines) return [];
@@ -398,11 +416,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                 key={exItem.id || `${exItem.exId}_${exIndex}`}
                                 exItem={exItem}
                                 exIndex={exIndex}
+                                totalExercises={(activeWorkout.exercises || []).length}
                                 libDef={libDef}
                                 pastWorkouts={pastWorkouts}
                                 isHistoryOpen={openHistoryExIndex === exIndex}
                                 isSetupOpen={openSetupExIndex === exIndex}
                                 openSpecialMenuId={openSpecialMenuId}
+                                onMoveExercise={handleMoveExercise}
                                 onToggleHistory={() => setOpenHistoryExIndex(openHistoryExIndex === exIndex ? null : exIndex)}
                                 onToggleSetup={() => setOpenSetupExIndex(openSetupExIndex === exIndex ? null : exIndex)}
                                 onRemoveExercise={() => handleRemoveExercise(exIndex)}
@@ -423,15 +443,11 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
 
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
                     <h3 style={{ marginBottom: '10px', fontSize: '0.95rem' }}>Aggiungi esercizio extra</h3>
-                    <select 
-                        onChange={e => { if(e.target.value) addExtraExercise(e.target.value); e.target.value = ''; }}
-                        className="w-full p-10 bg-surface text-white border-b rounded-8"
-                    >
-                        <option value="">+ Aggiungi esercizio dalla libreria</option>
-                        {library.map(l => (
-                            <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                    </select>
+                    <ExerciseSearchDropdown
+                        library={library}
+                        onSelectExercise={addExtraExercise}
+                        placeholder="🔍 Cerca esercizio extra da aggiungere..."
+                    />
                 </div>
             </div>
 

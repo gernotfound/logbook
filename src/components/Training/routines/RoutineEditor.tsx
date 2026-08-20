@@ -1,6 +1,7 @@
 import React from 'react';
 import MuscleModel from '../MuscleModel';
 import { RoutineExerciseItem } from './RoutineExerciseItem';
+import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 import { ExerciseLibraryItem } from '../../../types';
 
 interface RoutineEditorProps {
@@ -68,19 +69,11 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                     <label className="text-muted text-xs block">Esercizi nella scheda ({routineExercises.length})</label>
                 </div>
                 <div className="mb-15">
-                    <select 
-                        onChange={(e) => {
-                            onAddExercise(e.target.value);
-                            e.target.value = '';
-                        }}
-                        className="w-full p-10 bg-surface text-white border-b rounded-8"
-                        style={{ fontSize: '16px' }}
-                    >
-                        <option value="">+ Aggiungi esercizio dalla libreria</option>
-                        {library.map(l => (
-                            <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                    </select>
+                    <ExerciseSearchDropdown
+                        library={library}
+                        onSelectExercise={onAddExercise}
+                        placeholder="🔍 Cerca esercizio da aggiungere..."
+                    />
                 </div>
 
                 {routineExercises.length === 0 ? (

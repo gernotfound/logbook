@@ -18,7 +18,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                 ...prev,
                 exercises: [
                     ...prev.exercises,
-                    { exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
+                    { id: Logic.generateId('se'), exId, sets: [{ id: Logic.generateId('s'), kg: '', reps: '' }], sessionNote: '' }
                 ]
             };
         });
@@ -49,13 +49,22 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
 
     const reorderExercises = useCallback((fromIndex: number, toIndex: number) => {
         setLocalWorkout((prev) => {
-            if (!prev) return prev;
+            if (!prev || !Array.isArray(prev.exercises)) return prev;
+            const total = prev.exercises.length;
+            if (fromIndex < 0 || fromIndex >= total || toIndex < 0 || toIndex >= total || fromIndex === toIndex) {
+                return prev;
+            }
             const newExercises = [...prev.exercises];
             const [removed] = newExercises.splice(fromIndex, 1);
             newExercises.splice(toIndex, 0, removed);
             return { ...prev, exercises: newExercises };
         });
     }, [setLocalWorkout]);
+
+    const moveExercise = useCallback((index: number, direction: 'up' | 'down') => {
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        reorderExercises(index, targetIndex);
+    }, [reorderExercises]);
 
     const removeActiveExercise = useCallback(async (exIndex: number, closePanelsCallback?: (index: number) => void) => {
         if (!(await showConfirm("Rimuovere questo esercizio dalla sessione corrente?"))) return;
@@ -205,6 +214,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         addExtraExercise,
         addSpecialSet,
         reorderExercises,
+        moveExercise,
         removeActiveExercise,
         addSet,
         removeSet,

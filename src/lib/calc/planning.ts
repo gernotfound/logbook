@@ -77,7 +77,19 @@ export function calculateCycleTimeline(
     }
 
     const start = startOfDay(parsedStart);
-    const end = addDays(start, totalWeeks * 7 - 1);
+    let end = addDays(start, totalWeeks * 7 - 1);
+    if (cycle.endDate) {
+        try {
+            const parsedEnd = typeof cycle.endDate === 'string' && !cycle.endDate.includes('T')
+                ? parseISO(cycle.endDate)
+                : new Date(cycle.endDate);
+            if (isValid(parsedEnd) && differenceInCalendarDays(parsedEnd, start) >= 0) {
+                end = startOfDay(parsedEnd);
+            }
+        } catch {
+            // fallback to computed end
+        }
+    }
     const now = startOfDay(today);
 
     const formattedStartDate = format(start, 'dd/MM/yyyy');

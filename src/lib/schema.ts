@@ -1,6 +1,22 @@
 import { z } from 'zod';
+import { formatSleepTime } from './utils/date';
 
 // Defensive conversion helpers for robust runtime sanitization
+const safeOptionalSleepTime = () =>
+    z.union([
+        z.string().transform(v => {
+            const trimmed = v.trim();
+            if (!trimmed) return undefined;
+            const formatted = formatSleepTime(trimmed);
+            return formatted || undefined;
+        }),
+        z.number().transform(v => {
+            if (isNaN(v)) return undefined;
+            const formatted = formatSleepTime(v);
+            return formatted || undefined;
+        })
+    ]).optional().catch(undefined);
+
 const safeNumber = (defaultVal = 0) =>
     z.union([
         z.number().refine(v => !isNaN(v), { message: "NaN is not a valid number" }),
@@ -180,6 +196,7 @@ export const SessionExerciseSetSchema = z.object({
 }).passthrough().catch({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] }).default({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] });
 
 export const SessionExerciseSchema = z.object({
+    id: safeOptionalString(),
     exId: safeString(''),
     sessionNote: safeString(''),
     sets: z.array(SessionExerciseSetSchema).catch([]).default([]),
@@ -263,11 +280,11 @@ export const NutritionDaySchema = z.object({
     isDayOn: safeOptionalBoolean(),
     meals: z.array(LoggedMealItemSchema).optional().catch([]).default([]),
     supplementsIntake: z.array(SupplementIntakeSchema).optional().catch([]).default([]),
-    sleepHours: safeOptionalNumber(),
-    sleepDeep: safeOptionalNumber(),
-    sleepLight: safeOptionalNumber(),
-    sleepRem: safeOptionalNumber(),
-    sleepAwake: safeOptionalNumber(),
+    sleepHours: safeOptionalSleepTime(),
+    sleepDeep: safeOptionalSleepTime(),
+    sleepLight: safeOptionalSleepTime(),
+    sleepRem: safeOptionalSleepTime(),
+    sleepAwake: safeOptionalSleepTime(),
 }).passthrough().catch({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] }).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] });
 
 export const FoodSchema = z.object({
@@ -307,6 +324,7 @@ export const TrainingCycleSchema = z.object({
     sessionsPerWeek: safeOptionalNumber(),
     progressionMode: z.enum(['sequential', 'fixed']).optional().catch(undefined),
     startDate: safeOptionalString(),
+    endDate: safeOptionalString(),
     notes: safeOptionalString(),
     routines: z.array(TrainingCycleRoutineItemSchema).catch([]).default([]),
     createdAt: safeOptionalNumber(),
