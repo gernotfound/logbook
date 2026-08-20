@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { useHomeView } from '../../hooks/useHomeView';
 import MuscleModel from '../Training/MuscleModel';
 import HomeWorkoutWidget from './widgets/HomeWorkoutWidget';
+import HomeDomsCard from './widgets/HomeDomsCard';
 import HomeNutritionWidget from './widgets/HomeNutritionWidget';
 import HomeTdeeWidget from './widgets/HomeTdeeWidget';
 
@@ -28,7 +29,8 @@ const HomeView = ({ onNavigate }: any) => {
       bf, streak, totalWorkouts,
       tdeeCalc, chartData,
       weightPeriod, setWeightPeriod, weightStats,
-      muscleColors, volumeChartData
+      muscleColors, volumeChartData,
+      activePains, painColors, toggleActivePain
   } = homeState;
 
   return (
@@ -39,6 +41,12 @@ const HomeView = ({ onNavigate }: any) => {
         isRestDay={isRestDay}
         todaysWorkout={todaysWorkout}
         onNavigate={onNavigate}
+      />
+
+      <HomeDomsCard
+        activePains={activePains}
+        painColors={painColors}
+        onTogglePain={toggleActivePain}
       />
 
       <HomeNutritionWidget

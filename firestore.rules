@@ -39,7 +39,8 @@ service cloud.firestore {
           'trainingCycles',
           'activeCycleId',
           'nutritionPlanning',
-          'supplements'
+          'supplements',
+          'activePains'
         ]);
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}

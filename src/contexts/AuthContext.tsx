@@ -29,7 +29,8 @@ const defaultUserData: UserData = {
         lockedMacro: null, chartPeriod: 7,
         normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
     },
-    supplements: []
+    supplements: [],
+    activePains: []
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {

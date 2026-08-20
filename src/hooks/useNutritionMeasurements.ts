@@ -6,7 +6,7 @@ import { Logic } from '../lib/logic';
 const EMPTY_NUTRITION = {};
 const EMPTY_PROFILE = {};
 
-export function useNutritionMeasurements() {
+export function useNutritionMeasurements(selectedDate?: string) {
     const profile: any = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
     const saveUserData = useAppStore(state => state.saveUserData);
@@ -26,78 +26,95 @@ export function useNutritionMeasurements() {
     const [measureTime, setMeasureTime] = useState(new Date().toTimeString().substring(0, 5));
 
     const todayDateStr = Logic.getLocalDateString();
+    const targetDateStr = selectedDate || editingDate || todayDateStr;
+    const isToday = targetDateStr === todayDateStr;
 
-    // Restore draft on mount
+    const targetDayData = (nutrition as any)[targetDateStr];
+    const hasExistingData = Boolean(
+        targetDayData && (
+            (targetDayData.weight !== undefined && targetDayData.weight !== null && targetDayData.weight !== '') ||
+            (targetDayData.bf !== undefined && targetDayData.bf !== null && targetDayData.bf !== '') ||
+            (targetDayData.waist !== undefined && targetDayData.waist !== null && targetDayData.waist !== '') ||
+            (targetDayData.neck !== undefined && targetDayData.neck !== null && targetDayData.neck !== '') ||
+            (targetDayData.hip !== undefined && targetDayData.hip !== null && targetDayData.hip !== '') ||
+            (targetDayData.chest !== undefined && targetDayData.chest !== null && targetDayData.chest !== '') ||
+            (targetDayData.shoulders !== undefined && targetDayData.shoulders !== null && targetDayData.shoulders !== '') ||
+            (targetDayData.biceps !== undefined && targetDayData.biceps !== null && targetDayData.biceps !== '') ||
+            (targetDayData.thighs !== undefined && targetDayData.thighs !== null && targetDayData.thighs !== '') ||
+            (targetDayData.calves !== undefined && targetDayData.calves !== null && targetDayData.calves !== '')
+        )
+    );
+
+    // Restore draft or day measurements on mount / date switch
     useEffect(() => {
-        const draft = localStorage.getItem('draft_measurement');
-        const todayData = (nutrition as any)[todayDateStr];
-        
-        if (draft) {
-            try {
-                const parsed = JSON.parse(draft);
-                if (parsed.weight) setWeight(parsed.weight);
-                else if (todayData?.weight) setWeight(todayData.weight.toString());
-                
-                if (parsed.waist) setWaist(parsed.waist);
-                else if (todayData?.waist) setWaist(todayData.waist.toString());
-                
-                if (parsed.neck) setNeck(parsed.neck);
-                else if (todayData?.neck) setNeck(todayData.neck.toString());
-                
-                if (parsed.hip) setHip(parsed.hip);
-                else if (todayData?.hip) setHip(todayData.hip.toString());
-                
-                if (parsed.manualBf) setManualBf(parsed.manualBf);
-                else if (todayData?.bf) setManualBf(todayData.bf.toString());
-                
-                if (parsed.chest) setChest(parsed.chest);
-                else if (todayData?.chest) setChest(todayData.chest.toString());
-                
-                if (parsed.shoulders) setShoulders(parsed.shoulders);
-                else if (todayData?.shoulders) setShoulders(todayData.shoulders.toString());
-                
-                if (parsed.biceps) setBiceps(parsed.biceps);
-                else if (todayData?.biceps) setBiceps(todayData.biceps.toString());
-                
-                if (parsed.thighs) setThighs(parsed.thighs);
-                else if (todayData?.thighs) setThighs(todayData.thighs.toString());
-                
-                if (parsed.calves) setCalves(parsed.calves);
-                else if (todayData?.calves) setCalves(todayData.calves.toString());
-                
-                if (parsed.measureTime) setMeasureTime(parsed.measureTime);
-            } catch {
-                if (todayData?.weight) setWeight(todayData.weight.toString());
-                if (todayData?.waist) setWaist(todayData.waist.toString());
-                if (todayData?.neck) setNeck(todayData.neck.toString());
-                if (todayData?.bf) setManualBf(todayData.bf.toString());
-                if (todayData?.chest) setChest(todayData.chest.toString());
-                if (todayData?.shoulders) setShoulders(todayData.shoulders.toString());
-                if (todayData?.biceps) setBiceps(todayData.biceps.toString());
-                if (todayData?.thighs) setThighs(todayData.thighs.toString());
-                if (todayData?.calves) setCalves(todayData.calves.toString());
+        const dayData = (nutrition as any)[targetDateStr];
+        if (isToday && !editingDate) {
+            const draft = localStorage.getItem('draft_measurement');
+            if (draft) {
+                try {
+                    const parsed = JSON.parse(draft);
+                    setWeight(parsed.weight !== undefined && parsed.weight !== null ? parsed.weight : (dayData?.weight ? dayData.weight.toString() : ''));
+                    setWaist(parsed.waist !== undefined && parsed.waist !== null ? parsed.waist : (dayData?.waist ? dayData.waist.toString() : ''));
+                    setNeck(parsed.neck !== undefined && parsed.neck !== null ? parsed.neck : (dayData?.neck ? dayData.neck.toString() : ''));
+                    setHip(parsed.hip !== undefined && parsed.hip !== null ? parsed.hip : (dayData?.hip ? dayData.hip.toString() : ''));
+                    setManualBf(parsed.manualBf !== undefined && parsed.manualBf !== null ? parsed.manualBf : (dayData?.bf ? dayData.bf.toString() : ''));
+                    setChest(parsed.chest !== undefined && parsed.chest !== null ? parsed.chest : (dayData?.chest ? dayData.chest.toString() : ''));
+                    setShoulders(parsed.shoulders !== undefined && parsed.shoulders !== null ? parsed.shoulders : (dayData?.shoulders ? dayData.shoulders.toString() : ''));
+                    setBiceps(parsed.biceps !== undefined && parsed.biceps !== null ? parsed.biceps : (dayData?.biceps ? dayData.biceps.toString() : ''));
+                    setThighs(parsed.thighs !== undefined && parsed.thighs !== null ? parsed.thighs : (dayData?.thighs ? dayData.thighs.toString() : ''));
+                    setCalves(parsed.calves !== undefined && parsed.calves !== null ? parsed.calves : (dayData?.calves ? dayData.calves.toString() : ''));
+                    if (parsed.measureTime) setMeasureTime(parsed.measureTime);
+                    else if (dayData?.measurementTime) setMeasureTime(dayData.measurementTime);
+                } catch {
+                    setWeight(dayData?.weight ? dayData.weight.toString() : '');
+                    setWaist(dayData?.waist ? dayData.waist.toString() : '');
+                    setNeck(dayData?.neck ? dayData.neck.toString() : '');
+                    setHip(dayData?.hip ? dayData.hip.toString() : '');
+                    setManualBf(dayData?.bf ? dayData.bf.toString() : '');
+                    setChest(dayData?.chest ? dayData.chest.toString() : '');
+                    setShoulders(dayData?.shoulders ? dayData.shoulders.toString() : '');
+                    setBiceps(dayData?.biceps ? dayData.biceps.toString() : '');
+                    setThighs(dayData?.thighs ? dayData.thighs.toString() : '');
+                    setCalves(dayData?.calves ? dayData.calves.toString() : '');
+                    setMeasureTime(dayData?.measurementTime || new Date().toTimeString().substring(0, 5));
+                }
+            } else {
+                setWeight(dayData?.weight ? dayData.weight.toString() : '');
+                setWaist(dayData?.waist ? dayData.waist.toString() : '');
+                setNeck(dayData?.neck ? dayData.neck.toString() : '');
+                setHip(dayData?.hip ? dayData.hip.toString() : '');
+                setManualBf(dayData?.bf ? dayData.bf.toString() : '');
+                setChest(dayData?.chest ? dayData.chest.toString() : '');
+                setShoulders(dayData?.shoulders ? dayData.shoulders.toString() : '');
+                setBiceps(dayData?.biceps ? dayData.biceps.toString() : '');
+                setThighs(dayData?.thighs ? dayData.thighs.toString() : '');
+                setCalves(dayData?.calves ? dayData.calves.toString() : '');
+                setMeasureTime(dayData?.measurementTime || new Date().toTimeString().substring(0, 5));
             }
         } else {
-            if (todayData?.weight) setWeight(todayData.weight.toString());
-            if (todayData?.waist) setWaist(todayData.waist.toString());
-            if (todayData?.neck) setNeck(todayData.neck.toString());
-            if (todayData?.hip) setHip(todayData.hip.toString());
-            if (todayData?.bf) setManualBf(todayData.bf.toString());
-            if (todayData?.chest) setChest(todayData.chest.toString());
-            if (todayData?.shoulders) setShoulders(todayData.shoulders.toString());
-            if (todayData?.biceps) setBiceps(todayData.biceps.toString());
-            if (todayData?.thighs) setThighs(todayData.thighs.toString());
-            if (todayData?.calves) setCalves(todayData.calves.toString());
+            // For past/future dates or when explicitly editing
+            setWeight(dayData?.weight ? dayData.weight.toString() : '');
+            setWaist(dayData?.waist ? dayData.waist.toString() : '');
+            setNeck(dayData?.neck ? dayData.neck.toString() : '');
+            setHip(dayData?.hip ? dayData.hip.toString() : '');
+            setManualBf(dayData?.bf ? dayData.bf.toString() : '');
+            setChest(dayData?.chest ? dayData.chest.toString() : '');
+            setShoulders(dayData?.shoulders ? dayData.shoulders.toString() : '');
+            setBiceps(dayData?.biceps ? dayData.biceps.toString() : '');
+            setThighs(dayData?.thighs ? dayData.thighs.toString() : '');
+            setCalves(dayData?.calves ? dayData.calves.toString() : '');
+            setMeasureTime(dayData?.measurementTime || new Date().toTimeString().substring(0, 5));
         }
-    }, [todayDateStr, nutrition]);
+    }, [targetDateStr, nutrition, isToday, editingDate]);
 
+    // Save draft for today when inputs change
     useEffect(() => {
-        if (!editingDate) {
+        if (isToday && !editingDate) {
             localStorage.setItem('draft_measurement', JSON.stringify({ 
                 weight, waist, neck, hip, manualBf, chest, shoulders, biceps, thighs, calves, measureTime 
             }));
         }
-    }, [weight, waist, neck, hip, manualBf, chest, shoulders, biceps, thighs, calves, measureTime, editingDate]);
+    }, [weight, waist, neck, hip, manualBf, chest, shoulders, biceps, thighs, calves, measureTime, editingDate, isToday]);
 
     const measurementsHistory = useMemo(() => {
         return Object.values(nutrition)
@@ -123,18 +140,20 @@ export function useNutritionMeasurements() {
 
     const handleCancelEdit = () => {
         setEditingDate(null);
-        setWeight('');
-        setWaist('');
-        setNeck('');
-        setHip('');
-        setManualBf('');
-        setChest('');
-        setShoulders('');
-        setBiceps('');
-        setThighs('');
-        setCalves('');
-        setMeasureTime(new Date().toTimeString().substring(0, 5));
-        localStorage.removeItem('draft_measurement');
+        if (isToday) {
+            localStorage.removeItem('draft_measurement');
+        }
+        setWeight(targetDayData?.weight ? targetDayData.weight.toString() : '');
+        setWaist(targetDayData?.waist ? targetDayData.waist.toString() : '');
+        setNeck(targetDayData?.neck ? targetDayData.neck.toString() : '');
+        setHip(targetDayData?.hip ? targetDayData.hip.toString() : '');
+        setManualBf(targetDayData?.bf ? targetDayData.bf.toString() : '');
+        setChest(targetDayData?.chest ? targetDayData.chest.toString() : '');
+        setShoulders(targetDayData?.shoulders ? targetDayData.shoulders.toString() : '');
+        setBiceps(targetDayData?.biceps ? targetDayData.biceps.toString() : '');
+        setThighs(targetDayData?.thighs ? targetDayData.thighs.toString() : '');
+        setCalves(targetDayData?.calves ? targetDayData.calves.toString() : '');
+        setMeasureTime(targetDayData?.measurementTime || new Date().toTimeString().substring(0, 5));
     };
 
     const calculateAndSave = async (e?: any) => {
@@ -171,7 +190,7 @@ export function useNutritionMeasurements() {
             }
         }
 
-        const targetDate = editingDate || todayDateStr;
+        const targetDate = targetDateStr;
 
         try {
             await saveUserData((prev) => {
@@ -204,7 +223,10 @@ export function useNutritionMeasurements() {
             } else {
                 await showAlert(`Peso salvato correttamente!`);
             }
-            handleCancelEdit();
+            if (isToday) {
+                localStorage.removeItem('draft_measurement');
+            }
+            setEditingDate(null);
         } catch {
             await showAlert("Errore durante il salvataggio della misurazione.");
         }
@@ -212,7 +234,11 @@ export function useNutritionMeasurements() {
 
     return {
         profile,
+        targetDateStr,
+        selectedDate,
         editingDate,
+        setEditingDate,
+        hasExistingData,
         measureTime, setMeasureTime,
         weight, setWeight,
         waist, setWaist,

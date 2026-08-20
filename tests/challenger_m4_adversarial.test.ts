@@ -382,7 +382,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'trainingCycles',
                 'activeCycleId',
                 'nutritionPlanning',
-                'supplements'
+                'supplements',
+                'activePains'
             ];
 
             expectedKeys.forEach(key => {
@@ -400,7 +401,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(extractedKeys.sort()).toEqual(expectedKeys.sort());
         });
 
-        it('verifies DB.saveUserData writes strictly conforming userDocData with exactly the 9 whitelisted keys', async () => {
+        it('verifies DB.saveUserData writes strictly conforming userDocData with exactly the 10 whitelisted keys', async () => {
             const sampleUserData = {
                 profile: { name: 'Test' },
                 library: [],
@@ -411,6 +412,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 activeCycleId: null,
                 nutritionPlanning: null,
                 supplements: [],
+                activePains: [],
                 history: [],
                 nutrition: {}
             };
@@ -431,7 +433,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'trainingCycles',
                 'activeCycleId',
                 'nutritionPlanning',
-                'supplements'
+                'supplements',
+                'activePains'
             ];
 
             expect(writtenKeys.sort()).toEqual(expectedKeys.sort());

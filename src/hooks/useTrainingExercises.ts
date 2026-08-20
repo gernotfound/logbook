@@ -65,6 +65,8 @@ export function useTrainingExercises() {
     const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>([]);
     const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
     const [trackingType, setTrackingType] = useState<'weight_reps' | 'time' | 'cardio'>('weight_reps');
+    const [isBodyweight, setIsBodyweight] = useState(false);
+    const [equipmentWeight, setEquipmentWeight] = useState('');
 
     // Restore draft on mount
     useEffect(() => {
@@ -76,6 +78,9 @@ export function useTrainingExercises() {
                 if (parsed.notes) setExNotes(parsed.notes);
                 if (parsed.trackingType) setTrackingType(parsed.trackingType);
                 if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
+                if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
+                if (parsed.isBodyweight !== undefined) setIsBodyweight(Boolean(parsed.isBodyweight));
+                if (parsed.equipmentWeight !== undefined && parsed.equipmentWeight !== null) setEquipmentWeight(String(parsed.equipmentWeight));
             } catch {
                 // Ignore parse errors on invalid draft
             }
@@ -85,19 +90,33 @@ export function useTrainingExercises() {
     // Save draft on change
     useEffect(() => {
         if (!editingExId) {
-            try {
-                localStorage.setItem('draft_exercise', JSON.stringify({ 
-                    name: exName, 
-                    notes: exNotes, 
-                    trackingType, 
-                    selectedMuscles,
-                    secondaryMuscles
-                }));
-            } catch (e) {
-                console.warn("Quota exceeded or error saving draft", e);
+            const hasContent = Boolean(
+                exName.trim() || 
+                exNotes.trim() || 
+                selectedMuscles.length > 0 || 
+                secondaryMuscles.length > 0 || 
+                isBodyweight || 
+                equipmentWeight
+            );
+            if (hasContent) {
+                try {
+                    localStorage.setItem('draft_exercise', JSON.stringify({ 
+                        name: exName, 
+                        notes: exNotes, 
+                        trackingType, 
+                        selectedMuscles,
+                        secondaryMuscles,
+                        isBodyweight,
+                        equipmentWeight
+                    }));
+                } catch (e) {
+                    console.warn("Quota exceeded or error saving draft", e);
+                }
+            } else {
+                localStorage.removeItem('draft_exercise');
             }
         }
-    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, editingExId]);
+    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId]);
 
     const filteredMuscles = useMemo(() => {
         const rawQuery = muscleSearch.trim().toLowerCase();
@@ -277,6 +296,8 @@ export function useTrainingExercises() {
         setSecondaryMuscles(exSecMuscles);
 
         setTrackingType(ex.trackingType || 'weight_reps');
+        setIsBodyweight(Boolean(ex.isBodyweight));
+        setEquipmentWeight(ex.equipmentWeight !== undefined && ex.equipmentWeight !== null ? String(ex.equipmentWeight) : '');
         setSelectionMode('primary');
         
         // Scroll to top to see the form
@@ -292,6 +313,8 @@ export function useTrainingExercises() {
         setMuscleSearch('');
         setSelectionMode('primary');
         setTrackingType('weight_reps');
+        setIsBodyweight(false);
+        setEquipmentWeight('');
         localStorage.removeItem('draft_exercise');
     };
 
@@ -318,6 +341,9 @@ export function useTrainingExercises() {
             return;
         }
 
+        const parsedEqWeight = equipmentWeight ? parseFloat(String(equipmentWeight).replace(',', '.')) : undefined;
+        const validEqWeight = (parsedEqWeight !== undefined && !isNaN(parsedEqWeight) && parsedEqWeight > 0) ? parsedEqWeight : undefined;
+
         let updatedLibrary;
 
         if (editingExId) {
@@ -330,7 +356,9 @@ export function useTrainingExercises() {
                         notes: exNotes.trim(),
                         muscles: selectedMuscles.map((m: any) => m.id),
                         secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
-                        trackingType
+                        trackingType,
+                        isBodyweight: isBodyweight || undefined,
+                        equipmentWeight: validEqWeight
                     };
                 }
                 return ex;
@@ -346,7 +374,9 @@ export function useTrainingExercises() {
                 secondaryMuscles: secondaryMuscles.map((m: any) => m.id),
                 trackingType,
                 setsCount: 3,
-                sets: []
+                sets: [],
+                isBodyweight: isBodyweight || undefined,
+                equipmentWeight: validEqWeight
             };
             updatedLibrary = [...library, newEx].sort((a,b) => a.name.localeCompare(b.name));
         }
@@ -388,6 +418,7 @@ export function useTrainingExercises() {
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
         selectionMode, setSelectionMode, isDuplicateName,
         library, filteredMuscles, trackingType, setTrackingType,
+        isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete
     };

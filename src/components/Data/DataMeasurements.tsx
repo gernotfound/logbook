@@ -1,8 +1,13 @@
 import React from 'react';
+import { Logic } from '../../lib/logic';
 
 interface DataMeasurementsProps {
     profile: any;
-    editingDate: string | null;
+    selectedDate?: string;
+    setSelectedDate?: (d: string) => void;
+    targetDateStr?: string;
+    editingDate?: string | null;
+    hasExistingData?: boolean;
     measureTime: string;
     setMeasureTime: (val: string) => void;
     weight: string;
@@ -26,12 +31,16 @@ interface DataMeasurementsProps {
     calves: string;
     setCalves: (val: string) => void;
     handleCancelEdit: () => void;
-    calculateAndSave: () => Promise<void>;
+    calculateAndSave: (e?: any) => Promise<void>;
 }
 
 const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     profile,
+    selectedDate,
+    setSelectedDate,
+    targetDateStr,
     editingDate,
+    hasExistingData,
     measureTime, setMeasureTime,
     weight, setWeight,
     waist, setWaist,
@@ -46,14 +55,75 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     handleCancelEdit,
     calculateAndSave
 }) => {
+    const activeDateStr = targetDateStr || selectedDate || editingDate || Logic.getLocalDateString();
+    const todayStr = Logic.getLocalDateString();
+    const isEditing = Boolean(editingDate || hasExistingData);
+
+    const handlePrevDay = () => {
+        if (!setSelectedDate) return;
+        const d = new Date(activeDateStr);
+        d.setDate(d.getDate() - 1);
+        setSelectedDate(Logic.getLocalDateString(d));
+    };
+
+    const handleNextDay = () => {
+        if (!setSelectedDate) return;
+        if (activeDateStr === todayStr) return;
+        const d = new Date(activeDateStr);
+        d.setDate(d.getDate() + 1);
+        setSelectedDate(Logic.getLocalDateString(d));
+    };
+
+    const handleToday = () => {
+        if (setSelectedDate) setSelectedDate(todayStr);
+    };
+
     return (
-        <div className="card" id="measurement-form-card" style={editingDate ? { border: '2px solid var(--primary-color)' } : undefined}>
-            <h2 style={{ color: editingDate ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px' }}>
-                {editingDate ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
-            </h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                Registra il tuo peso, la massa grassa e le circonferenze corporee.
-            </p>
+        <div>
+            {/* Date Navigator */}
+            {setSelectedDate && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <button 
+                        className="btn btn-small" 
+                        onClick={handlePrevDay} 
+                        style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
+                    >
+                        ◀ Prec.
+                    </button>
+                    <div 
+                        style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} 
+                        onClick={handleToday} 
+                        title="Torna a oggi"
+                    >
+                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                            {Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}
+                        </div>
+                        {activeDateStr === todayStr && (
+                            <div style={{ fontSize: '0.7rem', color: 'var(--primary-color)' }}>OGGI</div>
+                        )}
+                    </div>
+                    <button 
+                        className="btn btn-small" 
+                        onClick={handleNextDay} 
+                        disabled={activeDateStr === todayStr} 
+                        style={{ 
+                            background: 'rgba(255,255,255,0.05)', 
+                            color: 'var(--text-main)', 
+                            opacity: activeDateStr === todayStr ? 0.3 : 1 
+                        }}
+                    >
+                        Succ. ▶
+                    </button>
+                </div>
+            )}
+
+            <div className="card" id="measurement-form-card" style={isEditing ? { border: '2px solid var(--primary-color)' } : undefined}>
+                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px' }}>
+                    {isEditing ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                    Registra il tuo peso, la massa grassa e le circonferenze corporee.
+                </p>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '0 5px' }}>
                 <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0 }}>Orario rilevazione</label>
@@ -238,16 +308,17 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
-                {editingDate && (
+                {isEditing && (
                     <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={handleCancelEdit}>
                         Annulla
                     </button>
                 )}
                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={calculateAndSave}>
-                    {editingDate ? '💾 Salva modifiche' : '💾 Salva misurazione'}
+                    {isEditing ? '💾 Salva modifiche' : '💾 Salva misurazione'}
                 </button>
             </div>
         </div>
+    </div>
     );
 };
 

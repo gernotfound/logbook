@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
+import { Logic } from '../../lib/logic';
 import DataMeasurements from './DataMeasurements';
 import DataBiometry from './DataBiometry';
 import DataSleep from './DataSleep';
@@ -15,14 +16,16 @@ const DataView: React.FC<DataViewProps> = ({
     subTab = 'measurements', 
     setSubTab 
 }) => {
-    const measurementsHook = useNutritionMeasurements();
+    const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
+    const measurementsHook = useNutritionMeasurements(selectedDate);
     const sleepHook = useSleepMeasurements();
-    const [localSubTab, setLocalSubTab] = React.useState('measurements');
+    const [localSubTab, setLocalSubTab] = useState('measurements');
 
     const currentSubTab = setSubTab ? subTab : localSubTab;
     const changeSubTab = setSubTab || setLocalSubTab;
 
     const handleSelectEdit = (day: any) => {
+        setSelectedDate(day.date);
         measurementsHook.handleEditClick(day);
         sleepHook.setEditingDate(day.date);
         changeSubTab('measurements');
@@ -67,7 +70,11 @@ const DataView: React.FC<DataViewProps> = ({
                 <div className="data-sub-view active">
                     <DataMeasurements 
                         profile={measurementsHook.profile}
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
+                        targetDateStr={measurementsHook.targetDateStr}
                         editingDate={measurementsHook.editingDate}
+                        hasExistingData={measurementsHook.hasExistingData}
                         measureTime={measurementsHook.measureTime}
                         setMeasureTime={measurementsHook.setMeasureTime}
                         weight={measurementsHook.weight}

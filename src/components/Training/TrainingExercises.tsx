@@ -10,6 +10,7 @@ const TrainingExercises = () => {
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
         selectionMode, setSelectionMode, isDuplicateName,
         library, filteredMuscles, trackingType, setTrackingType,
+        isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete
     } = useTrainingExercises();
@@ -74,6 +75,47 @@ const TrainingExercises = () => {
                         </button>
                     </div>
                 </div>
+
+                {trackingType === 'weight_reps' && (
+                    <div className="bg-black-10 border-glass rounded-12 p-12 mb-20">
+                        <div className="flex-between items-center mb-10">
+                            <div>
+                                <label className="text-white text-sm font-medium block" htmlFor="ex-bodyweight">
+                                    Esercizio a corpo libero
+                                </label>
+                                <span className="text-muted text-xs block">
+                                    Somma il peso corporeo dell'utente al calcolo del volume
+                                </span>
+                            </div>
+                            <input 
+                                id="ex-bodyweight"
+                                type="checkbox"
+                                checked={isBodyweight}
+                                onChange={e => setIsBodyweight(e.target.checked)}
+                                style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary-color)' }}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-muted text-xs block mb-4" htmlFor="ex-equipment-weight">
+                                Peso base attrezzo in kg (opzionale)
+                            </label>
+                            <input 
+                                id="ex-equipment-weight"
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                placeholder="es. 20 (bilanciere), 10..."
+                                value={equipmentWeight}
+                                onChange={e => setEquipmentWeight(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                style={{ marginBottom: 0, fontSize: '16px' }}
+                            />
+                            <span className="text-muted text-xs block mt-4">
+                                Viene sommato ai kg inseriti durante la sessione (es. bilanciere o tara attrezzo)
+                            </span>
+                        </div>
+                    </div>
+                )}
                 
                 <div className="bg-black-10 border-glass rounded-12 p-15 mb-20" style={{ marginTop: '30px' }}>
                     <div className="flex-between mb-10">
@@ -259,6 +301,20 @@ const TrainingExercises = () => {
                                 <div>
                                     <div className={`font-bold ${(expandedExId === ex.id || editingExId === ex.id) ? 'text-primary' : 'text-white'}`}>{ex.name}</div>
                                     {ex.notes && <div className="text-muted" style={{ fontSize: '0.75rem' }}>{ex.notes}</div>}
+                                    {(ex.isBodyweight || (ex.equipmentWeight !== undefined && ex.equipmentWeight > 0)) && (
+                                        <div className="flex flex-wrap gap-5 mt-4">
+                                            {ex.isBodyweight && (
+                                                <span className="badge badge-primary" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                                                    Corpo libero
+                                                </span>
+                                            )}
+                                            {ex.equipmentWeight !== undefined && ex.equipmentWeight > 0 && (
+                                                <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                                    Attrezzo: {ex.equipmentWeight} kg
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-10">
                                     <button className="btn-icon text-primary" aria-label="Modifica esercizio" onClick={(e) => { e.stopPropagation(); handleEditClick(ex); setExpandedExId(ex.id); }}>✏️</button>
@@ -271,8 +327,20 @@ const TrainingExercises = () => {
                                 <div className="mt-15 pt-15 border-t">
                                     <div className="mb-10 text-sm">
                                         <span className="text-muted">Tracciamento: </span>
-                                        <strong>{ex.trackingType === 'time' ? 'Tempo' : 'Peso e ripetizioni'}</strong>
+                                        <strong>{ex.trackingType === 'time' ? 'Tempo' : ex.trackingType === 'cardio' ? 'Cardio' : 'Peso e ripetizioni'}</strong>
                                     </div>
+                                    {ex.isBodyweight && (
+                                        <div className="mb-10 text-sm">
+                                            <span className="text-muted">Corpo libero: </span>
+                                            <strong className="text-primary">Sì (peso corporeo incluso nel volume)</strong>
+                                        </div>
+                                    )}
+                                    {ex.equipmentWeight !== undefined && ex.equipmentWeight > 0 && (
+                                        <div className="mb-10 text-sm">
+                                            <span className="text-muted">Peso base attrezzo: </span>
+                                            <strong>{ex.equipmentWeight} kg</strong>
+                                        </div>
+                                    )}
                                     {(ex.muscles || []).length > 0 || (ex.secondaryMuscles || []).length > 0 ? (
                                         <div className="flex-center w-full">
                                             <MuscleModel 
