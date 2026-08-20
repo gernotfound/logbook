@@ -5,7 +5,8 @@ import { DomainParsers } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
 import { removeUndefinedValues } from './utils/object';
-
+import { defaultExercises } from './defaultExercises';
+import { defaultFoods } from './defaultFoods';
 let lastSavedStateStr: string | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
@@ -50,9 +51,21 @@ export const DB = {
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
                 const data = docSnap.data() as Record<string, any>;
                 if(data.profile) state.profile = data.profile;
-                if(data.library) state.library = data.library;
+                if(data.library) {
+                    const existingIds = new Set(data.library.map((x:any) => x.id));
+                    const missingDefaults = defaultExercises.filter((x:any) => !existingIds.has(x.id));
+                    state.library = [...data.library, ...missingDefaults];
+                } else {
+                    state.library = defaultExercises;
+                }
                 if(data.routines) state.routines = data.routines;
-                if(data.customFoods) state.customFoods = data.customFoods;
+                if(data.customFoods) {
+                    const existingIds = new Set(data.customFoods.map((x:any) => x.id));
+                    const missingDefaults = defaultFoods.filter((x:any) => !existingIds.has(x.id));
+                    state.customFoods = [...data.customFoods, ...missingDefaults];
+                } else {
+                    state.customFoods = defaultFoods;
+                }
                 if(data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
                 if(data.trainingCycles) state.trainingCycles = data.trainingCycles;
                 if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
