@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { Logic } from '../../lib/logic';
+import { useAppStore } from '../../store/useAppStore';
 import type { WorkoutSession } from '../../types';
 
 interface UseWorkoutSetMutationsProps {
@@ -146,6 +147,49 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
+    const removeLastSet = useCallback(async (exIndex: number) => {
+        const currentWorkout = useAppStore.getState().localWorkout;
+        const ex = currentWorkout?.exercises?.[exIndex];
+        if (!ex || !ex.sets || ex.sets.length === 0) return;
+
+        const setsCount = ex.sets.length;
+        const lastSet: any = ex.sets[setsCount - 1];
+
+        const checkVal = (v: any) => {
+            if (v === undefined || v === null) return false;
+            const s = String(v).trim();
+            if (s === '' || s === '0') return false;
+            const n = Number(s.replace(',', '.'));
+            return isNaN(n) ? true : n !== 0;
+        };
+        const isFilled =
+            checkVal(lastSet.kg) ||
+            checkVal(lastSet.weight) ||
+            checkVal(lastSet.reps) ||
+            checkVal(lastSet.time) ||
+            checkVal(lastSet.timeInSeconds) ||
+            checkVal(lastSet.distance) ||
+            checkVal(lastSet.speed) ||
+            checkVal(lastSet.incline) ||
+            checkVal(lastSet.kcal) ||
+            (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
+            (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds)));
+
+        if (isFilled) {
+            const ok = await showConfirm("La serie contiene dei dati. Vuoi davvero rimuoverla?");
+            if (!ok) return;
+        }
+
+        setLocalWorkout((prev) => {
+            if (!prev) return prev;
+            const updatedExercises = prev.exercises.map((exItem: any, i: number) => {
+                if (i !== exIndex) return exItem;
+                return { ...exItem, sets: exItem.sets.slice(0, -1) };
+            });
+            return { ...prev, exercises: updatedExercises };
+        });
+    }, [setLocalWorkout, showConfirm]);
+
     const updateSessionNote = useCallback((exIndex: number, note: string) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
@@ -164,6 +208,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         removeActiveExercise,
         addSet,
         removeSet,
+        removeLastSet,
         updateSet,
         updateSpecialSet,
         removeSpecialSet,

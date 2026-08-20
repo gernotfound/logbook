@@ -64,7 +64,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         startWorkout, endWorkout, deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
         addExtraExercise, removeActiveExercise,
-        addSet, removeSet, updateSet,
+        addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet,
         updateSetupNote, updateSessionNote
     } = useWorkoutSession();
@@ -384,7 +384,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 </div>
             )}
 
-            <div className="card" style={{ padding: '15px', marginBottom: '20px' }}>
+            <div style={{ padding: '0', marginBottom: '20px' }}>
                 {activeWorkout.routineName && <h1 style={{ marginTop: 0, fontSize: '1.15rem' }}>{activeWorkout.routineName}</h1>}
                 {(activeWorkout.exercises || []).length === 0 ? (
                     <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
@@ -410,6 +410,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                 onUpdateSessionNote={(note) => updateSessionNote(exIndex, note)}
                                 onAddSet={() => addSet(exIndex)}
                                 onRemoveSet={(sIndex) => removeSet(exIndex, sIndex)}
+                                onRemoveLastSet={() => removeLastSet(exIndex)}
                                 onUpdateSet={(setId, field, val) => updateSet(exIndex, setId, field, val)}
                                 onAddSpecialSet={(type, setId) => handleAddSet(exIndex, type, setId)}
                                 onUpdateSpecialSet={(setId, type, idx, field, val) => updateSpecialSet(exIndex, setId, type, idx, field, val)}

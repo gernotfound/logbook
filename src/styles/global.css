@@ -269,12 +269,17 @@ input:focus, select:focus, textarea:focus {
 .btn-icon:hover { background: rgba(255,255,255,0.1); }
 
 
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .set-row { 
     background: rgba(0,0,0,0.2); 
     padding: 12px; 
     border-radius: 12px; 
     margin-bottom: 12px; 
-    border-left: 4px solid var(--primary-color); 
+    border: 1px solid var(--primary-color); 
 }
 .set-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
