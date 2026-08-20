@@ -2,9 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Base path: set VITE_BASE_PATH=/ in .env.production (or CI) for Firebase Hosting root deploy.
-// Defaults to '/logbook/' for GitHub Pages.
-const basePath = (import.meta as any).env?.VITE_BASE_PATH || '/logbook/'
+// Base path: set to '/' for Vercel or root domains.
+const basePath = '/'
 
 export default defineConfig({
   base: basePath,
