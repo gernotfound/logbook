@@ -262,6 +262,11 @@ export const NutritionDaySchema = z.object({
     isDayOn: safeOptionalBoolean(),
     meals: z.array(LoggedMealItemSchema).optional().catch([]).default([]),
     supplementsIntake: z.array(SupplementIntakeSchema).optional().catch([]).default([]),
+    sleepHours: safeOptionalNumber(),
+    sleepDeep: safeOptionalNumber(),
+    sleepLight: safeOptionalNumber(),
+    sleepRem: safeOptionalNumber(),
+    sleepAwake: safeOptionalNumber(),
 }).passthrough().catch({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] }).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] });
 
 export const FoodSchema = z.object({

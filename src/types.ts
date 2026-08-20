@@ -169,6 +169,11 @@ export interface NutritionDay {
     isDayOn?: boolean;
     meals?: LoggedMealItem[];
     supplementsIntake?: SupplementIntake[];
+    sleepHours?: number | string;
+    sleepDeep?: number | string;
+    sleepLight?: number | string;
+    sleepRem?: number | string;
+    sleepAwake?: number | string;
 }
 
 export interface Food {

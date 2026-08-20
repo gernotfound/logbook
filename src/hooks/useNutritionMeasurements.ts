@@ -101,7 +101,7 @@ export function useNutritionMeasurements() {
 
     const measurementsHistory = useMemo(() => {
         return Object.values(nutrition)
-            .filter((day: any) => day && (day.weight || day.bf))
+            .filter((day: any) => day && (day.weight || day.bf || day.sleepHours))
             .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
     }, [nutrition]);
 

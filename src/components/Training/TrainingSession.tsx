@@ -455,7 +455,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         type="text" 
                         value={manualDuration} 
                         onChange={e => setManualDuration(e.target.value)} 
-                        onBlur={() => setManualDuration(prev => Logic.normalizeDuration(prev))}
+                        onBlur={() => setManualDuration(Logic.normalizeDuration(manualDuration))}
                         onFocus={e => e.target.select()}
                         placeholder="00:00:00"
                         style={{ 
