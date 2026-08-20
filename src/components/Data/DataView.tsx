@@ -1,7 +1,9 @@
 import React from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
+import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
 import DataMeasurements from './DataMeasurements';
 import DataBiometry from './DataBiometry';
+import DataSleep from './DataSleep';
 import DataHistory from './DataHistory';
 
 interface DataViewProps {
@@ -14,6 +16,7 @@ const DataView: React.FC<DataViewProps> = ({
     setSubTab 
 }) => {
     const measurementsHook = useNutritionMeasurements();
+    const sleepHook = useSleepMeasurements();
     const [localSubTab, setLocalSubTab] = React.useState('measurements');
 
     const currentSubTab = setSubTab ? subTab : localSubTab;
@@ -21,6 +24,7 @@ const DataView: React.FC<DataViewProps> = ({
 
     const handleSelectEdit = (day: any) => {
         measurementsHook.handleEditClick(day);
+        sleepHook.setEditingDate(day.date);
         changeSubTab('measurements');
     };
 
@@ -38,6 +42,12 @@ const DataView: React.FC<DataViewProps> = ({
                     onClick={() => changeSubTab('measurements')}
                 >
                     Misurazioni
+                </div>
+                <div 
+                    className={`sub-nav-btn ${currentSubTab === 'sleep' ? 'active' : ''}`} 
+                    onClick={() => changeSubTab('sleep')}
+                >
+                    Sonno
                 </div>
                 <div 
                     className={`sub-nav-btn ${currentSubTab === 'biometry' ? 'active' : ''}`} 
@@ -89,6 +99,12 @@ const DataView: React.FC<DataViewProps> = ({
             {currentSubTab === 'biometry' && (
                 <div className="data-sub-view active">
                     <DataBiometry />
+                </div>
+            )}
+
+            {currentSubTab === 'sleep' && (
+                <div className="data-sub-view active">
+                    <DataSleep sleepHook={sleepHook} />
                 </div>
             )}
 

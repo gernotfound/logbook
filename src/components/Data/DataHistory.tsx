@@ -54,6 +54,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                     {day.waist && <span>| Vita: {day.waist}cm</span>}
                                     {day.neck && <span>| Collo: {day.neck}cm</span>}
                                     {day.hip && <span>| Fianchi: {day.hip}cm</span>}
+                                    {day.sleepHours && <span>| 🌙 Sonno: {day.sleepHours}h</span>}
                                 </div>
                             </div>
                             <div style={{ color: 'var(--primary-color)', fontSize: '1.1rem', opacity: 0.8 }}>

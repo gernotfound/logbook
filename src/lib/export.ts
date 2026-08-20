@@ -60,7 +60,7 @@ export const Exporter = {
             }
         });
         
-        let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Note\n";
+        let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Ore Sonno,Sonno Profondo (h),Sonno Leggero (h),Sonno REM (h),Tempo Sveglio (h),Note\n";
         const nutritionDates = Object.keys(nutrition).sort();
         nutritionDates.forEach(date => {
             const n = nutrition[date];
@@ -69,7 +69,7 @@ export const Exporter = {
                 // Rimuove newlines per non rompere il formato CSV, e escape di virgolette
                 safeNotes = `"${n.notes.replace(/(\r\n|\n|\r)/gm, " ").replace(/"/g, '""')}"`;
             }
-            nutritionCsv += `${date},${n.weight || ''},${n.kcal || ''},${n.carbs || ''},${n.pro || ''},${n.fat || ''},${n.bf || ''},${n.neck || ''},${n.chest || ''},${n.shoulders || ''},${n.biceps || ''},${n.waist || ''},${n.hips || n.hip || ''},${n.thighs || ''},${n.calves || ''},${safeNotes}\n`;
+            nutritionCsv += `${date},${n.weight || ''},${n.kcal || ''},${n.carbs || ''},${n.pro || ''},${n.fat || ''},${n.bf || ''},${n.neck || ''},${n.chest || ''},${n.shoulders || ''},${n.biceps || ''},${n.waist || ''},${n.hips || n.hip || ''},${n.thighs || ''},${n.calves || ''},${n.sleepHours || ''},${n.sleepDeep || ''},${n.sleepLight || ''},${n.sleepRem || ''},${n.sleepAwake || ''},${safeNotes}\n`;
         });
         
         const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";

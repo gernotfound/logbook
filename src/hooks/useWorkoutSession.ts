@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -24,29 +24,32 @@ export function useWorkoutSession() {
 
     const [selectedRoutine, setSelectedRoutine] = useState('');
     
-    // Rating states
-    const [mood, setMood] = useState('');
-    const [pump, setPump] = useState('');
-    const [fatigue, setFatigue] = useState('');
-    const [water, setWater] = useState('');
-    const [manualDuration, setManualDuration] = useState('00:00:00');
+    // Rating states derivati direttamente da activeWorkout per prevenire perdita di dati
+    const mood = activeWorkout?.moodRating !== undefined && activeWorkout.moodRating !== null ? activeWorkout.moodRating.toString() : '';
+    const pump = activeWorkout?.pumpRating !== undefined && activeWorkout.pumpRating !== null ? activeWorkout.pumpRating.toString() : '';
+    const fatigue = activeWorkout?.fatigueRating !== undefined && activeWorkout.fatigueRating !== null ? activeWorkout.fatigueRating.toString() : '';
+    const water = activeWorkout?.waterLiters !== undefined && activeWorkout.waterLiters !== null ? activeWorkout.waterLiters.toString() : '';
+    const manualDuration = activeWorkout ? Logic.normalizeDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00:00') : '00:00:00';
 
-    // Sincronizza i campi quando activeWorkout cambia (es. caricamento o avvio)
-    useEffect(() => {
-        if (activeWorkout) {
-            setMood(activeWorkout.moodRating !== undefined && activeWorkout.moodRating !== null ? activeWorkout.moodRating.toString() : '');
-            setPump(activeWorkout.pumpRating !== undefined && activeWorkout.pumpRating !== null ? activeWorkout.pumpRating.toString() : '');
-            setFatigue(activeWorkout.fatigueRating !== undefined && activeWorkout.fatigueRating !== null ? activeWorkout.fatigueRating.toString() : '');
-            setWater(activeWorkout.waterLiters !== undefined && activeWorkout.waterLiters !== null ? activeWorkout.waterLiters.toString() : '');
-            setManualDuration(Logic.normalizeDuration(activeWorkout.manualDurationStr || activeWorkout.globalDurationStr || '00:00:00'));
-        } else {
-            setMood('');
-            setPump('');
-            setFatigue('');
-            setWater('');
-            setManualDuration('00:00:00');
-        }
-    }, [activeWorkout]);
+    const setMood = useCallback((val: string) => {
+        setLocalWorkout(prev => prev ? { ...prev, moodRating: val ? parseInt(val) : null } : null);
+    }, [setLocalWorkout]);
+
+    const setPump = useCallback((val: string) => {
+        setLocalWorkout(prev => prev ? { ...prev, pumpRating: val ? parseInt(val) : null } : null);
+    }, [setLocalWorkout]);
+
+    const setFatigue = useCallback((val: string) => {
+        setLocalWorkout(prev => prev ? { ...prev, fatigueRating: val ? parseInt(val) : null } : null);
+    }, [setLocalWorkout]);
+
+    const setWater = useCallback((val: string) => {
+        setLocalWorkout(prev => prev ? { ...prev, waterLiters: val ? parseFloat(val) : 0 } : null);
+    }, [setLocalWorkout]);
+
+    const setManualDuration = useCallback((val: string) => {
+        setLocalWorkout(prev => prev ? { ...prev, manualDurationStr: val } : null);
+    }, [setLocalWorkout]);
 
     // Sub-hook per la manipolazione granulare delle serie ed esercizi
     const {
@@ -173,11 +176,6 @@ export function useWorkoutSession() {
         };
 
         setLocalWorkout(editingWorkout);
-        setMood(workout.moodRating !== undefined && workout.moodRating !== null ? workout.moodRating.toString() : '');
-        setPump(workout.pumpRating !== undefined && workout.pumpRating !== null ? workout.pumpRating.toString() : '');
-        setFatigue(workout.fatigueRating !== undefined && workout.fatigueRating !== null ? workout.fatigueRating.toString() : '');
-        setWater(workout.waterLiters !== undefined && workout.waterLiters !== null ? workout.waterLiters.toString() : '');
-        setManualDuration(durationStr);
         return true;
     }, [showConfirm, setLocalWorkout]);
 
@@ -218,8 +216,6 @@ export function useWorkoutSession() {
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            setMood(''); setPump(''); setFatigue(''); setWater('');
-            setManualDuration('00:00:00');
             await showAlert("Modifiche salvate con successo!");
             return true;
         } catch {
@@ -232,8 +228,6 @@ export function useWorkoutSession() {
         if (await showConfirm("Annullare le modifiche a questo allenamento?")) {
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            setMood(''); setPump(''); setFatigue(''); setWater('');
-            setManualDuration('00:00:00');
             return true;
         }
         return false;
@@ -275,7 +269,6 @@ export function useWorkoutSession() {
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            setMood(''); setPump(''); setFatigue(''); setWater('');
         } catch {
             showAlert("Errore durante il salvataggio della sessione.");
         }
@@ -290,7 +283,6 @@ export function useWorkoutSession() {
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            setMood(''); setPump(''); setFatigue(''); setWater('');
         } catch {
             showAlert("Errore durante l'eliminazione della sessione.");
         }
