@@ -16,6 +16,8 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.test
+!.env.production
 
 # Agent reports, rules and AI artifacts
 AGENTS.md
