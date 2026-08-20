@@ -65,7 +65,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         pains, setPains, togglePain,
         startWorkout, endWorkout, deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
-        addExtraExercise, moveExercise, removeActiveExercise,
+        addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet,
         updateSetupNote, updateSessionNote
@@ -91,6 +91,22 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             return prev;
         });
     }, [moveExercise]);
+
+    const handleMoveToPosition = useCallback((fromIndex: number, toIndex: number) => {
+        reorderExercises(fromIndex, toIndex);
+        setOpenHistoryExIndex(prev => {
+            if (prev === null) return null;
+            if (prev === fromIndex) return toIndex;
+            if (prev === toIndex) return fromIndex;
+            return prev;
+        });
+        setOpenSetupExIndex(prev => {
+            if (prev === null) return null;
+            if (prev === fromIndex) return toIndex;
+            if (prev === toIndex) return fromIndex;
+            return prev;
+        });
+    }, [reorderExercises]);
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle || !activeCycle.routines) return [];
@@ -424,6 +440,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                 isSetupOpen={openSetupExIndex === exIndex}
                                 openSpecialMenuId={openSpecialMenuId}
                                 onMoveExercise={handleMoveExercise}
+                                onMoveToPosition={handleMoveToPosition}
                                 onToggleHistory={() => setOpenHistoryExIndex(openHistoryExIndex === exIndex ? null : exIndex)}
                                 onToggleSetup={() => setOpenSetupExIndex(openSetupExIndex === exIndex ? null : exIndex)}
                                 onRemoveExercise={() => handleRemoveExercise(exIndex)}

@@ -10,17 +10,18 @@ export function useSleepMeasurements() {
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     
+    const todayDateStr = Logic.getLocalDateString();
+
     const [editingDate, setEditingDate] = useState<string | null>(null);
+    const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
     const [sleepHours, setSleepHours] = useState('');
     const [sleepDeep, setSleepDeep] = useState('');
     const [sleepLight, setSleepLight] = useState('');
     const [sleepRem, setSleepRem] = useState('');
     const [sleepAwake, setSleepAwake] = useState('');
 
-    const todayDateStr = Logic.getLocalDateString();
-
     useEffect(() => {
-        const targetDate = editingDate || todayDateStr;
+        const targetDate = editingDate || selectedDate;
         const targetData = (nutrition as any)[targetDate];
 
         if (targetData) {
@@ -36,7 +37,7 @@ export function useSleepMeasurements() {
             setSleepRem('');
             setSleepAwake('');
         }
-    }, [todayDateStr, nutrition, editingDate]);
+    }, [selectedDate, todayDateStr, nutrition, editingDate]);
 
     const saveSleep = async (e?: any) => {
         if (e) e.preventDefault();
@@ -74,7 +75,7 @@ export function useSleepMeasurements() {
         const parsedRem = sleepRem ? Logic.parseSleepInput(sleepRem) || undefined : undefined;
         const parsedAwake = sleepAwake ? Logic.parseSleepInput(sleepAwake) || undefined : undefined;
 
-        const targetDate = editingDate || todayDateStr;
+        const targetDate = editingDate || selectedDate;
 
         try {
             await saveUserData((prev) => {
@@ -107,6 +108,8 @@ export function useSleepMeasurements() {
     return {
         editingDate,
         setEditingDate,
+        selectedDate,
+        setSelectedDate,
         sleepHours, setSleepHours,
         sleepDeep, setSleepDeep,
         sleepLight, setSleepLight,
@@ -115,3 +118,4 @@ export function useSleepMeasurements() {
         saveSleep
     };
 }
+
