@@ -55,6 +55,7 @@ export interface Exercise {
     secondaryMuscles?: string[];
     sets: ExerciseSet[];
     trackingType?: 'weight_reps' | 'time' | 'cardio';
+    isDefault?: boolean;
 }
 
 export interface RoutineExercise {
