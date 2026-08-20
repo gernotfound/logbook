@@ -10,6 +10,8 @@ import {
   LOCAL_STORAGE_NUTRITION_TAB, 
   LOCAL_STORAGE_DATA_TAB 
 } from './constants';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
@@ -207,6 +209,8 @@ function App() {
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
+      <Analytics />
+      <SpeedInsights />
     </>
   );
 }
