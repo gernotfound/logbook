@@ -9,18 +9,18 @@ import { mergeUserData, hasUserData } from '../lib/merge';
 import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
 
-import { defaultExercises } from '../lib/defaultExercises';
-import { defaultFoods } from '../lib/defaultFoods';
+// Imports for default data removed
 
 const GUEST_KEY = 'logbook_is_guest';
 
 const defaultUserData: UserData = {
     profile: {},
-    library: defaultExercises as any[],
+    library: [],
     routines: [],
     history: [],
     nutrition: {},
-    customFoods: defaultFoods as any[],
+    customFoods: [],
+    catalogOverrides: {},
     activeWorkout: null,
     trainingCycles: [],
     activeCycleId: null,

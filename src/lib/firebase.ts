@@ -51,10 +51,18 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
+// App Check (ReCaptchaV3Provider)
+import { initAppCheck, isAppCheckFallbackOffline } from './appCheck';
+initAppCheck(app).then((res) => {
+    if (!res.success) {
+        console.warn("App Check fallito o non supportato. App in modalit degradata.", res.reason);
+    }
+});
+
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
 let analytics: Analytics | null = null;
 isSupported().then((supported) => {
-    if (supported) {
+    if (supported && localStorage.getItem('logbook_analytics_consent') === 'true') {
         analytics = getAnalytics(app);
     }
 }).catch(err => {
@@ -70,4 +78,15 @@ const provider = new GoogleAuthProvider();
 setPersistence(auth, indexedDBLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
-export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics };
+
+export const setAnalyticsConsent = (consent: boolean) => {
+    localStorage.setItem('logbook_analytics_consent', consent ? 'true' : 'false');
+    if (consent && !analytics) {
+        isSupported().then(supported => {
+            if (supported) analytics = getAnalytics(app);
+        });
+    } else if (!consent && analytics) {
+        analytics = null;
+    }
+};
+export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics, isAppCheckFallbackOffline };

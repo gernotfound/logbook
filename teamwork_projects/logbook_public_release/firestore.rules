@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- Helper Functions (Zero get() / exists() = 0 read cost on Firebase Spark) ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidMonthId(monthId) {
+      return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
+    }
+    
+    function incomingData() {
+      return request.resource.data;
+    }
+
+    // Default Deny All (Defense in Depth)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Public / Shared Global Catalog (R3: Global Catalog)
+    // Client writes strictly forbidden; managed exclusively via Firebase Admin Console
+    match /global_catalog/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /catalog/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // User Root Document: users/{userId}
+    match /users/{userId} {
+      allow read, delete: if isOwner(userId);
+      
+      allow create, update: if isOwner(userId)
+        // 1. Strict top-level field whitelist
+        && incomingData().keys().hasOnly([
+          'profile',
+          'library',
+          'customExercises',
+          'routines',
+          'customFoods',
+          'activeWorkout',
+          'trainingCycles',
+          'activeCycleId',
+          'nutritionPlanning',
+          'supplements',
+          'activePains',
+          'catalogOverrides',
+          'catalogHiddenIds',
+          'exerciseOverrides',
+          'foodOverrides',
+          'hiddenCatalogExercises',
+          'hiddenCatalogFoods'
+        ])
+        // 2. Type integrity checks (no dynamic queries, 0 read cost)
+        && (!('profile' in incomingData()) || incomingData().profile is map)
+        && (!('activeWorkout' in incomingData()) || incomingData().activeWorkout == null || incomingData().activeWorkout is map)
+        && (!('activeCycleId' in incomingData()) || incomingData().activeCycleId == null || incomingData().activeCycleId is string)
+        && (!('nutritionPlanning' in incomingData()) || incomingData().nutritionPlanning == null || incomingData().nutritionPlanning is map)
+        && (!('catalogOverrides' in incomingData()) || incomingData().catalogOverrides == null || incomingData().catalogOverrides is map)
+        && (!('exerciseOverrides' in incomingData()) || incomingData().exerciseOverrides == null || incomingData().exerciseOverrides is map)
+        && (!('foodOverrides' in incomingData()) || incomingData().foodOverrides == null || incomingData().foodOverrides is map)
+        // 3. Strict array length boundaries (prevent document pollution & quota abuse)
+        && (!('library' in incomingData()) || (incomingData().library is list && incomingData().library.size() <= 500))
+        && (!('customExercises' in incomingData()) || (incomingData().customExercises is list && incomingData().customExercises.size() <= 500))
+        && (!('routines' in incomingData()) || (incomingData().routines is list && incomingData().routines.size() <= 100))
+        && (!('customFoods' in incomingData()) || (incomingData().customFoods is list && incomingData().customFoods.size() <= 1000))
+        && (!('trainingCycles' in incomingData()) || (incomingData().trainingCycles is list && incomingData().trainingCycles.size() <= 50))
+        && (!('supplements' in incomingData()) || (incomingData().supplements is list && incomingData().supplements.size() <= 50))
+        && (!('activePains' in incomingData()) || (incomingData().activePains is list && incomingData().activePains.size() <= 50))
+        && (!('catalogHiddenIds' in incomingData()) || (incomingData().catalogHiddenIds is list && incomingData().catalogHiddenIds.size() <= 500))
+        && (!('hiddenCatalogExercises' in incomingData()) || (incomingData().hiddenCatalogExercises is list && incomingData().hiddenCatalogExercises.size() <= 500))
+        && (!('hiddenCatalogFoods' in incomingData()) || (incomingData().hiddenCatalogFoods is list && incomingData().hiddenCatalogFoods.size() <= 500));
+        
+      // Subcollection: Monthly Workout History (users/{userId}/history_months/{YYYY-MM})
+      match /history_months/{monthId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) 
+          && isValidMonthId(monthId)
+          && incomingData().keys().size() <= 120; // Max 120 workout sessions per monthly bucket (up to 4/day)
+      }
+      
+      // Subcollection: Monthly Nutrition & Daily Biometrics (users/{userId}/nutrition_months/{YYYY-MM})
+      match /nutrition_months/{monthId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) 
+          && isValidMonthId(monthId)
+          && incomingData().keys().size() <= 31; // Max 31 daily records per monthly bucket
+      }
+    }
+  }
+}

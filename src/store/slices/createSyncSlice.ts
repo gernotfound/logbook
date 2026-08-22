@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { del as idbDel } from 'idb-keyval';
 import { DB } from '../../lib/db';
+import { mapFirebaseErrorCode } from '../../lib/errorHandler';
 import type { UserData } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
 import { saveUserDataToCache } from './createDataSlice';
@@ -78,8 +79,9 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                     }
                     promisesToCall.forEach(p => p.resolve());
                 } catch (error) {
-                    console.error("Errore durante il salvataggio in Zustand:", error);
-                    set({ saveError: "Errore sincronizzazione. Verifica la connessione." });
+                    const formattedError = mapFirebaseErrorCode(error);
+                    console.error("[SyncSlice] Errore durante il salvataggio:", formattedError);
+                    set({ saveError: formattedError.message });
                     promisesToCall.forEach(p => p.reject(error));
                 } finally {
                     if (!globalSaveTimer && pendingPromises.length === 0) {
