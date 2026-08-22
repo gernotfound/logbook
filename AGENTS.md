@@ -1,4 +1,4 @@
-﻿# Regole di progetto, architettura e linee guida per AI (LogBook)
+# Regole di progetto, architettura e linee guida per AI (LogBook)
 
 Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI deve leggere, assimilare e rispettare *rigorosamente* questo documento prima di scrivere una sola riga di codice.
 
@@ -159,7 +159,7 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
   - `npm run lint` (o `npm.cmd run lint`) con `oxlint` per assicurare l'assenza di violazioni stilistiche e sintattiche.
 - **Igiene del repository:** File temporanei, note e file di istruzioni locali restano esclusi dal version control tramite `.gitignore`. Non inquinare i branch di produzione.
 
-## 15. Delega operazioni meccaniche (Google AI Studio)
-- **Regola:** Per la generazione di grossi dataset (liste di alimenti, esercizi, mappature, traduzioni estese) e operazioni di data entry puramente meccaniche, è vietato consumare token per la generazione in questa sessione.
-- **Azione richiesta:** Trattare l'utente come un "sub-agente": consigliargli esplicitamente di usare Google AI Studio (dove possiede ampie risorse) e fornirgli direttamente il **Prompt da copiare e incollare** che costringa l'AI esterna a produrre il risultato nel formato esatto (es. JSON) richiesto dal nostro codice.
+## 15. Delega operazioni meccaniche e di ricerca (Perplexity Pro & Gemini Pro)
+- **Regola:** L'utente possiede un abbonamento attivo a **Perplexity Pro** e **Google Gemini Pro**. Per operazioni puramente meccaniche (generazione di dataset, liste, formattazioni), per **ricerche estese** sul web o per **consulenze**, è vietato consumare risorse in questa sessione.
+- **Azione richiesta:** Invece di eseguire tu stesso il lavoro, delega il compito: fornisci all'utente il **Prompt esatto da copiare e incollare** su Perplexity o Gemini. Assicurati di includere nel prompt il contesto e le regole di formato (es. struttura JSON esatta, markdown specifico) affinché l'utente possa semplicemente farsi restituire il lavoro dall'AI esterna e passartelo pronto per l'integrazione.
 
