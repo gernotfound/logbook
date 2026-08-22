@@ -3,6 +3,7 @@ import Fuse from 'fuse.js';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { defaultExercises } from '../lib/defaultExercises';
 
 const normalizeStem = (str: string) => {
     return str
@@ -413,6 +414,27 @@ export function useTrainingExercises() {
         }
     };
 
+    const handleRestoreExercise = async (id: string) => {
+        const originalEx = defaultExercises.find(e => e.id === id);
+        if (!originalEx) {
+            showAlert("Errore: esercizio originale non trovato.");
+            return;
+        }
+
+        if(await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
+            const updatedLibrary = library.map(ex => ex.id === id ? { ...originalEx } : ex);
+            try {
+                await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
+                // Aggiorna anche il form corrente se è aperto
+                if (editingExId === id) {
+                    handleEditClick(originalEx);
+                }
+            } catch {
+                showAlert("Errore durante il ripristino dell'esercizio.");
+            }
+        }
+    };
+
     return {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
@@ -420,6 +442,6 @@ export function useTrainingExercises() {
         library, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
-        handleSaveExercise, handleDelete
+        handleSaveExercise, handleDelete, handleRestoreExercise
     };
 }
