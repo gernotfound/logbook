@@ -76,6 +76,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 <input 
                     id="water-intake" 
                     type="number" 
+                    inputMode="decimal"
                     step="0.1" 
                     placeholder="es. 1.5" 
                     value={water} 
@@ -95,6 +96,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                         <input 
                             id="mood-rating" 
                             type="number" 
+                            inputMode="decimal"
+                            step="0.1"
                             min="1" 
                             max="10" 
                             value={mood} 
@@ -110,6 +113,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                         <input 
                             id="pump-rating" 
                             type="number" 
+                            inputMode="decimal"
+                            step="0.1"
                             min="1" 
                             max="10" 
                             value={pump} 
@@ -125,6 +130,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                         <input 
                             id="fatigue-rating" 
                             type="number" 
+                            inputMode="decimal"
+                            step="0.1"
                             min="1" 
                             max="10" 
                             value={fatigue} 

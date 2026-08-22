@@ -12,10 +12,11 @@ const TrainingExercises = () => {
         library, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
-        handleSaveExercise, handleDelete
+        handleSaveExercise, handleDelete, handleRestoreExercise
     } = useTrainingExercises();
 
     const selectedMuscleIds = useMemo(() => selectedMuscles.map(m => m.id), [selectedMuscles]);
+    const editingExercise = useMemo(() => library.find(ex => ex.id === editingExId), [library, editingExId]);
 
     return (
         <div className="training-sub-view active">
@@ -272,6 +273,19 @@ const TrainingExercises = () => {
                         {editingExId ? '💾 Salva modifiche' : '+ Aggiungi in archivio'}
                     </button>
                 </div>
+                
+                {editingExId && editingExercise?.isDefault && (
+                    <div className="mt-10">
+                        <button
+                            type="button"
+                            className="btn w-full mb-0"
+                            style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ff4d6d', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                            onClick={() => handleRestoreExercise(editingExId)}
+                        >
+                            🔄 Ripristina all'originale
+                        </button>
+                    </div>
+                )}
             </div>
 
             <h2 className="mt-20" style={{ fontSize: '1.15rem' }}>Archivio esercizi ({library.length})</h2>
