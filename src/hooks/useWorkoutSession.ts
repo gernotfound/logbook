@@ -33,19 +33,19 @@ export function useWorkoutSession() {
     const pains = (activeWorkout?.pains && Array.isArray(activeWorkout.pains)) ? activeWorkout.pains : [];
 
     const setMood = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, moodRating: val ? parseInt(val) : null } : null);
+        setLocalWorkout(prev => prev ? { ...prev, moodRating: val as any } : null);
     }, [setLocalWorkout]);
 
     const setPump = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, pumpRating: val ? parseInt(val) : null } : null);
+        setLocalWorkout(prev => prev ? { ...prev, pumpRating: val as any } : null);
     }, [setLocalWorkout]);
 
     const setFatigue = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, fatigueRating: val ? parseInt(val) : null } : null);
+        setLocalWorkout(prev => prev ? { ...prev, fatigueRating: val as any } : null);
     }, [setLocalWorkout]);
 
     const setWater = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, waterLiters: val ? parseFloat(val) : 0 } : null);
+        setLocalWorkout(prev => prev ? { ...prev, waterLiters: val as any } : null);
     }, [setLocalWorkout]);
 
     const setManualDuration = useCallback((val: string) => {
@@ -205,11 +205,7 @@ export function useWorkoutSession() {
         const targetId = currentWorkout.originalHistoryId || currentWorkout.id;
         if (!targetId) return false;
 
-        const valRes = Logic.validateWorkoutRatings(
-            mood ? parseInt(mood) : null,
-            pump ? parseInt(pump) : null,
-            fatigue ? parseInt(fatigue) : null
-        );
+        const valRes = Logic.validateWorkoutRatings(mood, pump, fatigue);
 
         const durationStr = Logic.normalizeDuration(manualDuration?.trim() || currentWorkout.manualDurationStr || currentWorkout.globalDurationStr || '00:00:00');
 
@@ -221,7 +217,7 @@ export function useWorkoutSession() {
             moodRating: valRes.mood,
             pumpRating: valRes.pump,
             fatigueRating: valRes.fatigue,
-            waterLiters: water ? parseFloat(water) : 0,
+            waterLiters: water ? parseFloat(String(water).replace(',', '.')) : 0,
             pains: Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [],
             date: currentWorkout.date || Logic.getLocalDateString()
         };
@@ -258,11 +254,7 @@ export function useWorkoutSession() {
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || !(await showConfirm("Terminare l'allenamento?"))) return;
 
-        const valRes = Logic.validateWorkoutRatings(
-            mood ? parseInt(mood) : null,
-            pump ? parseInt(pump) : null,
-            fatigue ? parseInt(fatigue) : null
-        );
+        const valRes = Logic.validateWorkoutRatings(mood, pump, fatigue);
 
         const endTime = new Date().getTime();
         const startTime = currentWorkout.globalStartTime || endTime;
@@ -278,7 +270,7 @@ export function useWorkoutSession() {
             moodRating: valRes.mood,
             pumpRating: valRes.pump,
             fatigueRating: valRes.fatigue,
-            waterLiters: water ? parseFloat(water) : 0,
+            waterLiters: water ? parseFloat(String(water).replace(',', '.')) : 0,
             pains: sessionPains,
             date: currentWorkout.date || Logic.getLocalDateString()
         };
