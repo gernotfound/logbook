@@ -9,7 +9,7 @@ import {
     signOut, 
     onAuthStateChanged,
     setPersistence,
-    browserLocalPersistence,
+    indexedDBLocalPersistence,
     deleteUser
 } from "firebase/auth";
 import { 
@@ -67,7 +67,7 @@ const db = initializeFirestore(app, {
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
-setPersistence(auth, browserLocalPersistence)
+setPersistence(auth, indexedDBLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
 export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics };

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useAuth } from '../hooks/useAuth';
+import { useDialogStore } from '../store/useDialogStore';
 
 const SettingsView = () => {
     const {
@@ -14,6 +15,24 @@ const SettingsView = () => {
     const { isInstallable, isIOSInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
+
+    const handleCheckUpdate = async () => {
+        if ('serviceWorker' in navigator) {
+            try {
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (reg) {
+                    await reg.update();
+                    useDialogStore.getState().showAlert("Controllo aggiornamenti inviato. Se è disponibile una nuova versione, il banner di aggiornamento comparirà a breve in basso.");
+                } else {
+                    useDialogStore.getState().showAlert("Nessun Service Worker trovato. Assicurati che l'app sia installata correttamente.");
+                }
+            } catch (err) {
+                useDialogStore.getState().showAlert("Errore durante il controllo degli aggiornamenti.");
+            }
+        } else {
+            useDialogStore.getState().showAlert("Il tuo browser non supporta gli aggiornamenti in background.");
+        }
+    };
 
     useEffect(() => {
         const handleOnline = () => setIsOffline(false);
@@ -92,6 +111,12 @@ const SettingsView = () => {
             <div style={{ marginTop: '15px' }}>
                 <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleExport}>
                     💾 Esporta dati (CSV)
+                </button>
+            </div>
+
+            <div style={{ marginTop: '10px' }}>
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleCheckUpdate}>
+                    🔄 Cerca aggiornamenti
                 </button>
             </div>
 
