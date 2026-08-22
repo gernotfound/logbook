@@ -167,21 +167,6 @@ export function formatTime(ms: number, showHours = false): string {
     return showHours ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
 }
 
-export function validateInputData(value: any, type: string) {
-    if (value === '' || value === null) return '';
-    if (type === 'int') {
-        return value.toString().replace(/[^0-9]/g, '');
-    } else if (type === 'float') {
-        let val = value.toString().replace(/,/g, '.').replace(/[^0-9.]/g, '');
-        const parts = val.split('.');
-        if (parts.length > 2) {
-            val = parts[0] + '.' + parts.slice(1).join('');
-        }
-        return val;
-    }
-    return value;
-}
-
 export interface CalendarDayCell {
     dayNum: number;
     dateStr: string;

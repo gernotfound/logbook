@@ -16,6 +16,9 @@ if (typeof window !== 'undefined') {
 }
 
 const initApp = async () => {
+  if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
+    navigator.storage.persist().catch(() => {});
+  }
   try {
     const cached = await get<UserData>('logbook_cached_user_data');
     window.__INITIAL_USER_DATA__ = cached || null;

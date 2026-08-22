@@ -34,6 +34,15 @@ function App() {
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage(LOCAL_STORAGE_NUTRITION_TAB, 'meals');
   const [dataSubTab, setDataSubTab] = useLocalStorage(LOCAL_STORAGE_DATA_TAB, 'measurements');
 
+  // Handle Vite lazy chunk loading failure gracefully (e.g. after a new production deployment)
+  useEffect(() => {
+    const handlePreloadError = () => {
+      window.location.reload();
+    };
+    window.addEventListener('vite:preloadError', handlePreloadError);
+    return () => window.removeEventListener('vite:preloadError', handlePreloadError);
+  }, []);
+
   // Auto-dismiss save error toast after 5 seconds
   useEffect(() => {
     if (!saveError) return;
