@@ -19,7 +19,7 @@ export const clearWorkoutTimer = () => {
     }
 };
 
-export const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
+const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         try {

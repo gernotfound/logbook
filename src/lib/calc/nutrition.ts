@@ -73,13 +73,6 @@ export function calculateMacrosFromKg(weight: any, carbsPerKg?: any, proPerKg?: 
     };
 }
 
-export function calculateMacros(params: any) {
-    if (typeof params === 'object' && params !== null && ('weight' in params || 'carbsPerKg' in params)) {
-        return calculateMacrosFromKg(params.weight, params.carbsPerKg, params.proPerKg, params.fatPerKg);
-    }
-    return calculateMacrosFromKg(params);
-}
-
 export function calculateMacroRatio(carbsGrams: any, fatGrams: any) {
     const cG = parseFloat(carbsGrams) || 0;
     const fG = parseFloat(fatGrams) || 0;
@@ -89,57 +82,6 @@ export function calculateMacroRatio(carbsGrams: any, fatGrams: any) {
     const ratioKcal = Math.round((cKcal / fKcal) * 100) / 100;
     const ratioGrams = Math.round((cG / fG) * 100) / 100;
     return { ratioKcal, ratioGrams, ratioString: `${ratioKcal}:1` };
-}
-
-export function modulateMacroRatio(param1: any, param2?: any, param3?: any, param4?: any, param5?: any, param6?: any) {
-    let weight: any, carbsPerKg: any, proPerKg: any, fatPerKg: any, lockedMacro: any, targetValue: any, targetType: any;
-    if (typeof param1 === 'object' && param1 !== null) {
-        weight = param1.weight;
-        carbsPerKg = param1.carbsPerKg;
-        proPerKg = param1.proPerKg;
-        fatPerKg = param1.fatPerKg;
-        lockedMacro = param1.lockedMacro;
-        targetValue = param1.targetValue;
-        targetType = param1.targetType || 'ratio';
-    } else {
-        weight = param1;
-        carbsPerKg = param2;
-        proPerKg = param3;
-        fatPerKg = param4;
-        lockedMacro = param5;
-        targetValue = param6;
-        targetType = 'kcal';
-    }
-    const w = parseFloat(weight);
-    let c = parseFloat(carbsPerKg) || 0;
-    let f = parseFloat(fatPerKg) || 0;
-    const p = parseFloat(proPerKg) || 0;
-    if (isNaN(w) || w <= 0) return { carbsPerKg: c, fatPerKg: f };
-    const target = parseFloat(targetValue);
-    if (isNaN(target) || target <= 0) return { carbsPerKg: Math.round(c * 100) / 100, fatPerKg: Math.round(f * 100) / 100 };
-    if (lockedMacro === 'carbs') {
-        if (targetType === 'ratio') {
-            f = (c * 4) / (9 * target);
-        } else if (targetType === 'kcal') {
-            const proKcal = p * w * 4;
-            const carbsKcal = c * w * 4;
-            const fatKcal = Math.max(0, target - proKcal - carbsKcal);
-            f = fatKcal / (w * 9);
-        }
-    } else if (lockedMacro === 'fat') {
-        if (targetType === 'ratio') {
-            c = (target * f * 9) / 4;
-        } else if (targetType === 'kcal') {
-            const proKcal = p * w * 4;
-            const fatKcal = f * w * 9;
-            const carbsKcal = Math.max(0, target - proKcal - fatKcal);
-            c = carbsKcal / (w * 4);
-        }
-    }
-    return {
-        carbsPerKg: Math.round(c * 100) / 100,
-        fatPerKg: Math.round(f * 100) / 100
-    };
 }
 
 export function calculateNormocaloricaDiff(current: any, normocalorica: any) {
@@ -291,20 +233,6 @@ export function scaleFoodNutrients(food: any, quantity: any, unit?: any) {
     };
 }
 
-export function calculateFoodMacros(food: any, quantity: any) {
-    const scaled = scaleFoodNutrients(food, quantity, food ? food.unit : 'g');
-    return {
-        kcal: scaled.kcal,
-        carbs: scaled.carbs,
-        pro: scaled.pro,
-        fat: scaled.fat,
-        satFat: scaled.satFat,
-        unSatFat: scaled.unSatFat,
-        sugars: scaled.sugars,
-        salt: scaled.salt
-    };
-}
-
 const normalizeFoodStr = (str: any) => (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
 const FUSE_FOOD_OPTIONS = {
@@ -446,6 +374,4 @@ export function validateCustomFood(foodData: any) {
     return { isValid: true, errors: {}, cleanData };
 }
 
-export function generateMockNutrition() {
-    return {};
-}
+
