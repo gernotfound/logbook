@@ -72,21 +72,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [showPositionMenu]);
 
-    const primaryMuscles = useMemo<{ id: string; name: string }[]>(() => {
-        if (!libDef || !Array.isArray(libDef.muscles)) return [];
-        return libDef.muscles.map((mId: string) => {
-            const found = Logic.MUSCLES.find(m => m.id === mId);
-            return found || { id: mId, name: mId };
-        });
-    }, [libDef]);
 
-    const secondaryMuscles = useMemo<{ id: string; name: string }[]>(() => {
-        if (!libDef || !Array.isArray(libDef.secondaryMuscles)) return [];
-        return libDef.secondaryMuscles.map((mId: string) => {
-            const found = Logic.MUSCLES.find(m => m.id === mId);
-            return found || { id: mId, name: mId };
-        });
-    }, [libDef]);
 
     const handleRemoveLastSet = useCallback(async () => {
         if (onRemoveLastSet) {
@@ -152,86 +138,63 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
     return (
         <div style={{ marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+            <div style={{ marginBottom: '10px' }}>
                 <h2 style={{ color: 'var(--primary-color)', margin: 0, fontSize: '1.15rem' }}>{exName}</h2>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                    {/* Position dropdown */}
-                    <div style={{ position: 'relative' }} ref={positionMenuRef}>
-                        <button
-                            type="button"
-                            className="btn-small"
-                            style={{ borderRadius: '8px', minWidth: '44px', minHeight: '36px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em' }}
-                            onClick={() => setShowPositionMenu(v => !v)}
-                            aria-label="Cambia posizione esercizio"
-                        >#{exIndex + 1}</button>
-                        {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
-                                {Array.from({ length: totalExercises }, (_, i) => i).map(targetIdx => (
-                                    <button
-                                        key={targetIdx}
-                                        type="button"
-                                        onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
-                                        style={{
-                                            display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
-                                            background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
-                                            border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
-                                            cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: '0.85rem', borderRadius: '6px'
-                                        }}
-                                    >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+            </div>
+            <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+                {/* Position dropdown */}
+                <div style={{ position: 'relative' }} ref={positionMenuRef}>
                     <button
                         type="button"
                         className="btn-small"
-                        style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
-                        onClick={onRemoveExercise}
-                        aria-label="Rimuovi esercizio dalla sessione"
-                    >
-                        🗑️
-                    </button>
-                    <button
-                        type="button"
-                        className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
-                        style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
-                        onClick={onToggleHistory}
-                    >
-                        🕒 Storico
-                    </button>
-                    <button
-                        type="button"
-                        className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
-                        style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
-                        onClick={onToggleSetup}
-                    >
-                        ⚙️ Setup
-                    </button>
+                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '36px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em', color: '#000' }}
+                        onClick={() => setShowPositionMenu(v => !v)}
+                        aria-label="Cambia posizione esercizio"
+                    >#{exIndex + 1}</button>
+                    {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
+                            {Array.from({ length: totalExercises }, (_, i) => i).map(targetIdx => (
+                                <button
+                                    key={targetIdx}
+                                    type="button"
+                                    onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
+                                    style={{
+                                        display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                                        background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
+                                        border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
+                                        cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: '0.85rem', borderRadius: '6px'
+                                    }}
+                                >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
+                            ))}
+                        </div>
+                    )}
                 </div>
+                <button
+                    type="button"
+                    className="btn-small"
+                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
+                    onClick={onRemoveExercise}
+                    aria-label="Rimuovi esercizio dalla sessione"
+                >
+                    🗑️
+                </button>
+                <button
+                    type="button"
+                    className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
+                    style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
+                    onClick={onToggleHistory}
+                >
+                    🕒 Storico
+                </button>
+                <button
+                    type="button"
+                    className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
+                    style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
+                    onClick={onToggleSetup}
+                >
+                    ⚙️ Setup
+                </button>
             </div>
-
-            {(primaryMuscles.length > 0 || secondaryMuscles.length > 0) && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px', marginBottom: '8px' }}>
-                    {primaryMuscles.map(m => (
-                        <span key={m.id} className="badge badge-primary">
-                            {m.name}
-                        </span>
-                    ))}
-                    {secondaryMuscles.map(m => (
-                        <span
-                            key={m.id}
-                            className="badge"
-                            style={{
-                                background: 'var(--secondary-color, rgba(0, 229, 255, 0.3))',
-                                color: '#fff',
-                                border: '1px solid var(--secondary-color, #4db6ac)'
-                            }}
-                        >
-                            {m.name}
-                        </span>
-                    ))}
-                </div>
-            )}
 
             {(exItem.minReps || exItem.maxReps) && (
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>

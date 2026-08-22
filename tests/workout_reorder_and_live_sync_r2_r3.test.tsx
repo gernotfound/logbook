@@ -404,48 +404,6 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(onMoveToPosition).toHaveBeenCalledWith(0, 1);
         });
 
-        it('3.2: Renders dynamic primary muscle badges (cyan) and secondary muscle badges (teal) in Italian sentence case', () => {
-            const exItem = { id: 'se_1', exId: 'ex_bench', sets: [], sessionNote: '' };
-            const libDef = mockLibrary[0]; // Panca piana: primary chest_upper, chest_lower; secondary triceps, delts_front
-
-            const { container } = render(
-                <SessionExerciseCard
-                    exItem={exItem}
-                    exIndex={0}
-                    totalExercises={1}
-                    libDef={libDef}
-                    pastWorkouts={[]}
-                    isHistoryOpen={false}
-                    isSetupOpen={false}
-                    openSpecialMenuId={null}
-                    onToggleHistory={vi.fn()}
-                    onToggleSetup={vi.fn()}
-                    onRemoveExercise={vi.fn()}
-                    onUpdateSetupNote={vi.fn()}
-                    onUpdateSessionNote={vi.fn()}
-                    onAddSet={vi.fn()}
-                    onRemoveSet={vi.fn()}
-                    onUpdateSet={vi.fn()}
-                    onAddSpecialSet={vi.fn()}
-                    onUpdateSpecialSet={vi.fn()}
-                    onRemoveSpecialSet={vi.fn()}
-                    onToggleSpecialMenu={vi.fn()}
-                />
-            );
-
-            // Primary badges (badge-primary class)
-            const primaryBadges = container.querySelectorAll('.badge.badge-primary');
-            expect(primaryBadges.length).toBe(2);
-            expect(primaryBadges[0].textContent).toBe('Fascio clavicolare (petto alto)');
-            expect(primaryBadges[1].textContent).toBe('Fascio addominale (petto basso)');
-
-            // Secondary badges
-            const allBadges = container.querySelectorAll('.badge');
-            const secondaryBadges = Array.from(allBadges).filter(b => !b.classList.contains('badge-primary'));
-            expect(secondaryBadges.length).toBe(2);
-            expect(secondaryBadges[0].textContent).toBe('Tricipiti');
-            expect(secondaryBadges[1].textContent).toBe('Deltoide anteriore');
-        });
 
         it('3.3: Gracefully handles missing libDef without crashing', () => {
             const exItem = { id: 'se_deleted', exId: 'ex_deleted_id', sets: [], sessionNote: '' };
