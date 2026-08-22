@@ -1,6 +1,5 @@
-import React, { useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useDialogStore } from '../../../store/useDialogStore';
-import { Logic } from '../../../lib/logic';
 import SessionSetRow from './SessionSetRow';
 
 interface SessionExerciseCardProps {
