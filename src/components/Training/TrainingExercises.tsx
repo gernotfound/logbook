@@ -19,8 +19,8 @@ const TrainingExercises = () => {
 
     return (
         <div className="training-sub-view active">
-            <div className={`card ${editingExId ? 'border-primary' : ''}`}>
-                <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{ fontSize: '1.2rem' }}>
+            <div className={editingExId ? 'border-primary' : ''}>
+                <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{ fontSize: '1.2rem', marginBottom: '15px' }}>
                     {editingExId ? '✏️ Modifica esercizio' : '➕ Crea nuovo esercizio'}
                 </h2>
                 <div className="flex-col gap-10 mt-15 mb-20">
@@ -77,9 +77,9 @@ const TrainingExercises = () => {
                 </div>
 
                 {trackingType === 'weight_reps' && (
-                    <div className="mb-20">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <label className="text-white text-sm font-medium m-0" htmlFor="ex-bodyweight">
+                    <div className="mb-20" style={{ marginTop: '30px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                            <label className="text-white text-sm font-medium m-0 cursor-pointer" htmlFor="ex-bodyweight">
                                 Esercizio a corpo libero
                             </label>
                             <input 
@@ -87,10 +87,10 @@ const TrainingExercises = () => {
                                 type="checkbox"
                                 checked={isBodyweight}
                                 onChange={e => setIsBodyweight(e.target.checked)}
-                                style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary-color)', margin: 0 }}
+                                style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: 'var(--primary-color)', margin: 0 }}
                             />
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                             <label className="text-white text-sm font-medium m-0" htmlFor="ex-equipment-weight">
                                 Peso attrezzo
                             </label>
@@ -104,7 +104,7 @@ const TrainingExercises = () => {
                                 value={equipmentWeight}
                                 onChange={e => setEquipmentWeight(e.target.value)}
                                 onFocus={e => e.target.select()}
-                                style={{ width: '100px', textAlign: 'center', padding: '8px 12px', margin: 0, fontSize: '16px' }}
+                                style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '15px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-main)' }}
                             />
                         </div>
                     </div>
