@@ -27,7 +27,7 @@ export const HomeDomsCard: React.FC<HomeDomsCardProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '1.2rem' }}>⚡</span>
-                    <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>Dolori muscolari (DOMS)</h2>
+                    <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>Dolori muscolari</h2>
                 </div>
                 <span 
                     style={{
@@ -184,7 +184,7 @@ export const HomeDomsCard: React.FC<HomeDomsCardProps> = ({
                 </div>
             ) : (
                 <p style={{ margin: '0 0 12px 0', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Nessun dolore muscolare registrato. Clicca sul manichino o cerca un muscolo per aggiungerlo.
+                    Nessun dolore muscolare registrato. Cerca un muscolo per aggiungerlo.
                 </p>
             )}
 
@@ -192,8 +192,7 @@ export const HomeDomsCard: React.FC<HomeDomsCardProps> = ({
             <div style={{ maxWidth: '280px', margin: '0 auto' }}>
                 <MuscleModel 
                     muscleColors={painColors} 
-                    interactive={true} 
-                    onToggleMuscle={onTogglePain} 
+                    interactive={false} 
                 />
             </div>
         </div>

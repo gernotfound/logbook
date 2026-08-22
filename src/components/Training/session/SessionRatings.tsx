@@ -158,7 +158,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span>⚡</span>
-                        <span>Dolori muscolari (DOMS)</span>
+                        <span>Dolori muscolari</span>
                         <span 
                             style={{
                                 fontSize: '0.75rem',
