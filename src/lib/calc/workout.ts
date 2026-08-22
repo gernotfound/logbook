@@ -204,14 +204,14 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
     const checkRating = (val: any) => {
         if (val === null || val === undefined || val === '') return { val: null, invalid: false };
         if (typeof val === 'number') {
-            const ok = Number.isInteger(val) && val >= 1 && val <= 10;
+            const ok = !isNaN(val) && val >= 1 && val <= 10;
             return { val: ok ? val : null, invalid: !ok };
         }
         if (typeof val === 'string') {
-            const trimmed = val.trim();
+            const trimmed = val.replace(',', '.').trim();
             if (trimmed === '') return { val: null, invalid: false };
-            if (/^\d+$/.test(trimmed)) {
-                const num = parseInt(trimmed, 10);
+            if (/^\d+(\.\d+)?$/.test(trimmed)) {
+                const num = parseFloat(trimmed);
                 const ok = num >= 1 && num <= 10;
                 return { val: ok ? num : null, invalid: !ok };
             }
