@@ -77,42 +77,35 @@ const TrainingExercises = () => {
                 </div>
 
                 {trackingType === 'weight_reps' && (
-                    <div className="bg-black-10 border-glass rounded-12 p-12 mb-20">
-                        <div className="flex-between items-center mb-10">
-                            <div>
-                                <label className="text-white text-sm font-medium block" htmlFor="ex-bodyweight">
-                                    Esercizio a corpo libero
-                                </label>
-                                <span className="text-muted text-xs block">
-                                    Somma il peso corporeo dell'utente al calcolo del volume
-                                </span>
-                            </div>
+                    <div className="mb-20">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <label className="text-white text-sm font-medium m-0" htmlFor="ex-bodyweight">
+                                Esercizio a corpo libero
+                            </label>
                             <input 
                                 id="ex-bodyweight"
                                 type="checkbox"
                                 checked={isBodyweight}
                                 onChange={e => setIsBodyweight(e.target.checked)}
-                                style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary-color)' }}
+                                style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary-color)', margin: 0 }}
                             />
                         </div>
-                        <div>
-                            <label className="text-muted text-xs block mb-4" htmlFor="ex-equipment-weight">
-                                Peso base attrezzo in kg (opzionale)
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="text-white text-sm font-medium m-0" htmlFor="ex-equipment-weight">
+                                Peso attrezzo
                             </label>
                             <input 
                                 id="ex-equipment-weight"
                                 type="number"
                                 inputMode="decimal"
                                 step="0.5"
-                                placeholder="es. 20 (bilanciere), 10..."
+                                min="0"
+                                placeholder="0"
                                 value={equipmentWeight}
                                 onChange={e => setEquipmentWeight(e.target.value)}
                                 onFocus={e => e.target.select()}
-                                style={{ marginBottom: 0, fontSize: '16px' }}
+                                style={{ width: '100px', textAlign: 'center', padding: '8px 12px', margin: 0, fontSize: '16px' }}
                             />
-                            <span className="text-muted text-xs block mt-4">
-                                Viene sommato ai kg inseriti durante la sessione (es. bilanciere o tara attrezzo)
-                            </span>
                         </div>
                     </div>
                 )}
