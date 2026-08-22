@@ -27,10 +27,21 @@ const SettingsView = lazy(() => import('./components/SettingsView'));
 function App() {
   const { currentUser, loading, login, loginAsGuest, linkGoogleAccount, isGuest } = useAuth();
   const syncing = useAppStore(state => state.syncing);
+  const saveError = useAppStore(state => state.saveError);
+  const setSaveError = useAppStore(state => state.setSaveError);
   const [activeTab, setActiveTab] = useLocalStorage(LOCAL_STORAGE_ACTIVE_TAB, 'home');
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage(LOCAL_STORAGE_TRAINING_TAB, 'session');
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage(LOCAL_STORAGE_NUTRITION_TAB, 'meals');
   const [dataSubTab, setDataSubTab] = useLocalStorage(LOCAL_STORAGE_DATA_TAB, 'measurements');
+
+  // Auto-dismiss save error toast after 5 seconds
+  useEffect(() => {
+    if (!saveError) return;
+    const timer = setTimeout(() => {
+      setSaveError(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [saveError, setSaveError]);
 
   // Tracciamento dei tab su Google Analytics (SPA tab tracking)
   useEffect(() => {
@@ -172,11 +183,36 @@ function App() {
           </button>
         </div>
       )}
+      {/* Indicatore sincronizzazione non bloccante */}
       {syncing && (
-        <div id="sync-overlay">
-          <div className="spinner"></div>
-          <p style={{fontWeight:'bold', color:'var(--primary-color)'}}>Sincronizzazione in corso...</p>
-          <p style={{fontSize:'0.8rem'}}>Attendere, non chiudere l'app.</p>
+        <div 
+          className="sync-indicator" 
+          role="status" 
+          aria-live="polite"
+          aria-label="Salvataggio in corso"
+        >
+          <div className="sync-indicator-spinner" />
+          <span>Salvataggio in corso...</span>
+        </div>
+      )}
+
+      {/* Toast errore sincronizzazione non bloccante */}
+      {saveError && (
+        <div 
+          className="sync-error-toast" 
+          role="alert" 
+          aria-live="assertive"
+        >
+          <span className="sync-error-icon" aria-hidden="true">⚠️</span>
+          <span className="sync-error-text">{saveError}</span>
+          <button 
+            type="button" 
+            className="sync-error-close" 
+            aria-label="Chiudi avviso"
+            onClick={() => setSaveError(null)}
+          >
+            ✕
+          </button>
         </div>
       )}
 

@@ -46,7 +46,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const setUserData = useAppStore(state => state.setUserData);
     const setSyncing = useAppStore(state => state.setSyncing);
-    const saveError = useAppStore(state => state.saveError);
     const setSaveError = useAppStore(state => state.setSaveError);
 
     const loadData = useCallback(async (user: User) => {
@@ -262,13 +261,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [setSyncing]);
 
-    const getErrorDisplay = (error: string) => {
-        if (error.startsWith('📶')) return { icon: '', text: error.replace('📶 ', ''), bg: '#0ea5e9' };
-        if (error.includes('quota') || error.includes('resource-exhausted')) return { icon: '⚠️', text: 'Limite Firebase raggiunto. Riprova tra qualche minuto.', bg: '#f97316' };
-        if (error.includes('auth') || error.includes('sessione') || error.includes('permission')) return { icon: '🔒', text: 'Sessione scaduta. Rieffettua il login.', bg: '#8b5cf6' };
-        return { icon: '⚠️', text: error, bg: '#ef4444' };
-    };
-
     const value = useMemo(() => ({
         currentUser,
         loading,
@@ -282,21 +274,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return (
         <AuthContext.Provider value={value}>
             {children}
-            {saveError && (() => {
-                const { icon, text, bg } = getErrorDisplay(saveError);
-                return (
-                    <div style={{
-                        position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
-                        background: bg, color: '#fff', padding: '10px 20px', borderRadius: '8px',
-                        fontSize: '0.85rem', zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        maxWidth: 'calc(100vw - 40px)', textAlign: 'center'
-                    }}>
-                        {icon} {text}
-                        <button onClick={() => setSaveError(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 'bold', flexShrink: 0 }}>✕</button>
-                    </div>
-                );
-            })()}
         </AuthContext.Provider>
     );
 };
