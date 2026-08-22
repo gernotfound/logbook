@@ -1,4 +1,4 @@
-# Regole di progetto, architettura e linee guida per AI (LogBook)
+﻿# Regole di progetto, architettura e linee guida per AI (LogBook)
 
 Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI deve leggere, assimilare e rispettare *rigorosamente* questo documento prima di scrivere una sola riga di codice.
 
@@ -14,7 +14,7 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 - **Styling:** CSS nativo (Vanilla CSS) basato su variabili (CSS custom properties in `src/styles/global.css`). Assolutamente **NO Tailwind** o framework CSS esterni.
 - **Iconografia:** `lucide-react` (usare proporzioni coerenti, di norma `size={24}` o `size={20}`).
 - **PWA & monitoraggio:** `vite-plugin-pwa` per la gestione del service worker e del manifest; `@vercel/analytics` e `@vercel/speed-insights` per metriche real user.
-- **Librerie di supporto:** `date-fns` per date e intervalli temporali, `fast-deep-equal` per il diffing delle scritture Firestore, `chart.js` & `react-chartjs-2` per i grafici, `fuse.js` per la ricerca fuzzy.
+- **Librerie di supporto:** `date-fns` per date e intervalli temporali, `fast-deep-equal` per il diffing delle scritture Firestore, `chart.js` & `react-chartjs-2` per i grafici (stack grafico ufficiale basato su HTML5 Canvas 2D per rendering ad alte prestazioni, compatibilità garantita con React 19, Vite e ottimizzato a 60fps per dispositivi mobili iOS/PWA), `fuse.js` per la ricerca fuzzy.
 - **Testing & quality:** `vitest` (`@testing-library/react`, `jsdom`) e `oxlint`.
 
 ## 2. Architettura di rete e storage ibrido (3-Tier Storage & Offline-First)
@@ -162,3 +162,4 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 ## 15. Delega operazioni meccaniche (Google AI Studio)
 - **Regola:** Per la generazione di grossi dataset (liste di alimenti, esercizi, mappature, traduzioni estese) e operazioni di data entry puramente meccaniche, è vietato consumare token per la generazione in questa sessione.
 - **Azione richiesta:** Trattare l'utente come un "sub-agente": consigliargli esplicitamente di usare Google AI Studio (dove possiede ampie risorse) e fornirgli direttamente il **Prompt da copiare e incollare** che costringa l'AI esterna a produrre il risultato nel formato esatto (es. JSON) richiesto dal nostro codice.
+
