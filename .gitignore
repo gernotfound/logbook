@@ -20,7 +20,7 @@ dist-ssr
 !.env.production
 
 # Agent reports, rules and AI artifacts
-AGENTS.md
+# AGENTS.md removed from gitignore because it should be tracked
 GEMINI.md
 bug_report.md
 PROJECT.md
