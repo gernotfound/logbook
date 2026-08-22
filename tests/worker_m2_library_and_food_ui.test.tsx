@@ -178,7 +178,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(bwCheckbox.type).toBe('checkbox');
             expect(bwCheckbox.checked).toBe(false);
 
-            const eqInput = screen.getByPlaceholderText(/es. 20 \(bilanciere\), 10\.\.\./i) as HTMLInputElement;
+            const eqInput = screen.getByPlaceholderText('0') as HTMLInputElement;
             expect(eqInput).toBeDefined();
             expect(eqInput.type).toBe('number');
         });
