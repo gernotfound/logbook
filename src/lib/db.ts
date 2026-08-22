@@ -5,8 +5,10 @@ import { DomainParsers } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
 import { removeUndefinedValues } from './utils/object';
-import { defaultExercises } from './defaultExercises';
-import { defaultFoods } from './defaultFoods';
+import { checkDocSize } from './checkDocSize';
+import { syncGlobalCatalog, getInMemoryCatalog } from './catalog/catalogService';
+import { resolveEffectiveExercises, resolveEffectiveFoods, migrateLegacyLibraryToOverrides, migrateLegacyFoodsToOverrides } from './catalog/deltaResolver';
+
 let lastSavedStateStr: string | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
@@ -15,14 +17,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout opera
         timer = setTimeout(() => reject(new Error(errMsg)), ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-function checkDocSize(data: any, docName: string) {
-    const jsonStr = JSON.stringify(data);
-    const sizeBytes = new Blob([jsonStr]).size;
-    if (sizeBytes > 950000) { // Limit threshold below 1MB
-        throw new Error(`Il documento ${docName} supera il limite di dimensione di Firestore (1MB). Ridurre i dati inseriti.`);
-    }
 }
 
 export const DB = {
@@ -48,25 +42,33 @@ export const DB = {
                 activePains: []
             };
             const docRef = doc(db, "users", user.uid);
+            // 1. Sync global catalog first (offline-resilient)
+            const catalogResult = await syncGlobalCatalog(db);
+            const catalog = catalogResult.catalog;
+
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
                 const data = docSnap.data() as Record<string, any>;
                 if(data.profile) state.profile = data.profile;
-                if(data.library) {
-                    const existingIds = new Set(data.library.map((x:any) => x.id));
-                    const missingDefaults = defaultExercises.filter((x:any) => !existingIds.has(x.id));
-                    state.library = [...data.library, ...missingDefaults];
-                } else {
-                    state.library = defaultExercises;
-                }
+                
+                state.catalogOverrides = data.catalogOverrides || {};
+                
+                // 2. Resolve Library and CustomFoods using deltaResolver!
+                const { customExercises, overrides: exOverrides } = migrateLegacyLibraryToOverrides(data.library || [], catalog.exercises);
+                const { customFoods, overrides: foodOverrides } = migrateLegacyFoodsToOverrides(data.customFoods || [], catalog.foods);
+                
+                state.catalogOverrides = {
+                    ...state.catalogOverrides,
+                    exercises: { ...(state.catalogOverrides?.exercises || {}), ...(exOverrides.exercises || {}) },
+                    hiddenExerciseIds: Array.from(new Set([...(state.catalogOverrides?.hiddenExerciseIds || []), ...(exOverrides.hiddenExerciseIds || [])])),
+                    foods: { ...(state.catalogOverrides?.foods || {}), ...(foodOverrides.foods || {}) },
+                    hiddenFoodIds: Array.from(new Set([...(state.catalogOverrides?.hiddenFoodIds || []), ...(foodOverrides.hiddenFoodIds || [])]))
+                };
+                
+                state.library = resolveEffectiveExercises(catalog.exercises, customExercises, state.catalogOverrides);
+                state.customFoods = resolveEffectiveFoods(catalog.foods, customFoods, state.catalogOverrides);
+                
                 if(data.routines) state.routines = data.routines;
-                if(data.customFoods) {
-                    const existingIds = new Set(data.customFoods.map((x:any) => x.id));
-                    const missingDefaults = defaultFoods.filter((x:any) => !existingIds.has(x.id));
-                    state.customFoods = [...data.customFoods, ...missingDefaults];
-                } else {
-                    state.customFoods = defaultFoods;
-                }
                 if(data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
                 if(data.trainingCycles) state.trainingCycles = data.trainingCycles;
                 if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
@@ -74,6 +76,8 @@ export const DB = {
                 if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
                 if(data.activePains) state.activePains = data.activePains;
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
+                state.library = catalog.exercises;
+                state.customFoods = catalog.foods;
                 // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
                 // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
                 state.profile = DomainParsers.parseProfile(state.profile);
@@ -175,30 +179,52 @@ export const DB = {
             const batch = writeBatch(db);
             let hasWrites = false;
             
+            // Re-split library & customFoods into pure overrides/custom so we don't save the whole catalog
+            const catalog = getInMemoryCatalog();
+            let effectiveCustomExercises = state.library || [];
+            let effectiveCustomFoods = state.customFoods || [];
+            let overridesToSave = state.catalogOverrides || {};
+            
+            if (catalog) {
+                const { customExercises, overrides: exOverrides } = migrateLegacyLibraryToOverrides(state.library || [], catalog.exercises);
+                const { customFoods, overrides: foodOverrides } = migrateLegacyFoodsToOverrides(state.customFoods || [], catalog.foods);
+                overridesToSave = {
+                    ...overridesToSave,
+                    exercises: exOverrides.exercises,
+                    hiddenExerciseIds: exOverrides.hiddenExerciseIds,
+                    foods: foodOverrides.foods,
+                    hiddenFoodIds: foodOverrides.hiddenFoodIds,
+                };
+                effectiveCustomExercises = customExercises;
+                effectiveCustomFoods = customFoods;
+            }
+            
             // 1. User doc updates
             if (!deepEqual(state.profile, oldState.profile) ||
-                !deepEqual(state.library, oldState.library) ||
+                !deepEqual(effectiveCustomExercises, oldState.library) ||
                 !deepEqual(state.routines, oldState.routines) ||
-                !deepEqual(state.customFoods, oldState.customFoods) ||
+                !deepEqual(effectiveCustomFoods, oldState.customFoods) ||
                 !deepEqual(state.activeWorkout, oldState.activeWorkout) ||
                 !deepEqual(state.trainingCycles, oldState.trainingCycles) ||
                 !deepEqual(state.activeCycleId, oldState.activeCycleId) ||
                 !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning) ||
                 !deepEqual(state.supplements, oldState.supplements) ||
-                !deepEqual(state.activePains, oldState.activePains)) {
+                !deepEqual(state.activePains, oldState.activePains) ||
+                !deepEqual(overridesToSave, oldState.catalogOverrides)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 const userDocData = {
                     profile: state.profile || {},
-                    library: state.library || [],
+                    library: effectiveCustomExercises,
                     routines: state.routines || [],
-                    customFoods: state.customFoods || [],
+                    customFoods: effectiveCustomFoods,
                     activeWorkout: state.activeWorkout || null,
                     trainingCycles: state.trainingCycles || [],
                     activeCycleId: state.activeCycleId !== undefined ? state.activeCycleId : null,
                     nutritionPlanning: state.nutritionPlanning || null,
                     supplements: state.supplements || [],
-                    activePains: state.activePains || []
+                    activePains: state.activePains || [],
+                    catalogOverrides: overridesToSave
                 };
                 const cleanUserDocData = removeUndefinedValues(userDocData);
                 checkDocSize(cleanUserDocData, "User Profile");

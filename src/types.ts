@@ -225,19 +225,110 @@ export interface TrainingCycle {
     isActive?: boolean;
 }
 
+export interface CatalogManifest {
+    version: string;
+    updatedAt: string;
+    schemaVersion: number;
+    docRefs: {
+        exercises: string;
+        foods: string;
+    };
+    itemCounts: {
+        exercises: number;
+        foods: number;
+    };
+}
+
+export interface CatalogExercise {
+    id: string;
+    name: string;
+    muscles?: string[];
+    secondaryMuscles?: string[];
+    trackingType?: 'weight_reps' | 'time' | 'cardio';
+    isDefault?: boolean;
+    isBodyweight?: boolean;
+    equipmentWeight?: number;
+    notes?: string;
+    setsCount?: number;
+}
+
+export interface CatalogFood {
+    id: string | number;
+    name: string;
+    brand?: string;
+    category?: string;
+    kcal: number;
+    pro: number;
+    carbs: number;
+    fat: number;
+    baseQty?: number;
+    unit?: string;
+    servingUnit?: string;
+    servingWeight?: number | null;
+    isCustom?: boolean;
+    satFat?: number;
+    sugars?: number;
+    sodium?: number;
+    fiber?: number;
+    iron?: number;
+    potassium?: number;
+    calcium?: number;
+    magnesium?: number;
+    cholesterol?: number;
+}
+
+export interface CachedGlobalCatalog {
+    manifest: CatalogManifest;
+    exercises: CatalogExercise[];
+    foods: CatalogFood[];
+    cachedAt: number;
+}
+
+export interface ExerciseOverride {
+    name?: string;
+    notes?: string;
+    muscles?: string[];
+    secondaryMuscles?: string[];
+    equipmentWeight?: number;
+    isBodyweight?: boolean;
+    trackingType?: 'weight_reps' | 'time' | 'cardio';
+}
+
+export interface FoodOverride {
+    name?: string;
+    brand?: string;
+    category?: string;
+    kcal?: number;
+    pro?: number;
+    carbs?: number;
+    fat?: number;
+    baseQty?: number;
+    unit?: string;
+    servingUnit?: string;
+    servingWeight?: number | null;
+}
+
+export interface CatalogOverrides {
+    exercises?: Record<string, ExerciseOverride>;
+    foods?: Record<string, FoodOverride>;
+    hiddenExerciseIds?: string[];
+    hiddenFoodIds?: string[];
+}
+
 export interface UserData {
     profile?: UserProfile;
-    library?: Exercise[];
+    library?: Exercise[]; // Legacy, pre-migration
     routines?: WorkoutRoutine[];
     history?: WorkoutSession[];
     nutrition?: Record<string, NutritionDay>;
-    customFoods?: Food[];
+    customFoods?: Food[]; // Legacy, pre-migration
     activeWorkout?: WorkoutSession | null;
     nutritionPlanning?: NutritionPlanning;
     trainingCycles?: TrainingCycle[];
     activeCycleId?: string | null;
     supplements?: Supplement[];
     activePains?: string[];
+    catalogOverrides?: CatalogOverrides; // New global catalog overrides
 }
 
 declare global {

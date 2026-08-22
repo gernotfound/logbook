@@ -1,0 +1,23 @@
+{
+  "name": "logbook-public-release-poc",
+  "version": "1.0.0",
+  "description": "LogBook PWA Public Release Proof of Concept (App Check, Quota, Global Catalog, Resilient UX, Privacy Analytics)",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "firebase": "^12.17.0",
+    "idb-keyval": "^6.3.0",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
