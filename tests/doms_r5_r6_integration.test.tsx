@@ -58,7 +58,7 @@ describe('DOMS R5 & R6 Full Component and Integration Suite', () => {
                 />
             );
 
-            expect(screen.getByText('Dolori muscolari (DOMS)')).toBeDefined();
+            expect(screen.getByText('Dolori muscolari')).toBeDefined();
             expect(screen.getByText('2 attivi')).toBeDefined();
             expect(screen.getByText('Petto')).toBeDefined();
             expect(screen.getByText('Quadricipiti')).toBeDefined();
@@ -130,7 +130,7 @@ describe('DOMS R5 & R6 Full Component and Integration Suite', () => {
             );
 
             expect(screen.getByText('1 selezionati')).toBeDefined();
-            const accordionBtn = screen.getByRole('button', { name: /Dolori muscolari \(DOMS\)/i });
+            const accordionBtn = screen.getByRole('button', { name: /Dolori muscolari/i });
             
             // Before clicking: search input is not visible
             expect(screen.queryByPlaceholderText('🔍 Cerca muscolo dolorante...')).toBeNull();
@@ -160,7 +160,7 @@ describe('DOMS R5 & R6 Full Component and Integration Suite', () => {
                 />
             );
 
-            const accordionBtn = screen.getByRole('button', { name: /Dolori muscolari \(DOMS\)/i });
+            const accordionBtn = screen.getByRole('button', { name: /Dolori muscolari/i });
             fireEvent.click(accordionBtn);
 
             const searchInput = screen.getByPlaceholderText('🔍 Cerca muscolo dolorante...');
