@@ -82,7 +82,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
 
                 <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' }}>
                     <div style={{ position: 'relative', flex: 1, minWidth: 0, maxWidth: '200px' }}>
-                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Ore sonno (totali) *</label>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Ore sonno (totali)</label>
                         <input
                             id="sleep-hours"
                             type="time"
