@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { render, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
@@ -12,11 +12,11 @@ if (typeof window !== 'undefined') {
 }
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+(globalThis as any).ResizeObserver = class {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+} as any;
 
 // Mock useDialogStore
 vi.mock('../src/store/useDialogStore', () => {
@@ -54,16 +54,17 @@ export const emptyUserData: any = {
 };
 
 // Mock HTMLCanvasElement context for Chart.js
-HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(() => ({
+HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (this: any) { return { canvas: this,
   fillRect: vi.fn(),
   clearRect: vi.fn(),
   getImageData: vi.fn(() => ({ data: new Array(4) })),
   putImageData: vi.fn(),
   createImageData: vi.fn(),
   setTransform: vi.fn(),
+  resetTransform: vi.fn(),
   drawFocusIfNeeded: vi.fn(),
-  createRadialGradient: vi.fn(),
-  createLinearGradient: vi.fn(),
+  createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
   beginPath: vi.fn(),
   fill: vi.fn(),
   stroke: vi.fn(),
@@ -84,7 +85,7 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(() => ({
   strokeRect: vi.fn(),
   strokeText: vi.fn(),
   fillText: vi.fn(),
-})) as any;
+}; }) as any;
 
 // Mock localStorage
 const localStorageStore: Record<string, string> = {};
@@ -140,7 +141,7 @@ vi.mock('firebase/auth', () => ({
   signInWithRedirect: vi.fn(),
   getRedirectResult: vi.fn().mockResolvedValue(null),
   signOut: vi.fn(),
-  onAuthStateChanged: vi.fn((auth, callback) => {
+  onAuthStateChanged: vi.fn((_auth, callback) => {
     callback({
       uid: 'test-user-id',
       email: 'test@example.com',

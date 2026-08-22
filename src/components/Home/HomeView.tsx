@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+﻿import { lazy, Suspense } from 'react';
 import { useHomeView } from '../../hooks/useHomeView';
 import MuscleModel from '../Training/MuscleModel';
 import HomeWorkoutWidget from './widgets/HomeWorkoutWidget';
@@ -8,6 +8,8 @@ import HomeTdeeWidget from './widgets/HomeTdeeWidget';
 
 const WeightChart = lazy(() => import('./WeightChart'));
 const VolumeChart = lazy(() => import('./VolumeChart'));
+const WeeklyVolumeChart = lazy(() => import('../analytics/WeeklyVolumeChart'));
+const VolumeCaloriesCorrelationChart = lazy(() => import('../analytics/VolumeCaloriesCorrelationChart'));
 
 const PERIOD_OPTIONS = [
   { id: '7d', label: '1 sett' },
@@ -30,7 +32,8 @@ const HomeView = ({ onNavigate }: any) => {
       tdeeCalc, chartData,
       weightPeriod, setWeightPeriod, weightStats,
       muscleColors, volumeChartData,
-      activePains, painColors, toggleActivePain
+      activePains, painColors, toggleActivePain,
+      history, nutrition, library, userWeight
   } = homeState;
 
   return (
@@ -91,6 +94,26 @@ const HomeView = ({ onNavigate }: any) => {
                   </Suspense>
               </div>
           </div>
+      </div>
+
+      {/* Analytics & Progression Dashboard */}
+      <div id="home-analytics-section" style={{ marginTop: '10px' }}>
+          <Suspense fallback={<div className="card" style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
+              <WeeklyVolumeChart
+                  history={history}
+                  library={library}
+                  userWeight={userWeight}
+              />
+          </Suspense>
+
+          <Suspense fallback={<div className="card" style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
+              <VolumeCaloriesCorrelationChart
+                  history={history}
+                  nutrition={nutrition}
+                  library={library}
+                  userWeight={userWeight}
+              />
+          </Suspense>
       </div>
 
       <div className="card" id="home-chart-widget" style={{ padding: '16px' }}>

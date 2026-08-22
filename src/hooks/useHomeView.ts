@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+﻿import { useState, useMemo, useCallback } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
@@ -91,6 +91,10 @@ export type HomeViewState =
         activePains: string[];
         painColors: Record<string, string>;
         toggleActivePain: (muscleId: string) => void;
+        history: any[];
+        nutrition: Record<string, any>;
+        library: any[];
+        userWeight: number;
     };
 
 const EMPTY_HISTORY: any[] = [];
@@ -390,6 +394,7 @@ export function useHomeView(): HomeViewState {
     const currentWeight = todayNutrition.weight || 
                           recentWeight || 
                           nutritionPlanning?.weight || 80;
+    const resolvedUserWeight = typeof currentWeight === 'number' ? currentWeight : (parseFloat(String(currentWeight)) || 80);
     
     let bf = "--";
     const recentNutritionWithBf = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
@@ -430,6 +435,8 @@ export function useHomeView(): HomeViewState {
         tdeeCalc, recentDates, chartData,
         weightPeriod, setWeightPeriod, weightStats,
         muscleColors, volumeChartData,
-        activePains, painColors, toggleActivePain
+        activePains, painColors, toggleActivePain,
+        history, nutrition, library,
+        userWeight: resolvedUserWeight
     };
 }
