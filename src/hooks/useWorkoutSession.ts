@@ -228,8 +228,25 @@ export function useWorkoutSession() {
         try {
             await saveUserData((prev) => {
                 if (!prev) return prev;
+                const isMostRecent = prev.history && prev.history.length > 0 && prev.history[0].id === targetId;
                 const updatedHistory = (prev.history || []).map(w => (w.id === targetId ? updatedWorkout : w));
-                return { ...prev, history: updatedHistory, activeWorkout: null };
+                
+                let finalActivePains = prev.activePains || [];
+                if (isMostRecent) {
+                    finalActivePains = Logic.autoHealPains(
+                        prev.activePains || [],
+                        updatedWorkout.exercises || [],
+                        prev.library || [],
+                        updatedWorkout.pains || []
+                    );
+                }
+
+                return { 
+                    ...prev, 
+                    history: updatedHistory, 
+                    activeWorkout: null,
+                    ...(isMostRecent && { activePains: finalActivePains })
+                };
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
