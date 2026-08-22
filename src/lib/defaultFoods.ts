@@ -1,11 +1,11 @@
-﻿export const defaultFoods = [
+export const defaultFoods = [
   {
     "id": "petto-di-pollo-crudo",
     "name": "Petto di Pollo Crudo",
     "brand": "Generico",
     "kcal": 103,
-    "pro": 23.0,
-    "carbs": 0.0,
+    "pro": 23,
+    "carbs": 0,
     "fat": 1.2
   },
   {
@@ -13,8 +13,8 @@
     "name": "Petto di Tacchino Crudo",
     "brand": "Generico",
     "kcal": 110,
-    "pro": 24.0,
-    "carbs": 0.0,
+    "pro": 24,
+    "carbs": 0,
     "fat": 1.5
   },
   {
@@ -22,53 +22,53 @@
     "name": "Vitello Magro Crudo",
     "brand": "Generico",
     "kcal": 111,
-    "pro": 21.0,
-    "carbs": 0.0,
-    "fat": 3.0
+    "pro": 21,
+    "carbs": 0,
+    "fat": 3
   },
   {
     "id": "manzo-magro-crudo",
     "name": "Manzo Magro Crudo",
     "brand": "Generico",
     "kcal": 133,
-    "pro": 22.0,
-    "carbs": 0.0,
-    "fat": 5.0
+    "pro": 22,
+    "carbs": 0,
+    "fat": 5
   },
   {
     "id": "lonza-di-maiale-cruda",
     "name": "Lonza di Maiale Cruda",
     "brand": "Generico",
     "kcal": 138,
-    "pro": 21.0,
-    "carbs": 0.0,
-    "fat": 6.0
+    "pro": 21,
+    "carbs": 0,
+    "fat": 6
   },
   {
     "id": "salmone-fresco-crudo",
     "name": "Salmone Fresco Crudo",
     "brand": "Generico",
     "kcal": 197,
-    "pro": 20.0,
-    "carbs": 0.0,
-    "fat": 13.0
+    "pro": 20,
+    "carbs": 0,
+    "fat": 13
   },
   {
     "id": "tonno-al-naturale-sgocciolato",
     "name": "Tonno al Naturale Sgocciolato",
     "brand": "Generico",
     "kcal": 109,
-    "pro": 25.0,
-    "carbs": 0.0,
-    "fat": 1.0
+    "pro": 25,
+    "carbs": 0,
+    "fat": 1
   },
   {
     "id": "merluzzo-fresco-crudo",
     "name": "Merluzzo Fresco Crudo",
     "brand": "Generico",
     "kcal": 77,
-    "pro": 18.0,
-    "carbs": 0.0,
+    "pro": 18,
+    "carbs": 0,
     "fat": 0.5
   },
   {
@@ -76,36 +76,36 @@
     "name": "Uovo Intero Crudo",
     "brand": "Generico",
     "kcal": 146,
-    "pro": 13.0,
-    "carbs": 1.0,
-    "fat": 10.0
+    "pro": 13,
+    "carbs": 1,
+    "fat": 10
   },
   {
     "id": "albume-d-uovo-crudo",
     "name": "Albume d'Uovo Crudo",
     "brand": "Generico",
     "kcal": 48,
-    "pro": 11.0,
-    "carbs": 1.0,
-    "fat": 0.0
+    "pro": 11,
+    "carbs": 1,
+    "fat": 0
   },
   {
     "id": "yogurt-greco-0-grassi",
     "name": "Yogurt Greco 0% Grassi",
     "brand": "Generico",
     "kcal": 56,
-    "pro": 10.0,
-    "carbs": 4.0,
-    "fat": 0.0
+    "pro": 10,
+    "carbs": 4,
+    "fat": 0
   },
   {
     "id": "yogurt-greco-5-grassi",
     "name": "Yogurt Greco 5% Grassi",
     "brand": "Generico",
     "kcal": 93,
-    "pro": 9.0,
-    "carbs": 3.0,
-    "fat": 5.0
+    "pro": 9,
+    "carbs": 3,
+    "fat": 5
   },
   {
     "id": "latte-parzialmente-scremato",
@@ -113,7 +113,7 @@
     "brand": "Generico",
     "kcal": 47,
     "pro": 3.3,
-    "carbs": 5.0,
+    "carbs": 5,
     "fat": 1.5
   },
   {
@@ -122,7 +122,7 @@
     "brand": "Generico",
     "kcal": 66,
     "pro": 3.3,
-    "carbs": 5.0,
+    "carbs": 5,
     "fat": 3.6
   },
   {
@@ -130,62 +130,62 @@
     "name": "Ricotta Vaccina",
     "brand": "Generico",
     "kcal": 146,
-    "pro": 11.0,
-    "carbs": 3.0,
-    "fat": 10.0
+    "pro": 11,
+    "carbs": 3,
+    "fat": 10
   },
   {
     "id": "mozzarella-light",
     "name": "Mozzarella Light",
     "brand": "Generico",
     "kcal": 169,
-    "pro": 20.0,
-    "carbs": 2.0,
-    "fat": 9.0
+    "pro": 20,
+    "carbs": 2,
+    "fat": 9
   },
   {
     "id": "parmigiano-reggiano",
     "name": "Parmigiano Reggiano",
     "brand": "Generico",
     "kcal": 389,
-    "pro": 32.0,
-    "carbs": 0.0,
-    "fat": 29.0
+    "pro": 32,
+    "carbs": 0,
+    "fat": 29
   },
   {
     "id": "tofu-al-naturale-crudo",
     "name": "Tofu al Naturale Crudo",
     "brand": "Generico",
     "kcal": 140,
-    "pro": 15.0,
-    "carbs": 2.0,
-    "fat": 8.0
+    "pro": 15,
+    "carbs": 2,
+    "fat": 8
   },
   {
     "id": "tempeh-al-naturale-crudo",
     "name": "Tempeh al Naturale Crudo",
     "brand": "Generico",
     "kcal": 211,
-    "pro": 19.0,
-    "carbs": 9.0,
-    "fat": 11.0
+    "pro": 19,
+    "carbs": 9,
+    "fat": 11
   },
   {
     "id": "seitan-al-naturale-crudo",
     "name": "Seitan al Naturale Crudo",
     "brand": "Generico",
     "kcal": 218,
-    "pro": 36.0,
-    "carbs": 14.0,
-    "fat": 2.0
+    "pro": 36,
+    "carbs": 14,
+    "fat": 2
   },
   {
     "id": "pasta-di-semola-cruda",
     "name": "Pasta di Semola Cruda",
     "brand": "Generico",
     "kcal": 358,
-    "pro": 13.0,
-    "carbs": 73.0,
+    "pro": 13,
+    "carbs": 73,
     "fat": 1.5
   },
   {
@@ -193,8 +193,8 @@
     "name": "Pasta Integrale Cruda",
     "brand": "Generico",
     "kcal": 343,
-    "pro": 14.0,
-    "carbs": 66.0,
+    "pro": 14,
+    "carbs": 66,
     "fat": 2.5
   },
   {
@@ -202,53 +202,53 @@
     "name": "Riso Basmati Crudo",
     "brand": "Generico",
     "kcal": 353,
-    "pro": 9.0,
-    "carbs": 77.0,
-    "fat": 1.0
+    "pro": 9,
+    "carbs": 77,
+    "fat": 1
   },
   {
     "id": "riso-integrale-crudo",
     "name": "Riso Integrale Crudo",
     "brand": "Generico",
     "kcal": 355,
-    "pro": 8.0,
-    "carbs": 74.0,
-    "fat": 3.0
+    "pro": 8,
+    "carbs": 74,
+    "fat": 3
   },
   {
     "id": "avena-in-fiocchi-cruda",
     "name": "Avena in Fiocchi Cruda",
     "brand": "Generico",
     "kcal": 359,
-    "pro": 14.0,
-    "carbs": 60.0,
-    "fat": 7.0
+    "pro": 14,
+    "carbs": 60,
+    "fat": 7
   },
   {
     "id": "pane-integrale",
     "name": "Pane Integrale",
     "brand": "Generico",
     "kcal": 243,
-    "pro": 11.0,
-    "carbs": 43.0,
-    "fat": 3.0
+    "pro": 11,
+    "carbs": 43,
+    "fat": 3
   },
   {
     "id": "pane-bianco",
     "name": "Pane Bianco",
     "brand": "Generico",
     "kcal": 263,
-    "pro": 9.0,
-    "carbs": 50.0,
-    "fat": 3.0
+    "pro": 9,
+    "carbs": 50,
+    "fat": 3
   },
   {
     "id": "patate-crude",
     "name": "Patate Crude",
     "brand": "Generico",
     "kcal": 77,
-    "pro": 2.0,
-    "carbs": 17.0,
+    "pro": 2,
+    "carbs": 17,
     "fat": 0.1
   },
   {
@@ -257,7 +257,7 @@
     "brand": "Generico",
     "kcal": 87,
     "pro": 1.6,
-    "carbs": 20.0,
+    "carbs": 20,
     "fat": 0.1
   },
   {
@@ -265,17 +265,17 @@
     "name": "Ceci Secchi Crudi",
     "brand": "Generico",
     "kcal": 322,
-    "pro": 20.0,
-    "carbs": 47.0,
-    "fat": 6.0
+    "pro": 20,
+    "carbs": 47,
+    "fat": 6
   },
   {
     "id": "ceci-in-scatola-sgocciolati",
     "name": "Ceci in Scatola Sgocciolati",
     "brand": "Generico",
     "kcal": 115,
-    "pro": 7.0,
-    "carbs": 16.0,
+    "pro": 7,
+    "carbs": 16,
     "fat": 2.5
   },
   {
@@ -283,8 +283,8 @@
     "name": "Lenticchie Secche Crude",
     "brand": "Generico",
     "kcal": 318,
-    "pro": 24.0,
-    "carbs": 52.0,
+    "pro": 24,
+    "carbs": 52,
     "fat": 1.5
   },
   {
@@ -292,44 +292,44 @@
     "name": "Lenticchie in Scatola Sgocciolate",
     "brand": "Generico",
     "kcal": 101,
-    "pro": 8.0,
-    "carbs": 15.0,
-    "fat": 1.0
+    "pro": 8,
+    "carbs": 15,
+    "fat": 1
   },
   {
     "id": "fagioli-cannellini-in-scatola-sgocciolati",
     "name": "Fagioli Cannellini in Scatola Sgocciolati",
     "brand": "Generico",
     "kcal": 97,
-    "pro": 7.0,
-    "carbs": 15.0,
-    "fat": 1.0
+    "pro": 7,
+    "carbs": 15,
+    "fat": 1
   },
   {
     "id": "fagioli-borlotti-in-scatola-sgocciolati",
     "name": "Fagioli Borlotti in Scatola Sgocciolati",
     "brand": "Generico",
     "kcal": 97,
-    "pro": 7.0,
-    "carbs": 15.0,
-    "fat": 1.0
+    "pro": 7,
+    "carbs": 15,
+    "fat": 1
   },
   {
     "id": "quinoa-cruda",
     "name": "Quinoa Cruda",
     "brand": "Generico",
     "kcal": 366,
-    "pro": 14.0,
-    "carbs": 64.0,
-    "fat": 6.0
+    "pro": 14,
+    "carbs": 64,
+    "fat": 6
   },
   {
     "id": "cous-cous-crudo",
     "name": "Cous Cous Crudo",
     "brand": "Generico",
     "kcal": 354,
-    "pro": 13.0,
-    "carbs": 72.0,
+    "pro": 13,
+    "carbs": 72,
     "fat": 1.5
   },
   {
@@ -337,26 +337,26 @@
     "name": "Gallette di Riso",
     "brand": "Generico",
     "kcal": 379,
-    "pro": 8.0,
-    "carbs": 80.0,
-    "fat": 3.0
+    "pro": 8,
+    "carbs": 80,
+    "fat": 3
   },
   {
     "id": "grano-saraceno-crudo",
     "name": "Grano Saraceno Crudo",
     "brand": "Generico",
     "kcal": 363,
-    "pro": 13.0,
-    "carbs": 71.0,
-    "fat": 3.0
+    "pro": 13,
+    "carbs": 71,
+    "fat": 3
   },
   {
     "id": "farro-crudo",
     "name": "Farro Crudo",
     "brand": "Generico",
     "kcal": 351,
-    "pro": 15.0,
-    "carbs": 67.0,
+    "pro": 15,
+    "carbs": 67,
     "fat": 2.5
   },
   {
@@ -364,170 +364,170 @@
     "name": "Olio Extravergine di Oliva",
     "brand": "Generico",
     "kcal": 900,
-    "pro": 0.0,
-    "carbs": 0.0,
-    "fat": 100.0
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100
   },
   {
     "id": "burro",
     "name": "Burro",
     "brand": "Generico",
     "kcal": 755,
-    "pro": 1.0,
-    "carbs": 1.0,
-    "fat": 83.0
+    "pro": 1,
+    "carbs": 1,
+    "fat": 83
   },
   {
     "id": "burro-di-arachidi-100",
     "name": "Burro di Arachidi 100%",
     "brand": "Generico",
     "kcal": 614,
-    "pro": 25.0,
-    "carbs": 16.0,
-    "fat": 50.0
+    "pro": 25,
+    "carbs": 16,
+    "fat": 50
   },
   {
     "id": "burro-di-mandorle-100",
     "name": "Burro di Mandorle 100%",
     "brand": "Generico",
     "kcal": 655,
-    "pro": 21.0,
-    "carbs": 19.0,
-    "fat": 55.0
+    "pro": 21,
+    "carbs": 19,
+    "fat": 55
   },
   {
     "id": "noci-sgusciate",
     "name": "Noci Sgusciate",
     "brand": "Generico",
     "kcal": 701,
-    "pro": 15.0,
-    "carbs": 14.0,
-    "fat": 65.0
+    "pro": 15,
+    "carbs": 14,
+    "fat": 65
   },
   {
     "id": "mandorle-sgusciate",
     "name": "Mandorle Sgusciate",
     "brand": "Generico",
     "kcal": 622,
-    "pro": 21.0,
-    "carbs": 22.0,
-    "fat": 50.0
+    "pro": 21,
+    "carbs": 22,
+    "fat": 50
   },
   {
     "id": "nocciole-sgusciate",
     "name": "Nocciole Sgusciate",
     "brand": "Generico",
     "kcal": 677,
-    "pro": 15.0,
-    "carbs": 17.0,
-    "fat": 61.0
+    "pro": 15,
+    "carbs": 17,
+    "fat": 61
   },
   {
     "id": "arachidi-tostate",
     "name": "Arachidi Tostate",
     "brand": "Generico",
     "kcal": 609,
-    "pro": 26.0,
-    "carbs": 16.0,
-    "fat": 49.0
+    "pro": 26,
+    "carbs": 16,
+    "fat": 49
   },
   {
     "id": "pistacchi-sgusciati",
     "name": "Pistacchi Sgusciati",
     "brand": "Generico",
     "kcal": 597,
-    "pro": 20.0,
-    "carbs": 28.0,
-    "fat": 45.0
+    "pro": 20,
+    "carbs": 28,
+    "fat": 45
   },
   {
     "id": "anacardi-sgusciati",
     "name": "Anacardi Sgusciati",
     "brand": "Generico",
     "kcal": 588,
-    "pro": 18.0,
-    "carbs": 30.0,
-    "fat": 44.0
+    "pro": 18,
+    "carbs": 30,
+    "fat": 44
   },
   {
     "id": "semi-di-chia",
     "name": "Semi di Chia",
     "brand": "Generico",
     "kcal": 515,
-    "pro": 17.0,
-    "carbs": 42.0,
-    "fat": 31.0
+    "pro": 17,
+    "carbs": 42,
+    "fat": 31
   },
   {
     "id": "semi-di-lino",
     "name": "Semi di Lino",
     "brand": "Generico",
     "kcal": 566,
-    "pro": 18.0,
-    "carbs": 29.0,
-    "fat": 42.0
+    "pro": 18,
+    "carbs": 29,
+    "fat": 42
   },
   {
     "id": "semi-di-zucca",
     "name": "Semi di Zucca",
     "brand": "Generico",
     "kcal": 621,
-    "pro": 30.0,
-    "carbs": 15.0,
-    "fat": 49.0
+    "pro": 30,
+    "carbs": 15,
+    "fat": 49
   },
   {
     "id": "semi-di-girasole",
     "name": "Semi di Girasole",
     "brand": "Generico",
     "kcal": 623,
-    "pro": 21.0,
-    "carbs": 20.0,
-    "fat": 51.0
+    "pro": 21,
+    "carbs": 20,
+    "fat": 51
   },
   {
     "id": "avocado-crudo",
     "name": "Avocado Crudo",
     "brand": "Generico",
     "kcal": 179,
-    "pro": 2.0,
-    "carbs": 9.0,
-    "fat": 15.0
+    "pro": 2,
+    "carbs": 9,
+    "fat": 15
   },
   {
     "id": "cioccolato-fondente-85",
     "name": "Cioccolato Fondente 85%",
     "brand": "Generico",
     "kcal": 522,
-    "pro": 8.0,
-    "carbs": 19.0,
-    "fat": 46.0
+    "pro": 8,
+    "carbs": 19,
+    "fat": 46
   },
   {
     "id": "olio-di-cocco",
     "name": "Olio di Cocco",
     "brand": "Generico",
     "kcal": 900,
-    "pro": 0.0,
-    "carbs": 0.0,
-    "fat": 100.0
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100
   },
   {
     "id": "maionese-classica",
     "name": "Maionese Classica",
     "brand": "Generico",
     "kcal": 683,
-    "pro": 1.0,
-    "carbs": 1.0,
-    "fat": 75.0
+    "pro": 1,
+    "carbs": 1,
+    "fat": 75
   },
   {
     "id": "broccoli-crudi",
     "name": "Broccoli Crudi",
     "brand": "Generico",
     "kcal": 45,
-    "pro": 3.0,
-    "carbs": 7.0,
+    "pro": 3,
+    "carbs": 7,
     "fat": 0.5
   },
   {
@@ -535,8 +535,8 @@
     "name": "Spinaci Crudi",
     "brand": "Generico",
     "kcal": 33,
-    "pro": 3.0,
-    "carbs": 4.0,
+    "pro": 3,
+    "carbs": 4,
     "fat": 0.5
   },
   {
@@ -545,7 +545,7 @@
     "brand": "Generico",
     "kcal": 20,
     "pro": 1.5,
-    "carbs": 3.0,
+    "carbs": 3,
     "fat": 0.2
   },
   {
@@ -553,8 +553,8 @@
     "name": "Melanzane Crude",
     "brand": "Generico",
     "kcal": 30,
-    "pro": 1.0,
-    "carbs": 6.0,
+    "pro": 1,
+    "carbs": 6,
     "fat": 0.2
   },
   {
@@ -562,8 +562,8 @@
     "name": "Peperoni Rossi Crudi",
     "brand": "Generico",
     "kcal": 31,
-    "pro": 1.0,
-    "carbs": 6.0,
+    "pro": 1,
+    "carbs": 6,
     "fat": 0.3
   },
   {
@@ -571,8 +571,8 @@
     "name": "Pomodori Crudi",
     "brand": "Generico",
     "kcal": 22,
-    "pro": 1.0,
-    "carbs": 4.0,
+    "pro": 1,
+    "carbs": 4,
     "fat": 0.2
   },
   {
@@ -580,8 +580,8 @@
     "name": "Carote Crude",
     "brand": "Generico",
     "kcal": 46,
-    "pro": 1.0,
-    "carbs": 10.0,
+    "pro": 1,
+    "carbs": 10,
     "fat": 0.2
   },
   {
@@ -589,8 +589,8 @@
     "name": "Cipolle Crude",
     "brand": "Generico",
     "kcal": 41,
-    "pro": 1.0,
-    "carbs": 9.0,
+    "pro": 1,
+    "carbs": 9,
     "fat": 0.1
   },
   {
@@ -598,8 +598,8 @@
     "name": "Aglio Crudo",
     "brand": "Generico",
     "kcal": 161,
-    "pro": 6.0,
-    "carbs": 33.0,
+    "pro": 6,
+    "carbs": 33,
     "fat": 0.5
   },
   {
@@ -608,7 +608,7 @@
     "brand": "Generico",
     "kcal": 27,
     "pro": 2.2,
-    "carbs": 4.0,
+    "carbs": 4,
     "fat": 0.2
   },
   {
@@ -616,8 +616,8 @@
     "name": "Funghi Champignon Crudi",
     "brand": "Generico",
     "kcal": 27,
-    "pro": 3.0,
-    "carbs": 3.0,
+    "pro": 3,
+    "carbs": 3,
     "fat": 0.3
   },
   {
@@ -626,7 +626,7 @@
     "brand": "Generico",
     "kcal": 20,
     "pro": 1.5,
-    "carbs": 3.0,
+    "carbs": 3,
     "fat": 0.2
   },
   {
@@ -652,8 +652,8 @@
     "name": "Fagiolini Crudi",
     "brand": "Generico",
     "kcal": 38,
-    "pro": 2.0,
-    "carbs": 7.0,
+    "pro": 2,
+    "carbs": 7,
     "fat": 0.2
   },
   {
@@ -661,8 +661,8 @@
     "name": "Cavolfiore Crudo",
     "brand": "Generico",
     "kcal": 31,
-    "pro": 2.0,
-    "carbs": 5.0,
+    "pro": 2,
+    "carbs": 5,
     "fat": 0.3
   },
   {
@@ -671,7 +671,7 @@
     "brand": "Generico",
     "kcal": 32,
     "pro": 1.5,
-    "carbs": 6.0,
+    "carbs": 6,
     "fat": 0.2
   },
   {
@@ -679,8 +679,8 @@
     "name": "Zucca Cruda",
     "brand": "Generico",
     "kcal": 29,
-    "pro": 1.0,
-    "carbs": 6.0,
+    "pro": 1,
+    "carbs": 6,
     "fat": 0.1
   },
   {
@@ -689,7 +689,7 @@
     "brand": "Generico",
     "kcal": 59,
     "pro": 0.3,
-    "carbs": 14.0,
+    "carbs": 14,
     "fat": 0.2
   },
   {
@@ -697,8 +697,8 @@
     "name": "Banana Cruda",
     "brand": "Generico",
     "kcal": 99,
-    "pro": 1.0,
-    "carbs": 23.0,
+    "pro": 1,
+    "carbs": 23,
     "fat": 0.3
   },
   {
@@ -706,8 +706,8 @@
     "name": "Arancia Cruda",
     "brand": "Generico",
     "kcal": 54,
-    "pro": 1.0,
-    "carbs": 12.0,
+    "pro": 1,
+    "carbs": 12,
     "fat": 0.2
   },
   {
@@ -716,7 +716,7 @@
     "brand": "Generico",
     "kcal": 38,
     "pro": 0.7,
-    "carbs": 8.0,
+    "carbs": 8,
     "fat": 0.3
   },
   {
@@ -725,7 +725,7 @@
     "brand": "Generico",
     "kcal": 62,
     "pro": 0.7,
-    "carbs": 14.0,
+    "carbs": 14,
     "fat": 0.3
   },
   {
@@ -734,7 +734,7 @@
     "brand": "Generico",
     "kcal": 58,
     "pro": 1.2,
-    "carbs": 12.0,
+    "carbs": 12,
     "fat": 0.6
   },
   {
@@ -742,8 +742,8 @@
     "name": "Kiwi Crudo",
     "brand": "Generico",
     "kcal": 69,
-    "pro": 1.0,
-    "carbs": 15.0,
+    "pro": 1,
+    "carbs": 15,
     "fat": 0.5
   },
   {
@@ -752,7 +752,7 @@
     "brand": "Generico",
     "kcal": 55,
     "pro": 0.5,
-    "carbs": 13.0,
+    "carbs": 13,
     "fat": 0.1
   },
   {
@@ -761,7 +761,7 @@
     "brand": "Generico",
     "kcal": 37,
     "pro": 0.8,
-    "carbs": 8.0,
+    "carbs": 8,
     "fat": 0.2
   },
   {
@@ -770,7 +770,7 @@
     "brand": "Generico",
     "kcal": 36,
     "pro": 0.6,
-    "carbs": 8.0,
+    "carbs": 8,
     "fat": 0.2
   },
   {
@@ -779,7 +779,7 @@
     "brand": "Generico",
     "kcal": 45,
     "pro": 0.9,
-    "carbs": 10.0,
+    "carbs": 10,
     "fat": 0.2
   },
   {
@@ -788,7 +788,7 @@
     "brand": "Generico",
     "kcal": 50,
     "pro": 0.7,
-    "carbs": 11.0,
+    "carbs": 11,
     "fat": 0.3
   },
   {
@@ -797,7 +797,7 @@
     "brand": "Generico",
     "kcal": 63,
     "pro": 0.4,
-    "carbs": 15.0,
+    "carbs": 15,
     "fat": 0.1
   },
   {
@@ -806,7 +806,7 @@
     "brand": "Generico",
     "kcal": 77,
     "pro": 0.7,
-    "carbs": 18.0,
+    "carbs": 18,
     "fat": 0.2
   },
   {
@@ -815,7 +815,7 @@
     "brand": "Generico",
     "kcal": 67,
     "pro": 0.8,
-    "carbs": 15.0,
+    "carbs": 15,
     "fat": 0.4
   },
   {
@@ -824,7 +824,7 @@
     "brand": "Generico",
     "kcal": 43,
     "pro": 1.1,
-    "carbs": 9.0,
+    "carbs": 9,
     "fat": 0.3
   },
   {
@@ -833,7 +833,7 @@
     "brand": "Generico",
     "kcal": 48,
     "pro": 0.8,
-    "carbs": 11.0,
+    "carbs": 11,
     "fat": 0.1
   },
   {
@@ -842,17 +842,17 @@
     "brand": "Generico",
     "kcal": 329,
     "pro": 0.3,
-    "carbs": 82.0,
-    "fat": 0.0
+    "carbs": 82,
+    "fat": 0
   },
   {
     "id": "sciroppo-d-acero",
     "name": "Sciroppo d'Acero",
     "brand": "Generico",
     "kcal": 268,
-    "pro": 0.0,
-    "carbs": 67.0,
-    "fat": 0.0
+    "pro": 0,
+    "carbs": 67,
+    "fat": 0
   },
   {
     "id": "aceto-balsamico",
@@ -860,16 +860,16 @@
     "brand": "Generico",
     "kcal": 70,
     "pro": 0.5,
-    "carbs": 17.0,
-    "fat": 0.0
+    "carbs": 17,
+    "fat": 0
   },
   {
     "id": "salsa-di-soia",
     "name": "Salsa di Soia",
     "brand": "Generico",
     "kcal": 53,
-    "pro": 8.0,
-    "carbs": 5.0,
+    "pro": 8,
+    "carbs": 5,
     "fat": 0.1
   },
   {
@@ -878,7 +878,7 @@
     "brand": "Generico",
     "kcal": 24,
     "pro": 1.5,
-    "carbs": 4.0,
+    "carbs": 4,
     "fat": 0.2
   },
   {
@@ -886,8 +886,8 @@
     "name": "Ketchup",
     "brand": "Generico",
     "kcal": 105,
-    "pro": 1.0,
-    "carbs": 25.0,
+    "pro": 1,
+    "carbs": 25,
     "fat": 0.1
   },
   {
@@ -895,26 +895,26 @@
     "name": "Senape",
     "brand": "Generico",
     "kcal": 63,
-    "pro": 4.0,
-    "carbs": 5.0,
-    "fat": 3.0
+    "pro": 4,
+    "carbs": 5,
+    "fat": 3
   },
   {
     "id": "proteina-in-polvere-whey",
     "name": "Proteina in Polvere Whey",
     "brand": "Generico",
     "kcal": 365,
-    "pro": 75.0,
-    "carbs": 5.0,
-    "fat": 5.0
+    "pro": 75,
+    "carbs": 5,
+    "fat": 5
   },
   {
     "id": "bresaola-della-valtellina",
     "name": "Bresaola della Valtellina",
     "brand": "Generico",
     "kcal": 151,
-    "pro": 32.0,
-    "carbs": 0.0,
+    "pro": 32,
+    "carbs": 0,
     "fat": 2.6
   },
   {
@@ -922,8 +922,8 @@
     "name": "Prosciutto Crudo (Sgrassato)",
     "brand": "Generico",
     "kcal": 144,
-    "pro": 28.0,
-    "carbs": 0.0,
+    "pro": 28,
+    "carbs": 0,
     "fat": 3.5
   },
   {
@@ -931,8 +931,8 @@
     "name": "Prosciutto Cotto Alta QualitÃ ",
     "brand": "Generico",
     "kcal": 215,
-    "pro": 20.0,
-    "carbs": 1.0,
+    "pro": 20,
+    "carbs": 1,
     "fat": 14.5
   },
   {
@@ -940,8 +940,8 @@
     "name": "Fesa di Tacchino (Affettato)",
     "brand": "Generico",
     "kcal": 105,
-    "pro": 24.0,
-    "carbs": 1.0,
+    "pro": 24,
+    "carbs": 1,
     "fat": 0.5
   },
   {
@@ -949,25 +949,25 @@
     "name": "Orata Fresca Cruda",
     "brand": "Generico",
     "kcal": 89,
-    "pro": 20.0,
-    "carbs": 0.0,
-    "fat": 1.0
+    "pro": 20,
+    "carbs": 0,
+    "fat": 1
   },
   {
     "id": "gamberi-sgusciati-crudi",
     "name": "Gamberi Sgusciati Crudi",
     "brand": "Generico",
     "kcal": 71,
-    "pro": 15.0,
+    "pro": 15,
     "carbs": 0.5,
-    "fat": 1.0
+    "fat": 1
   },
   {
     "id": "polpo-crudo",
     "name": "Polpo Crudo",
     "brand": "Generico",
     "kcal": 57,
-    "pro": 11.0,
+    "pro": 11,
     "carbs": 1.5,
     "fat": 0.8
   },
@@ -976,8 +976,8 @@
     "name": "Fiocchi di Latte",
     "brand": "Generico",
     "kcal": 99,
-    "pro": 11.0,
-    "carbs": 3.0,
+    "pro": 11,
+    "carbs": 3,
     "fat": 4.8
   },
   {
@@ -995,7 +995,7 @@
     "brand": "Generico",
     "kcal": 33,
     "pro": 3.3,
-    "carbs": 1.0,
+    "carbs": 1,
     "fat": 1.8
   },
   {
@@ -1012,27 +1012,27 @@
     "name": "Farina d'Avena",
     "brand": "Generico",
     "kcal": 359,
-    "pro": 14.0,
-    "carbs": 60.0,
-    "fat": 7.0
+    "pro": 14,
+    "carbs": 60,
+    "fat": 7
   },
   {
     "id": "fette-biscottate-integrali",
     "name": "Fette Biscottate Integrali",
     "brand": "Generico",
     "kcal": 356,
-    "pro": 12.0,
-    "carbs": 68.0,
-    "fat": 4.0
+    "pro": 12,
+    "carbs": 68,
+    "fat": 4
   },
   {
     "id": "orzo-perlato-crudo",
     "name": "Orzo Perlato Crudo",
     "brand": "Generico",
     "kcal": 349,
-    "pro": 10.0,
-    "carbs": 75.0,
-    "fat": 1.0
+    "pro": 10,
+    "carbs": 75,
+    "fat": 1
   },
   {
     "id": "mais-dolce-in-scatola",
@@ -1040,7 +1040,7 @@
     "brand": "Generico",
     "kcal": 77,
     "pro": 2.5,
-    "carbs": 14.0,
+    "carbs": 14,
     "fat": 1.2
   },
   {
@@ -1049,7 +1049,7 @@
     "brand": "Generico",
     "kcal": 67,
     "pro": 5.5,
-    "carbs": 10.0,
+    "carbs": 10,
     "fat": 0.5
   },
   {
@@ -1057,9 +1057,9 @@
     "name": "Edamame Surgelati",
     "brand": "Generico",
     "kcal": 125,
-    "pro": 11.0,
-    "carbs": 9.0,
-    "fat": 5.0
+    "pro": 11,
+    "carbs": 9,
+    "fat": 5
   },
   {
     "id": "radicchio-crudo",
@@ -1076,7 +1076,7 @@
     "brand": "Generico",
     "kcal": 15,
     "pro": 1.2,
-    "carbs": 2.0,
+    "carbs": 2,
     "fat": 0.2
   },
   {
@@ -1084,8 +1084,1208 @@
     "name": "Cacao Amaro in Polvere",
     "brand": "Generico",
     "kcal": 325,
-    "pro": 20.0,
-    "carbs": 14.0,
-    "fat": 21.0
+    "pro": 20,
+    "carbs": 14,
+    "fat": 21
+  },
+  {
+    "id": "petto-di-pollo-cotto",
+    "name": "Petto di Pollo Cotto",
+    "calories": 165,
+    "macros": {
+      "protein": 31,
+      "carbs": 0,
+      "fat": 3.6
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "coscia-di-pollo-cotta",
+    "name": "Coscia di Pollo Cotta",
+    "calories": 209,
+    "macros": {
+      "protein": 26,
+      "carbs": 0,
+      "fat": 10.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "petto-di-tacchino-cotto",
+    "name": "Petto di Tacchino Cotto",
+    "calories": 135,
+    "macros": {
+      "protein": 30,
+      "carbs": 0,
+      "fat": 1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tacchino-macinato-93-microcotto",
+    "name": "Tacchino Macinato 93% Magro Cotto",
+    "calories": 176,
+    "macros": {
+      "protein": 27,
+      "carbs": 0,
+      "fat": 8
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "controfiletto-di-manzo-cotto",
+    "name": "Controfiletto di Manzo Magro Cotto",
+    "calories": 183,
+    "macros": {
+      "protein": 29,
+      "carbs": 0,
+      "fat": 6.8
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "manzo-macinato-85-cotto",
+    "name": "Manzo Macinato 85% Magro Cotto",
+    "calories": 250,
+    "macros": {
+      "protein": 26,
+      "carbs": 0,
+      "fat": 15
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "filetto-di-maiale-cotto",
+    "name": "Filetto di Maiale Cotto",
+    "calories": 143,
+    "macros": {
+      "protein": 26,
+      "carbs": 0,
+      "fat": 4
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pancetta-cotta",
+    "name": "Pancetta Cotta",
+    "calories": 541,
+    "macros": {
+      "protein": 37,
+      "carbs": 1.4,
+      "fat": 42
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "coscia-di-agnello-cotta",
+    "name": "Coscia di Agnello Magra Cotta",
+    "calories": 178,
+    "macros": {
+      "protein": 26,
+      "carbs": 0,
+      "fat": 7.7
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "salmone-atlantico-cotto",
+    "name": "Salmone Atlantico Cotto",
+    "calories": 208,
+    "macros": {
+      "protein": 25,
+      "carbs": 0,
+      "fat": 13
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tonno-in-olio-sgocciolato",
+    "name": "Tonno in Scatola in Olio Sgocciolato",
+    "calories": 198,
+    "macros": {
+      "protein": 29,
+      "carbs": 0,
+      "fat": 8.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "merluzzo-cotto",
+    "name": "Merluzzo Cotto",
+    "calories": 105,
+    "macros": {
+      "protein": 23,
+      "carbs": 0,
+      "fat": 0.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tilapia-cotta",
+    "name": "Tilapia Cotta",
+    "calories": 129,
+    "macros": {
+      "protein": 26,
+      "carbs": 0,
+      "fat": 2.7
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "gamberetti-cotti",
+    "name": "Gamberetti Cotti",
+    "calories": 99,
+    "macros": {
+      "protein": 24,
+      "carbs": 0.2,
+      "fat": 1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "sardine-in-olio",
+    "name": "Sardine in Scatola in Olio",
+    "calories": 208,
+    "macros": {
+      "protein": 25,
+      "carbs": 0,
+      "fat": 11
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tuorlo-d-uovo-crudo",
+    "name": "Tuorlo d'Uovo Crudo",
+    "calories": 322,
+    "macros": {
+      "protein": 16,
+      "carbs": 3.6,
+      "fat": 27
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "latte-scremato",
+    "name": "Latte Scremato",
+    "calories": 34,
+    "macros": {
+      "protein": 3.4,
+      "carbs": 5,
+      "fat": 0.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "yogurt-greco-2-grassi",
+    "name": "Yogurt Greco 2% Grassi",
+    "calories": 73,
+    "macros": {
+      "protein": 8.5,
+      "carbs": 3.6,
+      "fat": 2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "yogurt-greco-intero",
+    "name": "Yogurt Greco Intero",
+    "calories": 97,
+    "macros": {
+      "protein": 8.8,
+      "carbs": 3.6,
+      "fat": 4.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "formaggio-cheddar",
+    "name": "Formaggio Cheddar",
+    "calories": 403,
+    "macros": {
+      "protein": 25,
+      "carbs": 1.3,
+      "fat": 33
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "formaggio-feta",
+    "name": "Formaggio Feta",
+    "calories": 264,
+    "macros": {
+      "protein": 14,
+      "carbs": 4.1,
+      "fat": 21
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "formaggio-spalmabile",
+    "name": "Formaggio Spalmabile",
+    "calories": 342,
+    "macros": {
+      "protein": 6.2,
+      "carbs": 4.1,
+      "fat": 34
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "isolato-proteine-pisello",
+    "name": "Isolato di Proteine di Pisello",
+    "calories": 375,
+    "macros": {
+      "protein": 80,
+      "carbs": 5,
+      "fat": 5
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "isolato-proteine-soia",
+    "name": "Isolato di Proteine di Soia",
+    "calories": 360,
+    "macros": {
+      "protein": 81,
+      "carbs": 4,
+      "fat": 3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "semi-di-canapa",
+    "name": "Semi di Canapa",
+    "calories": 553,
+    "macros": {
+      "protein": 31,
+      "carbs": 9,
+      "fat": 49
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-integrale-cotto",
+    "name": "Riso Integrale Cotto",
+    "calories": 112,
+    "macros": {
+      "protein": 2.6,
+      "carbs": 23,
+      "fat": 0.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-bianco-cotto",
+    "name": "Riso Bianco Cotto",
+    "calories": 130,
+    "macros": {
+      "protein": 2.7,
+      "carbs": 28,
+      "fat": 0.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-basmati-cotto",
+    "name": "Riso Basmati Cotto",
+    "calories": 121,
+    "macros": {
+      "protein": 3.5,
+      "carbs": 25,
+      "fat": 0.5
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-selvatico-cotto",
+    "name": "Riso Selvatico Cotto",
+    "calories": 101,
+    "macros": {
+      "protein": 4,
+      "carbs": 21,
+      "fat": 0.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pasta-integrale-cotta",
+    "name": "Pasta Integrale Cotta",
+    "calories": 149,
+    "macros": {
+      "protein": 5.3,
+      "carbs": 30,
+      "fat": 1.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pasta-bianca-cotta",
+    "name": "Pasta Bianca Cotta",
+    "calories": 158,
+    "macros": {
+      "protein": 5.8,
+      "carbs": 30,
+      "fat": 0.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cous-cous-cotto",
+    "name": "Cous Cous Cotto",
+    "calories": 112,
+    "macros": {
+      "protein": 3.8,
+      "carbs": 23,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bulgur-cotto",
+    "name": "Bulgur Cotto",
+    "calories": 83,
+    "macros": {
+      "protein": 3.1,
+      "carbs": 19,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "orzo-perlato-cotto",
+    "name": "Orzo Perlato Cotto",
+    "calories": 123,
+    "macros": {
+      "protein": 2.3,
+      "carbs": 28,
+      "fat": 0.4
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "farro-cotto",
+    "name": "Farro Cotto",
+    "calories": 130,
+    "macros": {
+      "protein": 5,
+      "carbs": 26,
+      "fat": 1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bagel-semplice",
+    "name": "Bagel Semplice",
+    "calories": 257,
+    "macros": {
+      "protein": 10,
+      "carbs": 53,
+      "fat": 1.7
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pane-di-segale",
+    "name": "Pane di Segale",
+    "calories": 259,
+    "macros": {
+      "protein": 8.5,
+      "carbs": 48,
+      "fat": 3.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pane-a-lievitazione-naturale",
+    "name": "Pane a Lievitazione Naturale",
+    "calories": 231,
+    "macros": {
+      "protein": 9,
+      "carbs": 45,
+      "fat": 2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tortilla-di-mais",
+    "name": "Tortilla di Mais",
+    "calories": 218,
+    "macros": {
+      "protein": 5.7,
+      "carbs": 45,
+      "fat": 2.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tortilla-di-farina-bianca",
+    "name": "Tortilla di Farina Bianca",
+    "calories": 306,
+    "macros": {
+      "protein": 8,
+      "carbs": 49,
+      "fat": 8
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavoletti-di-bruxelles-crudi",
+    "name": "Cavoletti di Bruxelles Crudi",
+    "calories": 43,
+    "macros": {
+      "protein": 3.4,
+      "carbs": 9,
+      "fat": 0.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavolo-riccio-crudo",
+    "name": "Cavolo Riccio (Kale) Crudo",
+    "calories": 49,
+    "macros": {
+      "protein": 4.3,
+      "carbs": 9,
+      "fat": 0.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bietola-cruda",
+    "name": "Bietola Cruda",
+    "calories": 19,
+    "macros": {
+      "protein": 1.8,
+      "carbs": 3.7,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bok-choy-crudo",
+    "name": "Bok Choy Crudo",
+    "calories": 13,
+    "macros": {
+      "protein": 1.5,
+      "carbs": 2.2,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavolo-collard-crudo",
+    "name": "Cavolo Collard Crudo",
+    "calories": 32,
+    "macros": {
+      "protein": 3,
+      "carbs": 5.4,
+      "fat": 0.6
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "barbabietole-cotte",
+    "name": "Barbabietole Cotte",
+    "calories": 44,
+    "macros": {
+      "protein": 1.7,
+      "carbs": 10,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "peperone-verde-crudo",
+    "name": "Peperone Verde Crudo",
+    "calories": 20,
+    "macros": {
+      "protein": 0.9,
+      "carbs": 4.6,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pomodorini-crudi",
+    "name": "Pomodorini Crudi",
+    "calories": 18,
+    "macros": {
+      "protein": 1,
+      "carbs": 3.9,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melanzane-cotte",
+    "name": "Melanzane Cotte",
+    "calories": 35,
+    "macros": {
+      "protein": 0.8,
+      "carbs": 9,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "patata-dolce-cotta",
+    "name": "Patata Dolce Cotta",
+    "calories": 90,
+    "macros": {
+      "protein": 2,
+      "carbs": 21,
+      "fat": 0.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "more-crude",
+    "name": "More Crude",
+    "calories": 43,
+    "macros": {
+      "protein": 1.4,
+      "carbs": 10,
+      "fat": 0.5
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "ciliegie-crude",
+    "name": "Ciliegie Crude",
+    "calories": 63,
+    "macros": {
+      "protein": 1.1,
+      "carbs": 16,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melone-cantalupo-crudo",
+    "name": "Melone Cantalupo Crudo",
+    "calories": 34,
+    "macros": {
+      "protein": 0.8,
+      "carbs": 8.2,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melone-giallo-inverno-crudo",
+    "name": "Melone Giallo (Honeydew) Crudo",
+    "calories": 36,
+    "macros": {
+      "protein": 0.5,
+      "carbs": 9.1,
+      "fat": 0.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "datteri-medjool-secchi",
+    "name": "Datteri Medjool Secchi",
+    "calories": 277,
+    "macros": {
+      "protein": 1.8,
+      "carbs": 75,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "albicocche-crude",
+    "name": "Albicocche Crude",
+    "calories": 30,
+    "macros": {
+      "protein": 0.4,
+      "carbs": 6.8,
+      "fat": 0.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melograno-crudo",
+    "name": "Melograno Crudo",
+    "calories": 83,
+    "macros": {
+      "protein": 1.7,
+      "carbs": 18.7,
+      "fat": 1.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cachi-crudi",
+    "name": "Cachi Crudi",
+    "calories": 69,
+    "macros": {
+      "protein": 0.6,
+      "carbs": 16,
+      "fat": 0.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "fichi-freschi",
+    "name": "Fichi Freschi",
+    "calories": 74,
+    "macros": {
+      "protein": 0.7,
+      "carbs": 19.2,
+      "fat": 0.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "castagne-crude",
+    "name": "Castagne Crude",
+    "calories": 189,
+    "macros": {
+      "protein": 3.5,
+      "carbs": 42.4,
+      "fat": 2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "zenzero-fresco",
+    "name": "Zenzero Fresco",
+    "calories": 80,
+    "macros": {
+      "protein": 1.8,
+      "carbs": 17.7,
+      "fat": 0.7
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "noci-pecan",
+    "name": "Noci Pecan",
+    "calories": 691,
+    "macros": {
+      "protein": 9.2,
+      "carbs": 14,
+      "fat": 72
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "noci-del-brasile",
+    "name": "Noci del Brasile",
+    "calories": 656,
+    "macros": {
+      "protein": 14,
+      "carbs": 12,
+      "fat": 66
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "noci-macadamia",
+    "name": "Noci Macadamia",
+    "calories": 718,
+    "macros": {
+      "protein": 8,
+      "carbs": 14,
+      "fat": 76
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pinoli",
+    "name": "Pinoli",
+    "calories": 673,
+    "macros": {
+      "protein": 14,
+      "carbs": 13,
+      "fat": 68
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "semi-di-sesamo",
+    "name": "Semi di Sesamo",
+    "calories": 573,
+    "macros": {
+      "protein": 18,
+      "carbs": 23,
+      "fat": 50
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "fiocchi-di-cocco",
+    "name": "Fiocchi di Cocco Non Zuccherati",
+    "calories": 660,
+    "macros": {
+      "protein": 7.5,
+      "carbs": 24,
+      "fat": 64
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "barretta-proteica",
+    "name": "Barretta Proteica (Media)",
+    "calories": 315,
+    "macros": {
+      "protein": 25,
+      "carbs": 28,
+      "fat": 10
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "barretta-granola",
+    "name": "Barretta di Granola",
+    "calories": 406,
+    "macros": {
+      "protein": 5.5,
+      "carbs": 66,
+      "fat": 14
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "proteine-del-siero-isolate",
+    "name": "Proteine del Siero Isolate",
+    "calories": 380,
+    "macros": {
+      "protein": 90,
+      "carbs": 4,
+      "fat": 1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "proteine-della-caseina",
+    "name": "Proteine della Caseina in Polvere",
+    "calories": 385,
+    "macros": {
+      "protein": 80,
+      "carbs": 9,
+      "fat": 2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "frullato-sostitutivo-pasto",
+    "name": "Frullato Sostitutivo del Pasto",
+    "calories": 170,
+    "macros": {
+      "protein": 12,
+      "carbs": 20,
+      "fat": 4
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "maionese-light",
+    "name": "Maionese Light",
+    "calories": 278,
+    "macros": {
+      "protein": 1,
+      "carbs": 8,
+      "fat": 26
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "salsa-piccante",
+    "name": "Salsa Piccante",
+    "calories": 21,
+    "macros": {
+      "protein": 1.3,
+      "carbs": 1,
+      "fat": 1.8
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "hummus-pronto",
+    "name": "Hummus Pronto",
+    "calories": 177,
+    "macros": {
+      "protein": 7.9,
+      "carbs": 14,
+      "fat": 10
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "guacamole",
+    "name": "Guacamole",
+    "calories": 150,
+    "macros": {
+      "protein": 1.8,
+      "carbs": 7,
+      "fat": 13
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "salsa-di-pomodoro-pronta",
+    "name": "Salsa di Pomodoro Pronta",
+    "calories": 36,
+    "macros": {
+      "protein": 1.5,
+      "carbs": 7,
+      "fat": 0.4
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pesto-alla-genovese",
+    "name": "Pesto alla Genovese",
+    "calories": 418,
+    "macros": {
+      "protein": 6,
+      "carbs": 7,
+      "fat": 39
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tahini",
+    "name": "Tahini (Crema di Sesamo)",
+    "calories": 595,
+    "macros": {
+      "protein": 17,
+      "carbs": 21,
+      "fat": 54
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "lievito-nutrizionale",
+    "name": "Lievito Nutrizionale in Scaglie",
+    "calories": 290,
+    "macros": {
+      "protein": 45,
+      "carbs": 36,
+      "fat": 8
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "biscotti-frollini",
+    "name": "Biscotti Frollini",
+    "calories": 429,
+    "macros": {
+      "protein": 7.2,
+      "carbs": 73.7,
+      "fat": 13.8
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "biscotti-secchi",
+    "name": "Biscotti Secchi",
+    "calories": 416,
+    "macros": {
+      "protein": 6.6,
+      "carbs": 84.8,
+      "fat": 7.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "brioche-semplice",
+    "name": "Brioche Semplice",
+    "calories": 358,
+    "macros": {
+      "protein": 8.3,
+      "carbs": 38,
+      "fat": 20
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "muesli-cereali",
+    "name": "Muesli ai Cereali",
+    "calories": 364,
+    "macros": {
+      "protein": 9.7,
+      "carbs": 72.2,
+      "fat": 6
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-semi-di-girasole",
+    "name": "Olio di Semi di Girasole",
+    "calories": 884,
+    "macros": {
+      "protein": 0,
+      "carbs": 0,
+      "fat": 100
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-sesamo",
+    "name": "Olio di Sesamo",
+    "calories": 884,
+    "macros": {
+      "protein": 0,
+      "carbs": 0,
+      "fat": 100
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-semi-di-lino",
+    "name": "Olio di Semi di Lino",
+    "calories": 884,
+    "macros": {
+      "protein": 0,
+      "carbs": 0,
+      "fat": 100
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-avocado",
+    "name": "Olio di Avocado",
+    "calories": 884,
+    "macros": {
+      "protein": 0,
+      "carbs": 0,
+      "fat": 100
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "ghee",
+    "name": "Ghee (Burro Chiarificato)",
+    "calories": 900,
+    "macros": {
+      "protein": 0,
+      "carbs": 0,
+      "fat": 100
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "yogurt-intero-naturale",
+    "name": "Yogurt Intero Naturale",
+    "calories": 61,
+    "macros": {
+      "protein": 3.5,
+      "carbs": 4.7,
+      "fat": 3.3
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "ricotta-magra",
+    "name": "Ricotta Magra",
+    "calories": 72,
+    "macros": {
+      "protein": 12,
+      "carbs": 3.4,
+      "fat": 1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "carciofi-crudi",
+    "name": "Carciofi Crudi",
+    "calories": 23,
+    "macros": {
+      "protein": 2.7,
+      "carbs": 2.5,
+      "fat": 0.2
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "sgombro-cotto",
+    "name": "Sgombro Cotto",
+    "calories": 262,
+    "macros": {
+      "protein": 24,
+      "carbs": 0,
+      "fat": 17
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "aringhe-sotto-aceto",
+    "name": "Aringhe Sotto Aceto",
+    "calories": 262,
+    "macros": {
+      "protein": 14,
+      "carbs": 10,
+      "fat": 18
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "trota-arcobaleno-cotta",
+    "name": "Trota Arcobaleno Cotta",
+    "calories": 168,
+    "macros": {
+      "protein": 24,
+      "carbs": 0,
+      "fat": 6.6
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "granchio-cotto",
+    "name": "Granchio Cotto",
+    "calories": 97,
+    "macros": {
+      "protein": 20,
+      "carbs": 0,
+      "fat": 1.5
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "aragosta-cotta",
+    "name": "Aragosta Cotta",
+    "calories": 89,
+    "macros": {
+      "protein": 19,
+      "carbs": 0,
+      "fat": 0.9
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "capesante-cotte",
+    "name": "Capesante Cotte",
+    "calories": 137,
+    "macros": {
+      "protein": 24,
+      "carbs": 5.4,
+      "fat": 1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavolo-verde-crudo",
+    "name": "Cavolo Verde Crudo",
+    "calories": 25,
+    "macros": {
+      "protein": 1.3,
+      "carbs": 5.8,
+      "fat": 0.1
+    },
+    "servingSize": 100,
+    "unit": "g"
+  },
+  {
+    "id": "lattuga-romana-cruda",
+    "name": "Lattuga Romana Cruda",
+    "calories": 17,
+    "macros": {
+      "protein": 1.2,
+      "carbs": 3.3,
+      "fat": 0.3
+    },
+    "servingSize": 100,
+    "unit": "g"
   }
 ];
