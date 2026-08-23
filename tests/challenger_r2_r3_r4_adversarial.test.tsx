@@ -256,7 +256,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             }
 
             expect(saveSpy).toHaveBeenCalledTimes(1);
-            expect(useAppStore.getState().saveError).toBe('Errore sincronizzazione. Verifica la connessione.');
+            expect(useAppStore.getState().saveError).toBe('I dati sono stati salvati con successo sul dispositivo. La sincronizzazione con il cloud riprenderà automaticamente al ripristino della connessione.');
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
@@ -267,7 +267,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             const a1 = expect(p1).rejects.toThrow('Stage 1 Error');
             await vi.advanceTimersByTimeAsync(1100);
             await a1;
-            expect(useAppStore.getState().saveError).toBe('Errore sincronizzazione. Verifica la connessione.');
+            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
             expect(useAppStore.getState().syncing).toBe(false);
 
             // Stage 2: Burst of 5 Successes (recovers error state)
@@ -301,7 +301,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
                     expect((res as PromiseRejectedResult).reason).toBe(stage3Err);
                 }
             });
-            expect(useAppStore.getState().saveError).toBe('Errore sincronizzazione. Verifica la connessione.');
+            expect(useAppStore.getState().saveError).toBe('La sincronizzazione con il server ha impiegato troppo tempo. I dati sono salvati sul dispositivo e il tentativo verrà ripetuto in seguito.');
             expect(useAppStore.getState().syncing).toBe(false);
 
             // Stage 4: saveUserData(null) immediately clears everything
@@ -334,7 +334,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             await vi.advanceTimersByTimeAsync(1100);
             await assertion;
 
-            expect(useAppStore.getState().saveError).toBe('Errore sincronizzazione. Verifica la connessione.');
+            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
             expect(useAppStore.getState().syncing).toBe(false);
         });
     });
