@@ -70,21 +70,25 @@ export interface Food {
  * applying user overrides, excluding hidden items, and appending user-created custom exercises.
  */
 export function resolveEffectiveExercises(
-    globalExercises: CatalogExercise[],
+    globalExercises: CatalogExercise[] = [],
     userCustom: Exercise[] = [],
     overrides?: CatalogOverrides
 ): Exercise[] {
-    const hiddenSet = new Set(overrides?.hiddenExerciseIds || []);
-    const exerciseOverrides = overrides?.exercises || {};
+    const globals = Array.isArray(globalExercises) ? globalExercises : [];
+    const custom = Array.isArray(userCustom) ? userCustom : [];
+    const hiddenSet = new Set(Array.isArray(overrides?.hiddenExerciseIds) ? overrides.hiddenExerciseIds : []);
+    const exerciseOverrides = (overrides?.exercises && typeof overrides.exercises === 'object') ? overrides.exercises : {};
 
     const resolvedGlobal: Exercise[] = [];
 
-    for (const base of globalExercises) {
-        if (hiddenSet.has(base.id)) {
+    for (const base of globals) {
+        if (!base || !base.id || hiddenSet.has(base.id)) {
             continue;
         }
 
-        const override = exerciseOverrides[base.id];
+        const override = Object.prototype.hasOwnProperty.call(exerciseOverrides, base.id)
+            ? exerciseOverrides[base.id]
+            : undefined;
         if (!override) {
             resolvedGlobal.push({
                 id: base.id,
@@ -117,12 +121,14 @@ export function resolveEffectiveExercises(
     }
 
     // Return custom exercises followed by global resolved exercises
-    const cleanUserCustom = userCustom.map(c => ({
-        ...c,
-        isDefault: false,
-        setsCount: c.setsCount ?? 3,
-        sets: c.sets || []
-    }));
+    const cleanUserCustom = custom
+        .filter(c => c && c.id)
+        .map(c => ({
+            ...c,
+            isDefault: false,
+            setsCount: c.setsCount ?? 3,
+            sets: c.sets || []
+        }));
 
     return [...cleanUserCustom, ...resolvedGlobal];
 }
@@ -132,22 +138,30 @@ export function resolveEffectiveExercises(
  * applying user overrides, excluding hidden items, and appending user-created custom foods.
  */
 export function resolveEffectiveFoods(
-    globalFoods: CatalogFood[],
+    globalFoods: CatalogFood[] = [],
     userCustom: Food[] = [],
     overrides?: CatalogOverrides
 ): Food[] {
-    const hiddenSet = new Set((overrides?.hiddenFoodIds || []).map(id => String(id)));
-    const foodOverrides = overrides?.foods || {};
+    const globals = Array.isArray(globalFoods) ? globalFoods : [];
+    const custom = Array.isArray(userCustom) ? userCustom : [];
+    const hiddenSet = new Set((Array.isArray(overrides?.hiddenFoodIds) ? overrides.hiddenFoodIds : []).map(id => String(id)));
+    const foodOverrides = (overrides?.foods && typeof overrides.foods === 'object') ? overrides.foods : {};
 
     const resolvedGlobal: Food[] = [];
 
-    for (const base of globalFoods) {
+    for (const base of globals) {
+        if (!base || base.id === undefined || base.id === null) {
+            continue;
+        }
+
         const foodIdStr = String(base.id);
         if (hiddenSet.has(foodIdStr)) {
             continue;
         }
 
-        const override = foodOverrides[foodIdStr];
+        const override = Object.prototype.hasOwnProperty.call(foodOverrides, foodIdStr)
+            ? foodOverrides[foodIdStr]
+            : undefined;
         if (!override) {
             resolvedGlobal.push({
                 ...base,
@@ -172,10 +186,12 @@ export function resolveEffectiveFoods(
         }
     }
 
-    const cleanUserCustom = userCustom.map(f => ({
-        ...f,
-        isCustom: true
-    }));
+    const cleanUserCustom = custom
+        .filter(f => f && f.id !== undefined && f.id !== null)
+        .map(f => ({
+            ...f,
+            isCustom: true
+        }));
 
     return [...cleanUserCustom, ...resolvedGlobal];
 }
@@ -245,7 +261,8 @@ export function hideCatalogExercise(
     exerciseId: string, 
     currentOverrides?: CatalogOverrides
 ): CatalogOverrides {
-    const hiddenSet = new Set(currentOverrides?.hiddenExerciseIds || []);
+    const hiddenList = Array.isArray(currentOverrides?.hiddenExerciseIds) ? currentOverrides.hiddenExerciseIds : [];
+    const hiddenSet = new Set(hiddenList);
     hiddenSet.add(exerciseId);
 
     return {
@@ -261,7 +278,8 @@ export function unhideCatalogExercise(
     exerciseId: string, 
     currentOverrides?: CatalogOverrides
 ): CatalogOverrides {
-    const hiddenSet = new Set(currentOverrides?.hiddenExerciseIds || []);
+    const hiddenList = Array.isArray(currentOverrides?.hiddenExerciseIds) ? currentOverrides.hiddenExerciseIds : [];
+    const hiddenSet = new Set(hiddenList);
     hiddenSet.delete(exerciseId);
 
     return {
@@ -278,7 +296,8 @@ export function hideCatalogFood(
     currentOverrides?: CatalogOverrides
 ): CatalogOverrides {
     const foodIdStr = String(foodId);
-    const hiddenSet = new Set((currentOverrides?.hiddenFoodIds || []).map(id => String(id)));
+    const hiddenList = Array.isArray(currentOverrides?.hiddenFoodIds) ? currentOverrides.hiddenFoodIds : [];
+    const hiddenSet = new Set(hiddenList.map(id => String(id)));
     hiddenSet.add(foodIdStr);
 
     return {
@@ -295,7 +314,8 @@ export function unhideCatalogFood(
     currentOverrides?: CatalogOverrides
 ): CatalogOverrides {
     const foodIdStr = String(foodId);
-    const hiddenSet = new Set((currentOverrides?.hiddenFoodIds || []).map(id => String(id)));
+    const hiddenList = Array.isArray(currentOverrides?.hiddenFoodIds) ? currentOverrides.hiddenFoodIds : [];
+    const hiddenSet = new Set(hiddenList.map(id => String(id)));
     hiddenSet.delete(foodIdStr);
 
     return {
@@ -322,6 +342,21 @@ export function applyExerciseOverride(
 }
 
 /**
+ * Removes an override for a specific catalog exercise, resetting it to default.
+ */
+export function removeExerciseOverride(
+    exerciseId: string,
+    currentOverrides?: CatalogOverrides
+): CatalogOverrides {
+    const newExercises = { ...(currentOverrides?.exercises || {}) };
+    delete newExercises[exerciseId];
+    return {
+        ...currentOverrides,
+        exercises: newExercises
+    };
+}
+
+/**
  * Applies an override for a specific catalog food item.
  */
 export function applyFoodOverride(
@@ -340,27 +375,81 @@ export function applyFoodOverride(
 }
 
 /**
+ * Removes an override for a specific catalog food item, resetting it to default.
+ */
+export function removeFoodOverride(
+    foodId: string | number,
+    currentOverrides?: CatalogOverrides
+): CatalogOverrides {
+    const foodIdStr = String(foodId);
+    const newFoods = { ...(currentOverrides?.foods || {}) };
+    delete newFoods[foodIdStr];
+    return {
+        ...currentOverrides,
+        foods: newFoods
+    };
+}
+
+/**
+ * Symmetrically merges two CatalogOverrides objects without data loss.
+ */
+export function mergeCatalogOverrides(
+    a?: CatalogOverrides | null,
+    b?: CatalogOverrides | null
+): CatalogOverrides {
+    const overridesA = a || {};
+    const overridesB = b || {};
+
+    const hiddenExA = Array.isArray(overridesA.hiddenExerciseIds) ? overridesA.hiddenExerciseIds : [];
+    const hiddenExB = Array.isArray(overridesB.hiddenExerciseIds) ? overridesB.hiddenExerciseIds : [];
+    const hiddenFoodA = Array.isArray(overridesA.hiddenFoodIds) ? overridesA.hiddenFoodIds : [];
+    const hiddenFoodB = Array.isArray(overridesB.hiddenFoodIds) ? overridesB.hiddenFoodIds : [];
+
+    return {
+        exercises: {
+            ...(overridesA.exercises && typeof overridesA.exercises === 'object' ? overridesA.exercises : {}),
+            ...(overridesB.exercises && typeof overridesB.exercises === 'object' ? overridesB.exercises : {}),
+        },
+        foods: {
+            ...(overridesA.foods && typeof overridesA.foods === 'object' ? overridesA.foods : {}),
+            ...(overridesB.foods && typeof overridesB.foods === 'object' ? overridesB.foods : {}),
+        },
+        hiddenExerciseIds: Array.from(new Set([...hiddenExA, ...hiddenExB])),
+        hiddenFoodIds: Array.from(new Set([...hiddenFoodA.map(String), ...hiddenFoodB.map(String)])),
+    };
+}
+
+/**
  * Migration helper: splits a monolithic legacy library array into user custom exercises
  * and catalog overrides by cross-referencing with the global catalog.
  */
 export function migrateLegacyLibraryToOverrides(
-    legacyLibrary: Exercise[],
-    globalExercises: CatalogExercise[]
+    legacyLibrary: Exercise[] = [],
+    globalExercises: CatalogExercise[] = []
 ): { customExercises: Exercise[]; overrides: CatalogOverrides } {
+    const list = Array.isArray(legacyLibrary) ? legacyLibrary : [];
+    const globals = Array.isArray(globalExercises) ? globalExercises : [];
+
     const globalMap = new Map<string, CatalogExercise>();
-    for (const ex of globalExercises) {
-        globalMap.set(ex.id, ex);
+    for (const ex of globals) {
+        if (ex && ex.id) {
+            globalMap.set(ex.id, ex);
+        }
     }
 
     const customExercises: Exercise[] = [];
     const exerciseOverrides: Record<string, ExerciseOverride> = {};
     const presentDefaultIds = new Set<string>();
 
-    for (const item of legacyLibrary) {
+    for (const item of list) {
+        if (!item || !item.id) continue;
         const base = globalMap.get(item.id);
-        if (!base || !item.isDefault) {
+        if (!base || item.isDefault === false) {
             // User-created custom exercise
-            customExercises.push(item);
+            customExercises.push({
+                ...item,
+                isDefault: false
+            });
         } else {
             presentDefaultIds.add(item.id);
             const override = createExerciseOverride(base, item);
@@ -370,11 +459,15 @@ export function migrateLegacyLibraryToOverrides(
         }
     }
 
-    // Determine if any global defaults were deleted by user in legacy data
+    // Determine if any global defaults were deleted by user in legacy data.
+    // If presentDefaultIds is empty, legacyLibrary contained no default items,
+    // so no default items should be marked as hidden.
     const hiddenExerciseIds: string[] = [];
-    for (const globalEx of globalExercises) {
-        if (!presentDefaultIds.has(globalEx.id) && legacyLibrary.length > 0) {
-            hiddenExerciseIds.push(globalEx.id);
+    if (presentDefaultIds.size > 0) {
+        for (const globalEx of globals) {
+            if (globalEx && globalEx.id && !presentDefaultIds.has(globalEx.id)) {
+                hiddenExerciseIds.push(globalEx.id);
+            }
         }
     }
 
@@ -392,23 +485,32 @@ export function migrateLegacyLibraryToOverrides(
  * and catalog overrides by cross-referencing with the global foods catalog.
  */
 export function migrateLegacyFoodsToOverrides(
-    legacyFoods: Food[],
-    globalFoods: CatalogFood[]
+    legacyFoods: Food[] = [],
+    globalFoods: CatalogFood[] = []
 ): { customFoods: Food[]; overrides: CatalogOverrides } {
+    const list = Array.isArray(legacyFoods) ? legacyFoods : [];
+    const globals = Array.isArray(globalFoods) ? globalFoods : [];
+
     const globalMap = new Map<string, CatalogFood>();
-    for (const f of globalFoods) {
-        globalMap.set(String(f.id), f);
+    for (const f of globals) {
+        if (f && f.id !== undefined && f.id !== null) {
+            globalMap.set(String(f.id), f);
+        }
     }
 
     const customFoods: Food[] = [];
     const foodOverrides: Record<string, FoodOverride> = {};
     const presentDefaultIds = new Set<string>();
 
-    for (const item of legacyFoods) {
+    for (const item of list) {
+        if (!item || item.id === undefined || item.id === null) continue;
         const itemKey = String(item.id);
         const base = globalMap.get(itemKey);
-        if (!base || item.isCustom) {
-            customFoods.push(item);
+        if (!base || item.isCustom === true) {
+            customFoods.push({
+                ...item,
+                isCustom: true
+            });
         } else {
             presentDefaultIds.add(itemKey);
             const override = createFoodOverride(base, item);
@@ -418,11 +520,18 @@ export function migrateLegacyFoodsToOverrides(
         }
     }
 
+    // Determine if any global defaults were deleted by user in legacy data.
+    // If presentDefaultIds is empty, legacyFoods contained no default items,
+    // so no default items should be marked as hidden.
     const hiddenFoodIds: string[] = [];
-    for (const globalFood of globalFoods) {
-        const foodKey = String(globalFood.id);
-        if (!presentDefaultIds.has(foodKey) && legacyFoods.length > 0) {
-            hiddenFoodIds.push(foodKey);
+    if (presentDefaultIds.size > 0) {
+        for (const globalFood of globals) {
+            if (globalFood && globalFood.id !== undefined && globalFood.id !== null) {
+                const foodKey = String(globalFood.id);
+                if (!presentDefaultIds.has(foodKey)) {
+                    hiddenFoodIds.push(foodKey);
+                }
+            }
         }
     }
 

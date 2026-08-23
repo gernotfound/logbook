@@ -24,6 +24,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Catalogo globale condiviso (sola lettura pubblica per esercizi e alimenti predefiniti)
+    match /global_catalog/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Documento principale utente: users/{userId}
     match /users/{userId} {
       allow read, delete: if isOwner(userId);
@@ -40,7 +46,8 @@ service cloud.firestore {
           'activeCycleId',
           'nutritionPlanning',
           'supplements',
-          'activePains'
+          'activePains',
+          'catalogOverrides'
         ]);
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}

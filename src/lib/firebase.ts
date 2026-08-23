@@ -54,9 +54,11 @@ const app = initializeApp(firebaseConfig);
 // App Check (ReCaptchaV3Provider)
 import { initAppCheck, isAppCheckFallbackOffline } from './appCheck';
 initAppCheck(app).then((res) => {
-    if (!res.success) {
-        console.warn("App Check fallito o non supportato. App in modalit degradata.", res.reason);
+    if (!res.success && !res.disabled) {
+        console.warn("Inizializzazione App Check non riuscita:", res.reason);
     }
+}).catch((err) => {
+    console.warn("Errore durante l'inizializzazione di App Check:", err);
 });
 
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)

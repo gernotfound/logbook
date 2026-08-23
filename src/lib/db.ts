@@ -1,12 +1,12 @@
-import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
+import { auth, db, waitForPendingWrites, deleteUser, isAppCheckFallbackOffline } from './firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
-import type { UserData } from '../types';
+import type { UserData, CatalogOverrides } from '../types';
 import { getLocalDateString } from './utils/date';
 import { removeUndefinedValues } from './utils/object';
 import { checkDocSize } from './checkDocSize';
-import { syncGlobalCatalog, getInMemoryCatalog } from './catalog/catalogService';
+import { syncGlobalCatalog, getInMemoryCatalog, getCachedCatalog, getSeedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods, migrateLegacyLibraryToOverrides, migrateLegacyFoodsToOverrides } from './catalog/deltaResolver';
 
 let lastSavedStateStr: string | null = null;
@@ -42,9 +42,10 @@ export const DB = {
                 activePains: []
             };
             const docRef = doc(db, "users", user.uid);
-            // 1. Sync global catalog first (offline-resilient)
-            const catalogResult = await syncGlobalCatalog(db);
-            const catalog = catalogResult.catalog;
+            // 1. Get cached/seed catalog (offline-resilient)
+            const catalog = await getCachedCatalog();
+            // Background sync manifest if online (fire-and-forget)
+            syncGlobalCatalog(db).catch(() => {});
 
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
@@ -76,8 +77,8 @@ export const DB = {
                 if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
                 if(data.activePains) state.activePains = data.activePains;
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
-                state.library = catalog.exercises;
-                state.customFoods = catalog.foods;
+                state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
+                state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
                 // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
                 // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
                 state.profile = DomainParsers.parseProfile(state.profile);
@@ -170,7 +171,8 @@ export const DB = {
                 activeCycleId: null,
                 nutritionPlanning: null,
                 supplements: [],
-                activePains: []
+                activePains: [],
+                catalogOverrides: {}
             };
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
@@ -180,37 +182,44 @@ export const DB = {
             let hasWrites = false;
             
             // Re-split library & customFoods into pure overrides/custom so we don't save the whole catalog
-            const catalog = getInMemoryCatalog();
-            let effectiveCustomExercises = state.library || [];
-            let effectiveCustomFoods = state.customFoods || [];
-            let overridesToSave = state.catalogOverrides || {};
+            const catalog = getInMemoryCatalog(true) || getSeedCatalog();
+            const { customExercises, overrides: exOverrides } = migrateLegacyLibraryToOverrides(state.library || [], catalog.exercises);
+            const { customFoods, overrides: foodOverrides } = migrateLegacyFoodsToOverrides(state.customFoods || [], catalog.foods);
             
-            if (catalog) {
-                const { customExercises, overrides: exOverrides } = migrateLegacyLibraryToOverrides(state.library || [], catalog.exercises);
-                const { customFoods, overrides: foodOverrides } = migrateLegacyFoodsToOverrides(state.customFoods || [], catalog.foods);
-                overridesToSave = {
-                    ...overridesToSave,
-                    exercises: exOverrides.exercises,
-                    hiddenExerciseIds: exOverrides.hiddenExerciseIds,
-                    foods: foodOverrides.foods,
-                    hiddenFoodIds: foodOverrides.hiddenFoodIds,
-                };
-                effectiveCustomExercises = customExercises;
-                effectiveCustomFoods = customFoods;
-            }
+            const overridesToSave: CatalogOverrides = {
+                ...(state.catalogOverrides || {}),
+                exercises: {
+                    ...(state.catalogOverrides?.exercises || {}),
+                    ...(exOverrides.exercises || {})
+                },
+                hiddenExerciseIds: Array.from(new Set([
+                    ...(state.catalogOverrides?.hiddenExerciseIds || []),
+                    ...(exOverrides.hiddenExerciseIds || [])
+                ])),
+                foods: {
+                    ...(state.catalogOverrides?.foods || {}),
+                    ...(foodOverrides.foods || {})
+                },
+                hiddenFoodIds: Array.from(new Set([
+                    ...(state.catalogOverrides?.hiddenFoodIds || []),
+                    ...(foodOverrides.hiddenFoodIds || [])
+                ]))
+            };
+            const effectiveCustomExercises = customExercises;
+            const effectiveCustomFoods = customFoods;
             
             // 1. User doc updates
             if (!deepEqual(state.profile, oldState.profile) ||
-                !deepEqual(effectiveCustomExercises, oldState.library) ||
+                !deepEqual(state.library, oldState.library) ||
                 !deepEqual(state.routines, oldState.routines) ||
-                !deepEqual(effectiveCustomFoods, oldState.customFoods) ||
+                !deepEqual(state.customFoods, oldState.customFoods) ||
                 !deepEqual(state.activeWorkout, oldState.activeWorkout) ||
                 !deepEqual(state.trainingCycles, oldState.trainingCycles) ||
                 !deepEqual(state.activeCycleId, oldState.activeCycleId) ||
                 !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning) ||
                 !deepEqual(state.supplements, oldState.supplements) ||
                 !deepEqual(state.activePains, oldState.activePains) ||
-                !deepEqual(overridesToSave, oldState.catalogOverrides)) {
+                !deepEqual(state.catalogOverrides, oldState.catalogOverrides)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 const userDocData = {
@@ -305,6 +314,8 @@ export const DB = {
                     if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
+                    } else if (batchErr?.code === 'permission-denied' && isAppCheckFallbackOffline()) {
+                        console.warn("Scrittura negata dal server (App Check mancante). Salvata nella cache locale dell'app.", batchErr);
                     } else {
                         console.error("Errore critico durante il salvataggio Firestore:", batchErr);
                         throw batchErr;
@@ -355,7 +366,15 @@ export const DB = {
                 const chunk = allRefs.slice(i, i + CHUNK_SIZE);
                 const batch = writeBatch(db);
                 chunk.forEach(ref => batch.delete(ref));
-                await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
+                try {
+                    await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
+                } catch (batchErr: any) {
+                    if (batchErr?.code === 'permission-denied' && isAppCheckFallbackOffline()) {
+                        console.warn("Impossibile eliminare i dati cloud (App Check mancante), procedo con l'eliminazione dell'account Auth.");
+                    } else {
+                        throw batchErr;
+                    }
+                }
             }
 
             // 2. Delete Firebase Auth user account

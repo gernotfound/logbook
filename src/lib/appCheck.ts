@@ -30,6 +30,7 @@ export interface AppCheckResult {
     success: boolean;
     appCheck: AppCheck | null;
     isFallbackOffline: boolean;
+    disabled?: boolean;
     reason?: string;
 }
 
@@ -63,11 +64,14 @@ export async function isAppCheckSupported(): Promise<boolean> {
         return isSupportedCached;
     }
     try {
-        if (typeof window === 'undefined') {
+        if (typeof window === 'undefined' || typeof document === 'undefined') {
             isSupportedCached = false;
             return false;
         }
-        isSupportedCached = true;
+        // Verify essential Web APIs for reCAPTCHA v3 (window, fetch, crypto)
+        const hasCrypto = typeof window.crypto !== 'undefined';
+        const hasFetch = typeof window.fetch !== 'undefined';
+        isSupportedCached = Boolean(hasCrypto && hasFetch);
         return isSupportedCached;
     } catch (err) {
         console.warn("[AppCheck] Impossibile verificare il supporto del browser:", err);
@@ -96,13 +100,14 @@ export async function initAppCheck(
     }
 
     if (!siteKey || siteKey.trim() === '') {
-        console.warn(`[AppCheck] ${APP_CHECK_STRINGS.missingSiteKeyWarning}`);
+        console.warn(APP_CHECK_STRINGS.missingSiteKeyWarning);
         isFallbackOfflineMode = true;
         return {
             success: false,
             appCheck: null,
             isFallbackOffline: true,
-            reason: APP_CHECK_STRINGS.missingSiteKeyWarning
+            disabled: true,
+            reason: 'Site key not configured'
         };
     }
 
@@ -114,13 +119,14 @@ export async function initAppCheck(
             success: false,
             appCheck: null,
             isFallbackOffline: true,
+            disabled: false,
             reason: APP_CHECK_STRINGS.unsupportedMessage
         };
     }
 
     try {
         appCheckInstance = initializeAppCheck(app, {
-            provider: new ReCaptchaV3Provider(siteKey),
+            provider: new ReCaptchaV3Provider(siteKey.trim()),
             isTokenAutoRefreshEnabled: options?.isTokenAutoRefreshEnabled ?? true
         });
 
@@ -135,7 +141,8 @@ export async function initAppCheck(
         return {
             success: true,
             appCheck: appCheckInstance,
-            isFallbackOffline: false
+            isFallbackOffline: false,
+            disabled: false
         };
     } catch (err: any) {
         console.error("[AppCheck] Errore durante l'inizializzazione:", err);
@@ -144,6 +151,7 @@ export async function initAppCheck(
             success: false,
             appCheck: null,
             isFallbackOffline: true,
+            disabled: false,
             reason: err?.message || APP_CHECK_STRINGS.initErrorMessage
         };
     }

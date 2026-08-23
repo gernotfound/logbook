@@ -8,6 +8,8 @@ import { UserDataSchema } from '../lib/schema';
 import { mergeUserData, hasUserData } from '../lib/merge';
 import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
+import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
+import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog/deltaResolver';
 
 // Imports for default data removed
 
@@ -32,6 +34,18 @@ const defaultUserData: UserData = {
     supplements: [],
     activePains: []
 };
+
+const getResolvedDefaultUserData = (catalog = getInMemoryCatalog()): UserData => ({
+    ...defaultUserData,
+    library: resolveEffectiveExercises(catalog.exercises, [], {}),
+    customFoods: resolveEffectiveFoods(catalog.foods, [], {}),
+    catalogOverrides: {
+        exercises: {},
+        foods: {},
+        hiddenExerciseIds: [],
+        hiddenFoodIds: []
+    }
+});
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -114,14 +128,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             setUserData(cloudData!);
                         } else if (guestHasData) {
                             // Se il guest ha dati creati, unisce in modo deterministico con il cloud (se presente)
-                            const mergedData = (cloudHasData && cloudData)
-                                ? mergeUserData(cloudData, guestData)
-                                : (UserDataSchema.parse(guestData) as unknown as UserData);
+                            const mergedData = mergeUserData(cloudData, guestData);
                             
                             await DB.saveUserData(mergedData);
-                            setUserData(mergedData);
+                            // Ricarica per avere la risoluzione completa del catalogo globale per le viste
+                            const resolvedData = await DB.loadUserData();
+                            setUserData(resolvedData || mergedData);
                         } else {
-                            setUserData(cloudData || (UserDataSchema.parse(defaultUserData) as unknown as UserData));
+                            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                            const fallbackData = getResolvedDefaultUserData(catalog);
+                            setUserData(cloudData || (UserDataSchema.parse(fallbackData) as unknown as UserData));
                         }
                     } catch (e) {
                         console.warn("Errore sincronizzazione iniziale post-link:", e);
@@ -135,11 +151,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
             } else {
                 // Nessun utente Firebase: resetta solo se NON siamo in modalità guest
-                if (!isGuestRef.current && localStorage.getItem(GUEST_KEY) !== 'true') {
+                const isGuestActive = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+                if (!isGuestActive) {
                     DB.resetCache();
                     useAppStore.getState().resetStore();
                 }
-                // Se guest: i dati rimangono nel localStorage, non tocchiamo nulla
+                // Se guest: i dati rimangono nel localStorage/IndexedDB, non tocchiamo nulla
             }
         });
 
@@ -199,13 +216,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [setSaveError]);
 
     // Accesso guest: solo localStorage, zero Firebase
-    const loginAsGuest = useCallback(() => {
+    const loginAsGuest = useCallback(async () => {
         localStorage.setItem(GUEST_KEY, 'true');
         isGuestRef.current = true;
         setIsGuest(true);
-        // Se non ci sono dati precedenti in localStorage, inizializza con i default
-        if (!useAppStore.getState().userData) {
-            setUserData(UserDataSchema.parse(defaultUserData) as unknown as UserData);
+        // Se non ci sono dati precedenti in store/cache, inizializza con il catalogo globale risolto
+        const currentData = useAppStore.getState().userData;
+        if (!currentData) {
+            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+            const initialGuestData = getResolvedDefaultUserData(catalog);
+            setUserData(UserDataSchema.parse(initialGuestData) as unknown as UserData);
+        } else {
+            const hasCatalogExercises = Array.isArray(currentData.library) && currentData.library.some(e => e.isDefault === true);
+            const hasCatalogFoods = Array.isArray(currentData.customFoods) && currentData.customFoods.some(f => f.isCustom === false);
+            if (!hasCatalogExercises || !hasCatalogFoods) {
+                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                const resolvedLibrary = !hasCatalogExercises
+                    ? resolveEffectiveExercises(catalog.exercises, currentData.library || [], currentData.catalogOverrides)
+                    : currentData.library;
+                const resolvedFoods = !hasCatalogFoods
+                    ? resolveEffectiveFoods(catalog.foods, currentData.customFoods || [], currentData.catalogOverrides)
+                    : currentData.customFoods;
+                setUserData({
+                    ...currentData,
+                    library: resolvedLibrary,
+                    customFoods: resolvedFoods
+                });
+            }
         }
     }, [setUserData]);
 
