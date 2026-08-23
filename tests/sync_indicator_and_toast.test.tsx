@@ -659,7 +659,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       // Sync indicator disappears; non-blocking error toast appears
       expect(useAppStore.getState().syncing).toBe(false);
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
-      expect(screen.getByText(/Errore sincronizzazione\. Verifica la connessione\./i)).toBeDefined();
+      expect(screen.getByText(/dati sono stati salvati con successo sul dispositivo/i)).toBeDefined();
       expect(container.querySelector('#sync-overlay')).toBeNull();
 
       // Step 3: Lifter continues workout without clicking dismiss; toast auto-dismisses at 5s
@@ -815,7 +815,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       await savePromise;
       expect(caughtError5).not.toBeNull();
 
-      expect(screen.getByText(/Errore sincronizzazione\. Verifica la connessione\./i)).toBeDefined();
+      expect(screen.getByText(/dati sono stati salvati con successo sul dispositivo/i)).toBeDefined();
 
       // Online event fires
       act(() => {
@@ -823,7 +823,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       });
 
       expect(useAppStore.getState().saveError).toBeNull();
-      expect(screen.queryByText(/Errore sincronizzazione/i)).toBeNull();
+      expect(screen.queryByText(/dati sono stati salvati/i)).toBeNull();
       expect(container.querySelector('#sync-overlay')).toBeNull();
     });
   });
