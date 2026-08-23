@@ -14,7 +14,7 @@
 
 import { 
     initializeAppCheck, 
-    ReCaptchaV3Provider, 
+    ReCaptchaEnterpriseProvider, 
     getToken, 
     type AppCheck, 
 } from 'firebase/app-check';
@@ -126,7 +126,7 @@ export async function initAppCheck(
 
     try {
         appCheckInstance = initializeAppCheck(app, {
-            provider: new ReCaptchaV3Provider(siteKey.trim()),
+            provider: new ReCaptchaEnterpriseProvider(siteKey.trim()),
             isTokenAutoRefreshEnabled: options?.isTokenAutoRefreshEnabled ?? true
         });
 
@@ -212,7 +212,7 @@ export function getAppCheckStatus(): AppCheckStatusDetails {
         fallbackOffline: isFallbackOfflineMode,
         hasToken: Boolean(lastToken?.token),
         tokenExpireTimestamp: lastToken?.expireTimeMillis,
-        provider: appCheckInstance ? 'ReCaptchaV3Provider' : 'none'
+        provider: appCheckInstance ? 'ReCaptchaEnterpriseProvider' : 'none'
     };
 }
 
