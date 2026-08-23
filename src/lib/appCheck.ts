@@ -40,7 +40,7 @@ export interface AppCheckStatusDetails {
     fallbackOffline: boolean;
     hasToken: boolean;
     tokenExpireTimestamp?: number;
-    provider: 'ReCaptchaV3Provider' | 'none';
+    provider: 'ReCaptchaV3Provider' | 'ReCaptchaEnterpriseProvider' | 'none';
 }
 
 export const APP_CHECK_STRINGS = {
