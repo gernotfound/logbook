@@ -9,6 +9,7 @@ import './styles/global.css'
 import type { UserData } from './types'
 
 import { getCachedCatalog } from './lib/catalog/catalogService';
+import { resolveEffectiveExercises, resolveEffectiveFoods } from './lib/catalog/deltaResolver';
 
 // Prevent gesture/pinch zoom on iOS PWA
 if (typeof window !== 'undefined') {
@@ -22,24 +23,21 @@ const initApp = async () => {
     navigator.storage.persist().catch(() => {});
   }
   try {
+    const catalog = await getCachedCatalog();
     let cached = await get<UserData>('logbook_cached_user_data');
-    if (!cached) {
-      const catalog = await getCachedCatalog();
+    if (cached) {
       cached = {
-        library: catalog.exercises,
-        customFoods: catalog.foods,
-      } as any;
-    } else if (cached && (!cached.library || cached.library.length === 0)) {
-        // Just in case it was cached empty by accident during dev
-        const catalog = await getCachedCatalog();
-        cached.library = catalog.exercises as any;
-        cached.customFoods = catalog.foods as any;
-    }
-    
-    window.__INITIAL_USER_DATA__ = cached || null;
-    const initialData = getInitialUserData();
-    if (initialData && !useAppStore.getState().userData) {
-      useAppStore.setState({ userData: initialData });
+        ...cached,
+        library: resolveEffectiveExercises(catalog.exercises, cached.library || [], cached.catalogOverrides),
+        customFoods: resolveEffectiveFoods(catalog.foods, cached.customFoods || [], cached.catalogOverrides),
+      };
+      window.__INITIAL_USER_DATA__ = cached;
+      const initialData = getInitialUserData();
+      if (initialData && !useAppStore.getState().userData) {
+        useAppStore.setState({ userData: initialData });
+      }
+    } else {
+      window.__INITIAL_USER_DATA__ = null;
     }
   } catch (e) {
     console.warn("Errore recupero cache da IndexedDB:", e);

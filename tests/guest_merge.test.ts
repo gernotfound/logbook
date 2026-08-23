@@ -1,14 +1,64 @@
 import { describe, it, expect } from 'vitest';
-import { mergeUserData, hasUserData, mergeArrayById, mergeNutrition, mergeProfile, mergeNutritionPlanning } from '../src/lib/merge';
-import type { UserData } from '../src/types';
+import {
+    mergeUserData,
+    hasUserData,
+    mergeArrayById,
+    mergeNutrition,
+    mergeProfile,
+    mergeNutritionPlanning,
+    filterCustomExercises,
+    filterCustomFoods
+} from '../src/lib/merge';
+import { getSeedCatalog } from '../src/lib/catalog/catalogService';
+import type { UserData, Exercise, Food } from '../src/types';
 
 describe('Deterministic Guest Merge (R5) Suite', () => {
+    describe('filterCustomExercises & filterCustomFoods helpers', () => {
+        it('filters out standard seed catalog exercises and preserves user custom exercises', () => {
+            const seed = getSeedCatalog();
+            const standardEx = seed.exercises[0]; // e.g. panca-piana-bilanciere
+            const customEx1: Exercise = { id: 'custom_ex_1', name: 'Custom Fly', setsCount: 3, sets: [], isDefault: false };
+            const customEx2: Exercise = { id: 'custom_ex_2', name: 'Another Custom', setsCount: 4, sets: [] };
+
+            const filtered = filterCustomExercises([standardEx, customEx1, customEx2]);
+            expect(filtered).toHaveLength(2);
+            expect(filtered.map(e => e.id)).toEqual(['custom_ex_1', 'custom_ex_2']);
+        });
+
+        it('filters out standard seed catalog foods and preserves user custom foods', () => {
+            const seed = getSeedCatalog();
+            const standardFood = seed.foods[0]; // e.g. petto-di-pollo-crudo
+            const customFood1: Food = { id: 'custom_food_1', name: 'Custom Shake', kcal: 250, pro: 30, carbs: 10, fat: 5, isCustom: true };
+            const customFood2: Food = { id: 'custom_food_2', name: 'Custom Oats', kcal: 350, pro: 12, carbs: 60, fat: 7 };
+
+            const filtered = filterCustomFoods([standardFood, customFood1, customFood2]);
+            expect(filtered).toHaveLength(2);
+            expect(filtered.map(f => f.id)).toEqual(['custom_food_1', 'custom_food_2']);
+        });
+    });
+
     describe('hasUserData utility', () => {
         it('returns false for null, undefined, or empty objects', () => {
             expect(hasUserData(null)).toBe(false);
             expect(hasUserData(undefined)).toBe(false);
             expect(hasUserData({})).toBe(false);
             expect(hasUserData({ library: [], routines: [], history: [], nutrition: {}, customFoods: [], supplements: [], trainingCycles: [] })).toBe(false);
+        });
+
+        it('returns false for pristine state containing only standard seed catalog items', () => {
+            const seed = getSeedCatalog();
+            expect(hasUserData({
+                library: seed.exercises,
+                customFoods: seed.foods,
+                catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
+            })).toBe(false);
+        });
+
+        it('returns true if catalogOverrides contains any modification or hidden item', () => {
+            expect(hasUserData({ catalogOverrides: { exercises: { 'panca-piana-bilanciere': { notes: 'Pausa' } } } })).toBe(true);
+            expect(hasUserData({ catalogOverrides: { foods: { 'petto-di-pollo-crudo': { pro: 25 } } } })).toBe(true);
+            expect(hasUserData({ catalogOverrides: { hiddenExerciseIds: ['panca-declinata-bilanciere'] } })).toBe(true);
+            expect(hasUserData({ catalogOverrides: { hiddenFoodIds: ['petto-di-tacchino-crudo'] } })).toBe(true);
         });
 
         it('returns true if any collection or profile has user data', () => {
@@ -504,5 +554,60 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             expect(result.profile?.weight).toBe(80);
             expect(result.profile?.bodyFat).toBe(14);
         });
+
+        it('filters out monolithic seed items from guest/cloud libraries and merges catalogOverrides without duplication', () => {
+            const seed = getSeedCatalog();
+
+            const cloudData: UserData = {
+                profile: { name: 'Cloud User' },
+                library: [
+                    ...seed.exercises.slice(0, 10), // monolithic legacy slice
+                    { id: 'cloud_custom_1', name: 'Cloud Special', setsCount: 3, sets: [], isDefault: false }
+                ],
+                customFoods: [
+                    ...seed.foods.slice(0, 10), // monolithic legacy slice
+                    { id: 'cloud_food_1', name: 'Cloud Protein', kcal: 200, pro: 30, carbs: 5, fat: 2, isCustom: true }
+                ],
+                catalogOverrides: {
+                    exercises: { 'squat-bilanciere': { notes: 'Discesa lenta' } },
+                    hiddenExerciseIds: ['leg-extension-macchina']
+                }
+            };
+
+            const guestData: UserData = {
+                profile: { weight: 75 },
+                library: [
+                    ...seed.exercises, // full resolved guest library
+                    { id: 'guest_custom_1', name: 'Guest Special', setsCount: 4, sets: [], isDefault: false }
+                ],
+                customFoods: [
+                    ...seed.foods, // full resolved guest foods
+                    { id: 'guest_food_1', name: 'Guest Snack', kcal: 150, pro: 15, carbs: 10, fat: 3, isCustom: true }
+                ],
+                catalogOverrides: {
+                    exercises: { 'panca-piana-bilanciere': { notes: 'Pausa 2s' } },
+                    foods: { 'petto-di-pollo-crudo': { pro: 24 } },
+                    hiddenExerciseIds: ['panca-declinata-bilanciere'],
+                    hiddenFoodIds: ['petto-di-tacchino-crudo']
+                }
+            };
+
+            const result = mergeUserData(cloudData, guestData);
+
+            // Library and customFoods must contain strictly the 2 custom items, NOT 70+ seed duplicates!
+            expect(result.library).toHaveLength(2);
+            expect(result.library?.map(e => e.id)).toEqual(expect.arrayContaining(['cloud_custom_1', 'guest_custom_1']));
+
+            expect(result.customFoods).toHaveLength(2);
+            expect(result.customFoods?.map(f => f.id)).toEqual(expect.arrayContaining(['cloud_food_1', 'guest_food_1']));
+
+            // Catalog overrides are fully preserved and combined
+            expect(result.catalogOverrides?.exercises?.['squat-bilanciere']?.notes).toBe('Discesa lenta');
+            expect(result.catalogOverrides?.exercises?.['panca-piana-bilanciere']?.notes).toBe('Pausa 2s');
+            expect(result.catalogOverrides?.foods?.['petto-di-pollo-crudo']?.pro).toBe(24);
+            expect(result.catalogOverrides?.hiddenExerciseIds).toEqual(expect.arrayContaining(['leg-extension-macchina', 'panca-declinata-bilanciere']));
+            expect(result.catalogOverrides?.hiddenFoodIds).toEqual(expect.arrayContaining(['petto-di-tacchino-crudo']));
+        });
     });
 });
+

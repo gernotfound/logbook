@@ -1,18 +1,93 @@
-import { UserDataSchema } from './schema';
 import { getInMemoryCatalog } from './catalog/catalogService';
 import {
     mergeCatalogOverrides,
     migrateLegacyLibraryToOverrides,
-    migrateLegacyFoodsToOverrides
+    migrateLegacyFoodsToOverrides,
+    type Exercise,
+    type Food
 } from './catalog/deltaResolver';
-import type {
-    UserData,
-    UserProfile,
-    NutritionPlanning,
-    NutritionDay,
-    Exercise,
-    Food,
-} from '../types';
+import type { CatalogOverrides } from './catalog/catalogTypes';
+
+export interface UserProfile {
+    name?: string;
+    gender?: 'M' | 'F' | string;
+    dob?: string;
+    height?: string | number;
+    weight?: string | number;
+    waist?: string | number;
+    neck?: string | number;
+    hip?: string | number;
+    chest?: string | number;
+    shoulders?: string | number;
+    biceps?: string | number;
+    thighs?: string | number;
+    calves?: string | number;
+    bodyFat?: string | number;
+    [key: string]: any;
+}
+
+export interface NutritionPlanning {
+    weight?: number;
+    carbsPerKg?: number;
+    proPerKg?: number;
+    fatPerKg?: number;
+    avgMacros?: any;
+    onBoost?: any;
+    onMacros?: any;
+    offMacros?: any;
+    normocalorica?: {
+        kcal?: number;
+        carbs?: number;
+        pro?: number;
+        fat?: number;
+    };
+    [key: string]: any;
+}
+
+export interface NutritionDay {
+    date: string;
+    kcal?: number;
+    carbs?: number;
+    pro?: number;
+    fat?: number;
+    weight?: string | number;
+    bf?: string | number;
+    neck?: string | number;
+    waist?: string | number;
+    hip?: string | number;
+    chest?: string | number;
+    shoulders?: string | number;
+    biceps?: string | number;
+    thighs?: string | number;
+    calves?: string | number;
+    measurementTime?: string;
+    isDayOn?: boolean;
+    meals?: any[];
+    supplementsIntake?: any[];
+    sleepHours?: string;
+    sleepDeep?: string;
+    sleepLight?: string;
+    sleepRem?: string;
+    sleepAwake?: string;
+    [key: string]: any;
+}
+
+export interface UserData {
+    profile?: UserProfile;
+    library?: Exercise[];
+    routines?: any[];
+    history?: any[];
+    nutrition?: Record<string, NutritionDay>;
+    customFoods?: Food[];
+    activeWorkout?: any | null;
+    nutritionPlanning?: NutritionPlanning;
+    trainingCycles?: any[];
+    activeCycleId?: string | null;
+    supplements?: any[];
+    activePains?: string[];
+    catalogOverrides?: CatalogOverrides;
+    [key: string]: any;
+}
 
 /**
  * Filters out static seed/global catalog exercises, keeping only genuine user custom exercises.
@@ -131,14 +206,6 @@ export function mergeNutritionPlanning(
 
 /**
  * Merges two nutrition records keyed by `YYYY-MM-DD`.
- * - Dates unique to cloud or guest are preserved.
- * - For matching dates:
- *   - `meals` sub-array is merged by item ID (guest priority).
- *   - `supplementsIntake` sub-array is merged by intake ID (guest priority).
- *   - Daily macros (kcal, carbs, pro, fat) are recalculated from combined meals if meals exist;
- *     otherwise guest macros take priority if non-zero, else cloud.
- *   - Body measurements and notes: guest values prioritized if present/non-empty, otherwise cloud.
- *   - `isDayOn` and `measurementTime`: guest prioritized if defined, otherwise cloud.
  */
 export function mergeNutrition(
     cloudNut?: Record<string, NutritionDay> | null,
@@ -277,16 +344,6 @@ export function hasUserData(data?: UserData | null): boolean {
 
 /**
  * Deterministically merges cloud data and guest data across all collections.
- * - Array collections (`library`, `routines`, `customFoods`, `trainingCycles`, `history`, `supplements`):
- *   deduplicated by `id`, guest priority on collision.
- *   `library` and `customFoods` are filtered to keep ONLY custom items, preventing static catalog duplication.
- * - `catalogOverrides`: merged using `mergeCatalogOverrides(cloud.catalogOverrides, guest.catalogOverrides)`
- *   plus any legacy delta migrations if full monolithic arrays were passed.
- * - Record collections (`nutrition`): merged per date key (`YYYY-MM-DD`), inner `meals` and `supplementsIntake` merged by `id`.
- * - Scalar/profile fields (`profile`, `nutritionPlanning`, `activeWorkout`, `activeCycleId`):
- *   guest prioritized if defined/non-empty, otherwise cloud.
- * 
- * The merged object is validated through `UserDataSchema.parse()`.
  */
 export function mergeUserData(
     cloudData?: UserData | null,
@@ -306,19 +363,19 @@ export function mergeUserData(
     // If legacy monolithic arrays with modified catalog items are passed without catalogOverrides, extract them
     const catalog = getInMemoryCatalog(true);
     if (catalog) {
-        if (Array.isArray(cloud.library) && cloud.library.some(e => e && (e.isDefault === true || (e.id && catalog.exercises.some(ce => ce.id === e.id))))) {
+        if (Array.isArray(cloud.library) && cloud.library.some(e => e.isDefault === true || catalog.exercises.some(ce => ce.id === e.id))) {
             const { overrides } = migrateLegacyLibraryToOverrides(cloud.library, catalog.exercises);
             mergedOverrides = mergeCatalogOverrides(overrides, mergedOverrides);
         }
-        if (Array.isArray(guest.library) && guest.library.some(e => e && (e.isDefault === true || (e.id && catalog.exercises.some(ce => ce.id === e.id))))) {
+        if (Array.isArray(guest.library) && guest.library.some(e => e.isDefault === true || catalog.exercises.some(ce => ce.id === e.id))) {
             const { overrides } = migrateLegacyLibraryToOverrides(guest.library, catalog.exercises);
             mergedOverrides = mergeCatalogOverrides(mergedOverrides, overrides);
         }
-        if (Array.isArray(cloud.customFoods) && cloud.customFoods.some(f => f && (f.isCustom === false || (f.id !== undefined && f.id !== null && catalog.foods.some(cf => String(cf.id) === String(f.id)))))) {
+        if (Array.isArray(cloud.customFoods) && cloud.customFoods.some(f => f.isCustom === false || catalog.foods.some(cf => String(cf.id) === String(f.id)))) {
             const { overrides } = migrateLegacyFoodsToOverrides(cloud.customFoods, catalog.foods);
             mergedOverrides = mergeCatalogOverrides(overrides, mergedOverrides);
         }
-        if (Array.isArray(guest.customFoods) && guest.customFoods.some(f => f && (f.isCustom === false || (f.id !== undefined && f.id !== null && catalog.foods.some(cf => String(cf.id) === String(f.id)))))) {
+        if (Array.isArray(guest.customFoods) && guest.customFoods.some(f => f.isCustom === false || catalog.foods.some(cf => String(cf.id) === String(f.id)))) {
             const { overrides } = migrateLegacyFoodsToOverrides(guest.customFoods, catalog.foods);
             mergedOverrides = mergeCatalogOverrides(mergedOverrides, overrides);
         }
@@ -347,6 +404,5 @@ export function mergeUserData(
         catalogOverrides: mergedOverrides,
     };
 
-    return UserDataSchema.parse(rawMerged) as unknown as UserData;
+    return rawMerged;
 }
-

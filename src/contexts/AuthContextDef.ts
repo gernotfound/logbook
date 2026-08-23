@@ -6,7 +6,7 @@ export interface AuthContextType {
     loading: boolean;
     isGuest: boolean;
     login: () => Promise<void>;
-    loginAsGuest: () => void;
+    loginAsGuest: () => void | Promise<void>;
     linkGoogleAccount: () => Promise<void>;
     logout: (skipConfirm?: boolean) => Promise<void>;
 }

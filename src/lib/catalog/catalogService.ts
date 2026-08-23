@@ -37,6 +37,7 @@ import seedFoodsRaw from './seedFoods.json';
 const DEFAULT_SYNC_TIMEOUT_MS = 4000;
 
 let inMemoryCatalogCache: CachedGlobalCatalog | null = null;
+let isLoadedFromPersistentCache = false;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione catalogo"): Promise<T> {
     let timer: any;
@@ -85,7 +86,7 @@ export function getSeedCatalog(): CachedGlobalCatalog {
  * Falls back to the bundled seed dataset if IndexedDB is empty or corrupt.
  */
 export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
-    if (inMemoryCatalogCache) {
+    if (inMemoryCatalogCache && isLoadedFromPersistentCache) {
         return inMemoryCatalogCache;
     }
 
@@ -95,6 +96,7 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
             const parsed = CachedGlobalCatalogSchema.safeParse(rawCached);
             if (parsed.success) {
                 inMemoryCatalogCache = parsed.data;
+                isLoadedFromPersistentCache = true;
                 return parsed.data;
             }
             console.warn("[CatalogService] Cache IndexedDB corrotta, ripristino seed predefinito.");
@@ -106,6 +108,7 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
     // Fallback to static bundled seed
     const seedCatalog = getSeedCatalog();
     inMemoryCatalogCache = seedCatalog;
+    isLoadedFromPersistentCache = true;
 
     // Asynchronously populate IndexedDB in background
     saveCatalogToCache(seedCatalog).catch(err => {
@@ -120,6 +123,7 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
  */
 export async function saveCatalogToCache(catalog: CachedGlobalCatalog): Promise<void> {
     inMemoryCatalogCache = catalog;
+    isLoadedFromPersistentCache = true;
     try {
         await idbSet(CATALOG_CACHE_KEY, catalog);
     } catch (err) {
@@ -260,6 +264,7 @@ export async function syncGlobalCatalog(
  */
 export async function clearCatalogCache(): Promise<void> {
     inMemoryCatalogCache = null;
+    isLoadedFromPersistentCache = false;
     try {
         await idbDel(CATALOG_CACHE_KEY);
     } catch (err) {
@@ -267,5 +272,23 @@ export async function clearCatalogCache(): Promise<void> {
     }
 }
 
-export function getInMemoryCatalog(): CachedGlobalCatalog | null { return inMemoryCatalogCache; }
+/**
+ * Synchronous in-memory lookup with guaranteed seed fallback by default.
+ * Passing `false` allows checking if the catalog is already in memory without auto-populating seed.
+ */
+export function getInMemoryCatalog(fallbackToSeed?: true): CachedGlobalCatalog;
+export function getInMemoryCatalog(fallbackToSeed: false): CachedGlobalCatalog | null;
+export function getInMemoryCatalog(fallbackToSeed: boolean = true): CachedGlobalCatalog | null {
+    if (!inMemoryCatalogCache && fallbackToSeed) {
+        inMemoryCatalogCache = getSeedCatalog();
+    }
+    return inMemoryCatalogCache;
+}
+
+/**
+ * Checks whether the catalog is currently populated in memory.
+ */
+export function isCatalogInMemory(): boolean {
+    return inMemoryCatalogCache !== null;
+}
 

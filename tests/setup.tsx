@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { render, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
@@ -151,7 +151,15 @@ vi.mock('firebase/auth', () => ({
   }),
   setPersistence: vi.fn().mockResolvedValue(undefined),
   browserLocalPersistence: {},
+  indexedDBLocalPersistence: {},
   deleteUser: vi.fn(),
+}));
+
+vi.mock('firebase/app-check', () => ({
+  initializeAppCheck: vi.fn(() => ({})),
+  ReCaptchaV3Provider: vi.fn(),
+  getToken: vi.fn().mockResolvedValue({ token: 'mock-token', expireTimeMillis: Date.now() + 3600000 }),
+  isSupported: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('firebase/firestore', () => ({
