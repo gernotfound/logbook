@@ -1,21 +1,20 @@
 /**
  * Firebase App Check Security Module (LogBook PWA)
  * 
- * Provider: ReCaptchaV3Provider (Standard Google reCAPTCHA v3)
- * Cost Tier: 100% Free on Firebase Spark (1,000,000 evaluations/month included)
+ * Provider: ReCaptchaEnterpriseProvider (Google reCAPTCHA Enterprise — integrato in Google Cloud)
+ * Cost Tier: Gratuito fino a 10.000 valutazioni/mese (abbondantemente sufficiente per LogBook).
  * 
  * Key Constraints:
- * - NO reCAPTCHA Enterprise / App Check Enterprise (prohibited under zero-cost mandate).
- * - Site key is a public identifier embedded safely in the client bundle.
- * - Automatic background token refresh enabled (standard TTL = 1 hour).
- * - Graceful fallback to offline mode if browser lacks Web Crypto / iframe sandboxing (isSupported() === false).
+ * - Site key (VITE_RECAPTCHA_V3_SITE_KEY) è un identificatore pubblico sicuro nel bundle client.
+ * - Automatic background token refresh enabled (standard TTL configurato in Firebase App Check).
+ * - Graceful fallback to offline mode if browser lacks Web Crypto / isSupported() === false.
  * - User notifications strictly formatted in Italian Sentence case.
  */
 
 import { 
     initializeAppCheck, 
     ReCaptchaEnterpriseProvider, 
-    getToken, 
+    getToken,
     type AppCheck, 
 } from 'firebase/app-check';
 import type { FirebaseApp } from 'firebase/app';
@@ -57,7 +56,8 @@ let isFallbackOfflineMode: boolean = false;
 let lastToken: any = null;
 
 /**
- * Checks whether the current runtime environment (browser, WebView, PWA) supports App Check.
+ * Checks whether the current runtime environment supports App Check.
+ * Uses manual API checks since firebase/app-check non esporta isSupported().
  */
 export async function isAppCheckSupported(): Promise<boolean> {
     if (isSupportedCached !== null) {
@@ -68,11 +68,10 @@ export async function isAppCheckSupported(): Promise<boolean> {
             isSupportedCached = false;
             return false;
         }
-        // Verify essential Web APIs for reCAPTCHA v3 (window, fetch, crypto)
         const hasCrypto = typeof window.crypto !== 'undefined';
         const hasFetch = typeof window.fetch !== 'undefined';
         isSupportedCached = Boolean(hasCrypto && hasFetch);
-        return isSupportedCached;
+        return isSupportedCached as boolean;
     } catch (err) {
         console.warn("[AppCheck] Impossibile verificare il supporto del browser:", err);
         isSupportedCached = false;
@@ -81,7 +80,7 @@ export async function isAppCheckSupported(): Promise<boolean> {
 }
 
 /**
- * Initializes Firebase App Check with ReCaptchaV3Provider.
+ * Initializes Firebase App Check con ReCaptchaEnterpriseProvider.
  * Falls back safely to offline-only operation if unsupported or failed.
  */
 export async function initAppCheck(

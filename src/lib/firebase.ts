@@ -51,7 +51,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// App Check (ReCaptchaV3Provider)
+// App Check (ReCaptchaEnterpriseProvider — Google Cloud)
 import { initAppCheck, isAppCheckFallbackOffline } from './appCheck';
 initAppCheck(app).then((res) => {
     if (!res.success && !res.disabled) {

@@ -157,7 +157,7 @@ vi.mock('firebase/auth', () => ({
 
 vi.mock('firebase/app-check', () => ({
   initializeAppCheck: vi.fn(() => ({})),
-  ReCaptchaV3Provider: vi.fn(),
+  ReCaptchaEnterpriseProvider: vi.fn(),
   getToken: vi.fn().mockResolvedValue({ token: 'mock-token', expireTimeMillis: Date.now() + 3600000 }),
   isSupported: vi.fn().mockResolvedValue(true),
 }));
