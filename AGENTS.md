@@ -163,3 +163,42 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 - **Regola:** L'utente possiede un abbonamento attivo a **Perplexity Pro** e **Google Gemini Pro**. Per operazioni puramente meccaniche (generazione di dataset, liste, formattazioni), per **ricerche estese** sul web o per **consulenze**, è vietato consumare risorse in questa sessione.
 - **Azione richiesta:** Invece di eseguire tu stesso il lavoro, delega il compito: fornisci all'utente il **Prompt esatto da copiare e incollare** su Perplexity o Gemini. Assicurati di includere nel prompt il contesto e le regole di formato (es. struttura JSON esatta, markdown specifico) affinché l'utente possa semplicemente farsi restituire il lavoro dall'AI esterna e passartelo pronto per l'integrazione.
 
+## 16. Firebase App Check, Firestore Security Rules e Catalogo Globale (Infrastruttura operativa)
+
+### 16a. Firebase App Check — reCAPTCHA Enterprise
+- **Provider corretto:** L'app usa `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`). La chiave è configurata tramite la variabile d'ambiente `VITE_RECAPTCHA_V3_SITE_KEY` (il nome è storico, il provider è Enterprise). La logica si trova in `src/lib/appCheck.ts`.
+- **`isSupported` non esiste:** Il modulo `firebase/app-check` NON esporta `isSupported`. Usare il check manuale su `window.crypto` e `window.fetch` per verificare il supporto del browser.
+- **Throttle iniziale (appCheck/initial-throttle):** Al primo caricamento del sito, Firebase App Check acquisisce il token reCAPTCHA con un breve ritardo. Durante questo intervallo, Firestore può rispondere `permission-denied`. Questo è normale e atteso — i dati sono già al sicuro in IndexedDB. In `src/lib/db.ts`, l'errore `permission-denied` sul `batch.commit()` viene intercettato silenziosamente con un `console.warn` senza mai propagarlo all'utente.
+- **Checklist attivazione App Check (da eseguire UNA SOLA VOLTA su un nuovo progetto Firebase o una nuova app web):**
+  1. Google Cloud Console → *reCAPTCHA Enterprise* → Crea chiave → tipo "Sito web" → aggiungi il dominio (es. `logbook-gnf.vercel.app`) → salva la chiave (es. `6Lc...`).
+  2. Firebase Console → *Build → App Check* → seleziona l'app Web → scegli provider **reCAPTCHA Enterprise** → incolla la chiave → **Salva** (l'app deve risultare **Registered** con spunta verde, non grigia).
+  3. Aggiungere la chiave come variabile d'ambiente `VITE_RECAPTCHA_V3_SITE_KEY` su Vercel e fare redeploy.
+  - ⚠️ Se l'app risulta "Unregistered" in Firebase App Check, le richieste verso Firestore continueranno a ricevere `permission-denied` o HTTP 400 a oltranza.
+
+### 16b. Firestore Security Rules — Deploy obbligatorio
+- **Il file `firestore.rules` non si applica da solo.** Modificare `firestore.rules` nel repository non ha alcun effetto su Firebase finché non viene eseguito esplicitamente il deploy. Firebase usa le proprie regole interne (di default: blocca tutto) fino al primo deploy.
+- **Sintomo tipico se le regole non sono mai state deployate:** Tutti i tentativi di lettura/scrittura Firestore restituiscono `FirebaseError: Missing or insufficient permissions`, incluso il CatalogService che tenta di leggere `global_catalog/manifest`.
+- **Come deployare le regole:**
+  ```
+  npx.cmd firebase login          # autenticazione browser (una tantum per macchina)
+  npx.cmd firebase deploy --only firestore:rules
+  ```
+  I file `firebase.json` (punta a `firestore.rules`) e `.firebaserc` (progetto `logbook-db-98cc4`) sono già presenti nel repository e non vanno toccati.
+- **Quando ri-deployare:** Ogni volta che si modifica `firestore.rules`. Non è necessario un redeploy Vercel — le regole sono separate dall'app.
+- **⚠️ Il file `service-account.json` è nel `.gitignore` e NON va mai committato.** Contiene le credenziali admin del database. Va scaricato da Firebase Console (*Impostazioni progetto → Account di servizio → Genera nuova chiave privata*) e usato solo localmente per operazioni admin (seeding, script), poi eliminato.
+
+### 16c. Catalogo Globale (`global_catalog`) — Seeding e aggiornamento
+- **Struttura Firestore:** La collezione `global_catalog` contiene tre documenti:
+  - `manifest`: versione, data aggiornamento, `schemaVersion`, `docRefs` (punta ai documenti dati) e `itemCounts`.
+  - `exercises_v1`: `{ items: [...] }` con tutti gli esercizi del catalogo.
+  - `foods_v1`: `{ items: [...] }` con tutti gli alimenti del catalogo.
+- **Regole Firestore:** `global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false`. Queste regole sono già in `firestore.rules` ma devono essere deployate (vedi 16b).
+- **Fonte dati:** I seed locali si trovano in `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json`.
+- **Script di seeding:** Lo script `seed-catalog.mjs` (nella radice del progetto) carica i seed su Firestore usando `firebase-admin`. Richiede il `service-account.json` nella cartella radice.
+  ```
+  node seed-catalog.mjs
+  ```
+- **Quando ri-eseguire il seeding:** Solo quando si aggiunge o modifica il catalogo (nuovi esercizi o alimenti in `seedExercises.json` / `seedFoods.json`). Dopo il seeding, aggiornare anche la versione nel manifest (campo `version` in `getSeedCatalog()` in `catalogService.ts`) per forzare l'invalidazione della cache negli utenti.
+- **Fallback offline:** Se `global_catalog/manifest` non è raggiungibile (Firestore offline, regole non deployate, documento non esistente), il `CatalogService` cade silenziosamente sul seed locale bundlato nell'app. L'utente non vede nessun errore, ma in console appare `[CatalogService] Impossibile recuperare il manifest remoto`.
+
+
