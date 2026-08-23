@@ -21,15 +21,6 @@ dist-ssr
 
 # Agent reports, rules and AI artifacts
 # AGENTS.md removed from gitignore because it should be tracked
-GEMINI.md
-bug_report.md
-PROJECT.md
-action_plan.md
-task.md
-prompt_draft.md
-walkthrough.md
-implementation_plan.md
-ORIGINAL_REQUEST.md
 
 # Editor directories and files
 .vscode/*
@@ -41,6 +32,4 @@ ORIGINAL_REQUEST.md
 *.njsproj
 *.sln
 *.sw?
-/.agents
 coverage/
-audit_architetturale.md
