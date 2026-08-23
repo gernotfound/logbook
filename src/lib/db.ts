@@ -1,4 +1,4 @@
-import { auth, db, waitForPendingWrites, deleteUser, isAppCheckFallbackOffline } from './firebase';
+import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
@@ -314,8 +314,10 @@ export const DB = {
                     if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
-                    } else if (batchErr?.code === 'permission-denied' && isAppCheckFallbackOffline()) {
-                        console.warn("Scrittura negata dal server (App Check mancante). Salvata nella cache locale dell'app.", batchErr);
+                    } else if (batchErr?.code === 'permission-denied') {
+                        // Può essere: App Check mancante, token non ancora pronto (throttle iniziale),
+                        // o regole Firestore. I dati sono già salvati in cache locale — non blocchiamo l'utente.
+                        console.warn("Scrittura negata dal server (permesso Firestore). Salvata nella cache locale dell'app.", batchErr);
                     } else {
                         console.error("Errore critico durante il salvataggio Firestore:", batchErr);
                         throw batchErr;
@@ -369,8 +371,8 @@ export const DB = {
                 try {
                     await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
                 } catch (batchErr: any) {
-                    if (batchErr?.code === 'permission-denied' && isAppCheckFallbackOffline()) {
-                        console.warn("Impossibile eliminare i dati cloud (App Check mancante), procedo con l'eliminazione dell'account Auth.");
+                    if (batchErr?.code === 'permission-denied') {
+                        console.warn("Impossibile eliminare i dati cloud (permesso Firestore), procedo con l'eliminazione dell'account Auth.");
                     } else {
                         throw batchErr;
                     }
