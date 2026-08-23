@@ -19,6 +19,9 @@ dist-ssr
 !.env.test
 !.env.production
 
+# Firebase Admin Service Account (NEVER commit this!)
+service-account.json
+
 # Agent reports, rules and AI artifacts
 # AGENTS.md removed from gitignore because it should be tracked
 
