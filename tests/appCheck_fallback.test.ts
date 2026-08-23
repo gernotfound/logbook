@@ -62,7 +62,7 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     const status = getAppCheckStatus();
     expect(status.initialized).toBe(true);
     expect(status.hasToken).toBe(true);
-    expect(status.provider).toBe('ReCaptchaV3Provider');
+    expect(status.provider).toBe('ReCaptchaEnterpriseProvider');
 
     const token = await getAppCheckToken();
     expect(token).toBe('valid-test-app-check-token');
