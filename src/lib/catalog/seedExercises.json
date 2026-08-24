@@ -1834,19 +1834,6 @@
     "isDefault": true
   },
   {
-    "id": "tirate-al-mento-bilanciere",
-    "name": "Tirate al Mento con Bilanciere",
-    "muscles": [
-      "shoulders"
-    ],
-    "secondaryMuscles": [
-      "back",
-      "forearms"
-    ],
-    "trackingType": "weight_reps",
-    "isDefault": true
-  },
-  {
     "id": "tirate-al-mento-manubri",
     "name": "Tirate al Mento con Manubri",
     "muscles": [
