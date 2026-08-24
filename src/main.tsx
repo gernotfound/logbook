@@ -18,9 +18,14 @@ if (typeof window !== 'undefined') {
   });
 }
 
+import { requestDurableStorage, setStorageDiagnosticData } from './lib/storageStatus';
+
 const initApp = async () => {
-  if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-    navigator.storage.persist().catch(() => {});
+  if (typeof navigator !== 'undefined') {
+    requestDurableStorage().then(data => {
+      setStorageDiagnosticData(data);
+      console.log('Diagnostic Storage Status:', data);
+    }).catch(console.error);
   }
   try {
     const catalog = await getCachedCatalog();
