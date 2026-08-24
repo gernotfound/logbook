@@ -41,7 +41,6 @@ export const initApp = async () => {
   if (typeof navigator !== 'undefined') {
     requestDurableStorage().then(data => {
       setStorageDiagnosticData(data);
-      console.log('Diagnostic Storage Status:', data);
     }).catch(console.error);
   }
 
