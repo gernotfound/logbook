@@ -29,7 +29,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
     
     const { removeIntake, supplementsLibrary } = useSupplements(selectedDate);
 
-    const { showConfirm } = useDialogStore();
+    const showConfirm = useDialogStore(s => s.showConfirm);
 
     const [editingMealItem, setEditingMealItem] = useState<any | null>(null);
 
@@ -265,8 +265,12 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                 const mealItems = meals.filter(m => m.meal === mt);
                 let subKcal = 0, subC = 0, subP = 0, subF = 0;
                 mealItems.forEach(m => {
-                    const qty = m.quantity ?? m.baseQty ?? 100;
-                    const base = m.baseQty ?? 100;
+                    const base = m.baseQty !== undefined && m.baseQty !== null && m.baseQty > 0
+                        ? m.baseQty
+                        : (m.unit === 'porzione' || m.meal === 'quick' ? 1 : 100);
+                    const qty = m.quantity !== undefined && m.quantity !== null
+                        ? m.quantity
+                        : base;
                     const ratio = base > 0 ? qty / base : 1;
                     subKcal += (parseFloat(m.kcal) || 0) * ratio;
                     subC += (parseFloat(m.carbs) || 0) * ratio;
@@ -287,8 +291,12 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                             <p className="text-muted text-center my-10 text-sm">Nessun alimento aggiunto.</p>
                         ) : (
                             mealItems.map((item) => {
-                                const qty = item.quantity ?? item.baseQty ?? 100;
-                                const base = item.baseQty ?? 100;
+                                const base = item.baseQty !== undefined && item.baseQty !== null && item.baseQty > 0
+                                    ? item.baseQty
+                                    : (item.unit === 'porzione' || item.meal === 'quick' ? 1 : 100);
+                                const qty = item.quantity !== undefined && item.quantity !== null
+                                    ? item.quantity
+                                    : base;
                                 const ratio = base > 0 ? qty / base : 1;
                                 const itemKcal = Math.round((parseFloat(item.kcal) || 0) * ratio);
 

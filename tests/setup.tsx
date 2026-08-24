@@ -3,6 +3,7 @@ import { render, act } from '@testing-library/react';
 import { vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAppStore } from '../src/store/useAppStore';
+import type { UserData } from '../src/types';
 
 // Mock window methods
 if (typeof window !== 'undefined') {
@@ -42,7 +43,7 @@ vi.mock('../src/store/useDialogStore', () => {
   return { useDialogStore };
 });
 
-export const emptyUserData: any = {
+export const emptyUserData: UserData = {
   profile: {},
   library: [],
   routines: [],
@@ -50,7 +51,20 @@ export const emptyUserData: any = {
   nutrition: {},
   customFoods: [],
   activeWorkout: null,
-  nutritionPlanning: {}
+  nutritionPlanning: {
+    weight: 80,
+    carbsPerKg: 3.5,
+    proPerKg: 2.0,
+    fatPerKg: 1.0,
+    lockedMacro: null,
+    chartPeriod: 7,
+    normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
+  },
+  trainingCycles: [],
+  activeCycleId: null,
+  supplements: [],
+  activePains: [],
+  catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
 };
 
 // Mock HTMLCanvasElement context for Chart.js
@@ -196,17 +210,16 @@ vi.mock('../src/lib/db', () => ({
 }));
 
 // Default Mock User Data
-export const defaultMockUserData = {
-  profile: { name: 'Test User', dob: '1995-01-01', height: '175', gender: 'M', weight: 75, bodyFat: 15 },
+export const defaultMockUserData: UserData = {
+  profile: { dob: '1995-01-01', height: '175', gender: 'M' },
   library: [
-    { id: 'ex1', name: 'Panca Piana', targetMuscle: 'petto', notes: 'Esecuzione controllata' },
-    { id: 'ex2', name: 'Squat', targetMuscle: 'gambe', notes: 'Accosciata completa' }
+    { id: 'ex1', name: 'Panca Piana', notes: 'Esecuzione controllata', setsCount: 3, muscles: ['chest'], secondaryMuscles: ['triceps'], trackingType: 'weight_reps', isDefault: false, sets: [] },
+    { id: 'ex2', name: 'Squat', notes: 'Accosciata completa', setsCount: 3, muscles: ['legs'], secondaryMuscles: [], trackingType: 'weight_reps', isDefault: false, sets: [] }
   ],
   routines: [
     {
       id: 'r1',
       name: 'Scheda A - Upper',
-      notes: 'Focus petto',
       exercises: [{ exId: 'ex1', setsCount: 3 }]
     }
   ],
@@ -215,21 +228,21 @@ export const defaultMockUserData = {
       id: 'w1',
       date: '2026-07-25',
       routineName: 'Scheda A - Upper',
-      duration: '45m',
-      mood: 4,
-      pump: 4,
-      fatigue: 3,
-      water: 2,
+      globalDurationStr: '45m',
+      moodRating: 4,
+      pumpRating: 4,
+      fatigueRating: 3,
+      waterLiters: 2,
       exercises: [
         { exId: 'ex1', sets: [{ id: 's1', kg: '80', reps: '10' }], sessionNote: 'Ottimo allenamento' }
       ]
     }
   ],
   nutrition: {
-    '2026-07-26': { weight: 75, kcal: 2400, pro: 160, carbs: 280, fat: 65 }
+    '2026-07-26': { date: '2026-07-26', weight: 75, kcal: 2400, pro: 160, carbs: 280, fat: 65, meals: [], supplementsIntake: [] }
   },
   customFoods: [
-    { id: 'cf1', name: 'Proteine Whey', kcal: 380, pro: 80, carbs: 5, fat: 3, unit: '100g' }
+    { id: 'cf1', name: 'Proteine Whey', kcal: 380, pro: 80, carbs: 5, fat: 3, unit: '100g', isCustom: true }
   ],
   activeWorkout: null,
   nutritionPlanning: {
@@ -240,8 +253,28 @@ export const defaultMockUserData = {
     lockedMacro: null,
     chartPeriod: 7,
     normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-  }
+  },
+  trainingCycles: [],
+  activeCycleId: null,
+  supplements: [],
+  activePains: [],
+  catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
 };
+
+export function createMockUserData(overrides?: Partial<UserData>): UserData {
+  return {
+    ...defaultMockUserData,
+    ...overrides,
+    profile: { ...defaultMockUserData.profile, ...(overrides?.profile || {}) },
+    catalogOverrides: {
+      ...defaultMockUserData.catalogOverrides,
+      ...(overrides?.catalogOverrides || {})
+    },
+    nutritionPlanning: overrides?.nutritionPlanning !== undefined
+      ? overrides.nutritionPlanning
+      : defaultMockUserData.nutritionPlanning,
+  };
+}
 
 export interface RenderOptions {
   userData?: any;

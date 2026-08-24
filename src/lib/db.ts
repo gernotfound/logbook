@@ -314,10 +314,6 @@ export const DB = {
                     if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
-                    } else if (batchErr?.code === 'permission-denied') {
-                        // Può essere: App Check mancante, token non ancora pronto (throttle iniziale),
-                        // o regole Firestore. I dati sono già salvati in cache locale — non blocchiamo l'utente.
-                        console.warn("Scrittura negata dal server (permesso Firestore). Salvata nella cache locale dell'app.", batchErr);
                     } else {
                         console.error("Errore critico durante il salvataggio Firestore:", batchErr);
                         throw batchErr;

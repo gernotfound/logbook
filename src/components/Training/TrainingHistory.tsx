@@ -27,7 +27,17 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     {history.map(wo => {
-                        const date = new Date(wo.globalStartTime || new Date()).toLocaleDateString('it-IT', { 
+                        let dateObj: Date;
+                        if (wo.globalStartTime) {
+                            dateObj = new Date(wo.globalStartTime);
+                        } else if (wo.date) {
+                            const validStr = Logic.parseDateInput(wo.date) || wo.date;
+                            const [y, m, d] = validStr.split('-').map(Number);
+                            dateObj = (y && m && d) ? new Date(y, m - 1, d) : new Date();
+                        } else {
+                            dateObj = new Date();
+                        }
+                        const date = dateObj.toLocaleDateString('it-IT', { 
                             weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' 
                         });
                         const rawDuration = wo.manualDurationStr 

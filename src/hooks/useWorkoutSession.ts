@@ -4,6 +4,7 @@ import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
+import { mapFirebaseErrorCode } from '../lib/errorHandler';
 import type { WorkoutSession, WorkoutRoutine, Exercise } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
@@ -252,9 +253,17 @@ export function useWorkoutSession() {
             resetGlobalWorkoutTimer();
             await showAlert("Modifiche salvate con successo!");
             return true;
-        } catch {
-            showAlert("Errore durante il salvataggio delle modifiche.");
-            return false;
+        } catch (err: any) {
+            const formatted = mapFirebaseErrorCode(err);
+            if (formatted.isOfflineSafe) {
+                setLocalWorkout(null);
+                resetGlobalWorkoutTimer();
+                await showAlert("Modifiche salvate in locale (offline).");
+                return true;
+            } else {
+                showAlert("Errore durante il salvataggio delle modifiche.");
+                return false;
+            }
         }
     }, [mood, pump, fatigue, water, manualDuration, saveUserData, setLocalWorkout, showAlert]);
 
@@ -315,8 +324,14 @@ export function useWorkoutSession() {
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-        } catch {
-            showAlert("Errore durante il salvataggio della sessione.");
+        } catch (err: any) {
+            const formatted = mapFirebaseErrorCode(err);
+            if (formatted.isOfflineSafe) {
+                setLocalWorkout(null);
+                resetGlobalWorkoutTimer();
+            } else {
+                showAlert("Errore durante il salvataggio della sessione.");
+            }
         }
     }, [mood, pump, fatigue, water, showConfirm, saveUserData, setLocalWorkout, showAlert]);
 
@@ -329,8 +344,14 @@ export function useWorkoutSession() {
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-        } catch {
-            showAlert("Errore durante l'eliminazione della sessione.");
+        } catch (err: any) {
+            const formatted = mapFirebaseErrorCode(err);
+            if (formatted.isOfflineSafe) {
+                setLocalWorkout(null);
+                resetGlobalWorkoutTimer();
+            } else {
+                showAlert("Errore durante l'eliminazione della sessione.");
+            }
         }
     }, [showConfirm, saveUserData, setLocalWorkout, showAlert]);
 

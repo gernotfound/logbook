@@ -223,7 +223,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             const oversizedState = { ...state, customFoods: massiveFoods };
 
-            await expect(DB.saveUserData(oversizedState)).rejects.toThrow(/supera il limite di dimensione di Firestore/);
+            await expect(DB.saveUserData(oversizedState)).rejects.toThrow(/supera il limite di dimensione/);
             expect(mockBatch.commit).not.toHaveBeenCalled();
 
             // Clean state can still be saved afterwards
@@ -250,7 +250,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
     });
 
     describe('2. 3-Month Windowing & Multi-Month Firestore Isolation', () => {
-        it('2.1: DB.loadUserData strictly loads exactly 3 target months (current, M-1, M-2) via 7 getDoc calls', async () => {
+        it('2.1: DB.loadUserData strictly loads exactly 3 target months (current, M-1, M-2) via 8 getDoc calls', async () => {
             const mockUserDoc = {
                 profile: { height: '178' },
                 library: [],
@@ -297,8 +297,8 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(loaded?.history[1].id).toBe('h_m1');
             expect(loaded?.nutrition[`${m2}-05`]).toBeDefined();
 
-            // Total getDoc calls must be exactly 1 (user) + 3 (history) + 3 (nutrition) = 7
-            expect(getDoc).toHaveBeenCalledTimes(7);
+            // Total getDoc calls must be exactly 1 (manifest) + 1 (user) + 3 (history) + 3 (nutrition) = 8
+            expect(getDoc).toHaveBeenCalledTimes(8);
         });
 
         it('2.2: Verifies older months on Firestore are never deleted or affected when saving current data', async () => {

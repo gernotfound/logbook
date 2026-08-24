@@ -121,9 +121,9 @@ export function useNutritionMeals(dateStr?: string) {
             id: Logic.generateId('food'),
             name: quickData.name,
             meal: 'quick',
-            quantity: 100,
-            baseQty: 100,
-            unit: 'g',
+            quantity: 1,
+            baseQty: 1,
+            unit: 'porzione',
             kcal: quickData.kcal || 0,
             carbs: quickData.carbs || 0,
             pro: quickData.pro || 0,
@@ -159,8 +159,12 @@ export function useNutritionMeals(dateStr?: string) {
     const recalcTotals = (mealsList: any[]) => {
         let kcal = 0, carbs = 0, pro = 0, fat = 0;
         mealsList.forEach((m: any) => {
-            const qty = m.quantity ?? m.baseQty ?? 100;
-            const base = m.baseQty ?? 100;
+            const base = m.baseQty !== undefined && m.baseQty !== null && m.baseQty > 0
+                ? m.baseQty
+                : (m.unit === 'porzione' || m.meal === 'quick' ? 1 : 100);
+            const qty = m.quantity !== undefined && m.quantity !== null
+                ? m.quantity
+                : base;
             const ratio = base > 0 ? qty / base : 1;
             kcal += (parseFloat(m.kcal) || 0) * ratio;
             carbs += (parseFloat(m.carbs) || 0) * ratio;
