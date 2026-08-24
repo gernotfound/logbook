@@ -1,55 +1,72 @@
-# Project: LogBook Guest Mode & Global Catalog Resolution
+# Project: Unified Telemetry Hub
 
 ## Architecture
-- **State & Resolution**: Zustand 5 global store (`src/store/useAppStore.ts`). Views consume resolved `userData.library` (exercises) and `userData.customFoods` (foods) computed via `resolveEffectiveExercises` and `resolveEffectiveFoods`.
-- **Global Catalog Service**: `src/lib/catalog/catalogService.ts` and `deltaResolver.ts`. Seed files `seedExercises.json` and `seedFoods.json` provide instant offline catalog. IndexedDB key `'logbook_cached_global_catalog'` caches remote manifest/versions.
-- **Bootstrap Lifecycle**: `src/main.tsx` pre-render bootstrap with `window.__INITIAL_USER_DATA__`.
-- **Guest Flow & Cloud Merge**: `src/contexts/AuthContext.tsx` (`loginAsGuest`, `linkGoogleAccount`) and `src/lib/merge.ts` (`hasUserData`, `mergeUserData`).
-- **Persistence Tiering**: `src/lib/db.ts` (`DB.saveUserData`, `DB.loadUserData`) and `src/store/slices/createDataSlice.ts` (`saveUserDataToCache`). Only deltas (`customExercises`, `customFoods`, `catalogOverrides`) are persisted to personal records.
+The Unified Telemetry Hub provides centralized, privacy-first, offline-resilient telemetry for LogBook.
+- **Core Hub & Sanitizer (`src/lib/telemetryHub.ts`, `src/lib/telemetrySanitizer.ts`)**:
+  - Central singleton managing error and event dispatch.
+  - Strict privacy engine: stack trace truncation (≤1000 chars), PII scrubbing (emails, IPs, JWTs, API keys, local paths), payload sanitization.
+  - Context extractor: `appVersion`, `platform` (`'ios' | 'ipados' | 'other'`), `displayMode` (`'standalone' | 'browser'`), `online` (`boolean`), `userId`, `sessionId`.
+  - In-memory 60s sliding window deduplicator aggregating repeated errors into single documents with `count`, `firstSeen`, `lastSeen`.
+  - Offline FIFO queue in `localStorage` (`'logbook_telemetry_queue'`, capped at 50 entries) with dynamic in-flight live filtering and auto-replay on `window.addEventListener('online')` and app bootstrap.
+- **Error Tracking Channels**:
+  - React 19 Root Callbacks (`onCaughtError`, `onUncaughtError`, `onRecoverableError`) via `createRoot` options in `src/main.tsx`.
+  - Global Window Listeners (`window.onerror`, `window.onunhandledrejection`).
+  - Zod Validation Discards (`DomainParsers` in `src/lib/schema.ts`, `errorHandler.ts`).
+- **PWA Analytics & Offline Usage**:
+  - PWA Install Funnel: `beforeinstallprompt` (impression), custom button click (`pwa_install_click`), prompt outcome (`accepted` / `dismissed`), native `appinstalled`.
+  - Offline Workout Lifecycle: Tracking `workout_started` and `workout_saved` with `{ offline: boolean }` in `useWorkoutSession.ts`.
+- **Firestore Subcollections & Security Rules**:
+  - `users/{userId}/telemetry_errors/{errorId}`
+  - `users/{userId}/telemetry_events/{eventId}`
+  - Protected by `isOwner(userId)` and strict whitelist schemas in `firestore.rules`.
+  - Cascading deletion supported via `DB.deleteAccount`.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| F1 | Unified Catalog Resolution & Store Contract | Views consume `userData.library` and `userData.customFoods` as flat, resolved lists from store without inline per-render re-computation. | M1 | Survey / R1 |
-| F2 | Guest Bootstrap & Seed Fallback | Cold start guest sessions resolve bundled seed catalog into store on first frame without empty list flashes. | M2 | Survey / R2 |
-| F3 | Storage & Persistence Delta Isolation | Firestore `users/{uid}` and user cache store ONLY custom items, overrides, and hidden IDs. `DB.saveUserData` guarantees catalog fallback and never serializes static seed items. | M3 | Survey / R3 |
-| F4 | Cloud Merge & Account Linking Integrity | `mergeUserData` merges `catalogOverrides` and true custom items; `hasUserData` detects real user data without false positives from static catalog. | M4 | Survey / R3 |
-| F5 | E2E & Integration Verification | Opaque-box and unit/integration test suites (Tiers 1-4) validating guest cold start, persistence isolation, zero-flash transition, and merge integrity. | M0 & M5 | Survey / Acceptance Criteria |
+| F1 | Telemetry Context Provider | Captures appVersion, derived platform, displayMode, online status, userId, sessionId | M1 | Survey |
+| F2 | Privacy Sanitization Engine | Truncates stack traces to ≤1000 chars, scrubs emails, IPs, tokens, local paths, prevents PII leakage | M1 | Survey |
+| F3 | Error Tracking Core & Dedup | Hashes (type+message), 60s sliding rate limit, aggregates count/firstSeen/lastSeen | M1 | Survey |
+| F4 | React 19 Root Error Interception | Hooks onCaughtError, onUncaughtError, onRecoverableError in createRoot | M3 | Survey |
+| F5 | Global Window Error Interception | Intercepts window.onerror and window.onunhandledrejection non-blockingly | M1 | Survey |
+| F6 | Zod Validation Error Tracking | Hooks DomainParsers schema validation fallbacks without leaking user payload | M3 | Survey |
+| F7 | PWA Install Funnel Analytics | Tracks beforeinstallprompt, install button click, prompt outcome, and appinstalled | M2 | Survey |
+| F8 | Offline Workout Usage Analytics | Tracks workout_started and workout_saved with offline: boolean metadata | M2 | Survey |
+| F9 | Offline Queue & Replay Engine | Local FIFO buffer in localStorage, replaying queued events on window 'online' event | M2 | Survey |
+| F10 | Firestore Rules & Schema Whitelists | Subcollections under users/{uid} with isOwner checks and exact key whitelists | M3 | Survey |
+| F11 | Telemetry Query Documentation | Guide on querying and filtering telemetry errors/events in Firestore | M3 | Survey |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M0 | E2E Test Suite Track | Implement opaque-box E2E test suite covering Tiers 1-4 in `tests/e2e_guest_catalog.test.ts` and publish `TEST_READY.md`. | none | DONE |
-| M1 | Resolution Pipeline & Store Unification | Unify resolution helpers and ensure store provides resolved lists while tracking deltas cleanly. | none | DONE |
-| M2 | Guest Bootstrap & Cold Start Lifecycle | Update `main.tsx` and `AuthContext.tsx` (`loginAsGuest`) to guarantee instant seed resolution without flashing `[]` or wiping guest catalog. | M1 | DONE |
-| M3 | Storage & Persistence Delta Isolation | Update `db.ts` and `createDataSlice.ts` to ensure Firestore and user cache persist strictly deltas with resilient `getInMemoryCatalog` / `getSeedCatalog` fallback. | M1 | DONE |
-| M4 | Cloud Merge & Account Linking Integrity | Fix `mergeUserData` and `hasUserData` in `merge.ts` and `AuthContext.tsx` to preserve `catalogOverrides` and merge only custom items. | M1, M3 | DONE |
-| M5 | Final E2E Test Pass & Adversarial Hardening | Run full test suite across all tiers, pass 100% of E2E tests, and execute Tier 5 adversarial hardening. | M0, M2, M3, M4 | DONE |
+| E2E | E2E Testing Suite | Comprehensive test suite (Tiers 1-4, 121 tests authored) and `TEST_READY.md` | none | DONE |
+| M1 | Telemetry Hub Core & Error Dedup | `telemetrySanitizer.ts`, `telemetryHub.ts` core, hashing, 60s rate limit, sanitization | none | DONE |
+| M2 | PWA Analytics & Offline Replay | PWA install funnel, offline workout hooks, localStorage FIFO queue and online replay | M1 | DONE |
+| M3 | Integration & Firestore Rules | `main.tsx` React 19 root, `schema.ts`, `firestore.rules`, rules tests, documentation | M1, M2 | IN_PROGRESS |
+| M4 | Final Milestone (100% E2E Pass & Tier 5) | Pass 100% E2E tests, Adversarial Hardening (Tier 5), Forensic Integrity Audit | E2E, M3 | PLANNED |
 
 ## Interface Contracts
-### `catalogService` ↔ Store / Bootstrap / DB
-- `getSeedCatalog(): CachedGlobalCatalog`: Synchronous, infallible access to bundled seed exercises and foods.
-- `getCachedCatalog(): Promise<CachedGlobalCatalog>`: In-memory -> IndexedDB -> seed fallback.
-- `getInMemoryCatalog(fallbackToSeed?: true): CachedGlobalCatalog`: Synchronous memory lookup with fallback to `getSeedCatalog()`.
+### `telemetrySanitizer.ts` ↔ `telemetryHub.ts`
+- `scrubPII(text: string): string`
+- `truncateStack(stack?: string, maxLength?: number): string | undefined`
+- `getTelemetryContext(): TelemetryContext`
 
-### `deltaResolver` ↔ Store / Merge / DB
-- `resolveEffectiveExercises(globalExercises: CatalogExercise[], userCustom?: Exercise[], overrides?: CatalogOverrides): Exercise[]`
-- `resolveEffectiveFoods(globalFoods: CatalogFood[], userCustom?: Food[], overrides?: CatalogOverrides): Food[]`
-- `migrateLegacyLibraryToOverrides(library: Exercise[], globalExercises: CatalogExercise[]): { customExercises: Exercise[], overrides: CatalogOverrides }`
-- `migrateLegacyFoodsToOverrides(foods: Food[], globalFoods: CatalogFood[]): { customFoods: Food[], overrides: CatalogOverrides }`
-- `mergeCatalogOverrides(a?: CatalogOverrides | null, b?: CatalogOverrides | null): CatalogOverrides`
-
-### `mergeUserData` ↔ `AuthContext`
-- `mergeUserData(cloudData?: UserData | null, guestData?: UserData | null): UserData`
-  - Merges `catalogOverrides` (merging exercise overrides, food overrides, hidden IDs).
-  - Merges true custom exercises and foods deduplicated by ID.
-  - Preserves profile, routines, history, nutrition, cycles, supplements.
+### `telemetryHub.ts` ↔ Application (main.tsx, schema.ts, useWorkoutSession.ts, usePWAInstall.ts)
+- `telemetryHub.init(): void`
+- `telemetryHub.trackError(error: unknown, options?: { source?: ErrorSource; componentStack?: string; customMessage?: string }): void`
+- `telemetryHub.trackEvent(type: TelemetryEventType, details?: Record<string, any>): void`
+- `telemetryHub.flushQueue(): Promise<void>`
+- `telemetryHub.getQueuedEvents(): QueuedTelemetryItem[]`
 
 ## Code Layout
-- `src/lib/catalog/`: Catalog service, seed files, delta resolver.
-- `src/store/`: Zustand store, slices (`createDataSlice`, `createSyncSlice`, `createWorkoutSlice`).
-- `src/lib/db.ts`: Firestore persistence, load/save, schema serialization.
-- `src/lib/merge.ts`: Deterministic guest-to-cloud merge.
-- `src/contexts/AuthContext.tsx`: Authentication state listener, guest mode login, Google account linking.
-- `src/main.tsx`: Application bootstrap and pre-render cache setup.
-- `tests/`: Vitest test suites.
+- `src/lib/telemetrySanitizer.ts` (Sanitization, PII scrubbing, context probing)
+- `src/lib/telemetryHub.ts` (Core hub, dedup, queue, Firestore dispatch, replay)
+- `src/main.tsx` (React 19 root options & telemetry init)
+- `src/lib/schema.ts` (DomainParsers fallback hook)
+- `src/hooks/usePWAInstall.ts` (PWA install event routing)
+- `src/components/SettingsView.tsx` (Install button telemetry trigger)
+- `src/hooks/useWorkoutSession.ts` (Offline workout start/save telemetry)
+- `firestore.rules` (Security rules for telemetry_errors and telemetry_events)
+- `docs/TELEMETRY_FIRESTORE_QUERIES.md` (Operational documentation)
+- `tests/telemetry_hub.test.ts` (Unit & integration test suite)
+- `tests/telemetry_e2e.test.ts` (Opaque-box E2E test suite covering Tiers 1-4)

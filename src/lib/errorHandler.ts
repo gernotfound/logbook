@@ -3,6 +3,8 @@
  * Conforms to Italian Sentence case and AGENTS.md guidelines.
  */
 
+import { telemetryHub } from './telemetryHub';
+
 export type ErrorCategory =
   | 'network'
   | 'auth'
@@ -284,4 +286,18 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
     isOfflineSafe: true,
     canRetry: true,
   };
+}
+
+/**
+ * Non-blocking helper to report errors to the Telemetry Hub without throwing or leaking PII.
+ */
+export function reportError(
+  error: unknown,
+  options: { source?: string; customMessage?: string; componentStack?: string } = {}
+): void {
+  try {
+    telemetryHub.trackError(error, options);
+  } catch {
+    // Non-blocking safe fail-through
+  }
 }

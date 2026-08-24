@@ -46,12 +46,16 @@ describe('Challenger 2: DB.deleteAccount Chunking Stress & Adversarial Verificat
             ref: { path: `users/user_chunk_test_123/nutrition_months/2026-0${(i % 9) + 1}` }
         }));
 
-        vi.mocked(getDocs).mockImplementation((colRef: any) => {
-            const path = colRef?._path || '';
-            if (path.includes('history_months') || (colRef as any)?.id === 'history_months') {
+        let callCount = 0;
+        vi.mocked(getDocs).mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
                 return Promise.resolve({ forEach: (cb: any) => mockHistDocs.forEach(cb) } as any);
             }
-            return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            if (callCount === 2) {
+                return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            }
+            return Promise.resolve({ forEach: () => {} } as any);
         });
 
         await DB.deleteAccount();
@@ -76,7 +80,10 @@ describe('Challenger 2: DB.deleteAccount Chunking Stress & Adversarial Verificat
             if (callCount === 1) {
                 return Promise.resolve({ forEach: (cb: any) => mockHistDocs.forEach(cb) } as any);
             }
-            return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            if (callCount === 2) {
+                return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            }
+            return Promise.resolve({ forEach: () => {} } as any);
         });
 
         await DB.deleteAccount();
@@ -101,7 +108,10 @@ describe('Challenger 2: DB.deleteAccount Chunking Stress & Adversarial Verificat
             if (callCount === 1) {
                 return Promise.resolve({ forEach: (cb: any) => mockHistDocs.forEach(cb) } as any);
             }
-            return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            if (callCount === 2) {
+                return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            }
+            return Promise.resolve({ forEach: () => {} } as any);
         });
 
         await DB.deleteAccount();
@@ -128,7 +138,10 @@ describe('Challenger 2: DB.deleteAccount Chunking Stress & Adversarial Verificat
             if (callCount === 1) {
                 return Promise.resolve({ forEach: (cb: any) => mockHistDocs.forEach(cb) } as any);
             }
-            return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            if (callCount === 2) {
+                return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            }
+            return Promise.resolve({ forEach: () => {} } as any);
         });
 
         await DB.deleteAccount();
@@ -156,7 +169,10 @@ describe('Challenger 2: DB.deleteAccount Chunking Stress & Adversarial Verificat
             if (callCount === 1) {
                 return Promise.resolve({ forEach: (cb: any) => mockHistDocs.forEach(cb) } as any);
             }
-            return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            if (callCount === 2) {
+                return Promise.resolve({ forEach: (cb: any) => mockNutDocs.forEach(cb) } as any);
+            }
+            return Promise.resolve({ forEach: () => {} } as any);
         });
 
         let batchIndex = 0;

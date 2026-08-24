@@ -342,7 +342,7 @@ export const DB = {
         if (!user) throw new Error("Nessun utente autenticato.");
         try {
             // 1. Fetch subcollection documents while auth is valid
-            const [histSnap, nutSnap] = await Promise.all([
+            const [histSnap, nutSnap, errSnap, evtSnap, anomSnap] = await Promise.all([
                 getDocs(collection(db, "users", user.uid, "history_months")).catch(e => {
                     console.warn("Permesso negato per leggere history_months, proseguo...", e);
                     return { forEach: () => {} } as any;
@@ -350,12 +350,27 @@ export const DB = {
                 getDocs(collection(db, "users", user.uid, "nutrition_months")).catch(e => {
                     console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
                     return { forEach: () => {} } as any;
+                }),
+                getDocs(collection(db, "users", user.uid, "telemetry_errors")).catch(e => {
+                    console.warn("Permesso negato per leggere telemetry_errors, proseguo...", e);
+                    return { forEach: () => {} } as any;
+                }),
+                getDocs(collection(db, "users", user.uid, "telemetry_events")).catch(e => {
+                    console.warn("Permesso negato per leggere telemetry_events, proseguo...", e);
+                    return { forEach: () => {} } as any;
+                }),
+                getDocs(collection(db, "users", user.uid, "telemetry_anomalies")).catch(e => {
+                    console.warn("Permesso negato per leggere telemetry_anomalies, proseguo...", e);
+                    return { forEach: () => {} } as any;
                 })
             ]);
 
             const allRefs: any[] = [];
-            histSnap.forEach((d: any) => allRefs.push(d.ref));
-            nutSnap.forEach((d: any) => allRefs.push(d.ref));
+            histSnap?.forEach?.((d: any) => allRefs.push(d.ref));
+            nutSnap?.forEach?.((d: any) => allRefs.push(d.ref));
+            errSnap?.forEach?.((d: any) => allRefs.push(d.ref));
+            evtSnap?.forEach?.((d: any) => allRefs.push(d.ref));
+            anomSnap?.forEach?.((d: any) => allRefs.push(d.ref));
             allRefs.push(doc(db, "users", user.uid));
 
             // Chunk in max 400 operations per batch to strictly adhere to Firestore 500 limit
