@@ -4,6 +4,8 @@ import { UserDataSchema } from '../../lib/schema';
 import type { UserData } from '../../types';
 import type { AppState } from '../useAppStore';
 
+import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
+
 export interface DataSlice {
     userData: UserData | null;
     setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
@@ -25,11 +27,15 @@ export const getInitialUserData = (): UserData | null => {
 export const saveUserDataToCache = (data: UserData | null) => {
     try {
         if (data) {
-            idbSet('logbook_cached_user_data', data).catch((e) => {
+            idbSet('logbook_cached_user_data', data).then(() => {
+                updateStorageMarker();
+            }).catch((e) => {
                 console.warn("Errore salvataggio cache userData in IndexedDB:", e);
             });
         } else {
-            idbDel('logbook_cached_user_data').catch((e) => {
+            idbDel('logbook_cached_user_data').then(() => {
+                clearStorageMarker();
+            }).catch((e) => {
                 console.warn("Errore rimozione cache userData da IndexedDB:", e);
             });
         }

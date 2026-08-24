@@ -8,6 +8,9 @@ import { saveUserDataToCache } from './createDataSlice';
 import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 
+import { clearStorageMarker } from '../../lib/storageTelemetry';
+import { telemetryHub } from '../../lib/telemetryHub';
+
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
@@ -81,6 +84,16 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 } catch (error) {
                     const formattedError = mapFirebaseErrorCode(error);
                     console.error("[SyncSlice] Errore durante il salvataggio:", formattedError);
+
+                    try {
+                        telemetryHub.trackError(error, {
+                            source: 'app_error',
+                            customMessage: `Firestore save error: ${formattedError.code} - ${formattedError.message}`,
+                        });
+                    } catch {
+                        // Non-blocking safe fail-through
+                    }
+
                     set({ saveError: formattedError.message });
                     promisesToCall.forEach(p => p.reject(error));
                 } finally {
@@ -110,6 +123,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         pendingPromises = [];
         try {
             localStorage.removeItem('logbook_local_workout');
+            clearStorageMarker();
             idbDel('logbook_cached_user_data').catch((e) => {
                 console.warn("Impossibile rimuovere cache da IndexedDB", e);
             });

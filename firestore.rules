@@ -63,6 +63,55 @@ service cloud.firestore {
         allow create, update: if isOwner(userId) 
           && isValidMonthId(monthId);
       }
+
+      // Subcollection Telemetria Errori: users/{userId}/telemetry_errors/{errorId}
+      match /telemetry_errors/{errorId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && incomingData().keys().hasOnly([
+            'timestamp',
+            'type',
+            'message',
+            'stack',
+            'componentStack',
+            'source',
+            'context',
+            'userId',
+            'sessionId',
+            'count',
+            'firstSeen',
+            'lastSeen'
+          ]);
+      }
+
+      // Subcollection Telemetria Eventi & PWA Analytics: users/{userId}/telemetry_events/{eventId}
+      match /telemetry_events/{eventId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && incomingData().keys().hasOnly([
+            'timestamp',
+            'type',
+            'context',
+            'userId',
+            'sessionId',
+            'details'
+          ]);
+      }
+
+      // Subcollection Telemetria Anomalie Storage: users/{userId}/telemetry_anomalies/{eventId}
+      match /telemetry_anomalies/{eventId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && incomingData().keys().hasOnly([
+            'type',
+            'reason',
+            'timestamp',
+            'elapsedMs',
+            'platform',
+            'standalone',
+            'persisted'
+          ]);
+      }
     }
   }
 }

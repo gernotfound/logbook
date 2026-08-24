@@ -5,6 +5,7 @@ import { Logic } from '../lib/logic';
 import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
 import { mapFirebaseErrorCode } from '../lib/errorHandler';
+import { telemetryHub } from '../lib/telemetryHub';
 import type { WorkoutSession, WorkoutRoutine, Exercise } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
@@ -145,6 +146,18 @@ export function useWorkoutSession() {
         };
 
         setLocalWorkout(newActiveWorkout);
+
+        // Telemetry: Non-blocking tracking of workout start
+        try {
+            const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
+            telemetryHub.trackEvent('workout_started', {
+                offline: isOffline,
+                routineId: routine?.id || null,
+                routineName: routine?.name || null
+            });
+        } catch {
+            // Fail-safe non-blocking telemetry
+        }
     }, [selectedRoutine, showAlert, setLocalWorkout]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
@@ -331,6 +344,21 @@ export function useWorkoutSession() {
                 resetGlobalWorkoutTimer();
             } else {
                 showAlert("Errore durante il salvataggio della sessione.");
+            }
+        } finally {
+            // Telemetry: Non-blocking tracking of workout saved
+            try {
+                const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
+                const durationVal = finishedWorkout.globalDurationStr || finishedWorkout.manualDurationStr || durationStr;
+                telemetryHub.trackEvent('workout_saved', {
+                    offline: isOffline,
+                    duration: durationVal,
+                    durationMinutes: Math.round(diff / 60),
+                    exerciseCount: (finishedWorkout.exercises || []).length,
+                    exercisesCount: (finishedWorkout.exercises || []).length
+                });
+            } catch {
+                // Fail-safe non-blocking telemetry
             }
         }
     }, [mood, pump, fatigue, water, showConfirm, saveUserData, setLocalWorkout, showAlert]);

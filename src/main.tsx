@@ -18,19 +18,56 @@ if (typeof window !== 'undefined') {
   });
 }
 
-import { requestDurableStorage, setStorageDiagnosticData } from './lib/storageStatus';
+import { requestDurableStorage, setStorageDiagnosticData, getStorageDiagnosticData } from './lib/storageStatus';
+import {
+  getStorageMarker,
+  updateStorageMarker,
+  diagnoseStorageState,
+  shouldReportAnomaly,
+  isAnomalyAlreadyReported,
+  markAnomalyReported,
+  createStorageRecoveryAnomalyPayload,
+  dispatchStorageRecoveryAnomaly,
+} from './lib/storageTelemetry';
+import { telemetryHub } from './lib/telemetryHub';
 
-const initApp = async () => {
+export const initApp = async () => {
+  try {
+    telemetryHub.init();
+  } catch (err) {
+    console.warn('[TelemetryHub] Inizializzazione fallita (non bloccante):', err);
+  }
+
   if (typeof navigator !== 'undefined') {
     requestDurableStorage().then(data => {
       setStorageDiagnosticData(data);
       console.log('Diagnostic Storage Status:', data);
     }).catch(console.error);
   }
+
+  const marker = getStorageMarker();
+  const isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('logbook_is_guest') === 'true';
+
+  let cached: UserData | undefined = undefined;
+  let readError: unknown = null;
+
   try {
     const catalog = await getCachedCatalog();
-    let cached = await get<UserData>('logbook_cached_user_data');
-    if (cached) {
+    try {
+      cached = await get<UserData>('logbook_cached_user_data');
+    } catch (err) {
+      readError = err;
+      console.warn("Errore recupero cache da IndexedDB:", err);
+    }
+
+    const status = diagnoseStorageState({
+      cachedData: cached,
+      readError,
+      marker,
+      isGuest,
+    });
+
+    if (status === 'valid' && cached) {
       cached = {
         ...cached,
         library: resolveEffectiveExercises(catalog.exercises, cached.library || [], cached.catalogOverrides),
@@ -38,20 +75,57 @@ const initApp = async () => {
       };
       window.__INITIAL_USER_DATA__ = cached;
       const initialData = getInitialUserData();
-      if (initialData && !useAppStore.getState().userData) {
-        useAppStore.setState({ userData: initialData });
+      if (initialData) {
+        if (!useAppStore.getState().userData) {
+          useAppStore.setState({ userData: initialData });
+        }
+        // Update marker ONLY after complete successful read and schema validation
+        updateStorageMarker();
       }
     } else {
       window.__INITIAL_USER_DATA__ = null;
+
+      if (shouldReportAnomaly(status, marker)) {
+        if (!isAnomalyAlreadyReported(marker!)) {
+          markAnomalyReported(marker!);
+          const payload = createStorageRecoveryAnomalyPayload({
+            marker: marker!,
+            persisted: getStorageDiagnosticData()?.persistent ?? null,
+          });
+          // Fire-and-forget: do not block render
+          dispatchStorageRecoveryAnomaly(payload).catch((err) => {
+            console.warn("Invio telemetria anomalia storage fallito (non bloccante):", err);
+          });
+        }
+      }
     }
   } catch (e) {
-    console.warn("Errore recupero cache da IndexedDB:", e);
+    console.warn("Errore generale durante bootstrap storage:", e);
     window.__INITIAL_USER_DATA__ = null;
   }
 
   const rootElement = document.getElementById('root');
   if (rootElement) {
-    createRoot(rootElement).render(
+    createRoot(rootElement, {
+      onCaughtError(error, errorInfo) {
+        telemetryHub.trackError(error, {
+          source: 'react_caught',
+          componentStack: errorInfo?.componentStack,
+        });
+      },
+      onUncaughtError(error, errorInfo) {
+        telemetryHub.trackError(error, {
+          source: 'react_uncaught',
+          componentStack: errorInfo?.componentStack,
+        });
+      },
+      onRecoverableError(error, errorInfo) {
+        telemetryHub.trackError(error, {
+          source: 'react_recoverable',
+          componentStack: errorInfo?.componentStack,
+        });
+      },
+    }).render(
       <StrictMode>
         <ErrorBoundary>
           <AuthProvider>
@@ -63,4 +137,6 @@ const initApp = async () => {
   }
 };
 
-initApp();
+if (typeof document !== 'undefined') {
+  initApp();
+}

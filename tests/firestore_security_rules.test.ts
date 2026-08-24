@@ -25,6 +25,10 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     
     // Check nutrition_months
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
+
+    // Check telemetry_anomalies
+    expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
+    expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isOwner\(userId\);/);
   });
 
   it('users/{userId} whitelist contains all root UserData payload keys including catalogOverrides', () => {
@@ -94,4 +98,47 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     const isInvalidPermitted = invalidPayloadKeys.every(k => allowedKeys.has(k));
     expect(isInvalidPermitted).toBe(false);
   });
+
+  it('telemetry_anomalies whitelist contains all privacy-minimized payload keys', () => {
+    const anomalyMatch = rulesContent.match(/match\s+\/telemetry_anomalies\/\{eventId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+    expect(anomalyMatch).not.toBeNull();
+
+    const rawKeys = anomalyMatch![1];
+    const extractedKeys = rawKeys
+      .split(',')
+      .map(k => k.replace(/['"\s]/g, ''))
+      .filter(Boolean);
+
+    const expectedKeys = [
+      'type',
+      'reason',
+      'timestamp',
+      'elapsedMs',
+      'platform',
+      'standalone',
+      'persisted'
+    ];
+
+    expect(extractedKeys).toEqual(expect.arrayContaining(expectedKeys));
+    expect(extractedKeys.length).toBe(expectedKeys.length);
+  });
+
+  it('telemetry_errors and telemetry_events whitelist verification when configured in rules', () => {
+    if (rulesContent.includes('telemetry_errors')) {
+      expect(rulesContent).toMatch(/match\s+\/telemetry_errors\/\{errorId\}/);
+      const errorMatch = rulesContent.match(/match\s+\/telemetry_errors\/\{errorId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+      expect(errorMatch).not.toBeNull();
+      const rawErrorKeys = errorMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
+      expect(rawErrorKeys).toEqual(expect.arrayContaining(['timestamp', 'type', 'message', 'stack', 'context', 'userId', 'sessionId', 'count', 'firstSeen', 'lastSeen']));
+    }
+
+    if (rulesContent.includes('telemetry_events')) {
+      expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
+      const eventMatch = rulesContent.match(/match\s+\/telemetry_events\/\{eventId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+      expect(eventMatch).not.toBeNull();
+      const rawEventKeys = eventMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
+      expect(rawEventKeys).toEqual(expect.arrayContaining(['timestamp', 'type', 'context', 'userId', 'sessionId']));
+    }
+  });
 });
+
