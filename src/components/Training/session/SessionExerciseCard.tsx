@@ -211,16 +211,23 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         pastWorkouts.map((pw, idx) => (
                             <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed var(--glass-border)' }}>
                                 <strong style={{ fontSize: '0.85rem', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
-                                {pw.sets.map((s: any, sIdx: number) => (
-                                    <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
-                                        S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
-                                            <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{s.time || '?'}</b></>
-                                        ) : (
-                                            <><b>{s.kg || '?'}</b> kg × <b>{s.reps || '?'}</b></>
-                                        )}
-                                    </span>
-                                ))}
-                                {pw.note && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>{pw.note}</div>}
+                                {pw.sets.map((s: any, sIdx: number) => {
+                                    // Salta la serie se entrambi i campi sono assenti (weight_reps)
+                                    if (libDef?.trackingType !== 'time' && libDef?.trackingType !== 'cardio') {
+                                        const hasKg = s.kg !== null && s.kg !== undefined && s.kg !== '';
+                                        const hasReps = s.reps !== null && s.reps !== undefined && s.reps !== '';
+                                        if (!hasKg && !hasReps) return null;
+                                    }
+                                    return (
+                                        <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
+                                            S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
+                                                <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{s.time || '?'}</b></>
+                                            ) : (
+                                                <><b>{s.kg || '?'}</b> kg × <b>{s.reps || '?'}</b></>
+                                            )}
+                                        </span>
+                                    );
+                                })}
                             </div>
                         ))
                     )}
