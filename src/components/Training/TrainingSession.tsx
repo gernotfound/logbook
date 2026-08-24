@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
+import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
 import WorkoutTimer from './WorkoutTimer';
 import SessionExerciseCard from './session/SessionExerciseCard';
@@ -70,6 +71,9 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         addSpecialSet, updateSpecialSet, removeSpecialSet,
         updateSetupNote, updateSessionNote
     } = useWorkoutSession();
+
+    // Previene lo spegnimento automatico dello schermo durante la sessione attiva
+    useWakeLock(Boolean(activeWorkout));
 
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
