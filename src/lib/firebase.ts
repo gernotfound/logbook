@@ -64,7 +64,7 @@ initAppCheck(app).then((res) => {
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
 let analytics: Analytics | null = null;
 isSupported().then((supported) => {
-    if (supported && localStorage.getItem('logbook_analytics_consent') === 'true') {
+    if (supported && localStorage.getItem('logbook_analytics_consent') !== 'false') {
         analytics = getAnalytics(app);
     }
 }).catch(err => {

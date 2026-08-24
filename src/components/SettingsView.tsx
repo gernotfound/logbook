@@ -17,7 +17,7 @@ const SettingsView = () => {
     const { isInstallable, isIOSInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
-    const [analyticsEnabled, setAnalyticsEnabled] = useState(localStorage.getItem('logbook_analytics_consent') === 'true');
+    const [analyticsEnabled, setAnalyticsEnabled] = useState(localStorage.getItem('logbook_analytics_consent') !== 'false');
 
     const handleAnalyticsToggle = () => {
         const newState = !analyticsEnabled;
