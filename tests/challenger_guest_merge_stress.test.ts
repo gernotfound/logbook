@@ -543,8 +543,8 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
     });
 
     describe('5. Large Scale Dataset Merge (Volume, Performance & Memory Stress)', () => {
-        it('merges 1,000 items per collection in sub-second execution time (< 350ms)', () => {
-            const ITEM_COUNT = 500; // 500 cloud + 500 guest with 250 collisions each = large real-world load
+        it('merges large scale datasets in sub-second execution time (< 350ms)', () => {
+            const ITEM_COUNT = 60; // 60 cloud + 60 guest with 30 collisions each = 90 items per collection (within schema max limits: cycles/supps <= 100, routines <= 300, lib/foods <= 500)
 
             const cloudLibrary: any[] = [];
             const guestLibrary: any[] = [];
@@ -572,22 +572,22 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                 // Library
                 cloudLibrary.push({ id: `ex_${i}`, name: `Cloud Exercise ${i}`, targetMuscle: 'petto', setsCount: 3, sets: [] });
                 // 50% collision
-                const guestExId = i < 250 ? `ex_${i}` : `ex_guest_${i}`;
+                const guestExId = i < 30 ? `ex_${i}` : `ex_guest_${i}`;
                 guestLibrary.push({ id: guestExId, name: `Guest Exercise ${i}`, targetMuscle: 'petto', setsCount: 4, sets: [] });
 
                 // Routines
                 cloudRoutines.push({ id: `rt_${i}`, name: `Cloud Routine ${i}`, exercises: [{ exId: `ex_${i}`, setsCount: 3 }] });
-                const guestRtId = i < 250 ? `rt_${i}` : `rt_guest_${i}`;
+                const guestRtId = i < 30 ? `rt_${i}` : `rt_guest_${i}`;
                 guestRoutines.push({ id: guestRtId, name: `Guest Routine ${i}`, exercises: [{ exId: guestExId, setsCount: 4 }] });
 
                 // Custom Foods
                 cloudCustomFoods.push({ id: `food_${i}`, name: `Cloud Food ${i}`, kcal: 100 + i, pro: 10, carbs: 20, fat: 5 });
-                const guestFoodId = i < 250 ? `food_${i}` : `food_guest_${i}`;
+                const guestFoodId = i < 30 ? `food_${i}` : `food_guest_${i}`;
                 guestCustomFoods.push({ id: guestFoodId, name: `Guest Food ${i}`, kcal: 120 + i, pro: 12, carbs: 22, fat: 6 });
 
                 // Training Cycles
                 cloudCycles.push({ id: `cyc_${i}`, name: `Cloud Cycle ${i}`, durationWeeks: 4, routines: [] });
-                const guestCycId = i < 250 ? `cyc_${i}` : `cyc_guest_${i}`;
+                const guestCycId = i < 30 ? `cyc_${i}` : `cyc_guest_${i}`;
                 guestCycles.push({ id: guestCycId, name: `Guest Cycle ${i}`, durationWeeks: 6, routines: [] });
 
                 // History
@@ -597,7 +597,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                     routineName: `Cloud Session ${i}`,
                     exercises: [{ exId: `ex_${i}`, sessionNote: '', sets: [{ id: `s_${i}`, kg: '80', reps: '10' }] }]
                 });
-                const guestHistId = i < 250 ? `hist_${i}` : `hist_guest_${i}`;
+                const guestHistId = i < 30 ? `hist_${i}` : `hist_guest_${i}`;
                 guestHistory.push({
                     id: guestHistId,
                     date: '2026-08-02',
@@ -607,7 +607,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
 
                 // Supplements
                 cloudSupplements.push({ id: `supp_${i}`, name: `Cloud Supplement ${i}`, unit: 'g', target: 5 });
-                const guestSuppId = i < 250 ? `supp_${i}` : `supp_guest_${i}`;
+                const guestSuppId = i < 30 ? `supp_${i}` : `supp_guest_${i}`;
                 guestSupplements.push({ id: guestSuppId, name: `Guest Supplement ${i}`, unit: 'g', target: 10 });
 
                 // Nutrition Days (Dates)
@@ -620,7 +620,7 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
                     fat: 60,
                     meals: [{ id: `meal_c_${i}`, name: `Cloud Meal ${i}`, meal: 'pranzo', quantity: 100, baseQty: 100, kcal: 300, carbs: 30, pro: 20, fat: 5 }]
                 };
-                const guestDateKey = i < 250 ? dateKey : `2026-06-${String((i % 28) + 1).padStart(2, '0')}-${Math.floor(i / 28)}`;
+                const guestDateKey = i < 30 ? dateKey : `2026-06-${String((i % 28) + 1).padStart(2, '0')}-${Math.floor(i / 28)}`;
                 guestNutrition[guestDateKey] = {
                     date: guestDateKey,
                     kcal: 2100 + i,
@@ -665,12 +665,12 @@ describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversar
 
             // Assertions
             expect(durationMs).toBeLessThan(1500); // Must be fast and efficient even under parallel load
-            expect(merged.library).toHaveLength(750); // 500 + 500 - 250 collisions = 750
-            expect(merged.routines).toHaveLength(750);
-            expect(merged.customFoods).toHaveLength(750);
-            expect(merged.trainingCycles).toHaveLength(750);
-            expect(merged.history).toHaveLength(750);
-            expect(merged.supplements).toHaveLength(750);
+            expect(merged.library).toHaveLength(90); // 60 + 60 - 30 collisions = 90
+            expect(merged.routines).toHaveLength(90);
+            expect(merged.customFoods).toHaveLength(90);
+            expect(merged.trainingCycles).toHaveLength(90);
+            expect(merged.history).toHaveLength(90);
+            expect(merged.supplements).toHaveLength(90);
             expect(merged.activeWorkout?.id).toBe('w_active_large');
             expect(merged.profile?.height).toBe('182');
             expect(merged.profile?.weight).toBe(82);

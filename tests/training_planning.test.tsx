@@ -232,7 +232,7 @@ describe('Training Planning & Volume Calculations', () => {
 
             await waitFor(() => {
                 const cycles = useAppStore.getState().userData?.trainingCycles || [];
-                expect(cycles.some(c => c.name.includes('(Copia)'))).toBe(true);
+                expect(cycles.some(c => c.name.includes('(copia)'))).toBe(true);
             });
         });
 

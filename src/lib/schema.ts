@@ -77,7 +77,16 @@ const safeOptionalBoolean = () =>
         z.number().transform(v => v === 1),
     ]).optional().catch(undefined);
 
-export const UserProfileSchema = z.object({
+export const UserProfileSchema = z.preprocess((val: any) => {
+    if (val && typeof val === 'object') {
+        const hip = (val.hip !== undefined && val.hip !== null && val.hip !== '') ? val.hip : val.hips;
+        return {
+            ...val,
+            hip: hip !== undefined ? hip : undefined,
+        };
+    }
+    return val;
+}, z.object({
     dob: safeOptionalString(),
     height: safeOptionalString(),
     gender: safeOptionalString(),
@@ -91,7 +100,7 @@ export const UserProfileSchema = z.object({
     biceps: safeOptionalString(),
     thighs: safeOptionalString(),
     calves: safeOptionalString(),
-}).passthrough().catch({}).default({});
+}).passthrough()).catch({}).default({});
 
 export const MacroTargetSchema = z.object({
     kcal: safeNumber(0),
@@ -263,7 +272,16 @@ export const SupplementIntakeSchema = z.object({
     time: safeNumber(0),
 }).passthrough().catch({ id: '', supplementId: '', amount: 0, time: 0 }).default({ id: '', supplementId: '', amount: 0, time: 0 });
 
-export const NutritionDaySchema = z.object({
+export const NutritionDaySchema = z.preprocess((val: any) => {
+    if (val && typeof val === 'object') {
+        const hip = (val.hip !== undefined && val.hip !== null && val.hip !== '') ? val.hip : val.hips;
+        return {
+            ...val,
+            hip: hip !== undefined ? hip : undefined,
+        };
+    }
+    return val;
+}, z.object({
     date: safeString(''),
     kcal: safeNumber(0),
     carbs: safeNumber(0),
@@ -274,6 +292,7 @@ export const NutritionDaySchema = z.object({
     neck: safeOptionalNumber(),
     waist: safeOptionalNumber(),
     hip: safeOptionalNumber(),
+    hips: safeOptionalNumber(),
     chest: safeOptionalNumber(),
     shoulders: safeOptionalNumber(),
     biceps: safeOptionalNumber(),
@@ -288,7 +307,7 @@ export const NutritionDaySchema = z.object({
     sleepLight: safeOptionalSleepTime(),
     sleepRem: safeOptionalSleepTime(),
     sleepAwake: safeOptionalSleepTime(),
-}).passthrough().catch({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] }).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] });
+}).passthrough()).catch({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] }).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] });
 
 export const FoodSchema = z.object({
     id: z.union([z.string(), z.number()]).optional().catch(undefined),

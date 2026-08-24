@@ -6,7 +6,9 @@ export const Exporter = {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
         let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";
         history.forEach(session => {
-            const dateStr = session.globalStartTime ? new Date(session.globalStartTime).toLocaleString() : "Data sconosciuta";
+            const dateStr = session.globalStartTime 
+                ? new Date(session.globalStartTime).toLocaleString() 
+                : (session.date || "Data sconosciuta");
             const routineName = `"${session.routineName || 'Allenamento libero'}"`;
             
             // Session global metrics
@@ -30,7 +32,7 @@ export const Exporter = {
                             const speed = set.speed !== undefined ? set.speed : "";
                             const incline = set.incline !== undefined ? set.incline : "";
                             const kcal = set.kcal !== undefined ? set.kcal : "";
-                            const setPrefix = `${dateStr},${routineName},${exName}`;
+                            const setPrefix = `"${dateStr}",${routineName},${exName}`;
                             
                             workoutCsv += `${setPrefix},${idx + 1},${reps},${time},${kg},${distance},${speed},${incline},${kcal},${globalMetrics}\n`;
                             

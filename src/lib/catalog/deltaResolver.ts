@@ -86,7 +86,7 @@ export function resolveEffectiveExercises(
 
     // Return custom exercises followed by global resolved exercises
     const cleanUserCustom = custom
-        .filter(c => c && c.id)
+        .filter(c => c && c.id && c.isDefault !== true)
         .map(c => ({
             ...c,
             isDefault: false,
@@ -151,7 +151,7 @@ export function resolveEffectiveFoods(
     }
 
     const cleanUserCustom = custom
-        .filter(f => f && f.id !== undefined && f.id !== null)
+        .filter(f => f && f.id !== undefined && f.id !== null && f.id !== '' && f.isCustom !== false)
         .map(f => ({
             ...f,
             isCustom: true

@@ -369,7 +369,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
         const rulesPath = path.resolve(__dirname, '../firestore.rules');
         const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
 
-        it('verifies firestore.rules whitelists all 9 root document keys and disallows wildcards', () => {
+        it('verifies firestore.rules whitelists all 11 root document keys and disallows wildcards', () => {
             // Check that recursive wildcard was removed from users doc
             expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
 
@@ -383,7 +383,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'activeCycleId',
                 'nutritionPlanning',
                 'supplements',
-                'activePains'
+                'activePains',
+                'catalogOverrides'
             ];
 
             expectedKeys.forEach(key => {
@@ -401,7 +402,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(extractedKeys.sort()).toEqual(expectedKeys.sort());
         });
 
-        it('verifies DB.saveUserData writes strictly conforming userDocData with exactly the 10 whitelisted keys', async () => {
+        it('verifies DB.saveUserData writes strictly conforming userDocData with exactly the 11 whitelisted keys', async () => {
             const sampleUserData = {
                 profile: { name: 'Test' },
                 library: [],
@@ -413,6 +414,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 nutritionPlanning: null,
                 supplements: [],
                 activePains: [],
+                catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] },
                 history: [],
                 nutrition: {}
             };
@@ -434,7 +436,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'activeCycleId',
                 'nutritionPlanning',
                 'supplements',
-                'activePains'
+                'activePains',
+                'catalogOverrides'
             ];
 
             expect(writtenKeys.sort()).toEqual(expectedKeys.sort());
@@ -549,8 +552,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile.name).toBe('Window User');
-            // getDoc should be called: 1 for userDoc + 3 for history_months + 3 for nutrition_months = 7 calls total
-            expect(getDoc).toHaveBeenCalledTimes(7);
+            // getDoc should be called: 1 for manifest + 1 for userDoc + 3 for history_months + 3 for nutrition_months = 8 calls total
+            expect(getDoc).toHaveBeenCalledTimes(8);
         });
 
         it('DB.deleteAccount breaks large reference sets into chunks of <= 400', async () => {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { addDays } from 'date-fns';
 import { Logic } from '../../lib/logic';
 
 interface DataMeasurementsProps {
@@ -61,17 +62,21 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
     const handlePrevDay = () => {
         if (!setSelectedDate) return;
-        const d = new Date(activeDateStr);
-        d.setDate(d.getDate() - 1);
-        setSelectedDate(Logic.getLocalDateString(d));
+        const validStr = Logic.parseDateInput(activeDateStr) || activeDateStr;
+        const [y, m, d] = validStr.split('-').map(Number);
+        const baseDate = (y && m && d) ? new Date(y, m - 1, d) : new Date();
+        const prev = addDays(baseDate, -1);
+        setSelectedDate(Logic.getLocalDateString(prev));
     };
 
     const handleNextDay = () => {
         if (!setSelectedDate) return;
         if (activeDateStr === todayStr) return;
-        const d = new Date(activeDateStr);
-        d.setDate(d.getDate() + 1);
-        setSelectedDate(Logic.getLocalDateString(d));
+        const validStr = Logic.parseDateInput(activeDateStr) || activeDateStr;
+        const [y, m, d] = validStr.split('-').map(Number);
+        const baseDate = (y && m && d) ? new Date(y, m - 1, d) : new Date();
+        const next = addDays(baseDate, 1);
+        setSelectedDate(Logic.getLocalDateString(next));
     };
 
     const handleToday = () => {
@@ -183,7 +188,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             </div>
 
             {/* SEZIONE 2: Circonferenze opzionali */}
-            <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Misure circonferenze (Opzionali)</h3>
+            <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Misure circonferenze (opzionali)</h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Se inserisci questi dati ma non la BF % dalla bilancia, la massa grassa verrà calcolata automaticamente (Metodo US Navy).
             </p>

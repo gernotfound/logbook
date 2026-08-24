@@ -15,7 +15,8 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         addIntake, removeIntake 
     } = useSupplements(selectedDate);
     
-    const { showConfirm, showAlert } = useDialogStore();
+    const showConfirm = useDialogStore(s => s.showConfirm);
+    const showAlert = useDialogStore(s => s.showAlert);
     
     // Stato per la modale di creazione/modifica integratore
     const [showSuppModal, setShowSuppModal] = useState(false);

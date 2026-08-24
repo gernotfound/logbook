@@ -22,7 +22,13 @@ dist-ssr
 # Firebase Admin Service Account (NEVER commit this!)
 service-account.json
 
-# Agent reports, rules and AI artifacts
+# AI Agents & Workspaces
+.agents/
+teamwork_projects/
+docs/ai/
+TEST_INFRA.md
+TEST_READY.md
+ORIGINAL_REQUEST.md
 # AGENTS.md removed from gitignore because it should be tracked
 
 # Editor directories and files

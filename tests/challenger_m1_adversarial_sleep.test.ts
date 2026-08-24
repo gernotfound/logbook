@@ -290,11 +290,12 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
 
     describe('5. useSleepMeasurements Hook Adversarial Verification', () => {
         it('initializes from legacy number sleep data and formats to HH:MM in UI state', () => {
+            const today = Logic.getLocalDateString();
             useAppStore.setState({
                 userData: {
                     nutrition: {
-                        '2026-08-20': {
-                            date: '2026-08-20',
+                        [today]: {
+                            date: today,
                             sleepHours: 7.5,
                             sleepDeep: 1.25,
                             sleepLight: 4.5,
@@ -429,7 +430,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(sleepDeepInput.value).toBe('01:30');
 
             // Check Italian sentence case labels
-            expect(screen.getByText('Ore sonno (totali) *')).toBeDefined();
+            expect(screen.getByText('Ore sonno (totali)')).toBeDefined();
             expect(screen.getByText('Dettagli fasi (opzionali)')).toBeDefined();
             expect(screen.getByText('Sonno profondo')).toBeDefined();
             expect(screen.getByText('Sonno leggero')).toBeDefined();

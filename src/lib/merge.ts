@@ -100,6 +100,11 @@ export function mergeProfile(
         }
     }
 
+    const hipVal = result.hip !== undefined && result.hip !== null && result.hip !== '' ? result.hip : result.hips;
+    if (hipVal !== undefined) {
+        result.hip = hipVal;
+    }
+
     return result;
 }
 
@@ -154,9 +159,11 @@ export function mergeNutrition(
         const guestDay = guest[date];
 
         if (cloudDay && !guestDay) {
-            result[date] = { ...cloudDay };
+            const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
+            result[date] = { ...cloudDay, hip: cloudHip !== undefined ? cloudHip : cloudDay.hip };
         } else if (!cloudDay && guestDay) {
-            result[date] = { ...guestDay };
+            const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
+            result[date] = { ...guestDay, hip: guestHip !== undefined ? guestHip : guestDay.hip };
         } else if (cloudDay && guestDay) {
             const mergedMeals = mergeArrayById(cloudDay.meals, guestDay.meals);
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
@@ -169,8 +176,12 @@ export function mergeNutrition(
             if (mergedMeals.length > 0) {
                 let mKcal = 0, mCarbs = 0, mPro = 0, mFat = 0;
                 for (const m of mergedMeals) {
-                    const qty = (m as any).quantity ?? (m as any).baseQty ?? 100;
-                    const base = (m as any).baseQty ?? 100;
+                    const base = (m as any).baseQty !== undefined && (m as any).baseQty !== null && (m as any).baseQty > 0
+                        ? (m as any).baseQty
+                        : ((m as any).unit === 'porzione' || (m as any).meal === 'quick' ? 1 : 100);
+                    const qty = (m as any).quantity !== undefined && (m as any).quantity !== null
+                        ? (m as any).quantity
+                        : base;
                     const ratio = base > 0 ? qty / base : 1;
                     mKcal += (parseFloat((m as any).kcal) || 0) * ratio;
                     mCarbs += (parseFloat((m as any).carbs) || 0) * ratio;
@@ -186,6 +197,9 @@ export function mergeNutrition(
             const pickVal = (gVal: any, cVal: any) =>
                 (gVal !== undefined && gVal !== null && gVal !== '') ? gVal : cVal;
 
+            const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
+            const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
+
             result[date] = {
                 date,
                 kcal,
@@ -196,7 +210,7 @@ export function mergeNutrition(
                 bf: pickVal(guestDay.bf, cloudDay.bf),
                 neck: pickVal(guestDay.neck, cloudDay.neck),
                 waist: pickVal(guestDay.waist, cloudDay.waist),
-                hip: pickVal(guestDay.hip, cloudDay.hip),
+                hip: pickVal(guestHip, cloudHip),
                 chest: pickVal(guestDay.chest, cloudDay.chest),
                 shoulders: pickVal(guestDay.shoulders, cloudDay.shoulders),
                 biceps: pickVal(guestDay.biceps, cloudDay.biceps),

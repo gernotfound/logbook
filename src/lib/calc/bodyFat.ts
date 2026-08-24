@@ -45,7 +45,7 @@ export function calculateBodyFatByMethod(method: any, params: any): number | nul
         const height = parseFloat(params.height);
         const waist = parseFloat(params.waist);
         const neck = parseFloat(params.neck);
-        const hip = parseFloat(params.hip);
+        const hip = parseFloat(params.hip !== undefined && params.hip !== null && params.hip !== '' ? params.hip : params.hips);
         return calculateUsNavyBodyFat({ gender: 'F', height, waist, neck, hip });
     }
     if (m === 'bmi') {
@@ -78,8 +78,9 @@ export function calculateBodyFat(weight: any, profile: any): number | null {
     if (profile.gender === 'M' && profile.neck && profile.waist) {
         return calculateUsNavyBodyFat({ gender: 'M', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: 0 });
     }
-    if (profile.gender === 'F' && profile.neck && profile.waist && profile.hip) {
-        return calculateUsNavyBodyFat({ gender: 'F', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: parseFloat(profile.hip) });
+    const hipVal = profile.hip ?? profile.hips;
+    if (profile.gender === 'F' && profile.neck && profile.waist && hipVal) {
+        return calculateUsNavyBodyFat({ gender: 'F', height: hCm, neck: parseFloat(profile.neck), waist: parseFloat(profile.waist), hip: parseFloat(hipVal) });
     }
     return null;
 }
@@ -116,7 +117,7 @@ export function validateMeasurementData(data: any) {
     const height = parseFloat(data.height);
     const neck = parseFloat(data.neck);
     const waist = parseFloat(data.waist);
-    const hip = parseFloat(data.hip);
+    const hip = parseFloat(data.hip !== undefined && data.hip !== null && data.hip !== '' ? data.hip : data.hips);
     const manualBf = parseFloat(data.manualBf !== undefined ? data.manualBf : data.bfPercentage);
     if (method === 'manual') {
         if (isNaN(manualBf) || manualBf < 0 || manualBf > 100) {

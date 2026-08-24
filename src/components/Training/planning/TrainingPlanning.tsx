@@ -115,7 +115,7 @@ export default function TrainingPlanning() {
         const duplicated: TrainingCycle = {
             ...cycle,
             id: Logic.generateId('cycle'),
-            name: `${cycle.name} (Copia)`,
+            name: `${cycle.name} (copia)`,
             createdAt: Date.now(),
             isActive: false
         };
