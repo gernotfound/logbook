@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { setAnalyticsConsent } from '../lib/firebase';
+import { getStorageDiagnosticData } from '../lib/storageStatus';
 
 const SettingsView = () => {
     const {
@@ -137,6 +138,32 @@ const SettingsView = () => {
                 <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleCheckUpdate}>
                     🔄 Cerca aggiornamenti
                 </button>
+            </div>
+
+            <div className="card" style={{ marginTop: '20px', border: '1px solid var(--glass-border)' }}>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}>🔧 Diagnostica archiviazione</h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
+                {(() => {
+                    const storageDiag = getStorageDiagnosticData();
+                    if (!storageDiag) return <span style={{ fontSize: '0.85rem' }}>Caricamento...</span>;
+                    if (!storageDiag.supported) return <span style={{ fontSize: '0.85rem', color: 'var(--danger-color)' }}>Persistenza non supportata (Storage API mancante).</span>;
+                    return (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                <span>Stato:</span>
+                                <span style={{ color: storageDiag.persistent ? 'var(--success-color)' : 'var(--warning-color)', fontWeight: 'bold' }}>
+                                    {storageDiag.persistent ? 'Persistente (Sicuro)' : 'Best-Effort (Volatile)'}
+                                </span>
+                            </div>
+                            {storageDiag.usage !== undefined && storageDiag.quota !== undefined && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Utilizzo:</span>
+                                    <span>{(storageDiag.usage / 1024 / 1024).toFixed(2)} MB / {(storageDiag.quota / 1024 / 1024).toFixed(2)} MB</span>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             <div style={{ marginTop: '10px' }}>
