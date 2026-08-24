@@ -94,7 +94,14 @@ export function resolveEffectiveExercises(
             sets: c.sets || []
         }));
 
-    return [...cleanUserCustom, ...resolvedGlobal];
+    const merged = [...cleanUserCustom, ...resolvedGlobal];
+    const seenNames = new Set<string>();
+    return merged.filter(ex => {
+        const nameKey = (ex.name || '').trim().toLowerCase();
+        if (!nameKey || seenNames.has(nameKey)) return false;
+        seenNames.add(nameKey);
+        return true;
+    });
 }
 
 /**
@@ -157,7 +164,14 @@ export function resolveEffectiveFoods(
             isCustom: true
         }));
 
-    return [...cleanUserCustom, ...resolvedGlobal];
+    const merged = [...cleanUserCustom, ...resolvedGlobal];
+    const seenNames = new Set<string>();
+    return merged.filter(f => {
+        const nameKey = (f.name || '').trim().toLowerCase();
+        if (!nameKey || seenNames.has(nameKey)) return false;
+        seenNames.add(nameKey);
+        return true;
+    });
 }
 
 /**
