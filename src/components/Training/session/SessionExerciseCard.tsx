@@ -218,12 +218,17 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                         const hasReps = s.reps !== null && s.reps !== undefined && s.reps !== '';
                                         if (!hasKg && !hasReps) return null;
                                     }
+                                    
+                                    const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
+                                    const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
+                                    const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
+
                                     return (
                                         <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
                                             S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
-                                                <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{s.time || '?'}</b></>
+                                                <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{displayTime}</b></>
                                             ) : (
-                                                <><b>{s.kg || '?'}</b> kg × <b>{s.reps || '?'}</b></>
+                                                <><b>{displayKg}</b> kg × <b>{displayReps}</b></>
                                             )}
                                         </span>
                                     );
