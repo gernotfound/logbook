@@ -94,12 +94,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         let isMounted = true;
+        const handleAuthVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && localStorage.getItem('logbook_awaiting_redirect') === 'true') {
+                console.log('Rilevato ritorno da redirect auth, forzo reload per sincronizzare lo stato.');
+                localStorage.removeItem('logbook_awaiting_redirect');
+                window.location.reload();
+            }
+        };
+        document.addEventListener('visibilitychange', handleAuthVisibilityChange);
 
-        getRedirectResult(auth).catch(err => {
+
+        getRedirectResult(auth).then(() => localStorage.removeItem('logbook_awaiting_redirect')).catch(err => {
             console.warn("getRedirectResult error (non critico):", err);
         });
 
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
+            if (user) localStorage.removeItem('logbook_awaiting_redirect');
             if (!isMounted) return;
             setCurrentUser(user);
             setLoading(false);
@@ -191,6 +201,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isMounted = false;
             clearTimeout(safetyTimer);
             unsubscribe();
+            document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [loadData, setSyncing, setUserData]);
@@ -203,6 +214,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (error: any) {
             if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed' || /popup/i.test(error.message)) {
                 try {
+                    localStorage.setItem('logbook_awaiting_redirect', 'true');
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError) {
                     console.error("Errore login redirect", redirectError);
@@ -256,6 +268,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (error: any) {
             if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed' || /popup/i.test(error.message)) {
                 try {
+                    localStorage.setItem('logbook_awaiting_redirect', 'true');
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError) {
                     console.error("Errore collegamento redirect:", redirectError);
