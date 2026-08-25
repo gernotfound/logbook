@@ -200,10 +200,18 @@ const SettingsView = () => {
                 </button>
             </div>
 
+
             {showPrivacy && (
                 <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
             )}
+
+            <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '10px' }}>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Versione {__APP_VERSION__} &middot; build {__BUILD_HASH__} &middot; {new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(__BUILD_TIME__))}
+                </p>
+            </div>
         </div>
+
     );
 };
 
