@@ -40,8 +40,8 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     onCancel
 }) => {
     return (
-        <div className="card">
-            <h2 style={{ fontSize: '1.2rem' }}>{editingRoutineId ? '✏️ Modifica scheda' : '➕ Crea nuova scheda'}</h2>
+        <div className="section-divider">
+            <h2 style={{ fontSize: '1.2rem', marginTop: 0 }}>{editingRoutineId ? '✏️ Modifica scheda' : '➕ Crea nuova scheda'}</h2>
             <p className="text-muted text-sm mb-15">Crea o modifica la tua scheda di allenamento.</p>
 
             <div className="mb-15">

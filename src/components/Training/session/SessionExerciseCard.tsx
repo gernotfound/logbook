@@ -136,7 +136,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     };
 
     return (
-        <div style={{ marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+        <div className="section-divider">
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{ color: 'var(--primary-color)', margin: 0, fontSize: '1.15rem' }}>{exName}</h2>
             </div>
@@ -371,7 +371,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={(e: any) => onUpdateSessionNote(e.target.value)}
-                style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
             />
         </div>
     );

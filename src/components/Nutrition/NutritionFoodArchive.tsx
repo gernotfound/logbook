@@ -175,7 +175,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     return (
         <div>
             {/* Header & Create Button */}
-            <div className="card mb-15">
+            <div className="section-divider">
                 <div className="flex-between mb-15 items-center">
                     <div>
                         <h1 className="m-0" style={{ color: 'var(--text-main)', fontSize: '1.4rem' }}>🥗 Alimenti</h1>
@@ -217,7 +217,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             </div>
 
             {/* Food Items List */}
-            <div className="card">
+            <div className="section-divider-last">
                 <div className="flex-between mb-10 pb-10 border-b">
                     <span className="text-sm font-bold text-muted">
                         I tuoi alimenti ({filteredFoods.length})

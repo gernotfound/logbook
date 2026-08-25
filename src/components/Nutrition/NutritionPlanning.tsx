@@ -140,7 +140,7 @@ const NutritionPlanning = () => {
                         borderRadius: '8px',
                         padding: '10px',
                         color: 'var(--text-main)',
-                        fontSize: '0.9rem',
+                        fontSize: '16px',
                         resize: 'vertical'
                     }}
                 />

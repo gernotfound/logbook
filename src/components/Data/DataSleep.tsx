@@ -77,8 +77,8 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                 </div>
             )}
 
-            <div className="card" id="sleep-form-card" style={isEditing ? { border: '2px solid var(--primary-color)' } : undefined}>
-                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px' }}>
+            <div id="sleep-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
+                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px', marginTop: 0 }}>
                     {isEditing ? `✏️ Modifica sonno (${activeDateStr})` : `🌙 Dati sonno (${activeDateStr})`}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>

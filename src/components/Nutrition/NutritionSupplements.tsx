@@ -144,7 +144,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     </div>
                     
                     <div style={{ display: 'flex', gap: '15px' }}>
-                        <div className="form-group" style={{ flex: 1 }}>
+                        <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
                             <label>Dose target giornaliera</label>
                             <input 
                                 type="number" 
@@ -155,7 +155,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                 style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
                             />
                         </div>
-                        <div className="form-group" style={{ flex: 1 }}>
+                        <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
                             <label>Dose singola (opzionale)</label>
                             <input 
                                 type="number" 
@@ -166,7 +166,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                 style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
                             />
                         </div>
-                        <div className="form-group" style={{ flex: 1 }}>
+                        <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
                             <label>Unità di misura</label>
                             <input 
                                 type="text" 

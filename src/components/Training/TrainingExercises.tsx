@@ -105,7 +105,7 @@ const TrainingExercises = () => {
                                 value={equipmentWeight}
                                 onChange={e => setEquipmentWeight(e.target.value)}
                                 onFocus={e => e.target.select()}
-                                style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '15px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-main)' }}
+                                style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-main)' }}
                             />
                         </div>
                     </div>

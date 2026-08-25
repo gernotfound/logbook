@@ -60,8 +60,8 @@ const SettingsView = () => {
             <h1 style={{ marginBottom: '15px', fontSize: '1.5rem' }}>⚙️ Impostazioni</h1>
 
             {isGuest ? (
-                <div className="card" style={{ border: '1px solid var(--warning-color)' }}>
-                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem' }}>⚠️ Modalità locale</h2>
+                <div className="section-divider">
+                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}>⚠️ Modalità locale</h2>
                     <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
                         Stai usando LogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo e non possono essere recuperati se perdi l'accesso al browser.
                     </p>
@@ -81,8 +81,8 @@ const SettingsView = () => {
                     </div>
                 </div>
             ) : (
-                <div className="card" style={{ border: '1px solid var(--primary-color)' }}>
-                    <h2 style={{ color: 'var(--primary-color)', fontSize: '1.2rem' }}>Account Google</h2>
+                <div className="section-divider">
+                    <h2 style={{ color: 'var(--primary-color)', fontSize: '1.2rem', marginTop: 0 }}>Account Google</h2>
                     {currentUser && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
                             {currentUser.photoURL && <img src={currentUser.photoURL} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />}
@@ -100,15 +100,15 @@ const SettingsView = () => {
             )}
 
             {isInstallable && (
-                <div style={{ marginTop: '15px' }}>
-                    <button className="btn btn-primary" style={{ width: '100%' }} onClick={promptInstall}>
+                <div className="section-divider">
+                    <button className="btn btn-primary" style={{ width: '100%', marginBottom: 0 }} onClick={promptInstall}>
                         📱 Installa app sul telefono
                     </button>
                 </div>
             )}
 
             {isIOSInstallable && (
-                <div className="card" style={{ marginTop: '15px', border: '1px solid var(--primary-color)', background: 'rgba(14, 165, 233, 0.08)' }}>
+                <div className="section-divider">
                     <h3 style={{ margin: '0 0 8px 0', color: 'var(--primary-color)', fontSize: '0.95rem' }}>
                         📱 Installa su iPhone / iPad
                     </h3>
@@ -118,29 +118,29 @@ const SettingsView = () => {
                 </div>
             )}
 
-            <div style={{ marginTop: '15px' }}>
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleExport}>
+            <div className="section-divider">
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleExport}>
                     💾 Esporta dati (CSV)
                 </button>
             </div>
 
-            <div style={{ marginTop: '10px' }}>
-                <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255, 255, 255, 0.02)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <div className="section-divider">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h3 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: 'var(--text-main)' }}>Statistiche di utilizzo</h3>
                         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Condividi dati anonimi di diagnostica e Analytics per aiutarci a migliorare l'app.</p>
                     </div>
-                    <input type="checkbox" id="analytics-toggle" checked={analyticsEnabled} onChange={handleAnalyticsToggle} style={{ width: '24px', height: '24px', accentColor: 'var(--primary-color)' }} />
+                    <input type="checkbox" id="analytics-toggle" checked={analyticsEnabled} onChange={handleAnalyticsToggle} style={{ width: '24px', height: '24px', accentColor: 'var(--primary-color)', marginLeft: '10px' }} />
                 </div>
             </div>
 
-            <div style={{ marginTop: '10px' }}>
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={handleCheckUpdate}>
+            <div className="section-divider">
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleCheckUpdate}>
                     🔄 Cerca aggiornamenti
                 </button>
             </div>
 
-            <div className="card" style={{ marginTop: '20px', border: '1px solid var(--glass-border)' }}>
+            <div className="section-divider">
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}>🔧 Diagnostica archiviazione</h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
                 {(() => {
@@ -166,15 +166,15 @@ const SettingsView = () => {
                 })()}
             </div>
 
-            <div style={{ marginTop: '10px' }}>
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%' }} onClick={() => setShowPrivacy(true)}>
+            <div className="section-divider">
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={() => setShowPrivacy(true)}>
                     📄 Informativa sulla privacy
                 </button>
             </div>
 
             {isOffline && (
-                <div className="card" style={{ border: '1px solid var(--warning-color)', marginTop: '15px', backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
-                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem' }}>⚠️ Connessione assente</h2>
+                <div className="section-divider">
+                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}>⚠️ Connessione assente</h2>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
                         Sei attualmente offline. Puoi continuare a usare l'app: tutte le modifiche verranno salvate localmente e sincronizzate con il cloud non appena tornerà la connessione.
                     </p>
@@ -182,8 +182,8 @@ const SettingsView = () => {
             )}
 
             {/* Danger Zone */}
-            <div className="card" style={{ border: '1px solid var(--danger-color)', marginTop: '20px', marginBottom: '100px' }}>
-                <h2 style={{ color: 'var(--danger-color)', fontSize: '1.2rem' }}>⚠️ Zona pericolosa</h2>
+            <div style={{ marginBottom: '100px' }}>
+                <h2 style={{ color: 'var(--danger-color)', fontSize: '1.2rem', marginTop: 0 }}>⚠️ Zona pericolosa</h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                     {isGuest
                         ? "Elimina permanentemente tutti i dati salvati su questo dispositivo. Questa azione è irreversibile."
@@ -192,7 +192,7 @@ const SettingsView = () => {
                 </p>
                 <button 
                     className="btn" 
-                    style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', width: '100%' }}
+                    style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', width: '100%', marginBottom: 0 }}
                     onClick={handleDeleteAccount}
                     disabled={deletingAccount}
                 >
