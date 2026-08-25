@@ -3,9 +3,20 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Base path: set to '/' for Vercel or root domains.
+
+const appVersion = process.env.npm_package_version || '0.0.0-dev'
+const buildHash = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7)
+const buildTime = new Date().toISOString()
+
 const basePath = '/'
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __BUILD_HASH__: JSON.stringify(buildHash),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
+
   base: basePath,
   plugins: [
     react(),
