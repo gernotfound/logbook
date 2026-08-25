@@ -1,5 +1,92 @@
 import { z } from 'zod';
 import { formatSleepTime } from './utils/date';
+import { telemetryHub } from './telemetryHub';
+
+export interface ZodFallbackContext {
+    schema: string;
+    field?: string;
+    fallbackUsed?: string;
+    expectedType?: string;
+    receivedType?: string;
+    issueCode?: string;
+    error?: unknown;
+}
+
+export type SchemaFallbackListener = (context: ZodFallbackContext) => void;
+let customFallbackListener: SchemaFallbackListener | null = null;
+
+export function setSchemaFallbackListener(listener: SchemaFallbackListener | null): void {
+    customFallbackListener = listener;
+}
+
+export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
+    try {
+        if (customFallbackListener) {
+            try {
+                customFallbackListener(ctx);
+            } catch {
+                // Safe fail-through
+            }
+        }
+
+        if (typeof telemetryHub === 'undefined' || !telemetryHub) return;
+
+        let expectedType = ctx.expectedType;
+        let receivedType = ctx.receivedType;
+        let issueCode = ctx.issueCode;
+        let fieldPath = ctx.field;
+
+        if (ctx.error && typeof ctx.error === 'object' && 'issues' in (ctx.error as any)) {
+            const issues = (ctx.error as any).issues;
+            if (Array.isArray(issues) && issues.length > 0) {
+                const first = issues[0];
+                if (first) {
+                    if (!issueCode) issueCode = first.code || 'validation_error';
+                    if (!fieldPath && Array.isArray(first.path) && first.path.length > 0) {
+                        fieldPath = first.path.join('.');
+                    }
+                    if (!expectedType && 'expected' in first && first.expected !== undefined) {
+                        expectedType = String(first.expected);
+                    }
+                    if (!receivedType && 'received' in first && first.received !== undefined) {
+                        receivedType = String(first.received);
+                    }
+                }
+            }
+        }
+
+        const safeIssueCode = issueCode || 'validation_fallback';
+        const safeField = fieldPath || 'root';
+        const safeFallback = ctx.fallbackUsed || 'default';
+
+        const typeInfo = (expectedType && receivedType) ? ` (expected ${expectedType}, received ${receivedType})` : '';
+        const syntheticMessage = `Zod fallback in ${ctx.schema} [${safeField}]: ${safeIssueCode}${typeInfo}`;
+
+        // 1. Dispatch Telemetry Event (without raw corrupted values or PII)
+        if (typeof telemetryHub.trackEvent === 'function') {
+            telemetryHub.trackEvent('zod_schema_fallback', {
+                schema: ctx.schema,
+                field: safeField,
+                issueCode: safeIssueCode,
+                expectedType: expectedType || 'unknown',
+                receivedType: receivedType || 'unknown',
+                fallbackUsed: safeFallback,
+            });
+        }
+
+        // 2. Dispatch Telemetry Error (deduplicated by telemetryHub)
+        if (typeof telemetryHub.trackError === 'function') {
+            const fallbackError = new Error(syntheticMessage);
+            fallbackError.name = 'ZodSchemaFallbackError';
+            telemetryHub.trackError(fallbackError, {
+                source: 'zod_schema_fallback',
+                customMessage: syntheticMessage,
+            });
+        }
+    } catch {
+        // Safe non-blocking guarantee: schema parsing must never fail because of telemetry
+    }
+}
 
 // Defensive conversion helpers for robust runtime sanitization
 const safeOptionalSleepTime = () =>
@@ -100,7 +187,14 @@ export const UserProfileSchema = z.preprocess((val: any) => {
     biceps: safeOptionalString(),
     thighs: safeOptionalString(),
     calves: safeOptionalString(),
-}).passthrough()).catch({}).default({});
+}).passthrough()).catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'UserProfileSchema',
+        fallbackUsed: 'default_empty_profile',
+        error: ctx?.error,
+    });
+    return {};
+}).default({});
 
 export const MacroTargetSchema = z.object({
     kcal: safeNumber(0),
@@ -143,7 +237,14 @@ export const NutritionPlanningSchema = z.object({
     chartPeriod: safeOptionalNumber(),
     normocalorica: PartialMacroTargetSchema.optional().catch(undefined),
     totalKcal: safeOptionalNumber(),
-}).passthrough().catch({}).default({});
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'NutritionPlanningSchema',
+        fallbackUsed: 'default_empty_planning',
+        error: ctx?.error,
+    });
+    return {};
+}).default({});
 
 export const ExerciseSetSchema = z.object({
     weight: safeString(''),
@@ -164,7 +265,14 @@ export const ExerciseSchema = z.object({
     isDefault: safeOptionalBoolean(),
     isBodyweight: safeOptionalBoolean(),
     equipmentWeight: safeOptionalNumber(),
-}).passthrough().catch({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] }).default({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] });
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'ExerciseSchema',
+        fallbackUsed: 'default_empty_exercise',
+        error: ctx?.error,
+    });
+    return { id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] };
+}).default({ id: '', name: '', setsCount: 0, muscles: [], secondaryMuscles: [], sets: [] });
 
 export const RoutineExerciseSchema = z.object({
     exId: safeString(''),
@@ -178,7 +286,14 @@ export const WorkoutRoutineSchema = z.object({
     id: safeString(''),
     name: safeString(''),
     exercises: z.array(RoutineExerciseSchema).catch([]).default([]),
-}).passthrough().catch({ id: '', name: '', exercises: [] }).default({ id: '', name: '', exercises: [] });
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'WorkoutRoutineSchema',
+        fallbackUsed: 'default_empty_routine',
+        error: ctx?.error,
+    });
+    return { id: '', name: '', exercises: [] };
+}).default({ id: '', name: '', exercises: [] });
 
 export const SessionExerciseDropsetSchema = z.object({
     id: safeString(''),
@@ -235,7 +350,14 @@ export const WorkoutSessionSchema = z.object({
     isEditingHistory: safeOptionalBoolean(),
     originalHistoryId: safeOptionalString(),
     pains: z.array(safeString('')).optional().catch([]).default([]),
-}).passthrough().catch({ exercises: [], pains: [] }).default({ exercises: [], pains: [] });
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'WorkoutSessionSchema',
+        fallbackUsed: 'default_empty_session',
+        error: ctx?.error,
+    });
+    return { exercises: [], pains: [] };
+}).default({ exercises: [], pains: [] });
 
 export const LoggedMealItemSchema = z.object({
     id: safeString(''),
@@ -263,7 +385,14 @@ export const SupplementSchema = z.object({
     unit: safeString(''),
     target: safeOptionalNumber(),
     portion: safeOptionalNumber(),
-}).passthrough().catch({ id: '', name: '', unit: '' }).default({ id: '', name: '', unit: '' });
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'SupplementSchema',
+        fallbackUsed: 'default_empty_supplement',
+        error: ctx?.error,
+    });
+    return { id: '', name: '', unit: '' };
+}).default({ id: '', name: '', unit: '' });
 
 export const SupplementIntakeSchema = z.object({
     id: safeString(''),
@@ -307,7 +436,14 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     sleepLight: safeOptionalSleepTime(),
     sleepRem: safeOptionalSleepTime(),
     sleepAwake: safeOptionalSleepTime(),
-}).passthrough()).catch({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] }).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] });
+}).passthrough()).catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'NutritionDaySchema',
+        fallbackUsed: 'default_empty_day',
+        error: ctx?.error,
+    });
+    return { date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] };
+}).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [] });
 
 export const FoodSchema = z.object({
     id: z.union([z.string(), z.number()]).optional().catch(undefined),
@@ -332,7 +468,14 @@ export const FoodSchema = z.object({
     calcium: safeOptionalNullableNumber(),
     magnesium: safeOptionalNullableNumber(),
     cholesterol: safeOptionalNullableNumber(),
-}).passthrough().catch({ name: '', kcal: 0, pro: 0, carbs: 0, fat: 0 }).default({ name: '', kcal: 0, pro: 0, carbs: 0, fat: 0 });
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'FoodSchema',
+        fallbackUsed: 'default_empty_food',
+        error: ctx?.error,
+    });
+    return { name: '', kcal: 0, pro: 0, carbs: 0, fat: 0 };
+}).default({ name: '', kcal: 0, pro: 0, carbs: 0, fat: 0 });
 
 export const TrainingCycleRoutineItemSchema = z.object({
     routineId: safeString(''),
@@ -351,7 +494,14 @@ export const TrainingCycleSchema = z.object({
     routines: z.array(TrainingCycleRoutineItemSchema).catch([]).default([]),
     createdAt: safeOptionalNumber(),
     isActive: safeOptionalBoolean(),
-}).passthrough().catch({ id: '', name: '', durationWeeks: 4, routines: [] }).default({ id: '', name: '', durationWeeks: 4, routines: [] });
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'TrainingCycleSchema',
+        fallbackUsed: 'default_empty_cycle',
+        error: ctx?.error,
+    });
+    return { id: '', name: '', durationWeeks: 4, routines: [] };
+}).default({ id: '', name: '', durationWeeks: 4, routines: [] });
 
 export const defaultUserDataFallback = {
     profile: {},
@@ -490,91 +640,170 @@ export const UserDataSchema = z.object({
     supplements: z.array(SupplementSchema).max(100).optional().catch([]).default([]),
     activePains: z.array(safeString('')).max(50).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
-}).passthrough().catch(defaultUserDataFallback).default(defaultUserDataFallback);
+}).passthrough().catch((ctx) => {
+    reportZodSchemaFallback({
+        schema: 'UserDataSchema',
+        fallbackUsed: 'defaultUserDataFallback',
+        error: ctx?.error,
+    });
+    return defaultUserDataFallback;
+}).default(defaultUserDataFallback);
 
 export const DomainParsers = {
     // Oggetti singoli: fallback al default schema in caso di dato corrotto
     parseProfile: (data: unknown) => {
-        const result = UserProfileSchema.safeParse(data);
-        if (!result.success) { console.warn('[DomainParsers] parseProfile fallback:', result.error.issues[0]?.message); }
-        return result.success ? result.data : UserProfileSchema.parse({});
+        return UserProfileSchema.parse(data);
     },
     parseWorkoutSession: (data: unknown) => {
-        const result = WorkoutSessionSchema.safeParse(data);
-        if (!result.success) { console.warn('[DomainParsers] parseWorkoutSession fallback:', result.error.issues[0]?.message); }
-        return result.success ? result.data : WorkoutSessionSchema.parse({});
+        return WorkoutSessionSchema.parse(data);
     },
     parseNutritionPlanning: (data: unknown) => {
-        const result = NutritionPlanningSchema.safeParse(data);
-        if (!result.success) { console.warn('[DomainParsers] parseNutritionPlanning fallback:', result.error.issues[0]?.message); }
-        return result.success ? result.data : null;
+        if (data === null || data === undefined) return null;
+        return NutritionPlanningSchema.parse(data);
     },
-    // Array: filtra i singoli elementi malformati invece di bloccare tutto
+    // Array: sanifica i singoli elementi con sub-schema fallbacks
     parseHistory: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.reduce<z.infer<typeof WorkoutSessionSchema>[]>((acc, item) => {
-            const r = WorkoutSessionSchema.safeParse(item);
-            if (r.success) acc.push(r.data);
-            else console.warn('[DomainParsers] parseHistory: elemento scartato:', r.error.issues[0]?.message);
-            return acc;
-        }, []);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'WorkoutSessionSchema',
+                    field: 'history',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.map((item) => WorkoutSessionSchema.parse(item));
     },
     parseLibrary: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.reduce<z.infer<typeof ExerciseSchema>[]>((acc, item) => {
-            const r = ExerciseSchema.safeParse(item);
-            if (r.success) acc.push(r.data);
-            else console.warn('[DomainParsers] parseLibrary: elemento scartato:', r.error.issues[0]?.message);
-            return acc;
-        }, []);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'ExerciseSchema',
+                    field: 'library',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.map((item) => ExerciseSchema.parse(item));
     },
     parseCustomFoods: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.reduce<z.infer<typeof FoodSchema>[]>((acc, item) => {
-            const r = FoodSchema.safeParse(item);
-            if (r.success) acc.push(r.data);
-            else console.warn('[DomainParsers] parseCustomFoods: elemento scartato:', r.error.issues[0]?.message);
-            return acc;
-        }, []);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'FoodSchema',
+                    field: 'customFoods',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.map((item) => FoodSchema.parse(item));
     },
     parseRoutines: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.reduce<z.infer<typeof WorkoutRoutineSchema>[]>((acc, item) => {
-            const r = WorkoutRoutineSchema.safeParse(item);
-            if (r.success) acc.push(r.data);
-            else console.warn('[DomainParsers] parseRoutines: elemento scartato:', r.error.issues[0]?.message);
-            return acc;
-        }, []);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'WorkoutRoutineSchema',
+                    field: 'routines',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.map((item) => WorkoutRoutineSchema.parse(item));
     },
     parseTrainingCycles: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.reduce<z.infer<typeof TrainingCycleSchema>[]>((acc, item) => {
-            const r = TrainingCycleSchema.safeParse(item);
-            if (r.success) acc.push(r.data);
-            else console.warn('[DomainParsers] parseTrainingCycles: elemento scartato:', r.error.issues[0]?.message);
-            return acc;
-        }, []);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'TrainingCycleSchema',
+                    field: 'trainingCycles',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.map((item) => TrainingCycleSchema.parse(item));
     },
     parseSupplements: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.reduce<z.infer<typeof SupplementSchema>[]>((acc, item) => {
-            const r = SupplementSchema.safeParse(item);
-            if (r.success) acc.push(r.data);
-            else console.warn('[DomainParsers] parseSupplements: elemento scartato:', r.error.issues[0]?.message);
-            return acc;
-        }, []);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'SupplementSchema',
+                    field: 'supplements',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.map((item) => SupplementSchema.parse(item));
     },
     parseActivePains: (data: unknown) => {
-        const arr = Array.isArray(data) ? data : [];
-        return arr.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+        if (!Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'UserDataSchema',
+                    field: 'activePains',
+                    fallbackUsed: 'empty_array',
+                    receivedType: typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'array',
+                });
+            }
+            return [];
+        }
+        return data.filter((item): item is string => {
+            const isStr = typeof item === 'string' && item.trim().length > 0;
+            if (!isStr && item !== null && item !== undefined && item !== '') {
+                reportZodSchemaFallback({
+                    schema: 'UserDataSchema',
+                    field: 'activePains[]',
+                    fallbackUsed: 'entry_discarded',
+                    receivedType: typeof item,
+                    issueCode: 'invalid_type',
+                    expectedType: 'string',
+                });
+            }
+            return isStr;
+        });
     },
     parseNutrition: (data: unknown) => {
-        if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            if (data !== undefined && data !== null) {
+                reportZodSchemaFallback({
+                    schema: 'NutritionDaySchema',
+                    field: 'nutrition',
+                    fallbackUsed: 'empty_record',
+                    receivedType: Array.isArray(data) ? 'array' : typeof data,
+                    issueCode: 'invalid_type',
+                    expectedType: 'object',
+                });
+            }
+            return {};
+        }
         const result: Record<string, z.infer<typeof NutritionDaySchema>> = {};
         for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
-            const r = NutritionDaySchema.safeParse(val);
-            if (r.success) result[key] = r.data;
-            else console.warn(`[DomainParsers] parseNutrition: giorno ${key} scartato:`, r.error.issues[0]?.message);
+            result[key] = NutritionDaySchema.parse(val);
         }
         return result;
     },

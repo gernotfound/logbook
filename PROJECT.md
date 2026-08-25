@@ -39,11 +39,11 @@ The Unified Telemetry Hub provides centralized, privacy-first, offline-resilient
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| E2E | E2E Testing Suite | Comprehensive test suite (Tiers 1-4, 121 tests authored) and `TEST_READY.md` | none | DONE |
+| E2E | E2E Testing Suite | Comprehensive test suite (Tiers 1-5, 140 tests authored) and `TEST_READY.md` | none | DONE |
 | M1 | Telemetry Hub Core & Error Dedup | `telemetrySanitizer.ts`, `telemetryHub.ts` core, hashing, 60s rate limit, sanitization | none | DONE |
 | M2 | PWA Analytics & Offline Replay | PWA install funnel, offline workout hooks, localStorage FIFO queue and online replay | M1 | DONE |
-| M3 | Integration & Firestore Rules | `main.tsx` React 19 root, `schema.ts`, `firestore.rules`, rules tests, documentation | M1, M2 | IN_PROGRESS |
-| M4 | Final Milestone (100% E2E Pass & Tier 5) | Pass 100% E2E tests, Adversarial Hardening (Tier 5), Forensic Integrity Audit | E2E, M3 | PLANNED |
+| M3 | Integration & Firestore Rules | `main.tsx` React 19 root, `schema.ts`, `firestore.rules`, rules tests, documentation | M1, M2 | DONE |
+| M4 | Final Milestone (100% E2E Pass & Tier 5) | Pass 100% E2E tests, Adversarial Hardening (Tier 5), Forensic Integrity Audit | E2E, M3 | DONE |
 
 ## Interface Contracts
 ### `telemetrySanitizer.ts` ↔ `telemetryHub.ts`
@@ -69,4 +69,4 @@ The Unified Telemetry Hub provides centralized, privacy-first, offline-resilient
 - `firestore.rules` (Security rules for telemetry_errors and telemetry_events)
 - `docs/TELEMETRY_FIRESTORE_QUERIES.md` (Operational documentation)
 - `tests/telemetry_hub.test.ts` (Unit & integration test suite)
-- `tests/telemetry_e2e.test.ts` (Opaque-box E2E test suite covering Tiers 1-4)
+- `tests/telemetry_e2e.test.ts` (Opaque-box E2E test suite covering Tiers 1-5)
