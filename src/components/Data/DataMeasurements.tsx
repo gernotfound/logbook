@@ -122,8 +122,8 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 </div>
             )}
 
-            <div className="card" id="measurement-form-card" style={isEditing ? { border: '2px solid var(--primary-color)' } : undefined}>
-                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px' }}>
+            <div id="measurement-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
+                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px', marginTop: 0 }}>
                     {isEditing ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>

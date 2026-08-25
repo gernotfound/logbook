@@ -72,7 +72,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
             )}
 
             {/* Daily Target Progress Header */}
-            <div className="card mb-15" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            <div className="section-divider">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', background: 'rgba(255,255,255,0.05)', padding: '10px 15px', borderRadius: '10px' }}>
                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: isDayOn ? 'var(--primary-color)' : 'var(--text-main)' }}>
                         {isDayOn ? '🔥 Giorno ON' : '🛋️ Giorno OFF'}
@@ -126,7 +126,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
             </div>
 
             {/* Search Box */}
-            <div className="card mb-15">
+            <div className="section-divider">
                 <h2 className="mb-10" style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>🔍 Cerca alimento</h2>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input 
@@ -279,7 +279,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                 });
 
                 return (
-                    <div key={mt} className="card mb-15">
+                    <div key={mt} className="section-divider">
                         <div className="flex-between mb-10 pb-10 border-b">
                             <h2 className="m-0" style={{ fontSize: '1.15rem', color: 'var(--text-main)' }}>{mt}</h2>
                             <span className="text-sm text-muted">
@@ -352,7 +352,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
 
             {/* Supplements List */}
             {todayNutrition?.supplementsIntake && todayNutrition.supplementsIntake.length > 0 && (
-                <div className="card mb-15" style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                <div className="section-divider-last">
                     <div className="flex-between mb-10 pb-10 border-b">
                         <h2 className="m-0" style={{ fontSize: '1.15rem', color: 'var(--text-main)' }}>Integratori</h2>
                         <span className="text-sm text-muted">

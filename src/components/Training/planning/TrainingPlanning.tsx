@@ -157,7 +157,7 @@ export default function TrainingPlanning() {
     return (
         <div>
             {/* Header */}
-            <div className="card mb-15">
+            <div className="section-divider">
                 <div className="flex-between items-center">
                     <div>
                         <h1 className="m-0" style={{ color: 'var(--primary-color)', fontSize: '1.4rem' }}>🎯 Pianificazione</h1>
@@ -192,7 +192,7 @@ export default function TrainingPlanning() {
             )}
 
             {/* Active Cycle Overview */}
-            <div className="card mb-15">
+            <div className="section-divider">
                 <div className="flex-between items-start mb-15 pb-15 border-b">
                     <div>
                         <h2 className="m-0 text-white" style={{ fontSize: '1.4rem' }}>
@@ -406,7 +406,7 @@ export default function TrainingPlanning() {
             </div>
 
             {/* Cycles Archive */}
-            <div className="card">
+            <div className="section-divider-last">
                 <div className="flex-between mb-10 pb-10 border-b items-center">
                     <span className="text-sm font-bold text-muted">
                         I tuoi cicli di allenamento ({trainingCycles.length})

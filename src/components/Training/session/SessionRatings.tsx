@@ -89,7 +89,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
             <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
                 <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '0.95rem' }}>Valuta sessione (1-10) — opzionale</h3>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label htmlFor="mood-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                             Umore
                         </label>
@@ -106,7 +106,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
                         />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label htmlFor="pump-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                             Pump
                         </label>
@@ -123,7 +123,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
                         />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label htmlFor="fatigue-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
                             Stanchezza
                         </label>

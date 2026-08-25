@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { useHomeView } from '../../hooks/useHomeView';
 import MuscleModel from '../Training/MuscleModel';
 import HomeWorkoutWidget from './widgets/HomeWorkoutWidget';
@@ -64,15 +64,15 @@ const HomeView = ({ onNavigate }: any) => {
       <HomeTdeeWidget tdeeCalc={tdeeCalc} />
 
       <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-          <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
+          <div className="card" style={{ flex: 1, minWidth: 0, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Massa grassa (stima)</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>{bf !== '--' ? `${bf} %` : '--'}</div>
           </div>
-          <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
+          <div className="card" style={{ flex: 1, minWidth: 0, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Streak attuale 🔥</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (streak || 0) > 0 ? 'var(--warning-color)' : 'var(--text-main)', marginTop: '5px' }}>{streak || 0} gg</div>
           </div>
-          <div className="card" style={{ flex: 1, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
+          <div className="card" style={{ flex: 1, minWidth: 0, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Totale sessioni</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>💪 {totalWorkouts}</div>
           </div>

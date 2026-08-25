@@ -75,7 +75,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
             </div>
 
             {/* Quick Add buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: '4px' }}>+ Aggiungi a:</span>
                 {mealTypes.map(mt => (
                     <button 

@@ -181,13 +181,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         return (
             <div className="tab-pane active fade-in" id="train-session">
                 {/* 1. Sezione Avvia sessione pianificata */}
-                <div
-                    className="card mb-15"
-                    style={{
-                        border: activeCycle ? '1px solid var(--primary-color)' : '1px solid var(--glass-border)',
-                        background: activeCycle ? 'rgba(14, 165, 233, 0.05)' : 'var(--glass-bg)'
-                    }}
-                >
+                <div className="section-divider">
                     <div className="flex-between items-center mb-10 pb-8 border-b">
                         <div>
                             <span className="text-xs text-primary font-bold uppercase tracking-wider block">
@@ -325,7 +319,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 </div>
 
                 {/* 2. Sezione Avvia nuova sessione (Tutte le schede / Libera) */}
-                <div className="card">
+                <div className="section-divider-last">
                     <div className="flex-between items-center mb-10 pb-8 border-b">
                         <div>
                             <h2 className="m-0" style={{ fontSize: '1.1rem' }}>

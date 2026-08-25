@@ -9,8 +9,8 @@ const DataBiometry = () => {
     } = useSettings();
 
     return (
-        <div className="card">
-            <h1 style={{ fontSize: '1.4rem' }}>Dati biometrici</h1>
+        <div className="section-divider-last">
+            <h1 style={{ fontSize: '1.4rem', marginTop: 0 }}>Dati biometrici</h1>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
             </p>
