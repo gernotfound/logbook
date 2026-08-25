@@ -77,6 +77,7 @@ const db = initializeFirestore(app, {
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
 setPersistence(auth, indexedDBLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
