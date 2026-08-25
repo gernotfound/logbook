@@ -107,8 +107,14 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                                                 if (s.kcal) parts.push(`${s.kcal}kcal`);
                                                                 return parts.join(' • ') || 'Cardio';
                                                             }
-                                                            if (libDef?.trackingType === 'time') return `${s.kg ? s.kg + 'kg ' : ''}⏱️${s.time || '?'}`;
-                                                            return `${s.kg || '?'}kg×${s.reps || '?'}`;
+                                                        if (libDef?.trackingType === 'time') {
+                                                            const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg + 'kg ' : '';
+                                                            const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
+                                                            return `${displayKg}⏱️${displayTime}`;
+                                                        }
+                                                        const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
+                                                        const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
+                                                        return `${displayKg}kg×${displayReps}`;
                                                         }).join(', ')}</span>
                                                     )}
                                                 </div>
