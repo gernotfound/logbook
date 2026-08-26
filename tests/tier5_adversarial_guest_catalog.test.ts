@@ -123,9 +123,13 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 // 1. Simulate loginAsGuest
                 localStorage.setItem(GUEST_KEY, 'true');
                 const catalog = await getCachedCatalog();
+                
+                // Inject a custom item to verify no duplications or leaks across cycles
+                const customEx: import('../src/types').Exercise = { id: `custom_${i}`, name: `Custom ${i}`, isDefault: false, setsCount: 3, sets: [] };
+
                 const guestData: UserData = {
                     profile: {},
-                    library: resolveEffectiveExercises(catalog.exercises, [], {}),
+                    library: resolveEffectiveExercises(catalog.exercises, [customEx], {}),
                     customFoods: resolveEffectiveFoods(catalog.foods, [], {}),
                     catalogOverrides: {},
                     routines: [],
@@ -139,7 +143,11 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 useAppStore.getState().setUserData(guestData);
 
                 expect(localStorage.getItem(GUEST_KEY)).toBe('true');
-                expect(useAppStore.getState().userData?.library?.length).toBeGreaterThanOrEqual(100);
+                const currentLibrary = useAppStore.getState().userData?.library;
+                expect(currentLibrary).toBeDefined();
+                // State must be exactly catalog size + 1 (the custom item of this cycle), proving no accumulation/duplication
+                expect(currentLibrary?.length).toBe(catalog.exercises.length + 1);
+                expect(currentLibrary?.find(e => e.id === `custom_${i}`)).toBeDefined();
 
                 // 2. Simulate logout
                 localStorage.removeItem(GUEST_KEY);
@@ -467,8 +475,28 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     describe('5.3: Offline Guest Persistence -> Firestore Payload Inspection (Zero Seed Duplication & Strict Doc Size Bounds)', () => {
 
         it('T5.3.1: Massive user data stress (100 custom exercises, 100 custom foods, 50 routines, 200 history sessions, 180 nutrition days, 50 overrides) strictly excludes seed items and satisfies Firestore size limits', async () => {
-            const seed = getSeedCatalog();
-            await saveCatalogToCache(seed);
+            // Generate standard seed catalog fixture explicitly
+            const fixtureExercises: import('../src/types').CatalogExercise[] = Array.from({ length: 176 }, (_, i) => ({
+                id: `std_exercise_${i}`,
+                name: `Standard Exercise ${i}`,
+                muscles: ['chest'],
+                trackingType: 'weight_reps',
+                isDefault: true,
+                setsCount: 3
+            }));
+            const fixtureFoods: import('../src/types').CatalogFood[] = Array.from({ length: 130 }, (_, i) => ({
+                id: `std_food_${i}`,
+                name: `Standard Food ${i}`,
+                kcal: 100 + i,
+                pro: 10,
+                carbs: 10,
+                fat: 5,
+                isCustom: false,
+                baseQty: 100,
+                unit: 'g'
+            }));
+            const seed = { manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } }, exercises: fixtureExercises, foods: fixtureFoods };
+            await saveCatalogToCache(seed as any);
 
             let capturedUserDocWrite: any = null;
             const capturedHistoryMonthWrites: Record<string, any> = {};
@@ -796,17 +824,33 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     describe('5.5: Race Conditions During Fast Bootstrap, Debounced Writes & Concurrent Sync', () => {
 
         it('T5.5.1: 50 concurrent getCachedCatalog() calls resolve cleanly without race conditions or cache corruption', async () => {
-            await clearCatalogCache();
+            await clearCatalogCache(); // Clears both in-memory and IDB
+
+            // Populate IDB directly to force concurrent read races without hitting the empty seed fallback
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: [{ id: 'ex_race_1', name: 'Race Ex 1', isDefault: true, setsCount: 3, trackingType: 'weight_reps', muscles: ['chest'] }],
+                foods: [{ id: 'food_race_1', name: 'Race Food 1', kcal: 100, pro: 10, carbs: 10, fat: 5, isCustom: false, baseQty: 100, unit: 'g' }]
+            } as any;
+            await idbSet('logbook_cached_global_catalog', fixtureCatalog);
 
             const promises = Array.from({ length: 50 }, () => getCachedCatalog());
             const results = await Promise.all(promises);
 
             expect(results).toHaveLength(50);
+            
+            const firstCat = results[0];
+            expect(firstCat).toBeDefined();
+            expect(firstCat.exercises).toHaveLength(1);
+            expect(firstCat.foods).toHaveLength(1);
+            
             for (const cat of results) {
                 expect(cat).toBeDefined();
                 expect(cat.manifest.version).toBe('1.0.0');
-                expect(cat.exercises.length).toBeGreaterThan(100);
-                expect(cat.foods.length).toBeGreaterThan(100);
+                // Ensure all 50 calls resolved the exact same coherent result without race condition corruption
+                expect(cat).toStrictEqual(firstCat);
+                expect(cat.exercises.length).toBe(1);
+                expect(cat.foods.length).toBe(1);
             }
         });
 
