@@ -297,8 +297,11 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             const catalog = await getCachedCatalog();
             expect(catalog).toBeDefined();
             expect(catalog.manifest.version).toBe('1.0.0');
-            expect(catalog.exercises.length).toBeGreaterThan(100);
-            expect(catalog.foods.length).toBeGreaterThan(100);
+            // Seed is intentionally empty (commit e61a133): fallback returns valid empty arrays
+            expect(Array.isArray(catalog.exercises)).toBe(true);
+            expect(Array.isArray(catalog.foods)).toBe(true);
+            expect(catalog.exercises).toHaveLength(0);
+            expect(catalog.foods).toHaveLength(0);
         });
 
         it('T2.2: Missing or undefined catalogOverrides object handled safely with full catalog fallback', () => {
@@ -338,6 +341,11 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
         });
 
         it('T2.4: Partial and idempotent override operations: unhide non-hidden and hide non-existent items', () => {
+            // Local fixture with the exercises referenced by this test
+            const globalExFixture: CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
+            ];
+
             let overrides: CatalogOverrides = {};
 
             // Unhide item that was never hidden -> safe no-op
@@ -348,9 +356,8 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             overrides = hideCatalogExercise('non-existent-exercise-id-999', overrides);
             expect(overrides.hiddenExerciseIds).toContain('non-existent-exercise-id-999');
 
-            const seed = getSeedCatalog();
-            const resolved = resolveEffectiveExercises(seed.exercises, [], overrides);
-            expect(resolved).toHaveLength(seed.exercises.length); // None of the standard ones were hidden
+            const resolved = resolveEffectiveExercises(globalExFixture, [], overrides);
+            expect(resolved).toHaveLength(globalExFixture.length); // None of the fixture items hidden
 
             // Idempotent hiding: hiding the same exercise twice does not duplicate ID
             overrides = hideCatalogExercise('panca-piana-bilanciere', overrides);
@@ -361,13 +368,16 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             overrides = unhideCatalogExercise('panca-piana-bilanciere', overrides);
             expect(overrides.hiddenExerciseIds).not.toContain('panca-piana-bilanciere');
 
-            const resolvedAfterUnhide = resolveEffectiveExercises(seed.exercises, [], overrides);
+            const resolvedAfterUnhide = resolveEffectiveExercises(globalExFixture, [], overrides);
             expect(resolvedAfterUnhide.find(e => e.id === 'panca-piana-bilanciere')).toBeDefined();
         });
 
         it('T2.5: Override with empty strings, undefined fields, and partial macro updates preserves base fields', () => {
-            const seed = getSeedCatalog();
-            const baseFood = seed.foods.find(f => f.id === 'petto-di-pollo-crudo')!;
+            // Local fixture for petto-di-pollo-crudo (seed is empty — commit e61a133)
+            const globalFoodsFixture: CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, brand: undefined, isCustom: false }
+            ];
+            const baseFood = globalFoodsFixture[0];
 
             // Apply override only updating carbs from 0 to 1, leaving pro/fat/kcal undefined
             const overrides: CatalogOverrides = {
@@ -378,7 +388,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
                 }
             };
 
-            const resolvedFoods = resolveEffectiveFoods(seed.foods, [], overrides);
+            const resolvedFoods = resolveEffectiveFoods(globalFoodsFixture, [], overrides);
             const overriddenFood = resolvedFoods.find(f => f.id === 'petto-di-pollo-crudo')!;
 
             expect(overriddenFood.carbs).toBe(1); // updated
@@ -419,7 +429,11 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
     describe('Tier 3: Cross-Feature Combinations (Custom Items, Overrides, Workouts & Meals)', () => {
 
         it('T3.1: Guest creates custom exercise, overrides standard exercise, and hides another standard exercise', () => {
-            const seed = getSeedCatalog();
+            // Local fixture (seed is empty — commit e61a133)
+            const globalExercisesFixture: CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
+                { id: 'panca-declinata-bilanciere', name: 'Panca Declinata Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
+            ];
 
             // 1. Custom exercise
             const customEx: Exercise = {
@@ -435,7 +449,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             };
 
             // 2. Override standard exercise
-            const baseBench = seed.exercises.find(e => e.id === 'panca-piana-bilanciere')!;
+            const baseBench = globalExercisesFixture.find(e => e.id === 'panca-piana-bilanciere')!;
             const benchOverride = createExerciseOverride(baseBench, {
                 notes: 'Fermo al petto 2 secondi',
                 equipmentWeight: 20
@@ -450,7 +464,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             overrides = hideCatalogExercise('panca-declinata-bilanciere', overrides);
 
             // Resolution
-            const effective = resolveEffectiveExercises(seed.exercises, [customEx], overrides);
+            const effective = resolveEffectiveExercises(globalExercisesFixture, [customEx], overrides);
 
             // Verification: Custom is first
             expect(effective[0].id).toBe('custom_ex_incline_db');
@@ -468,7 +482,11 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
         });
 
         it('T3.2: Guest creates custom food, overrides standard food macros, and hides another standard food', () => {
-            const seed = getSeedCatalog();
+            // Local fixture (seed is empty — commit e61a133)
+            const globalFoodsFixture: CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                { id: 'petto-di-tacchino-crudo', name: 'Petto di tacchino crudo', kcal: 104, pro: 22.0, carbs: 0, fat: 1.5, isCustom: false }
+            ];
 
             // 1. Custom Food
             const customFood: Food = {
@@ -485,7 +503,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             };
 
             // 2. Override standard chicken macros
-            const baseChicken = seed.foods.find(f => f.id === 'petto-di-pollo-crudo')!;
+            const baseChicken = globalFoodsFixture.find(f => f.id === 'petto-di-pollo-crudo')!;
             const chickenOverride = createFoodOverride(baseChicken, {
                 pro: 24.5,
                 kcal: 109
@@ -500,7 +518,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             overrides = hideCatalogFood('petto-di-tacchino-crudo', overrides);
 
             // Resolution
-            const effectiveFoods = resolveEffectiveFoods(seed.foods, [customFood], overrides);
+            const effectiveFoods = resolveEffectiveFoods(globalFoodsFixture, [customFood], overrides);
 
             // Custom food appears first with isCustom = true
             expect(effectiveFoods[0].id).toBe('custom_food_whey_iso');
@@ -761,9 +779,32 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(merged.catalogOverrides?.hiddenFoodIds).toEqual(expect.arrayContaining(['petto-di-tacchino-crudo']));
         });
 
-        it('T4.2: Persistence isolation: DB.saveUserData serializes ONLY custom deltas, never the 176+ seed items', async () => {
-            const seed = getSeedCatalog();
-            await saveCatalogToCache(seed);
+        it('T4.2: Persistence isolation: DB.saveUserData serializes ONLY custom deltas, never the global seed items', async () => {
+            // Local fixture catalog (seed is empty — commit e61a133).
+            // We inject 5 global exercises + 5 global foods to make the "stripping" behavior observable.
+            const globalExFixture: CatalogExercise[] = Array.from({ length: 5 }, (_, i) => ({
+                id: `global-ex-${i}`,
+                name: `Global Exercise ${i}`,
+                muscles: ['chest'],
+                trackingType: 'weight_reps' as const,
+                isDefault: true,
+                setsCount: 3
+            }));
+            const globalFoodFixture: CatalogFood[] = Array.from({ length: 5 }, (_, i) => ({
+                id: `global-food-${i}`,
+                name: `Global Food ${i}`,
+                kcal: 100,
+                pro: 10,
+                carbs: 20,
+                fat: 2,
+                isCustom: false
+            }));
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: globalExFixture,
+                foods: globalFoodFixture
+            } as any;
+            await saveCatalogToCache(fixtureCatalog);
 
             let capturedUserDocWrite: any = null;
             const mockBatch = {
@@ -777,7 +818,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             };
             vi.mocked(writeBatch).mockReturnValue(mockBatch as any);
 
-            // User has resolved library (176 seed + 1 custom) and resolved foods (130 seed + 1 custom)
+            // User has 1 custom exercise and 1 custom food on top of the 5+5 global fixture
             const customExercise: Exercise = {
                 id: 'custom_ex_hip_thrust_db',
                 name: 'Hip Thrust con Manubrio',
@@ -798,16 +839,17 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
 
             const overrides: CatalogOverrides = {
                 exercises: {
-                    'panca-piana-bilanciere': { notes: 'Pausa 1s al petto' }
+                    'global-ex-0': { notes: 'Pausa 1s' }
                 },
-                hiddenExerciseIds: ['panca-declinata-bilanciere']
+                hiddenExerciseIds: ['global-ex-1']
             };
 
-            const fullResolvedLibrary = resolveEffectiveExercises(seed.exercises, [customExercise], overrides);
-            const fullResolvedFoods = resolveEffectiveFoods(seed.foods, [customFood], overrides);
+            const fullResolvedLibrary = resolveEffectiveExercises(globalExFixture, [customExercise], overrides);
+            const fullResolvedFoods = resolveEffectiveFoods(globalFoodFixture, [customFood], overrides);
 
-            expect(fullResolvedLibrary.length).toBeGreaterThan(100);
-            expect(fullResolvedFoods.length).toBeGreaterThan(100);
+            // Resolved library contains: 1 custom + 4 unhidden globals = 5 total
+            expect(fullResolvedLibrary.length).toBeGreaterThan(1);
+            expect(fullResolvedFoods.length).toBeGreaterThan(1);
 
             const stateToSave = {
                 profile: { name: 'Test Persistence User' },
@@ -828,17 +870,17 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocWrite).not.toBeNull();
 
-            // CRITICAL TEST: The serialized library must have length 1 (only the custom exercise), NOT 177!
+            // CRITICAL TEST: The serialized library must have length 1 (only the custom exercise)
             expect(capturedUserDocWrite.library).toHaveLength(1);
             expect(capturedUserDocWrite.library[0].id).toBe('custom_ex_hip_thrust_db');
 
-            // CRITICAL TEST: The serialized customFoods must have length 1 (only the custom food), NOT 131!
+            // CRITICAL TEST: The serialized customFoods must have length 1 (only the custom food)
             expect(capturedUserDocWrite.customFoods).toHaveLength(1);
             expect(capturedUserDocWrite.customFoods[0].id).toBe('custom_food_almond_butter');
 
             // Overrides are properly saved
-            expect(capturedUserDocWrite.catalogOverrides?.exercises?.['panca-piana-bilanciere']?.notes).toBe('Pausa 1s al petto');
-            expect(capturedUserDocWrite.catalogOverrides?.hiddenExerciseIds).toContain('panca-declinata-bilanciere');
+            expect(capturedUserDocWrite.catalogOverrides?.exercises?.['global-ex-0']?.notes).toBe('Pausa 1s');
+            expect(capturedUserDocWrite.catalogOverrides?.hiddenExerciseIds).toContain('global-ex-1');
 
             // Ensure JSON size of user document is well below 10KB
             const serializedPayload = JSON.stringify(capturedUserDocWrite);
