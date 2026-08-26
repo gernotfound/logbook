@@ -640,7 +640,15 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     describe('5.4: Extreme Override Structures & Corrupted User Payloads (Fuzzing & Defensive Boundaries)', () => {
 
         it('T5.4.1: Adversarial override map injection (__proto__, constructor, NaN, Infinity, negative values) is sanitized defensively', () => {
-            const seed = getSeedCatalog();
+            // Local fixture (seed is empty — commit e61a133)
+            const globalExFixture: CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
+                { id: 'squat-bilanciere', name: 'Squat Bilanciere', muscles: ['quads'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 }
+            ];
+            const globalFoodFixture: CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                { id: 'petto-di-tacchino-crudo', name: 'Petto di tacchino crudo', kcal: 104, pro: 22.0, carbs: 0, fat: 1.5, isCustom: false }
+            ];
 
             const hostileOverrides: any = {
                 exercises: {
@@ -666,10 +674,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             };
 
             // Resolution must not throw
-            expect(() => resolveEffectiveExercises(seed.exercises, [], hostileOverrides)).not.toThrow();
-            expect(() => resolveEffectiveFoods(seed.foods, [], hostileOverrides)).not.toThrow();
+            expect(() => resolveEffectiveExercises(globalExFixture, [], hostileOverrides)).not.toThrow();
+            expect(() => resolveEffectiveFoods(globalFoodFixture, [], hostileOverrides)).not.toThrow();
 
-            const resolvedEx = resolveEffectiveExercises(seed.exercises, [], hostileOverrides);
+            const resolvedEx = resolveEffectiveExercises(globalExFixture, [], hostileOverrides);
             const bench = resolvedEx.find(e => e.id === 'panca-piana-bilanciere')!;
             expect(bench.notes).toBe('Valid note');
             expect(bench.name).toBe('Overridden Bench');
@@ -677,7 +685,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // Hidden items deduplicated and filtered
             expect(resolvedEx.find(e => e.id === 'squat-bilanciere')).toBeUndefined();
 
-            const resolvedFoods = resolveEffectiveFoods(seed.foods, [], hostileOverrides);
+            const resolvedFoods = resolveEffectiveFoods(globalFoodFixture, [], hostileOverrides);
             expect(resolvedFoods.find(f => f.id === 'petto-di-tacchino-crudo')).toBeUndefined();
 
             // Symmetrical merge of hostile overrides
