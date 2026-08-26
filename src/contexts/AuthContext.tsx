@@ -87,6 +87,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (error?.code === 'unavailable' || !navigator.onLine) {
                 setSaveError("📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.");
             }
+            // Prevenzione loop di caricamento: se non c'è alcuno stato locale e il cloud fallisce,
+            // carichiamo i dati di default per permettere l'avvio dell'app.
+            const latestData = useAppStore.getState().userData;
+            if (!latestData) {
+                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                const fallbackData = getResolvedDefaultUserData(catalog);
+                setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
+            }
         } finally {
             setSyncing(false);
         }
