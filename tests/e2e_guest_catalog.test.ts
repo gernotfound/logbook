@@ -54,6 +54,7 @@ import type {
     UserData,
     Exercise,
     Food,
+    CatalogExercise,
     CatalogOverrides,
     WorkoutSession,
     WorkoutRoutine,
@@ -922,7 +923,29 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
         });
 
         it('T4.5: Legacy migration utilities cleanly extract custom items and overrides from monolithic arrays', () => {
-            const seed = getSeedCatalog();
+            // Use an explicit in-memory fixture instead of getSeedCatalog().
+            // seedExercises.json is intentionally empty (commit e61a133); the migrator
+            // requires a populated globalExercises array to distinguish standard from custom items.
+            const globalFixture: CatalogExercise[] = [
+                {
+                    id: 'panca-piana-bilanciere',
+                    name: 'Panca Piana Bilanciere',
+                    muscles: ['chest'],
+                    secondaryMuscles: ['triceps', 'shoulders'],
+                    trackingType: 'weight_reps',
+                    isDefault: true,
+                    setsCount: 3
+                },
+                {
+                    id: 'panca-inclinata-bilanciere',
+                    name: 'Panca Inclinata Bilanciere',
+                    muscles: ['chest'],
+                    secondaryMuscles: ['triceps'],
+                    trackingType: 'weight_reps',
+                    isDefault: true,
+                    setsCount: 3
+                }
+            ];
 
             // Simulate legacy library where 1 standard exercise was modified, 1 standard was deleted, and 1 custom was added
             const legacyLibrary: Exercise[] = [
@@ -944,7 +967,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
                 // 'panca-inclinata-bilanciere' was removed by user
             ];
 
-            const { customExercises, overrides } = migrateLegacyLibraryToOverrides(legacyLibrary, seed.exercises);
+            const { customExercises, overrides } = migrateLegacyLibraryToOverrides(legacyLibrary, globalFixture);
 
             // Custom exercise correctly separated
             expect(customExercises).toHaveLength(1);
