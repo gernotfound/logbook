@@ -4,7 +4,7 @@ import { render, screen, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
-import { getCachedCatalog, clearCatalogCache } from '../src/lib/catalog/catalogService';
+import { getCachedCatalog, clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
 import { idbStore } from './setup';
@@ -56,26 +56,25 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
 
         const state = useAppStore.getState().userData;
         expect(state).not.toBeNull();
-        expect(state?.library?.length).toBeGreaterThanOrEqual(100);
-        expect(state?.customFoods?.length).toBeGreaterThanOrEqual(100);
+        expect(Array.isArray(state?.library)).toBe(true);
+        expect(Array.isArray(state?.customFoods)).toBe(true);
+        expect(state?.library?.length).toBe(0);
+        expect(state?.customFoods?.length).toBe(0);
 
-        // Verify specific known exercises and foods from seed catalog
-        const bench = state?.library?.find(e => e.id === 'panca-piana-bilanciere');
-        expect(bench).toBeDefined();
-        expect(bench?.name).toBe('Panca Piana Bilanciere');
-        expect(bench?.isDefault).toBe(true);
-
-        const chicken = state?.customFoods?.find(f => f.id === 'petto-di-pollo-crudo');
-        expect(chicken).toBeDefined();
-        expect(chicken?.name).toBe('Petto di Pollo Crudo');
-        expect(chicken?.isCustom).toBe(false);
-
-        expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBeGreaterThanOrEqual(100);
-        expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBeGreaterThanOrEqual(100);
+        expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBe(0);
+        expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
     });
 
     it('M2.2: Pre-render cache bootstrap resolves custom deltas with global catalog in main.tsx', async () => {
-        const catalog = await getCachedCatalog();
+        // Local fixture to simulate a populated global catalog (seed is empty — commit e61a133)
+        const catalog = {
+            exercises: [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
+            ] as import('../src/types').CatalogExercise[],
+            foods: [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di Pollo Crudo', kcal: 103, pro: 23, carbs: 0, fat: 1.2, isCustom: false }
+            ] as import('../src/types').CatalogFood[]
+        };
 
         const customEx: Exercise = {
             id: 'custom_biceps_curl',
@@ -152,7 +151,8 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         });
 
         expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST');
-        expect(useAppStore.getState().userData?.library?.length).toBeGreaterThanOrEqual(100);
+        expect(Array.isArray(useAppStore.getState().userData?.library)).toBe(true);
+        expect(useAppStore.getState().userData?.library?.length).toBe(0);
 
         // Ensure localStorage flag is retained
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
@@ -183,6 +183,16 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
     });
 
     it('M2.5: loginAsGuest preserves existing custom exercises and foods when resolving missing catalog', async () => {
+        // Local fixture to populate the cache (seed is empty — commit e61a133)
+        const fixtureCatalog = {
+            manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+            exercises: [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
+            ],
+            foods: []
+        } as any;
+        await saveCatalogToCache(fixtureCatalog);
+
         const customEx: Exercise = {
             id: 'custom_lat_pull',
             name: 'Lat Machine Impugnatura Neutra',
@@ -210,7 +220,8 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         });
 
         const state = useAppStore.getState().userData!;
-        expect(state.library?.length).toBeGreaterThanOrEqual(100);
+        // 1 custom + 1 global fixture = 2
+        expect(state.library?.length).toBe(2);
         // Custom exercise is preserved
         expect(state.library?.find(e => e.id === 'custom_lat_pull')).toBeDefined();
         // Standard exercise is also present
