@@ -50,28 +50,39 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(catalog).toBeNull();
         });
 
-        it('getSeedCatalog() is pure and returns complete seed dataset', () => {
+        it('getSeedCatalog() is pure and returns a valid empty seed dataset', () => {
             const seed = getSeedCatalog();
+            // Manifest must always be valid regardless of seed content
             expect(seed.manifest.docRefs.exercises).toBe('exercises_v1');
             expect(seed.manifest.docRefs.foods).toBe('foods_v1');
-            expect(seed.exercises.length).toBeGreaterThanOrEqual(70);
-            expect(seed.foods.length).toBeGreaterThanOrEqual(100);
+            expect(seed.manifest.schemaVersion).toBe(1);
 
-            // Specific known seed items
-            const bench = seed.exercises.find(e => e.id === 'panca-piana-bilanciere');
-            expect(bench).toBeDefined();
-            expect(bench?.name).toBe('Panca Piana Bilanciere');
+            // Seed is intentionally empty (commit e61a133): users build their catalog manually.
+            // The arrays must be valid arrays (never null/undefined), but are expected to be empty.
+            expect(Array.isArray(seed.exercises)).toBe(true);
+            expect(Array.isArray(seed.foods)).toBe(true);
+            expect(seed.exercises).toHaveLength(0);
+            expect(seed.foods).toHaveLength(0);
 
-            const chicken = seed.foods.find(f => String(f.id) === 'petto-di-pollo-crudo');
-            expect(chicken).toBeDefined();
-            expect(chicken?.name).toBe('Petto di Pollo Crudo');
+            // Purity: successive calls must return independent array references (no shared state)
+            const seed2 = getSeedCatalog();
+            expect(seed.exercises).not.toBe(seed2.exercises);
+            expect(seed.foods).not.toBe(seed2.foods);
         });
 
         it('getCachedCatalog() returns in-memory cache if populated and saves seed to cache if empty', async () => {
+            // getCachedCatalog() must always return a defined, non-null catalog (even with empty seed)
             const catalog = await getCachedCatalog();
             expect(catalog).toBeDefined();
-            expect(catalog.exercises.length).toBeGreaterThan(0);
+            expect(catalog).not.toBeNull();
+            // Must return valid arrays (empty seed is a valid state — commit e61a133)
+            expect(Array.isArray(catalog.exercises)).toBe(true);
+            expect(Array.isArray(catalog.foods)).toBe(true);
+            // Must mark the catalog as loaded into in-memory cache
             expect(isCatalogInMemory()).toBe(true);
+            // Verify the IDB cache was actually written: a second call must return the same manifest
+            const catalog2 = await getCachedCatalog();
+            expect(catalog2.manifest.version).toBe(catalog.manifest.version);
         });
     });
 

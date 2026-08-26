@@ -283,10 +283,10 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             const loaded = await DB.loadUserData();
 
             expect(loaded).not.toBeNull();
-            expect(loaded?.library?.length).toBeGreaterThanOrEqual(100);
-            expect(loaded?.customFoods?.length).toBeGreaterThanOrEqual(100);
-            expect(loaded?.library?.every(e => e.isDefault === true)).toBe(true);
-            expect(loaded?.customFoods?.every(f => f.isCustom === false)).toBe(true);
+            // When user doc is missing and seed is empty (commit e61a133), both arrays must be empty.
+            // This is the correct offline-first cold start: no items, no crash.
+            expect(loaded?.library).toEqual([]);
+            expect(loaded?.customFoods).toEqual([]);
         });
     });
 
