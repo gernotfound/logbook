@@ -19,9 +19,8 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
     expect(navBlock).toMatch(/bottom:\s*0\s*!important/);
     expect(navBlock).toMatch(/position:\s*fixed\s*!important/);
 
-    // Must have padding-bottom using env(safe-area-inset-bottom, 0px) without subtraction
-    expect(navBlock).toMatch(/padding-bottom:\s*max\(env\(safe-area-inset-bottom,\s*0px\),\s*8px\)\s*!important/);
-    expect(navBlock).not.toMatch(/calc\(env\(safe-area-inset-bottom/);
+    // Must have padding-bottom using calc(env(...) - 4px) to lower nav flush on iPhone (commit f407e3c)
+    expect(navBlock).toMatch(/padding-bottom:\s*max\(calc\(env\(safe-area-inset-bottom,\s*0px\)\s*-\s*4px\),\s*8px\)\s*!important/);
   });
 
   it('verifies body reserves sufficient padding-bottom for the fixed nav bar', () => {
