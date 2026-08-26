@@ -136,7 +136,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             ];
 
             const parsed = DomainParsers.parseLibrary(rawLib);
-            expect(parsed.length).toBe(5); // All 5 handled safely via defensive schemas
+            expect(parsed.length).toBe(2); // 2 valid items preserved, 3 ghosts filtered
             expect(parsed.find(e => e.id === 'ex1')?.name).toBe('Panca');
             expect(parsed.find(e => e.id === 'ex2')?.isBodyweight).toBe(true);
         });
