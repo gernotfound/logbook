@@ -290,6 +290,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
         it('converts stringified numbers and handles empty strings gracefully', () => {
             const dirtyFoods = [
                 {
+                    id: 'pasta-semola-dirty',  // required: isValidParsedId filters items without a valid id
                     name: 'Pasta di semola',
                     kcal: '350',
                     pro: '12',
