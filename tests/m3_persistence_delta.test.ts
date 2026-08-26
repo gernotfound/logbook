@@ -138,16 +138,29 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
         });
 
         it('persists modified catalog overrides and hidden IDs accurately to Firestore', async () => {
-            const seed = getSeedCatalog();
-            await saveCatalogToCache(seed);
+            // Local fixture (seed is empty — commit e61a133)
+            const globalExFixture: import('../src/types').CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
+                { id: 'panca-declinata-bilanciere', name: 'Panca Declinata', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
+            ];
+            const globalFoodFixture: import('../src/types').CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                { id: 'petto-di-tacchino-crudo', name: 'Petto di tacchino crudo', kcal: 104, pro: 22.0, carbs: 0, fat: 1.5, isCustom: false }
+            ];
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: globalExFixture,
+                foods: globalFoodFixture
+            } as any;
+            await saveCatalogToCache(fixtureCatalog);
 
-            const baseBench = seed.exercises.find(e => e.id === 'panca-piana-bilanciere')!;
+            const baseBench = globalExFixture.find(e => e.id === 'panca-piana-bilanciere')!;
             const benchOverride = createExerciseOverride(baseBench, {
                 notes: 'Pausa 2 secondi al petto',
                 equipmentWeight: 20
             });
 
-            const baseChicken = seed.foods.find(f => f.id === 'petto-di-pollo-crudo')!;
+            const baseChicken = globalFoodFixture.find(f => f.id === 'petto-di-pollo-crudo')!;
             const chickenOverride = createFoodOverride(baseChicken, {
                 pro: 25,
                 kcal: 110
@@ -164,8 +177,8 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             overrides = hideCatalogExercise('panca-declinata-bilanciere', overrides);
             overrides = hideCatalogFood('petto-di-tacchino-crudo', overrides);
 
-            const fullResolvedLibrary = resolveEffectiveExercises(seed.exercises, [], overrides);
-            const fullResolvedFoods = resolveEffectiveFoods(seed.foods, [], overrides);
+            const fullResolvedLibrary = resolveEffectiveExercises(globalExFixture, [], overrides);
+            const fullResolvedFoods = resolveEffectiveFoods(globalFoodFixture, [], overrides);
 
             const stateToSave: UserData = {
                 profile: { name: 'Override Athlete' },
@@ -232,6 +245,25 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
 
     describe('DB.loadUserData Catalog Resolution', () => {
         it('hydrates user data from Firestore and resolves effective library and foods', async () => {
+            // Inject a fixture catalog so DB.loadUserData can resolve effective library and foods.
+            // seedExercises.json is intentionally empty (commit e61a133); the global catalog
+            // is normally fetched from Firestore. This simulates that post-fetch state.
+            const globalExFixture: import('../src/types').CatalogExercise[] = [
+                { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
+                { id: 'panca-declinata-bilanciere', name: 'Panca Declinata', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 },
+                { id: 'squat-bilanciere', name: 'Squat Bilanciere', muscles: ['quads'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 }
+            ];
+            const globalFoodFixture: import('../src/types').CatalogFood[] = [
+                { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                { id: 'riso-bianco-cotto', name: 'Riso bianco cotto', kcal: 130, pro: 2.7, carbs: 28.6, fat: 0.3, isCustom: false }
+            ];
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: globalExFixture,
+                foods: globalFoodFixture
+            } as any;
+            await saveCatalogToCache(fixtureCatalog);
+
             const mockFirestoreDoc = {
                 profile: { name: 'Cloud User', height: '180' },
                 library: [
@@ -263,14 +295,14 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile?.name).toBe('Cloud User');
-            // Library contains custom + standard exercises (excluding hidden)
-            expect(loaded?.library?.length).toBeGreaterThan(100);
+            // Library: 1 custom + 2 unhidden globals (panca-declinata hidden) = 3
+            expect(loaded?.library?.length).toBeGreaterThan(1);
             expect(loaded?.library?.find(e => e.id === 'cloud_custom_dip')).toBeDefined();
             expect(loaded?.library?.find(e => e.id === 'panca-piana-bilanciere')?.notes).toBe('Presa stretta');
             expect(loaded?.library?.find(e => e.id === 'panca-declinata-bilanciere')).toBeUndefined();
 
-            // Foods contains custom + standard foods
-            expect(loaded?.customFoods?.length).toBeGreaterThan(100);
+            // Foods: 1 custom + 2 standard globals = 3
+            expect(loaded?.customFoods?.length).toBeGreaterThan(1);
             expect(loaded?.customFoods?.find(f => f.id === 'cloud_custom_quark')).toBeDefined();
         });
 
