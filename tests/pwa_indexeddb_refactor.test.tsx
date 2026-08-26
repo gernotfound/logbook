@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { useAppStore, getInitialUserData } from '../src/store/useAppStore';
 import { idbStore } from './setup';
-import { get, set, del } from 'idb-keyval';
+
 import type { UserData, WorkoutSession } from '../src/types';
 import App from '../src/App';
 

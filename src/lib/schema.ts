@@ -649,6 +649,8 @@ export const UserDataSchema = z.object({
     return defaultUserDataFallback;
 }).default(defaultUserDataFallback);
 
+const isValidParsedId = (id: unknown) => typeof id === 'string' && id.trim().length > 0;
+
 export const DomainParsers = {
     // Oggetti singoli: fallback al default schema in caso di dato corrotto
     parseProfile: (data: unknown) => {
@@ -692,7 +694,7 @@ export const DomainParsers = {
             }
             return [];
         }
-        return data.map((item) => ExerciseSchema.parse(item));
+        return data.map((item) => ExerciseSchema.parse(item)).filter(item => isValidParsedId(item.id));
     },
     parseCustomFoods: (data: unknown) => {
         if (!Array.isArray(data)) {
@@ -708,7 +710,7 @@ export const DomainParsers = {
             }
             return [];
         }
-        return data.map((item) => FoodSchema.parse(item));
+        return data.map((item) => FoodSchema.parse(item)).filter(item => isValidParsedId(item.id));
     },
     parseRoutines: (data: unknown) => {
         if (!Array.isArray(data)) {
