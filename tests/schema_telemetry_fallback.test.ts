@@ -193,14 +193,13 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
         it('sanitizes corrupt library items and notifies telemetry', async () => {
             vi.useFakeTimers();
             const libraryData = [
-                { id: 'ex_valid', name: 'Squat', setsCount: 3, muscles: [], secondaryMuscles: [], sets: [] },
-                'corrupted_exercise_item',
+                { id: 'ex_valid', name: 'Valid Exercise', setsCount: 3 },
+                'corrupted_exercise_string',
             ];
 
             const parsed = DomainParsers.parseLibrary(libraryData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].id).toBe('ex_valid');
-            expect(parsed[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(50);
 
@@ -215,14 +214,13 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
         it('sanitizes corrupt customFoods and notifies telemetry', async () => {
             vi.useFakeTimers();
             const foodsData = [
-                { name: 'Avena', kcal: 370, pro: 13, carbs: 68, fat: 7 },
+                { id: 'avena123', name: 'Avena', kcal: 370, pro: 13, carbs: 68, fat: 7 },
                 'corrupted_food_string',
             ];
 
             const parsed = DomainParsers.parseCustomFoods(foodsData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].name).toBe('Avena');
-            expect(parsed[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(50);
 

@@ -8,7 +8,7 @@ import TrainingHistory from '../src/components/Training/TrainingHistory';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 import { SessionRatings } from '../src/components/Training/session/SessionRatings';
 import { useAppStore } from '../src/store/useAppStore';
-import type { WorkoutSession, UserData, Exercise, WorkoutRoutine } from '../src/types';
+import type { WorkoutSession, UserData } from '../src/types';
 import fs from 'fs';
 import path from 'path';
 
