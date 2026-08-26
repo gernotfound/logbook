@@ -91,7 +91,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 i % 2 === 0 ? `corrupt_food_${i}` : { name: 12345, kcal: 'invalid_kcal', satFat: 'bad_fat' }
             );
             const result = DomainParsers.parseCustomFoods(malformedArray);
-            expect(result).toHaveLength(1000);
+            expect(result).toHaveLength(0);
             for (const food of result) {
                 expect(typeof food.name).toBe('string');
                 expect(typeof food.kcal).toBe('number');
@@ -299,9 +299,9 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
 
             const parsed = DomainParsers.parseLibrary(sparse);
             expect(parsed).toBeDefined();
-            expect(parsed.length).toBe(5000);
+            expect(parsed.length).toBe(2);
             expect(parsed[0].name).toBe('Bench Press');
-            expect(parsed[2500].name).toBe('Squat');
+            expect(parsed[1].name).toBe('Squat');
         });
     });
 

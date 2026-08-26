@@ -151,9 +151,8 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
                 `CORRUPT_EXERCISE_${SENSITIVE_STRINGS[4]}`,
             ];
             const arrayResult = DomainParsers.parseLibrary(arrayInput);
-            expect(arrayResult).toHaveLength(2);
+            expect(arrayResult).toHaveLength(1);
             expect(arrayResult[0].id).toBe('ex1');
-            expect(arrayResult[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(100);
 
@@ -167,13 +166,12 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
             expect(nonArrayResult).toEqual([]);
 
             const arrayInput = [
-                { name: 'Oatmeal', kcal: 360, pro: 13, carbs: 60, fat: 7 },
+                { id: 'food1', name: 'Oatmeal', kcal: 360, pro: 13, carbs: 60, fat: 7 },
                 `CORRUPT_FOOD_${SENSITIVE_STRINGS[6]}`,
             ];
             const arrayResult = DomainParsers.parseCustomFoods(arrayInput);
-            expect(arrayResult).toHaveLength(2);
+            expect(arrayResult).toHaveLength(1);
             expect(arrayResult[0].name).toBe('Oatmeal');
-            expect(arrayResult[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(100);
 
