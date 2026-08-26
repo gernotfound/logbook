@@ -36,10 +36,14 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
         it('getInMemoryCatalog() returns non-null seed catalog on cold start without prior initialization', () => {
             expect(isCatalogInMemory()).toBe(false);
             const catalog = getInMemoryCatalog();
+            // Must return a defined, non-null object with a valid manifest (seed is intentionally empty)
             expect(catalog).toBeDefined();
+            expect(catalog).not.toBeNull();
             expect(catalog.manifest.version).toBe('1.0.0');
-            expect(catalog.exercises.length).toBeGreaterThan(50);
-            expect(catalog.foods.length).toBeGreaterThan(50);
+            // Arrays must be valid (empty is acceptable — commit e61a133)
+            expect(Array.isArray(catalog.exercises)).toBe(true);
+            expect(Array.isArray(catalog.foods)).toBe(true);
+            // Must mark the catalog as loaded into in-memory cache
             expect(isCatalogInMemory()).toBe(true);
         });
 
