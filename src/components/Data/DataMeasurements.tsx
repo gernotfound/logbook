@@ -1,6 +1,7 @@
 import React from 'react';
 import { addDays } from 'date-fns';
 import { Logic } from '../../lib/logic';
+import { X } from 'lucide-react';
 
 interface DataMeasurementsProps {
     profile: any;
@@ -131,23 +132,27 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 </p>
 
             <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 0, maxWidth: '200px' }}>
+                <div style={{ flex: 1, minWidth: 0, maxWidth: '200px' }}>
                     <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Orario rilevazione</label>
-                    <input
-                        id="measure-time"
-                        type="time"
-                        value={measureTime}
-                        onChange={e => setMeasureTime(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', paddingRight: '30px', margin: 0 }}
-                    />
-                    {measureTime && (
-                        <button
-                            type="button"
-                            onClick={() => setMeasureTime('')}
-                            style={{ position: 'absolute', right: '8px', top: 'calc(50% + 14px)', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
-                            aria-label="Cancella orario"
-                        >×</button>
-                    )}
+                    <div style={{ position: 'relative' }}>
+                        <input
+                            id="measure-time"
+                            type="time"
+                            value={measureTime}
+                            onChange={e => setMeasureTime(e.target.value)}
+                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', paddingRight: '35px', margin: 0 }}
+                        />
+                        {measureTime && (
+                            <button
+                                type="button"
+                                onClick={() => setMeasureTime('')}
+                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                                aria-label="Cancella orario"
+                            >
+                                <X size={18} />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

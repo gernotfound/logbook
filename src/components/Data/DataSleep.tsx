@@ -1,6 +1,7 @@
 import React from 'react';
 import { addDays } from 'date-fns';
 import { Logic } from '../../lib/logic';
+import { X } from 'lucide-react';
 
 interface DataSleepProps {
     sleepHook: any;
@@ -86,25 +87,29 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                 </p>
 
                 <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' }}>
-                    <div style={{ position: 'relative', flex: 1, minWidth: 0, maxWidth: '200px' }}>
+                    <div style={{ flex: 1, minWidth: 0, maxWidth: '200px' }}>
                         <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Ore sonno (totali)</label>
-                        <input
-                            id="sleep-hours"
-                            type="time"
-                            placeholder="07:30"
-                            value={sleepHook.sleepHours}
-                            onChange={e => sleepHook.setSleepHours(e.target.value)}
-                            onFocus={e => e.target.select()}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', paddingRight: '30px', margin: 0 }}
-                        />
-                        {sleepHook.sleepHours && (
-                            <button
-                                type="button"
-                                onClick={() => sleepHook.setSleepHours('')}
-                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
-                                aria-label="Cancella ore sonno"
-                            >×</button>
-                        )}
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="sleep-hours"
+                                type="time"
+                                placeholder="07:30"
+                                value={sleepHook.sleepHours}
+                                onChange={e => sleepHook.setSleepHours(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', paddingRight: '35px', margin: 0 }}
+                            />
+                            {sleepHook.sleepHours && (
+                                <button
+                                    type="button"
+                                    onClick={() => sleepHook.setSleepHours('')}
+                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                                    aria-label="Cancella ore sonno"
+                                >
+                                    <X size={18} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -112,88 +117,104 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                 <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Dettagli fasi (opzionali)</h3>
 
                 <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno profondo</label>
-                        <input
-                            id="sleep-deep"
-                            type="time"
-                            placeholder="01:30"
-                            value={sleepHook.sleepDeep}
-                            onChange={e => sleepHook.setSleepDeep(e.target.value)}
-                            onFocus={e => e.target.select()}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '30px' }}
-                        />
-                        {sleepHook.sleepDeep && (
-                            <button
-                                type="button"
-                                onClick={() => sleepHook.setSleepDeep('')}
-                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
-                                aria-label="Cancella sonno profondo"
-                            >×</button>
-                        )}
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="sleep-deep"
+                                type="time"
+                                placeholder="01:30"
+                                value={sleepHook.sleepDeep}
+                                onChange={e => sleepHook.setSleepDeep(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '35px' }}
+                            />
+                            {sleepHook.sleepDeep && (
+                                <button
+                                    type="button"
+                                    onClick={() => sleepHook.setSleepDeep('')}
+                                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                                    aria-label="Cancella sonno profondo"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno leggero</label>
-                        <input
-                            id="sleep-light"
-                            type="time"
-                            placeholder="04:00"
-                            value={sleepHook.sleepLight}
-                            onChange={e => sleepHook.setSleepLight(e.target.value)}
-                            onFocus={e => e.target.select()}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '30px' }}
-                        />
-                        {sleepHook.sleepLight && (
-                            <button
-                                type="button"
-                                onClick={() => sleepHook.setSleepLight('')}
-                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
-                                aria-label="Cancella sonno leggero"
-                            >×</button>
-                        )}
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="sleep-light"
+                                type="time"
+                                placeholder="04:00"
+                                value={sleepHook.sleepLight}
+                                onChange={e => sleepHook.setSleepLight(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '35px' }}
+                            />
+                            {sleepHook.sleepLight && (
+                                <button
+                                    type="button"
+                                    onClick={() => sleepHook.setSleepLight('')}
+                                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                                    aria-label="Cancella sonno leggero"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno REM</label>
-                        <input
-                            id="sleep-rem"
-                            type="time"
-                            placeholder="01:30"
-                            value={sleepHook.sleepRem}
-                            onChange={e => sleepHook.setSleepRem(e.target.value)}
-                            onFocus={e => e.target.select()}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '30px' }}
-                        />
-                        {sleepHook.sleepRem && (
-                            <button
-                                type="button"
-                                onClick={() => sleepHook.setSleepRem('')}
-                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
-                                aria-label="Cancella sonno REM"
-                            >×</button>
-                        )}
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="sleep-rem"
+                                type="time"
+                                placeholder="01:30"
+                                value={sleepHook.sleepRem}
+                                onChange={e => sleepHook.setSleepRem(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '35px' }}
+                            />
+                            {sleepHook.sleepRem && (
+                                <button
+                                    type="button"
+                                    onClick={() => sleepHook.setSleepRem('')}
+                                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                                    aria-label="Cancella sonno REM"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                         <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Tempo sveglio</label>
-                        <input
-                            id="sleep-awake"
-                            type="time"
-                            placeholder="00:30"
-                            value={sleepHook.sleepAwake}
-                            onChange={e => sleepHook.setSleepAwake(e.target.value)}
-                            onFocus={e => e.target.select()}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '30px' }}
-                        />
-                        {sleepHook.sleepAwake && (
-                            <button
-                                type="button"
-                                onClick={() => sleepHook.setSleepAwake('')}
-                                style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1, padding: 0 }}
-                                aria-label="Cancella tempo sveglio"
-                            >×</button>
-                        )}
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="sleep-awake"
+                                type="time"
+                                placeholder="00:30"
+                                value={sleepHook.sleepAwake}
+                                onChange={e => sleepHook.setSleepAwake(e.target.value)}
+                                onFocus={e => e.target.select()}
+                                style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px', paddingRight: '35px' }}
+                            />
+                            {sleepHook.sleepAwake && (
+                                <button
+                                    type="button"
+                                    onClick={() => sleepHook.setSleepAwake('')}
+                                    style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                                    aria-label="Cancella tempo sveglio"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
