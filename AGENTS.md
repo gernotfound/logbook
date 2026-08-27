@@ -100,6 +100,7 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 - **CSS flexbox mobile:** Inserire sempre `min-width: 0` nei figli diretti di container `display: flex` per prevenire overflow orizzontale su schermi stretti.
 - **Input numerici:** Nei form usare sempre `<input type="number" inputMode="decimal" onFocus={e => e.target.select()} />`. Permettere che il campo diventi una stringa vuota `""` se l'utente cancella tutto (non forzare il reset automatico a `0` durante la digitazione).
 - **Keep-alive e scroll preservation:** In `App.tsx`, le viste principali preservano la posizione di scroll tramite il dizionario `tabScrollPositions`.
+- **Compatibilità Cross-Device e Touch Target:** Assicurati sempre che l'interfaccia sia responsiva (usando media query dai 320px in su) e integra le aree sicure (es. `env(safe-area-inset-top)`) per prevenire tagli visivi da Notch/Dynamic Island o indicatori home. Applica sempre touch target di almeno 44x44px (o classi che lo garantiscano, come nel `global.css`) a bottoni, link e campi di input.
 
 ## 8. Blindatura dello stato in background (Safari Suspend & Storage Ibrido)
 - Se l'utente chiude il browser, spegne lo schermo o passa ad altra applicazione nel mezzo di un allenamento, il sistema operativo (in particolare iOS WebKit e Android PWA) può congelare o terminare all'istante il thread JavaScript, interrompendo qualsiasi Promise, microtask o timeout pendente.
