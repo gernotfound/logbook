@@ -30,8 +30,8 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains, pain
                 </span>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ maxHeight: '140px', display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px' }}>
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                     <MuscleModel 
                         muscleColors={painColors} 
                         interactive={false} 

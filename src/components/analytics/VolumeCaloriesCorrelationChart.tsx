@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Chart } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -178,7 +178,7 @@ export default function VolumeCaloriesCorrelationChart({
         yCalories: {
           type: 'linear' as const,
           position: 'right' as const,
-          beginAtZero: false,
+          beginAtZero: true,
           grid: { drawOnChartArea: false },
           ticks: {
             color: '#ffb703',

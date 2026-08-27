@@ -22,7 +22,7 @@ const BiometryBentoCard: React.FC<BiometryBentoCardProps> = ({ weightStats, bf }
                             <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
                                 {weightStats.latestWeight} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>kg</span>
                             </span>
-                            {weightStats.weightDelta !== null && (
+                            {weightStats.weightDelta !== null && weightStats.weightDelta !== 0 && (
                                 <span style={{
                                     fontWeight: '600',
                                     fontSize: '0.75rem',
