@@ -289,9 +289,9 @@ export function useWorkoutSession() {
         return false;
     }, [showConfirm, setLocalWorkout]);
 
-    const endWorkout = useCallback(async () => {
+    const endWorkout = useCallback(async (): Promise<WorkoutSession | null> => {
         const currentWorkout = useAppStore.getState().localWorkout;
-        if (!currentWorkout || !(await showConfirm("Terminare l'allenamento?"))) return;
+        if (!currentWorkout || !(await showConfirm("Terminare l'allenamento?"))) return null;
 
         const valRes = Logic.validateWorkoutRatings(mood, pump, fatigue);
 
@@ -337,13 +337,16 @@ export function useWorkoutSession() {
             });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
+            return finishedWorkout;
         } catch (err: any) {
             const formatted = mapFirebaseErrorCode(err);
             if (formatted.isOfflineSafe) {
                 setLocalWorkout(null);
                 resetGlobalWorkoutTimer();
+                return finishedWorkout;
             } else {
                 showAlert("Errore durante il salvataggio della sessione.");
+                return null;
             }
         } finally {
             // Telemetry: Non-blocking tracking of workout saved

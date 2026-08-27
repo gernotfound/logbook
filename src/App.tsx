@@ -93,6 +93,14 @@ function App() {
     });
   };
 
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      handleTabChange((e as CustomEvent).detail);
+    };
+    window.addEventListener('app:navigate', handleNavEvent);
+    return () => window.removeEventListener('app:navigate', handleNavEvent);
+  }, [activeTab]);
+
   // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {

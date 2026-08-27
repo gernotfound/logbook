@@ -7,6 +7,8 @@ import WorkoutTimer from './WorkoutTimer';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
+import WorkoutReportModal from './WorkoutReportModal';
+import type { WorkoutSession } from '../../types';
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     const [display, setDisplay] = useState('00:00:00');
@@ -78,6 +80,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
+    const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
 
     const handleMoveExercise = useCallback((fromIndex: number, direction: 'up' | 'down') => {
         const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
@@ -381,8 +384,30 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         }
     };
 
+    const handleEndWorkout = async () => {
+        const finishedWorkout = await endWorkout();
+        if (finishedWorkout) {
+            setReportWorkout(finishedWorkout);
+        }
+    };
+
+    const handleCloseReport = () => {
+        setReportWorkout(null);
+        window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
+    };
+
     return (
         <div className="training-sub-view active">
+            {reportWorkout && (
+                <WorkoutReportModal 
+                    workout={reportWorkout}
+                    history={history}
+                    library={library}
+                    onClose={handleCloseReport}
+                    fromEndWorkout={true}
+                />
+            )}
+
             {/* Sticky Timer */}
             <div style={{ position: 'sticky', top: 'env(safe-area-inset-top, 0px)', zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
                 <WorkoutTimer />
@@ -524,7 +549,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 </>
             ) : (
                 <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={endWorkout}>
+                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
                         🏁 Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
