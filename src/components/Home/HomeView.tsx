@@ -1,10 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { useHomeView } from '../../hooks/useHomeView';
-import MuscleModel from '../Training/MuscleModel';
 import HomeWorkoutWidget from './widgets/HomeWorkoutWidget';
-import HomeDomsCard from './widgets/HomeDomsCard';
 import HomeNutritionWidget from './widgets/HomeNutritionWidget';
-import HomeTdeeWidget from './widgets/HomeTdeeWidget';
+import HeaderDashboard from './widgets/HeaderDashboard';
+import BiometryBentoCard from './widgets/BiometryBentoCard';
+import RecoveryBentoCard from './widgets/RecoveryBentoCard';
 
 const WeightChart = lazy(() => import('./WeightChart'));
 const VolumeChart = lazy(() => import('./VolumeChart'));
@@ -29,179 +29,149 @@ const HomeView = ({ onNavigate }: any) => {
       isRestDay, todaysWorkout,
       kcalEaten, carbs, pro, fat, kcalTarget,
       bf, streak, totalWorkouts,
-      tdeeCalc, chartData,
+      chartData,
       weightPeriod, setWeightPeriod, weightStats,
-      muscleColors, volumeChartData,
-      activePains, painColors, toggleActivePain,
+      volumeChartData,
+      activePains, painColors,
       history, nutrition, library, userWeight
   } = homeState;
 
   return (
     <div id="view-home" className="view-section active">
-      <h1 style={{ marginTop: '10px', marginBottom: '25px', fontSize: '1.5rem' }}>Panoramica di oggi</h1>
       
-      <HomeWorkoutWidget
-        isRestDay={isRestDay}
-        todaysWorkout={todaysWorkout}
-        onNavigate={onNavigate}
-      />
+      <div className="home-bento-grid">
+        {/* Header - Full Width */}
+        <div className="bento-full">
+            <HeaderDashboard streak={streak} totalWorkouts={totalWorkouts} />
+        </div>
 
-      <HomeDomsCard
-        activePains={activePains}
-        painColors={painColors}
-        onTogglePain={toggleActivePain}
-      />
+        {/* Workout Hero - Full Width */}
+        <div className="card bento-full" style={{ padding: 0, overflow: 'hidden', margin: 0 }}>
+            <HomeWorkoutWidget
+                isRestDay={isRestDay}
+                todaysWorkout={todaysWorkout}
+                onNavigate={onNavigate}
+            />
+        </div>
 
-      <HomeNutritionWidget
-        kcalEaten={kcalEaten}
-        kcalTarget={kcalTarget}
-        carbs={carbs}
-        pro={pro}
-        fat={fat}
-        onNavigate={onNavigate}
-      />
+        {/* Nutrition - Full Width */}
+        <div className="card bento-full" style={{ padding: 0, margin: 0 }}>
+            <HomeNutritionWidget
+                kcalEaten={kcalEaten}
+                kcalTarget={kcalTarget}
+                carbs={carbs}
+                pro={pro}
+                fat={fat}
+                onNavigate={onNavigate}
+            />
+        </div>
 
-      <HomeTdeeWidget tdeeCalc={tdeeCalc} />
+        {/* Biometria + Recovery - Half Width Each */}
+        <div className="card" style={{ margin: 0 }}>
+            <BiometryBentoCard weightStats={weightStats} bf={bf} />
+        </div>
 
-      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-          <div className="card" style={{ flex: 1, minWidth: 0, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Massa grassa (stima)</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>{bf !== '--' ? `${bf} %` : '--'}</div>
-          </div>
-          <div className="card" style={{ flex: 1, minWidth: 0, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Streak attuale 🔥</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: (streak || 0) > 0 ? 'var(--warning-color)' : 'var(--text-main)', marginTop: '5px' }}>{streak || 0} gg</div>
-          </div>
-          <div className="card" style={{ flex: 1, minWidth: 0, textAlign: 'center', marginBottom: 0, padding: '15px' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Totale sessioni</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '5px' }}>💪 {totalWorkouts}</div>
-          </div>
-      </div>
+        <div className="card" style={{ margin: 0 }}>
+            <RecoveryBentoCard activePains={activePains} painColors={painColors} />
+        </div>
 
-      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0, overflow: 'hidden' }}>
-              <h2 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Stato muscolare (72h)</h2>
-              <div style={{ padding: '0', margin: '0' }}>
-                  <MuscleModel muscleColors={muscleColors} interactive={false} />
-              </div>
-          </div>
-          
-          <div className="card" style={{ flex: '1 1 calc(50% - 15px)', minWidth: '150px', marginBottom: 0, display: 'flex', flexDirection: 'column' }}>
-              <h2 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Volume (7gg)</h2>
-              <div style={{ flex: 1, minHeight: '150px', width: '100%', position: 'relative' }}>
-                  <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
-                      <VolumeChart chartData={volumeChartData} />
-                  </Suspense>
-              </div>
-          </div>
-      </div>
+        {/* Volume Chart 7gg - Full Width */}
+        <div className="card bento-full" style={{ margin: 0, display: 'flex', flexDirection: 'column' }}>
+            <h2 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Volume (7gg)</h2>
+            <div style={{ flex: 1, minHeight: '150px', width: '100%', position: 'relative' }}>
+                <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
+                    <VolumeChart chartData={volumeChartData} />
+                </Suspense>
+            </div>
+        </div>
 
-      {/* Analytics & Progression Dashboard */}
-      <div id="home-analytics-section" style={{ marginTop: '10px' }}>
-          <Suspense fallback={<div className="card" style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
-              <WeeklyVolumeChart
-                  history={history}
-                  library={library}
-                  userWeight={userWeight}
-              />
-          </Suspense>
+        {/* Analytics & Progression Dashboard - Full Width */}
+        <div className="bento-full" id="home-analytics-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <Suspense fallback={<div className="card" style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0 }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
+                <WeeklyVolumeChart
+                    history={history}
+                    library={library}
+                    userWeight={userWeight}
+                />
+            </Suspense>
 
-          <Suspense fallback={<div className="card" style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
-              <VolumeCaloriesCorrelationChart
-                  history={history}
-                  nutrition={nutrition}
-                  library={library}
-                  userWeight={userWeight}
-              />
-          </Suspense>
-      </div>
+            <Suspense fallback={<div className="card" style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0 }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
+                <VolumeCaloriesCorrelationChart
+                    history={history}
+                    nutrition={nutrition}
+                    library={library}
+                    userWeight={userWeight}
+                />
+            </Suspense>
+            
+            {/* Trend Peso Corporeo */}
+            <div className="card" id="home-chart-widget" style={{ padding: '16px', margin: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Trend peso corporeo</h2>
+                    </div>
 
-      <div className="card" id="home-chart-widget" style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
-              <div>
-                  <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Trend peso corporeo</h2>
-                  {weightStats?.latestWeight ? (
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span>Ultimo: <strong style={{ color: 'var(--text-main)' }}>{weightStats.latestWeight} kg</strong></span>
-                          {weightStats.weightDelta !== null && (
-                              <span style={{
-                                  fontWeight: '600',
-                                  fontSize: '0.8rem',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  background: weightStats.weightDelta < 0 ? 'rgba(74, 222, 128, 0.15)' : (weightStats.weightDelta > 0 ? 'rgba(248, 113, 113, 0.15)' : 'rgba(255, 255, 255, 0.08)'),
-                                  color: weightStats.weightDelta < 0 ? '#4ade80' : (weightStats.weightDelta > 0 ? '#f87171' : 'var(--text-muted)')
-                              }}>
-                                  {weightStats.weightDelta > 0 ? `+${weightStats.weightDelta.toFixed(1)}` : weightStats.weightDelta.toFixed(1)} kg
-                              </span>
-                          )}
-                          {weightStats.minWeight !== null && weightStats.maxWeight !== null && weightStats.minWeight !== weightStats.maxWeight && (
-                              <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                                  (min {weightStats.minWeight} • max {weightStats.maxWeight} kg)
-                              </span>
-                          )}
-                      </div>
-                  ) : null}
-              </div>
+                    {/* Period Selector Tabs */}
+                    <div style={{
+                        display: 'flex',
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        borderRadius: '10px',
+                        padding: '3px',
+                        gap: '2px',
+                        border: '1px solid rgba(255, 255, 255, 0.08)'
+                    }}>
+                        {PERIOD_OPTIONS.map(p => {
+                            const isActive = weightPeriod === p.id;
+                            return (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setWeightPeriod(p.id)}
+                                    style={{
+                                        background: isActive ? 'var(--primary-color)' : 'transparent',
+                                        color: isActive ? '#ffffff' : 'var(--text-muted)',
+                                        border: 'none',
+                                        borderRadius: '7px',
+                                        padding: '6px 10px',
+                                        fontSize: '0.8rem',
+                                        fontWeight: isActive ? '600' : 'normal',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {p.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
 
-              {/* Period Selector Tabs */}
-              <div style={{
-                  display: 'flex',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  borderRadius: '10px',
-                  padding: '3px',
-                  gap: '2px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}>
-                  {PERIOD_OPTIONS.map(p => {
-                      const isActive = weightPeriod === p.id;
-                      return (
-                          <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => setWeightPeriod(p.id)}
-                              style={{
-                                  background: isActive ? 'var(--primary-color)' : 'transparent',
-                                  color: isActive ? '#ffffff' : 'var(--text-muted)',
-                                  border: 'none',
-                                  borderRadius: '7px',
-                                  padding: '6px 10px',
-                                  fontSize: '0.8rem',
-                                  fontWeight: isActive ? '600' : 'normal',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s ease',
-                                  whiteSpace: 'nowrap'
-                              }}
-                          >
-                              {p.label}
-                          </button>
-                      );
-                  })}
-              </div>
-          </div>
+                <div style={{ height: '220px', width: '100%', position: 'relative' }}>
+                    {weightStats?.hasDataInPeriod && chartData ? (
+                        <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
+                            <WeightChart chartData={chartData} />
+                        </Suspense>
+                    ) : (
+                        <div style={{
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--text-muted)',
+                            textAlign: 'center',
+                            padding: '20px'
+                        }}>
+                            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⚖️</div>
+                            <div style={{ fontSize: '0.9rem' }}>Nessuna misurazione registrata in questo intervallo.</div>
+                            <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Registra il tuo peso nella sezione Dati.</div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
 
-          <div style={{ height: '220px', width: '100%', position: 'relative' }}>
-              {weightStats?.hasDataInPeriod && chartData ? (
-                  <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
-                      <WeightChart chartData={chartData} />
-                  </Suspense>
-              ) : (
-                  <div style={{
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--text-muted)',
-                      textAlign: 'center',
-                      padding: '20px'
-                  }}>
-                      <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⚖️</div>
-                      <div style={{ fontSize: '0.9rem' }}>Nessuna misurazione registrata in questo intervallo.</div>
-                      <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Registra il tuo peso nella sezione Dati.</div>
-                  </div>
-              )}
-          </div>
       </div>
     </div>
   );
