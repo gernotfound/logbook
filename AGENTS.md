@@ -58,15 +58,13 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
      - Subcollection `users/{uid}/history_months/{YYYY-MM}`: sessioni di allenamento raggruppate per mese.
      - Subcollection `users/{uid}/nutrition_months/{YYYY-MM}`: registrazioni nutrizionali giornaliere e misure per mese.
      - Le scritture e cancellazioni dei soli mesi effettivamente modificati vengono raggruppate in un `writeBatch(db)` atomico con timeout protettivo di 7000ms.
-- **⚠️ CHECKLIST OBBLIGATORIA IN 5 PASSAGGI PER NUOVE PROPRIETÀ:**
-  Se aggiungi una nuova proprietà all'interfaccia `UserData`, DEVI aggiornare tutti i 5 file seguenti:
-  1. `src/types.ts`: definire l'interfaccia e la proprietà in `UserData`.
-  2. `src/lib/schema.ts`: creare il sub-schema difensivo, registrarlo in `UserDataSchema` e in `defaultUserDataFallback`. *Se salti questo passaggio, `UserDataSchema.parse()` eliminerà silenziosamente la nuova proprietà a ogni avvio o download dal cloud.*
-  3. `src/lib/db.ts`:
-     - In `DB.loadUserData`: dichiarare la proprietà nell'oggetto `state` e mapparla da `data`.
-     - In `DB.saveUserData`: dichiararla in `oldState`, includerla nel controllo `deepEqual` e serializzarla in `userDocData` (o nella subcollection appropriata).
-  4. `src/contexts/AuthContext.tsx`: includere il valore iniziale in `defaultUserData`.
-  5. `src/lib/export.ts` (o `src/hooks/useSettings.ts`): se il dato deve essere esportabile, includerlo nella formattazione CSV di `exportToCSV`.
+- **Invarianti non negoziabili per modifiche allo State:**
+  Se si aggiunge una proprietà a `UserData`, è imperativo aggiornare simultaneamente:
+  - `src/types.ts` (interfaccia)
+  - `src/lib/schema.ts` (Gateway Zod e fallback difensivi)
+  - `src/lib/db.ts` (`loadUserData` e `saveUserData` con diffing strutturale)
+  - `src/contexts/AuthContext.tsx` (`defaultUserData`)
+  *Violare questa invariante causerà la perdita silenziosa dei dati al primo ciclo di salvataggio/caricamento a causa dello strip di Zod o del fast-deep-equal.*
 
 ## 4. Gestione delle date e dei timezone
 - **Niente `toISOString` puro:** Le date di sistema, i log di allenamento e le registrazioni nutrizionali devono essere salvati nel fuso orario locale usando SEMPRE `Logic.getLocalDateString()` (es. `2026-08-14`).
@@ -83,10 +81,8 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
   - Il deploy è continuo e automatico a ogni `git push` sul branch principale. Non è richiesto alcun file di workflow o pipeline di build dedicata (zero-config CI/CD).
   - L'app gira tassativamente sulla radice (`/`) del dominio, come configurato in `vite.config.ts` (`base: '/'`). È vietato l'utilizzo di subpath o prefissi URL annidati.
   - Il monitoraggio delle prestazioni e l'analisi degli utenti reali sono affidati ai pacchetti integrati `@vercel/analytics` e `@vercel/speed-insights`.
-- **⚠️ CHECKLIST OBBLIGATORIA SICUREZZA E DOMINI (Firebase Auth & Google Cloud API Key):**
-  Qualsiasi modifica, aggiunta o migrazione del dominio dell'app (es. cambio dominio di produzione o nuovo sottodominio Vercel) impone tassativamente l'esecuzione immediata dei seguenti due passaggi di sicurezza per prevenire blocchi dell'autenticazione o errori 403 Forbidden:
-  1. **Firebase Authentication (Authorized domains):** Aggiungere il nuovo dominio nella console Firebase (*Authentication* $\rightarrow$ *Settings* $\rightarrow$ *Authorized domains*). Senza questo passaggio, il login con Google e le funzioni di autenticazione falliranno sollevando l'eccezione `auth/unauthorized-domain`.
-  2. **Google Cloud (Browser key / referrers):** Aggiungere il dominio tra i referrer HTTP autorizzati nelle restrizioni della "Browser key" su Google Cloud Credentials (*APIs & Services* $\rightarrow$ *Credentials* $\rightarrow$ *Browser key*). L'omissione causerà errori bloccanti 403 Forbidden su tutte le chiamate verso Identity Toolkit e Firestore.
+- **Invarianti non negoziabili per Sicurezza e Domini:**
+  Se si cambia o si aggiunge un dominio di hosting (es. un nuovo sottodominio Vercel), è TASSATIVO autorizzare il nuovo dominio in due punti: **Firebase Auth (Authorized domains)** e **Google Cloud Console (RESTrizioni Browser API Key)**. In caso contrario, le chiamate Firestore e l'autenticazione falliranno con errori 403 Forbidden o `auth/unauthorized-domain`.
 - Firebase Firestore SDK rifiuta categoricamente qualsiasi valore `undefined` nell'albero JSON, sollevando eccezioni non gestite.
 - Prima di serializzare e salvare lo stato, assicurarsi che i campi opzionali o svuotati siano esplicitamente convertiti a `null` oppure che la chiave venga omessa (`delete obj.key`).
 - Gli schemi difensivi Zod e i mapping di `db.ts` devono garantire la conformità: fallback `activeWorkout: state.activeWorkout || null`, `activeCycleId: state.activeCycleId || null`, ecc.
@@ -153,10 +149,7 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 ## 14. Git workflow & buone pratiche di sviluppo
 - **Vietato teorizzare e proporre modifiche cieche:** Usa sempre `grep_search` e `view_file` in modo approfondito per ispezionare l'implementazione reale prima di toccare qualsiasi riga di codice. **Prima di proporre o aggiungere un elemento (es. un banner, un form o una logica), verifica rigorosamente in tutto il codebase che non sia già presente.**
 - **Chiedere prima di presumere:** Se un requisito di design o una logica di business non è chiara, non tirare a indovinare: chiedi sempre chiarimenti.
-- **Build e test obbligatori:** Prima di finalizzare qualsiasi modifica o proporre commit, esegui SEMPRE:
-  - `npm test` (o `npm.cmd test`) per verificare che i test unitari e di integrazione passino.
-  - `npm run build` (o `npm.cmd run build`) per assicurarti che TypeScript (`tsc --noEmit`) e Vite compilino senza errori o violazioni di tipo.
-  - `npm run lint` (o `npm.cmd run lint`) con `oxlint` per assicurare l'assenza di violazioni stilistiche e sintattiche.
+- **Invarianti non negoziabili per Commit/Push:** Ogni modifica deve passare silenziosamente `npm run test`, `npm run build` e `npm run lint`. Mai committare codice con fallimenti, warning o errori di tipizzazione.
 - **Igiene del repository:** File temporanei, note e file di istruzioni locali restano esclusi dal version control tramite `.gitignore`. Non inquinare i branch di produzione.
 
 ## 15. Delega operazioni meccaniche e di ricerca (Perplexity Pro & Gemini Pro)
@@ -169,11 +162,7 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 - **Provider corretto:** L'app usa `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`). La chiave è configurata tramite la variabile d'ambiente `VITE_RECAPTCHA_V3_SITE_KEY` (il nome è storico, il provider è Enterprise). La logica si trova in `src/lib/appCheck.ts`.
 - **`isSupported` non esiste:** Il modulo `firebase/app-check` NON esporta `isSupported`. Usare il check manuale su `window.crypto` e `window.fetch` per verificare il supporto del browser.
 - **Throttle iniziale (appCheck/initial-throttle):** Al primo caricamento del sito, Firebase App Check acquisisce il token reCAPTCHA con un breve ritardo. Durante questo intervallo, Firestore può rispondere `permission-denied`. Questo è normale e atteso — i dati sono già al sicuro in IndexedDB. In `src/lib/db.ts`, l'errore `permission-denied` sul `batch.commit()` viene intercettato silenziosamente con un `console.warn` senza mai propagarlo all'utente.
-- **Checklist attivazione App Check (da eseguire UNA SOLA VOLTA su un nuovo progetto Firebase o una nuova app web):**
-  1. Google Cloud Console → *reCAPTCHA Enterprise* → Crea chiave → tipo "Sito web" → aggiungi il dominio (es. `logbook-gnf.vercel.app`) → salva la chiave (es. `6Lc...`).
-  2. Firebase Console → *Build → App Check* → seleziona l'app Web → scegli provider **reCAPTCHA Enterprise** → incolla la chiave → **Salva** (l'app deve risultare **Registered** con spunta verde, non grigia).
-  3. Aggiungere la chiave come variabile d'ambiente `VITE_RECAPTCHA_V3_SITE_KEY` su Vercel e fare redeploy.
-  - ⚠️ Se l'app risulta "Unregistered" in Firebase App Check, le richieste verso Firestore continueranno a ricevere `permission-denied` o HTTP 400 a oltranza.
+- **Attivazione App Check:** La registrazione della chiave su Firebase App Check e Google Cloud deve essere sempre verde ("Registered"), altrimenti le richieste Firestore riceveranno `permission-denied`.
 
 ### 16b. Firestore Security Rules — Deploy obbligatorio
 - **Il file `firestore.rules` non si applica da solo.** Modificare `firestore.rules` nel repository non ha alcun effetto su Firebase finché non viene eseguito esplicitamente il deploy. Firebase usa le proprie regole interne (di default: blocca tutto) fino al primo deploy.
@@ -187,18 +176,17 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
 - **Quando ri-deployare:** Ogni volta che si modifica `firestore.rules`. Non è necessario un redeploy Vercel — le regole sono separate dall'app.
 - **⚠️ Il file `service-account.json` è nel `.gitignore` e NON va mai committato.** Contiene le credenziali admin del database. Va scaricato da Firebase Console (*Impostazioni progetto → Account di servizio → Genera nuova chiave privata*) e usato solo localmente per operazioni admin (seeding, script), poi eliminato.
 
-### 16c. Catalogo Globale (`global_catalog`) — Seeding e aggiornamento
+### 16c. Catalogo Globale (`global_catalog`) — Seeding e Zod Invariants
 - **Struttura Firestore:** La collezione `global_catalog` contiene tre documenti:
   - `manifest`: versione, data aggiornamento, `schemaVersion`, `docRefs` (punta ai documenti dati) e `itemCounts`.
   - `exercises_v1`: `{ items: [...] }` con tutti gli esercizi del catalogo.
   - `foods_v1`: `{ items: [...] }` con tutti gli alimenti del catalogo.
-- **Regole Firestore:** `global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false`. Queste regole sono già in `firestore.rules` ma devono essere deployate (vedi 16b).
-- **Fonte dati:** I seed locali si trovano in `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json`.
-- **Script di seeding:** Lo script `seed-catalog.mjs` (nella radice del progetto) carica i seed su Firestore usando `firebase-admin`. Richiede il `service-account.json` nella cartella radice.
-  ```
-  node seed-catalog.mjs
-  ```
-- **Quando ri-eseguire il seeding:** Solo quando si aggiunge o modifica il catalogo (nuovi esercizi o alimenti in `seedExercises.json` / `seedFoods.json`). Dopo il seeding, aggiornare anche la versione nel manifest (campo `version` in `getSeedCatalog()` in `catalogService.ts`) per forzare l'invalidazione della cache negli utenti.
-- **Fallback offline:** Se `global_catalog/manifest` non è raggiungibile (Firestore offline, regole non deployate, documento non esistente), il `CatalogService` cade silenziosamente sul seed locale bundlato nell'app. L'utente non vede nessun errore, ma in console appare `[CatalogService] Impossibile recuperare il manifest remoto`.
+- **Regole Firestore:** `global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false`.
+- **Seed locali vuoti (`enforce manual input`):** I seed locali in `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono *intenzionalmente vuoti*. L'app impone l'inserimento manuale o il download dal cloud (per ridurre il bundle size).
+- **Fallback offline (Array Vuoti):** Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sul seed locale. Essendo quest'ultimo intenzionalmente vuoto, il fallback *restituisce array vuoti validi*, non un catalogo popolato. L'app non va in crash e i `customItems` dell'utente continuano a funzionare regolarmente.
+- **Invariante Zod (Ghost Objects):** Il gateway Zod (`UserDataSchema`) applica una validazione severa per proteggere l'app da oggetti fantasma o serializzazioni rotte:
+  - Scarta a monte (nel transformer) elementi nulli, primitivi o mancanti di un `id` valido (`id === ''`).
+  - Se l'elemento ha un `id` valido ma altri campi sono corrotti (es. numero al posto di stringa), l'elemento *non viene scartato* ma sanitizzato con i valori di default, preservando la referenza vitale per logbook e cronologia.
+- **ATTENZIONE su `seed-catalog.mjs`:** Non rieseguire MAI accidentalmente questo script! Dal momento che i JSON locali sono stati svuotati per la policy "enforce manual input", eseguire lo script andrebbe a sovrascrivere `global_catalog` su Firestore con array vuoti, distruggendo il database cloud di esercizi e alimenti per tutti gli utenti.
 
 
