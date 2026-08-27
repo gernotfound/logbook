@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { useAppStore, getInitialUserData } from '../src/store/useAppStore';
 import { idbStore } from './setup';
 

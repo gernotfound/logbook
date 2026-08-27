@@ -5,7 +5,7 @@ import { UserDataSchema, ExerciseSchema, DomainParsers, defaultUserDataFallback 
 import { mergeUserData, hasUserData } from '../src/lib/merge';
 import {
     calculateEffectiveSetWeight,
-    calculateSetVolume,
+
     calculateWorkoutVolume,
     getLatestUserWeight,
     autoHealPains,

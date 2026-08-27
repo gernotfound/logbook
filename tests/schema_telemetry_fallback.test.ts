@@ -3,17 +3,17 @@ import * as firestoreModule from 'firebase/firestore';
 import {
     DomainParsers,
     UserDataSchema,
-    UserProfileSchema,
-    WorkoutSessionSchema,
-    NutritionPlanningSchema,
-    ExerciseSchema,
-    WorkoutRoutineSchema,
-    TrainingCycleSchema,
-    SupplementSchema,
-    NutritionDaySchema,
-    FoodSchema,
+
+
+
+
+
+
+
+
+
     setSchemaFallbackListener,
-    reportZodSchemaFallback,
+
     type ZodFallbackContext
 } from '../src/lib/schema';
 import { telemetryHub, type TelemetryErrorPayload, type TelemetryEventPayload } from '../src/lib/telemetryHub';

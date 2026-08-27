@@ -65,7 +65,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
 
   it('Flow 2: IndexedDB read_error does NOT update marker and does NOT dispatch anomaly', async () => {
     // Set a previous marker
-    const priorMarker = updateStorageMarker(1000)!;
+updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockRejectedValue(new Error('IndexedDB blocked'));
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
@@ -79,7 +79,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
   });
 
   it('Flow 3: Invalid cache does NOT update marker and does NOT dispatch anomaly', async () => {
-    const priorMarker = updateStorageMarker(1000)!;
+updateStorageMarker(1000)!;
     // Return corrupted non-object data
     vi.spyOn(idbKeyval, 'get').mockResolvedValue('corrupted string payload' as any);
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');

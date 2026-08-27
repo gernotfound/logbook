@@ -7,7 +7,7 @@ import { useNutritionPlanning } from '../src/hooks/useNutritionPlanning';
 import TrainingSession from '../src/components/training/TrainingSession';
 import SessionExerciseCard from '../src/components/training/session/SessionExerciseCard';
 import SessionSetRow from '../src/components/training/session/SessionSetRow';
-import WorkoutTimer from '../src/components/training/WorkoutTimer';
+
 import { Logic } from '../src/lib/logic';
 import { DB } from '../src/lib/db';
 import type { UserData, WorkoutSession } from '../src/types';

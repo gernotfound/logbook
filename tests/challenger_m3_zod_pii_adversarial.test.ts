@@ -12,7 +12,7 @@ import { telemetryHub } from '../src/lib/telemetryHub';
 
 describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Hardening', () => {
     const capturedSetDocPayloads: Array<{ path: string; payload: any }> = [];
-    let mockSetDoc: any;
+
 
     const SENSITIVE_STRINGS = [
         'super_secret_password_12345!',

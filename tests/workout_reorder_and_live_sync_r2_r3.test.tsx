@@ -7,8 +7,7 @@ import { useWorkoutSetMutations } from '../src/hooks/workout/useWorkoutSetMutati
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { SessionExerciseCard } from '../src/components/Training/session/SessionExerciseCard';
 import TrainingSession from '../src/components/Training/TrainingSession';
-import { Logic } from '../src/lib/logic';
-import { SessionExerciseSchema, WorkoutSessionSchema } from '../src/lib/schema';
+import { SessionExerciseSchema } from '../src/lib/schema';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import type { WorkoutSession, ExerciseLibraryItem } from '../src/types';
 

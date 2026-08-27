@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { parseISO, format, addDays, startOfDay, differenceInCalendarDays } from 'date-fns';
-import { calculateCycleTimeline, calculateCycleSchedule, getNextScheduledRoutine } from '../src/lib/calc/planning';
+import { calculateCycleTimeline } from '../src/lib/calc/planning';
 import { TrainingCycleSchema, DomainParsers } from '../src/lib/schema';
-import type { TrainingCycle, WorkoutRoutine } from '../src/types';
+import type { TrainingCycle } from '../src/types';
 
 // Helper mirror functions representing the two-way binding logic contracts
 function computeEndDate(startIso: string, weeks: number): string {

@@ -186,7 +186,7 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
-      const { result } = renderHook(() => usePWAInstall());
+renderHook(() => usePWAInstall());
 
       act(() => {
         window.dispatchEvent(new Event('appinstalled'));

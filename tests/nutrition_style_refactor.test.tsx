@@ -114,7 +114,7 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
         ];
 
         it('renders macro labels in var(--text-muted) and numeric values in var(--text-main)', () => {
-            const { container } = render(
+render(
                 <NutritionHistory 
                     nutritionHistory={historyData}
                     onDayClick={vi.fn()}
@@ -169,7 +169,7 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
                 targetDateStr: '2026-08-16'
             };
 
-            const { container } = renderWithProviders(
+renderWithProviders(
                 <NutritionMeals mealsHook={mockHook} selectedDate="2026-08-16" />
             );
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { TrainingCycleSchema } from '../src/lib/schema';
-import { calculateCycleTimeline, calculateCycleSchedule } from '../src/lib/calc/planning';
+import { calculateCycleTimeline } from '../src/lib/calc/planning';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import type { TrainingCycle, WorkoutRoutine } from '../src/types';
 

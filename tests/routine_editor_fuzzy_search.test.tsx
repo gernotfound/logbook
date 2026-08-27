@@ -6,7 +6,7 @@ import { ExerciseSearchDropdown } from '../src/components/Training/ExerciseSearc
 import { RoutineEditor } from '../src/components/Training/routines/RoutineEditor';
 import TrainingSession from '../src/components/Training/TrainingSession';
 import { Logic, searchExerciseLibrary, normalizeStem } from '../src/lib/logic';
-import { Exercise, ExerciseLibraryItem, WorkoutSession } from '../src/types';
+import {  ExerciseLibraryItem, WorkoutSession } from '../src/types';
 import { useAppStore } from '../src/store/useAppStore';
 
 const mockLibrary: ExerciseLibraryItem[] = [

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { mergeUserData, mergeArrayById, mergeNutrition, mergeProfile, mergeNutritionPlanning, hasUserData } from '../src/lib/merge';
-import { UserDataSchema } from '../src/lib/schema';
-import type { UserData, NutritionDay, WorkoutSession, LoggedMealItem } from '../src/types';
+import { mergeUserData, mergeArrayById, mergeNutrition, mergeProfile, mergeNutritionPlanning } from '../src/lib/merge';
+import type { UserData, NutritionDay, WorkoutSession } from '../src/types';
 
 describe('Empirical Challenger: Deterministic Guest Merge (R5) Stress & Adversarial Suite', () => {
 
