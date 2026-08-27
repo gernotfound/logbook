@@ -106,7 +106,6 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 const existing = (prev.customFoods || []) as any[];
                 return { ...prev, customFoods: existing.filter(f => f.id !== food.id) };
             });
-            await showAlert("Alimento eliminato con successo.");
         } catch {
             await showAlert("Errore durante l'eliminazione dell'alimento.");
         }
