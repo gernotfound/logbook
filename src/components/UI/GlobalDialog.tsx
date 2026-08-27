@@ -22,7 +22,7 @@ export const GlobalDialog: React.FC = () => {
       zIndex: 99999
     }}>
       <div 
-        className="dialog-box card" 
+        className="dialog-box card safe-top safe-bottom" 
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="global-dialog-title"
@@ -30,6 +30,8 @@ export const GlobalDialog: React.FC = () => {
         style={{
           width: '90%',
           maxWidth: '400px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
           background: 'var(--surface-color)',
           border: '1px solid var(--glass-border)',
           boxShadow: '0 10px 30px rgba(0,0,0,0.8)',

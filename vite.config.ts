@@ -24,6 +24,7 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'favicon.svg', 'icons.svg'],
       workbox: {
+        cacheId: 'logbook-v2', // Incrementa versione per cache-busting
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
         navigateFallback: '/index.html',
