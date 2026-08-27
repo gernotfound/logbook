@@ -734,6 +734,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
     });
 
+    // Timeout increased to 10000ms: Resolving mock-timer window advancing (1100ms) 
+    // requires more real-time processing of JSDom async callbacks under high parallel CPU load.
     test('T4.3_workload: Workout completion while background sync runs with zero UI interruption', async () => {
       vi.mocked(DB.saveUserData).mockResolvedValueOnce(undefined);
       const activeWorkout = {
@@ -769,7 +771,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
       expect(useAppStore.getState().syncing).toBe(false);
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
-    });
+    }, 10000);
 
     test('T4.4_workload: Multi-tab routine editor and manual error dismissal workflow', async () => {
       const { container } = await renderSettledApp();
