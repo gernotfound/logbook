@@ -12,7 +12,7 @@ import { telemetryHub } from '../src/lib/telemetryHub';
 
 describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Hardening', () => {
     const capturedSetDocPayloads: Array<{ path: string; payload: any }> = [];
-
+    let _mockSetDoc: any;
 
     const SENSITIVE_STRINGS = [
         'super_secret_password_12345!',
@@ -37,7 +37,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
         vi.useRealTimers();
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-        mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockImplementation(async (docRef: any, data: any) => {
+        _mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockImplementation(async (docRef: any, data: any) => {
             capturedSetDocPayloads.push({ path: docRef?.path || '', payload: data });
             return undefined;
         });

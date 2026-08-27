@@ -9,9 +9,10 @@ import {
   type QueuedTelemetryItem,
 } from '../src/lib/telemetryHub';
 
+
 describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online Flush Stress Suite', () => {
   let mockSetDoc: any;
-
+  let _mockDoc: any;
   let dispatchedDocs: Array<{ path: string; data: any; options?: any }>;
 
   beforeEach(() => {
@@ -28,7 +29,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       return undefined;
     });
 
-    mockDoc = vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
+    _mockDoc = vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
       return { path: pathSegments.join('/') } as any;
     });
 
