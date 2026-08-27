@@ -72,6 +72,8 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
         }
     };
 
+    // Timeout increased to 15000ms: Chart.js rendering within JSDom is extremely CPU-bound.
+    // Under full CI parallelization, React layout effect and canvas painting exceed the 5000ms limit.
     it('renders WeeklyVolumeChart card within HomeView with sentence case header', async () => {
         renderWithProviders(<HomeView onNavigate={() => {}} />, {
             userData: mockUserData
@@ -79,7 +81,7 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
 
         const header = await screen.findByText('Volume di allenamento settimanale', {}, { timeout: 10000 });
         expect(header).toBeDefined();
-    });
+    }, 15000);
 
     it('renders VolumeCaloriesCorrelationChart card within HomeView with sentence case header', async () => {
         renderWithProviders(<HomeView onNavigate={() => {}} />, {
