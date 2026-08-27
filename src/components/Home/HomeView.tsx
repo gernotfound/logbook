@@ -7,7 +7,6 @@ import BiometryBentoCard from './widgets/BiometryBentoCard';
 import RecoveryBentoCard from './widgets/RecoveryBentoCard';
 
 const WeightChart = lazy(() => import('./WeightChart'));
-const VolumeChart = lazy(() => import('./VolumeChart'));
 const WeeklyVolumeChart = lazy(() => import('../analytics/WeeklyVolumeChart'));
 const VolumeCaloriesCorrelationChart = lazy(() => import('../analytics/VolumeCaloriesCorrelationChart'));
 
@@ -31,7 +30,6 @@ const HomeView = ({ onNavigate }: any) => {
       bf, streak, totalWorkouts,
       chartData,
       weightPeriod, setWeightPeriod, weightStats,
-      volumeChartData,
       activePains, painColors,
       history, nutrition, library, userWeight
   } = homeState;
@@ -46,13 +44,15 @@ const HomeView = ({ onNavigate }: any) => {
         </div>
 
         {/* Workout Hero - Full Width */}
-        <div className="card bento-full" style={{ padding: 0, overflow: 'hidden', margin: 0 }}>
-            <HomeWorkoutWidget
-                isRestDay={isRestDay}
-                todaysWorkout={todaysWorkout}
-                onNavigate={onNavigate}
-            />
-        </div>
+        {!isRestDay && (
+            <div className="card bento-full" style={{ padding: 0, overflow: 'hidden', margin: 0 }}>
+                <HomeWorkoutWidget
+                    isRestDay={isRestDay}
+                    todaysWorkout={todaysWorkout}
+                    onNavigate={onNavigate}
+                />
+            </div>
+        )}
 
         {/* Nutrition - Full Width */}
         <div className="card bento-full" style={{ padding: 0, margin: 0 }}>
@@ -73,16 +73,6 @@ const HomeView = ({ onNavigate }: any) => {
 
         <div className="card" style={{ margin: 0 }}>
             <RecoveryBentoCard activePains={activePains} painColors={painColors} />
-        </div>
-
-        {/* Volume Chart 7gg - Full Width */}
-        <div className="card bento-full" style={{ margin: 0, display: 'flex', flexDirection: 'column' }}>
-            <h2 style={{ marginBottom: '10px', fontSize: '0.9rem', textAlign: 'center' }}>Volume (7gg)</h2>
-            <div style={{ flex: 1, minHeight: '150px', width: '100%', position: 'relative' }}>
-                <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
-                    <VolumeChart chartData={volumeChartData} />
-                </Suspense>
-            </div>
         </div>
 
         {/* Analytics & Progression Dashboard - Full Width */}

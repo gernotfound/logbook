@@ -10,18 +10,11 @@ interface HeaderDashboardProps {
 const HeaderDashboard: React.FC<HeaderDashboardProps> = ({ streak, totalWorkouts }) => {
     const today = Logic.getLocalDateString();
     const formattedDate = Logic.formatItalianDate ? Logic.formatItalianDate(today) : today;
-    
-    // Un semplice saluto dinamico in base all'ora
-    const hour = new Date().getHours();
-    let greeting = 'Bentornato!';
-    if (hour < 12) greeting = 'Buongiorno!';
-    else if (hour < 18) greeting = 'Buon pomeriggio!';
-    else greeting = 'Buonasera!';
 
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-                <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>{greeting}</h1>
+                <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>LogBook</h1>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formattedDate}</p>
             </div>
             
@@ -39,6 +32,7 @@ const HeaderDashboard: React.FC<HeaderDashboardProps> = ({ streak, totalWorkouts
                     <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: streak > 0 ? 'var(--warning-color)' : 'var(--text-muted)' }}>
                         {streak || 0}
                     </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '2px' }}>Streak</span>
                 </div>
                 
                 <div style={{ 
@@ -54,6 +48,7 @@ const HeaderDashboard: React.FC<HeaderDashboardProps> = ({ streak, totalWorkouts
                     <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
                         {totalWorkouts}
                     </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '2px' }}>Sessioni</span>
                 </div>
             </div>
         </div>
