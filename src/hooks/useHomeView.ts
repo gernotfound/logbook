@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
@@ -227,9 +227,7 @@ export function useHomeView(): HomeViewState {
 
         const colors: Record<string, string> = {};
         fatigue.forEach((val, pathOrId) => {
-            if (val > 0.7) colors[pathOrId] = '#ef4444'; // Affaticamento alto (oggi/recente)
-            else if (val > 0.35) colors[pathOrId] = '#f97316'; // Affaticamento medio (ieri)
-            else if (val > 0.05) colors[pathOrId] = '#eab308'; // Affaticamento lieve (recupero quasi completo)
+            if (val > 0.3) colors[pathOrId] = '#f97316'; // Affaticamento (arancione)
         });
 
         const sortedVolume = Array.from(volume.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);

@@ -14,7 +14,7 @@ const HeaderDashboard: React.FC<HeaderDashboardProps> = ({ streak, totalWorkouts
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-                <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>LogBook</h1>
+                <h1 style={{ margin: 0, fontSize: '1.8rem', color: 'var(--text-main)' }}>LogBook</h1>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formattedDate}</p>
             </div>
             
