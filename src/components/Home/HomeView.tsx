@@ -30,7 +30,7 @@ const HomeView = ({ onNavigate }: any) => {
       bf, streak, totalWorkouts,
       chartData,
       weightPeriod, setWeightPeriod, weightStats,
-      activePains, painColors,
+      activePains, painColors, muscleColors, toggleActivePain,
       history, nutrition, library, userWeight
   } = homeState;
 
@@ -72,7 +72,12 @@ const HomeView = ({ onNavigate }: any) => {
         </div>
 
         <div className="card" style={{ margin: 0 }}>
-            <RecoveryBentoCard activePains={activePains} painColors={painColors} />
+            <RecoveryBentoCard 
+                activePains={activePains} 
+                painColors={painColors} 
+                muscleColors={muscleColors} 
+                onTogglePain={toggleActivePain} 
+            />
         </div>
 
         {/* Analytics & Progression Dashboard - Full Width */}
