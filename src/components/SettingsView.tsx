@@ -36,7 +36,7 @@ const SettingsView = () => {
                 } else {
                     useDialogStore.getState().showAlert("Nessun Service Worker trovato. Assicurati che l'app sia installata correttamente.");
                 }
-            } catch (err) {
+            } catch {
                 useDialogStore.getState().showAlert("Errore durante il controllo degli aggiornamenti.");
             }
         } else {
