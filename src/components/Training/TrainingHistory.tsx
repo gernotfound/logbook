@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { Logic } from '../../lib/logic';
 import type { WorkoutSession } from '../../types';
+import WorkoutReportModal from './WorkoutReportModal';
 
 interface TrainingHistoryProps {
     onEditWorkout?: (workout: WorkoutSession) => void;
@@ -9,17 +10,27 @@ interface TrainingHistoryProps {
 
 const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     const { userData, history, deleteWorkout } = useTrainingHistory();
+    const [selectedReportWorkout, setSelectedReportWorkout] = useState<WorkoutSession | null>(null);
 
+    const library = useMemo(() => userData?.library || [], [userData?.library]);
     const libraryMap = useMemo(() => {
         const map = new Map<string, any>();
-        if (userData?.library) {
-            userData.library.forEach(l => map.set(l.id, l));
-        }
+        library.forEach(l => map.set(l.id, l));
         return map;
-    }, [userData?.library]);
+    }, [library]);
 
     return (
         <div className="training-sub-view active">
+            {selectedReportWorkout && (
+                <WorkoutReportModal 
+                    workout={selectedReportWorkout}
+                    history={history}
+                    library={library}
+                    onClose={() => setSelectedReportWorkout(null)}
+                    fromEndWorkout={false}
+                />
+            )}
+            
             <h2 style={{ marginBottom: '20px', fontSize: '1.15rem' }}>Storico allenamenti ({history.length})</h2>
 
             {history.length === 0 ? (
@@ -47,7 +58,6 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                 : '00:00:00');
                         const durationDisplay = Logic.normalizeDuration(rawDuration);
                         
-                        // Legacy compatibility: support both moodRating and mood field names
                         const moodVal = wo.moodRating ?? (wo as any).mood;
                         const pumpVal = wo.pumpRating ?? (wo as any).pump;
                         const fatigueVal = wo.fatigueRating ?? (wo as any).fatigue;
@@ -60,8 +70,8 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                         <h3 style={{ margin: 0, fontSize: '1rem' }}>{wo.routineName || 'Sessione personalizzata'}</h3>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{date}</div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                        <div className="badge badge-primary">{durationDisplay}</div>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <div className="badge badge-primary" style={{ marginRight: '5px' }}>{durationDisplay}</div>
                                         {onEditWorkout && (
                                             <button 
                                                 className="btn-icon" 
@@ -81,12 +91,20 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                     </div>
                                 </div>
 
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
-                                    {wo.exercises?.length || 0} esercizi completati
-                                    {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        {wo.exercises?.length || 0} esercizi completati
+                                        {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
+                                    </div>
+                                    <button 
+                                        className="btn btn-small" 
+                                        style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem', margin: 0, background: 'rgba(0, 229, 255, 0.1)', color: 'var(--primary-color)', border: '1px solid rgba(0, 229, 255, 0.3)' }}
+                                        onClick={() => setSelectedReportWorkout(wo)}
+                                    >
+                                        📊 Vedi Report
+                                    </button>
                                 </div>
 
-                                {/* Exercise details */}
                                 {(wo.exercises || []).length > 0 && (
                                     <div style={{ marginBottom: '10px' }}>
                                         {(wo.exercises || []).map((ex: any, exIdx: number) => {
