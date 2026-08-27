@@ -8,7 +8,7 @@ interface BottomNavProps {
 
 export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setActiveTab }) => (
   <nav
-    className="bottom-nav"
+    className="bottom-nav safe-bottom"
     aria-label="Navigazione principale"
     style={{
       position: 'fixed',

@@ -17,6 +17,7 @@ import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import ReloadPrompt from './components/UI/ReloadPrompt';
+import { InstallPrompt } from './components/UI/InstallPrompt';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
@@ -162,6 +163,7 @@ function App() {
     <>
       <GlobalDialog />
       <ReloadPrompt />
+      <InstallPrompt />
       {/* Banner utente guest — visibile finché non collega Google */}
       {isGuest && (
         <div style={{
