@@ -196,7 +196,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
         });
 
         it('2.3: HomeNutritionWidget macro boxes (CARBO, PRO, GRASSI) all have flex: 1 and minWidth: 0', () => {
-            const { container } = render(
+render(
                 <HomeNutritionWidget
                     kcalEaten={2100}
                     kcalTarget={2400}
@@ -224,7 +224,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
         });
 
         it('2.4: HomeView stats cards (Massa grassa, Streak, Totale sessioni) all have flex: 1 and minWidth: 0', () => {
-            const { container } = renderWithProviders(<HomeView onNavigate={vi.fn()} />);
+renderWithProviders(<HomeView onNavigate={vi.fn()} />);
 
             const bfCard = screen.getByText('Massa grassa (stima)').closest('.card') as HTMLElement;
             const streakCard = screen.getByText('Streak attuale 🔥').closest('.card') as HTMLElement;
@@ -381,7 +381,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
 
         it('3.1: FoodItemRow quick-add buttons container explicitly declares flexWrap: wrap', () => {
             const onQuickAdd = vi.fn();
-            const { container } = render(
+render(
                 <FoodItemRow
                     food={mockFood}
                     isLast={false}
@@ -409,7 +409,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
         });
 
         it('3.2: FoodItemRow macro details and title containers declare flexWrap: wrap to prevent horizontal blowouts on long names', () => {
-            const { container } = render(
+render(
                 <FoodItemRow
                     food={mockFood}
                     isLast={false}

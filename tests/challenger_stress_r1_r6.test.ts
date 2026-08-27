@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    getLatestUserWeight,
+
     calculateEffectiveSetWeight,
     calculateSetVolume,
     calculateWorkoutVolume,

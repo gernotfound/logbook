@@ -3,8 +3,8 @@ import { doc, getDoc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { DB } from '../src/lib/db';
-import { DomainParsers, UserDataSchema, defaultUserDataFallback } from '../src/lib/schema';
-import type { UserData } from '../src/types';
+import { DomainParsers, UserDataSchema } from '../src/lib/schema';
+import type {} from '../src/types';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {

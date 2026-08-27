@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DomainParsers, UserDataSchema, defaultUserDataFallback } from '../src/lib/schema';
+import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 
 describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
     describe('1. parseProfile', () => {

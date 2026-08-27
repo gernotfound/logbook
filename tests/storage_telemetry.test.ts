@@ -16,7 +16,6 @@ import {
   createStorageRecoveryAnomalyPayload,
   dispatchStorageRecoveryAnomaly,
 } from '../src/lib/storageTelemetry';
-import { UserDataSchema } from '../src/lib/schema';
 import * as firestoreModule from 'firebase/firestore';
 import * as firebaseLib from '../src/lib/firebase';
 

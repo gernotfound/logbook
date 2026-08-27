@@ -8,11 +8,10 @@ import {
   type TelemetryEventPayload,
   type QueuedTelemetryItem,
 } from '../src/lib/telemetryHub';
-import { computeErrorHash, scrubPII } from '../src/lib/telemetrySanitizer';
 
 describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online Flush Stress Suite', () => {
   let mockSetDoc: any;
-  let mockDoc: any;
+
   let dispatchedDocs: Array<{ path: string; data: any; options?: any }>;
 
   beforeEach(() => {

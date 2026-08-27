@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { removeUndefinedValues, isPlainObject } from '../src/lib/utils/object';
-import { Logic } from '../src/lib/logic';
 import type { UserData } from '../src/types';
 
 /**
@@ -686,7 +685,7 @@ describe('Empirical Challenger: removeUndefinedValues & Firestore Serialization 
             for (let i = 0; i < ITERATIONS; i++) {
                 JSON.parse(JSON.stringify(sampleData));
             }
-            const durationJson = performance.now() - startJson;
+const _elapsed = performance.now() - startJson;
 
             // Assert custom is fast (< 500ms for 500 comprehensive structures under parallel load)
             expect(durationCustom).toBeLessThan(1000);

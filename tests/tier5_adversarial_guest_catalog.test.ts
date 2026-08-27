@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
-import { getDoc, writeBatch, doc } from 'firebase/firestore';
+import {  writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { DB } from '../src/lib/db';
@@ -23,23 +23,23 @@ import {
     getSeedCatalog,
     saveCatalogToCache,
     clearCatalogCache,
-    getInMemoryCatalog,
+
     CATALOG_CACHE_KEY
 } from '../src/lib/catalog/catalogService';
 
 import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
-    createExerciseOverride,
-    createFoodOverride,
-    hideCatalogExercise,
-    unhideCatalogExercise,
-    hideCatalogFood,
-    unhideCatalogFood,
-    applyExerciseOverride,
-    removeExerciseOverride,
-    applyFoodOverride,
-    removeFoodOverride,
+
+
+
+
+
+
+
+
+
+
     mergeCatalogOverrides,
     migrateLegacyLibraryToOverrides,
     migrateLegacyFoodsToOverrides
@@ -48,24 +48,22 @@ import {
 import {
     mergeUserData,
     hasUserData,
-    filterCustomExercises,
-    filterCustomFoods,
+
+
     mergeNutrition,
-    mergeProfile,
-    mergeNutritionPlanning,
-    mergeArrayById
+
+
+
 } from '../src/lib/merge';
 
 import {
-    UserDataSchema,
-    DomainParsers
+
+
 } from '../src/lib/schema';
 
 import { checkDocSize } from '../src/lib/checkDocSize';
-import { useAppStore, getInitialUserData } from '../src/store/useAppStore';
-import { saveUserDataToCache } from '../src/store/slices/createDataSlice';
+import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
-import { useDialogStore } from '../src/store/useDialogStore';
 
 import type {
     UserData,
@@ -75,7 +73,7 @@ import type {
     WorkoutSession,
     WorkoutRoutine,
     NutritionDay,
-    CachedGlobalCatalog
+
 } from '../src/types';
 
 import { idbStore } from './setup';

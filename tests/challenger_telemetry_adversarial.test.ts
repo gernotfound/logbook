@@ -4,25 +4,23 @@ import { z } from 'zod';
 import {
   scrubPII,
   truncateStack,
-  detectDerivedPlatform,
-  isStandaloneMode,
-  getTelemetryContext,
-  computeErrorHash,
-  hashError,
+
+
+
+
+
   sanitizeErrorPayload,
-  APP_VERSION,
+
 } from '../src/lib/telemetrySanitizer';
 import {
-  TelemetryHub,
+
   telemetryHub,
-  RATE_LIMIT_WINDOW_MS,
-  DEDUP_WINDOW_MS,
-  FIRESTORE_DISPATCH_TIMEOUT_MS,
-  TELEMETRY_QUEUE_KEY,
+
+
+
+
   TELEMETRY_QUEUE_CAPACITY,
-  SESSION_ID_KEY,
-  type TelemetryErrorPayload,
-  type TelemetryEventPayload,
+
 } from '../src/lib/telemetryHub';
 
 describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer', () => {

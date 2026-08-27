@@ -20,7 +20,7 @@ import {
     TELEMETRY_QUEUE_KEY,
     TELEMETRY_QUEUE_CAPACITY,
     type TelemetryErrorPayload,
-type
+
 } from '../src/lib/telemetryHub';
 
 describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial Stress Suite', () => {

@@ -1,10 +1,9 @@
-﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen, fireEvent, render, cleanup } from '@testing-library/react';
 import WeeklyVolumeChart from '../src/components/analytics/WeeklyVolumeChart';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
-import HomeView from '../src/components/Home/HomeView';
-import { renderWithProviders } from './setup';
-import { computeWeeklyVolumeSeries, computeWeeklyNutritionSeries, computeVolumeCaloriesCorrelation, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
+
+import {   computeVolumeCaloriesCorrelation, calculatePearsonCorrelation, generateWeekIntervals } from '../src/lib/calc/analytics';
 import type { WorkoutSession, NutritionDay, Exercise } from '../src/types';
 
 describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () => {

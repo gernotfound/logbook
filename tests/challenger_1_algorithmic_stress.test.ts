@@ -1,13 +1,13 @@
-﻿import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
     computeWeeklyVolumeSeries,
-    computeWeeklyNutritionSeries,
+
     computeVolumeCaloriesCorrelation,
     calculatePearsonCorrelation,
     generateWeekIntervals,
     getWorkoutDateString
 } from '../src/lib/calc/analytics';
-import { calculateSetVolume, calculateEffectiveSetWeight, calculateWorkoutVolume } from '../src/lib/calc/workout';
+import { calculateSetVolume } from '../src/lib/calc/workout';
 import type { WorkoutSession, Exercise, NutritionDay } from '../src/types';
 
 describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {

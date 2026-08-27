@@ -4,7 +4,7 @@ import { render, screen, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
-import { getCachedCatalog, clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import {  clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
 import { idbStore } from './setup';

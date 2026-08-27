@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
-import { scrubPII, truncateStack, computeErrorHash, sanitizeErrorPayload } from '../src/lib/telemetrySanitizer';
-import { telemetryHub, type TelemetryErrorPayload, RATE_LIMIT_WINDOW_MS } from '../src/lib/telemetryHub';
+import { scrubPII, truncateStack, computeErrorHash } from '../src/lib/telemetrySanitizer';
+import { telemetryHub, type TelemetryErrorPayload } from '../src/lib/telemetryHub';
 
 describe('Challenger 4: Final Adversarial Telemetry & Stress Verification Harness', () => {
   let mockSetDoc: any;

@@ -194,7 +194,7 @@ describe('Empirical Challenger M1-2: useLocalStorage, ErrorBoundary & PWA Archit
             const fallbackEmail = 'default@example.com';
 
             // Odd number fails refine
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+vi.spyOn(console, 'warn').mockImplementation(() => {});
             window.localStorage.setItem('odd_num', JSON.stringify(7));
             const { result: numRes } = renderHook(() => useLocalStorage('odd_num', fallbackNum, evenNumberSchema));
             expect(numRes.current[0]).toBe(fallbackNum);

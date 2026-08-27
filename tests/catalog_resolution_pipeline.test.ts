@@ -1,18 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
     getSeedCatalog,
     getCachedCatalog,
     getInMemoryCatalog,
-    saveCatalogToCache,
+
     clearCatalogCache,
     isCatalogInMemory,
-    CATALOG_CACHE_KEY
+
 } from '../src/lib/catalog/catalogService';
 import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
-    createExerciseOverride,
-    createFoodOverride,
+
+
     hideCatalogExercise,
     unhideCatalogExercise,
     hideCatalogFood,
