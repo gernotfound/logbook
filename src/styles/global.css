@@ -413,6 +413,12 @@ input:focus, select:focus, textarea:focus {
 }
 .nav-item span:first-child { font-size: 1.4rem; }
 
+.nav-item:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
 
 
 
@@ -666,6 +672,11 @@ input:focus, select:focus, textarea:focus {
     font-weight: 500;
     user-select: none;
     outline: none;
+}
+
+.tracking-card-option:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 .tracking-card-option:hover {
