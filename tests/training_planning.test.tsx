@@ -294,7 +294,7 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.change(select, { target: { value: 'r_pull' } });
 
             // Button should display and allow starting Trazione (Pull)
-            const startSelectedBtn = screen.getByText(/Avvia Trazione \(Pull\)/i);
+            const startSelectedBtn = screen.getByRole('button', { name: /Avvia Trazione \(Pull\)/i });
             expect(startSelectedBtn).toBeDefined();
 
             fireEvent.click(startSelectedBtn);
@@ -319,7 +319,7 @@ describe('Training Planning & Volume Calculations', () => {
             render(<TrainingSession onNavigateToPlanning={onNavPlanning} />);
 
             expect(screen.getByText(/Nessun ciclo di allenamento attivo al momento/i)).toBeDefined();
-            const navBtn = screen.getByText(/Vai a Pianificazione/i);
+            const navBtn = screen.getByRole('button', { name: /Vai a Pianificazione/i });
             fireEvent.click(navBtn);
             expect(onNavPlanning).toHaveBeenCalled();
         });

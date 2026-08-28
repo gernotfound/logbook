@@ -430,7 +430,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
                 expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
                 expect(screen.getByText('Annulla')).toBeDefined();
-                expect(screen.getByText('💾 Salva modifiche')).toBeDefined();
+                expect(screen.getByRole('button', { name: /Salva modifiche/i })).toBeDefined();
             });
 
             it('T1.3.5: female profile conditionally displays hip measurement input', () => {

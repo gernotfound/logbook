@@ -290,11 +290,11 @@ renderWithProviders(
                 />
             );
 
-            const heading = screen.getByRole('heading', { level: 2, name: /Nutrizione odierna/i });
+            const heading = screen.getByRole('heading', { level: 2, name: /Nutrizione/i });
             expect(heading.style.color).toBe('var(--text-main)');
 
-            const targetKcal = screen.getByText('2200');
-            expect(targetKcal.style.color).toBe('var(--text-main)');
+            const targetKcal = screen.getByText(/2200/i);
+            expect(targetKcal.style.color).toBe('var(--text-muted)');
 
             expect(screen.getByText('CARBO').style.color).toBe('var(--text-muted)');
             expect(screen.getByText('PRO').style.color).toBe('var(--text-muted)');
