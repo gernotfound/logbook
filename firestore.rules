@@ -47,7 +47,8 @@ service cloud.firestore {
           'nutritionPlanning',
           'supplements',
           'activePains',
-          'catalogOverrides'
+          'catalogOverrides',
+          'legalConsent'
         ]);
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}
