@@ -11,6 +11,10 @@ export function serializeForFirestore(data: any): any {
         return { booleanValue: data };
     }
 
+    if (data instanceof Date) {
+        return { timestampValue: data.toISOString() };
+    }
+
     if (typeof data === 'number') {
         if (Number.isInteger(data)) {
             return { integerValue: data.toString() };

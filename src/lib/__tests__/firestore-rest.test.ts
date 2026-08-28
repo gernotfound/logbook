@@ -22,7 +22,7 @@ describe('serializeForFirestore', () => {
         });
     });
 
-    it('should serialize objects correctly', () => {
+    it('should serialize objects correctly, including empty objects', () => {
         const obj = { name: 'Test', age: 30 };
         expect(serializeForFirestore(obj)).toEqual({
             mapValue: {
@@ -31,6 +31,24 @@ describe('serializeForFirestore', () => {
                     age: { integerValue: '30' }
                 }
             }
+        });
+
+        const empty = { metadata: {} };
+        expect(serializeForFirestore(empty)).toEqual({
+            mapValue: {
+                fields: {
+                    metadata: {
+                        mapValue: { fields: {} }
+                    }
+                }
+            }
+        });
+    });
+
+    it('should serialize ISO Dates correctly', () => {
+        const date = new Date('2025-01-15T10:30:00Z');
+        expect(serializeForFirestore(date)).toEqual({
+            timestampValue: '2025-01-15T10:30:00.000Z'
         });
     });
 

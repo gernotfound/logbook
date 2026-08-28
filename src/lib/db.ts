@@ -10,6 +10,7 @@ import { syncGlobalCatalog, getInMemoryCatalog, getCachedCatalog, getSeedCatalog
 import { resolveEffectiveExercises, resolveEffectiveFoods, migrateLegacyLibraryToOverrides, migrateLegacyFoodsToOverrides } from './catalog/deltaResolver';
 import { wrapInFirestoreDocument } from './firestore-rest';
 import { set, get, del } from 'idb-keyval';
+import { useDialogStore } from '../store/useDialogStore';
 
 let lastSavedStateStr: string | null = null;
 
@@ -32,7 +33,13 @@ export const DB = {
             // App is open: clear SW pending sync payloads, Firestore SDK will handle its own offline queue
             Promise.all([
                 get('sync_failed').then(failed => {
-                    if (failed) console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
+                    if (failed) {
+                        console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
+                        useDialogStore.getState().showAlert(
+                            "Sincronizzazione in background interrotta",
+                            "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token è scaduto. Nessun problema: il salvataggio verrà completato automaticamente adesso che sei online."
+                        );
+                    }
                     return set('sync_failed', false);
                 }),
                 del('pending_sync_payload'),
