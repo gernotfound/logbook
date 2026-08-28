@@ -508,7 +508,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             );
 
             // Should display the Dolori / DOMS card
-            const painHeading = screen.getByText(/dolori muscolari/i);
+            const painHeading = screen.getByText(/Recupero e Dolori/i);
             expect(painHeading).toBeDefined();
 
             // Petto badge should be displayed

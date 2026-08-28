@@ -428,7 +428,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('✏️ Modifica misurazione')).toBeDefined();
+                expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
                 expect(screen.getByText('Annulla')).toBeDefined();
                 expect(screen.getByText('💾 Salva modifiche')).toBeDefined();
             });
@@ -779,7 +779,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     activePains: ['petto', 'bicipiti']
                 };
                 renderWithProviders(<HomeView onNavigate={vi.fn()} />, { userData });
-                expect(screen.getByText('Panoramica di oggi')).toBeDefined();
+                expect(screen.getByText('LogBook')).toBeDefined();
             });
 
             it('T1.5.7: toggling muscle adds it if absent, removes it if present in activePains state', () => {

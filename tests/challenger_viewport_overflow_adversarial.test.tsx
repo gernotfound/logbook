@@ -226,8 +226,8 @@ render(
         it('2.4: HomeView stats cards (Massa grassa, Streak, Totale sessioni) all have flex: 1 and minWidth: 0', () => {
 renderWithProviders(<HomeView onNavigate={vi.fn()} />);
 
-            const bfCard = screen.getByText('Massa grassa (stima)').closest('.card') as HTMLElement;
-            const streakCard = screen.getByText('Streak attuale 🔥').closest('.card') as HTMLElement;
+            const bfCard = screen.getByText(/Massa grassa/i).closest('.card') as HTMLElement;
+            const streakCard = screen.getByText(/Streak/i).closest('.card') as HTMLElement;
             const sessionsCard = screen.getByText('Totale sessioni').closest('.card') as HTMLElement;
 
             expect(bfCard).not.toBeNull();

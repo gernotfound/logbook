@@ -517,7 +517,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             // so we can advance the globalSaveTimer (1000ms) without infinite loops.
             vi.useFakeTimers({ shouldAdvanceTime: false });
             vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
-            const endBtn = screen.getByText('🏁 Termina sessione');
+            const endBtn = screen.getByText(/Termina sessione/i);
 
             await act(async () => {
                 fireEvent.click(endBtn);

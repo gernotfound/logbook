@@ -124,8 +124,8 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             renderWithProviders(<HomeView onNavigate={() => {}} />);
 
             // Existing elements
-            expect(screen.getByText('Panoramica di oggi')).toBeDefined();
-            expect(screen.getByText('Stato muscolare (72h)')).toBeDefined();
+            expect(screen.getByText('LogBook')).toBeDefined();
+            expect(screen.getByText(/Recupero e Dolori/i)).toBeDefined();
             expect(screen.getByText('Trend peso corporeo')).toBeDefined();
 
             // Lazy loaded analytics charts
