@@ -39,7 +39,8 @@ export const DB = {
                 activeCycleId: null,
                 nutritionPlanning: null,
                 supplements: [],
-                activePains: []
+                activePains: [],
+                legalConsent: null
             };
             const docRef = doc(db, "users", user.uid);
             // 1. Get cached/seed catalog (offline-resilient)
@@ -76,6 +77,7 @@ export const DB = {
                 if(data.supplements) state.supplements = data.supplements;
                 if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
                 if(data.activePains) state.activePains = data.activePains;
+                if(data.legalConsent) state.legalConsent = data.legalConsent;
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
                 state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
                 state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
@@ -92,6 +94,7 @@ export const DB = {
                 state.activePains = DomainParsers.parseActivePains(state.activePains);
                 if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
+                if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
                 
                 lastSavedStateStr = JSON.stringify(state);
                 return state as unknown as UserData;
@@ -147,6 +150,7 @@ export const DB = {
             state.activePains = DomainParsers.parseActivePains(state.activePains);
             if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
+            if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
             
             lastSavedStateStr = JSON.stringify(state);
             return state as unknown as UserData;
@@ -172,7 +176,8 @@ export const DB = {
                 nutritionPlanning: null,
                 supplements: [],
                 activePains: [],
-                catalogOverrides: {}
+                catalogOverrides: {},
+                legalConsent: null
             };
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
@@ -219,7 +224,8 @@ export const DB = {
                 !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning) ||
                 !deepEqual(state.supplements, oldState.supplements) ||
                 !deepEqual(state.activePains, oldState.activePains) ||
-                !deepEqual(state.catalogOverrides, oldState.catalogOverrides)) {
+                !deepEqual(state.catalogOverrides, oldState.catalogOverrides) ||
+                !deepEqual(state.legalConsent, oldState.legalConsent)) {
                 
                 const userRef = doc(db, "users", user.uid);
                 const userDocData = {
@@ -233,7 +239,8 @@ export const DB = {
                     nutritionPlanning: state.nutritionPlanning || null,
                     supplements: state.supplements || [],
                     activePains: state.activePains || [],
-                    catalogOverrides: overridesToSave
+                    catalogOverrides: overridesToSave,
+                    legalConsent: state.legalConsent || null
                 };
                 const cleanUserDocData = removeUndefinedValues(userDocData);
                 checkDocSize(cleanUserDocData, "User Profile");
