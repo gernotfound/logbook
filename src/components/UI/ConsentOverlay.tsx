@@ -5,8 +5,10 @@ import { LEGAL_VERSIONS } from '../../lib/legalVersions';
 import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 import { useSettings } from '../../hooks/useSettings';
+import { useScrollLock } from '../../hooks/useScrollLock';
 
 export const ConsentOverlay: React.FC = () => {
+    useScrollLock();
     const { isGuest } = useAuth();
     const { handleExport, handleDeleteAccount } = useSettings();
     const updateUserData = useAppStore(state => state.updateUserData);

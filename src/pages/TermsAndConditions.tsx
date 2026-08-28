@@ -1,7 +1,9 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { useScrollLock } from '../hooks/useScrollLock';
 
 export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  useScrollLock();
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
