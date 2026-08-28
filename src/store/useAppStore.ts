@@ -40,3 +40,34 @@ if (typeof window !== 'undefined') {
         useAppStore.getState().setSaveError(null);
     });
 }
+
+// PWA FIX: Sync App Badge with active local workout
+if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
+    useAppStore.subscribe((state, prevState) => {
+        const hasWorkout = !!state.localWorkout;
+        const hadWorkout = !!prevState.localWorkout;
+        
+        if (hasWorkout && !hadWorkout) {
+            try {
+                (navigator as any).setAppBadge(1).catch(() => {});
+            } catch (e) {
+                // Ignore
+            }
+        } else if (!hasWorkout && hadWorkout) {
+            try {
+                (navigator as any).clearAppBadge().catch(() => {});
+            } catch (e) {
+                // Ignore
+            }
+        }
+    });
+    
+    // Initial check
+    setTimeout(() => {
+        if (useAppStore.getState().localWorkout) {
+            try {
+                (navigator as any).setAppBadge(1).catch(() => {});
+            } catch (e) {}
+        }
+    }, 1000);
+}

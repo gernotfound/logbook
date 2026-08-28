@@ -44,6 +44,20 @@ function App() {
     return () => window.removeEventListener('vite:preloadError', handlePreloadError);
   }, []);
 
+  // Handle URL parameters for PWA shortcuts
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['home', 'training', 'nutrition', 'data', 'settings'].includes(tabParam)) {
+        if (tabParam !== activeTab) {
+          setActiveTab(tabParam);
+        }
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, [activeTab, setActiveTab]);
+
   // Auto-dismiss save error toast after 5 seconds
   useEffect(() => {
     if (!saveError) return;

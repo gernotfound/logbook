@@ -62,12 +62,29 @@ export default defineConfig({
         description: "L'app definitiva per il tracciamento di allenamento, nutrizione e progressi. Funziona anche offline in palestra.",
         theme_color: '#000000',
         background_color: '#000000',
+        display_override: ['window-controls-overlay', 'standalone'],
         display: 'standalone',
         orientation: 'portrait',
         start_url: basePath,
         scope: basePath,
         lang: 'it-IT',
         categories: ['fitness', 'health', 'lifestyle'],
+        shortcuts: [
+          {
+            name: "Allenamento",
+            short_name: "Allenamento",
+            description: "Vai alla sezione allenamento",
+            url: "/?tab=training",
+            icons: [{ src: "icon-192.png", sizes: "192x192" }]
+          },
+          {
+            name: "Alimentazione",
+            short_name: "Alimentazione",
+            description: "Vai alla sezione nutrizione",
+            url: "/?tab=nutrition",
+            icons: [{ src: "icon-192.png", sizes: "192x192" }]
+          }
+        ],
         icons: [
           {
             src: 'icon-192.png',
@@ -109,6 +126,8 @@ export default defineConfig({
           if (id.includes('node_modules/firebase/firestore')) return 'firebase-firestore';
           if (id.includes('node_modules/firebase')) return 'firebase-core';
           if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'chartjs';
+          if (id.includes('node_modules/zod')) return 'vendor-zod';
+          if (id.includes('node_modules/date-fns')) return 'vendor-dates';
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/zustand') || id.includes('node_modules/lucide-react')) return 'vendor';
         }
       }
