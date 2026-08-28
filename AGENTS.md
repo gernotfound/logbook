@@ -190,4 +190,7 @@ Questo file è la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione AI
   - Se l'elemento ha un `id` valido ma altri campi sono corrotti (es. numero al posto di stringa), l'elemento *non viene scartato* ma sanitizzato con i valori di default, preservando la referenza vitale per logbook e cronologia.
 - **ATTENZIONE su `seed-catalog.mjs`:** Non rieseguire MAI accidentalmente questo script! Dal momento che i JSON locali sono stati svuotati per la policy "enforce manual input", eseguire lo script andrebbe a sovrascrivere `global_catalog` su Firestore con array vuoti, distruggendo il database cloud di esercizi e alimenti per tutti gli utenti.
 
-
+## 17. Modalità Pianificazione Rigorosa (Strict Planning Mode)
+- **Regola vitale:** Dato che il progetto è diventato grande e articolato, le modifiche dirette al codice possono avere effetti collaterali imprevisti su logiche complesse (es. Zod, IndexedDB, Firebase). Pertanto, quando l'utente propone una modifica, fa domande architetturali, o fornisce analisi provenienti da altre AI (es. Perplexity), è **SEVERAMENTE VIETATO** scrivere o modificare codice sorgente in prima battuta.
+- **Azione richiesta:** Devi **SEMPRE** redigere o aggiornare il file `implementation_plan.md` descrivendo in dettaglio le modifiche che intendi fare, file per file, e le potenziali ripercussioni. Successivamente devi fermarti e richiedere esplicitamente l'**approvazione** dell'utente.
+- Solo dopo che l'utente ha letto e approvato il piano, potrai passare alla fase esecutiva e modificare i file. L'utente deve avere sempre l'ultima parola prima di ogni modifica strutturale.
