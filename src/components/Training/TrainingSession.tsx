@@ -263,17 +263,18 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                             style={{ width: '100%', marginBottom: 0, fontWeight: 'bold' }}
                                             onClick={() => startWorkout(nextScheduled.nextRoutine!.id, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
                                         >
-                                            🏋️ Avvia {nextScheduled.nextRoutine.name} (Seduta #{nextScheduled.nextSessionIndex})
+                                            <span aria-hidden="true">🏋️</span> Avvia {nextScheduled.nextRoutine.name} (Seduta #{nextScheduled.nextSessionIndex})
                                         </button>
                                     </div>
                                 )}
 
                                 <div className="border-t pt-10">
-                                    <label className="text-xs text-muted font-bold block mb-6">
+                                    <label htmlFor="rotation-routine-select" className="text-xs text-muted font-bold block mb-6">
                                         Oppure scegli un'altra scheda della rotazione:
                                     </label>
                                     <div className="form-group mb-10">
                                         <select
+                                            id="rotation-routine-select"
                                             aria-label="Seleziona scheda della rotazione"
                                             value={selectedPlannedRoutine}
                                             onChange={e => setSelectedPlannedRoutine(e.target.value)}
@@ -296,7 +297,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                             style={{ width: '100%', marginBottom: 0 }}
                                             onClick={() => startWorkout(selectedPlannedRoutine, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
                                         >
-                                            🏋️ Avvia {plannedRoutines.find(p => p.routine?.id === selectedPlannedRoutine)?.routine?.name || 'scheda selezionata'}
+                                            <span aria-hidden="true">🏋️</span> Avvia {plannedRoutines.find(p => p.routine?.id === selectedPlannedRoutine)?.routine?.name || 'scheda selezionata'}
                                         </button>
                                     )}
                                 </div>
@@ -328,9 +329,9 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                             <h2 className="m-0" style={{ fontSize: '1.1rem' }}>
                                 Avvia nuova sessione
                             </h2>
-                            <p className="text-muted text-xs m-0 mt-4">
+                            <label htmlFor="archive-routine-select" className="text-muted text-xs m-0 mt-4 block">
                                 Seleziona liberamente qualsiasi scheda dal tuo archivio
-                            </p>
+                            </label>
                         </div>
                     </div>
                     {routines.length === 0 ? (
@@ -341,6 +342,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         <div>
                             <div className="form-group mb-12">
                                 <select 
+                                    id="archive-routine-select"
                                     aria-label="Seleziona scheda dall'archivio"
                                     value={selectedRoutine} 
                                     onChange={e => setSelectedRoutine(e.target.value)}
@@ -361,7 +363,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                 style={{ width: '100%', marginBottom: 0 }}
                                 onClick={() => startWorkout(selectedRoutine)}
                             >
-                                🏋️ Inizia allenamento
+                                <span aria-hidden="true">🏋️</span> Inizia allenamento
                             </button>
                         </div>
                     )}
