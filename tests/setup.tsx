@@ -5,6 +5,20 @@ import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // Deprecated
+    removeListener: vi.fn(), // Deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 // Mock window methods
 if (typeof window !== 'undefined') {
   window.scrollTo = vi.fn();

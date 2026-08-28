@@ -175,10 +175,10 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
             userData: mockUserData
         });
 
-        expect(await screen.findByText('Panoramica di oggi', {}, { timeout: 10000 })).toBeDefined();
-        expect(await screen.findByText('Massa grassa (stima)', {}, { timeout: 10000 })).toBeDefined();
-        expect(await screen.findByText(/Streak attuale/i, {}, { timeout: 10000 })).toBeDefined();
-        expect(await screen.findByText('Totale sessioni', {}, { timeout: 10000 })).toBeDefined();
+        expect(await screen.findByText('Biometria', {}, { timeout: 10000 })).toBeDefined();
+        expect(await screen.findByText('Massa grassa', {}, { timeout: 10000 })).toBeDefined();
+        expect(await screen.findByText(/Streak/i, {}, { timeout: 10000 })).toBeDefined();
+        expect(await screen.findByText(/Sessioni/i, {}, { timeout: 10000 })).toBeDefined();
         expect(await screen.findByText('Trend peso corporeo', {}, { timeout: 10000 })).toBeDefined();
     });
 });

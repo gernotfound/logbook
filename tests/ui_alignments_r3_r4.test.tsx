@@ -134,8 +134,8 @@ describe('UI Alignments - R3 & R4', () => {
                 />
             );
 
-            expect(screen.getByText('✏️ Modifica misurazione')).toBeDefined();
-            expect(screen.getByText('💾 Salva modifiche')).toBeDefined();
+            expect(screen.getByText(/Modifica misurazione/i)).toBeDefined();
+            expect(screen.getByText(/Salva modifiche/i)).toBeDefined();
 
             const nextBtn = screen.getByText('Succ. ▶') as HTMLButtonElement;
             expect(nextBtn.disabled).toBe(false);

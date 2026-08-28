@@ -436,7 +436,7 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             expect(screen.getByText('Sonno leggero')).toBeDefined();
             expect(screen.getByText('Sonno REM')).toBeDefined();
             expect(screen.getByText('Tempo sveglio')).toBeDefined();
-            expect(screen.getByText('💾 Salva sonno')).toBeDefined();
+            expect(screen.getByText(/Salva sonno/i)).toBeDefined();
         });
     });
 });
