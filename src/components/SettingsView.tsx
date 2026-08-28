@@ -57,11 +57,11 @@ const SettingsView = () => {
 
     return (
         <div id="view-settings" className="view-section active">
-            <h1 style={{ marginBottom: '15px', fontSize: '1.5rem' }}>⚙️ Impostazioni</h1>
+            <h1 style={{ marginBottom: '15px', fontSize: '1.5rem' }}><span aria-hidden="true">⚙️</span> Impostazioni</h1>
 
             {isGuest ? (
                 <div className="section-divider">
-                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}>⚠️ Modalità locale</h2>
+                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
                     <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
                         Stai usando LogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo e non possono essere recuperati se perdi l'accesso al browser.
                     </p>
@@ -102,7 +102,7 @@ const SettingsView = () => {
             {isInstallable && (
                 <div className="section-divider">
                     <button className="btn btn-primary" style={{ width: '100%', marginBottom: 0 }} onClick={promptInstall}>
-                        📱 Installa app sul telefono
+                        <span aria-hidden="true">📱</span> Installa app sul telefono
                     </button>
                 </div>
             )}
@@ -110,7 +110,7 @@ const SettingsView = () => {
             {isIOSInstallable && (
                 <div className="section-divider">
                     <h3 style={{ margin: '0 0 8px 0', color: 'var(--primary-color)', fontSize: '0.95rem' }}>
-                        📱 Installa su iPhone / iPad
+                        <span aria-hidden="true">📱</span> Installa su iPhone / iPad
                     </h3>
                     <p style={{ fontSize: '0.85rem', margin: 0, lineHeight: 1.4, color: 'var(--text-main)' }}>
                         Per installare LogBook come app a schermo intero: tocca l'icona <strong>Condividi</strong> in Safari e seleziona <strong>"Aggiungi alla schermata Home"</strong>.
@@ -120,7 +120,7 @@ const SettingsView = () => {
 
             <div className="section-divider">
                 <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleExport}>
-                    💾 Esporta dati (CSV)
+                    <span aria-hidden="true">💾</span> Esporta dati (CSV)
                 </button>
             </div>
 
@@ -136,12 +136,12 @@ const SettingsView = () => {
 
             <div className="section-divider">
                 <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleCheckUpdate}>
-                    🔄 Cerca aggiornamenti
+                    <span aria-hidden="true">🔄</span> Cerca aggiornamenti
                 </button>
             </div>
 
             <div className="section-divider">
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}>🔧 Diagnostica archiviazione</h3>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}><span aria-hidden="true">🔧</span> Diagnostica archiviazione</h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
                 {(() => {
                     const storageDiag = getStorageDiagnosticData();
@@ -168,13 +168,13 @@ const SettingsView = () => {
 
             <div className="section-divider">
                 <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={() => setShowPrivacy(true)}>
-                    📄 Informativa sulla privacy
+                    <span aria-hidden="true">📄</span> Informativa sulla privacy
                 </button>
             </div>
 
             {isOffline && (
                 <div className="section-divider">
-                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}>⚠️ Connessione assente</h2>
+                    <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}><span aria-hidden="true">⚠️</span> Connessione assente</h2>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
                         Sei attualmente offline. Puoi continuare a usare l'app: tutte le modifiche verranno salvate localmente e sincronizzate con il cloud non appena tornerà la connessione.
                     </p>
@@ -183,7 +183,7 @@ const SettingsView = () => {
 
             {/* Danger Zone */}
             <div style={{ marginBottom: '100px' }}>
-                <h2 style={{ color: 'var(--danger-color)', fontSize: '1.2rem', marginTop: 0 }}>⚠️ Zona pericolosa</h2>
+                <h2 style={{ color: 'var(--danger-color)', fontSize: '1.2rem', marginTop: 0 }}><span aria-hidden="true">⚠️</span> Zona pericolosa</h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                     {isGuest
                         ? "Elimina permanentemente tutti i dati salvati su questo dispositivo. Questa azione è irreversibile."
@@ -196,7 +196,7 @@ const SettingsView = () => {
                     onClick={handleDeleteAccount}
                     disabled={deletingAccount}
                 >
-                    {deletingAccount ? '⏳ Eliminazione...' : (isGuest ? '🗑️ Elimina dati locali' : '🗑️ Elimina account e dati')}
+                    {deletingAccount ? <><span aria-hidden="true">⏳</span> Eliminazione...</> : (isGuest ? <><span aria-hidden="true">🗑️</span> Elimina dati locali</> : <><span aria-hidden="true">🗑️</span> Elimina account e dati</>)}
                 </button>
             </div>
 

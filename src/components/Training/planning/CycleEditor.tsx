@@ -791,7 +791,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     className="btn btn-primary flex-2"
                     style={{ marginBottom: 0 }}
                 >
-                    {initialCycle ? '💾 Salva modifiche' : '💾 Salva ciclo'}
+                    {initialCycle ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva ciclo</>}
                 </button>
             </div>
         </form>

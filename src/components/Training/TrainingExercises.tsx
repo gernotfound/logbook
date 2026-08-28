@@ -270,7 +270,7 @@ const TrainingExercises = () => {
                         style={{ whiteSpace: 'nowrap', margin: 0 }} 
                         onClick={handleSaveExercise}
                     >
-                        {editingExId ? '💾 Salva modifiche' : '+ Aggiungi in archivio'}
+                        {editingExId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : '+ Aggiungi in archivio'}
                     </button>
                 </div>
                 
@@ -282,7 +282,7 @@ const TrainingExercises = () => {
                             style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ff4d6d', border: '1px solid rgba(239, 68, 68, 0.3)' }}
                             onClick={() => handleRestoreExercise(editingExId)}
                         >
-                            🔄 Ripristina all'originale
+                            <span aria-hidden="true">🔄</span> Ripristina all'originale
                         </button>
                     </div>
                 )}

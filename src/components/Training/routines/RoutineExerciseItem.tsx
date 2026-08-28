@@ -196,7 +196,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'dropset')}
                             >
-                                🔻 Dropset {exercise.defaultTechnique === 'dropset' ? '✓' : ''}
+                                <span aria-hidden="true">🔻</span> Dropset {exercise.defaultTechnique === 'dropset' ? '✓' : ''}
                             </button>
                             <button
                                 type="button"
@@ -213,7 +213,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'isometrics')}
                             >
-                                ⏱️ Isometria {exercise.defaultTechnique === 'isometrics' ? '✓' : ''}
+                                <span aria-hidden="true">⏱️</span> Isometria {exercise.defaultTechnique === 'isometrics' ? '✓' : ''}
                             </button>
                         </div>
                     </div>

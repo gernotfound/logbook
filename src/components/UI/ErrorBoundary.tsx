@@ -66,14 +66,14 @@ class ErrorBoundary extends Component<Props, State> {
               className="btn btn-primary" 
               onClick={() => window.location.reload()}
             >
-              🔄 Ricarica pagina
+              <span aria-hidden="true">🔄</span> Ricarica pagina
             </button>
             <button 
               className="btn" 
               style={{ background: 'transparent', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', fontSize: '0.85rem' }}
               onClick={this.handleHardReset}
             >
-              ⚠️ Hard reset (dati corrotti)
+              <span aria-hidden="true">⚠️</span> Hard reset (dati corrotti)
             </button>
           </div>
         </div>

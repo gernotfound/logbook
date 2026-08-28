@@ -329,7 +329,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     </button>
                 )}
                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={calculateAndSave}>
-                    {isEditing ? '💾 Salva modifiche' : '💾 Salva misurazione'}
+                    {isEditing ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva misurazione</>}
                 </button>
             </div>
         </div>

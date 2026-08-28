@@ -172,7 +172,7 @@ export default function TrainingPlanning() {
                             onClick={handleCreateNew}
                             style={{ marginBottom: 0, padding: '8px 16px', fontSize: '0.9rem' }}
                         >
-                            ➕ Nuovo ciclo
+                            <span aria-hidden="true">➕</span> Nuovo ciclo
                         </button>
                     )}
                 </div>
@@ -221,7 +221,7 @@ export default function TrainingPlanning() {
                                 onClick={handleDeactivateCycle}
                                 title="Disattiva ciclo attivo"
                             >
-                                ⏸️ Disattiva
+                                <span aria-hidden="true">⏸️</span> Disattiva
                             </button>
                         </div>
                     )}

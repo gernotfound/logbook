@@ -100,10 +100,10 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                                                 <span>Rep min: {ex.minReps || '-'} | Rep max: {ex.maxReps || '-'}</span>
                                             )}
                                             {ex.defaultTechnique === 'dropset' && (
-                                                <span className="badge" style={{ background: 'var(--warning-color)', color: '#000', fontWeight: 600 }}>🔻 Dropset</span>
+                                                <span className="badge" style={{ background: 'var(--warning-color)', color: '#000', fontWeight: 600 }}><span aria-hidden="true">🔻</span> Dropset</span>
                                             )}
                                             {ex.defaultTechnique === 'isometrics' && (
-                                                <span className="badge" style={{ background: 'var(--accent-color)', color: '#fff', fontWeight: 600 }}>⏱️ Isometria</span>
+                                                <span className="badge" style={{ background: 'var(--accent-color)', color: '#fff', fontWeight: 600 }}><span aria-hidden="true">⏱️</span> Isometria</span>
                                             )}
                                         </div>
                                     </div>

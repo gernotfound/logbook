@@ -315,7 +315,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                     style={{ fontSize: '0.8rem', marginBottom: 0 }}
                                     onClick={onNavigateToPlanning}
                                 >
-                                    🎯 Vai a Pianificazione
+                                    <span aria-hidden="true">🎯</span> Vai a Pianificazione
                                 </button>
                             )}
                         </div>
@@ -543,7 +543,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             {activeWorkout.isEditingHistory ? (
                 <>
                     <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
-                        💾 Salva modifiche
+                        <span aria-hidden="true">💾</span> Salva modifiche
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
                         Annulla modifica
@@ -552,10 +552,10 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             ) : (
                 <>
                     <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
-                        🏁 Termina sessione
+                        <span aria-hidden="true">🏁</span> Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
-                        🗑️ Elimina sessione
+                        <span aria-hidden="true">🗑️</span> Elimina sessione
                     </button>
                 </>
             )}
