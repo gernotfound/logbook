@@ -118,7 +118,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                     style={{ whiteSpace: 'nowrap', margin: 0 }} 
                     onClick={onSave}
                 >
-                    {editingRoutineId ? '💾 Salva modifiche' : '➕ Salva nuova scheda'}
+                    {editingRoutineId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">➕</span> Salva nuova scheda</>}
                 </button>
             </div>
         </div>

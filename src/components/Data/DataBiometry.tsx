@@ -63,7 +63,7 @@ const DataBiometry = () => {
             </div>
 
             <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleSaveProfile}>
-                💾 Salva profilo biometrico
+                <span aria-hidden="true">💾</span> Salva profilo biometrico
             </button>
         </div>
     );

@@ -80,7 +80,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         onClick={() => onEdit(cycle)}
                         title="Modifica ciclo"
                     >
-                        ✏️ Modifica
+                        <span aria-hidden="true">✏️</span> Modifica
                     </button>
                     <button
                         type="button"
@@ -89,7 +89,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         onClick={() => onDuplicate(cycle)}
                         title="Duplica ciclo"
                     >
-                        📋 Duplica
+                        <span aria-hidden="true">📋</span> Duplica
                     </button>
                     <button
                         type="button"
@@ -99,7 +99,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         aria-label="Elimina ciclo"
                         title="Elimina ciclo"
                     >
-                        🗑️
+                        <span aria-hidden="true">🗑️</span>
                     </button>
                 </div>
             </div>
@@ -154,7 +154,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         }}
                         onClick={() => setShowSchedule(!showSchedule)}
                     >
-                        {showSchedule ? '▲ Nascondi programmazione' : `🔄 Vedi programmazione (${schedule.totalSessions} sedute su ${cycle.durationWeeks} sett.)`}
+                        {showSchedule ? '▲ Nascondi programmazione' : <><span aria-hidden="true">🔄</span> Vedi programmazione ({schedule.totalSessions} sedute su {cycle.durationWeeks} sett.)</>}
                     </button>
 
                     {showSchedule && (
@@ -229,7 +229,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         style={{ width: '100%', marginBottom: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}
                         onClick={() => onDeactivate(cycle.id)}
                     >
-                        ⏸️ Disattiva ciclo
+                        <span aria-hidden="true">⏸️</span> Disattiva ciclo
                     </button>
                 ) : (
                     <button
@@ -238,7 +238,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         style={{ width: '100%', marginBottom: 0, fontSize: '0.8rem' }}
                         onClick={() => onSetActive(cycle.id)}
                     >
-                        ⭐ Imposta come ciclo attivo
+                        <span aria-hidden="true">⭐</span> Imposta come ciclo attivo
                     </button>
                 )}
             </div>

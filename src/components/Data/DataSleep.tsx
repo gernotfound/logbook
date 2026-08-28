@@ -225,7 +225,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         </button>
                     )}
                     <button className="btn btn-primary" style={{ flex: 2 }} onClick={sleepHook.saveSleep}>
-                        {isEditing ? '💾 Salva modifiche' : '💾 Salva sonno'}
+                        {isEditing ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva sonno</>}
                     </button>
                 </div>
             </div>
