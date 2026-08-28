@@ -316,6 +316,14 @@ export interface CatalogOverrides {
     hiddenFoodIds?: string[];
 }
 
+export interface LegalConsent {
+    hasAcceptedTerms: boolean;
+    hasAcceptedHealthData: boolean;
+    acceptedAt: string;
+    privacyVersion: string;
+    termsVersion: string;
+}
+
 export interface UserData {
     profile?: UserProfile;
     library?: Exercise[]; // Legacy, pre-migration
@@ -330,6 +338,7 @@ export interface UserData {
     supplements?: Supplement[];
     activePains?: string[];
     catalogOverrides?: CatalogOverrides; // New global catalog overrides
+    legalConsent?: LegalConsent;
 }
 
 declare global {
