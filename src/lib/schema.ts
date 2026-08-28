@@ -626,6 +626,14 @@ export const CatalogOverridesSchema = z.object({
     hiddenFoodIds: []
 });
 
+export const LegalConsentSchema = z.object({
+    hasAcceptedTerms: safeBoolean(false),
+    hasAcceptedHealthData: safeBoolean(false),
+    acceptedAt: safeString(''),
+    privacyVersion: safeString(''),
+    termsVersion: safeString(''),
+}).passthrough().optional().catch(undefined);
+
 export const UserDataSchema = z.object({
     profile: UserProfileSchema.optional().catch({}).default({}),
     library: z.array(ExerciseSchema).max(500).optional().catch([]).default([]),
@@ -640,6 +648,8 @@ export const UserDataSchema = z.object({
     supplements: z.array(SupplementSchema).max(100).optional().catch([]).default([]),
     activePains: z.array(safeString('')).max(50).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
+    legalConsent: LegalConsentSchema,
+
 }).passthrough().catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'UserDataSchema',

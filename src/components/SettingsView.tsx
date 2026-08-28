@@ -4,6 +4,7 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
+import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { setAnalyticsConsent } from '../lib/firebase';
 import { getStorageDiagnosticData } from '../lib/storageStatus';
 
@@ -18,7 +19,8 @@ const SettingsView = () => {
     const { isInstallable, isIOSInstallable, promptInstall } = usePWAInstall();
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
-    const [analyticsEnabled, setAnalyticsEnabled] = useState(localStorage.getItem('logbook_analytics_consent') !== 'false');
+    const [showTerms, setShowTerms] = useState(false);
+    const [analyticsEnabled, setAnalyticsEnabled] = useState(localStorage.getItem('logbook_analytics_consent') === 'true');
 
     const handleAnalyticsToggle = () => {
         const newState = !analyticsEnabled;
@@ -166,10 +168,18 @@ const SettingsView = () => {
                 })()}
             </div>
 
-            <div className="section-divider">
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={() => setShowPrivacy(true)}>
-                    <span aria-hidden="true">📄</span> Informativa sulla privacy
+            <div className="section-divider" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h3 style={{ margin: '0 0 5px 0', fontSize: '0.95rem' }}><span aria-hidden="true">⚖️</span> Legale e Privacy</h3>
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={() => setShowTerms(true)}>
+                    <span aria-hidden="true">📄</span> Termini e Condizioni
                 </button>
+                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={() => setShowPrivacy(true)}>
+                    <span aria-hidden="true">📋</span> Informativa sulla Privacy
+                </button>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                    Titolare del trattamento: LogBook Developer<br/>
+                    Email: privacy@logbook.example.com
+                </div>
             </div>
 
             {isOffline && (
@@ -200,9 +210,12 @@ const SettingsView = () => {
                 </button>
             </div>
 
-
             {showPrivacy && (
                 <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
+            )}
+            
+            {showTerms && (
+                <TermsAndConditions onClose={() => setShowTerms(false)} />
             )}
 
             <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '10px' }}>
@@ -211,8 +224,8 @@ const SettingsView = () => {
                 </p>
             </div>
         </div>
-
     );
 };
 
 export default SettingsView;
+

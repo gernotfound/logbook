@@ -18,6 +18,8 @@ import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import ReloadPrompt from './components/UI/ReloadPrompt';
 import { InstallPrompt } from './components/UI/InstallPrompt';
+import { ConsentOverlay } from './components/UI/ConsentOverlay';
+import { needsLegalUpdate } from './lib/legalVersions';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
@@ -28,12 +30,15 @@ const SettingsView = lazy(() => import('./components/SettingsView'));
 function App() {
   const { currentUser, loading, login, loginAsGuest, linkGoogleAccount, isGuest } = useAuth();
   const syncing = useAppStore(state => state.syncing);
+  const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
   const setSaveError = useAppStore(state => state.setSaveError);
   const [activeTab, setActiveTab] = useLocalStorage(LOCAL_STORAGE_ACTIVE_TAB, 'home');
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage(LOCAL_STORAGE_TRAINING_TAB, 'session');
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage(LOCAL_STORAGE_NUTRITION_TAB, 'meals');
   const [dataSubTab, setDataSubTab] = useLocalStorage(LOCAL_STORAGE_DATA_TAB, 'measurements');
+
+  const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
 
   // Handle Vite lazy chunk loading failure gracefully (e.g. after a new production deployment)
   useEffect(() => {
@@ -176,6 +181,7 @@ function App() {
   return (
     <>
       <GlobalDialog />
+      {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
       {/* Banner utente guest — visibile finché non collega Google */}
