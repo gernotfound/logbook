@@ -36,15 +36,15 @@ describe('Integration: Schema -> Merge -> Valid Output', () => {
         expect(merged).toBeDefined();
         
         // Profile merged
-        expect(merged.profile.height).toBe('180');
-        expect(merged.profile.weight).toBe('80'); // '80' string is preserved as string per UserProfileSchema
+        expect(merged.profile!.height).toBe('180');
+        expect((merged.profile as any).weight).toBe('80'); // '80' string is preserved as string per UserProfileSchema
         
         // Routines fallback to []
         expect(merged.routines).toEqual([]);
 
         // Library merged, guest overrides cloud
-        expect(merged.library).toHaveLength(1);
-        expect(merged.library[0].name).toBe('Guest Ex');
-        expect(merged.library[0].muscles).toEqual([]); // Fallback array applied by schema
+        expect(merged.library!).toHaveLength(1);
+        expect(merged.library![0].name).toBe('Guest Ex');
+        expect(merged.library![0].muscles).toEqual([]); // Fallback array applied by schema
     });
 });

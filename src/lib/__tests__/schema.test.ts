@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { UserDataSchema, NutritionDaySchema, ExerciseSetSchema, DomainParsers } from '../schema';
+import { UserDataSchema, NutritionDaySchema, DomainParsers } from '../schema';
 
 describe('UserDataSchema', () => {
     it('should fallback to defaults when completely empty or invalid', () => {
