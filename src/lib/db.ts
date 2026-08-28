@@ -8,6 +8,8 @@ import { removeUndefinedValues } from './utils/object';
 import { checkDocSize } from './checkDocSize';
 import { syncGlobalCatalog, getInMemoryCatalog, getCachedCatalog, getSeedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods, migrateLegacyLibraryToOverrides, migrateLegacyFoodsToOverrides } from './catalog/deltaResolver';
+import { wrapInFirestoreDocument } from './firestore-rest';
+import { set, get, del } from 'idb-keyval';
 
 let lastSavedStateStr: string | null = null;
 
@@ -27,6 +29,16 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return null;
         try {
+            // App is open: clear SW pending sync payloads, Firestore SDK will handle its own offline queue
+            Promise.all([
+                get('sync_failed').then(failed => {
+                    if (failed) console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
+                    return set('sync_failed', false);
+                }),
+                del('pending_sync_payload'),
+                del('pending_sync_token')
+            ]).catch(() => {});
+
             const state: Record<string, any> = { 
                 profile: {}, 
                 library: [], 
@@ -185,6 +197,8 @@ export const DB = {
             
             const batch = writeBatch(db);
             let hasWrites = false;
+            const restWrites: any[] = [];
+            const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
             
             // Re-split library & customFoods into pure overrides/custom so we don't save the whole catalog
             const catalog = getInMemoryCatalog(true) || getSeedCatalog();
@@ -245,6 +259,15 @@ export const DB = {
                 const cleanUserDocData = removeUndefinedValues(userDocData);
                 checkDocSize(cleanUserDocData, "User Profile");
                 batch.set(userRef, cleanUserDocData, { merge: true });
+                restWrites.push({
+                    update: {
+                        name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}`,
+                        ...wrapInFirestoreDocument(cleanUserDocData)
+                    },
+                    updateMask: {
+                        fieldPaths: Object.keys(cleanUserDocData)
+                    }
+                });
                 hasWrites = true;
             }
 
@@ -272,12 +295,21 @@ export const DB = {
                     const cleanDoc = removeUndefinedValues(newHistMonths[month]);
                     checkDocSize(cleanDoc, `History ${month}`);
                     batch.set(doc(db, "users", user.uid, "history_months", month), cleanDoc);
+                    restWrites.push({
+                        update: {
+                            name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/history_months/${month}`,
+                            ...wrapInFirestoreDocument(cleanDoc)
+                        }
+                    });
                     hasWrites = true;
                 }
             });
             Object.keys(oldHistMonths).forEach(month => {
                 if (!newHistMonths[month]) {
                     batch.delete(doc(db, "users", user.uid, "history_months", month));
+                    restWrites.push({
+                        delete: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/history_months/${month}`
+                    });
                     hasWrites = true;
                 }
             });
@@ -302,12 +334,21 @@ export const DB = {
                     const cleanDoc = removeUndefinedValues(newNutMonths[month]);
                     checkDocSize(cleanDoc, `Nutrition ${month}`);
                     batch.set(doc(db, "users", user.uid, "nutrition_months", month), cleanDoc);
+                    restWrites.push({
+                        update: {
+                            name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/nutrition_months/${month}`,
+                            ...wrapInFirestoreDocument(cleanDoc)
+                        }
+                    });
                     hasWrites = true;
                 }
             });
             Object.keys(oldNutMonths).forEach(month => {
                 if (!newNutMonths[month]) {
                     batch.delete(doc(db, "users", user.uid, "nutrition_months", month));
+                    restWrites.push({
+                        delete: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/nutrition_months/${month}`
+                    });
                     hasWrites = true;
                 }
             });
@@ -317,10 +358,27 @@ export const DB = {
                     await withTimeout(batch.commit(), 7000, "Timeout sincronizzazione Firestore");
                     console.log(`Sincronizzazione DB completata.`);
                     lastSavedStateStr = JSON.stringify(state);
+                    await set('sync_failed', false); // Clear flag on success
                 } catch (batchErr: any) {
                     if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
+                        
+                        try {
+                            const token = await user.getIdToken();
+                            await set('pending_sync_payload', { writes: restWrites, projectId });
+                            await set('pending_sync_token', token);
+                            
+                            if ('serviceWorker' in navigator) {
+                                const reg = await navigator.serviceWorker.ready;
+                                if ('sync' in reg) {
+                                    await (reg as any).sync.register('logbook-sync');
+                                    console.log("Background Sync registrato con successo.");
+                                }
+                            }
+                        } catch (syncErr) {
+                            console.error("Errore durante la registrazione del Background Sync:", syncErr);
+                        }
                     } else {
                         console.error("Errore critico durante il salvataggio Firestore:", batchErr);
                         throw batchErr;
