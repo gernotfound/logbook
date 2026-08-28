@@ -32,7 +32,8 @@ const defaultUserData: UserData = {
         normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
     },
     supplements: [],
-    activePains: []
+    activePains: [],
+    legalConsent: undefined
 };
 
 const getResolvedDefaultUserData = (catalog = getInMemoryCatalog()): UserData => ({
