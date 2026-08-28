@@ -68,6 +68,13 @@ if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
             try {
                 (navigator as any).setAppBadge(1).catch(() => {});
             } catch (e) {}
+        } else {
+            try {
+                (navigator as any).clearAppBadge().catch(() => {});
+                if (import.meta.env.DEV) {
+                    console.log('[AppBadge] Cleared orphan badge at startup');
+                }
+            } catch (e) {}
         }
     }, 1000);
 }
