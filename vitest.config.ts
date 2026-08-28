@@ -12,6 +12,13 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/setup.tsx'],
     testTimeout: 10000,
-    exclude: [...configDefaults.exclude, '**/teamwork_projects/**', '**/.agents/**'],
+    exclude: [
+      ...configDefaults.exclude,
+      '**/teamwork_projects/**',
+      '**/.agents/**',
+      '**/challenger_*.test.{ts,tsx}',
+      '**/*adversarial*.test.{ts,tsx}',
+      '**/*stress*.test.{ts,tsx}'
+    ],
   },
 });

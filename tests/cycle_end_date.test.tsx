@@ -282,7 +282,7 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
                 />
             );
 
-            const saveBtn = screen.getByText('💾 Salva modifiche');
+            const saveBtn = screen.getByRole('button', { name: /Salva modifiche/i });
             fireEvent.click(saveBtn);
 
             expect(onSave).toHaveBeenCalledTimes(1);
