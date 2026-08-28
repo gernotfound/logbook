@@ -126,12 +126,15 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </p>
           </Section>
 
-          <Section title="Conservazione e cancellazione dei dati">
+          <Section title="Conservazione, Backup e Cancellazione dei Dati">
             <p>
               I dati locali (modalità ospite) rimangono sul dispositivo finché non vengono eliminati manualmente.
             </p>
             <p>
               I dati cloud vengono conservati finché l'account è attivo. Puoi richiedere la cancellazione completa e immediata di tutti i tuoi dati cloud — incluso l'account — tramite la funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> nelle Impostazioni. L'operazione è irreversibile e costituisce revoca del consenso ai sensi dell'Art. 9 GDPR.
+            </p>
+            <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
+              <strong>Attenzione:</strong> Trattandosi di un servizio offerto a titolo amatoriale e gratuito, non sono garantiti backup di livello enterprise. L'utente accetta il rischio di potenziale perdita di dati e si impegna a effettuare esportazioni periodiche (formato CSV) tramite l'apposita funzione.
             </p>
           </Section>
 
