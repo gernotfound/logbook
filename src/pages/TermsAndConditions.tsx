@@ -80,31 +80,40 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
             </div>
           </Section>
 
-          <Section title="3. Limitazione di Responsabilità">
+          <Section title="3. Natura Amatoriale del Software (AS-IS)">
             <p>
-              L'uso dell'Applicazione è a tuo esclusivo rischio. Il titolare dell'Applicazione non si assume alcuna responsabilità per infortuni, danni fisici, problemi di salute o qualsiasi altro danno diretto o indiretto derivante dall'uso o dall'impossibilità di usare l'Applicazione. Non si garantiscono risultati specifici (es. perdita di peso, aumento della massa muscolare) derivanti dall'utilizzo dell'app.
+              LogBook è un progetto software sviluppato in modo <strong>puramente amatoriale, indipendente e senza scopo di lucro</strong>. L'Applicazione viene fornita "così com'è" (AS-IS) e "come disponibile", senza garanzie di alcun tipo, né espresse né implicite. Non viene garantito un uptime (continuità del servizio) specifico e il software può presentare bug, difetti, vulnerabilità o errori di calcolo.
+            </p>
+            <p style={{ marginTop: '8px' }}>
+              Il titolare si riserva il diritto insindacabile di modificare, sospendere, interrompere o cessare definitivamente il funzionamento dell'Applicazione in qualsiasi momento e <strong>senza alcun preavviso</strong>. Ti consigliamo vivamente di utilizzare frequentemente la funzione di esportazione dati per avere un backup personale locale delle tue informazioni.
             </p>
           </Section>
 
-          <Section title="4. Età Minima">
+          <Section title="4. Limitazione di Responsabilità">
+            <p>
+              L'uso dell'Applicazione è a tuo esclusivo rischio. Il titolare dell'Applicazione declina esplicitamente ogni responsabilità per infortuni, danni fisici, problemi di salute, perdita di dati (inclusa la cancellazione improvvisa dell'account o dei salvataggi), danni diretti o indiretti derivanti dall'uso, dall'impossibilità di usare o da malfunzionamenti dell'Applicazione. Non si garantiscono risultati specifici (es. perdita di peso, aumento della massa muscolare) derivanti dall'utilizzo dell'app.
+            </p>
+          </Section>
+
+          <Section title="5. Età Minima">
             <p>
               L'Applicazione è destinata all'uso da parte di persone maggiorenni (18 anni o più). L'utilizzo da parte di minori è consentito solo sotto la supervisione e l'esplicito consenso di un genitore o tutore legale, il quale si assume la responsabilità dell'accettazione di questi Termini.
             </p>
           </Section>
 
-          <Section title="5. Account e Sicurezza">
+          <Section title="6. Account e Sicurezza">
             <p>
               Se decidi di creare un account (modalità Cloud), sei responsabile di mantenere la riservatezza delle tue credenziali di accesso Google. Il titolare si riserva il diritto di sospendere o chiudere il tuo account in qualsiasi momento se viene rilevato un uso fraudolento, illegale o in violazione di questi Termini.
             </p>
           </Section>
 
-          <Section title="6. Proprietà dei Dati e Contenuti">
+          <Section title="7. Proprietà dei Dati e Contenuti">
             <p>
               Tutti i dati personali, gli allenamenti registrati e le metriche corporee inserite rimangono di tua esclusiva proprietà. Puoi esportarli o cancellarli in qualsiasi momento tramite le funzionalità dell'Applicazione.
             </p>
           </Section>
 
-          <Section title="7. Legge Applicabile e Foro Competente">
+          <Section title="8. Legge Applicabile e Foro Competente">
             <p>
               I presenti Termini sono regolati e interpretati in conformità con le leggi della Repubblica Italiana. Per qualsiasi controversia derivante da o relativa all'uso dell'Applicazione, sarà competente in via esclusiva il Foro italiano.
             </p>
