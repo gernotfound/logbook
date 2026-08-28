@@ -37,6 +37,8 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      const isNetworkError = this.state.error?.message?.includes('Failed to fetch dynamically imported module');
+      
       return (
         <div style={{
           display: 'flex',
@@ -50,9 +52,13 @@ class ErrorBoundary extends Component<Props, State> {
           textAlign: 'center'
         }}>
           <GlobalDialog />
-          <h1 style={{ color: 'var(--danger-color)', marginBottom: '10px' }}>Ops, qualcosa è andato storto!</h1>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
-            Si è verificato un errore imprevisto. Prova a ricaricare la pagina.
+          <h1 style={{ color: 'var(--danger-color)', marginBottom: '10px' }}>
+            {isNetworkError ? 'Sei offline' : 'Ops, qualcosa è andato storto!'}
+          </h1>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '300px' }}>
+            {isNetworkError 
+              ? 'Connettiti a internet per accedere a questa sezione. Se sei già connesso, la versione dell\'app potrebbe essere stata aggiornata.'
+              : 'Si è verificato un errore imprevisto. Prova a ricaricare la pagina.'}
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>

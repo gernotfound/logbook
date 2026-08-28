@@ -90,8 +90,31 @@ export const Exporter = {
             }, 500);
         }
     },
-    downloadFile(filename: string, content: string) {
+    async downloadFile(filename: string, content: string) {
         const blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' }); // \uFEFF è la BOM per Excel
+        
+        if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+            try {
+                const handle = await (window as any).showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{
+                        description: 'CSV File',
+                        accept: { 'text/csv': ['.csv'] },
+                    }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                return;
+            } catch (err: any) {
+                if (err.name === 'AbortError') {
+                    return; // Utente ha annullato
+                }
+                console.warn("showSaveFilePicker fallito, uso fallback nativo:", err);
+                // Fallback in caso di altri errori (es. file in uso, user gesture persa)
+            }
+        }
+        
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
