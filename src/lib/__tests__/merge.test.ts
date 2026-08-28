@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mergeArrayById, mergeNutrition, mergeUserData } from '../merge';
-import { UserDataSchema } from '../schema';
 
 vi.mock('../catalog/catalogService', () => ({
     getInMemoryCatalog: () => ({ exercises: [], foods: [] }),
@@ -62,7 +61,7 @@ describe('mergeNutrition', () => {
             }
         } as any;
         const merged = mergeNutrition(cloud, guest);
-        expect(merged['2025-01-01'].meals[0].name).toBe('Apple (Guest)');
+        expect(merged['2025-01-01'].meals![0].name).toBe('Apple (Guest)');
         expect(merged['2025-01-01'].kcal).toBe(60);
     });
 });
