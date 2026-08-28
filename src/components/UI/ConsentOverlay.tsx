@@ -9,7 +9,7 @@ import { useSettings } from '../../hooks/useSettings';
 export const ConsentOverlay: React.FC = () => {
     const { isGuest } = useAuth();
     const { handleExport, handleDeleteAccount } = useSettings();
-    const setUserData = useAppStore(state => state.setUserData);
+    const updateUserData = useAppStore(state => state.updateUserData);
     const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [acceptedHealth, setAcceptedHealth] = useState(false);
     const [showPrivacy, setShowPrivacy] = useState(false);
@@ -17,19 +17,16 @@ export const ConsentOverlay: React.FC = () => {
 
     const handleAccept = () => {
         if (!acceptedTerms || !acceptedHealth) return;
-        setUserData((prev) => {
-            if (!prev) return prev;
-            return {
-                ...prev,
-                legalConsent: {
-                    hasAcceptedTerms: true,
-                    hasAcceptedHealthData: true,
-                    acceptedAt: new Date().toISOString(),
-                    privacyVersion: LEGAL_VERSIONS.privacy,
-                    termsVersion: LEGAL_VERSIONS.terms
-                }
-            };
-        });
+        updateUserData((prev) => ({
+            ...prev,
+            legalConsent: {
+                hasAcceptedTerms: true,
+                hasAcceptedHealthData: true,
+                acceptedAt: new Date().toISOString(),
+                privacyVersion: LEGAL_VERSIONS.privacy,
+                termsVersion: LEGAL_VERSIONS.terms
+            }
+        }));
     };
 
     return (
