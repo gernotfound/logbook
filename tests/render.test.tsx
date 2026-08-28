@@ -33,7 +33,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
     const onNavigateMock = vi.fn();
     const { container } = renderWithProviders(<HomeView onNavigate={onNavigateMock} />);
     expect(container.querySelector('#view-home')).not.toBeNull();
-    expect(screen.getByText(/Panoramica di Oggi/i)).toBeDefined();
+    expect(screen.getByText(/LogBook/i)).toBeDefined();
   });
 
   test('renders TrainingView with session subtab', () => {

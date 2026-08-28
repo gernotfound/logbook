@@ -203,7 +203,7 @@ describe('Training Planning & Volume Calculations', () => {
         it('allows opening cycle editor and creating a new cycle', async () => {
             render(<TrainingPlanning />);
 
-            const newBtn = screen.getByText('➕ Nuovo ciclo');
+            const newBtn = screen.getByText(/Nuovo ciclo/i);
             fireEvent.click(newBtn);
 
             expect(screen.getByText('➕ Nuovo ciclo di allenamento')).toBeDefined();
@@ -215,7 +215,7 @@ describe('Training Planning & Volume Calculations', () => {
             const selectRoutine = screen.getByRole('combobox');
             fireEvent.change(selectRoutine, { target: { value: 'r_push' } });
 
-            const saveBtn = screen.getByText('💾 Salva ciclo');
+            const saveBtn = screen.getByText(/Salva ciclo/i);
             fireEvent.click(saveBtn);
 
             await waitFor(() => {
@@ -240,7 +240,7 @@ describe('Training Planning & Volume Calculations', () => {
             const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
             render(<TrainingPlanning />);
 
-            const editBtns = screen.getAllByText('✏️ Modifica');
+            const editBtns = screen.getAllByText(/Modifica/i);
             fireEvent.click(editBtns[0]);
 
             expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
@@ -252,7 +252,7 @@ describe('Training Planning & Volume Calculations', () => {
             render(<TrainingPlanning />);
 
             // Check deactivation button
-            const deactivateBtn = screen.getByText('⏸️ Disattiva ciclo');
+            const deactivateBtn = screen.getByText(/Disattiva ciclo/i);
             fireEvent.click(deactivateBtn);
 
             await waitFor(() => {
@@ -260,7 +260,7 @@ describe('Training Planning & Volume Calculations', () => {
             });
 
             // Reactivate cycle
-            const activateBtn = screen.getByText('⭐ Imposta come ciclo attivo');
+            const activateBtn = screen.getByText(/Imposta come ciclo attivo/i);
             fireEvent.click(activateBtn);
 
             await waitFor(() => {
@@ -275,7 +275,7 @@ describe('Training Planning & Volume Calculations', () => {
             expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
 
             // Check next scheduled routine button
-            const startPlannedBtn = screen.getByText(/🏋️ Avvia Spinta \(Push\) \(Seduta #/i);
+            const startPlannedBtn = screen.getByText(/Avvia Spinta \(Push\) \(Seduta #/i);
             fireEvent.click(startPlannedBtn);
 
             await waitFor(() => {
@@ -294,7 +294,7 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.change(select, { target: { value: 'r_pull' } });
 
             // Button should display and allow starting Trazione (Pull)
-            const startSelectedBtn = screen.getByText(/🏋️ Avvia Trazione \(Pull\)/i);
+            const startSelectedBtn = screen.getByText(/Avvia Trazione \(Pull\)/i);
             expect(startSelectedBtn).toBeDefined();
 
             fireEvent.click(startSelectedBtn);
@@ -319,7 +319,7 @@ describe('Training Planning & Volume Calculations', () => {
             render(<TrainingSession onNavigateToPlanning={onNavPlanning} />);
 
             expect(screen.getByText(/Nessun ciclo di allenamento attivo al momento/i)).toBeDefined();
-            const navBtn = screen.getByText('🎯 Vai a Pianificazione');
+            const navBtn = screen.getByText(/Vai a Pianificazione/i);
             fireEvent.click(navBtn);
             expect(onNavPlanning).toHaveBeenCalled();
         });

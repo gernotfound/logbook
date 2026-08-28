@@ -384,7 +384,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'nutritionPlanning',
                 'supplements',
                 'activePains',
-                'catalogOverrides'
+                'catalogOverrides',
+                'legalConsent'
             ];
 
             expectedKeys.forEach(key => {
@@ -437,7 +438,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'nutritionPlanning',
                 'supplements',
                 'activePains',
-                'catalogOverrides'
+                'catalogOverrides',
+                'legalConsent'
             ];
 
             expect(writtenKeys.sort()).toEqual(expectedKeys.sort());
