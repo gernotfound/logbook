@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
-import { setAnalyticsConsent } from '../lib/firebase';
+import { setAnalyticsConsent, getAnalyticsConsent } from '../lib/firebase';
 import { getStorageDiagnosticData } from '../lib/storageStatus';
 
 const SettingsView = () => {
@@ -20,7 +20,13 @@ const SettingsView = () => {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
-    const [analyticsEnabled, setAnalyticsEnabled] = useState(localStorage.getItem('logbook_analytics_consent') === 'true');
+    const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
+
+    useEffect(() => {
+        const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
+        window.addEventListener('analytics_consent_changed', handler);
+        return () => window.removeEventListener('analytics_consent_changed', handler);
+    }, []);
 
     const handleAnalyticsToggle = () => {
         const newState = !analyticsEnabled;
