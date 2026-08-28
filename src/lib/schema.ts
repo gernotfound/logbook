@@ -673,6 +673,10 @@ export const DomainParsers = {
         if (data === null || data === undefined) return null;
         return NutritionPlanningSchema.parse(data);
     },
+    parseLegalConsent: (data: unknown) => {
+        if (data === null || data === undefined) return undefined;
+        return LegalConsentSchema.parse(data);
+    },
     // Array: sanifica i singoli elementi con sub-schema fallbacks
     parseHistory: (data: unknown) => {
         if (!Array.isArray(data)) {
