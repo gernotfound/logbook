@@ -359,6 +359,7 @@ export function mergeUserData(
             ...(guest.activePains || [])
         ])),
         catalogOverrides: mergedOverrides,
+        legalConsent: guest.legalConsent || cloud.legalConsent,
     };
 
     return UserDataSchema.parse(rawMerged) as unknown as UserData;
