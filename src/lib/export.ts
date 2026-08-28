@@ -110,8 +110,14 @@ export const Exporter = {
                 if (err.name === 'AbortError') {
                     return; // Utente ha annullato
                 }
-                console.warn("showSaveFilePicker fallito, uso fallback nativo:", err);
-                // Fallback in caso di altri errori (es. file in uso, user gesture persa)
+                if (err.name === 'SecurityError' || err.name === 'TypeError') {
+                    console.warn("showSaveFilePicker bloccato, uso fallback nativo:", err);
+                    // Lascia procedere al fallback fuori dal blocco
+                } else {
+                    console.error("Esportazione fallita:", err);
+                    useDialogStore.getState().showAlert("Esportazione fallita, riprova.");
+                    return;
+                }
             }
         }
         
