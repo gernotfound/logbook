@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { analytics } from './lib/firebase';
+import { analytics, getAnalyticsConsent } from './lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { 
@@ -37,6 +37,7 @@ function App() {
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage(LOCAL_STORAGE_TRAINING_TAB, 'session');
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage(LOCAL_STORAGE_NUTRITION_TAB, 'meals');
   const [dataSubTab, setDataSubTab] = useLocalStorage(LOCAL_STORAGE_DATA_TAB, 'measurements');
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
 
@@ -47,6 +48,12 @@ function App() {
     };
     window.addEventListener('vite:preloadError', handlePreloadError);
     return () => window.removeEventListener('vite:preloadError', handlePreloadError);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
+    window.addEventListener('analytics_consent_changed', handler);
+    return () => window.removeEventListener('analytics_consent_changed', handler);
   }, []);
 
   // Handle URL parameters for PWA shortcuts
@@ -74,16 +81,16 @@ function App() {
 
   // Tracciamento dei tab su Google Analytics (SPA tab tracking)
   useEffect(() => {
-    if (analytics) {
+    if (analytics && analyticsEnabled) {
       (logEvent as any)(analytics, 'screen_view', {
         screen_name: activeTab,
         screen_class: 'App'
       });
     }
-  }, [activeTab]);
+  }, [activeTab, analyticsEnabled]);
 
   useEffect(() => {
-    if (analytics) {
+    if (analytics && analyticsEnabled) {
       const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
       if (subTab) {
         (logEvent as any)(analytics, 'sub_tab_view', {
@@ -92,7 +99,7 @@ function App() {
         });
       }
     }
-  }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab]);
+  }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab, analyticsEnabled]);
 
   // Track visited tabs for lazy Keep-Alive rendering
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
@@ -284,8 +291,8 @@ function App() {
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
-      <Analytics />
-      <SpeedInsights />
+      {analyticsEnabled && <Analytics />}
+      {analyticsEnabled && <SpeedInsights />}
     </>
   );
 }

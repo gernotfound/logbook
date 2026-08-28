@@ -63,8 +63,10 @@ initAppCheck(app).then((res) => {
 
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
 let analytics: Analytics | null = null;
+let currentAnalyticsConsent = localStorage.getItem('logbook_analytics_consent') === 'true';
+
 isSupported().then((supported) => {
-    if (supported && localStorage.getItem('logbook_analytics_consent') !== 'false') {
+    if (supported && currentAnalyticsConsent) {
         analytics = getAnalytics(app);
     }
 }).catch(err => {
@@ -82,8 +84,13 @@ setPersistence(auth, browserLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
 
+export const getAnalyticsConsent = () => currentAnalyticsConsent;
+
 export const setAnalyticsConsent = (consent: boolean) => {
+    currentAnalyticsConsent = consent;
     localStorage.setItem('logbook_analytics_consent', consent ? 'true' : 'false');
+    window.dispatchEvent(new Event('analytics_consent_changed'));
+    
     if (consent && !analytics) {
         isSupported().then(supported => {
             if (supported) analytics = getAnalytics(app);
