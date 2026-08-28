@@ -56,8 +56,8 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         );
 
         expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
-        expect(screen.getByText('🔄 Ricarica pagina')).toBeDefined();
-        expect(screen.getByText('⚠️ Hard reset (dati corrotti)')).toBeDefined();
+        expect(screen.getByText(/Ricarica pagina/i)).toBeDefined();
+        expect(screen.getByText(/Hard reset \(dati corrotti\)/i)).toBeDefined();
 
         consoleErrorSpy.mockRestore();
     });
@@ -71,7 +71,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             </ErrorBoundary>
         );
 
-        fireEvent.click(screen.getByText('🔄 Ricarica pagina'));
+        fireEvent.click(screen.getByText(/Ricarica pagina/i));
         expect(window.location.reload).toHaveBeenCalledTimes(1);
 
         consoleErrorSpy.mockRestore();
@@ -89,7 +89,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         // Click Hard Reset button
         await act(async () => {
-            fireEvent.click(screen.getByText('⚠️ Hard reset (dati corrotti)'));
+            fireEvent.click(screen.getByText(/Hard reset \(dati corrotti\)/i));
         });
 
         // showConfirm should have been called with proper message and title
@@ -114,7 +114,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         );
 
         await act(async () => {
-            fireEvent.click(screen.getByText('⚠️ Hard reset (dati corrotti)'));
+            fireEvent.click(screen.getByText(/Hard reset \(dati corrotti\)/i));
         });
 
         expect(useDialogStore.getState().showConfirm).toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         );
 
         await act(async () => {
-            fireEvent.click(screen.getByText('⚠️ Hard reset (dati corrotti)'));
+            fireEvent.click(screen.getByText(/Hard reset \(dati corrotti\)/i));
         });
 
         expect(useDialogStore.getState().showConfirm).toHaveBeenCalled();

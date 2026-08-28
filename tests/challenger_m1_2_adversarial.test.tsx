@@ -329,8 +329,8 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
 
             expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
             expect(screen.getByText('Si è verificato un errore imprevisto. Prova a ricaricare la pagina.')).toBeDefined();
-            expect(screen.getByText('🔄 Ricarica pagina')).toBeDefined();
-            expect(screen.getByText('⚠️ Hard reset (dati corrotti)')).toBeDefined();
+            expect(screen.getByText(/Ricarica pagina/i)).toBeDefined();
+            expect(screen.getByText(/Hard reset \(dati corrotti\)/i)).toBeDefined();
 
             errorSpy.mockRestore();
         });
@@ -349,7 +349,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
                 </ErrorBoundary>
             );
 
-            fireEvent.click(screen.getByText('🔄 Ricarica pagina'));
+            fireEvent.click(screen.getByText(/Ricarica pagina/i));
             expect(reloadMock).toHaveBeenCalledTimes(1);
 
             errorSpy.mockRestore();
@@ -373,7 +373,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             );
 
             // Click the Hard Reset button
-            const hardResetBtn = screen.getByText('⚠️ Hard reset (dati corrotti)');
+            const hardResetBtn = screen.getByText(/Hard reset \(dati corrotti\)/i);
             await act(async () => {
                 fireEvent.click(hardResetBtn);
             });
@@ -406,7 +406,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             );
 
             // Click the Hard Reset button
-            const hardResetBtn = screen.getByText('⚠️ Hard reset (dati corrotti)');
+            const hardResetBtn = screen.getByText(/Hard reset \(dati corrotti\)/i);
             await act(async () => {
                 fireEvent.click(hardResetBtn);
             });
