@@ -69,7 +69,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
 
             await Exporter.exportToCSV([session], {}, [{ id: 'ex_1', name: 'Panca piana' }]);
 
-            expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String));
+            expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String), expect.anything());
             const lines = exportedContent.split('\n');
             const dataLine = lines[1]; // First data line after header
 
@@ -104,7 +104,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
 
             await Exporter.exportToCSV([session], {}, []);
 
-            expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String));
+            expect(downloadSpy).toHaveBeenCalledWith('allenamenti.csv', expect.any(String), expect.anything());
             const lines = exportedContent.split('\n');
             const dataLine = lines[1];
             expect(dataLine).toContain('"2026-05-14"');
@@ -318,7 +318,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             expect(cycles.some(c => c.name === 'Mesociclo Massa (copia)')).toBe(true);
         });
 
-        it('SessionRatings renders Valuta sessione (1-10) — opzionale in sentence case', () => {
+        it('SessionRatings renders Valuta sessione (1-10) in sentence case', () => {
             render(
                 <SessionRatings
                     water=""
@@ -332,7 +332,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 />
             );
 
-            expect(screen.getByText('Valuta sessione (1-10) — opzionale')).toBeDefined();
+            expect(screen.getByText('Valuta sessione (1-10)')).toBeDefined();
         });
     });
 

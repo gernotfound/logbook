@@ -225,11 +225,11 @@ describe('Workout Improvements & History Edit Suite', () => {
     test('Esporta Dati CSV button is directly present in SettingsView', () => {
       renderWithProviders(<SettingsView />);
 
-      // CSV button must be present between Account Google and Zona Pericolosa
-      const csvBtn = screen.getByText(/Esporta Dati \(CSV\)/i);
+      const exportTabBtn = screen.getByText('Esporta');
+      fireEvent.click(exportTabBtn);
+
+      const csvBtn = screen.getByText(/Esporta dati \(CSV\)/i);
       expect(csvBtn).not.toBeNull();
-      expect(screen.getByText('Account Google')).not.toBeNull();
-      expect(screen.getByText(/Zona Pericolosa/i)).not.toBeNull();
     });
   });
 
