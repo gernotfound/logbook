@@ -869,7 +869,7 @@ export class TelemetryHub {
   public async dispatchErrorToFirestore(payload: TelemetryErrorPayload): Promise<boolean> {
     try {
       const uid = payload.userId || this.getUserId();
-      if (!uid) {
+      if (!uid || uid === 'anonymous') {
         return false;
       }
 
@@ -912,7 +912,7 @@ export class TelemetryHub {
   public async dispatchEventToFirestore(payload: TelemetryEventPayload): Promise<boolean> {
     try {
       const uid = payload.userId || this.getUserId();
-      if (!uid) {
+      if (!uid || uid === 'anonymous') {
         return false;
       }
 
