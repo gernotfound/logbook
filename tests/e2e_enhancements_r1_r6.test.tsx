@@ -980,7 +980,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
 
                 // misurazioni.csv contains formatted sleep
                 await vi.waitFor(() => {
-                    expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('07:30,02:00'));
+                    expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('07:30,02:00'), expect.anything());
                 });
             });
         });
@@ -1756,7 +1756,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             await Exporter.exportToCSV([], nutritionData, []);
 
             await vi.waitFor(() => {
-                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('08:00,02:00,04:30,01:30,00:30'));
+                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('08:00,02:00,04:30,01:30,00:30'), expect.anything());
             });
         });
 
@@ -1924,8 +1924,8 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             await Exporter.exportToCSV(state?.history || [], state?.nutrition || {}, state?.library || []);
 
             await vi.waitFor(() => {
-                expect(downloadFileSpy).toHaveBeenCalledWith('allenamenti.csv', expect.stringContaining('Quads Day'));
-                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('08:00,02:30'));
+                expect(downloadFileSpy).toHaveBeenCalledWith('allenamenti.csv', expect.stringContaining('Quads Day'), expect.anything());
+                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('08:00,02:30'), expect.anything());
             });
         });
     });
@@ -2161,8 +2161,8 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             await Exporter.exportToCSV([], weekNutrition, []);
 
             await vi.waitFor(() => {
-                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('2026-08-01,76.1'));
-                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('2026-08-07,76.7'));
+                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('2026-08-01,76.1'), expect.anything());
+                expect(downloadFileSpy).toHaveBeenCalledWith('misurazioni.csv', expect.stringContaining('2026-08-07,76.7'), expect.anything());
             });
         });
 

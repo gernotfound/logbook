@@ -41,6 +41,7 @@ describe('Unified Telemetry Hub E2E Suite (Tiers 1 - 5)', () => {
 
     if (telemetryHub && typeof telemetryHub.reset === 'function') {
       telemetryHub.reset();
+      telemetryHub.setUserId('test-user');
     }
   });
 
@@ -53,6 +54,7 @@ describe('Unified Telemetry Hub E2E Suite (Tiers 1 - 5)', () => {
 
     if (telemetryHub && typeof telemetryHub.reset === 'function') {
       telemetryHub.reset();
+      telemetryHub.setUserId('test-user');
     }
   });
 
