@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Fuse from 'fuse.js';
 import { useAppStore } from '../store/useAppStore';
 import React from 'react';

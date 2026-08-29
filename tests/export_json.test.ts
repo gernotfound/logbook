@@ -92,7 +92,7 @@ describe('JSON Export/Import Logic', () => {
                 { id: 'r2', name: 'Push', exercises: [{ exId: 'ex2' }] }
             ],
             trainingCycles: [
-                { id: 'c1', name: 'Starting Strength', durationWeeks: 12, routines: ['r1', 'r2'] }
+                { id: 'c1', name: 'Starting Strength', durationWeeks: 12, routines: [{ routineId: 'r1', frequencyPerWeek: 1 }, { routineId: 'r2', frequencyPerWeek: 1 }] }
             ]
         };
 
@@ -124,7 +124,7 @@ describe('JSON Export/Import Logic', () => {
         const mockUserData: any = {
             library: [],
             routines: [{ id: 'empty_r', name: 'Empty Routine', exercises: [] }],
-            trainingCycles: [{ id: 'broken_c', name: 'Broken', durationWeeks: 4, routines: ['ghost_r'] }]
+            trainingCycles: [{ id: 'broken_c', name: 'Broken', durationWeeks: 4, routines: [{ routineId: 'ghost_r', frequencyPerWeek: 1 }] }]
         };
 
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});

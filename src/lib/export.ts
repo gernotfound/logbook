@@ -173,7 +173,7 @@ export const Exporter = {
         if (cycleIds.size > 0) {
             (userData.trainingCycles || []).forEach(c => {
                 if (cycleIds.has(c.id) && Array.isArray(c.routines)) {
-                    c.routines.forEach(rId => routineIds.add(rId));
+                    c.routines.forEach(item => routineIds.add(item.routineId));
                 }
             });
         }
