@@ -37,7 +37,7 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
             id: `cy_${i}`,
             name: `Cycle ${i}`,
             durationWeeks: 4,
-            routines: [`rt_${i % 300}`, `rt_${(i + 1) % 300}`]
+            routines: [{ routineId: `rt_${i % 300}`, frequencyPerWeek: 1 }, { routineId: `rt_${(i + 1) % 300}`, frequencyPerWeek: 1 }]
         }));
 
         const mockUserData: any = { library, routines, trainingCycles };
