@@ -1,4 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import Fuse from 'fuse.js';
+import { useAppStore } from '../store/useAppStore';
+import React from 'react';
+
 import { useSettings } from '../hooks/useSettings';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { useAuth } from '../hooks/useAuth';
@@ -7,6 +11,89 @@ import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { setAnalyticsConsent, getAnalyticsConsent } from '../lib/firebase';
 import { getStorageDiagnosticData } from '../lib/storageStatus';
+
+
+type ExportSelection = 'all' | 'none' | string[];
+
+const ExportSelector = React.memo(({ 
+    title, 
+    items, 
+    selection, 
+    onChange 
+}: { 
+    title: string, 
+    items: {id: string, name: string}[], 
+    selection: ExportSelection, 
+    onChange: (val: ExportSelection) => void 
+}) => {
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const fuse = useMemo(() => new Fuse(items, { keys: ['name'], threshold: 0.3 }), [items]);
+    const filteredItems = useMemo(() => {
+        if (!searchQuery.trim()) return items;
+        return fuse.search(searchQuery).map(res => res.item);
+    }, [searchQuery, items, fuse]);
+
+    const isCustom = Array.isArray(selection);
+
+    return (
+        <div style={{ marginBottom: '15px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{title}</span>
+                <select 
+                    value={selection === 'all' ? 'all' : selection === 'none' ? 'none' : 'custom'}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'all') onChange('all');
+                        else if (val === 'none') onChange('none');
+                        else onChange([]);
+                    }}
+                    style={{ background: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '4px 8px', fontSize: '0.8rem' }}
+                >
+                    <option value="all">Tutti ({items.length})</option>
+                    <option value="custom">Seleziona...</option>
+                    <option value="none">Nessuno</option>
+                </select>
+            </div>
+            
+            {isCustom && (
+                <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {selection.length} selezionati su {items.length}
+                        </span>
+                        {items.length > 5 && (
+                            <input 
+                                type="text" 
+                                placeholder="Cerca..." 
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                style={{ width: '120px', padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '4px', color: 'var(--text-main)' }}
+                            />
+                        )}
+                    </div>
+                    
+                    <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {filteredItems.length === 0 ? <span style={{fontSize:'0.8rem', color:'var(--text-muted)'}}>Nessun elemento</span> : filteredItems.map(item => (
+                            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={(selection as string[]).includes(item.id)}
+                                    onChange={e => {
+                                        if (e.target.checked) onChange([...(selection as string[]), item.id]);
+                                        else onChange((selection as string[]).filter(id => id !== item.id));
+                                    }}
+                                    style={{ accentColor: 'var(--primary-color)' }}
+                                />
+                                {item.name}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+});
 
 const SettingsView = () => {
     const {
@@ -25,9 +112,14 @@ const SettingsView = () => {
     
     const [activeTab, setActiveTab] = useState<'account' | 'privacy' | 'export'>('account');
 
-    const [exportLibrary, setExportLibrary] = useState(true);
-    const [exportRoutines, setExportRoutines] = useState(true);
-    const [exportCycles, setExportCycles] = useState(true);
+    const [exportLibrary, setExportLibrary] = useState<ExportSelection>('all');
+    const [exportRoutines, setExportRoutines] = useState<ExportSelection>('all');
+    const [exportTrainingCycles, setExportTrainingCycles] = useState<ExportSelection>('all');
+    
+    const EMPTY_ARRAY: any[] = [];
+    const storeLibrary = useAppStore(state => state.userData?.library);
+    const storeRoutines = useAppStore(state => state.userData?.routines);
+    const storeCycles = useAppStore(state => state.userData?.trainingCycles);
 
     useEffect(() => {
         const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
@@ -237,27 +329,20 @@ const SettingsView = () => {
                         <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)' }}><span aria-hidden="true">🤝</span> Condividi con altri atleti</h3>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esporta o importa Esercizi, Schede e Pianificazioni per condividerli.</p>
                         
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                <input type="checkbox" checked={exportLibrary} onChange={e => setExportLibrary(e.target.checked)} style={{ accentColor: 'var(--primary-color)' }} />
-                                Esercizi (Libreria)
-                            </label>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                <input type="checkbox" checked={exportRoutines} onChange={e => setExportRoutines(e.target.checked)} style={{ accentColor: 'var(--primary-color)' }} />
-                                Schede (Routines)
-                            </label>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                                <input type="checkbox" checked={exportCycles} onChange={e => setExportCycles(e.target.checked)} style={{ accentColor: 'var(--primary-color)' }} />
-                                Pianificazioni (Cicli)
-                            </label>
-                        </div>
+                        <ExportSelector title="Esercizi (Libreria)" items={storeLibrary || EMPTY_ARRAY} selection={exportLibrary} onChange={setExportLibrary} />
+                        <ExportSelector title="Schede (Routines)" items={storeRoutines || EMPTY_ARRAY} selection={exportRoutines} onChange={setExportRoutines} />
+                        <ExportSelector title="Pianificazioni (Cicli)" items={storeCycles || EMPTY_ARRAY} selection={exportTrainingCycles} onChange={setExportTrainingCycles} />
 
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <button 
                                 className="btn" 
-                                style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0, opacity: (!exportLibrary && !exportRoutines && !exportCycles) ? 0.5 : 1 }} 
-                                onClick={() => handleExportShare({ exportLibrary, exportRoutines, exportCycles })}
-                                disabled={!exportLibrary && !exportRoutines && !exportCycles}
+                                style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0, opacity: (exportLibrary === 'none' && exportRoutines === 'none' && exportTrainingCycles === 'none') ? 0.5 : 1 }} 
+                                onClick={() => handleExportShare({ 
+                                    exportLibrary: exportLibrary === 'all' ? true : exportLibrary === 'none' ? false : exportLibrary, 
+                                    exportRoutines: exportRoutines === 'all' ? true : exportRoutines === 'none' ? false : exportRoutines, 
+                                    exportTrainingCycles: exportTrainingCycles === 'all' ? true : exportTrainingCycles === 'none' ? false : exportTrainingCycles 
+                                })}
+                                disabled={exportLibrary === 'none' && exportRoutines === 'none' && exportTrainingCycles === 'none'}
                             >
                                 <span aria-hidden="true">📤</span> Esporta JSON
                             </button>

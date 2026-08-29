@@ -79,4 +79,69 @@ describe('JSON Export/Import Logic', () => {
         expect(saveUserDataMock).not.toHaveBeenCalled();
         expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('Sicurezza: Non puoi importare il backup di un altro utente'));
     });
+
+    it('exportShareJson with granular array applies dependency resolution', async () => {
+        const mockUserData: any = {
+            library: [
+                { id: 'ex1', name: 'Squat', setsCount: 3, sets: [] },
+                { id: 'ex2', name: 'Bench', setsCount: 3, sets: [] },
+                { id: 'ex3', name: 'Deadlift', setsCount: 3, sets: [] }
+            ],
+            routines: [
+                { id: 'r1', name: 'Legs', exercises: [{ exId: 'ex1' }] },
+                { id: 'r2', name: 'Push', exercises: [{ exId: 'ex2' }] }
+            ],
+            trainingCycles: [
+                { id: 'c1', name: 'Starting Strength', durationWeeks: 12, routines: ['r1', 'r2'] }
+            ]
+        };
+
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        downloadSpy.mockClear();
+        
+        const result = await Exporter.exportShareJson(mockUserData, {
+            exportTrainingCycles: ['c1'],
+            exportRoutines: [],
+            exportLibrary: []
+        });
+        
+        expect(downloadSpy).toHaveBeenCalled();
+        const [, content] = downloadSpy.mock.calls[0];
+        const parsed = JSON.parse(content);
+        
+        expect(parsed.trainingCycles).toHaveLength(1);
+        expect(parsed.trainingCycles[0].id).toBe('c1');
+        
+        expect(parsed.routines).toHaveLength(2);
+        expect(parsed.routines.map((r: any) => r.id)).toEqual(expect.arrayContaining(['r1', 'r2']));
+        
+        expect(parsed.library).toHaveLength(2);
+        expect(parsed.library.map((e: any) => e.id)).toEqual(expect.arrayContaining(['ex1', 'ex2']));
+        expect(parsed.library.find((e: any) => e.id === 'ex3')).toBeUndefined();
+    });
+
+    it('exportShareJson with empty items and non-existent dependencies exports gracefully', async () => {
+        const mockUserData: any = {
+            library: [],
+            routines: [{ id: 'empty_r', name: 'Empty Routine', exercises: [] }],
+            trainingCycles: [{ id: 'broken_c', name: 'Broken', durationWeeks: 4, routines: ['ghost_r'] }]
+        };
+
+        const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
+        downloadSpy.mockClear();
+
+        await Exporter.exportShareJson(mockUserData, {
+            exportTrainingCycles: ['broken_c'],
+            exportRoutines: ['empty_r'],
+            exportLibrary: ['ghost_ex']
+        });
+
+        expect(downloadSpy).toHaveBeenCalled();
+        const [, content] = downloadSpy.mock.calls[0];
+        const parsed = JSON.parse(content);
+
+        expect(parsed.trainingCycles).toHaveLength(1);
+        expect(parsed.routines).toHaveLength(1);
+        expect(parsed.library).toHaveLength(0);
+    });
 });
