@@ -137,17 +137,78 @@ export const Exporter = {
         URL.revokeObjectURL(url); // Cleanup memory
     },
 
-    async exportShareJson(userData: UserData, options: { exportLibrary?: boolean, exportRoutines?: boolean, exportCycles?: boolean } = { exportLibrary: true, exportRoutines: true, exportCycles: true }) {
+    async exportShareJson(
+        userData: UserData,
+        options: {
+            exportLibrary?: boolean | string[],
+            exportRoutines?: boolean | string[],
+            exportTrainingCycles?: boolean | string[]
+        } = { exportLibrary: true, exportRoutines: true, exportTrainingCycles: true }
+    ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number }> {
+        
+        const libraryIds = new Set<string>();
+        const routineIds = new Set<string>();
+        const cycleIds = new Set<string>();
+
+        // 1. Aggiungi le selezioni esplicite
+        if (options.exportTrainingCycles === true) {
+            (userData.trainingCycles || []).forEach(c => cycleIds.add(c.id));
+        } else if (Array.isArray(options.exportTrainingCycles)) {
+            options.exportTrainingCycles.forEach(id => cycleIds.add(id));
+        }
+
+        if (options.exportRoutines === true) {
+            (userData.routines || []).forEach(r => routineIds.add(r.id));
+        } else if (Array.isArray(options.exportRoutines)) {
+            options.exportRoutines.forEach(id => routineIds.add(id));
+        }
+
+        if (options.exportLibrary === true) {
+            (userData.library || []).forEach(e => libraryIds.add(e.id));
+        } else if (Array.isArray(options.exportLibrary)) {
+            options.exportLibrary.forEach(id => libraryIds.add(id));
+        }
+
+        // 2. Risoluzione dipendenze: Cicli -> Schede
+        if (cycleIds.size > 0) {
+            (userData.trainingCycles || []).forEach(c => {
+                if (cycleIds.has(c.id) && Array.isArray(c.routines)) {
+                    c.routines.forEach(rId => routineIds.add(rId));
+                }
+            });
+        }
+
+        // 3. Risoluzione dipendenze: Schede -> Esercizi
+        if (routineIds.size > 0) {
+            (userData.routines || []).forEach(r => {
+                if (routineIds.has(r.id) && Array.isArray(r.exercises)) {
+                    r.exercises.forEach(ex => libraryIds.add(ex.exId));
+                }
+            });
+        }
+
+        // 4. Filtra gli array reali ignorando ID inesistenti o orfani
+        const finalLibrary = (userData.library || []).filter(e => libraryIds.has(e.id));
+        const finalRoutines = (userData.routines || []).filter(r => routineIds.has(r.id));
+        const finalCycles = (userData.trainingCycles || []).filter(c => cycleIds.has(c.id));
+
         const payload = {
             version: 1,
             type: 'share',
             exportedAt: new Date().toISOString(),
-            library: options.exportLibrary ? (userData.library || []) : [],
-            routines: options.exportRoutines ? (userData.routines || []) : [],
-            trainingCycles: options.exportCycles ? (userData.trainingCycles || []) : []
+            library: finalLibrary,
+            routines: finalRoutines,
+            trainingCycles: finalCycles
         };
+
         const content = JSON.stringify(payload, null, 2);
         this.downloadFile("logbook_condivisione.json", content, 'application/json');
+        
+        return {
+            libraryCount: finalLibrary.length,
+            routinesCount: finalRoutines.length,
+            cyclesCount: finalCycles.length
+        };
     },
 
     async exportBackupJson(userData: UserData, currentUser: any) {

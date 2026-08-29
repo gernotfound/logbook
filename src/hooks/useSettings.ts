@@ -52,10 +52,13 @@ export function useSettings() {
         }
     };
 
-    const handleExportShare = (options?: { exportLibrary?: boolean, exportRoutines?: boolean, exportCycles?: boolean }) => {
+    const handleExportShare = async (options?: { exportLibrary?: boolean | string[], exportRoutines?: boolean | string[], exportTrainingCycles?: boolean | string[] }) => {
         const userData = useAppStore.getState().userData;
         if(userData) {
-            Exporter.exportShareJson(userData, options);
+            const result = await Exporter.exportShareJson(userData, options);
+            if (result) {
+                showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
+            }
         }
     };
 
