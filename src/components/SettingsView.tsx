@@ -25,6 +25,10 @@ const SettingsView = () => {
     
     const [activeTab, setActiveTab] = useState<'account' | 'privacy' | 'export'>('account');
 
+    const [exportLibrary, setExportLibrary] = useState(true);
+    const [exportRoutines, setExportRoutines] = useState(true);
+    const [exportCycles, setExportCycles] = useState(true);
+
     useEffect(() => {
         const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
         window.addEventListener('analytics_consent_changed', handler);
@@ -233,8 +237,28 @@ const SettingsView = () => {
                         <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)' }}><span aria-hidden="true">🤝</span> Condividi con altri atleti</h3>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esporta o importa Esercizi, Schede e Pianificazioni per condividerli.</p>
                         
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                <input type="checkbox" checked={exportLibrary} onChange={e => setExportLibrary(e.target.checked)} style={{ accentColor: 'var(--primary-color)' }} />
+                                Esercizi (Libreria)
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                <input type="checkbox" checked={exportRoutines} onChange={e => setExportRoutines(e.target.checked)} style={{ accentColor: 'var(--primary-color)' }} />
+                                Schede (Routines)
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                <input type="checkbox" checked={exportCycles} onChange={e => setExportCycles(e.target.checked)} style={{ accentColor: 'var(--primary-color)' }} />
+                                Pianificazioni (Cicli)
+                            </label>
+                        </div>
+
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <button className="btn" style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0 }} onClick={handleExportShare}>
+                            <button 
+                                className="btn" 
+                                style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0, opacity: (!exportLibrary && !exportRoutines && !exportCycles) ? 0.5 : 1 }} 
+                                onClick={() => handleExportShare({ exportLibrary, exportRoutines, exportCycles })}
+                                disabled={!exportLibrary && !exportRoutines && !exportCycles}
+                            >
                                 <span aria-hidden="true">📤</span> Esporta JSON
                             </button>
                             <label className="btn btn-primary" style={{ flex: 1, margin: 0, textAlign: 'center', cursor: 'pointer', opacity: importingData ? 0.7 : 1 }}>
