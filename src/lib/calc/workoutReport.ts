@@ -26,7 +26,6 @@ export interface WorkoutReport {
     previousTotalVolume?: number;
     volumeDeltaPercent?: number;
     exerciseComparisons: ExerciseComparison[];
-    starExercise?: ExerciseComparison;
     newPRs: ExerciseComparison[];
 }
 
@@ -106,8 +105,6 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
 
     let currentTotalVolume = 0;
     let previousTotalVolume = 0;
-    let starExercise: ExerciseComparison | undefined;
-    let maxDeltaPercent = -Infinity;
 
     if (!previousWorkout) {
         for (const ex of (currentWorkout.exercises || [])) {
@@ -129,6 +126,11 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
         const currStats = calculateExerciseStats(ex);
         currentTotalVolume += currStats.volume;
 
+        let exName = 'Esercizio';
+        if (libraryMap && libraryMap.has(ex.exId)) {
+            exName = libraryMap.get(ex.exId).name;
+        }
+
         const prevEx = prevExMap.get(ex.exId);
         if (prevEx) {
             const prevStats = calculateExerciseStats(prevEx);
@@ -144,20 +146,11 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
 
             const repsDelta = currStats.totalReps - prevStats.totalReps;
             const weightDelta = currStats.avgWeight - prevStats.avgWeight;
-            const repsDeltaPercent = prevStats.totalReps > 0 ? (repsDelta / prevStats.totalReps) * 100 : (currStats.totalReps > 0 ? 100 : 0);
 
-            // PR logic: 
-            // 1) volume improved >=5%
-            // 2) or avg weight improved and reps didn't drop
-            // 3) or it's a bodyweight exercise (volume=0) and reps improved >=5%
-            const isPR = (volumeDeltaPercent >= 5 && currStats.volume > 0) || 
+            // PR logic:
+            const isPR = (volumeDelta > 0 && currStats.volume > 0) || 
                          (weightDelta > 0 && currStats.totalReps >= prevStats.totalReps) ||
-                         (currStats.volume === 0 && repsDeltaPercent >= 5 && currStats.totalReps > 0);
-
-            let exName = 'Esercizio';
-            if (libraryMap && libraryMap.has(ex.exId)) {
-                exName = libraryMap.get(ex.exId).name;
-            }
+                         (currStats.volume === 0 && repsDelta > 0 && currStats.totalReps > 0);
 
             const comp: ExerciseComparison = {
                 exId: ex.exId,
@@ -180,10 +173,29 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
             if (isPR) {
                 report.newPRs.push(comp);
             }
+        } else {
+            // Esercizio eseguito per la prima volta in questa scheda (non c'è in prevExMap)
+            const isPR = currStats.totalReps > 0;
+            const comp: ExerciseComparison = {
+                exId: ex.exId,
+                exName: exName,
+                currentVolume: currStats.volume,
+                previousVolume: 0,
+                volumeDelta: currStats.volume,
+                volumeDeltaPercent: currStats.volume > 0 ? 100 : 0,
+                currentReps: currStats.totalReps,
+                previousReps: 0,
+                repsDelta: currStats.totalReps,
+                currentAvgWeight: currStats.avgWeight,
+                previousAvgWeight: 0,
+                weightDelta: currStats.avgWeight,
+                isPR
+            };
 
-            if (volumeDeltaPercent > maxDeltaPercent && volumeDeltaPercent > 0 && currStats.volume > 0) {
-                maxDeltaPercent = volumeDeltaPercent;
-                starExercise = comp;
+            report.exerciseComparisons.push(comp);
+            
+            if (isPR) {
+                report.newPRs.push(comp);
             }
         }
     }
@@ -196,8 +208,6 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
     } else if (currentTotalVolume > 0 && previousTotalVolume === 0 && report.exerciseComparisons.length > 0) {
         report.volumeDeltaPercent = 100;
     }
-
-    report.starExercise = starExercise;
 
     return report;
 }
