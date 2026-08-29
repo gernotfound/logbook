@@ -1,5 +1,8 @@
 import { useDialogStore } from '../store/useDialogStore';
+import { useAppStore } from '../store/useAppStore';
 import { Logic } from './logic';
+import { UserDataSchema } from './schema';
+import type { UserData } from '../types';
 
 export const Exporter = {
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
@@ -80,26 +83,28 @@ export const Exporter = {
         
         const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";
         if (workoutCsv !== workoutHeader) {
-            this.downloadFile("allenamenti.csv", workoutCsv);
+            this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
         } else {
-            await useDialogStore.getState().showAlert("Nessun allenamento da esportare.");
+            useDialogStore.getState().showAlert("Nessun allenamento da esportare.");
         }
         if (nutritionDates.length > 0) {
             setTimeout(() => {
-                this.downloadFile("misurazioni.csv", nutritionCsv);
+                this.downloadFile("misurazioni.csv", nutritionCsv, "text/csv;charset=utf-8;");
             }, 500);
         }
     },
-    async downloadFile(filename: string, content: string) {
-        const blob = new Blob(["\uFEFF" + content], { type: 'text/csv;charset=utf-8;' }); // \uFEFF è la BOM per Excel
+
+    async downloadFile(filename: string, content: string, type: string = "text/csv;charset=utf-8;") {
+        const prefix = type.includes("csv") ? "\uFEFF" : "";
+        const blob = new Blob([prefix + content], { type });
         
         if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
             try {
                 const handle = await (window as any).showSaveFilePicker({
                     suggestedName: filename,
                     types: [{
-                        description: 'CSV File',
-                        accept: { 'text/csv': ['.csv'] },
+                        description: type.includes("json") ? 'JSON File' : 'CSV File',
+                        accept: type.includes("json") ? { 'application/json': ['.json'] } : { 'text/csv': ['.csv'] },
                     }],
                 });
                 const writable = await handle.createWritable();
@@ -130,5 +135,129 @@ export const Exporter = {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url); // Cleanup memory
+    },
+
+    async exportShareJson(userData: UserData) {
+        const payload = {
+            version: 1,
+            type: 'share',
+            exportedAt: new Date().toISOString(),
+            library: userData.library || [],
+            routines: userData.routines || [],
+            trainingCycles: userData.trainingCycles || []
+        };
+        const content = JSON.stringify(payload, null, 2);
+        this.downloadFile("logbook_condivisione.json", content, 'application/json');
+    },
+
+    async exportBackupJson(userData: UserData, currentUser: any) {
+        const payload = {
+            version: 1,
+            type: 'backup',
+            exportedAt: new Date().toISOString(),
+            userId: currentUser?.uid || null,
+            profile: userData.profile,
+            library: userData.library || [],
+            routines: userData.routines || [],
+            trainingCycles: userData.trainingCycles || [],
+            nutritionPlanning: userData.nutritionPlanning,
+            history: userData.history || [],
+            nutrition: userData.nutrition || {},
+            supplements: userData.supplements || []
+        };
+        const content = JSON.stringify(payload, null, 2);
+        this.downloadFile("logbook_backup.json", content, 'application/json');
+    },
+
+    async importFromJson(file: File, currentUser: any, saveUserData: any) {
+        return new Promise<void>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const content = e.target?.result as string;
+                    const payload = JSON.parse(content);
+                    
+                    if (payload.version !== 1 || !['share', 'backup'].includes(payload.type)) {
+                        throw new Error("Formato file non valido o non supportato.");
+                    }
+
+                    if (payload.type === 'backup') {
+                        if (payload.userId !== null && payload.userId !== undefined && currentUser?.uid && payload.userId !== currentUser.uid) {
+                            throw new Error("Sicurezza: Non puoi importare il backup di un altro utente. Questo sovrascriverebbe le tue cronologie personali.");
+                        }
+                    }
+
+                    const currentData = useAppStore.getState().userData || {};
+                    let mergedData: any = { ...currentData };
+
+                    const mergeArrayById = (arr1: any[], arr2: any[]) => {
+                        const map = new Map<string, any>(arr1.map(item => [item.id, item]));
+                        arr2.forEach(item => {
+                            if (!map.has(item.id)) {
+                                map.set(item.id, item); // Diamo priorità ai dati locali non sovrascrivendo se esiste già
+                            }
+                        });
+                        return Array.from(map.values());
+                    };
+
+                    mergedData.library = mergeArrayById(currentData.library || [], payload.library || []);
+                    mergedData.routines = mergeArrayById(currentData.routines || [], payload.routines || []);
+                    mergedData.trainingCycles = mergeArrayById(currentData.trainingCycles || [], payload.trainingCycles || []);
+
+                    if (payload.type === 'backup') {
+                        if (payload.profile && !currentData.profile) {
+                            mergedData.profile = payload.profile;
+                        }
+                        if (payload.nutritionPlanning && !currentData.nutritionPlanning) {
+                            mergedData.nutritionPlanning = payload.nutritionPlanning;
+                        }
+                        mergedData.supplements = mergeArrayById(currentData.supplements || [], payload.supplements || []);
+                        
+                        // History: append by ID or original fallback
+                        const currentHistory = currentData.history || [];
+                        const histMap = new Map(currentHistory.map(h => [h.id || ((h.date || '') + (h.routineName || '')), h]));
+                        (payload.history || []).forEach((h: any) => {
+                            const k = h.id || ((h.date || '') + (h.routineName || ''));
+                            if (!histMap.has(k)) histMap.set(k, h);
+                        });
+                        mergedData.history = Array.from(histMap.values());
+
+                        // Nutrition
+                        const currentNut = currentData.nutrition || {};
+                        const payloadNut = payload.nutrition || {};
+                        const newNut = { ...currentNut };
+                        for (const date in payloadNut) {
+                            if (!newNut[date]) {
+                                newNut[date] = payloadNut[date];
+                            } else {
+                                // Merge date
+                                const d1 = newNut[date];
+                                const d2 = payloadNut[date];
+                                d1.meals = mergeArrayById(d1.meals || [], d2.meals || []);
+                                d1.supplementsIntake = mergeArrayById(d1.supplementsIntake || [], d2.supplementsIntake || []);
+                            }
+                        }
+                        mergedData.nutrition = newNut;
+                    }
+
+                    const finalData = UserDataSchema.parse(mergedData);
+                    
+                    // Applica al globale in modo safe tramite store
+                    await saveUserData(() => finalData);
+                    
+                    useDialogStore.getState().showAlert(
+                        payload.type === 'share' 
+                        ? "Importazione completata: Esercizi, Schede e Pianificazioni aggiornati." 
+                        : "Ripristino backup completato con successo."
+                    );
+                    resolve();
+                } catch (err: any) {
+                    console.error("Import error:", err);
+                    useDialogStore.getState().showAlert(err.message || "Errore durante l'importazione del file JSON.");
+                    reject(err);
+                }
+            };
+            reader.readAsText(file);
+        });
     }
 };

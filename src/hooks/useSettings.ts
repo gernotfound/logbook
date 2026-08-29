@@ -31,6 +31,7 @@ export function useSettings() {
     const setHeight = (val: string) => setLocalProfile({ ...profile, height: val });
     const setGender = (val: string) => setLocalProfile({ ...profile, gender: val });
     const [deletingAccount, setDeletingAccount] = useState(false);
+    const [importingData, setImportingData] = useState(false);
 
     const handleSaveProfile = async (e?: any) => {
         if (e) e.preventDefault();
@@ -44,10 +45,41 @@ export function useSettings() {
         }
     };
 
-    const handleExport = () => {
+    const handleExportCSV = () => {
         const userData = useAppStore.getState().userData;
         if(userData) {
             Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
+        }
+    };
+
+    const handleExportShare = () => {
+        const userData = useAppStore.getState().userData;
+        if(userData) {
+            Exporter.exportShareJson(userData);
+        }
+    };
+
+    const handleExportBackup = () => {
+        const userData = useAppStore.getState().userData;
+        if(userData) {
+            Exporter.exportBackupJson(userData, currentUser);
+        }
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        setImportingData(true);
+        try {
+            await Exporter.importFromJson(file, currentUser, saveUserData);
+        } catch (error) {
+            console.error("Import error:", error);
+        } finally {
+            setImportingData(false);
+            if (e.target) {
+                e.target.value = ''; // Reset input
+            }
         }
     };
 
@@ -81,6 +113,9 @@ export function useSettings() {
         height, setHeight,
         gender, setGender,
         deletingAccount,
-        handleSaveProfile, handleExport, handleDeleteAccount
+        importingData,
+        handleSaveProfile, 
+        handleExportCSV, handleExportShare, handleExportBackup, handleImportFile,
+        handleDeleteAccount
     };
 }
