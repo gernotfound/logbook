@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { X, Trophy, Star, ArrowUp, ArrowDown, Activity, Clock, Layers } from 'lucide-react';
+import { X, Trophy, ArrowUp, ArrowDown, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
 import { Logic } from '../../lib/logic';
 import type { WorkoutSession, Exercise } from '../../types';
@@ -62,26 +62,42 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     flexDirection: 'column',
                     gap: '10px'
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>{report.workoutName}</h2>
-                            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                {Logic.formatItalianDate ? Logic.formatItalianDate(report.date) : report.date}
-                            </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>{report.workoutName}</h2>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {Logic.formatItalianDate ? Logic.formatItalianDate(report.date) : report.date}
+                        </p>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Clock size={12} />
+                                {Logic.formatDuration ? Logic.formatDuration(report.durationSeconds) : report.durationSeconds}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Layers size={12} />
+                                {workout.exercises?.length || 0} Esercizi
+                            </span>
                         </div>
-                        <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+                        <button 
+                            onClick={onClose} 
+                            style={{ 
+                                background: 'transparent', 
+                                border: '1px solid var(--glass-border)', 
+                                color: 'var(--text-muted)', 
+                                cursor: 'pointer', 
+                                padding: '8px', 
+                                borderRadius: '8px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                minWidth: '44px',
+                                minHeight: '44px'
+                            }}
+                            aria-label="Chiudi"
+                        >
                             <X size={24} />
                         </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Clock size={12} />
-                            {Logic.formatDuration ? Logic.formatDuration(report.durationSeconds) : report.durationSeconds}
-                        </span>
-                        <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Layers size={12} />
-                            {workout.exercises?.length || 0} Esercizi
-                        </span>
                     </div>
                 </div>
 
@@ -93,15 +109,15 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Volume Totale</span>
                             <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>{formatKg(report.totalVolume)}</span>
-                            {report.volumeDeltaPercent !== undefined && report.volumeDeltaPercent !== 0 && (
+                            {report.volumeDeltaPercent !== undefined && (
                                 <span style={{
                                     fontSize: '0.75rem',
                                     fontWeight: 'bold',
-                                    color: report.volumeDeltaPercent > 0 ? 'var(--success-color)' : 'var(--danger-color)',
+                                    color: report.volumeDeltaPercent > 0 ? 'var(--success-color)' : (report.volumeDeltaPercent < 0 ? 'var(--danger-color)' : 'var(--text-muted)'),
                                     display: 'flex', alignItems: 'center', gap: '2px'
                                 }}>
-                                    {report.volumeDeltaPercent > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                                    {formatDelta(Math.abs(report.volumeDeltaPercent), true)} vs prec.
+                                    {report.volumeDeltaPercent > 0 ? <ArrowUp size={12} /> : (report.volumeDeltaPercent < 0 ? <ArrowDown size={12} /> : null)}
+                                    {formatDelta(report.volumeDeltaPercent, true)} vs prec.
                                 </span>
                             )}
                         </div>
@@ -140,23 +156,11 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             <div key={pr.exId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
                                                 <span>{pr.exName}</span>
                                                 <span style={{ fontWeight: 'bold', color: 'var(--warning-color)' }}>
-                                                    {pr.volumeDeltaPercent > 0 ? `+${pr.volumeDeltaPercent.toFixed(1)}% Vol` : `+${pr.weightDelta.toFixed(1)}kg Media`}
+                                                    {pr.volumeDelta > 0 ? `+${pr.volumeDeltaPercent.toFixed(1)}% Vol` : `+${pr.weightDelta.toFixed(1)}kg Media`}
                                                 </span>
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            )}
-
-                            {/* Star Exercise */}
-                            {report.starExercise && (
-                                <div className="card" style={{ margin: 0, padding: '16px', background: 'rgba(0, 229, 255, 0.05)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
-                                    <h3 style={{ margin: '0 0 8px', fontSize: '1rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        <Star size={16} /> Miglioramento Top
-                                    </h3>
-                                    <p style={{ margin: 0, fontSize: '0.9rem' }}>
-                                        <span style={{ fontWeight: 'bold' }}>{report.starExercise.exName}</span>: {formatDelta(report.starExercise.volumeDeltaPercent, true)} volume
-                                    </p>
                                 </div>
                             )}
 
