@@ -10,7 +10,7 @@ import { useScrollLock } from '../../hooks/useScrollLock';
 export const ConsentOverlay: React.FC = () => {
     useScrollLock();
     const { isGuest } = useAuth();
-    const { handleExport, handleDeleteAccount } = useSettings();
+    const { handleExportCSV, handleDeleteAccount } = useSettings();
     const updateUserData = useAppStore(state => state.updateUserData);
     const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [acceptedHealth, setAcceptedHealth] = useState(false);
@@ -105,7 +105,7 @@ export const ConsentOverlay: React.FC = () => {
                         Se non desideri accettare, puoi comunque esercitare i tuoi diritti sui dati:
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }} onClick={handleExport}>
+                        <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }} onClick={handleExportCSV}>
                             <span aria-hidden="true">📥</span> Esporta i miei dati (CSV)
                         </button>
                         <button className="btn" style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)' }} onClick={handleDeleteAccount}>
