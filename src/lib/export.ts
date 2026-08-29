@@ -137,14 +137,14 @@ export const Exporter = {
         URL.revokeObjectURL(url); // Cleanup memory
     },
 
-    async exportShareJson(userData: UserData) {
+    async exportShareJson(userData: UserData, options: { exportLibrary?: boolean, exportRoutines?: boolean, exportCycles?: boolean } = { exportLibrary: true, exportRoutines: true, exportCycles: true }) {
         const payload = {
             version: 1,
             type: 'share',
             exportedAt: new Date().toISOString(),
-            library: userData.library || [],
-            routines: userData.routines || [],
-            trainingCycles: userData.trainingCycles || []
+            library: options.exportLibrary ? (userData.library || []) : [],
+            routines: options.exportRoutines ? (userData.routines || []) : [],
+            trainingCycles: options.exportCycles ? (userData.trainingCycles || []) : []
         };
         const content = JSON.stringify(payload, null, 2);
         this.downloadFile("logbook_condivisione.json", content, 'application/json');

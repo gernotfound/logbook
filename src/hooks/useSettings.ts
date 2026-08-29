@@ -52,10 +52,10 @@ export function useSettings() {
         }
     };
 
-    const handleExportShare = () => {
+    const handleExportShare = (options?: { exportLibrary?: boolean, exportRoutines?: boolean, exportCycles?: boolean }) => {
         const userData = useAppStore.getState().userData;
         if(userData) {
-            Exporter.exportShareJson(userData);
+            Exporter.exportShareJson(userData, options);
         }
     };
 
