@@ -1,5 +1,5 @@
 import { doc, setDoc } from "firebase/firestore";
-import { getDb, auth, onAuthStateChanged, ensureAppCheck } from './firebase';
+import { getDb, auth, onAuthStateChanged } from './firebase';
 import { UserDataSchema } from './schema';
 import { getStorageDiagnosticData } from './storageStatus';
 
@@ -372,7 +372,6 @@ export async function dispatchStorageRecoveryAnomaly(
     }
 
     const eventId = `anomaly_${payload.timestamp}_${Math.random().toString(36).slice(2, 9)}`;
-    await ensureAppCheck();
     const anomalyDocRef = doc(getDb(), "users", uid, "telemetry_anomalies", eventId);
 
     const writePromise = setDoc(anomalyDocRef, payload);

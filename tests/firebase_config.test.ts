@@ -113,7 +113,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
 
             const firebaseModule = await import('../src/lib/firebase');
             expect(firebaseModule.auth).toBeDefined();
-            expect(firebaseModule.db).toBeDefined();
+            expect(firebaseModule.getDb).toBeDefined();
             expect(firebaseModule.provider).toBeDefined();
             expect(firebaseModule.signInWithPopup).toBeDefined();
             expect(firebaseModule.signOut).toBeDefined();

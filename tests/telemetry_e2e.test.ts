@@ -38,6 +38,8 @@ describe('Unified Telemetry Hub E2E Suite (Tiers 1 - 5)', () => {
     vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
       return { path: pathSegments.join('/') } as any;
     });
+    vi.spyOn(firebaseLib, 'ensureAppCheck').mockResolvedValue(undefined);
+    vi.spyOn(firebaseLib, 'getDb').mockReturnValue({} as any);
 
     if (telemetryHub && typeof telemetryHub.reset === 'function') {
       telemetryHub.reset();
