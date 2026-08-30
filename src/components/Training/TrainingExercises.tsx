@@ -307,11 +307,11 @@ const TrainingExercises = () => {
                                 style={{ borderLeft: editingExId === ex.id ? '3px solid var(--primary-color)' : 'none', paddingLeft: editingExId === ex.id ? '10px' : '0' }}
                                 onClick={() => setExpandedExId(expandedExId === ex.id ? null : ex.id)}
                             >
-                                <div>
-                                    <div className="flex items-center gap-6">
+                                <div style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
+                                    <div className="flex items-center gap-6" style={{ flexWrap: 'wrap' }}>
                                         <div className={`font-bold ${(expandedExId === ex.id || editingExId === ex.id) ? 'text-primary' : 'text-white'}`}>{ex.name}</div>
                                         {routineCount > 0 && (
-                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)' }}>
+                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                                 {routineCount === 1 ? 'In 1 scheda' : `In ${routineCount} schede`}
                                             </span>
                                         )}
@@ -332,7 +332,7 @@ const TrainingExercises = () => {
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-10">
+                                <div className="flex items-center gap-10" style={{ flexShrink: 0 }}>
                                     <button className="btn-icon text-primary" aria-label="Modifica esercizio" onClick={(e) => { e.stopPropagation(); handleEditClick(ex); setExpandedExId(ex.id); }}>✏️</button>
                                     {!ex.isDefault && (
                                         <button className="btn-icon text-danger" aria-label="Elimina esercizio" onClick={(e) => handleDelete(ex.id, e)}>🗑️</button>
