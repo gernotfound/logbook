@@ -18,8 +18,15 @@ export const getInitialUserData = (): UserData | null => {
         if (!cached) return null;
         const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
         if (!parsed || typeof parsed !== 'object') return null;
-        return UserDataSchema.parse(parsed) as unknown as UserData;
-    } catch {
+        
+        const start = performance.now();
+        const validated = UserDataSchema.parse(parsed) as unknown as UserData;
+        const end = performance.now();
+        console.log(`[BOOT] Parsing Zod completato in ${(end - start).toFixed(2)}ms`);
+        
+        return validated;
+    } catch (err) {
+        console.warn("[BOOT] Errore parsing Zod:", err);
         return null;
     }
 };
