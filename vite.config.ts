@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // Base path: set to '/' for Vercel or root domains.
 
@@ -99,6 +100,12 @@ export default defineConfig({
           }
         ]
       }
+    }),
+    process.env.npm_lifecycle_event === 'analyze' && visualizer({
+      open: true,
+      filename: 'bundle-stats.html',
+      gzipSize: true,
+      brotliSize: true
     })
   ],
   build: {

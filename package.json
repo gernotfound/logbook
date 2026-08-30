@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "analyze": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
@@ -41,6 +42,7 @@
     "firebase-admin": "^14.3.0",
     "jsdom": "^29.1.1",
     "oxlint": "^1.76.0",
+    "rollup-plugin-visualizer": "^7.1.1",
     "sharp": "^0.35.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.0",
