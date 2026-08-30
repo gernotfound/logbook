@@ -408,11 +408,26 @@ export const DB = {
             console.warn("Disconnessione con scritture in cache locale:", err);
         }
         await auth.signOut();
+        try {
+            await del('logbook_cached_user_data');
+            localStorage.removeItem('logbook_local_workout');
+            localStorage.removeItem('logbook_is_guest');
+            // Nota: non eliminiamo le cache del Service Worker (caches.keys()) perché 
+            // contengono solo gli asset statici (App Shell) e non i dati sensibili.
+            // Cancellarle romperebbe il supporto offline della PWA.
+        } catch (e) {
+            console.warn("Errore pulizia storage offline al logout:", e);
+        }
     },
     async deleteAccount() {
         const user = auth.currentUser;
         if (!user) throw new Error("Nessun utente autenticato.");
         try {
+            try {
+                await del('logbook_cached_user_data');
+                localStorage.removeItem('logbook_local_workout');
+                localStorage.removeItem('logbook_is_guest');
+            } catch (e) {}
             // 1. Fetch subcollection documents while auth is valid
             const [histSnap, nutSnap, errSnap, evtSnap, anomSnap] = await Promise.all([
                 getDocs(collection(db, "users", user.uid, "history_months")).catch(e => {
