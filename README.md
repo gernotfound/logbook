@@ -48,3 +48,6 @@ Se scarichi il repository e lanci `npm run dev`:
 1. Le API di salvataggio in cloud e di Google Auth **falliranno**, poiché il progetto clonato non possiede le chiavi di accesso a Firestore.
 2. Tuttavia, l'app può continuare a funzionare in locale in **Modalità Guest**.
 3. Per far funzionare il cloud-sync in locale, dovrai obbligatoriamente creare un tuo progetto Firebase, abilitare Auth/Firestore, e creare un file `.env` root con le tue credenziali (es. `VITE_FIREBASE_API_KEY`).
+  
+## Sicurezza, Offline PWA e Sviluppo AI  
+LogBook e' costruito con un'architettura ibrida Offline-First e una Content-Security-Policy ferrea. Per una panoramica dettagliata sulle regole di sicurezza HTTP, il caching del Service Worker e le invarianti di sviluppo per agenti AI, consulta obbligatoriamente il file [AGENTS.md](AGENTS.md). 
