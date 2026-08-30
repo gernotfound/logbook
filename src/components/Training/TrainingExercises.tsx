@@ -9,7 +9,7 @@ const TrainingExercises = () => {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
         selectionMode, setSelectionMode, isDuplicateName,
-        library, filteredMuscles, trackingType, setTrackingType,
+        library, routines, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete, handleRestoreExercise
@@ -294,7 +294,9 @@ const TrainingExercises = () => {
                 <p className="text-muted">Nessun esercizio creato.</p>
             ) : (
                 <div className="flex-col gap-8">
-                    {library.map(ex => (
+                    {library.map(ex => {
+                        const routineCount = routines.filter(r => r.exercises?.some((re: any) => re.exId === ex.id)).length;
+                        return (
                         <div 
                             key={ex.id} 
                             className="card p-15 mb-0"
@@ -306,7 +308,14 @@ const TrainingExercises = () => {
                                 onClick={() => setExpandedExId(expandedExId === ex.id ? null : ex.id)}
                             >
                                 <div>
-                                    <div className={`font-bold ${(expandedExId === ex.id || editingExId === ex.id) ? 'text-primary' : 'text-white'}`}>{ex.name}</div>
+                                    <div className="flex items-center gap-6">
+                                        <div className={`font-bold ${(expandedExId === ex.id || editingExId === ex.id) ? 'text-primary' : 'text-white'}`}>{ex.name}</div>
+                                        {routineCount > 0 && (
+                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)' }}>
+                                                {routineCount === 1 ? 'In 1 scheda' : `In ${routineCount} schede`}
+                                            </span>
+                                        )}
+                                    </div>
                                     {ex.notes && <div className="text-muted" style={{ fontSize: '0.75rem' }}>{ex.notes}</div>}
                                     {(ex.isBodyweight || (ex.equipmentWeight !== undefined && ex.equipmentWeight > 0)) && (
                                         <div className="flex flex-wrap gap-5 mt-4">
@@ -361,7 +370,8 @@ const TrainingExercises = () => {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>
