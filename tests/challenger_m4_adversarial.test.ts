@@ -16,6 +16,8 @@ vi.mock('../src/lib/firebase', () => ({
         signOut: vi.fn().mockResolvedValue(undefined),
     },
     db: {},
+    getDb: vi.fn().mockReturnValue({}),
+    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
     waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
     deleteUser: vi.fn().mockResolvedValue(undefined),
 }));

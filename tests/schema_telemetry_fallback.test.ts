@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
+import * as firebaseLib from '../src/lib/firebase';
 import {
     DomainParsers,
     UserDataSchema,
@@ -32,6 +33,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
         vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
             return { path: pathSegments.join('/') } as any;
         });
+        vi.spyOn(firebaseLib, 'ensureAppCheck').mockResolvedValue(undefined);
+        vi.spyOn(firebaseLib, 'getDb').mockReturnValue({} as any);
 
         setSchemaFallbackListener(null);
         telemetryHub.reset();

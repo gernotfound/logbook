@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
+import * as firebaseLib from '../src/lib/firebase';
 import { z } from 'zod';
 import {
   scrubPII,
