@@ -439,7 +439,7 @@ export function useTrainingExercises() {
         editingExId, exName, setExName, exNotes, setExNotes,
         muscleSearch, setMuscleSearch, selectedMuscles, secondaryMuscles,
         selectionMode, setSelectionMode, isDuplicateName,
-        library, filteredMuscles, trackingType, setTrackingType,
+        library, routines, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete, handleRestoreExercise
