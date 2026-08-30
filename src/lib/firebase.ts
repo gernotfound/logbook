@@ -51,14 +51,27 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// App Check (ReCaptchaEnterpriseProvider — Google Cloud)
+// App Check (ReCaptchaEnterpriseProvider — Google Cloud) - Lazy Init
 import { initAppCheck, isAppCheckFallbackOffline } from './appCheck';
-initAppCheck(app).then((res) => {
-    if (!res.success && !res.disabled) {
-        console.warn("Inizializzazione App Check non riuscita:", res.reason);
+
+const scheduleAppCheck = (callback: () => void) => {
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(callback, { timeout: 2000 });
+    } else if (typeof window !== 'undefined') {
+        setTimeout(callback, 0);
+    } else {
+        callback();
     }
-}).catch((err) => {
-    console.warn("Errore durante l'inizializzazione di App Check:", err);
+};
+
+scheduleAppCheck(() => {
+    initAppCheck(app).then((res) => {
+        if (!res.success && !res.disabled) {
+            console.warn("Inizializzazione App Check non riuscita:", res.reason);
+        }
+    }).catch((err) => {
+        console.warn("Errore durante l'inizializzazione di App Check:", err);
+    });
 });
 
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
