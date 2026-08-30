@@ -51,30 +51,25 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// App Check (ReCaptchaEnterpriseProvider) - Lazy Init
-const scheduleAppCheck = (callback: () => void) => {
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(callback);
-    } else if (typeof window !== 'undefined') {
-        setTimeout(callback, 3000);
-    } else {
-        callback();
-    }
-};
-
-scheduleAppCheck(() => {
-    import('./appCheck').then(({ initAppCheck }) => {
-        initAppCheck(app).then((res) => {
-            if (!res.success && !res.disabled) {
-                console.warn("Inizializzazione App Check non riuscita:", res.reason);
-            }
-        }).catch((err) => {
-            console.warn("Errore durante l'inizializzazione di App Check:", err);
+// App Check (ReCaptchaEnterpriseProvider) - On Demand Init
+export let appCheckPromise: Promise<void> | null = null;
+export const ensureAppCheck = () => {
+    if (typeof window === 'undefined') return Promise.resolve();
+    if (!appCheckPromise) {
+        appCheckPromise = import('./appCheck').then(({ initAppCheck }) => {
+            return initAppCheck(app).then((res) => {
+                if (!res.success && !res.disabled) {
+                    console.warn("Inizializzazione App Check non riuscita:", res.reason);
+                }
+            }).catch((err) => {
+                console.warn("Errore durante l'inizializzazione di App Check:", err);
+            });
+        }).catch(err => {
+            console.warn("Errore caricamento modulo App Check:", err);
         });
-    }).catch(err => {
-        console.warn("Errore caricamento modulo App Check:", err);
-    });
-});
+    }
+    return appCheckPromise;
+};
 
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
 let analytics: Analytics | null = null;
@@ -88,9 +83,15 @@ isSupported().then((supported) => {
     console.warn("Firebase Analytics non supportato o disabilitato:", err);
 });
 
-const db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
+let _db: any = null;
+export const getDb = () => {
+    if (!_db) {
+        _db = initializeFirestore(app, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+        });
+    }
+    return _db;
+};
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
@@ -114,4 +115,4 @@ export const setAnalyticsConsent = (consent: boolean) => {
         analytics = null;
     }
 };
-export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics };
+export { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics };

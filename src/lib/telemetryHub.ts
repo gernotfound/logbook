@@ -3,7 +3,7 @@
  */
 
 import { doc, setDoc } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { getDb, auth, ensureAppCheck } from './firebase';
 import {
   computeErrorHash,
   sanitizeErrorPayload,
@@ -874,7 +874,8 @@ export class TelemetryHub {
       }
 
       const errorId = payload.id || `err_${payload.hash || computeErrorHash(payload.type, payload.message)}`;
-      const docRef = doc(db, 'users', uid, 'telemetry_errors', errorId);
+      await ensureAppCheck();
+      const docRef = doc(getDb(), 'users', uid, 'telemetry_errors', errorId);
 
       const firestorePayload: Record<string, any> = {
         timestamp: payload.timestamp || payload.firstSeen || Date.now(),
@@ -917,7 +918,8 @@ export class TelemetryHub {
       }
 
       const eventId = payload.id || `evt_${payload.timestamp}_${Math.random().toString(36).slice(2, 9)}`;
-      const docRef = doc(db, 'users', uid, 'telemetry_events', eventId);
+      await ensureAppCheck();
+      const docRef = doc(getDb(), 'users', uid, 'telemetry_events', eventId);
 
       const firestorePayload: Record<string, any> = {
         timestamp: payload.timestamp,

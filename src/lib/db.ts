@@ -1,4 +1,4 @@
-import { auth, db, waitForPendingWrites, deleteUser } from './firebase';
+import { auth, getDb, waitForPendingWrites, deleteUser, ensureAppCheck } from './firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
@@ -61,11 +61,12 @@ export const DB = {
                 activePains: [],
                 legalConsent: null
             };
-            const docRef = doc(db, "users", user.uid);
+            await ensureAppCheck();
+            const docRef = doc(getDb(), "users", user.uid);
             // 1. Get cached/seed catalog (offline-resilient)
             const catalog = await getCachedCatalog();
             // Background sync manifest if online (fire-and-forget)
-            syncGlobalCatalog(db).catch(() => {});
+            syncGlobalCatalog(getDb()).catch(() => {});
 
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
@@ -127,7 +128,7 @@ export const DB = {
             });
 
             const historyDocs = await withTimeout(
-                Promise.all(targetMonths.map(m => getDoc(doc(db, "users", user.uid, "history_months", m)))),
+                Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "history_months", m)))),
                 6000,
                 "Timeout recupero storico"
             );
@@ -141,7 +142,7 @@ export const DB = {
             });
             
             const nutritionDocs = await withTimeout(
-                Promise.all(targetMonths.map(m => getDoc(doc(db, "users", user.uid, "nutrition_months", m)))),
+                Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "nutrition_months", m)))),
                 6000,
                 "Timeout recupero nutrizione"
             );
@@ -202,7 +203,8 @@ export const DB = {
                 oldState = JSON.parse(lastSavedStateStr);
             }
             
-            const batch = writeBatch(db);
+            await ensureAppCheck();
+            const batch = writeBatch(getDb());
             let hasWrites = false;
             const restWrites: any[] = [];
             const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -248,7 +250,7 @@ export const DB = {
                 !deepEqual(state.catalogOverrides, oldState.catalogOverrides) ||
                 !deepEqual(state.legalConsent, oldState.legalConsent)) {
                 
-                const userRef = doc(db, "users", user.uid);
+                const userRef = doc(getDb(), "users", user.uid);
                 const userDocData = {
                     profile: state.profile || {},
                     library: effectiveCustomExercises,
@@ -301,7 +303,7 @@ export const DB = {
                 if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
                     const cleanDoc = removeUndefinedValues(newHistMonths[month]);
                     checkDocSize(cleanDoc, `History ${month}`);
-                    batch.set(doc(db, "users", user.uid, "history_months", month), cleanDoc);
+                    batch.set(doc(getDb(), "users", user.uid, "history_months", month), cleanDoc);
                     restWrites.push({
                         update: {
                             name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/history_months/${month}`,
@@ -313,7 +315,7 @@ export const DB = {
             });
             Object.keys(oldHistMonths).forEach(month => {
                 if (!newHistMonths[month]) {
-                    batch.delete(doc(db, "users", user.uid, "history_months", month));
+                    batch.delete(doc(getDb(), "users", user.uid, "history_months", month));
                     restWrites.push({
                         delete: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/history_months/${month}`
                     });
@@ -340,7 +342,7 @@ export const DB = {
                 if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
                     const cleanDoc = removeUndefinedValues(newNutMonths[month]);
                     checkDocSize(cleanDoc, `Nutrition ${month}`);
-                    batch.set(doc(db, "users", user.uid, "nutrition_months", month), cleanDoc);
+                    batch.set(doc(getDb(), "users", user.uid, "nutrition_months", month), cleanDoc);
                     restWrites.push({
                         update: {
                             name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/nutrition_months/${month}`,
@@ -352,7 +354,7 @@ export const DB = {
             });
             Object.keys(oldNutMonths).forEach(month => {
                 if (!newNutMonths[month]) {
-                    batch.delete(doc(db, "users", user.uid, "nutrition_months", month));
+                    batch.delete(doc(getDb(), "users", user.uid, "nutrition_months", month));
                     restWrites.push({
                         delete: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/nutrition_months/${month}`
                     });
@@ -402,7 +404,7 @@ export const DB = {
     async secureLogOut() {
         console.log("Attendo il completamento delle scritture offline...");
         try {
-            await withTimeout(waitForPendingWrites(db), 2500, "Timeout scritture offline");
+            await withTimeout(waitForPendingWrites(getDb()), 2500, "Timeout scritture offline");
             console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
         } catch (err) {
             console.warn("Disconnessione con scritture in cache locale:", err);
@@ -429,24 +431,25 @@ export const DB = {
                 localStorage.removeItem('logbook_is_guest');
             } catch (e) {}
             // 1. Fetch subcollection documents while auth is valid
+            await ensureAppCheck();
             const [histSnap, nutSnap, errSnap, evtSnap, anomSnap] = await Promise.all([
-                getDocs(collection(db, "users", user.uid, "history_months")).catch(e => {
+                getDocs(collection(getDb(), "users", user.uid, "history_months")).catch(e => {
                     console.warn("Permesso negato per leggere history_months, proseguo...", e);
                     return { forEach: () => {} } as any;
                 }),
-                getDocs(collection(db, "users", user.uid, "nutrition_months")).catch(e => {
+                getDocs(collection(getDb(), "users", user.uid, "nutrition_months")).catch(e => {
                     console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
                     return { forEach: () => {} } as any;
                 }),
-                getDocs(collection(db, "users", user.uid, "telemetry_errors")).catch(e => {
+                getDocs(collection(getDb(), "users", user.uid, "telemetry_errors")).catch(e => {
                     console.warn("Permesso negato per leggere telemetry_errors, proseguo...", e);
                     return { forEach: () => {} } as any;
                 }),
-                getDocs(collection(db, "users", user.uid, "telemetry_events")).catch(e => {
+                getDocs(collection(getDb(), "users", user.uid, "telemetry_events")).catch(e => {
                     console.warn("Permesso negato per leggere telemetry_events, proseguo...", e);
                     return { forEach: () => {} } as any;
                 }),
-                getDocs(collection(db, "users", user.uid, "telemetry_anomalies")).catch(e => {
+                getDocs(collection(getDb(), "users", user.uid, "telemetry_anomalies")).catch(e => {
                     console.warn("Permesso negato per leggere telemetry_anomalies, proseguo...", e);
                     return { forEach: () => {} } as any;
                 })
@@ -458,13 +461,13 @@ export const DB = {
             errSnap?.forEach?.((d: any) => allRefs.push(d.ref));
             evtSnap?.forEach?.((d: any) => allRefs.push(d.ref));
             anomSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-            allRefs.push(doc(db, "users", user.uid));
+            allRefs.push(doc(getDb(), "users", user.uid));
 
             // Chunk in max 400 operations per batch to strictly adhere to Firestore 500 limit
             const CHUNK_SIZE = 400;
             for (let i = 0; i < allRefs.length; i += CHUNK_SIZE) {
                 const chunk = allRefs.slice(i, i + CHUNK_SIZE);
-                const batch = writeBatch(db);
+                const batch = writeBatch(getDb());
                 chunk.forEach(ref => batch.delete(ref));
                 try {
                     await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
