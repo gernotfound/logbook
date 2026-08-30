@@ -16,9 +16,11 @@ export default defineConfig({
       ...configDefaults.exclude,
       '**/teamwork_projects/**',
       '**/.agents/**',
-      '**/challenger_*.test.{ts,tsx}',
-      '**/*adversarial*.test.{ts,tsx}',
-      '**/*stress*.test.{ts,tsx}'
+      ...(process.env.npm_lifecycle_event === 'test:stress' ? [] : [
+        '**/challenger_*.test.{ts,tsx}',
+        '**/*adversarial*.test.{ts,tsx}',
+        '**/*stress*.test.{ts,tsx}'
+      ])
     ],
   },
 });
