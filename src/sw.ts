@@ -8,6 +8,9 @@ declare let self: ServiceWorkerGlobalScope;
 clientsClaim();
 
 self.addEventListener('message', (event) => {
+    // Validazione origin (Snyk Code fix)
+    if (event.origin && event.origin !== self.location.origin) return;
+
     if (event.data && event.data.type === 'SKIP_WAITING') {
         self.skipWaiting();
     }
