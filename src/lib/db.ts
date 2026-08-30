@@ -367,7 +367,7 @@ export const DB = {
                     lastSavedStateStr = JSON.stringify(state);
                     await set('sync_failed', false); // Clear flag on success
                 } catch (batchErr: any) {
-                    if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+                    if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || batchErr?.code === 'permission-denied' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
                         

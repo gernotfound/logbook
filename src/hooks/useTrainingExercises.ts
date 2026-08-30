@@ -3,7 +3,7 @@ import Fuse from 'fuse.js';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { defaultExercises } from '../lib/defaultExercises';
+import { getInMemoryCatalog } from '../lib/catalog/catalogService';
 
 const normalizeStem = (str: string) => {
     return str
@@ -415,7 +415,8 @@ export function useTrainingExercises() {
     };
 
     const handleRestoreExercise = async (id: string) => {
-        const originalEx = defaultExercises.find(e => e.id === id);
+        const catalog = getInMemoryCatalog(true);
+        const originalEx = catalog.exercises.find(e => e.id === id);
         if (!originalEx) {
             showAlert("Errore: esercizio originale non trovato.");
             return;
