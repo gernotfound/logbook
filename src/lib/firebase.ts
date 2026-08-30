@@ -51,26 +51,28 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// App Check (ReCaptchaEnterpriseProvider — Google Cloud) - Lazy Init
-import { initAppCheck, isAppCheckFallbackOffline } from './appCheck';
-
+// App Check (ReCaptchaEnterpriseProvider) - Lazy Init
 const scheduleAppCheck = (callback: () => void) => {
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(callback, { timeout: 2000 });
+        (window as any).requestIdleCallback(callback);
     } else if (typeof window !== 'undefined') {
-        setTimeout(callback, 0);
+        setTimeout(callback, 3000);
     } else {
         callback();
     }
 };
 
 scheduleAppCheck(() => {
-    initAppCheck(app).then((res) => {
-        if (!res.success && !res.disabled) {
-            console.warn("Inizializzazione App Check non riuscita:", res.reason);
-        }
-    }).catch((err) => {
-        console.warn("Errore durante l'inizializzazione di App Check:", err);
+    import('./appCheck').then(({ initAppCheck }) => {
+        initAppCheck(app).then((res) => {
+            if (!res.success && !res.disabled) {
+                console.warn("Inizializzazione App Check non riuscita:", res.reason);
+            }
+        }).catch((err) => {
+            console.warn("Errore durante l'inizializzazione di App Check:", err);
+        });
+    }).catch(err => {
+        console.warn("Errore caricamento modulo App Check:", err);
     });
 });
 
@@ -112,4 +114,4 @@ export const setAnalyticsConsent = (consent: boolean) => {
         analytics = null;
     }
 };
-export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics, isAppCheckFallbackOffline };
+export { auth, db, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics };
