@@ -1,16 +1,20 @@
 import React from 'react';
 import { Logic } from '../../lib/logic';
+import { ContextMenu } from '../UI/ContextMenu';
+import { Pencil, Trash2 } from 'lucide-react';
 
 interface DataHistoryProps {
     measurementsHistory: any[];
     editingDate: string | null;
     onSelectEdit: (day: any) => void;
+    onDeleteMeasurement: (date: string) => void;
 }
 
 const DataHistory: React.FC<DataHistoryProps> = ({
     measurementsHistory,
     editingDate,
-    onSelectEdit
+    onSelectEdit,
+    onDeleteMeasurement
 }) => {
     return (
         <div>
@@ -18,7 +22,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                 <h1 style={{ margin: 0, fontSize: '1.4rem' }}>Storico misurazioni ({measurementsHistory.length})</h1>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                Tutte le misurazioni registrate in ordine cronologico. Clicca su una voce per modificarla.
+                Tutte le misurazioni registrate in ordine cronologico. Usa le opzioni per modificare o eliminare una misurazione.
             </p>
 
             {measurementsHistory.length === 0 ? (
@@ -42,7 +46,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                 borderLeft: editingDate === day.date ? '4px solid var(--primary-color)' : '1px solid var(--glass-border)',
                                 transition: 'all 0.2s ease'
                             }}
-                            onClick={() => onSelectEdit(day)}
+                            
                         >
                             <div>
                                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: editingDate === day.date ? 'var(--primary-color)' : 'white' }}>
@@ -57,8 +61,22 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                     {day.sleepHours && <span>| 🌙 Sonno: {Logic.formatSleepTime(day.sleepHours)}</span>}
                                 </div>
                             </div>
-                            <div style={{ color: 'var(--primary-color)', fontSize: '1.1rem', opacity: 0.8 }}>
-                                ✏️
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <ContextMenu
+                                    items={[
+                                        {
+                                            label: 'Modifica',
+                                            icon: <Pencil size={16} />,
+                                            onClick: () => onSelectEdit(day)
+                                        },
+                                        {
+                                            label: 'Elimina',
+                                            icon: <Trash2 size={16} />,
+                                            onClick: () => onDeleteMeasurement(day.date),
+                                            variant: 'danger' as const
+                                        }
+                                    ]}
+                                />
                             </div>
                         </div>
                     ))}
