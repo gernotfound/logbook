@@ -78,7 +78,19 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             {activeSubTab === 'meals' && (
                 <div className="nutrition-sub-view active">
                     <NutritionMeals 
-                        mealsHook={mealsHook} 
+                        mealsHook={{
+                            ...mealsHook,
+                            saveCustomFood: async () => {
+                                const wasEditing = !!mealsHook.editingFoodId;
+                                await mealsHook.saveCustomFood();
+                                if (wasEditing && setSubTab) setSubTab('archive');
+                            },
+                            cancelCustomFood: () => {
+                                const wasEditing = !!mealsHook.editingFoodId;
+                                mealsHook.cancelCustomFood();
+                                if (wasEditing && setSubTab) setSubTab('archive');
+                            }
+                        }}
                         selectedDate={selectedDate} 
                         setSelectedDate={setSelectedDate} 
                     />
