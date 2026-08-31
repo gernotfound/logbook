@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
+import { ContextMenu } from '../UI/ContextMenu';
 
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
@@ -333,10 +335,25 @@ const TrainingExercises = () => {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-10" style={{ flexShrink: 0 }}>
-                                    <button className="btn-icon text-primary" aria-label="Modifica esercizio" onClick={(e) => { e.stopPropagation(); handleEditClick(ex); setExpandedExId(ex.id); }}>✏️</button>
-                                    {!ex.isDefault && (
-                                        <button className="btn-icon text-danger" aria-label="Elimina esercizio" onClick={(e) => handleDelete(ex.id, e)}>🗑️</button>
-                                    )}
+                                    <ContextMenu
+                                        items={[
+                                            {
+                                                label: 'Modifica esercizio',
+                                                icon: <Pencil size={16} />,
+                                                onClick: () => {
+                                                    handleEditClick(ex);
+                                                    setExpandedExId(ex.id);
+                                                }
+                                            },
+                                            {
+                                                label: 'Elimina esercizio',
+                                                icon: <Trash2 size={16} />,
+                                                variant: 'danger',
+                                                hidden: ex.isDefault,
+                                                onClick: (e) => handleDelete(ex.id, e)
+                                            }
+                                        ]}
+                                    />
                                 </div>
                             </div>
                             {expandedExId === ex.id && (

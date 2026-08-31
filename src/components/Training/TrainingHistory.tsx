@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { BarChart2, Pencil, Trash2 } from 'lucide-react';
+import { ContextMenu } from '../UI/ContextMenu';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
 import { Logic } from '../../lib/logic';
 import type { WorkoutSession } from '../../types';
@@ -72,37 +74,35 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <div className="badge badge-primary" style={{ marginRight: '5px' }}>{durationDisplay}</div>
-                                        {onEditWorkout && (
-                                            <button 
-                                                className="btn-icon" 
-                                                style={{ color: 'var(--primary-color)' }} 
-                                                aria-label="Modifica allenamento"
-                                                title="Modifica allenamento"
-                                                onClick={() => onEditWorkout(wo)}
-                                            >✏️</button>
-                                        )}
-                                        <button 
-                                            className="btn-icon" 
-                                            style={{ color: 'var(--danger-color)' }} 
-                                            aria-label="Elimina allenamento"
-                                            title="Elimina allenamento"
-                                            onClick={() => deleteWorkout(wo.id!)}
-                                        >🗑️</button>
+                                        <ContextMenu
+                                            items={[
+                                                {
+                                                    label: 'Vedi report',
+                                                    icon: <BarChart2 size={16} />,
+                                                    onClick: () => setSelectedReportWorkout(wo)
+                                                },
+                                                {
+                                                    label: 'Modifica allenamento',
+                                                    icon: <Pencil size={16} />,
+                                                    hidden: !onEditWorkout,
+                                                    onClick: () => onEditWorkout?.(wo)
+                                                },
+                                                {
+                                                    label: 'Elimina allenamento',
+                                                    icon: <Trash2 size={16} />,
+                                                    variant: 'danger',
+                                                    onClick: () => deleteWorkout(wo.id!)
+                                                }
+                                            ]}
+                                        />
                                     </div>
                                 </div>
 
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
                                     <div>
                                         {wo.exercises?.length || 0} esercizi completati
                                         {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
                                     </div>
-                                    <button 
-                                        className="btn btn-small" 
-                                        style={{ width: 'auto', padding: '4px 10px', fontSize: '0.75rem', margin: 0, background: 'rgba(0, 229, 255, 0.1)', color: 'var(--primary-color)', border: '1px solid rgba(0, 229, 255, 0.3)' }}
-                                        onClick={() => setSelectedReportWorkout(wo)}
-                                    >
-                                        📊 Vedi Report
-                                    </button>
                                 </div>
 
                                 {(wo.exercises || []).length > 0 && (

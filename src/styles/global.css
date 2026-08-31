@@ -880,6 +880,7 @@ button.icon-only {
   }
 }
 
+
 /* Tablet */
 @media (min-width: 768px) {
   #app-container {
@@ -893,4 +894,172 @@ button.icon-only {
   #app-container {
     max-width: 960px;
   }
+}
+
+/* ==========================================================================
+   Context Menu Component (Dark Glassmorphism)
+   ========================================================================== */
+
+.context-menu-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.context-menu-trigger {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-sizing: border-box;
+}
+
+.context-menu-trigger:hover,
+.context-menu-trigger:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  border-color: var(--glass-border);
+  outline: none;
+}
+
+.context-menu-trigger[aria-expanded="true"] {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--primary-color);
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+.context-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  min-width: 180px;
+  max-width: 260px;
+  width: max-content;
+  background: rgba(18, 18, 18, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 1px rgba(255, 255, 255, 0.15);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: contextMenuPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  touch-action: manipulation;
+}
+
+.context-menu-dropdown.align-right {
+  right: 0;
+  left: auto;
+}
+
+.context-menu-dropdown.align-left {
+  left: 0;
+  right: auto;
+}
+
+@keyframes contextMenuPop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-main);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.context-menu-item:hover,
+.context-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  outline: none;
+}
+
+.context-menu-item.item-primary,
+.context-menu-item.context-menu-item-primary {
+  color: var(--primary-color);
+}
+
+.context-menu-item.item-primary:hover,
+.context-menu-item.item-primary:focus-visible,
+.context-menu-item.context-menu-item-primary:hover,
+.context-menu-item.context-menu-item-primary:focus-visible {
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--primary-color);
+}
+
+.context-menu-item.item-danger,
+.context-menu-item.context-menu-item-danger {
+  color: var(--danger-color);
+}
+
+.context-menu-item.item-danger:hover,
+.context-menu-item.item-danger:focus-visible,
+.context-menu-item.context-menu-item-danger:hover,
+.context-menu-item.context-menu-item-danger:focus-visible {
+  background: rgba(255, 77, 109, 0.12);
+  color: var(--danger-color);
+}
+
+.context-menu-item.item-disabled,
+.context-menu-item.context-menu-item-disabled,
+.context-menu-item:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.context-menu-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.context-menu-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
