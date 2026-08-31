@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
 
@@ -295,14 +296,21 @@ const TrainingExercises = () => {
             {library.length === 0 ? (
                 <p className="text-muted">Nessun esercizio creato.</p>
             ) : (
-                <div className="flex-col gap-8">
-                    {library.map(ex => {
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Virtuoso
+                        useWindowScroll
+                        data={library}
+                        initialItemCount={20}
+                        components={{
+                            Footer: () => <div style={{ height: '90px' }} />
+                        }}
+                        itemContent={(index, ex) => {
                         const routineCount = routines.filter(r => r.exercises?.some((re: any) => re.exId === ex.id)).length;
                         return (
                         <div 
                             key={ex.id} 
-                            className="card p-15 mb-0"
-                            style={{ marginBottom: 0 }}
+                            className="card p-15"
+                            style={{ marginBottom: '15px' }}
                         >
                             <div 
                                 className="flex-between cursor-pointer"
@@ -392,8 +400,7 @@ const TrainingExercises = () => {
                                 </div>
                             )}
                         </div>
-                        );
-                    })}
+                        )}} />
                 </div>
             )}
         </div>
