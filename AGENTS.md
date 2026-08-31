@@ -130,7 +130,13 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
   - Trasparenze in vetro: `--glass-bg: rgba(13, 13, 13, 0.85);`, `--glass-border: rgba(255, 255, 255, 0.1);`
   - Testi: `--text-main: #f0f0f0;`, `--text-muted: #9ba3af;`
 - **Classi e prefissi standard:** `.card`, `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-small`, `.btn-icon`, `.form-group`, `.input-row`, `.spinner`.
-- **Regola di consistenza:** Quando aggiungi un elemento di UI, assicurati che rispetti la densitÃ , il contrasto e il feeling premium del tema dark glassmorphism.
+- **Tipografia e dimensioni (Best Practice):**
+  - Usare sempre le classi di utilità globali per i testi (`.text-xs`, `.text-sm`, `.text-md`, `.text-base`, `.text-lg`, `.text-xl`) definite in `global.css`.
+  - Non usare *mai* stili inline (`style={{ fontSize: '...' }}`) a meno di eccezioni dinamiche imprescindibili.
+  - Usare sempre l'unità `rem` e mai `px` per scalare con le preferenze di accessibilità del sistema operativo.
+  - Affidarsi ai tag semantici (`<h1>`, `<h2>`, `<h3>`, `<h4>`) per i titoli, che hanno già le loro dimensioni standardizzate in `global.css`.
+  - *Unica eccezione:* I campi `<input>`, `<select>` e `<textarea>` devono tassativamente mantenere `font-size: 16px !important` (già gestito a livello globale) per prevenire lo zoom automatico e distruttivo su iOS Safari.
+- **Regola di consistenza:** Quando aggiungi un elemento di UI, assicurati che rispetti la densità, il contrasto e il feeling premium del tema dark glassmorphism.
 
 ## 11. Stile testuale (Sentence case italiano)
 - Ogni testo rivolto all'utente (label, bottoni, placeholder, alert, titoli di sezione) DEVE rispettare rigorosamente la convenzione italiana del **Sentence case**: *Solo ed esclusivamente la primissima lettera della frase va in maiuscolo*. Le parole successive sono minuscole, salvo nomi propri, sigle o marchi.
