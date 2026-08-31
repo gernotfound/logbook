@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Chart } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,7 +12,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import { computeVolumeCaloriesCorrelation } from '../../lib/calc/analytics';
+import { useAnalyticsWorker } from '../../hooks/useAnalyticsWorker';
 import type { WorkoutSession, NutritionDay, Exercise } from '../../types';
 
 ChartJS.register(
@@ -50,10 +50,34 @@ export default function VolumeCaloriesCorrelationChart({
   defaultWeeks = 8
 }: VolumeCaloriesCorrelationChartProps) {
   const [selectedWeeks, setSelectedWeeks] = useState<number>(defaultWeeks);
+  const [isCalculating, setIsCalculating] = useState(true);
+  const { calculateCorrelationStats } = useAnalyticsWorker();
 
-  const { points, stats } = useMemo(() => {
-    return computeVolumeCaloriesCorrelation(history, nutrition, library, userWeight, selectedWeeks);
-  }, [history, nutrition, library, userWeight, selectedWeeks]);
+  const [calcResult, setCalcResult] = useState<{points: any[], stats: any}>({
+    points: [],
+    stats: { hasData: false, correlationCoefficient: null, correlationInsight: '', avgWeeklyVolumeKg: 0, avgDailyKcal: 0, validDataPointsCount: 0 }
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsCalculating(true);
+    
+    calculateCorrelationStats(history, nutrition, library, userWeight, selectedWeeks)
+      .then((res: any) => {
+        if (isMounted) {
+          setCalcResult(res);
+          setIsCalculating(false);
+        }
+      })
+      .catch((err: any) => {
+        console.error("Errore calcolo grafico correlazione:", err);
+        if (isMounted) setIsCalculating(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [history, nutrition, library, userWeight, selectedWeeks, calculateCorrelationStats]);
+
+  const { points, stats } = calcResult;
 
   const chartData = useMemo(() => {
     return {
@@ -195,7 +219,12 @@ export default function VolumeCaloriesCorrelationChart({
   }, [points]);
 
   return (
-    <div className="card" id="volume-calories-correlation-card" style={{ padding: '16px', marginBottom: '20px' }}>
+    <div className="card" id="volume-calories-correlation-card" style={{ padding: '16px', marginBottom: '20px', position: 'relative' }}>
+      {isCalculating && (
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(13,13,13,0.5)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'inherit' }}>
+          <div className="spinner" style={{ width: '28px', height: '28px', borderWidth: '3px' }}></div>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
