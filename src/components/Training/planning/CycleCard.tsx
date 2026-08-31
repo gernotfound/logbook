@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
+import { ContextMenu, ContextMenuItem } from '../../UI/ContextMenu';
+import { Pencil, Copy, Trash2 } from 'lucide-react';
 
 interface CycleCardProps {
     cycle: TrainingCycle;
@@ -29,6 +31,28 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     const schedule = useMemo(() => {
         return Logic.calculateCycleSchedule(cycle, routines);
     }, [cycle, routines]);
+
+    const menuItems: ContextMenuItem[] = [
+        {
+            id: 'edit-cycle',
+            label: 'Modifica ciclo',
+            icon: <Pencil size={16} />,
+            onClick: () => onEdit(cycle)
+        },
+        {
+            id: 'duplicate-cycle',
+            label: 'Duplica ciclo',
+            icon: <Copy size={16} />,
+            onClick: () => onDuplicate(cycle)
+        },
+        {
+            id: 'delete-cycle',
+            label: 'Elimina ciclo',
+            icon: <Trash2 size={16} />,
+            variant: 'danger',
+            onClick: () => onDelete(cycle)
+        }
+    ];
 
     return (
         <div
@@ -72,36 +96,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button
-                        type="button"
-                        className="btn btn-small"
-                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
-                        onClick={() => onEdit(cycle)}
-                        title="Modifica ciclo"
-                    >
-                        <span aria-hidden="true">✏️</span> Modifica
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-small"
-                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
-                        onClick={() => onDuplicate(cycle)}
-                        title="Duplica ciclo"
-                    >
-                        <span aria-hidden="true">📋</span> Duplica
-                    </button>
-                    <button
-                        type="button"
-                        className="btn-icon"
-                        style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }}
-                        onClick={() => onDelete(cycle)}
-                        aria-label="Elimina ciclo"
-                        title="Elimina ciclo"
-                    >
-                        <span aria-hidden="true">🗑️</span>
-                    </button>
-                </div>
+                <ContextMenu items={menuItems} />
             </div>
 
             {cycle.notes && (

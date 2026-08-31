@@ -1,4 +1,6 @@
 import React from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
+import { ContextMenu } from '../../UI/ContextMenu';
 
 interface FoodItemRowProps {
     food: any;
@@ -40,25 +42,21 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button 
-                        type="button" 
-                        className="btn btn-small" 
-                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
-                        onClick={() => onEdit(food)}
-                        title="Modifica alimento"
-                    >
-                        ✏️ Modifica
-                    </button>
-                    <button 
-                        type="button" 
-                        className="btn-icon" 
-                        style={{ color: 'var(--danger-color)', fontSize: '0.9rem' }}
-                        onClick={() => onDelete(food)}
-                        aria-label="Elimina alimento"
-                        title="Elimina alimento"
-                    >
-                        🗑️
-                    </button>
+                    <ContextMenu
+                        items={[
+                            {
+                                label: 'Modifica alimento',
+                                icon: <Pencil size={16} />,
+                                onClick: () => onEdit(food)
+                            },
+                            {
+                                label: 'Elimina alimento',
+                                icon: <Trash2 size={16} />,
+                                variant: 'danger',
+                                onClick: () => onDelete(food)
+                            }
+                        ]}
+                    />
                 </div>
             </div>
 

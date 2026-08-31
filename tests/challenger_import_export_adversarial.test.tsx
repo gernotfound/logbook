@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Exporter } from '../src/lib/export';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
-import { UserDataSchema } from '../src/lib/schema';
 import { UserData } from '../src/types';
 
 vi.mock('../src/store/useAppStore', () => ({
@@ -59,7 +58,6 @@ describe('Adversarial Import/Export Logic', () => {
         await Exporter.importFromJson(file, mockCurrentUser, saveUserDataMock);
         
         expect(saveUserDataMock).toHaveBeenCalled();
-        const savedData = saveUserDataMock.mock.calls[0][0](mockUserData);
         // We actually check how our saveUserData works: it gets a thunk or direct. Our implementation uses await saveUserData((prev: any) => finalData);
         // Wait, the mock in useSettings just calls saveUserData((prev) => finalData);
         // Or in export.ts we wrote: await saveUserData((prev: any) => finalData);

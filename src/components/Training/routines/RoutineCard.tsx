@@ -1,6 +1,8 @@
 import React from 'react';
 import MuscleModel from '../MuscleModel';
 import { Routine, RoutineExercise, ExerciseLibraryItem } from '../../../types';
+import { ContextMenu, ContextMenuItem } from '../../UI/ContextMenu';
+import { Pencil, Trash2 } from 'lucide-react';
 
 interface RoutineCardProps {
     routine: Routine;
@@ -33,6 +35,22 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
         }
     });
 
+    const menuItems: ContextMenuItem[] = [
+        {
+            id: 'edit-routine',
+            label: 'Modifica scheda',
+            icon: <Pencil size={16} />,
+            onClick: () => onEdit(routine)
+        },
+        {
+            id: 'delete-routine',
+            label: 'Elimina scheda',
+            icon: <Trash2 size={16} />,
+            variant: 'danger',
+            onClick: (e) => onDelete(routine.id, e)
+        }
+    ];
+
     return (
         <div 
             className="card p-15 mb-0"
@@ -50,24 +68,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                         {(routine.exercises || []).length} esercizi
                     </div>
                 </div>
-                <div className="flex items-center gap-10">
-                    <button 
-                        type="button"
-                        className="btn-icon text-primary" 
-                        onClick={(e) => { e.stopPropagation(); onEdit(routine); }}
-                        aria-label="Modifica scheda"
-                    >
-                        ✏️
-                    </button>
-                    <button 
-                        type="button"
-                        className="btn-icon text-danger" 
-                        onClick={(e) => onDelete(routine.id, e)}
-                        aria-label="Elimina scheda"
-                    >
-                        🗑️
-                    </button>
-                </div>
+                <ContextMenu items={menuItems} />
             </div>
 
             {isExpanded && (

@@ -311,7 +311,12 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
         it('TrainingPlanning duplicates cycle with (copia) in sentence case', async () => {
             render(<TrainingPlanning />);
 
-            const dupBtn = screen.getByTitle('Duplica ciclo');
+            const optionsBtn = screen.getByTitle('Opzioni');
+            await act(async () => {
+                fireEvent.click(optionsBtn);
+            });
+
+            const dupBtn = screen.getByRole('menuitem', { name: /Duplica ciclo/i });
             await act(async () => {
                 fireEvent.click(dupBtn);
             });

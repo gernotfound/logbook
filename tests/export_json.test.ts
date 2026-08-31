@@ -99,7 +99,7 @@ describe('JSON Export/Import Logic', () => {
         const downloadSpy = vi.spyOn(Exporter, 'downloadFile').mockImplementation(async () => {});
         downloadSpy.mockClear();
         
-        const result = await Exporter.exportShareJson(mockUserData, {
+        await Exporter.exportShareJson(mockUserData, {
             exportTrainingCycles: ['c1'],
             exportRoutines: [],
             exportLibrary: []

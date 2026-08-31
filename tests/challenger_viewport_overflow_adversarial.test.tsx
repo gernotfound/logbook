@@ -455,7 +455,7 @@ render(
             );
 
             const buttons = container.querySelectorAll('button');
-            expect(buttons.length).toBeGreaterThanOrEqual(6); // 2 action buttons + 4 quick-add buttons
+            expect(buttons.length).toBeGreaterThanOrEqual(5); // 1 ContextMenu trigger button + 4 quick-add buttons
             
             // Cleanup attached DOM node
             document.body.removeChild(rootWrapper);
