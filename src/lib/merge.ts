@@ -1,9 +1,7 @@
 import { UserDataSchema } from './schema';
 import { getInMemoryCatalog } from './catalog/catalogService';
 import {
-    mergeCatalogOverrides,
-    migrateLegacyLibraryToOverrides,
-    migrateLegacyFoodsToOverrides
+    mergeCatalogOverrides
 } from './catalog/deltaResolver';
 import type {
     UserData,
@@ -316,27 +314,6 @@ export function mergeUserData(
     const customGuestFoods = filterCustomFoods(guest.customFoods);
 
     let mergedOverrides = mergeCatalogOverrides(cloud.catalogOverrides, guest.catalogOverrides);
-
-    // If legacy monolithic arrays with modified catalog items are passed without catalogOverrides, extract them
-    const catalog = getInMemoryCatalog(true);
-    if (catalog) {
-        if (Array.isArray(cloud.library) && cloud.library.some(e => e && (e.isDefault === true || (e.id && catalog.exercises.some(ce => ce.id === e.id))))) {
-            const { overrides } = migrateLegacyLibraryToOverrides(cloud.library, catalog.exercises);
-            mergedOverrides = mergeCatalogOverrides(overrides, mergedOverrides);
-        }
-        if (Array.isArray(guest.library) && guest.library.some(e => e && (e.isDefault === true || (e.id && catalog.exercises.some(ce => ce.id === e.id))))) {
-            const { overrides } = migrateLegacyLibraryToOverrides(guest.library, catalog.exercises);
-            mergedOverrides = mergeCatalogOverrides(mergedOverrides, overrides);
-        }
-        if (Array.isArray(cloud.customFoods) && cloud.customFoods.some(f => f && (f.isCustom === false || (f.id !== undefined && f.id !== null && catalog.foods.some(cf => String(cf.id) === String(f.id)))))) {
-            const { overrides } = migrateLegacyFoodsToOverrides(cloud.customFoods, catalog.foods);
-            mergedOverrides = mergeCatalogOverrides(overrides, mergedOverrides);
-        }
-        if (Array.isArray(guest.customFoods) && guest.customFoods.some(f => f && (f.isCustom === false || (f.id !== undefined && f.id !== null && catalog.foods.some(cf => String(cf.id) === String(f.id)))))) {
-            const { overrides } = migrateLegacyFoodsToOverrides(guest.customFoods, catalog.foods);
-            mergedOverrides = mergeCatalogOverrides(mergedOverrides, overrides);
-        }
-    }
 
     const rawMerged: UserData = {
         profile: mergeProfile(cloud.profile, guest.profile),

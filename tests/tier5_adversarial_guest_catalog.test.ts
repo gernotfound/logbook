@@ -41,8 +41,8 @@ import {
 
 
     mergeCatalogOverrides,
-    migrateLegacyLibraryToOverrides,
-    migrateLegacyFoodsToOverrides
+    extractCustomExercisesAndOverrides,
+    extractCustomFoodsAndOverrides
 } from '../src/lib/catalog/deltaResolver';
 
 import {
@@ -795,8 +795,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 { id: 'panca-piana-bilanciere', name: 'Duplicate Bench Override' }
             ];
 
-            expect(() => migrateLegacyLibraryToOverrides(hostileLegacyEx, seed.exercises)).not.toThrow();
-            const { customExercises, overrides } = migrateLegacyLibraryToOverrides(hostileLegacyEx, seed.exercises);
+            expect(() => extractCustomExercisesAndOverrides(hostileLegacyEx, seed.exercises)).not.toThrow();
+            const { customExercises, overrides } = extractCustomExercisesAndOverrides(hostileLegacyEx, seed.exercises);
 
             expect(Array.isArray(customExercises)).toBe(true);
             expect(overrides.exercises).toBeDefined();
@@ -811,8 +811,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 { id: 99999, name: 'Numeric Custom Food' }
             ];
 
-            expect(() => migrateLegacyFoodsToOverrides(hostileLegacyFoods, seed.foods)).not.toThrow();
-            const foodResult = migrateLegacyFoodsToOverrides(hostileLegacyFoods, seed.foods);
+            expect(() => extractCustomFoodsAndOverrides(hostileLegacyFoods, seed.foods)).not.toThrow();
+            const foodResult = extractCustomFoodsAndOverrides(hostileLegacyFoods, seed.foods);
             expect(Array.isArray(foodResult.customFoods)).toBe(true);
             expect(foodResult.overrides.foods).toBeDefined();
         });

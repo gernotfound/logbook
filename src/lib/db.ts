@@ -7,7 +7,7 @@ import { getLocalDateString } from './utils/date';
 import { removeUndefinedValues } from './utils/object';
 import { checkDocSize } from './checkDocSize';
 import { syncGlobalCatalog, getInMemoryCatalog, getCachedCatalog, getSeedCatalog } from './catalog/catalogService';
-import { resolveEffectiveExercises, resolveEffectiveFoods, migrateLegacyLibraryToOverrides, migrateLegacyFoodsToOverrides } from './catalog/deltaResolver';
+import { resolveEffectiveExercises, resolveEffectiveFoods, extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides } from './catalog/deltaResolver';
 import { wrapInFirestoreDocument } from './firestore-rest';
 import { set, get, del } from 'idb-keyval';
 import { useDialogStore } from '../store/useDialogStore';
@@ -76,16 +76,8 @@ export const DB = {
                 state.catalogOverrides = data.catalogOverrides || {};
                 
                 // 2. Resolve Library and CustomFoods using deltaResolver!
-                const { customExercises, overrides: exOverrides } = migrateLegacyLibraryToOverrides(data.library || [], catalog.exercises);
-                const { customFoods, overrides: foodOverrides } = migrateLegacyFoodsToOverrides(data.customFoods || [], catalog.foods);
-                
-                state.catalogOverrides = {
-                    ...state.catalogOverrides,
-                    exercises: { ...(state.catalogOverrides?.exercises || {}), ...(exOverrides.exercises || {}) },
-                    hiddenExerciseIds: Array.from(new Set([...(state.catalogOverrides?.hiddenExerciseIds || []), ...(exOverrides.hiddenExerciseIds || [])])),
-                    foods: { ...(state.catalogOverrides?.foods || {}), ...(foodOverrides.foods || {}) },
-                    hiddenFoodIds: Array.from(new Set([...(state.catalogOverrides?.hiddenFoodIds || []), ...(foodOverrides.hiddenFoodIds || [])]))
-                };
+                const customExercises = data.library || [];
+                const customFoods = data.customFoods || [];
                 
                 state.library = resolveEffectiveExercises(catalog.exercises, customExercises, state.catalogOverrides);
                 state.customFoods = resolveEffectiveFoods(catalog.foods, customFoods, state.catalogOverrides);
@@ -211,8 +203,8 @@ export const DB = {
             
             // Re-split library & customFoods into pure overrides/custom so we don't save the whole catalog
             const catalog = getInMemoryCatalog(true) || getSeedCatalog();
-            const { customExercises, overrides: exOverrides } = migrateLegacyLibraryToOverrides(state.library || [], catalog.exercises);
-            const { customFoods, overrides: foodOverrides } = migrateLegacyFoodsToOverrides(state.customFoods || [], catalog.foods);
+            const { customExercises, overrides: exOverrides } = extractCustomExercisesAndOverrides(state.library || [], catalog.exercises);
+            const { customFoods, overrides: foodOverrides } = extractCustomFoodsAndOverrides(state.customFoods || [], catalog.foods);
             
             const overridesToSave: CatalogOverrides = {
                 ...(state.catalogOverrides || {}),

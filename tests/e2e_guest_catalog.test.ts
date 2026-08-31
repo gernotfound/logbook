@@ -36,7 +36,7 @@ import {
     hideCatalogExercise,
     unhideCatalogExercise,
     hideCatalogFood,
-    migrateLegacyLibraryToOverrides
+    extractCustomExercisesAndOverrides
 } from '../src/lib/catalog/deltaResolver';
 
 import {
@@ -1035,7 +1035,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
                 // 'panca-inclinata-bilanciere' was removed by user
             ];
 
-            const { customExercises, overrides } = migrateLegacyLibraryToOverrides(legacyLibrary, globalFixture);
+            const { customExercises, overrides } = extractCustomExercisesAndOverrides(legacyLibrary, globalFixture);
 
             // Custom exercise correctly separated
             expect(customExercises).toHaveLength(1);
