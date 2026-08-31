@@ -43,3 +43,5 @@ ORIGINAL_REQUEST.md
 *.sw?
 coverage/
 bundle-stats.html 
+playwright-report/  
+test-results/ 
