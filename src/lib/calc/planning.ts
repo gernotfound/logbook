@@ -359,7 +359,6 @@ export function getNextScheduledRoutine(
     const validCycleRoutines = cycle.routines.filter(r => r && r.routineId);
     if (validCycleRoutines.length === 0) return null;
 
-    const cycleRoutineIds = new Set(validCycleRoutines.map(r => r.routineId));
     const N = validCycleRoutines.length;
     const durationWeeks = Math.max(1, Number(cycle.durationWeeks) || 4);
     let sessionsPerWeek = Number(cycle.sessionsPerWeek);
