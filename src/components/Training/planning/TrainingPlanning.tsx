@@ -160,7 +160,7 @@ export default function TrainingPlanning() {
             <div className="section-divider">
                 <div className="flex-between items-center">
                     <div>
-                        <h1 className="m-0" style={{ color: 'var(--primary-color)', fontSize: '1.4rem' }}>🎯 Pianificazione</h1>
+                        <h1 className="m-0" style={{color: 'var(--primary-color)'}}>🎯 Pianificazione</h1>
                         <p className="text-muted text-sm m-0 mt-4">
                             Periodizzazione, split settimanale e volume muscolare
                         </p>
@@ -170,7 +170,7 @@ export default function TrainingPlanning() {
                             type="button"
                             className="btn btn-primary"
                             onClick={handleCreateNew}
-                            style={{ marginBottom: 0, padding: '8px 16px', fontSize: '0.9rem' }}
+                            style={{ marginBottom: 0, padding: '8px 16px', fontSize: '0.95rem' }}
                         >
                             <span aria-hidden="true">➕</span> Nuovo ciclo
                         </button>
@@ -195,12 +195,12 @@ export default function TrainingPlanning() {
             <div className="section-divider">
                 <div className="flex-between items-start mb-15 pb-15 border-b">
                     <div>
-                        <h2 className="m-0 text-white" style={{ fontSize: '1.4rem' }}>
+                        <h2 className="m-0 text-white">
                             {activeCycle?.name || 'Nessun ciclo attivo'}
                         </h2>
                         {activeCycle && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
-                                <span style={{ fontSize: '0.9rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                                <span style={{ fontSize: '0.95rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
                                     {activeCycle.durationWeeks} settimane
                                 </span>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -258,7 +258,7 @@ export default function TrainingPlanning() {
 
                 {/* Manichino Muscolare Vettoriale (Sempre visibile come da Regola 5) */}
                 <div className="mb-15 flex-center w-full flex-col">
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 'bold' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 'bold' }}>
                         Mappa muscolare del ciclo settimanale
                     </div>
                     <div style={{ width: '100%', maxWidth: '400px', display: 'flex', justifyContent: 'center' }}>
@@ -292,7 +292,7 @@ export default function TrainingPlanning() {
                             aria-expanded={isVolumeOpen}
                         >
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>📊 Volume settimanale per muscolo</span>
+                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>📊 Volume settimanale per muscolo</span>
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(serie a settimana)</span>
                             </span>
                             <span style={{
@@ -332,10 +332,10 @@ export default function TrainingPlanning() {
                                             }}
                                         >
                                             <div className="flex-between items-center mb-4">
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)' }}>
                                                     {item.label}
                                                 </span>
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--primary-color)' }}>
+                                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
                                                     {item.sets} {item.sets === 1 ? 'serie' : 'serie'} / sett.
                                                 </span>
                                             </div>
@@ -381,7 +381,7 @@ export default function TrainingPlanning() {
                                                 borderRadius: '8px',
                                                 background: 'rgba(255,255,255,0.05)',
                                                 border: '1px solid var(--glass-border)',
-                                                fontSize: '0.8rem',
+                                                fontSize: '0.85rem',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '6px'

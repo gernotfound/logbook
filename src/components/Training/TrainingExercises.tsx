@@ -24,7 +24,7 @@ const TrainingExercises = () => {
     return (
         <div className="training-sub-view active">
             <div className={editingExId ? 'border-primary' : ''}>
-                <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{ fontSize: '1.2rem', marginBottom: '15px' }}>
+                <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{marginBottom: '15px'}}>
                     {editingExId ? '✏️ Modifica esercizio' : '➕ Crea nuovo esercizio'}
                 </h2>
                 <div className="flex-col gap-10 mt-15 mb-20">
@@ -37,7 +37,7 @@ const TrainingExercises = () => {
                             onChange={e => setExName(e.target.value)}
                         />
                         {isDuplicateName && (
-                            <div style={{ color: 'var(--danger-color)', fontSize: '0.8rem', marginTop: '6px' }}>
+                            <div style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginTop: '6px' }}>
                                 ⚠️ Esiste già un esercizio con questo nome nell'archivio.
                             </div>
                         )}
@@ -291,7 +291,7 @@ const TrainingExercises = () => {
                 )}
             </div>
 
-            <h2 className="mt-20" style={{ fontSize: '1.15rem' }}>Archivio esercizi ({library.length})</h2>
+            <h2 className="mt-20">Archivio esercizi ({library.length})</h2>
             <p className="text-muted text-sm">Clicca su un esercizio per vederne i dettagli o sull'icona per modificarlo.</p>
             {library.length === 0 ? (
                 <p className="text-muted">Nessun esercizio creato.</p>
@@ -322,7 +322,7 @@ const TrainingExercises = () => {
                                     <div className="flex items-center gap-6" style={{ flexWrap: 'wrap' }}>
                                         <div className={`font-bold ${(expandedExId === ex.id || editingExId === ex.id) ? 'text-primary' : 'text-white'}`}>{ex.name}</div>
                                         {routineCount > 0 && (
-                                            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                            <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                                 {routineCount === 1 ? 'In 1 scheda' : `In ${routineCount} schede`}
                                             </span>
                                         )}
@@ -331,12 +331,12 @@ const TrainingExercises = () => {
                                     {(ex.isBodyweight || (ex.equipmentWeight !== undefined && ex.equipmentWeight > 0)) && (
                                         <div className="flex flex-wrap gap-5 mt-4">
                                             {ex.isBodyweight && (
-                                                <span className="badge badge-primary" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                                                <span className="badge badge-primary" style={{ fontSize: '0.75rem', padding: '2px 6px' }}>
                                                     Corpo libero
                                                 </span>
                                             )}
                                             {ex.equipmentWeight !== undefined && ex.equipmentWeight > 0 && (
-                                                <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                                <span className="badge" style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                                                     Attrezzo: {ex.equipmentWeight} kg
                                                 </span>
                                             )}

@@ -48,7 +48,7 @@ const CHART_OPTIONS = {
 
 export default function VolumeChart({ chartData }: { chartData: any }) {
     if (!chartData || !chartData.labels || chartData.labels.length === 0) {
-        return <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', marginTop: '40px' }}>Nessun dato sul volume questa settimana.</div>;
+        return <div style={{ color: 'var(--text-muted)', fontSize: '0.95rem', textAlign: 'center', marginTop: '40px' }}>Nessun dato sul volume questa settimana.</div>;
     }
     return <Bar data={chartData} options={CHART_OPTIONS as any} />;
 }

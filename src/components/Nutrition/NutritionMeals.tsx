@@ -64,7 +64,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                             {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr || '') : targetDateStr}
                         </div>
                         {targetDateStr === Logic.getLocalDateString() && (
-                            <div style={{ fontSize: '0.7rem', color: 'var(--primary-color)' }}>OGGI</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                         )}
                     </div>
                     <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
@@ -94,11 +94,11 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
                     <div>
                         <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)' }}>{Math.round(todayNutrition.kcal)}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>kcal assunte</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>kcal assunte</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{dailyTarget.kcal || 0}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>TDEE target</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>TDEE target</div>
                     </div>
                 </div>
 
@@ -108,18 +108,18 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                     <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.pro)}<span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>/{dailyTarget.pro}</span></div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.pro)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.pro}</span></div>
                         <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--success-color)', width: `${dailyTarget.pro > 0 ? Math.min((todayNutrition.pro / dailyTarget.pro) * 100, 100) : 0}%` }}></div></div>
                     </div>
                     <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>CAR</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.carbs)}<span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>/{dailyTarget.carbs}</span></div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>CAR</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.carbs)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.carbs}</span></div>
                         <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--primary-color)', width: `${dailyTarget.carbs > 0 ? Math.min((todayNutrition.carbs / dailyTarget.carbs) * 100, 100) : 0}%` }}></div></div>
                     </div>
                     <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>GRA</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.fat)}<span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>/{dailyTarget.fat}</span></div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>GRA</div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.fat)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.fat}</span></div>
                         <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--danger-color)', width: `${dailyTarget.fat > 0 ? Math.min((todayNutrition.fat / dailyTarget.fat) * 100, 100) : 0}%` }}></div></div>
                     </div>
                 </div>
@@ -127,7 +127,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
 
             {/* Search Box */}
             <div className="section-divider">
-                <h2 className="mb-10" style={{ fontSize: '1.2rem', color: 'var(--text-main)' }}>🔍 Cerca alimento</h2>
+                <h2 className="mb-10" style={{color: 'var(--text-main)'}}>🔍 Cerca alimento</h2>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input 
                         type="text" 
@@ -198,9 +198,9 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                                             <span>{f.name}</span>
-                                            {f.isCustom && <span style={{ background: 'var(--warning-color)', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600 }}>Custom</span>}
+                                            {f.isCustom && <span style={{ background: 'var(--warning-color)', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>Custom</span>}
                                         </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '3px' }}>
                                             {f.kcal} kcal / {f.baseQty || 100}{f.unit || 'g'} • P:{f.pro || 0}g C:{f.carbs || 0}g G:{f.fat || 0}g
                                         </div>
                                     </div>
@@ -281,7 +281,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                 return (
                     <div key={mt} className="section-divider">
                         <div className="flex-between mb-10 pb-10 border-b">
-                            <h2 className="m-0" style={{ fontSize: '1.15rem', color: 'var(--text-main)' }}>{mt}</h2>
+                            <h2 className="m-0" style={{color: 'var(--text-main)'}}>{mt}</h2>
                             <span className="text-sm text-muted">
                                 {Math.round(subKcal)} kcal • P:{Math.round(subP)} C:{Math.round(subC)} G:{Math.round(subF)}
                             </span>
@@ -354,7 +354,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
             {todayNutrition?.supplementsIntake && todayNutrition.supplementsIntake.length > 0 && (
                 <div className="section-divider-last">
                     <div className="flex-between mb-10 pb-10 border-b">
-                        <h2 className="m-0" style={{ fontSize: '1.15rem', color: 'var(--text-main)' }}>Integratori</h2>
+                        <h2 className="m-0" style={{color: 'var(--text-main)'}}>Integratori</h2>
                         <span className="text-sm text-muted">
                             {todayNutrition.supplementsIntake.length} assunzioni
                         </span>

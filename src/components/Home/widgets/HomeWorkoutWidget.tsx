@@ -26,8 +26,8 @@ export const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
                 gap: '15px'
             }}>
                 <div>
-                    <h2 style={{ margin: '0 0 8px 0', fontSize: '1.4rem', color: 'var(--text-main)' }}>Pronto ad allenarti?</h2>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>Nessun allenamento registrato oggi.</p>
+                    <h2 style={{margin: '0 0 8px 0',color: 'var(--text-main)'}}>Pronto ad allenarti?</h2>
+                    <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-muted)' }}>Nessun allenamento registrato oggi.</p>
                 </div>
                 <button 
                     className="btn btn-primary" 
@@ -56,8 +56,8 @@ export const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
                 <CheckCircle2 size={48} />
             </div>
             <div>
-                <h2 style={{ margin: '0 0 4px 0', fontSize: '1.2rem', color: 'var(--text-main)' }}>Allenamento completato</h2>
-                <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                <h2 style={{margin: '0 0 4px 0',color: 'var(--text-main)'}}>Allenamento completato</h2>
+                <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-muted)' }}>
                     {todaysWorkout?.routineName || 'Sessione'} <br/> 
                     <span style={{ opacity: 0.8 }}>{todaysWorkout?.exercises?.length || 0} esercizi</span>
                 </p>

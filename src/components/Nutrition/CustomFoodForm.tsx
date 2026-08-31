@@ -50,7 +50,7 @@ export default function CustomFoodForm({
 
     return (
         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
-            <h3 style={{ color: 'var(--text-main)', marginBottom: '12px', fontSize: '1rem' }}>
+            <h3 style={{color: 'var(--text-main)', marginBottom: '12px'}}>
                 {isEditing ? '✏️ Modifica alimento' : '➕ Nuovo alimento personalizzato'}
             </h3>
             
@@ -107,7 +107,7 @@ export default function CustomFoodForm({
                 )}
             </div>
 
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
                 Valori per 100 {cfData.unit !== 'pezzo' ? (cfData.unit || 'g') : 'g'}:
             </div>
             

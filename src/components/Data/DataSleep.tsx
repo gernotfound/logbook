@@ -60,7 +60,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                             {Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}
                         </div>
                         {activeDateStr === today && (
-                            <div style={{ fontSize: '0.7rem', color: 'var(--primary-color)' }}>OGGI</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                         )}
                     </div>
                     <button
@@ -79,7 +79,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
             )}
 
             <div id="sleep-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
-                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px', marginTop: 0 }}>
+                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
                     {isEditing ? `✏️ Modifica sonno (${activeDateStr})` : `🌙 Dati sonno (${activeDateStr})`}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
@@ -114,11 +114,11 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                 </div>
 
                 <div style={{ width: '100%', height: '1px', background: 'var(--glass-border)', margin: '20px 0' }}></div>
-                <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Dettagli fasi (opzionali)</h3>
+                <h3 style={{color: 'var(--text-muted)', marginBottom: '15px'}}>Dettagli fasi (opzionali)</h3>
 
                 <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno profondo</label>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno profondo</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 id="sleep-deep"
@@ -142,7 +142,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         </div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno leggero</label>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno leggero</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 id="sleep-light"
@@ -169,7 +169,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
 
                 <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno REM</label>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sonno REM</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 id="sleep-rem"
@@ -193,7 +193,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         </div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Tempo sveglio</label>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Tempo sveglio</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 id="sleep-awake"

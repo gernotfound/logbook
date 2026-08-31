@@ -166,7 +166,7 @@ function App() {
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '20px 0' }}>
                 <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>oppure</span>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>oppure</span>
                 <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
             </div>
             <button
@@ -205,7 +205,7 @@ function App() {
           justifyContent: 'center',
           gap: '10px',
           padding: '8px 16px',
-          fontSize: '0.8rem',
+          fontSize: '0.85rem',
           zIndex: 8888,
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
         }}>
@@ -218,7 +218,7 @@ function App() {
               border: 'none',
               borderRadius: '6px',
               padding: '5px 12px',
-              fontSize: '0.78rem',
+              fontSize: '0.75rem',
               fontWeight: 'bold',
               cursor: 'pointer',
               flexShrink: 0,

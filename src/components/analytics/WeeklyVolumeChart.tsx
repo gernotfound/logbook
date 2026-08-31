@@ -163,7 +163,7 @@ export default function WeeklyVolumeChart({
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Volume di allenamento settimanale</h2>
+          <h2 style={{margin: 0}}>Volume di allenamento settimanale</h2>
           {stats.hasData ? (
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span>Attuale: <strong style={{ color: 'var(--primary-color)' }}>{stats.currentWeekVolumeKg.toLocaleString('it-IT')} kg</strong></span>
@@ -171,7 +171,7 @@ export default function WeeklyVolumeChart({
               {stats.percentageChange !== null && (
                 <span style={{
                   fontWeight: '600',
-                  fontSize: '0.8rem',
+                  fontSize: '0.85rem',
                   padding: '2px 6px',
                   borderRadius: '4px',
                   background: stats.percentageChange > 0 ? 'rgba(46, 204, 113, 0.15)' : (stats.percentageChange < 0 ? 'rgba(255, 77, 109, 0.15)' : 'rgba(255, 255, 255, 0.08)'),
@@ -206,7 +206,7 @@ export default function WeeklyVolumeChart({
                   border: 'none',
                   borderRadius: '7px',
                   padding: '6px 10px',
-                  fontSize: '0.8rem',
+                  fontSize: '0.85rem',
                   fontWeight: isActive ? '600' : 'normal',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
@@ -235,7 +235,7 @@ export default function WeeklyVolumeChart({
             padding: '20px'
           }}>
             <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>🏋️</div>
-            <div style={{ fontSize: '0.9rem' }}>Nessun dato di allenamento nelle settimane selezionate.</div>
+            <div style={{ fontSize: '0.95rem' }}>Nessun dato di allenamento nelle settimane selezionate.</div>
             <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Completa una sessione per visualizzare il volume di allenamento.</div>
           </div>
         )}

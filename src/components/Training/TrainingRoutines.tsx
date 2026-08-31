@@ -50,7 +50,7 @@ const TrainingRoutines: React.FC = () => {
                 onCancel={handleCancelEdit}
             />
 
-            <h2 className="mt-20" style={{ fontSize: '1.15rem' }}>Archivio schede ({routines.length})</h2>
+            <h2 className="mt-20">Archivio schede ({routines.length})</h2>
             <p className="text-muted text-sm">Clicca su una scheda per vederne i dettagli.</p>
             {routines.length === 0 ? (
                 <p className="text-muted">Nessuna scheda creata.</p>

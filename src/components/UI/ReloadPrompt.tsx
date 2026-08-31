@@ -130,7 +130,7 @@ export const ReloadPrompt: React.FC = () => {
           style={{
             flex: 1,
             padding: '10px',
-            fontSize: '0.9rem',
+            fontSize: '0.95rem',
             margin: 0,
             cursor: 'pointer',
           }}
@@ -145,7 +145,7 @@ export const ReloadPrompt: React.FC = () => {
           style={{
             flex: 1,
             padding: '10px',
-            fontSize: '0.9rem',
+            fontSize: '0.95rem',
             margin: 0,
             cursor: 'pointer',
           }}

@@ -42,15 +42,15 @@ export const InstallPrompt: React.FC = () => {
       animation: 'fadeSlideUp 0.3s ease-out'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Installa LogBook</h3>
+        <h3 style={{margin: 0}}>Installa LogBook</h3>
         <button onClick={handleDismiss} className="btn-icon" aria-label="Chiudi" style={{ margin: '-5px -5px 0 0' }}>
           &times;
         </button>
       </div>
-      <p style={{ margin: 0, fontSize: '0.9rem' }}>
+      <p style={{ margin: 0, fontSize: '0.95rem' }}>
         Per un'esperienza ottimale in palestra, installa l'app:
       </p>
-      <ol style={{ margin: '0 0 0 20px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+      <ol style={{ margin: '0 0 0 20px', fontSize: '0.95rem', color: 'var(--text-muted)' }}>
         <li>Tocca l'icona Condividi <span style={{ display: 'inline-block', border: '1px solid currentColor', borderRadius: '4px', padding: '0 4px', fontSize: '1.1rem' }}>[↑]</span> in basso</li>
         <li>Scegli <strong>"Aggiungi alla schermata Home"</strong></li>
       </ol>

@@ -10,9 +10,9 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <h1 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>Storico pasti ({nutritionHistory.length})</h1>
+                <h1 style={{margin: 0,color: 'var(--text-main)'}}>Storico pasti ({nutritionHistory.length})</h1>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Tutti i pasti registrati in ordine cronologico.
             </p>
 
@@ -41,38 +41,38 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                             <div style={{ width: '100%' }}>
                                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date}
-                                    <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                                    <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>
                                         {day.isDayOn ? '🔥 ON' : '🛋️ OFF'}
                                     </span>
                                 </div>
                                 
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px' }}>
                                     <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Kcal</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Kcal</div>
                                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(day.kcal || 0)}</div>
                                     </div>
                                     <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pro</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pro</div>
                                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(day.pro || 0)}g</div>
                                     </div>
                                     <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Car</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Car</div>
                                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(day.carbs || 0)}g</div>
                                     </div>
                                     <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Gra</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Gra</div>
                                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(day.fat || 0)}g</div>
                                     </div>
                                 </div>
 
                                 {day.meals && day.meals.length > 0 && (
-                                    <div style={{ marginTop: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                    <div style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                         🍽️ {day.meals.length} alimenti inseriti
                                     </div>
                                 )}
                                 
                                 {day.supplementsIntake && day.supplementsIntake.length > 0 && (
-                                    <div style={{ marginTop: '6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                    <div style={{ marginTop: '6px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                         💊 {day.supplementsIntake.length} integratori assunti
                                     </div>
                                 )}

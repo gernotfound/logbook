@@ -17,7 +17,7 @@ export const HomeTdeeWidget: React.FC<HomeTdeeWidgetProps> = ({ tdeeCalc }) => {
         <div className="card" style={{ border: '1px solid rgba(46, 204, 113, 0.3)', background: 'linear-gradient(145deg, rgba(0, 0, 0, 0.6) 0%, rgba(46, 204, 113, 0.05) 100%)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                    <h2 style={{ margin: 0, color: 'var(--success-color)', fontSize: '1.15rem' }}>TDEE reale stimato</h2>
+                    <h2 style={{margin: 0, color: 'var(--success-color)'}}>TDEE reale stimato</h2>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>

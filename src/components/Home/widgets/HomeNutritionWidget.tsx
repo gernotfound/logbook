@@ -27,7 +27,7 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
     return (
         <div style={{ padding: '20px', cursor: 'pointer' }} onClick={() => onNavigate('nutrition')}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{margin: 0,color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px'}}>
                     <Utensils size={20} color="var(--primary-color)" />
                     Nutrizione
                 </h2>
@@ -56,7 +56,7 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
                 {/* Macros */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
                             <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>CARBO</span>
                             <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{carbs}g</span>
                         </div>
@@ -65,7 +65,7 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
                         </div>
                     </div>
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
                             <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</span>
                             <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{pro}g</span>
                         </div>
@@ -74,7 +74,7 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
                         </div>
                     </div>
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
                             <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>GRASSI</span>
                             <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{fat}g</span>
                         </div>

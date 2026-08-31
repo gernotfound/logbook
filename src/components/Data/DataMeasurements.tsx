@@ -105,7 +105,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                             {Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}
                         </div>
                         {activeDateStr === todayStr && (
-                            <div style={{ fontSize: '0.7rem', color: 'var(--primary-color)' }}>OGGI</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                         )}
                     </div>
                     <button 
@@ -124,7 +124,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             )}
 
             <div id="measurement-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
-                <h2 style={{ color: isEditing ? 'var(--primary-color)' : 'white', fontSize: '1.2rem', marginBottom: '10px', marginTop: 0 }}>
+                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
                     {isEditing ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
@@ -158,7 +158,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
 
             {/* SEZIONE 1: Dati principali */}
-            <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Dati principali</h3>
+            <h3 style={{color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px'}}>Dati principali</h3>
             
             <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -193,14 +193,14 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             </div>
 
             {/* SEZIONE 2: Circonferenze opzionali */}
-            <h3 style={{ fontSize: '1rem', color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px' }}>Misure circonferenze (opzionali)</h3>
+            <h3 style={{color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px'}}>Misure circonferenze (opzionali)</h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Se inserisci questi dati ma non la BF % dalla bilancia, la massa grassa verrà calcolata automaticamente (Metodo US Navy).
             </p>
 
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Vita (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Vita (cm)</label>
                     <input 
                         id="measure-waist" 
                         type="number" 
@@ -213,7 +213,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Collo (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Collo (cm)</label>
                     <input 
                         id="measure-neck" 
                         type="number" 
@@ -230,7 +230,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             {profile.gender === 'F' && (
                 <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
                     <div style={{ width: '50%', minWidth: 0 }}>
-                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Fianchi (cm)</label>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Fianchi (cm)</label>
                         <input 
                             id="measure-hip" 
                             type="number" 
@@ -246,11 +246,11 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             )}
 
             <div style={{ width: '100%', height: '1px', background: 'var(--glass-border)', margin: '20px 0' }}></div>
-            <h3 style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Altre misure (Bodybuilding)</h3>
+            <h3 style={{color: 'var(--text-muted)', marginBottom: '15px'}}>Altre misure (Bodybuilding)</h3>
 
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Torace (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Torace (cm)</label>
                     <input 
                         id="measure-chest" 
                         type="number" 
@@ -263,7 +263,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Spalle (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Spalle (cm)</label>
                     <input 
                         id="measure-shoulders" 
                         type="number" 
@@ -279,7 +279,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Braccia (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Braccia (cm)</label>
                     <input 
                         id="measure-biceps" 
                         type="number" 
@@ -292,7 +292,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Cosce (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Cosce (cm)</label>
                     <input 
                         id="measure-thighs" 
                         type="number" 
@@ -308,7 +308,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
                 <div style={{ width: '50%', minWidth: 0 }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Polpacci (cm)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Polpacci (cm)</label>
                     <input 
                         id="measure-calves" 
                         type="number" 

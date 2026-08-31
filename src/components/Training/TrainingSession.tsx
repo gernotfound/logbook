@@ -190,7 +190,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                             <span className="text-xs text-primary font-bold uppercase tracking-wider block">
                                 Programmazione
                             </span>
-                            <h2 className="m-0 text-white" style={{ fontSize: '1.15rem' }}>
+                            <h2 className="m-0 text-white">
                                 🎯 Avvia sessione pianificata
                             </h2>
                         </div>
@@ -218,7 +218,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                     <button
                                         type="button"
                                         className="btn btn-secondary btn-small"
-                                        style={{ fontSize: '0.8rem', marginBottom: 0 }}
+                                        style={{ fontSize: '0.85rem', marginBottom: 0 }}
                                         onClick={onNavigateToPlanning}
                                     >
                                         Modifica ciclo in Pianificazione
@@ -251,7 +251,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                                 <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
                                                     {nextScheduled.nextRoutine.name}
                                                 </div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                                     Rotazione {nextScheduled.rotationNumber} • Scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle} • {(nextScheduled.nextRoutine.exercises || []).length} esercizi
                                                 </div>
                                             </div>
@@ -312,7 +312,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                                 <button
                                     type="button"
                                     className="btn btn-secondary btn-small"
-                                    style={{ fontSize: '0.8rem', marginBottom: 0 }}
+                                    style={{ fontSize: '0.85rem', marginBottom: 0 }}
                                     onClick={onNavigateToPlanning}
                                 >
                                     <span aria-hidden="true">🎯</span> Vai a Pianificazione
@@ -326,7 +326,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 <div className="section-divider-last">
                     <div className="flex-between items-center mb-10 pb-8 border-b">
                         <div>
-                            <h2 className="m-0" style={{ fontSize: '1.1rem' }}>
+                            <h2 className="m-0">
                                 Avvia nuova sessione
                             </h2>
                             <label htmlFor="archive-routine-select" className="text-muted text-xs m-0 mt-4 block">
@@ -430,13 +430,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
                             ✏️ Modifica allenamento dello storico
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             {activeWorkout.routineName || 'Sessione'} • {activeWorkout.date || ''}
                         </div>
                     </div>
                     <button 
                         className="btn btn-small" 
-                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.1)' }}
+                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.1)' }}
                         onClick={handleCancelHistory}
                     >
                         Annulla
@@ -445,7 +445,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             )}
 
             <div style={{ padding: '0', marginBottom: '20px' }}>
-                {activeWorkout.routineName && <h1 style={{ marginTop: 0, fontSize: '1.15rem' }}>{activeWorkout.routineName}</h1>}
+                {activeWorkout.routineName && <h1 style={{marginTop: 0}}>{activeWorkout.routineName}</h1>}
                 {(activeWorkout.exercises || []).length === 0 ? (
                     <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
                 ) : (
@@ -485,7 +485,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 )}
 
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
-                    <h3 style={{ marginBottom: '10px', fontSize: '0.95rem' }}>Aggiungi esercizio extra</h3>
+                    <h3 style={{marginBottom: '10px'}}>Aggiungi esercizio extra</h3>
                     <ExerciseSearchDropdown
                         library={library}
                         onSelectExercise={addExtraExercise}

@@ -228,7 +228,7 @@ export default function VolumeCaloriesCorrelationChart({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Correlazione volume vs calorie</h2>
+            <h2 style={{margin: 0}}>Correlazione volume vs calorie</h2>
             {stats.correlationCoefficient !== null && (
               <span style={{
                 fontWeight: '600',
@@ -244,7 +244,7 @@ export default function VolumeCaloriesCorrelationChart({
             )}
           </div>
 
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '5px', lineHeight: 1.4, maxWidth: '540px' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '5px', lineHeight: 1.4, maxWidth: '540px' }}>
             {stats.correlationInsight}
           </div>
         </div>
@@ -271,7 +271,7 @@ export default function VolumeCaloriesCorrelationChart({
                   border: 'none',
                   borderRadius: '7px',
                   padding: '6px 10px',
-                  fontSize: '0.8rem',
+                  fontSize: '0.85rem',
                   fontWeight: isActive ? '600' : 'normal',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
@@ -300,7 +300,7 @@ export default function VolumeCaloriesCorrelationChart({
             padding: '20px'
           }}>
             <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⚡</div>
-            <div style={{ fontSize: '0.9rem' }}>Dati insufficienti per calcolare la correlazione.</div>
+            <div style={{ fontSize: '0.95rem' }}>Dati insufficienti per calcolare la correlazione.</div>
             <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Registra allenamenti e pasti per visualizzare la relazione tra apporto energetico e carichi.</div>
           </div>
         )}

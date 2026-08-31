@@ -24,7 +24,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '15px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontSize: '1.05rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '8px'}}>
                     <Activity size={18} color="#ff4d6d" />
                     Recupero e Dolori
                 </h2>
@@ -100,7 +100,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                     }}
                 >
                     {searchResults.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '10px', textAlign: 'center' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', textAlign: 'center' }}>
                             Nessun muscolo trovato
                         </div>
                     ) : (
@@ -153,7 +153,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                 color: '#ff6b81',
                                 padding: '4px 10px',
                                 borderRadius: '8px',
-                                fontSize: '0.8rem',
+                                fontSize: '0.85rem',
                                 fontWeight: 600
                             }}
                         >

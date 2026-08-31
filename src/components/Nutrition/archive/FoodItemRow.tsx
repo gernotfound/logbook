@@ -37,7 +37,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
                         <span>{food.name}</span>
                     </div>
                     {food.brand && (
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                             {food.brand}
                         </div>
                     )}

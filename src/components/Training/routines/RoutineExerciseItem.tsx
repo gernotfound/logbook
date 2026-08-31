@@ -77,7 +77,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     marginTop: '4px'
                 }}>
                     <span style={{ fontSize: '1rem' }}>🏃</span>
-                    <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         Esercizio cardio — le metriche verranno registrate durante la sessione.
                     </span>
                 </div>
@@ -187,7 +187,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 style={{
                                     margin: 0,
                                     padding: '6px 12px',
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.85rem',
                                     background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
                                     color: exercise.defaultTechnique === 'dropset' ? '#000' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'dropset' ? 700 : 500,
@@ -204,7 +204,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 style={{
                                     margin: 0,
                                     padding: '6px 12px',
-                                    fontSize: '0.8rem',
+                                    fontSize: '0.85rem',
                                     background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
                                     color: exercise.defaultTechnique === 'isometrics' ? '#fff' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'isometrics' ? 700 : 500,
