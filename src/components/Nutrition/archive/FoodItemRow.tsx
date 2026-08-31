@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../../UI/ContextMenu';
 
 interface FoodItemRowProps {
@@ -8,6 +8,7 @@ interface FoodItemRowProps {
     mealTypes: string[];
     onEdit: (food: any) => void;
     onDelete: (food: any) => void;
+    onDuplicate: (food: any) => void;
     onQuickAddToMeal: (food: any, mealType: string) => void;
 }
 
@@ -17,6 +18,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
     mealTypes,
     onEdit,
     onDelete,
+    onDuplicate,
     onQuickAddToMeal
 }) => {
     return (
@@ -45,12 +47,17 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
                     <ContextMenu
                         items={[
                             {
-                                label: 'Modifica alimento',
+                                label: 'Modifica',
                                 icon: <Pencil size={16} />,
                                 onClick: () => onEdit(food)
                             },
                             {
-                                label: 'Elimina alimento',
+                                label: 'Duplica',
+                                icon: <Copy size={16} />,
+                                onClick: () => onDuplicate(food)
+                            },
+                            {
+                                label: 'Elimina',
                                 icon: <Trash2 size={16} />,
                                 variant: 'danger',
                                 onClick: () => onDelete(food)
@@ -97,3 +104,5 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
         </div>
     );
 };
+
+

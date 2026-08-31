@@ -96,6 +96,27 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         }
     };
 
+    const handleDuplicateFood = async (food: any) => {
+        const newName = Logic.generateUniqueName(food.name, customFoods.map(f => f.name));
+        const duplicated = {
+            ...food,
+            id: Logic.generateId('cf'),
+            name: newName
+        };
+        try {
+            await saveUserData((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    customFoods: [...(prev.customFoods || []), duplicated]
+                };
+            });
+            await showAlert('Alimento duplicato con successo!');
+        } catch {
+            await showAlert('Errore durante la duplicazione.');
+        }
+    };
+
     const handleDeleteFood = async (food: any) => {
         const confirmed = await showConfirm(`Sei sicuro di voler eliminare l'alimento "${food.name}"?`);
         if (!confirmed) return;
@@ -245,6 +266,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                             mealTypes={MEAL_TYPES}
                             onEdit={openEditModal}
                             onDelete={handleDeleteFood}
+                                onDuplicate={handleDuplicateFood}
                             onQuickAddToMeal={handleQuickAddToMeal}
                         />
                     ))

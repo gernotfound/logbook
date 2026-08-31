@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
 
 import MuscleModel from './MuscleModel';
@@ -14,7 +14,7 @@ const TrainingExercises = () => {
         library, routines, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
-        handleSaveExercise, handleDelete, handleRestoreExercise
+        handleSaveExercise, handleDelete, handleRestoreExercise, handleDuplicate
     } = useTrainingExercises();
 
     const selectedMuscleIds = useMemo(() => selectedMuscles.map(m => m.id), [selectedMuscles]);
@@ -338,7 +338,7 @@ const TrainingExercises = () => {
                                     <ContextMenu
                                         items={[
                                             {
-                                                label: 'Modifica esercizio',
+                                                label: 'Modifica',
                                                 icon: <Pencil size={16} />,
                                                 onClick: () => {
                                                     handleEditClick(ex);
@@ -346,7 +346,12 @@ const TrainingExercises = () => {
                                                 }
                                             },
                                             {
-                                                label: 'Elimina esercizio',
+                                                label: 'Duplica',
+                                                icon: <Copy size={16} />,
+                                                onClick: () => handleDuplicate(ex)
+                                            },
+                                            {
+                                                label: 'Elimina',
                                                 icon: <Trash2 size={16} />,
                                                 variant: 'danger',
                                                 hidden: ex.isDefault,
@@ -396,3 +401,4 @@ const TrainingExercises = () => {
 };
 
 export default TrainingExercises;
+

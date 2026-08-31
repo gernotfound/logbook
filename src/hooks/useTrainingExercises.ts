@@ -275,6 +275,27 @@ export function useTrainingExercises() {
         }
     };
 
+    const handleDuplicate = async (ex: any) => {
+        const newName = Logic.generateUniqueName(ex.name, library.map(l => l.name));
+        const duplicated = {
+            ...ex,
+            id: Logic.generateId('ex'),
+            name: newName,
+            isDefault: false
+        };
+        try {
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    library: [...(prev.library || []), duplicated]
+                };
+            });
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     const handleEditClick = (ex: any) => {
         setEditingExId(ex.id);
         setExName(ex.name || '');
@@ -443,6 +464,6 @@ export function useTrainingExercises() {
         library, routines, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
         toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
-        handleSaveExercise, handleDelete, handleRestoreExercise
+        handleSaveExercise, handleDelete, handleRestoreExercise, handleDuplicate
     };
 }

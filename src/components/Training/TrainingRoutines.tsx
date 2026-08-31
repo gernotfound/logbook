@@ -10,7 +10,7 @@ const TrainingRoutines: React.FC = () => {
         expandedRoutineId, handleRoutineClick,
         routineExercises,
         routines, library,
-        handleSave, handleCancelEdit, handleEditClick, handleDelete,
+        handleSave, handleCancelEdit, handleEditClick, handleDelete, handleDuplicate,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
         handleUpdateTechnique,
         handleRemoveExerciseFromRoutine, moveExercise
@@ -64,6 +64,7 @@ const TrainingRoutines: React.FC = () => {
                             library={library}
                             onToggleExpand={handleRoutineClick}
                             onEdit={handleEditClick}
+                            onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                         />
                     ))}
