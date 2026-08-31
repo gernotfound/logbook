@@ -22,8 +22,8 @@ import {
     applyFoodOverride,
     removeFoodOverride,
     mergeCatalogOverrides,
-    migrateLegacyLibraryToOverrides,
-    migrateLegacyFoodsToOverrides
+    extractCustomExercisesAndOverrides,
+    extractCustomFoodsAndOverrides
 } from '../src/lib/catalog/deltaResolver';
 import type { CatalogExercise, CatalogFood, CatalogOverrides, Exercise, Food } from '../src/types';
 
@@ -274,7 +274,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
                 // ex_default_2 and ex_default_3 are missing -> should become hidden
             ];
 
-            const migrated = migrateLegacyLibraryToOverrides(legacyLibrary, globalExercises);
+            const migrated = extractCustomExercisesAndOverrides(legacyLibrary, globalExercises);
             expect(migrated.customExercises).toHaveLength(1);
             expect(migrated.customExercises[0].id).toBe('custom_ex');
             expect(migrated.customExercises[0].isDefault).toBe(false);
@@ -289,7 +289,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
                 { id: 'custom_ex_2', name: 'Custom Exercise 2', setsCount: 4, isDefault: false, sets: [] }
             ];
 
-            const migrated = migrateLegacyLibraryToOverrides(customOnlyLibrary, globalExercises);
+            const migrated = extractCustomExercisesAndOverrides(customOnlyLibrary, globalExercises);
             expect(migrated.customExercises).toHaveLength(2);
             // Crucial: hiddenExerciseIds must be EMPTY, not hiding all 3 global items!
             expect(migrated.overrides.hiddenExerciseIds).toEqual([]);
@@ -300,7 +300,7 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
                 { id: 'custom_shake', name: 'Custom Shake', kcal: 250, pro: 30, carbs: 10, fat: 2, isCustom: true }
             ];
 
-            const migrated = migrateLegacyFoodsToOverrides(customOnlyFoods, globalFoods);
+            const migrated = extractCustomFoodsAndOverrides(customOnlyFoods, globalFoods);
             expect(migrated.customFoods).toHaveLength(1);
             expect(migrated.customFoods[0].id).toBe('custom_shake');
             expect(migrated.customFoods[0].isCustom).toBe(true);

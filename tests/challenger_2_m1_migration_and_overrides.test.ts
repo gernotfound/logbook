@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    migrateLegacyLibraryToOverrides,
-    migrateLegacyFoodsToOverrides,
+    extractCustomExercisesAndOverrides,
+    extractCustomFoodsAndOverrides,
     removeExerciseOverride,
     removeFoodOverride,
     resolveEffectiveExercises,
@@ -41,7 +41,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
         { id: 'food_5', name: 'Uova Intere', brand: 'Generico', category: 'Uova', kcal: 143, pro: 12.6, carbs: 0.7, fat: 9.5, baseQty: 100, unit: 'g', servingUnit: 'uovo medio', servingWeight: 55, isCustom: false }
     ];
 
-    describe('1. Stress Test: migrateLegacyLibraryToOverrides', () => {
+    describe('1. Stress Test: extractCustomExercisesAndOverrides', () => {
 
         it('Scenario 1.1: Pure default library (all defaults present with unmodified attributes)', () => {
             const legacyLibrary: Exercise[] = mockGlobalExercises.map(ex => ({
@@ -58,7 +58,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 sets: []
             }));
 
-            const result = migrateLegacyLibraryToOverrides(legacyLibrary, mockGlobalExercises);
+            const result = extractCustomExercisesAndOverrides(legacyLibrary, mockGlobalExercises);
 
             expect(result.customExercises).toEqual([]);
             expect(result.overrides.exercises).toEqual({});
@@ -72,7 +72,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { id: 'unknown_id_3', name: 'Unknown Legacy Exercise', isDefault: undefined, setsCount: 3, sets: [] }
             ];
 
-            const result = migrateLegacyLibraryToOverrides(legacyLibrary, mockGlobalExercises);
+            const result = extractCustomExercisesAndOverrides(legacyLibrary, mockGlobalExercises);
 
             // Crucial: All custom items extracted, isDefault forced to false
             expect(result.customExercises).toHaveLength(3);
@@ -94,7 +94,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { id: 'my_custom_dips', name: 'Chest Dips Weighted', isDefault: false, setsCount: 4, sets: [] }
             ];
 
-            const result = migrateLegacyLibraryToOverrides(legacyLibrary, mockGlobalExercises);
+            const result = extractCustomExercisesAndOverrides(legacyLibrary, mockGlobalExercises);
 
             expect(result.customExercises).toHaveLength(2);
             expect(result.customExercises.map(c => c.id)).toEqual(['my_custom_curl', 'my_custom_dips']);
@@ -155,7 +155,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 }
             ];
 
-            const result = migrateLegacyLibraryToOverrides(legacyLibrary, mockGlobalExercises);
+            const result = extractCustomExercisesAndOverrides(legacyLibrary, mockGlobalExercises);
 
             expect(result.customExercises).toHaveLength(0);
             expect(result.overrides.hiddenExerciseIds).toEqual([]);
@@ -186,12 +186,12 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
 
         it('Scenario 1.5: Adversarial inputs (null, undefined, malformed objects, non-arrays)', () => {
             // Null and undefined inputs
-            const res1 = migrateLegacyLibraryToOverrides(null as any, null as any);
+            const res1 = extractCustomExercisesAndOverrides(null as any, null as any);
             expect(res1.customExercises).toEqual([]);
             expect(res1.overrides.exercises).toEqual({});
             expect(res1.overrides.hiddenExerciseIds).toEqual([]);
 
-            const res2 = migrateLegacyLibraryToOverrides(undefined, undefined);
+            const res2 = extractCustomExercisesAndOverrides(undefined, undefined);
             expect(res2.customExercises).toEqual([]);
             expect(res2.overrides.exercises).toEqual({});
             expect(res2.overrides.hiddenExerciseIds).toEqual([]);
@@ -208,7 +208,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { randomGarbage: true }
             ];
 
-            const res3 = migrateLegacyLibraryToOverrides(corruptedLegacy, mockGlobalExercises);
+            const res3 = extractCustomExercisesAndOverrides(corruptedLegacy, mockGlobalExercises);
             expect(res3.customExercises).toHaveLength(1);
             expect(res3.customExercises[0].id).toBe('valid_custom');
             expect(res3.overrides.exercises?.['bench_press']?.name).toBe('Panca Modificata');
@@ -224,7 +224,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 // deadlift, pullup, plank missing
             ];
 
-            const { customExercises, overrides } = migrateLegacyLibraryToOverrides(legacyLibrary, mockGlobalExercises);
+            const { customExercises, overrides } = extractCustomExercisesAndOverrides(legacyLibrary, mockGlobalExercises);
             const resolved = resolveEffectiveExercises(mockGlobalExercises, customExercises, overrides);
 
             // Resolved list should contain custom first, then the 2 active global exercises
@@ -249,7 +249,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
         });
     });
 
-    describe('2. Stress Test: migrateLegacyFoodsToOverrides', () => {
+    describe('2. Stress Test: extractCustomFoodsAndOverrides', () => {
 
         it('Scenario 2.1: Pure default foods (all defaults present and unmodified)', () => {
             const legacyFoods: Food[] = mockGlobalFoods.map(f => ({
@@ -257,7 +257,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 isCustom: false
             }));
 
-            const result = migrateLegacyFoodsToOverrides(legacyFoods, mockGlobalFoods);
+            const result = extractCustomFoodsAndOverrides(legacyFoods, mockGlobalFoods);
 
             expect(result.customFoods).toEqual([]);
             expect(result.overrides.foods).toEqual({});
@@ -271,7 +271,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { id: 'unknown_food_abc', name: 'Imported Custom Food', kcal: 300, pro: 20, carbs: 30, fat: 10 }
             ];
 
-            const result = migrateLegacyFoodsToOverrides(legacyFoods, mockGlobalFoods);
+            const result = extractCustomFoodsAndOverrides(legacyFoods, mockGlobalFoods);
 
             expect(result.customFoods).toHaveLength(3);
             expect(result.customFoods.every(f => f.isCustom === true)).toBe(true);
@@ -291,7 +291,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { id: 'custom_bar', name: 'Protein Bar', kcal: 210, pro: 20, carbs: 15, fat: 7, isCustom: true }
             ];
 
-            const result = migrateLegacyFoodsToOverrides(legacyFoods, mockGlobalFoods);
+            const result = extractCustomFoodsAndOverrides(legacyFoods, mockGlobalFoods);
 
             expect(result.customFoods).toHaveLength(1);
             expect(result.customFoods[0].id).toBe('custom_bar');
@@ -325,7 +325,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 // 103 is missing
             ];
 
-            const result = migrateLegacyFoodsToOverrides(legacyFoods, numericGlobalFoods);
+            const result = extractCustomFoodsAndOverrides(legacyFoods, numericGlobalFoods);
 
             expect(result.customFoods).toHaveLength(0);
             expect(result.overrides.foods?.['101']?.name).toBe('Numeric Apple Golden');
@@ -334,7 +334,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
         });
 
         it('Scenario 2.5: Adversarial inputs (null, undefined, non-arrays, corrupted entries)', () => {
-            const res1 = migrateLegacyFoodsToOverrides(null as any, null as any);
+            const res1 = extractCustomFoodsAndOverrides(null as any, null as any);
             expect(res1.customFoods).toEqual([]);
             expect(res1.overrides.foods).toEqual({});
             expect(res1.overrides.hiddenFoodIds).toEqual([]);
@@ -349,7 +349,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { id: 'custom_valid', name: 'Valid', kcal: 100 }
             ];
 
-            const res2 = migrateLegacyFoodsToOverrides(corrupted, mockGlobalFoods);
+            const res2 = extractCustomFoodsAndOverrides(corrupted, mockGlobalFoods);
             expect(res2.customFoods).toHaveLength(1);
             expect(res2.customFoods[0].id).toBe('custom_valid');
             expect(res2.overrides.foods?.['food_1']?.kcal).toBe(105);
@@ -363,7 +363,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
                 { id: 'food_3', name: 'Olio Extravergine d\'Oliva', kcal: 884, pro: 0, carbs: 0, fat: 100, isCustom: false }
             ];
 
-            const { customFoods, overrides } = migrateLegacyFoodsToOverrides(legacyFoods, mockGlobalFoods);
+            const { customFoods, overrides } = extractCustomFoodsAndOverrides(legacyFoods, mockGlobalFoods);
             const resolved = resolveEffectiveFoods(mockGlobalFoods, customFoods, overrides);
 
             expect(resolved).toHaveLength(3);
@@ -704,7 +704,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
             }
 
             const startTime = performance.now();
-            const result = migrateLegacyLibraryToOverrides(largeLegacy, largeGlobals);
+            const result = extractCustomExercisesAndOverrides(largeLegacy, largeGlobals);
             const duration = performance.now() - startTime;
 
             expect(duration).toBeLessThan(100);
@@ -767,7 +767,7 @@ describe('EMPIRICAL CHALLENGER 2 (Milestone M1): deltaResolver Migration & Overr
             }
 
             const startTime = performance.now();
-            const result = migrateLegacyFoodsToOverrides(largeLegacyFoods, largeGlobalFoods);
+            const result = extractCustomFoodsAndOverrides(largeLegacyFoods, largeGlobalFoods);
             const duration = performance.now() - startTime;
 
             expect(duration).toBeLessThan(100);

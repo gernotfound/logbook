@@ -14,7 +14,6 @@
  * Complies with AGENTS.md:
  * - Pure, non-mutating transformations.
  * - Deterministic ordering (custom user items first or alphabetically).
- * - Full legacy migration utilities for smooth upgrade from monolithic UserData.
  */
 
 import type {
@@ -398,10 +397,10 @@ export function mergeCatalogOverrides(
 }
 
 /**
- * Migration helper: splits a monolithic legacy library array into user custom exercises
+ * Splits an effective library array into user custom exercises
  * and catalog overrides by cross-referencing with the global catalog.
  */
-export function migrateLegacyLibraryToOverrides(
+export function extractCustomExercisesAndOverrides(
     legacyLibrary: Exercise[] = [],
     globalExercises: CatalogExercise[] = []
 ): { customExercises: Exercise[]; overrides: CatalogOverrides } {
@@ -459,10 +458,10 @@ export function migrateLegacyLibraryToOverrides(
 }
 
 /**
- * Migration helper: splits a monolithic legacy customFoods array into true custom foods
+ * Splits an effective customFoods array into true custom foods
  * and catalog overrides by cross-referencing with the global foods catalog.
  */
-export function migrateLegacyFoodsToOverrides(
+export function extractCustomFoodsAndOverrides(
     legacyFoods: Food[] = [],
     globalFoods: CatalogFood[] = []
 ): { customFoods: Food[]; overrides: CatalogOverrides } {

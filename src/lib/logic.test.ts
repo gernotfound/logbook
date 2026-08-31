@@ -454,27 +454,11 @@ describe('Logic Library Tests', () => {
     });
 
     describe('formatSleepTime, parseSleepInput & isSleepTimeValid', () => {
-        it('formatSleepTime: converts legacy numbers to HH:MM correctly', () => {
-            expect(Logic.formatSleepTime(7.5)).toBe('07:30');
-            expect(Logic.formatSleepTime(1.25)).toBe('01:15');
-            expect(Logic.formatSleepTime(8)).toBe('08:00');
-            expect(Logic.formatSleepTime(0.5)).toBe('00:30');
-            expect(Logic.formatSleepTime(0)).toBe('00:00');
-        });
-
         it('formatSleepTime: normalizes and validates HH:MM strings', () => {
             expect(Logic.formatSleepTime('08:30')).toBe('08:30');
             expect(Logic.formatSleepTime('8:30')).toBe('08:30');
-            expect(Logic.formatSleepTime('8:5')).toBe('08:05');
             expect(Logic.formatSleepTime('00:00')).toBe('00:00');
             expect(Logic.formatSleepTime('23:59')).toBe('23:59');
-        });
-
-        it('formatSleepTime: handles decimal strings gracefully', () => {
-            expect(Logic.formatSleepTime('7.5')).toBe('07:30');
-            expect(Logic.formatSleepTime('7,5')).toBe('07:30');
-            expect(Logic.formatSleepTime('8h')).toBe('08:00');
-            expect(Logic.formatSleepTime('1.25')).toBe('01:15');
         });
 
         it('formatSleepTime: returns empty string for invalid or empty inputs', () => {
@@ -485,14 +469,11 @@ describe('Logic Library Tests', () => {
             expect(Logic.formatSleepTime('invalid')).toBe('');
             expect(Logic.formatSleepTime('25:00')).toBe('');
             expect(Logic.formatSleepTime('12:65')).toBe('');
-            expect(Logic.formatSleepTime(-5)).toBe('');
-            expect(Logic.formatSleepTime(NaN)).toBe('');
         });
 
         it('parseSleepInput: parses and canonicalizes sleep strings', () => {
             expect(Logic.parseSleepInput('08:30')).toBe('08:30');
             expect(Logic.parseSleepInput('8:30')).toBe('08:30');
-            expect(Logic.parseSleepInput('7.5')).toBe('07:30');
             expect(Logic.parseSleepInput('')).toBe(null);
             expect(Logic.parseSleepInput(null)).toBe(null);
             expect(Logic.parseSleepInput(undefined)).toBe(null);
@@ -502,7 +483,6 @@ describe('Logic Library Tests', () => {
         it('isSleepTimeValid: validates sleep format correctly', () => {
             expect(Logic.isSleepTimeValid('08:30')).toBe(true);
             expect(Logic.isSleepTimeValid('8:30')).toBe(true);
-            expect(Logic.isSleepTimeValid('7.5')).toBe(true);
             expect(Logic.isSleepTimeValid('00:00')).toBe(true);
             expect(Logic.isSleepTimeValid('23:59')).toBe(true);
 

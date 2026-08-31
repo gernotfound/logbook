@@ -163,11 +163,11 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     carbs: 250,
                     pro: 150,
                     fat: 60,
-                    sleepHours: 7.5,
-                    sleepDeep: 1.5,
-                    sleepLight: 4.0,
-                    sleepRem: 1.5,
-                    sleepAwake: 0.5
+                    sleepHours: '07:30',
+                    sleepDeep: '01:30',
+                    sleepLight: '04:00',
+                    sleepRem: '01:30',
+                    sleepAwake: '00:30'
                 };
 
                 const parsed = NutritionDaySchema.parse(rawNutrition);
@@ -919,36 +919,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 expect(useAppStore.getState().userData?.nutrition).toEqual({});
             });
 
-            it('T2.1.2: High boundary sleep durations (e.g. 24 hours) validate successfully and clamp to 23:59', () => {
-                const day = NutritionDaySchema.parse({
-                    date: '2026-08-16',
-                    kcal: 0,
-                    carbs: 0,
-                    pro: 0,
-                    fat: 0,
-                    sleepHours: 24,
-                    sleepDeep: 8,
-                    sleepLight: 10,
-                    sleepRem: 4,
-                    sleepAwake: 2
-                });
 
-                expect(day.sleepHours).toBe('23:59');
-                expect(day.sleepDeep).toBe('08:00');
-            });
-
-            it('T2.1.3: Fractional and float sleep durations (7.75) are converted accurately to HH:MM (07:45)', () => {
-                const day = NutritionDaySchema.parse({
-                    date: '2026-08-16',
-                    kcal: 0,
-                    carbs: 0,
-                    pro: 0,
-                    fat: 0,
-                    sleepHours: 7.75
-                });
-
-                expect(day.sleepHours).toBe('07:45');
-            });
 
             it('T2.1.4: Incomplete sleep phase inputs (only total sleep provided, phases empty) save cleanly', async () => {
                 const today = Logic.getLocalDateString();

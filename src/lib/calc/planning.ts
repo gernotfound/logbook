@@ -378,10 +378,6 @@ export function getNextScheduledRoutine(
             if (w.cycleId) {
                 return w.cycleId === cycle.id;
             }
-            // If cycle has a startDate, match routines of this cycle completed on or after startDate (legacy fallback)
-            if (cycle.startDate && w.date && w.date >= cycle.startDate && w.routineId && cycleRoutineIds.has(w.routineId)) {
-                return true;
-            }
             return false;
         }).length;
     }

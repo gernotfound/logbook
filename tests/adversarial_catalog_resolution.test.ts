@@ -21,8 +21,8 @@ import {
 
 
     mergeCatalogOverrides,
-    migrateLegacyLibraryToOverrides,
-    migrateLegacyFoodsToOverrides
+    extractCustomExercisesAndOverrides,
+    extractCustomFoodsAndOverrides
 } from '../src/lib/catalog/deltaResolver';
 import type {
     CatalogExercise,
@@ -476,7 +476,7 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
                 { id: 'custom_lateral_raises', name: 'Alzate Laterali Cavi', setsCount: 3, sets: [] }
             ];
 
-            const { customExercises, overrides } = migrateLegacyLibraryToOverrides(legacyLibrary, globalExercises);
+            const { customExercises, overrides } = extractCustomExercisesAndOverrides(legacyLibrary, globalExercises);
 
             expect(customExercises.length).toBe(2);
             expect(customExercises.map(c => c.id)).toContain('custom_hip_thrust');
@@ -505,7 +505,7 @@ describe('Adversarial & Stress Testing Suite for Catalog Resolution Pipeline (M1
                 { id: 'custom_bar', name: 'Barretta Proteica', kcal: 200, pro: 20, carbs: 15, fat: 6, isCustom: true }
             ];
 
-            const { customFoods, overrides } = migrateLegacyFoodsToOverrides(legacyFoods, globalFoods);
+            const { customFoods, overrides } = extractCustomFoodsAndOverrides(legacyFoods, globalFoods);
 
             expect(customFoods.length).toBe(1);
             expect(customFoods[0].id).toBe('custom_bar');
