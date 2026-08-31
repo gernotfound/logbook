@@ -43,11 +43,12 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                     <Virtuoso
                         useWindowScroll
                         data={history}
-                        initialItemCount={10}
+                        initialItemCount={Math.min(10, history.length)}
                         components={{
                             Footer: () => <div style={{ height: '90px' }} />
                         }}
                         itemContent={(_, wo) => {
+                        if (!wo) return null;
                         let dateObj: Date;
                         if (wo.globalStartTime) {
                             dateObj = new Date(wo.globalStartTime);
