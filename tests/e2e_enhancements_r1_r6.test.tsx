@@ -144,10 +144,15 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 expect(container.textContent).toContain('🌙 Sonno: 07:30');
                 expect(container.textContent).toContain('🌙 Sonno: 08:00');
 
-                // Clicking history entry invokes onSelectEdit
-                const firstCard = container.querySelector('.card');
-                expect(firstCard).not.toBeNull();
-                fireEvent.click(firstCard!);
+                // Clicking 'Modifica' from ContextMenu invokes onSelectEdit
+                const optionsTriggers = screen.getAllByRole('button', { name: 'Opzioni' });
+                expect(optionsTriggers.length).toBeGreaterThan(0);
+                fireEvent.click(optionsTriggers[0]);
+                
+                const editItem = screen.getByRole('menuitem', { name: 'Modifica' });
+                expect(editItem).not.toBeNull();
+                fireEvent.click(editItem);
+                
                 expect(onSelectEdit).toHaveBeenCalledWith(historyDays[0]);
             });
 
