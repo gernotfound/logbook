@@ -9,11 +9,8 @@ test.describe('Offline scenarios & Background suspension', () => {
     await expect(page.locator('text=LogBook')).toBeVisible();
 
     // 3. Login as Guest
-    const guestBtn = page.locator('button:has-text("Continua come ospite")');
-    if (await guestBtn.isVisible()) {
-      await guestBtn.click();
-      await expect(page.locator('text=Inizia sessione vuota')).toBeVisible();
-    }
+    await page.click('button:has-text("Continua senza account")');
+    await expect(page.locator('text=Inizia sessione vuota')).toBeVisible();
 
     // 4. Inizia un allenamento
     await page.click('button:has-text("Inizia sessione vuota")');
