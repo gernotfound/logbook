@@ -156,6 +156,32 @@ export function useNutritionMeasurements(selectedDate?: string) {
         setMeasureTime(targetDayData?.measurementTime || new Date().toTimeString().substring(0, 5));
     };
 
+    const handleDeleteMeasurement = async (dateStr: string) => {
+        const confirmed = await useDialogStore.getState().showConfirm(`Sei sicuro di voler eliminare la misurazione del ${Logic.formatItalianDate ? Logic.formatItalianDate(dateStr) : dateStr}?`);
+        if (!confirmed) return;
+        try {
+            await saveUserData((prev) => {
+                if (!prev || !prev.nutrition?.[dateStr]) return prev;
+                const day = { ...prev.nutrition[dateStr] };
+                delete day.weight;
+                delete day.bf;
+                delete day.waist;
+                delete day.neck;
+                delete day.hip;
+                delete day.chest;
+                delete day.shoulders;
+                delete day.biceps;
+                delete day.thighs;
+                delete day.calves;
+                delete day.measurementTime;
+                return { ...prev, nutrition: { ...prev.nutrition, [dateStr]: day } };
+            });
+            await showAlert('Misurazione eliminata.');
+        } catch {
+            await showAlert("Errore durante l'eliminazione.");
+        }
+    };
+
     const calculateAndSave = async (e?: any) => {
         if (e) e.preventDefault();
         
@@ -253,6 +279,8 @@ export function useNutritionMeasurements(selectedDate?: string) {
         measurementsHistory,
         handleEditClick,
         handleCancelEdit,
-        calculateAndSave
+        calculateAndSave,
+        handleDeleteMeasurement
     };
 }
+

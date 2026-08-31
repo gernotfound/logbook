@@ -24,7 +24,8 @@ const NutritionMeasurements = () => {
         measurementsHistory,
         handleEditClick,
         handleCancelEdit,
-        calculateAndSave
+        calculateAndSave,
+        handleDeleteMeasurement
     } = useNutritionMeasurements();
 
     return (
@@ -63,6 +64,7 @@ const NutritionMeasurements = () => {
                     measurementsHistory={measurementsHistory}
                     editingDate={editingDate}
                     onSelectEdit={handleEditClick}
+                    onDeleteMeasurement={handleDeleteMeasurement}
                 />
             </div>
         </div>

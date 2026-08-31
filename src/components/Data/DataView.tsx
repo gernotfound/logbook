@@ -97,8 +97,16 @@ const DataView: React.FC<DataViewProps> = ({
                         setThighs={measurementsHook.setThighs}
                         calves={measurementsHook.calves}
                         setCalves={measurementsHook.setCalves}
-                        handleCancelEdit={measurementsHook.handleCancelEdit}
-                        calculateAndSave={measurementsHook.calculateAndSave}
+                        handleCancelEdit={() => {
+                            const wasEditing = !!measurementsHook.editingDate;
+                            measurementsHook.handleCancelEdit();
+                            if (wasEditing) changeSubTab('history');
+                        }}
+                        calculateAndSave={async (e) => {
+                            const wasEditing = !!measurementsHook.editingDate;
+                            await measurementsHook.calculateAndSave(e);
+                            if (wasEditing) changeSubTab('history');
+                        }}
                     />
                 </div>
             )}
@@ -126,6 +134,7 @@ const DataView: React.FC<DataViewProps> = ({
                         measurementsHistory={measurementsHook.measurementsHistory}
                         editingDate={measurementsHook.editingDate}
                         onSelectEdit={handleSelectEdit}
+                        onDeleteMeasurement={measurementsHook.handleDeleteMeasurement}
                     />
                 </div>
             )}
