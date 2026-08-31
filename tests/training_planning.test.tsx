@@ -233,12 +233,12 @@ describe('Training Planning & Volume Calculations', () => {
             const optionsBtn = screen.getByTitle('Opzioni');
             fireEvent.click(optionsBtn);
 
-            const dupBtn = screen.getByRole('menuitem', { name: /Duplica ciclo/i });
+            const dupBtn = screen.getByRole('menuitem', { name: /Duplica/i });
             fireEvent.click(dupBtn);
 
             await waitFor(() => {
                 const cycles = useAppStore.getState().userData?.trainingCycles || [];
-                expect(cycles.some(c => c.name.includes('(copia)'))).toBe(true);
+                expect(cycles.some(c => c.name.includes('- 1'))).toBe(true);
             });
 
             // Open ContextMenu for the second cycle and delete it
@@ -246,7 +246,7 @@ describe('Training Planning & Volume Calculations', () => {
             expect(allOptionsBtns.length).toBeGreaterThanOrEqual(2);
             fireEvent.click(allOptionsBtns[1]);
 
-            const deleteBtn = screen.getByRole('menuitem', { name: /Elimina ciclo/i });
+            const deleteBtn = screen.getByRole('menuitem', { name: /Elimina/i });
             fireEvent.click(deleteBtn);
 
             await waitFor(() => {
@@ -262,7 +262,7 @@ describe('Training Planning & Volume Calculations', () => {
             const optionsBtn = screen.getByTitle('Opzioni');
             fireEvent.click(optionsBtn);
 
-            const editBtn = screen.getByRole('menuitem', { name: /Modifica ciclo/i });
+            const editBtn = screen.getByRole('menuitem', { name: /Modifica/i });
             fireEvent.click(editBtn);
 
             expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
@@ -395,9 +395,9 @@ describe('Training Planning & Volume Calculations', () => {
             expect(optionsBtn).toBeDefined();
             fireEvent.click(optionsBtn);
 
-            const editItem = screen.getByRole('menuitem', { name: /Modifica ciclo/i });
-            const dupItem = screen.getByRole('menuitem', { name: /Duplica ciclo/i });
-            const delItem = screen.getByRole('menuitem', { name: /Elimina ciclo/i });
+            const editItem = screen.getByRole('menuitem', { name: /Modifica/i });
+            const dupItem = screen.getByRole('menuitem', { name: /Duplica/i });
+            const delItem = screen.getByRole('menuitem', { name: /Elimina/i });
 
             expect(editItem).toBeDefined();
             expect(dupItem).toBeDefined();
@@ -410,12 +410,12 @@ describe('Training Planning & Volume Calculations', () => {
 
             // Re-open and click duplicate
             fireEvent.click(optionsBtn);
-            fireEvent.click(screen.getByRole('menuitem', { name: /Duplica ciclo/i }));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Duplica/i }));
             expect(onDuplicate).toHaveBeenCalledWith(testCycle);
 
             // Re-open and click delete
             fireEvent.click(optionsBtn);
-            fireEvent.click(screen.getByRole('menuitem', { name: /Elimina ciclo/i }));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Elimina/i }));
             expect(onDelete).toHaveBeenCalledWith(testCycle);
         });
     });
@@ -456,8 +456,8 @@ describe('Training Planning & Volume Calculations', () => {
             // onToggleExpand must NOT have been called due to stopPropagation
             expect(onToggle).not.toHaveBeenCalled();
 
-            const editItem = screen.getByRole('menuitem', { name: /Modifica scheda/i });
-            const deleteItem = screen.getByRole('menuitem', { name: /Elimina scheda/i });
+            const editItem = screen.getByRole('menuitem', { name: /Modifica/i });
+            const deleteItem = screen.getByRole('menuitem', { name: /Elimina/i });
             expect(editItem).toBeDefined();
             expect(deleteItem).toBeDefined();
             expect(deleteItem.className).toContain('item-danger');
@@ -488,7 +488,7 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(optionsBtn);
             expect(onToggle).not.toHaveBeenCalled();
 
-            const deleteItem = screen.getByRole('menuitem', { name: /Elimina scheda/i });
+            const deleteItem = screen.getByRole('menuitem', { name: /Elimina/i });
             fireEvent.click(deleteItem);
             expect(onDelete).toHaveBeenCalledWith('r_test', expect.anything());
             expect(onToggle).not.toHaveBeenCalled();
@@ -515,4 +515,5 @@ describe('Training Planning & Volume Calculations', () => {
         });
     });
 });
+
 

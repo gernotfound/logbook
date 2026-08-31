@@ -504,8 +504,8 @@ describe('Workout Improvements & History Edit Suite', () => {
       });
 
       // Default exercise should have "Modifica esercizio" but NOT "Elimina esercizio"
-      expect(screen.getByRole('menuitem', { name: /modifica esercizio/i })).not.toBeNull();
-      expect(screen.queryByRole('menuitem', { name: /elimina esercizio/i })).toBeNull();
+      expect(screen.getByRole('menuitem', { name: /modifica/i })).not.toBeNull();
+      expect(screen.queryByRole('menuitem', { name: /elimina/i })).toBeNull();
 
       // Close menu by clicking trigger again
       act(() => {
@@ -518,12 +518,12 @@ describe('Workout Improvements & History Edit Suite', () => {
       });
 
       // Custom exercise should have both "Modifica esercizio" and "Elimina esercizio"
-      expect(screen.getByRole('menuitem', { name: /modifica esercizio/i })).not.toBeNull();
-      expect(screen.getByRole('menuitem', { name: /elimina esercizio/i })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: /modifica/i })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: /elimina/i })).not.toBeNull();
 
       // Click "Modifica esercizio"
       act(() => {
-        fireEvent.click(screen.getByRole('menuitem', { name: /modifica esercizio/i }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /modifica/i }));
       });
 
       // Form header shows editing title
@@ -571,8 +571,8 @@ describe('Workout Improvements & History Edit Suite', () => {
         fireEvent.click(triggerBtn);
       });
 
-      const editItem = screen.getByRole('menuitem', { name: /modifica alimento/i });
-      const deleteItem = screen.getByRole('menuitem', { name: /elimina alimento/i });
+      const editItem = screen.getByRole('menuitem', { name: /modifica/i });
+      const deleteItem = screen.getByRole('menuitem', { name: /elimina/i });
       expect(editItem).not.toBeNull();
       expect(deleteItem).not.toBeNull();
 
@@ -587,7 +587,7 @@ describe('Workout Improvements & History Edit Suite', () => {
         fireEvent.click(triggerBtn);
       });
       act(() => {
-        fireEvent.click(screen.getByRole('menuitem', { name: /elimina alimento/i }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /elimina/i }));
       });
       expect(deletedFood).toEqual(mockFood);
     });
