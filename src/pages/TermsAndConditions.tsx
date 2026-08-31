@@ -39,10 +39,10 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           flexShrink: 0,
         }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-main)' }}>
+            <h2 style={{margin: 0,color: 'var(--text-main)'}}>
               Termini e Condizioni
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Aggiornati al 28 agosto 2026
             </p>
           </div>
@@ -62,7 +62,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           padding: '24px',
           color: 'var(--text-muted)',
           lineHeight: '1.7',
-          fontSize: '0.9rem',
+          fontSize: '0.95rem',
         }}>
           <Section title="1. Accettazione dei Termini">
             <p>
@@ -134,15 +134,11 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div style={{ marginBottom: '28px' }}>
-    <h3 style={{
-      color: 'var(--text-main)',
-      fontSize: '1rem',
-      fontWeight: 700,
+    <h3 style={{color: 'var(--text-main)',fontWeight: 700,
       marginTop: 0,
       marginBottom: '10px',
       paddingBottom: '6px',
-      borderBottom: '1px solid var(--glass-border)',
-    }}>
+      borderBottom: '1px solid var(--glass-border)'}}>
       {title}
     </h3>
     {children}

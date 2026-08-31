@@ -74,6 +74,11 @@ input, select, textarea {
     overflow-x: clip;
 }
 
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1.1rem; }
+h4, h5 { font-size: 1rem; }
+
 h1, h2, h3, h4, h5 { 
     color: var(--text-main); 
     margin-bottom: 12px; 

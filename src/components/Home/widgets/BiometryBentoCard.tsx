@@ -9,7 +9,7 @@ interface BiometryBentoCardProps {
 const BiometryBentoCard: React.FC<BiometryBentoCardProps> = ({ weightStats, bf }) => {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '15px' }}>
-            <h2 style={{ fontSize: '1.05rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '8px'}}>
                 <Scale size={18} color="var(--primary-color)" />
                 Biometria
             </h2>
@@ -20,7 +20,7 @@ const BiometryBentoCard: React.FC<BiometryBentoCardProps> = ({ weightStats, bf }
                     {weightStats?.latestWeight ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
                             <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                                {weightStats.latestWeight} <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>kg</span>
+                                {weightStats.latestWeight} <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>kg</span>
                             </span>
                             {weightStats.weightDelta !== null && weightStats.weightDelta !== 0 && (
                                 <span style={{

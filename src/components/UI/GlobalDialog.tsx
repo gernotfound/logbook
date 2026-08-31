@@ -41,7 +41,7 @@ export const GlobalDialog: React.FC = () => {
           animation: 'fadeIn 0.2s ease-out'
         }}
       >
-        <h2 id="global-dialog-title" style={{ color: 'var(--text-main)', margin: '0 0 15px 0', fontSize: '1.4rem' }}>{title}</h2>
+        <h2 id="global-dialog-title" style={{color: 'var(--text-main)', margin: '0 0 15px 0'}}>{title}</h2>
         
         <p id="global-dialog-message" style={{ color: 'var(--text-muted)', marginBottom: '25px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textAlign: 'left' }}>
           {message}

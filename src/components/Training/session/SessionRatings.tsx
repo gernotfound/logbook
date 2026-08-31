@@ -87,7 +87,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
             </div>
 
             <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '0.95rem' }}>Valuta sessione (1-10)</h3>
+                <h3 style={{marginTop: 0, marginBottom: '12px'}}>Valuta sessione (1-10)</h3>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <label htmlFor="mood-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
@@ -179,14 +179,14 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             {pains.length > 0 ? `${pains.length} selezionati` : 'Opzionale'}
                         </span>
                     </div>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         {isDomsOpen ? '▲' : '▼'}
                     </span>
                 </button>
 
                 {isDomsOpen && (
                     <div style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             Seleziona i muscoli doloranti dopo l&apos;allenamento. I muscoli primari allenati non selezionati guariranno automaticamente.
                         </p>
 
@@ -248,7 +248,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                 }}
                             >
                                 {searchResults.length === 0 ? (
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '10px', textAlign: 'center' }}>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', textAlign: 'center' }}>
                                         Nessun muscolo trovato
                                     </div>
                                 ) : (
@@ -301,7 +301,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                             color: '#ff6b81',
                                             padding: '4px 10px',
                                             borderRadius: '8px',
-                                            fontSize: '0.8rem',
+                                            fontSize: '0.85rem',
                                             fontWeight: 600
                                         }}
                                     >

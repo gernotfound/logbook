@@ -296,7 +296,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     return (
         <form onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
             <div className="flex-between mb-15 items-center">
-                <h2 className="m-0" style={{ color: 'var(--primary-color)', fontSize: '1.2rem' }}>
+                <h2 className="m-0" style={{color: 'var(--primary-color)'}}>
                     {initialCycle ? '✏️ Modifica ciclo' : '➕ Nuovo ciclo di allenamento'}
                 </h2>
                 <button
@@ -519,7 +519,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         borderRadius: '6px',
                         background: 'rgba(14, 165, 233, 0.08)',
                         border: '1px solid rgba(14, 165, 233, 0.2)',
-                        fontSize: '0.8rem',
+                        fontSize: '0.85rem',
                         color: 'var(--primary-color)',
                         display: 'flex',
                         alignItems: 'center',
@@ -704,7 +704,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                             <span className="text-xs text-primary font-bold uppercase tracking-wider block">
                                 Programmazione rotazione
                             </span>
-                            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#fff' }}>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#fff' }}>
                                 🔄 Calendario rotazione schede ({schedule.totalSessions} sedute)
                             </span>
                         </div>
@@ -738,7 +738,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     }}
                                 >
                                     <div className="flex-between items-center mb-6">
-                                        <span style={{ fontWeight: 'bold', fontSize: '0.8rem', color: 'var(--primary-color)' }}>
+                                        <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: 'var(--primary-color)' }}>
                                             Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
                                         </span>
                                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>

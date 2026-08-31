@@ -63,7 +63,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     gap: '10px'
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <h2 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text-main)' }}>{report.workoutName}</h2>
+                        <h2 style={{margin: 0,color: 'var(--text-main)'}}>{report.workoutName}</h2>
                         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             {Logic.formatItalianDate ? Logic.formatItalianDate(report.date) : report.date}
                         </p>
@@ -107,7 +107,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     {/* Summary Cards */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Volume Totale</span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Volume Totale</span>
                             <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>{formatKg(report.totalVolume)}</span>
                             {report.volumeDeltaPercent !== undefined && (
                                 <span style={{
@@ -122,7 +122,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             )}
                         </div>
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
-                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Esercizi Condivisi</span>
+                             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esercizi Condivisi</span>
                              <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{report.exerciseComparisons.length}</span>
                         </div>
                     </div>
@@ -140,7 +140,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             gap: '10px'
                         }}>
                             <span style={{ fontSize: '2rem' }}>🎉</span>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary-color)' }}>Prima sessione completata!</h3>
+                            <h3 style={{margin: 0,color: 'var(--primary-color)'}}>Prima sessione completata!</h3>
                             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Non abbiamo allenamenti precedenti con questa scheda per fare un confronto. I progressi verranno tracciati dalla prossima volta!</p>
                         </div>
                     ) : (
@@ -148,12 +148,12 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             {/* PR Section */}
                             {report.newPRs.length > 0 && (
                                 <div className="card" style={{ margin: 0, padding: '16px', background: 'rgba(234, 179, 8, 0.05)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
-                                    <h3 style={{ margin: '0 0 12px', fontSize: '1rem', color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <h3 style={{margin: '0 0 12px',color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '6px'}}>
                                         <Trophy size={16} /> Nuovi Record Personali
                                     </h3>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         {report.newPRs.map(pr => (
-                                            <div key={pr.exId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
+                                            <div key={pr.exId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}>
                                                 <span>{pr.exName}</span>
                                                 <span style={{ fontWeight: 'bold', color: 'var(--warning-color)' }}>
                                                     {pr.volumeDelta > 0 ? `+${pr.volumeDeltaPercent.toFixed(1)}% Vol` : `+${pr.weightDelta.toFixed(1)}kg Media`}
@@ -167,7 +167,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             {/* Exercise List */}
                             {report.exerciseComparisons.length > 0 && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <h3 style={{margin: 0,color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px'}}>
                                         <Activity size={16} /> Confronto Esercizi
                                     </h3>
                                     {report.exerciseComparisons.map(ex => {
@@ -179,7 +179,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             <div key={ex.exId} className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{ex.exName}</span>
-                                                    {ex.isPR && <span style={{ background: 'var(--warning-color)', color: '#000', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>PR</span>}
+                                                    {ex.isPR && <span style={{ background: 'var(--warning-color)', color: '#000', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>PR</span>}
                                                 </div>
 
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -202,7 +202,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                                     </div>
                                                 </div>
 
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-muted)', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
                                                     <span>Reps: {ex.currentReps} <span style={{ color: ex.repsDelta > 0 ? 'var(--success-color)' : (ex.repsDelta < 0 ? 'var(--danger-color)' : 'inherit') }}>({formatDelta(ex.repsDelta)})</span></span>
                                                     <span>Peso medio: {formatKg(ex.currentAvgWeight)} <span style={{ color: ex.weightDelta > 0 ? 'var(--success-color)' : (ex.weightDelta < 0 ? 'var(--danger-color)' : 'inherit') }}>({formatDelta(ex.weightDelta)})</span></span>
                                                 </div>
@@ -217,7 +217,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
                 {/* Footer */}
                 <div style={{ padding: '16px 20px', borderTop: '1px solid var(--glass-border)' }}>
-                    <button className="btn btn-primary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1.05rem', fontWeight: 'bold' }} onClick={onClose}>
+                    <button className="btn btn-primary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={onClose}>
                         {fromEndWorkout ? 'Chiudi e torna alla Home' : 'Chiudi Report'}
                     </button>
                 </div>

@@ -128,7 +128,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr || '') : targetDateStr}
                 </div>
                 {targetDateStr === Logic.getLocalDateString() && (
-                    <div style={{ fontSize: '0.7rem', color: 'var(--primary-color)' }}>OGGI</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                 )}
             </div>
             <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
@@ -153,7 +153,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                 </button>
             ) : (
                 <div className="card mb-15" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--primary-color)' }}>
-                    <h2 className="mb-15" style={{ fontSize: '1.1rem', color: 'var(--text-main)' }}>
+                    <h2 className="mb-15" style={{color: 'var(--text-main)'}}>
                         {editingSuppId ? 'Modifica integratore' : 'Crea nuovo integratore'}
                     </h2>
                     
@@ -314,12 +314,12 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
                             {suppIntakes.length > 0 && (
                                 <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '10px' }}>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Storico odierno:</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Storico odierno:</div>
                                     {suppIntakes.map(intake => {
                                         const timeStr = new Date(intake.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                                         return (
                                             <div key={intake.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed rgba(255,255,255,0.1)' }}>
-                                                <div style={{ fontSize: '0.9rem' }}>
+                                                <div style={{ fontSize: '0.95rem' }}>
                                                     <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>{timeStr}</span>
                                                     <strong>{intake.amount}</strong> {supp.unit}
                                                 </div>

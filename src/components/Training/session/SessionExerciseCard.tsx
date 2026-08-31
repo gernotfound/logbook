@@ -138,7 +138,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     return (
         <div className="section-divider">
             <div style={{ marginBottom: '10px' }}>
-                <h2 style={{ color: 'var(--primary-color)', margin: 0, fontSize: '1.15rem' }}>{exName}</h2>
+                <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
             </div>
             <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
                 {/* Position dropdown */}
@@ -204,9 +204,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isHistoryOpen && (
                 <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{ marginBottom: '8px', marginTop: 0, fontSize: '0.85rem' }}>Ultimi 2 allenamenti:</h3>
+                    <h3 style={{marginBottom: '8px', marginTop: 0}}>Ultimi 2 allenamenti:</h3>
                     {pastWorkouts.length === 0 ? (
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
                     ) : (
                         pastWorkouts.map((pw, idx) => (
                             <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed var(--glass-border)' }}>
@@ -241,7 +241,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{ marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Modifica setup (globale):</h3>
+                    <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Modifica setup (globale):</h3>
                     <input
                         id={`setup-${exItem.exId}`}
                         type="text"

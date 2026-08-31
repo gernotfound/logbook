@@ -39,7 +39,7 @@ const ExportSelector = React.memo(({
     return (
         <div style={{ marginBottom: '15px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>{title}</span>
+                <span style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>{title}</span>
                 <select 
                     value={selection === 'all' ? 'all' : selection === 'none' ? 'none' : 'custom'}
                     onChange={(e) => {
@@ -48,7 +48,7 @@ const ExportSelector = React.memo(({
                         else if (val === 'none') onChange('none');
                         else onChange([]);
                     }}
-                    style={{ background: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '4px 8px', fontSize: '0.8rem' }}
+                    style={{ background: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '4px 8px', fontSize: '0.85rem' }}
                 >
                     <option value="all">Tutti ({items.length})</option>
                     <option value="custom">Seleziona...</option>
@@ -68,13 +68,13 @@ const ExportSelector = React.memo(({
                                 placeholder="Cerca..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                style={{ width: '120px', padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '4px', color: 'var(--text-main)' }}
+                                style={{ width: '120px', padding: '4px 8px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '4px', color: 'var(--text-main)' }}
                             />
                         )}
                     </div>
                     
                     <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {filteredItems.length === 0 ? <span style={{fontSize:'0.8rem', color:'var(--text-muted)'}}>Nessun elemento</span> : filteredItems.map(item => (
+                        {filteredItems.length === 0 ? <span style={{fontSize: '0.85rem', color:'var(--text-muted)'}}>Nessun elemento</span> : filteredItems.map(item => (
                             <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-main)' }}>
                                 <input 
                                     type="checkbox" 
@@ -164,7 +164,7 @@ const SettingsView = () => {
 
     return (
         <div id="view-settings" className="view-section active">
-            <h1 style={{ marginBottom: '15px', fontSize: '1.5rem' }}><span aria-hidden="true">⚙️</span> Impostazioni</h1>
+            <h1 style={{marginBottom: '15px'}}><span aria-hidden="true">⚙️</span> Impostazioni</h1>
 
             <div className="sub-nav" style={{ marginBottom: '20px' }}>
                 <div className={`sub-nav-btn ${activeTab === 'account' ? 'active' : ''}`} onClick={() => setActiveTab('account')}>Account</div>
@@ -176,7 +176,7 @@ const SettingsView = () => {
                 <>
                     {isGuest ? (
                         <div className="section-divider">
-                            <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
+                            <h2 style={{color: 'var(--warning-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
                             <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
                                 Stai usando LogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo e non possono essere recuperati se perdi l'accesso al browser.
                             </p>
@@ -197,17 +197,17 @@ const SettingsView = () => {
                         </div>
                     ) : (
                         <div className="section-divider">
-                            <h2 style={{ color: 'var(--primary-color)', fontSize: '1.2rem', marginTop: 0 }}>Account Google</h2>
+                            <h2 style={{color: 'var(--primary-color)',marginTop: 0}}>Account Google</h2>
                             {currentUser && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
                                     {currentUser.photoURL && <img src={currentUser.photoURL} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />}
                                     <div>
                                         <div style={{ fontWeight: 'bold' }}>{currentUser.displayName}</div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
                                     </div>
                                 </div>
                             )}
-                            <p style={{ fontSize: '0.8rem' }}>I tuoi dati sono sincronizzati automaticamente sul cloud.</p>
+                            <p style={{ fontSize: '0.85rem' }}>I tuoi dati sono sincronizzati automaticamente sul cloud.</p>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
                                 <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dall'account</button>
                             </div>
@@ -224,7 +224,7 @@ const SettingsView = () => {
 
                     {isIOSInstallable && (
                         <div className="section-divider">
-                            <h3 style={{ margin: '0 0 8px 0', color: 'var(--primary-color)', fontSize: '0.95rem' }}>
+                            <h3 style={{margin: '0 0 8px 0', color: 'var(--primary-color)'}}>
                                 <span aria-hidden="true">📱</span> Installa su iPhone / iPad
                             </h3>
                             <p style={{ fontSize: '0.85rem', margin: 0, lineHeight: 1.4, color: 'var(--text-main)' }}>
@@ -240,8 +240,8 @@ const SettingsView = () => {
                     </div>
 
                     <div className="section-divider">
-                        <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem' }}><span aria-hidden="true">🔧</span> Diagnostica archiviazione</h3>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
+                        <h3 style={{margin: '0 0 10px 0'}}><span aria-hidden="true">🔧</span> Diagnostica archiviazione</h3>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
                         {(() => {
                             const storageDiag = getStorageDiagnosticData();
                             if (!storageDiag) return <span style={{ fontSize: '0.85rem' }}>Caricamento...</span>;
@@ -267,7 +267,7 @@ const SettingsView = () => {
 
                     {isOffline && (
                         <div className="section-divider">
-                            <h2 style={{ color: 'var(--warning-color)', fontSize: '1.2rem', marginTop: 0 }}><span aria-hidden="true">⚠️</span> Connessione assente</h2>
+                            <h2 style={{color: 'var(--warning-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Connessione assente</h2>
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
                                 Sei attualmente offline. Puoi continuare a usare l'app: tutte le modifiche verranno salvate localmente e sincronizzate con il cloud non appena tornerà la connessione.
                             </p>
@@ -276,7 +276,7 @@ const SettingsView = () => {
 
                     {/* Danger Zone */}
                     <div style={{ marginBottom: '100px' }}>
-                        <h2 style={{ color: 'var(--danger-color)', fontSize: '1.2rem', marginTop: 0 }}><span aria-hidden="true">⚠️</span> Zona pericolosa</h2>
+                        <h2 style={{color: 'var(--danger-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Zona pericolosa</h2>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                             {isGuest
                                 ? "Elimina permanentemente tutti i dati salvati su questo dispositivo. Questa azione è irreversibile."
@@ -298,14 +298,14 @@ const SettingsView = () => {
             {activeTab === 'privacy' && (
                 <>
                     <div className="section-divider" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <h3 style={{ margin: '0 0 5px 0', fontSize: '0.95rem' }}><span aria-hidden="true">⚖️</span> Legale e Privacy</h3>
+                        <h3 style={{margin: '0 0 5px 0'}}><span aria-hidden="true">⚖️</span> Legale e Privacy</h3>
                         <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={() => setShowTerms(true)}>
                             <span aria-hidden="true">📄</span> Termini e Condizioni
                         </button>
                         <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={() => setShowPrivacy(true)}>
                             <span aria-hidden="true">📋</span> Informativa sulla Privacy
                         </button>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>
                             Titolare del trattamento: LogBook Developer<br/>
                             Email: privacy@logbook.example.com
                         </div>
@@ -314,7 +314,7 @@ const SettingsView = () => {
                     <div className="section-divider">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                                <h3 style={{ margin: '0 0 5px 0', fontSize: '1rem', color: 'var(--text-main)' }}>Statistiche di utilizzo</h3>
+                                <h3 style={{margin: '0 0 5px 0',color: 'var(--text-main)'}}>Statistiche di utilizzo</h3>
                                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Condividi dati anonimi di diagnostica e Analytics per aiutarci a migliorare l'app.</p>
                             </div>
                             <input type="checkbox" id="analytics-toggle" checked={analyticsEnabled} onChange={handleAnalyticsToggle} style={{ width: '24px', height: '24px', accentColor: 'var(--primary-color)', marginLeft: '10px' }} />
@@ -326,7 +326,7 @@ const SettingsView = () => {
             {activeTab === 'export' && (
                 <>
                     <div className="section-divider">
-                        <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)' }}><span aria-hidden="true">🤝</span> Condividi con altri atleti</h3>
+                        <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">🤝</span> Condividi con altri atleti</h3>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esporta o importa Esercizi, Schede e Pianificazioni per condividerli.</p>
                         
                         <ExportSelector title="Esercizi (Libreria)" items={storeLibrary || EMPTY_ARRAY} selection={exportLibrary} onChange={setExportLibrary} />
@@ -354,7 +354,7 @@ const SettingsView = () => {
                     </div>
 
                     <div className="section-divider">
-                        <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)' }}><span aria-hidden="true">🔐</span> Backup personale (solo tuo uso)</h3>
+                        <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">🔐</span> Backup personale (solo tuo uso)</h3>
                         <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esporta TUTTI i tuoi dati inclusa la cronologia allenamenti e misurazioni.</p>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: 'var(--warning-color)' }}>L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>
                         
@@ -370,10 +370,16 @@ const SettingsView = () => {
                     </div>
 
                     <div className="section-divider">
-                        <h3 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: 'var(--text-main)' }}><span aria-hidden="true">📊</span> Esportazione Legacy</h3>
+                        <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">📊</span> Esportazione Legacy</h3>
                         <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleExportCSV}>
                             <span aria-hidden="true">💾</span> Esporta dati (CSV)
                         </button>
+                    </div>
+
+                    <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '10px' }}>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            Versione {__APP_VERSION__} &middot; build {__BUILD_HASH__} &middot; {new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(__BUILD_TIME__))}
+                        </p>
                     </div>
                 </>
             )}
@@ -385,12 +391,6 @@ const SettingsView = () => {
             {showTerms && (
                 <TermsAndConditions onClose={() => setShowTerms(false)} />
             )}
-
-            <div style={{ textAlign: 'center', marginTop: '30px', marginBottom: '10px' }}>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Versione {__APP_VERSION__} &middot; build {__BUILD_HASH__} &middot; {new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(__BUILD_TIME__))}
-                </p>
-            </div>
         </div>
     );
 };

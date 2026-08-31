@@ -65,13 +65,13 @@ export const CycleCard: React.FC<CycleCardProps> = ({
             <div className="flex-between items-start mb-8 gap-10">
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <h3 className="m-0" style={{ color: 'var(--text-main)', fontSize: '1.05rem' }}>
+                        <h3 className="m-0" style={{color: 'var(--text-main)'}}>
                             {cycle.name}
                         </h3>
                         {isActive && (
                             <span
                                 style={{
-                                    fontSize: '0.7rem',
+                                    fontSize: '0.75rem',
                                     fontWeight: 'bold',
                                     padding: '2px 8px',
                                     borderRadius: '12px',
@@ -83,7 +83,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                             </span>
                         )}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                         {cycle.startDate ? (
                             <>
                                 <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
@@ -179,7 +179,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                                     border: '1px solid rgba(14, 165, 233, 0.25)',
                                                     borderRadius: '4px',
                                                     color: '#fff',
-                                                    fontSize: '0.7rem'
+                                                    fontSize: '0.75rem'
                                                 }}
                                             >
                                                 #{sess.globalSessionIndex} {sess.routineName}
@@ -221,7 +221,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}
+                        style={{ width: '100%', marginBottom: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}
                         onClick={() => onDeactivate(cycle.id)}
                     >
                         <span aria-hidden="true">⏸️</span> Disattiva ciclo
@@ -230,7 +230,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: '0.8rem' }}
+                        style={{ width: '100%', marginBottom: 0, fontSize: '0.85rem' }}
                         onClick={() => onSetActive(cycle.id)}
                     >
                         <span aria-hidden="true">⭐</span> Imposta come ciclo attivo

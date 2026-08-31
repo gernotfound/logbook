@@ -103,7 +103,7 @@ const HomeView = ({ onNavigate }: any) => {
             <div className="card" id="home-chart-widget" style={{ padding: '16px', margin: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
                     <div>
-                        <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Trend peso corporeo</h2>
+                        <h2 style={{margin: 0}}>Trend peso corporeo</h2>
                     </div>
 
                     {/* Period Selector Tabs */}
@@ -128,7 +128,7 @@ const HomeView = ({ onNavigate }: any) => {
                                         border: 'none',
                                         borderRadius: '7px',
                                         padding: '6px 10px',
-                                        fontSize: '0.8rem',
+                                        fontSize: '0.85rem',
                                         fontWeight: isActive ? '600' : 'normal',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
@@ -159,7 +159,7 @@ const HomeView = ({ onNavigate }: any) => {
                             padding: '20px'
                         }}>
                             <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⚖️</div>
-                            <div style={{ fontSize: '0.9rem' }}>Nessuna misurazione registrata in questo intervallo.</div>
+                            <div style={{ fontSize: '0.95rem' }}>Nessuna misurazione registrata in questo intervallo.</div>
                             <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Registra il tuo peso nella sezione Dati.</div>
                         </div>
                     )}

@@ -30,10 +30,10 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
         <React.Fragment>
             <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px', border: '1px solid var(--primary-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '75px' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
                     <button 
                         className="btn-icon" 
-                        style={{ color: 'var(--danger-color)', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+                        style={{ color: 'var(--danger-color)', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
                         onClick={() => onRemoveSet(sIndex)}
                         aria-label={`Rimuovi serie ${sIndex + 1}`}
                     >
@@ -100,7 +100,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             justifyContent: 'center',
                             padding: 0,
                             margin: 0,
-                            fontSize: '1.25rem',
+                            fontSize: '1.2rem',
                             lineHeight: 1,
                             alignSelf: 'center'
                         }} 

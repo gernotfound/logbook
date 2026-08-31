@@ -19,9 +19,9 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <h1 style={{ margin: 0, fontSize: '1.4rem' }}>Storico misurazioni ({measurementsHistory.length})</h1>
+                <h1 style={{margin: 0}}>Storico misurazioni ({measurementsHistory.length})</h1>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Tutte le misurazioni registrate in ordine cronologico. Usa le opzioni per modificare o eliminare una misurazione.
             </p>
 

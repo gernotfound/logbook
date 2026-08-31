@@ -52,7 +52,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             onClick={e => e.stopPropagation()}
         >
             <div className="flex-between mb-15 pb-10 border-b">
-                <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.1rem' }}>
+                <h2 style={{margin: 0, color: 'var(--text-main)'}}>
                     ✏️ Modifica porzione
                 </h2>
                 <button 
@@ -66,11 +66,11 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
                     {item.name}
                 </div>
                 {item.brand && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         {item.brand}
                     </div>
                 )}
@@ -120,19 +120,19 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                 }}
             >
                 <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>KCAL</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KCAL</div>
                     <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentKcal}</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>PRO</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO</div>
                     <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentPro}g</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>CARBO</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CARBO</div>
                     <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentCarbs}g</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>GRASSI</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GRASSI</div>
                     <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentFat}g</div>
                 </div>
             </div>

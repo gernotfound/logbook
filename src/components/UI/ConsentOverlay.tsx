@@ -56,10 +56,10 @@ export const ConsentOverlay: React.FC = () => {
                 flexDirection: 'column',
                 gap: '20px'
             }}>
-                <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
+                <h2 style={{margin: 0, color: 'var(--text-main)'}}>
                     Aggiornamento Termini e Privacy
                 </h2>
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: '1.5' }}>
                     Per continuare a utilizzare LogBook e per essere conformi alle normative europee sulla protezione dei dati (GDPR), ti chiediamo di leggere e accettare i nostri documenti legali e di acconsentire al trattamento dei tuoi dati.
                 </p>
 
@@ -72,8 +72,8 @@ export const ConsentOverlay: React.FC = () => {
                             onChange={(e) => setAcceptedTerms(e.target.checked)}
                             style={{ width: '20px', height: '20px', accentColor: 'var(--primary-color)', marginTop: '2px', flexShrink: 0 }}
                         />
-                        <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
-                            Ho letto e accetto i <button className="btn-link" style={{ padding: 0, background: 'none', border: 'none', color: 'var(--primary-color)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.9rem' }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button> e l'<button className="btn-link" style={{ padding: 0, background: 'none', border: 'none', color: 'var(--primary-color)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.9rem' }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button>.
+                        <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
+                            Ho letto e accetto i <button className="btn-link" style={{ padding: 0, background: 'none', border: 'none', color: 'var(--primary-color)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.95rem' }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button> e l'<button className="btn-link" style={{ padding: 0, background: 'none', border: 'none', color: 'var(--primary-color)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.95rem' }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button>.
                         </span>
                     </label>
 
@@ -85,7 +85,7 @@ export const ConsentOverlay: React.FC = () => {
                             onChange={(e) => setAcceptedHealth(e.target.checked)}
                             style={{ width: '20px', height: '20px', accentColor: 'var(--primary-color)', marginTop: '2px', flexShrink: 0 }}
                         />
-                        <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
+                        <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
                             <strong>Consenso esplicito dati salute (Art. 9 GDPR):</strong> Acconsento al trattamento dei miei dati relativi alla salute (peso, misure corporee, parametri di allenamento e alimentazione) per le finalità esclusive di tracciamento e fornitura del servizio descritte nell'Informativa sulla Privacy. Questo consenso è essenziale per il funzionamento dell'app.
                         </span>
                     </label>

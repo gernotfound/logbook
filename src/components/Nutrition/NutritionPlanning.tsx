@@ -10,7 +10,7 @@ const NutritionPlanning = () => {
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h1 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>🎯 Pianificazione macro</h1>
+                <h1 style={{margin: 0, color: 'var(--text-main)'}}>🎯 Pianificazione macro</h1>
             </div>
 
             <div className="input-row flex-between" style={{ marginBottom: '20px' }}>
@@ -30,7 +30,7 @@ const NutritionPlanning = () => {
             <div style={{ display: 'flex', gap: '15px', flexDirection: 'column' }}>
                 {/* 1. MEDIA SETTIMANALE */}
                 <div className="card" style={{ marginBottom: 0 }}>
-                    <h2 style={{ fontSize: '1.1rem', marginTop: 0, marginBottom: '15px', color: 'var(--text-main)' }}>⚖️ Media settimanale desiderata</h2>
+                    <h2 style={{marginTop: 0, marginBottom: '15px', color: 'var(--text-main)'}}>⚖️ Media settimanale desiderata</h2>
                     
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
                         <span style={{ color: 'var(--text-muted)' }}>Pro (g/kg)</span>
@@ -47,18 +47,18 @@ const NutritionPlanning = () => {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--surface-color)', padding: '10px', borderRadius: '8px' }}>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>PRO</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO</div>
                             <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(avgMacrosCalc.proGrams)}g</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>CAR</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CAR</div>
                             <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(avgMacrosCalc.carbsGrams)}g</div>
                         </div>
                         <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>GRA</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GRA</div>
                             <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(avgMacrosCalc.fatGrams)}g</div>
                         </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>KCAL</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KCAL</div>
                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(avgMacrosCalc.totalKcal)}</div>
                     </div>
                     
@@ -69,8 +69,8 @@ const NutritionPlanning = () => {
 
                 {/* 2. VARIAZIONI GIORNI ON */}
                 <div className="card" style={{ marginBottom: 0 }}>
-                    <h2 style={{ fontSize: '1.1rem', marginTop: 0, marginBottom: '5px', color: 'var(--text-main)' }}>🚀 Variazioni giorni ON</h2>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Varia in percentuale i macro nei giorni di allenamento.</p>
+                    <h2 style={{marginTop: 0, marginBottom: '5px', color: 'var(--text-main)'}}>🚀 Variazioni giorni ON</h2>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Varia in percentuale i macro nei giorni di allenamento.</p>
                     
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
                         <span style={{ color: 'var(--text-muted)' }}>Variazione pro (%)</span>
@@ -92,33 +92,33 @@ const NutritionPlanning = () => {
                     
                     {/* GIORNO ON */}
                     <div className="card" style={{ marginBottom: 0, padding: '15px' }}>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--primary-color)', fontWeight: 'bold', marginBottom: '10px' }}>🔥 Giorno ON (Allenamento)</div>
+                        <div style={{ fontSize: '0.95rem', color: 'var(--primary-color)', fontWeight: 'bold', marginBottom: '10px' }}>🔥 Giorno ON (Allenamento)</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Pro: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.proPerKg).toFixed(2)} g/kg</span></div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Car: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.carbsPerKg).toFixed(2)} g/kg</span></div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Gra: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.fatPerKg).toFixed(2)} g/kg</span></div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Pro: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.proPerKg).toFixed(2)} g/kg</span></div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Car: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.carbsPerKg).toFixed(2)} g/kg</span></div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Gra: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.fatPerKg).toFixed(2)} g/kg</span></div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--surface-color)', padding: '8px', borderRadius: '6px' }}>
-                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>PRO</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.proGrams)}g</div></div>
-                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>CAR</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.carbsGrams)}g</div></div>
-                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>GRA</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.fatGrams)}g</div></div>
-                            <div style={{ textAlign: 'center', flex: 1, borderLeft: '1px solid var(--glass-border)' }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>KCAL</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.totalKcal)}</div></div>
+                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.proGrams)}g</div></div>
+                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CAR</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.carbsGrams)}g</div></div>
+                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GRA</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.fatGrams)}g</div></div>
+                            <div style={{ textAlign: 'center', flex: 1, borderLeft: '1px solid var(--glass-border)' }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KCAL</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(onMacrosCalc.totalKcal)}</div></div>
                         </div>
                     </div>
 
                     {/* GIORNO OFF */}
                     <div className="card" style={{ marginBottom: 0, padding: '15px' }}>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 'bold', marginBottom: '10px' }}>🛋️ Giorno OFF (Riposo)</div>
+                        <div style={{ fontSize: '0.95rem', color: 'var(--text-main)', fontWeight: 'bold', marginBottom: '10px' }}>🛋️ Giorno OFF (Riposo)</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Pro: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.proPerKg).toFixed(2)} g/kg</span></div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Car: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.carbsPerKg).toFixed(2)} g/kg</span></div>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Gra: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.fatPerKg).toFixed(2)} g/kg</span></div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Pro: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.proPerKg).toFixed(2)} g/kg</span></div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Car: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.carbsPerKg).toFixed(2)} g/kg</span></div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Gra: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.fatPerKg).toFixed(2)} g/kg</span></div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--surface-color)', padding: '8px', borderRadius: '6px' }}>
-                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>PRO</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.proGrams)}g</div></div>
-                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>CAR</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.carbsGrams)}g</div></div>
-                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>GRA</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.fatGrams)}g</div></div>
-                            <div style={{ textAlign: 'center', flex: 1, borderLeft: '1px solid var(--glass-border)' }}><div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>KCAL</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.totalKcal)}</div></div>
+                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.proGrams)}g</div></div>
+                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CAR</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.carbsGrams)}g</div></div>
+                            <div style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GRA</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.fatGrams)}g</div></div>
+                            <div style={{ textAlign: 'center', flex: 1, borderLeft: '1px solid var(--glass-border)' }}><div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KCAL</div><div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(offMacrosCalc.totalKcal)}</div></div>
                         </div>
                     </div>
                 </div>
@@ -157,20 +157,20 @@ const NutritionPlanning = () => {
             {/* TDEE COMPARE (Automatico) */}
             <div className="card" style={{ marginTop: '30px', padding: '15px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <h2 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-main)' }}>⚖️ TDEE (normocalorica)</h2>
+                    <h2 style={{margin: 0,color: 'var(--text-main)'}}>⚖️ TDEE (normocalorica)</h2>
                 </div>
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', background: 'var(--surface-color)', padding: '10px', borderRadius: '8px' }}>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>TDEE (normo stimato)</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TDEE (normo stimato)</div>
                         <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-main)' }}>{Math.round(tdeeCalc.tdee || 0)}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>MEDIA IMPOSTATA</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MEDIA IMPOSTATA</div>
                         <div style={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-main)' }}>{Math.round(avgMacrosCalc.totalKcal)}</div>
                     </div>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '10px' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '10px' }}>
                     Il tuo TDEE viene calcolato automaticamente in base alle tue misurazioni corporee e profilo.
                 </div>
             </div>

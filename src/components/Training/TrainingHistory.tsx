@@ -34,7 +34,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                 />
             )}
             
-            <h2 style={{ marginBottom: '20px', fontSize: '1.15rem' }}>Storico allenamenti ({history.length})</h2>
+            <h2 style={{marginBottom: '20px'}}>Storico allenamenti ({history.length})</h2>
 
             {history.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>Nessun allenamento registrato.</p>
@@ -78,8 +78,8 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                             <div key={wo.id} className="card" style={{ marginBottom: '15px', borderLeft: '4px solid var(--primary-dark)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                     <div>
-                                        <h3 style={{ margin: 0, fontSize: '1rem' }}>{wo.routineName || 'Sessione personalizzata'}</h3>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{date}</div>
+                                        <h3 style={{margin: 0}}>{wo.routineName || 'Sessione personalizzata'}</h3>
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{date}</div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <div className="badge badge-primary" style={{ marginRight: '5px' }}>{durationDisplay}</div>
@@ -122,7 +122,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                             
                                             const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time || s.distance || s.speed || s.kcal);
                                             return (
-                                                <div key={exIdx} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                                                <div key={exIdx} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
                                                     <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{exName}</span>
                                                     {validSets.length > 0 && (
                                                         <span> — {validSets.map((s: any) => {
@@ -151,7 +151,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                 )}
                                 
                                 {hasRatings && (
-                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--glass-border)', fontSize: '0.8rem' }}>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--glass-border)', fontSize: '0.85rem' }}>
                                         {moodVal && <span className="badge badge-primary">Umore: {moodVal}/10</span>}
                                         {pumpVal && <span className="badge badge-primary">Pump: {pumpVal}/10</span>}
                                         {fatigueVal && <span className="badge badge-primary">Stanchezza: {fatigueVal}/10</span>}
