@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 import { BarChart2, Pencil, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
 import { useTrainingHistory } from '../../hooks/useTrainingHistory';
@@ -38,8 +39,15 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
             {history.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>Nessun allenamento registrato.</p>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    {history.map(wo => {
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Virtuoso
+                        useWindowScroll
+                        data={history}
+                        initialItemCount={10}
+                        components={{
+                            Footer: () => <div style={{ height: '90px' }} />
+                        }}
+                        itemContent={(index, wo) => {
                         let dateObj: Date;
                         if (wo.globalStartTime) {
                             dateObj = new Date(wo.globalStartTime);
@@ -66,7 +74,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                         const hasRatings = moodVal || pumpVal || fatigueVal;
                         
                         return (
-                            <div key={wo.id} className="card" style={{ marginBottom: 0, borderLeft: '4px solid var(--primary-dark)' }}>
+                            <div key={wo.id} className="card" style={{ marginBottom: '15px', borderLeft: '4px solid var(--primary-dark)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                     <div>
                                         <h3 style={{ margin: 0, fontSize: '1rem' }}>{wo.routineName || 'Sessione personalizzata'}</h3>
@@ -149,8 +157,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                     </div>
                                 )}
                             </div>
-                        )
-                    })}
+                        )}} />
                 </div>
             )}
         </div>
