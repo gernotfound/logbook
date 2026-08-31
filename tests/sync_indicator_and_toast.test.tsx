@@ -723,7 +723,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
       // Advance past 1000ms debounce
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(1100);
+        await vi.runAllTimersAsync();
       });
 
       await Promise.all([p1, p2, p3]);
