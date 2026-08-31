@@ -223,6 +223,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                     sleepHook={mockSleepHook}
                     selectedDate={selectedDate}
                     setSelectedDate={setSelectedDate}
+                    todayDateStr="2026-10-01"
                 />
             );
 
@@ -236,6 +237,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                     sleepHook={mockSleepHook}
                     selectedDate="2026-08-31"
                     setSelectedDate={setSelectedDate}
+                    todayDateStr="2026-10-01"
                 />
             );
 
