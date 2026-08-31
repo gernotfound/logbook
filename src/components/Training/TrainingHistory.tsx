@@ -47,7 +47,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                         components={{
                             Footer: () => <div style={{ height: '90px' }} />
                         }}
-                        itemContent={(index, wo) => {
+                        itemContent={(_, wo) => {
                         let dateObj: Date;
                         if (wo.globalStartTime) {
                             dateObj = new Date(wo.globalStartTime);
