@@ -109,7 +109,17 @@ function App() {
   const currentTabRef = useState<{ current: string }>({ current: activeTab })[0];
 
   const handleTabChange = (newTab: string) => {
-    if (newTab === activeTab) return;
+    if (newTab === activeTab) {
+      // Comportamento di "reset": clicco sulla tab già attiva
+      if (newTab === 'training') setTrainingSubTab('session');
+      if (newTab === 'nutrition') setNutritionSubTab('meals');
+      if (newTab === 'data') setDataSubTab('measurements');
+      
+      tabScrollPositions[activeTab] = 0;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     tabScrollPositions[activeTab] = window.scrollY;
     setVisitedTabs(prev => prev[newTab] ? prev : { ...prev, [newTab]: true });
     setActiveTab(newTab);

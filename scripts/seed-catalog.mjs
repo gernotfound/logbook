@@ -1,4 +1,4 @@
-﻿/**
+/**
  * seed-catalog.mjs
  * Popola la collezione global_catalog su Firestore con i seed locali.
  * Utilizzo: node seed-catalog.mjs
@@ -23,8 +23,8 @@ if (existsSync(SERVICE_ACCOUNT_PATH)) {
 }
 
 const db = getFirestore();
-const exercises = require("./src/lib/catalog/seedExercises.json");
-const foods = require("./src/lib/catalog/seedFoods.json");
+const exercises = require("../src/lib/catalog/seedExercises.json");
+const foods = require("../src/lib/catalog/seedFoods.json");
 
 const manifest = {
     version: "1.0.0",
