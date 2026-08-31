@@ -316,13 +316,13 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 fireEvent.click(optionsBtn);
             });
 
-            const dupBtn = screen.getByRole('menuitem', { name: /Duplica ciclo/i });
+            const dupBtn = screen.getByRole('menuitem', { name: /Duplica/i });
             await act(async () => {
                 fireEvent.click(dupBtn);
             });
 
             const cycles = useAppStore.getState().userData?.trainingCycles || [];
-            expect(cycles.some(c => c.name === 'Mesociclo Massa (copia)')).toBe(true);
+            expect(cycles.some(c => c.name === 'Mesociclo Massa - 1')).toBe(true);
         });
 
         it('SessionRatings renders Valuta sessione (1-10) in sentence case', () => {
@@ -351,3 +351,4 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
         });
     });
 });
+
