@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
@@ -304,7 +304,7 @@ const TrainingExercises = () => {
                         components={{
                             Footer: () => <div style={{ height: '90px' }} />
                         }}
-                        itemContent={(index, ex) => {
+                        itemContent={(_, ex) => {
                         const routineCount = routines.filter(r => r.exercises?.some((re: any) => re.exId === ex.id)).length;
                         return (
                         <div 
