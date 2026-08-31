@@ -32,7 +32,7 @@ export function useAnalyticsWorker() {
                 // But we need to clean up pending promises and trigger their fallback.
                 const pending = Array.from(pendingPromises.current.entries());
                 pendingPromises.current.clear();
-                for (const [id, handlers] of pending) {
+                for (const [, handlers] of pending) {
                     clearTimeout(handlers.timeoutId);
                     handlers.reject(new Error('Worker crashed'));
                 }
@@ -49,7 +49,7 @@ export function useAnalyticsWorker() {
             }
             const pending = Array.from(pendingPromises.current.entries());
             pendingPromises.current.clear();
-            for (const [id, handlers] of pending) {
+            for (const [, handlers] of pending) {
                 clearTimeout(handlers.timeoutId);
                 handlers.reject(new Error('Worker terminated on unmount'));
             }

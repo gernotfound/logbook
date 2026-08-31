@@ -42,7 +42,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
     };
 
     describe('WeeklyVolumeChart', () => {
-        it('renders chart card header in sentence case', () => {
+        it('renders chart card header in sentence case', async () => {
             renderWithProviders(
                 <WeeklyVolumeChart
                     history={mockHistory}
@@ -52,7 +52,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             );
 
             expect(screen.getByText('Volume di allenamento settimanale')).toBeDefined();
-            expect(screen.getByText(/Attuale:/i)).toBeDefined();
+            expect(await screen.findByText(/Attuale:/i)).toBeDefined();
         });
 
         it('renders period buttons and toggles active state on click', () => {
@@ -77,7 +77,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             expect(btn4).toBeDefined();
         });
 
-        it('renders empty state when history is empty', () => {
+        it('renders empty state when history is empty', async () => {
             renderWithProviders(
                 <WeeklyVolumeChart
                     history={[]}
@@ -86,8 +86,8 @@ describe('Analytics UI Components & Dashboard Integration', () => {
                 />
             );
 
-            expect(screen.getByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
-            expect(screen.getByText('Completa una sessione per visualizzare il volume di allenamento.')).toBeDefined();
+            expect(await screen.findByText('Nessun dato di allenamento nelle settimane selezionate.')).toBeDefined();
+            expect(await screen.findByText('Completa una sessione per visualizzare il volume di allenamento.')).toBeDefined();
         });
     });
 
@@ -105,7 +105,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
         });
 
-        it('renders empty state when no workouts or calories exist', () => {
+        it('renders empty state when no workouts or calories exist', async () => {
             renderWithProviders(
                 <VolumeCaloriesCorrelationChart
                     history={[]}
@@ -115,7 +115,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
                 />
             );
 
-            expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
+            expect(await screen.findByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         });
     });
 
