@@ -300,12 +300,13 @@ const TrainingExercises = () => {
                     <Virtuoso
                         useWindowScroll
                         data={library}
-                        initialItemCount={20}
+                        initialItemCount={Math.min(20, library.length)}
                         components={{
                             Footer: () => <div style={{ height: '90px' }} />
                         }}
                         itemContent={(_, ex) => {
-                        const routineCount = routines.filter(r => r.exercises?.some((re: any) => re.exId === ex.id)).length;
+                            if (!ex) return null;
+                            const routineCount = routines.filter(r => r.exercises?.some((re: any) => re.exId === ex.id)).length;
                         return (
                         <div 
                             key={ex.id} 
