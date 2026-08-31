@@ -47,6 +47,26 @@ export function useTrainingRoutines() {
         setExpandedRoutineId(prev => prev === id ? null : id);
     };
 
+    const handleDuplicate = async (rtn: WorkoutRoutine) => {
+        const newName = Logic.generateUniqueName(rtn.name, routines.map(r => r.name));
+        const duplicated: WorkoutRoutine = {
+            ...rtn,
+            id: Logic.generateId('rtn'),
+            name: newName
+        };
+        try {
+            await saveUserData((prev) => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    routines: [...(prev.routines || []), duplicated]
+                };
+            });
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     const handleEditClick = (rtn: WorkoutRoutine) => {
         setEditingRoutineId(rtn.id);
         setRoutineName(rtn.name);
@@ -180,7 +200,7 @@ export function useTrainingRoutines() {
         expandedRoutineId, handleRoutineClick,
         routineExercises,
         routines, library,
-        handleSave, handleCancelEdit, handleEditClick, handleDelete,
+        handleSave, handleCancelEdit, handleEditClick, handleDelete, handleDuplicate,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
         handleUpdateTechnique,
         handleRemoveExerciseFromRoutine, moveExercise

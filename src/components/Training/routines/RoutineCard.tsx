@@ -2,7 +2,7 @@ import React from 'react';
 import MuscleModel from '../MuscleModel';
 import { Routine, RoutineExercise, ExerciseLibraryItem } from '../../../types';
 import { ContextMenu, ContextMenuItem } from '../../UI/ContextMenu';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Copy, Trash2 } from 'lucide-react';
 
 interface RoutineCardProps {
     routine: Routine;
@@ -11,6 +11,7 @@ interface RoutineCardProps {
     onToggleExpand: (id: string) => void;
     onEdit: (routine: Routine) => void;
     onDelete: (id: string, e: React.MouseEvent) => void;
+    onDuplicate: (routine: Routine, e: React.MouseEvent) => void;
 }
 
 export const RoutineCard: React.FC<RoutineCardProps> = ({
@@ -19,6 +20,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     library,
     onToggleExpand,
     onEdit,
+    onDuplicate,
     onDelete
 }) => {
     const muscles: string[] = [];
@@ -38,13 +40,19 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     const menuItems: ContextMenuItem[] = [
         {
             id: 'edit-routine',
-            label: 'Modifica scheda',
+            label: 'Modifica',
             icon: <Pencil size={16} />,
             onClick: () => onEdit(routine)
         },
         {
+            id: 'duplicate-routine',
+            label: 'Duplica',
+            icon: <Copy size={16} />,
+            onClick: (e) => onDuplicate(routine, e as any)
+        },
+        {
             id: 'delete-routine',
-            label: 'Elimina scheda',
+            label: 'Elimina',
             icon: <Trash2 size={16} />,
             variant: 'danger',
             onClick: (e) => onDelete(routine.id, e)
@@ -117,3 +125,5 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
         </div>
     );
 };
+
+

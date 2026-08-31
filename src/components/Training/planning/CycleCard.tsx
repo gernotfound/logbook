@@ -35,19 +35,19 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     const menuItems: ContextMenuItem[] = [
         {
             id: 'edit-cycle',
-            label: 'Modifica ciclo',
+            label: 'Modifica',
             icon: <Pencil size={16} />,
             onClick: () => onEdit(cycle)
         },
         {
             id: 'duplicate-cycle',
-            label: 'Duplica ciclo',
+            label: 'Duplica',
             icon: <Copy size={16} />,
             onClick: () => onDuplicate(cycle)
         },
         {
             id: 'delete-cycle',
-            label: 'Elimina ciclo',
+            label: 'Elimina',
             icon: <Trash2 size={16} />,
             variant: 'danger',
             onClick: () => onDelete(cycle)

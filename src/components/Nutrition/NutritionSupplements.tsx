@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
 import { Logic } from '../../lib/logic';
+import { ContextMenu } from '../UI/ContextMenu';
+import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { useDialogStore } from '../../store/useDialogStore';
 
 interface NutritionSupplementsProps {
@@ -9,6 +12,7 @@ interface NutritionSupplementsProps {
 }
 
 export default function NutritionSupplements({ selectedDate, setSelectedDate }: NutritionSupplementsProps) {
+    const saveUserData = useAppStore(s => s.saveUserData);
     const { 
         targetDateStr, supplementsLibrary, supplementsIntake, 
         saveSupplementToLibrary, deleteSupplementFromLibrary, 
@@ -84,6 +88,27 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             portion: supp.portion ? supp.portion.toString() : ''
         });
         setShowSuppModal(true);
+    };
+
+    const handleDuplicateSupplement = async (supp: any) => {
+        const newName = Logic.generateUniqueName(supp.name, supplementsLibrary.map(s => s.name));
+        const duplicated = {
+            ...supp,
+            id: Logic.generateId('supp'),
+            name: newName
+        };
+        try {
+            await saveUserData((prev: any) => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    supplements: [...(prev.supplements || []), duplicated]
+                };
+            });
+            await showAlert('Integratore duplicato!');
+        } catch {
+            await showAlert('Errore durante la duplicazione.');
+        }
     };
 
     const handleDeleteSupplement = async (id: string, name: string) => {
@@ -209,8 +234,26 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '5px' }}>
-                                    <button className="btn-icon text-muted" onClick={() => handleEditSupplement(supp)}>✏️</button>
-                                    <button className="btn-icon text-danger" onClick={() => handleDeleteSupplement(supp.id, supp.name)}>✕</button>
+                                    <ContextMenu
+                                        items={[
+                                            {
+                                                label: 'Modifica',
+                                                icon: <Pencil size={16} />,
+                                                onClick: () => handleEditSupplement(supp)
+                                            },
+                                            {
+                                                label: 'Duplica',
+                                                icon: <Copy size={16} />,
+                                                onClick: () => handleDuplicateSupplement(supp)
+                                            },
+                                            {
+                                                label: 'Elimina',
+                                                icon: <Trash2 size={16} />,
+                                                variant: 'danger',
+                                                onClick: () => handleDeleteSupplement(supp.id, supp.name)
+                                            }
+                                        ]}
+                                    />
                                 </div>
                             </div>
 
@@ -293,3 +336,6 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         </div>
     );
 }
+
+
+
