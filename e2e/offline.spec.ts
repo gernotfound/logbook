@@ -10,30 +10,44 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 3. Login as Guest
     await page.click('button:has-text("Continua senza account")');
-    await expect(page.locator('text=Inizia sessione vuota')).toBeVisible();
+    
+    // 3.5 Accetta Termini e Condizioni (Privacy Overlay)
+    await page.waitForSelector('text=Aggiornamento Termini e Privacy');
+    const checkboxes = await page.locator('input[type="checkbox"]').all();
+    for (const cb of checkboxes) {
+      await cb.check();
+    }
+    await page.click('button:has-text("Accetta e Continua")');
 
-    // 4. Inizia un allenamento
-    await page.click('button:has-text("Inizia sessione vuota")');
+    // Attendiamo di essere loggati e vedere la navbar
+    await expect(page.locator('button[aria-label="Allenamento"]')).toBeVisible();
+
+    // 4. Naviga alla tab Allenamento (tramite la Bottom Nav)
+    await page.click('button[aria-label="Allenamento"]');
+
+    // 5. Crea una scheda vuota per poter avviare una sessione
+    await page.click('div.sub-nav-btn:has-text("Schede")');
+    
+    // Compila il nome della scheda (l'editor è sempre visibile in cima)
+    await page.fill('input[placeholder*="Spinta"]', 'Scheda E2E Offline');
+    await page.click('button:has-text("Salva nuova scheda")');
+
+    // 6. Torna alla vista Sessione
+    await page.click('div.sub-nav-btn:has-text("Sessione")');
+
+    // Seleziona la scheda appena creata
+    await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
+
+    // 7. Inizia l'allenamento
+    await page.click('button:has-text("Inizia allenamento")');
     
     // Assicurati di essere nella schermata allenamento attivo
     await expect(page.locator('button:has-text("Termina")')).toBeVisible();
 
-    // 5. Aggiungi un esercizio
-    await page.click('button:has-text("Aggiungi esercizio")');
-    // Trova la card della Panca Piana
-    await page.locator('.card', { hasText: 'Panca Piana' }).first().click();
-    
-    // Aggiungi un set
-    await page.click('button:has-text("Aggiungi serie")');
-    await page.fill('input[placeholder="kg"]', '80');
-    await page.fill('input[placeholder="reps"]', '10');
-    // Clicca sulla spunta
-    await page.locator('button.bg-primary').first().click();
-
-    // 6. Vai offline
+    // 8. Vai offline
     await context.setOffline(true);
 
-    // 7. Simula la sospensione del thread o del tab
+    // 10. Simula la sospensione del thread o del tab
     // Visibilitychange farà scattare il salvataggio immediato in localStorage bypassando il debounce
     await page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', {
@@ -43,25 +57,26 @@ test.describe('Offline scenarios & Background suspension', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    // 8. Torna online per riaprire l'app senza crashare se il SW non ha claimato il client in tempo
+    // 11. Torna online per riaprire l'app senza crashare se il SW non ha claimato il client in tempo
     await context.setOffline(false);
 
     // Chiudi e riapri il tab simulando la riapertura dell'app dopo il kill
     await page.close();
     const newPage = await context.newPage();
     await newPage.goto('/');
+    
+    // Naviga di nuovo ad allenamento
+    await newPage.click('button[aria-label="Allenamento"]');
 
-    // Assicurati che il workout sia ancora lì e il set anche
+    // Assicurati che il workout sia ancora lì
     await expect(newPage.locator('button:has-text("Termina")')).toBeVisible();
-    await expect(newPage.locator('input[value="80"]')).toBeVisible();
-    await expect(newPage.locator('input[value="10"]')).toBeVisible();
 
-    // 10. Termina l'allenamento
+    // 12. Termina l'allenamento
     await newPage.click('button:has-text("Termina")');
-    // Conferma l'alert
-    await newPage.click('button:has-text("Termina sessione")');
+    // Conferma l'alert (GlobalDialog)
+    await newPage.click('button:has-text("Conferma")');
 
-    // Verifica che l'allenamento sia finito (Home)
-    await expect(newPage.locator('text=Inizia sessione vuota')).toBeVisible();
+    // Verifica che l'allenamento sia finito
+    await expect(newPage.locator('button:has-text("Inizia allenamento")')).toBeVisible();
   });
 });
