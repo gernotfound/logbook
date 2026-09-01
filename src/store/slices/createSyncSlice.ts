@@ -11,18 +11,21 @@ import type { AppState } from '../useAppStore';
 import { clearStorageMarker } from '../../lib/storageTelemetry';
 import { telemetryHub } from '../../lib/telemetryHub';
 
+import type { SyncResult } from '../../types';
+
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
     setSyncing: (val: boolean) => void;
     setSaveError: (error: string | null) => void;
-    saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<void>;
-    updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<void>;
+    saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<SyncResult>;
+    updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<SyncResult>;
     resetStore: () => void;
 }
 
 let globalSaveTimer: ReturnType<typeof setTimeout> | null = null;
-type PendingPromise = { resolve: () => void; reject: (err: unknown) => void };
+const SYNCED_RESULT: SyncResult = { ok: true, status: 'synced' };
+type PendingPromise = { resolve: (result: SyncResult) => void; reject: (err: unknown) => void };
 let pendingPromises: PendingPromise[] = [];
 
 export const clearSyncTimers = () => {
@@ -53,10 +56,10 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             }
             const promises = [...pendingPromises];
             pendingPromises = [];
-            promises.forEach(p => p.resolve());
+            promises.forEach(p => p.resolve(SYNCED_RESULT));
             saveUserDataToCache(null);
             set({ userData: null, saveError: null, syncing: false });
-            return;
+            return SYNCED_RESULT;
         }
 
         const finalData: UserData = {
@@ -67,7 +70,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         saveUserDataToCache(finalData);
         set({ userData: finalData, saveError: null, syncing: true });
 
-        return new Promise<void>((resolve, reject) => {
+        return new Promise<SyncResult>((resolve, reject) => {
             pendingPromises.push({ resolve, reject });
             if (globalSaveTimer) clearTimeout(globalSaveTimer);
             globalSaveTimer = setTimeout(async () => {
@@ -77,10 +80,28 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 try {
                     // Always pull the freshest state at the time of execution
                     const currentState = get().userData;
-                    if (currentState) {
-                        await DB.saveUserData(currentState);
+                    if (!currentState) {
+                        promisesToCall.forEach(p => p.resolve(SYNCED_RESULT));
+                        return;
                     }
-                    promisesToCall.forEach(p => p.resolve());
+                    
+                    const result = await DB.saveUserData(currentState);
+                    
+                    if (result.ok) {
+                        set({ saveError: null });
+                        promisesToCall.forEach(p => p.resolve(result));
+                    } else {
+                        if (result.status === 'local-pending') {
+                            set({ saveError: "Salvato localmente. Sincronizzazione in attesa." });
+                            promisesToCall.forEach(p => p.resolve(result));
+                        } else if (result.status === 'rejected') {
+                            set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova." });
+                            promisesToCall.forEach(p => p.resolve(result));
+                        } else {
+                            set({ saveError: "Errore inatteso durante il salvataggio." });
+                            promisesToCall.forEach(p => p.resolve(result));
+                        }
+                    }
                 } catch (error) {
                     const formattedError = mapFirebaseErrorCode(error);
                     console.error("[SyncSlice] Errore durante il salvataggio:", formattedError);
@@ -105,11 +126,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         });
     },
 
-    updateUserData: async (updater: (prev: UserData) => UserData) => {
+    updateUserData: async (updater: (prev: UserData) => UserData): Promise<SyncResult> => {
         const { userData } = get();
-        if (!userData) return;
+        if (!userData) return SYNCED_RESULT;
         const nextData = updater(userData);
-        await get().saveUserData(nextData);
+        return get().saveUserData(nextData);
     },
 
     resetStore: () => {

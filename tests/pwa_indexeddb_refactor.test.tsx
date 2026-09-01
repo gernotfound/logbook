@@ -228,19 +228,19 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useFakeTimers();
       const { DB } = await import('../src/lib/db');
 
-      let resolveFirstWrite: (() => void) | null = null;
-      let resolveSecondWrite: (() => void) | null = null;
+      let resolveFirstWrite: ((val: any) => void) | null = null;
+      let resolveSecondWrite: ((val: any) => void) | null = null;
 
       const originalSave = DB.saveUserData;
       let callCount = 0;
       (DB as any).saveUserData = vi.fn().mockImplementation(() => {
         callCount++;
         if (callCount === 1) {
-          return new Promise<void>((resolve) => {
+          return new Promise<any>((resolve) => {
             resolveFirstWrite = resolve;
           });
         } else {
-          return new Promise<void>((resolve) => {
+          return new Promise<any>((resolve) => {
             resolveSecondWrite = resolve;
           });
         }
@@ -276,7 +276,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(useAppStore.getState().syncing).toBe(true);
 
       // 4. First network write finishes while second save is debouncing
-      if (resolveFirstWrite) (resolveFirstWrite as any)();
+      if (resolveFirstWrite) resolveFirstWrite({ ok: true, status: 'synced' });
       await vi.advanceTimersByTimeAsync(100);
 
       // CRITICAL: syncing MUST remain TRUE because second save is still debouncing
@@ -288,7 +288,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(useAppStore.getState().syncing).toBe(true);
 
       // 6. Second network write finishes
-      if (resolveSecondWrite) (resolveSecondWrite as any)();
+      if (resolveSecondWrite) resolveSecondWrite({ ok: true, status: 'synced' });
       await vi.advanceTimersByTimeAsync(50);
       await Promise.all([p1, p2]);
 

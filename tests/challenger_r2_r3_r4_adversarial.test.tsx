@@ -189,7 +189,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
         });
 
         it('BURST STRESS (50 Concurrent Calls - Success): debounces 50 rapid calls into exactly 1 DB write, resolves ALL 50 caller promises with freshest data', async () => {
-            const saveSpy = vi.spyOn(DB, 'saveUserData').mockResolvedValue(undefined);
+            const saveSpy = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' });
             const burstCount = 50;
             const promises: Promise<void>[] = [];
 

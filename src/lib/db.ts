@@ -2,7 +2,7 @@ import { auth, getDb, waitForPendingWrites, deleteUser, ensureAppCheck } from '.
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
-import type { UserData, CatalogOverrides } from '../types';
+import type { UserData, CatalogOverrides, SyncResult } from '../types';
 import { getLocalDateString } from './utils/date';
 import { removeUndefinedValues } from './utils/object';
 import { checkDocSize } from './checkDocSize';
@@ -12,12 +12,19 @@ import { wrapInFirestoreDocument } from './firestore-rest';
 import { set, get, del } from 'idb-keyval';
 import { useDialogStore } from '../store/useDialogStore';
 
+export class SyncTimeoutError extends Error {
+    constructor(message: string = "Timeout operazione Firestore") {
+        super(message);
+        this.name = "SyncTimeoutError";
+    }
+}
+
 let lastSavedStateStr: string | null = null;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
     let timer: any;
     const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(errMsg)), ms);
+        timer = setTimeout(() => reject(new SyncTimeoutError(errMsg)), ms);
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
@@ -171,9 +178,9 @@ export const DB = {
             throw error;
         }
     },
-    async saveUserData(state: Record<string, any>) {
+    async saveUserData(state: Record<string, any>): Promise<SyncResult> {
         const user = auth.currentUser;
-        if (!user) return;
+        if (!user) return { ok: true, status: 'synced' };
         try {
             let oldState: Record<string, any> = { 
                 profile: {}, 
@@ -360,8 +367,16 @@ export const DB = {
                     console.log(`Sincronizzazione DB completata.`);
                     lastSavedStateStr = JSON.stringify(state);
                     await set('sync_failed', false); // Clear flag on success
-                } catch (batchErr: any) {
-                    if (batchErr?.message?.includes("Timeout") || batchErr?.code === 'unavailable' || batchErr?.code === 'permission-denied' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+                    return { ok: true, status: 'synced' };
+                } catch (batchErr: unknown) {
+                    const code = (batchErr && typeof batchErr === 'object' && 'code' in batchErr) 
+                        ? (batchErr as any).code 
+                        : undefined;
+                        
+                    if (code === 'permission-denied') {
+                        return { ok: false, status: 'rejected', error: batchErr };
+                    }
+                    if (batchErr instanceof SyncTimeoutError || code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
                         
@@ -380,17 +395,19 @@ export const DB = {
                         } catch (syncErr) {
                             console.error("Errore durante la registrazione del Background Sync:", syncErr);
                         }
+                        return { ok: false, status: 'local-pending', error: batchErr };
                     } else {
                         console.error("Errore critico durante il salvataggio Firestore:", batchErr);
-                        throw batchErr;
+                        return { ok: false, status: 'failed', error: batchErr };
                     }
                 }
             } else {
                 lastSavedStateStr = JSON.stringify(state);
+                return { ok: true, status: 'synced' };
             }
         } catch (error) {
             console.error("Errore durante il salvataggio:", error);
-            throw error;
+            return { ok: false, status: 'failed', error };
         }
     },
     async secureLogOut() {

@@ -16,7 +16,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
     vi.useFakeTimers();
     clearSyncTimers();
     vi.mocked(DB.saveUserData).mockReset();
-    vi.mocked(DB.saveUserData).mockResolvedValue(undefined);
+    vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     useAppStore.setState({
       userData: { ...defaultMockUserData },
       localWorkout: null,
@@ -32,7 +32,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       useAppStore.getState().resetStore();
     });
     vi.mocked(DB.saveUserData).mockReset();
-    vi.mocked(DB.saveUserData).mockResolvedValue(undefined);
+    vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -670,7 +670,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(screen.queryByText(/Errore sincronizzazione/i)).toBeNull();
 
       // Step 4: Connection restored, next save succeeds
-      vi.mocked(DB.saveUserData).mockResolvedValueOnce(undefined);
+      vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' } as any);
       let recoverySave: any;
       await act(async () => {
         recoverySave = useAppStore.getState().saveUserData((prev) => ({
@@ -685,7 +685,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1100);
       });
-      await expect(recoverySave).resolves.toBeUndefined();
+      await expect(recoverySave).resolves.toHaveProperty('ok', true);
 
       expect(useAppStore.getState().syncing).toBe(false);
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
@@ -693,7 +693,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
     });
 
     test('T4.2_workload: Rapid nutrition multi-item logging with debounced batch sync', async () => {
-      const saveSpy = vi.mocked(DB.saveUserData).mockResolvedValue(undefined);
+      const saveSpy = vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
       const { container } = await renderSettledApp();
 
       let p1: any, p2: any, p3: any;
@@ -737,7 +737,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
     // Timeout increased to 10000ms: Resolving mock-timer window advancing (1100ms) 
     // requires more real-time processing of JSDom async callbacks under high parallel CPU load.
     test('T4.3_workload: Workout completion while background sync runs with zero UI interruption', async () => {
-      vi.mocked(DB.saveUserData).mockResolvedValueOnce(undefined);
+      vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' } as any);
       const activeWorkout = {
         routineId: 'r1',
         routineName: 'Upper Body Blast',
@@ -767,7 +767,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1100);
       });
-      await expect(completePromise).resolves.toBeUndefined();
+      await expect(completePromise).resolves.toHaveProperty('ok', true);
 
       expect(useAppStore.getState().syncing).toBe(false);
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
