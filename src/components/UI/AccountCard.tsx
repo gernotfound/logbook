@@ -6,12 +6,12 @@ import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePasswor
 import { Eye, EyeOff } from 'lucide-react';
 
 export const AccountCard = () => {
-    const { currentUser, isGuest, linkGoogleAccount } = useAuth();
+    const { currentUser, isGuest, linkGoogleAccount, registerWithEmail } = useAuth();
     const { handleLogout } = useSettings();
     const { showAlert } = useDialogStore();
 
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
-    const [showReauthModal, setShowReauthModal] = useState<'email' | 'password' | 'linkEmail' | null>(null);
+    const [showReauthModal, setShowReauthModal] = useState<'email' | 'password' | 'linkEmail' | 'guestRegister' | null>(null);
     const [currentPasswordInput, setCurrentPasswordInput] = useState('');
     const [newEmailInput, setNewEmailInput] = useState('');
     const [newPasswordInput, setNewPasswordInput] = useState('');
@@ -131,6 +131,28 @@ export const AccountCard = () => {
         }
     };
 
+    const onGuestRegister = async () => {
+        const weakError = checkPasswordStrength(newPasswordInput);
+        if (weakError) {
+            await showAlert(weakError);
+            return;
+        }
+        if (!newEmailInput || !newEmailInput.includes('@')) {
+            await showAlert("Email non valida.");
+            return;
+        }
+        setLoadingAction('guestRegister');
+        try {
+            await registerWithEmail(newEmailInput, newPasswordInput);
+            // La migrazione avviene automaticamente in onAuthStateChanged
+            window.location.reload();
+        } catch (error: any) {
+            setLoadingAction(null);
+            // Errori gestiti da AuthContext (handleAuthError)
+            console.error("Registrazione guest fallita", error);
+        }
+    };
+
     if (isGuest) {
         return (
             <div className="card">
@@ -140,10 +162,41 @@ export const AccountCard = () => {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <button className="btn btn-primary" onClick={linkGoogleAccount}>
-                        Collega account Google
+                        Crea account con Google
                     </button>
+                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => setShowReauthModal('guestRegister')}>
+                        Crea account con Email e Password
+                    </button>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--glass-border)', margin: '10px 0' }} />
                     <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dalla modalità locale</button>
                 </div>
+                
+                {showReauthModal === 'guestRegister' && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ background: 'var(--surface-color)', padding: '20px', borderRadius: '12px', width: '90%', maxWidth: '350px', border: '1px solid var(--glass-border)' }}>
+                            <h3 style={{ marginTop: 0 }}>Crea Account</h3>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>I tuoi dati locali verranno salvati sul cloud.</p>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
+                                <input type="email" placeholder="La tua Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
+                                
+                                <div style={{ position: 'relative' }}>
+                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
+                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                </div>
+                                
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                    <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => { setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
+                                    <button className="btn btn-primary" style={{ flex: 1 }} onClick={onGuestRegister} disabled={loadingAction === 'guestRegister'}>
+                                        {loadingAction === 'guestRegister' ? 'Attendere...' : 'Registrati'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
