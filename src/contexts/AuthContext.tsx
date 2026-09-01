@@ -10,6 +10,7 @@ import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog/deltaResolver';
+import { createDefaultNutritionPlanning } from '../lib/nutritionDefaults';
 
 // Imports for default data removed
 
@@ -26,11 +27,8 @@ const defaultUserData: UserData = {
     activeWorkout: null,
     trainingCycles: [],
     activeCycleId: null,
-    nutritionPlanning: {
-        weight: 80, carbsPerKg: 3.5, proPerKg: 2.0, fatPerKg: 1.0,
-        lockedMacro: null, chartPeriod: 7,
-        normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-    },
+    nutritionPlanning: createDefaultNutritionPlanning(),
+    nutritionPlanningOrigin: 'generated-default',
     supplements: [],
     activePains: [],
     legalConsent: undefined

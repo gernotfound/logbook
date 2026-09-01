@@ -146,21 +146,21 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
                 normocalorica: { kcal: 2600, carbs: 320 }
             };
 
-            const merged = mergeNutritionPlanning(cloudPlan, guestPlan);
-            expect(merged?.weight).toBe(80);
-            expect(merged?.carbsPerKg).toBe(3.5);
-            expect(merged?.proPerKg).toBe(2.0); // cloud preserved
-            expect(merged?.normocalorica?.kcal).toBe(2600); // guest override
-            expect(merged?.normocalorica?.carbs).toBe(320); // guest override
-            expect(merged?.normocalorica?.pro).toBe(160); // cloud preserved
-            expect(merged?.normocalorica?.fat).toBe(65); // cloud preserved
+            const mergedResult = mergeNutritionPlanning(cloudPlan, guestPlan, 'user-edited', 'user-edited');
+            const merged = mergedResult.activePlan;
+            // Since it's user-edited + user-edited differing, cloud wins actively (Policy case 5)
+            expect(merged?.weight).toBe(75);
+            expect(merged?.carbsPerKg).toBe(3.0);
+            expect(merged?.normocalorica?.kcal).toBe(2400);
+            // Guest is saved in pendingConflict
+            expect(mergedResult.pendingConflict?.weight).toBe(80);
         });
 
         it('handles null/undefined nutrition planning inputs safely', () => {
-            expect(mergeNutritionPlanning(null, null)).toBeUndefined();
+            expect(mergeNutritionPlanning(null, null).activePlan).toBeUndefined();
             const plan = { weight: 70, carbsPerKg: 3.0, proPerKg: 2.0, fatPerKg: 1.0 };
-            expect(mergeNutritionPlanning(plan, null)).toEqual(plan);
-            expect(mergeNutritionPlanning(null, plan)).toEqual(plan);
+            expect(mergeNutritionPlanning(plan, null, 'user-edited', 'generated-default').activePlan).toEqual(plan);
+            expect(mergeNutritionPlanning(null, plan, 'generated-default', 'user-edited').activePlan).toEqual(plan);
         });
     });
 

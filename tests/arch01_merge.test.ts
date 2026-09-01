@@ -137,7 +137,10 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
 
             // Fire auth callback with a mock user
             await act(async () => {
+                (auth as any).currentUser = { uid: 'user123' };
                 await authCallback({ uid: 'user123' });
+                // Flush loadData promises
+                await new Promise(r => setTimeout(r, 10));
             });
 
             // Verification
@@ -185,7 +188,10 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             if (!authCallback) throw new Error("authCallback was not set by renderHook!");
 
             await act(async () => {
+                (auth as any).currentUser = { uid: 'user123' };
                 await authCallback({ uid: 'user123' });
+                // Flush loadData promises
+                await new Promise(r => setTimeout(r, 10));
             });
 
             const finalState = useAppStore.getState().userData;
