@@ -7,8 +7,8 @@ interface Props {
 
 export const NutritionConflictBanner: React.FC<Props> = ({ onResolveClick }) => {
   return (
-    <div 
-      className="card p-3 mb-4 flex items-center justify-between" 
+    <div
+      className="card p-3 mb-4 flex items-center justify-between"
       style={{ borderLeft: '4px solid var(--warning-color)', background: 'var(--surface-light)' }}
     >
       <div className="flex items-center gap-3">
@@ -20,7 +20,7 @@ export const NutritionConflictBanner: React.FC<Props> = ({ onResolveClick }) => 
           </p>
         </div>
       </div>
-      <button 
+      <button
         className="btn btn-small"
         style={{ background: 'var(--warning-color)', color: '#000', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
         onClick={onResolveClick}

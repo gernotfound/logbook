@@ -358,8 +358,8 @@ export type SyncResult =
     | { ok: false; status: 'rejected'; error: unknown }
     | { ok: false; status: 'failed'; error: unknown };
 
-export type ResolveNutritionConflictInput = { 
-    resolution: 'cloud' | 'local'; 
-    expectedUid: string; 
-    expectedConflictFingerprint: string; 
+export type ResolveNutritionConflictInput = {
+    resolution: 'cloud' | 'local';
+    expectedUid: string;
+    expectedConflictFingerprint: string;
 };

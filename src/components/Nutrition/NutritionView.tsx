@@ -9,6 +9,7 @@ import { NutritionConflictBanner } from './NutritionConflictBanner';
 import { NutritionConflictDialog } from '../UI/NutritionConflictDialog';
 import { useNutritionHistory } from '../../hooks/useNutritionHistory';
 import { Logic } from '../../lib/logic';
+import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
@@ -20,7 +21,7 @@ interface NutritionViewProps {
 
 const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
     const activeSubTab = (subTab === 'planning' || subTab === 'archive' || subTab === 'history' || subTab === 'supplements') ? subTab : 'meals';
-    
+
     const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
     const mealsHook = useNutritionMeals(selectedDate);
     const historyHook = useNutritionHistory();
@@ -38,7 +39,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
         if (!currentUser?.uid || !pendingConflict) return;
         setIsResolving(true);
         try {
-            const fingerprint = JSON.stringify(pendingConflict);
+            const fingerprint = getNutritionConflictFingerprint(pendingConflict);
             const result = await resolveConflict({
                 resolution,
                 expectedUid: currentUser.uid,
@@ -51,6 +52,10 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                 showAlert('Piano locale salvato, in attesa di connessione per la sincronizzazione cloud.', 'warning');
                 setConflictDialogOpen(false);
             } else {
+                if (result.error instanceof Error && result.error.message === "conflict-resolved-elsewhere") {
+                    setConflictDialogOpen(false);
+                    return;
+                }
                 showAlert(`Errore durante il salvataggio: ${result.error}`, 'error');
                 // Non chiudiamo il dialog, lasciamo all'utente la possibilità di esportare
             }
@@ -88,32 +93,32 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             )}
 
             <div className="sub-nav" onWheel={handleWheel}>
-                <div 
-                    className={`sub-nav-btn ${activeSubTab === 'meals' ? 'active' : ''}`} 
+                <div
+                    className={`sub-nav-btn ${activeSubTab === 'meals' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('meals')}
                 >
                     Pasti
                 </div>
-                <div 
-                    className={`sub-nav-btn ${activeSubTab === 'planning' ? 'active' : ''}`} 
+                <div
+                    className={`sub-nav-btn ${activeSubTab === 'planning' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('planning')}
                 >
                     Pianificazione
                 </div>
-                <div 
-                    className={`sub-nav-btn ${activeSubTab === 'supplements' ? 'active' : ''}`} 
+                <div
+                    className={`sub-nav-btn ${activeSubTab === 'supplements' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('supplements')}
                 >
                     Integratori
                 </div>
-                <div 
-                    className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`} 
+                <div
+                    className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('archive')}
                 >
                     Alimenti
                 </div>
-                <div 
-                    className={`sub-nav-btn ${activeSubTab === 'history' ? 'active' : ''}`} 
+                <div
+                    className={`sub-nav-btn ${activeSubTab === 'history' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('history')}
                 >
                     Storico
@@ -122,7 +127,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'meals' && (
                 <div className="nutrition-sub-view active">
-                    <NutritionMeals 
+                    <NutritionMeals
                         mealsHook={{
                             ...mealsHook,
                             saveCustomFood: async () => {
@@ -136,8 +141,8 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                                 if (wasEditing && setSubTab) setSubTab('archive');
                             }
                         }}
-                        selectedDate={selectedDate} 
-                        setSelectedDate={setSelectedDate} 
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
                     />
                 </div>
             )}
@@ -156,8 +161,8 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'history' && (
                 <div className="nutrition-sub-view active">
-                    <NutritionHistory 
-                        nutritionHistory={historyHook.nutritionHistory} 
+                    <NutritionHistory
+                        nutritionHistory={historyHook.nutritionHistory}
                         onDayClick={handleHistoryDayClick}
                     />
                 </div>
@@ -165,15 +170,15 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
             {activeSubTab === 'supplements' && (
                 <div className="nutrition-sub-view active">
-                    <NutritionSupplements 
-                        selectedDate={selectedDate} 
-                        setSelectedDate={setSelectedDate} 
+                    <NutritionSupplements
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
                     />
                 </div>
             )}
 
             {pendingConflict && (
-                <NutritionConflictDialog 
+                <NutritionConflictDialog
                     isOpen={isConflictDialogOpen}
                     onClose={() => setConflictDialogOpen(false)}
                     onResolve={handleResolveConflict}
