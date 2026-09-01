@@ -131,7 +131,11 @@ export function useNutritionPlanning() {
         
         setLocalPlanning(updatedPlanning);
         try {
-            await saveUserData(prev => ({ ...prev, nutritionPlanning: updatedPlanning }));
+            await saveUserData(prev => ({
+                ...prev,
+                nutritionPlanningOrigin: 'user-edited',
+                nutritionPlanning: updatedPlanning
+            }));
             await showAlert("Pianificazione salvata sul cloud!");
         } catch {
             await showAlert("Errore durante il salvataggio della pianificazione.");

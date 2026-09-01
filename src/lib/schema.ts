@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { formatSleepTime } from './utils/date';
 import { telemetryHub } from './telemetryHub';
+import { createDefaultNutritionPlanning } from './nutritionDefaults';
 
 export interface ZodFallbackContext {
     schema: string;
@@ -496,7 +497,9 @@ export const TrainingCycleSchema = z.object({
     return { id: '', name: '', durationWeeks: 4, routines: [] };
 }).default({ id: '', name: '', durationWeeks: 4, routines: [] });
 
-export const defaultUserDataFallback = {
+import type { UserData } from '../types';
+
+export const defaultUserDataFallback: UserData = {
     profile: {},
     library: [],
     routines: [],
@@ -504,15 +507,8 @@ export const defaultUserDataFallback = {
     nutrition: {},
     customFoods: [],
     activeWorkout: null,
-    nutritionPlanning: {
-        weight: 80,
-        carbsPerKg: 3.5,
-        proPerKg: 2.0,
-        fatPerKg: 1.0,
-        lockedMacro: null,
-        chartPeriod: 7,
-        normocalorica: { kcal: 2500, carbs: 300, pro: 160, fat: 70 }
-    },
+    nutritionPlanning: createDefaultNutritionPlanning(),
+    nutritionPlanningOrigin: 'generated-default' as const,
     trainingCycles: [],
     activeCycleId: null,
     supplements: [],
@@ -642,6 +638,10 @@ export const UserDataSchema = z.object({
     activePains: z.array(safeString('')).max(50).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
     legalConsent: LegalConsentSchema,
+    nutritionPlanningOrigin: z.enum(['generated-default', 'user-edited']).optional().catch(undefined),
+    pendingConflicts: z.object({
+        nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined)
+    }).optional().catch(undefined),
 
 }).passthrough().catch((ctx) => {
     reportZodSchemaFallback({
@@ -649,8 +649,8 @@ export const UserDataSchema = z.object({
         fallbackUsed: 'defaultUserDataFallback',
         error: ctx?.error,
     });
-    return defaultUserDataFallback;
-}).default(defaultUserDataFallback);
+    return defaultUserDataFallback as any;
+}).default(defaultUserDataFallback as any);
 
 const isValidParsedId = (id: unknown) => typeof id === 'string' && id.trim().length > 0;
 

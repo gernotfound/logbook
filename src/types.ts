@@ -339,6 +339,10 @@ export interface UserData {
     activePains?: string[];
     catalogOverrides?: CatalogOverrides; // New global catalog overrides
     legalConsent?: LegalConsent;
+    nutritionPlanningOrigin?: 'generated-default' | 'user-edited';
+    pendingConflicts?: {
+        nutritionPlanning?: NutritionPlanning;
+    };
 }
 
 declare global {

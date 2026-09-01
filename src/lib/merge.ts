@@ -3,6 +3,7 @@ import { getInMemoryCatalog } from './catalog/catalogService';
 import {
     mergeCatalogOverrides
 } from './catalog/deltaResolver';
+import { createDefaultNutritionPlanning } from './nutritionDefaults';
 import type {
     UserData,
     UserProfile,
@@ -106,30 +107,60 @@ export function mergeProfile(
     return result;
 }
 
+export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | undefined): boolean {
+    if (!plan) return false;
+    const def = createDefaultNutritionPlanning();
+    return (
+        plan.weight === def.weight &&
+        plan.carbsPerKg === def.carbsPerKg &&
+        plan.proPerKg === def.proPerKg &&
+        plan.fatPerKg === def.fatPerKg &&
+        plan.chartPeriod === def.chartPeriod &&
+        plan.normocalorica?.kcal === def.normocalorica?.kcal
+    );
+}
+
 /**
- * Merges nutrition planning settings non-destructively.
- * Guest settings take priority when defined.
+ * Merges nutrition planning settings based on explicit provenance policy.
  */
 export function mergeNutritionPlanning(
     cloudPlan?: NutritionPlanning | null,
-    guestPlan?: NutritionPlanning | null
-): NutritionPlanning | undefined {
-    if (!cloudPlan && !guestPlan) return undefined;
-    if (!cloudPlan) return guestPlan || undefined;
-    if (!guestPlan) return cloudPlan || undefined;
+    guestPlan?: NutritionPlanning | null,
+    cloudOrigin?: 'generated-default' | 'user-edited',
+    guestOrigin?: 'generated-default' | 'user-edited'
+): { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' } {
 
-    return {
-        ...cloudPlan,
-        ...guestPlan,
-        avgMacros: guestPlan.avgMacros || cloudPlan.avgMacros,
-        onBoost: guestPlan.onBoost || cloudPlan.onBoost,
-        onMacros: guestPlan.onMacros || cloudPlan.onMacros,
-        offMacros: guestPlan.offMacros || cloudPlan.offMacros,
-        normocalorica: {
-            ...(cloudPlan.normocalorica || {}),
-            ...(guestPlan.normocalorica || {})
-        }
-    };
+    // Fallbacks
+    const resolvedGuestOrigin = guestOrigin || (isDefaultNutritionPlanning(guestPlan) ? 'generated-default' : 'user-edited');
+    const resolvedCloudOrigin = cloudOrigin || (isDefaultNutritionPlanning(cloudPlan) ? 'generated-default' : 'user-edited');
+
+    // 1. Guest default + cloud exist: Cloud wins
+    if (resolvedGuestOrigin === 'generated-default' && cloudPlan) {
+        return { activePlan: cloudPlan, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
+    }
+
+    // 2. Guest default + cloud absent: Keep local but no conflicts
+    if (resolvedGuestOrigin === 'generated-default' && !cloudPlan) {
+        return { activePlan: guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedGuestOrigin };
+    }
+
+    // 3. Guest edited + cloud absent: Promote guest
+    if (resolvedGuestOrigin === 'user-edited' && !cloudPlan) {
+        return { activePlan: guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedGuestOrigin };
+    }
+
+    // 4. Guest edited + cloud equals (shallow compare): No conflict
+    if (resolvedGuestOrigin === 'user-edited' && cloudPlan && guestPlan && JSON.stringify(cloudPlan) === JSON.stringify(guestPlan)) {
+        return { activePlan: cloudPlan, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
+    }
+
+    // 5. Guest edited + cloud differs: Cloud wins actively, guest stored as conflict
+    if (resolvedGuestOrigin === 'user-edited' && cloudPlan && guestPlan) {
+        return { activePlan: cloudPlan, pendingConflict: guestPlan, activeOrigin: resolvedCloudOrigin };
+    }
+
+    // Fallback if all logic falls through
+    return { activePlan: cloudPlan || guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
 }
 
 /**
@@ -258,8 +289,11 @@ export function hasUserData(data?: UserData | null): boolean {
         }
     }
 
-    if (data.nutritionPlanning && typeof data.nutritionPlanning === 'object') {
-        if (Object.values(data.nutritionPlanning).some(v => v !== undefined && v !== null && v !== '')) {
+    if (data.nutritionPlanningOrigin === 'user-edited') {
+        return true;
+    } else if (!data.nutritionPlanningOrigin && data.nutritionPlanning && typeof data.nutritionPlanning === 'object') {
+        // Fallback for legacy data without origin flag
+        if (!isDefaultNutritionPlanning(data.nutritionPlanning) && Object.values(data.nutritionPlanning).some(v => v !== undefined && v !== null && v !== '')) {
             return true;
         }
     }
@@ -315,6 +349,8 @@ export function mergeUserData(
 
     let mergedOverrides = mergeCatalogOverrides(cloud.catalogOverrides, guest.catalogOverrides);
 
+    const mergedNutrition = mergeNutritionPlanning(cloud.nutritionPlanning, guest.nutritionPlanning, cloud.nutritionPlanningOrigin, guest.nutritionPlanningOrigin);
+
     const rawMerged: UserData = {
         profile: mergeProfile(cloud.profile, guest.profile),
         library: mergeArrayById(customCloudExercises, customGuestExercises),
@@ -325,7 +361,12 @@ export function mergeUserData(
         activeWorkout: guest.activeWorkout !== undefined && guest.activeWorkout !== null
             ? guest.activeWorkout
             : (cloud.activeWorkout || null),
-        nutritionPlanning: mergeNutritionPlanning(cloud.nutritionPlanning, guest.nutritionPlanning),
+        nutritionPlanning: mergedNutrition.activePlan,
+        nutritionPlanningOrigin: mergedNutrition.activeOrigin,
+        pendingConflicts: mergedNutrition.pendingConflict ? {
+            ...(cloud.pendingConflicts || {}),
+            nutritionPlanning: mergedNutrition.pendingConflict
+        } : cloud.pendingConflicts,
         trainingCycles: mergeArrayById(cloud.trainingCycles, guest.trainingCycles),
         activeCycleId: (guest.activeCycleId !== undefined && guest.activeCycleId !== null && guest.activeCycleId !== '')
             ? guest.activeCycleId
@@ -388,6 +429,7 @@ export function mergeCloudIntoLocal(
         activeWorkout: localData.activeWorkout !== undefined && localData.activeWorkout !== null
             ? localData.activeWorkout
             : (cloudData.activeWorkout || null),
+        pendingConflicts: localData.pendingConflicts || cloudData.pendingConflicts,
     };
 
     return UserDataSchema.parse(rawMerged) as unknown as UserData;

@@ -247,7 +247,8 @@ export const DB = {
                 !deepEqual(state.supplements, oldState.supplements) ||
                 !deepEqual(state.activePains, oldState.activePains) ||
                 !deepEqual(state.catalogOverrides, oldState.catalogOverrides) ||
-                !deepEqual(state.legalConsent, oldState.legalConsent)) {
+                !deepEqual(state.legalConsent, oldState.legalConsent) ||
+                !deepEqual(state.nutritionPlanningOrigin, oldState.nutritionPlanningOrigin)) {
                 
                 const userRef = doc(getDb(), "users", user.uid);
                 const userDocData = {
@@ -262,7 +263,8 @@ export const DB = {
                     supplements: state.supplements || [],
                     activePains: state.activePains || [],
                     catalogOverrides: overridesToSave,
-                    legalConsent: state.legalConsent || null
+                    legalConsent: state.legalConsent || null,
+                    nutritionPlanningOrigin: state.nutritionPlanningOrigin || null
                 };
                 const cleanUserDocData = removeUndefinedValues(userDocData);
                 checkDocSize(cleanUserDocData, "User Profile");
