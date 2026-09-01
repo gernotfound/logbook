@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
 
+vi.mock('firebase/firestore', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...(actual as object),
+        waitForPendingWrites: vi.fn().mockReturnValue(new Promise(() => {})), // Never resolves so we can check pending state
+    };
+});
+
 vi.mock('../src/lib/telemetry', () => ({
     telemetryHub: { trackError: vi.fn() }
 }));

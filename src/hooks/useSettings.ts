@@ -17,9 +17,9 @@ export function useSettings() {
 
     const handleLogout = async () => {
         if (isGuest) {
-            await logout();
+            await logout({ mode: 'normal' });
         } else if (await showConfirm("Sei sicuro di voler uscire dal tuo account?")) {
-            await logout(true);
+            await logout({ mode: 'normal' });
         }
     };
 
@@ -89,7 +89,7 @@ export function useSettings() {
     const handleDeleteAccount = async () => {
         if (isGuest) {
             if (!(await showConfirm("⚠️ ATTENZIONE: Questa operazione eliminerà permanentemente tutti i dati salvati su questo dispositivo.\n\nConfermi l'eliminazione dei dati locali?"))) return;
-            await logout(true);
+            await logout({ mode: 'force' });
             return;
         }
 
@@ -105,7 +105,7 @@ export function useSettings() {
             console.error("Errore eliminazione account:", error);
             await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
             if (error.message?.includes("effettuare di nuovo il login")) {
-                logout();
+                logout({ mode: 'force' });
             }
         }
     };

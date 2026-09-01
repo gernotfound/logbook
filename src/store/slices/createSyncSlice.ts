@@ -13,9 +13,12 @@ import { telemetryHub } from '../../lib/telemetryHub';
 
 import type { SyncResult } from '../../types';
 
+export type SyncHealth = 'synced' | 'local-pending' | 'rejected' | 'failed';
+
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
+    syncHealth: SyncHealth;
     setSyncing: (val: boolean) => void;
     setSaveError: (error: string | null) => void;
     saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<SyncResult>;
@@ -39,16 +42,17 @@ export const clearSyncTimers = () => {
 export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => ({
     saveError: null,
     syncing: false,
+    syncHealth: 'synced',
 
     setSyncing: (val: boolean) => set((state) => state.syncing === val ? state : { syncing: val }),
     setSaveError: (error: string | null) => set({ saveError: error }),
 
     saveUserData: async (newDataOrUpdater) => {
         const { userData, localWorkout } = get();
-        const nextData = typeof newDataOrUpdater === 'function' 
-            ? (newDataOrUpdater as (prev: UserData | null) => UserData | null)(userData) 
+        const nextData = typeof newDataOrUpdater === 'function'
+            ? (newDataOrUpdater as (prev: UserData | null) => UserData | null)(userData)
             : newDataOrUpdater;
-        
+
         if (!nextData) {
             if (globalSaveTimer) {
                 clearTimeout(globalSaveTimer);
@@ -66,7 +70,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             ...nextData,
             activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
         };
-        
+
         saveUserDataToCache(finalData);
         set({ userData: finalData, saveError: null, syncing: true });
 
@@ -84,21 +88,34 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                         promisesToCall.forEach(p => p.resolve(SYNCED_RESULT));
                         return;
                     }
-                    
+
                     const result = await DB.saveUserData(currentState);
-                    
+
                     if (result.ok) {
-                        set({ saveError: null });
+                        set({ saveError: null, syncHealth: 'synced' });
                         promisesToCall.forEach(p => p.resolve(result));
                     } else {
                         if (result.status === 'local-pending') {
-                            set({ saveError: "Salvato localmente. Sincronizzazione in attesa." });
+                            set({ saveError: "Salvato localmente. Sincronizzazione in attesa.", syncHealth: 'local-pending' });
                             promisesToCall.forEach(p => p.resolve(result));
+
+                            // Listen for background sync completion to automatically update syncHealth
+                            import('firebase/firestore').then(({ waitForPendingWrites }) => {
+                                import('../../lib/firebase').then(({ getDb }) => {
+                                    waitForPendingWrites(getDb()).then(() => {
+                                        // Only clear if the current health is still local-pending
+                                        // (don't override if a rejected/failed state happened in the meantime)
+                                        if (get().syncHealth === 'local-pending') {
+                                            set({ saveError: null, syncHealth: 'synced' });
+                                        }
+                                    }).catch(() => {});
+                                });
+                            });
                         } else if (result.status === 'rejected') {
-                            set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova." });
+                            set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", syncHealth: 'rejected' });
                             promisesToCall.forEach(p => p.resolve(result));
                         } else {
-                            set({ saveError: "Errore inatteso durante il salvataggio." });
+                            set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed' });
                             promisesToCall.forEach(p => p.resolve(result));
                         }
                     }
@@ -115,7 +132,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                         // Non-blocking safe fail-through
                     }
 
-                    set({ saveError: formattedError.message });
+                    set({ saveError: formattedError.message, syncHealth: 'failed' });
                     promisesToCall.forEach(p => p.reject(error));
                 } finally {
                     if (!globalSaveTimer && pendingPromises.length === 0) {
