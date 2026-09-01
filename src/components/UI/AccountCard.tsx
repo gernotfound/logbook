@@ -20,7 +20,7 @@ export const AccountCard = () => {
 
     const providers = useMemo(() => {
         if (!currentUser) return [];
-        return currentUser.providerData.map(p => p.providerId);
+        return (currentUser.providerData || []).map(p => p.providerId);
     }, [currentUser]);
 
     const hasGoogle = providers.includes('google.com');
@@ -209,12 +209,12 @@ export const AccountCard = () => {
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
                             {showReauthModal === 'email' && (
-                                <input type="email" placeholder="Nuova Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
+                                <input type="email" placeholder="Nuova Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
                             )}
                             
                             {(showReauthModal === 'password' || showReauthModal === 'linkEmail') && (
                                 <div style={{ position: 'relative' }}>
-                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
+                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
                                     <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                         {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
@@ -223,7 +223,7 @@ export const AccountCard = () => {
                             
                             {hasPassword && (
                                 <div style={{ position: 'relative' }}>
-                                    <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
+                                    <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} autoComplete="current-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
                                     <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                         {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
