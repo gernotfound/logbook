@@ -568,8 +568,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         });
       });
 
-      // Guest banner at top
-      expect(screen.getByText(/Modalità locale/i)).toBeDefined();
+      // Guest banner at top (using getAllByText to avoid multiple matches from SettingsView)
+      expect(screen.getAllByText(/Modalità locale/i).length).toBeGreaterThan(0);
       // Sync indicator at bottom-right
       expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
       // Error toast
