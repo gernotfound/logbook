@@ -175,7 +175,7 @@ const SettingsView = () => {
             {activeTab === 'account' && (
                 <>
                     {isGuest ? (
-                        <div className="section-divider">
+                        <div className="card">
                             <h2 style={{color: 'var(--warning-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
                             <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
                                 Stai usando LogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo e non possono essere recuperati se perdi l'accesso al browser.
@@ -196,7 +196,7 @@ const SettingsView = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="section-divider">
+                        <div className="card">
                             <h2 style={{color: 'var(--primary-color)',marginTop: 0}}>Account Google</h2>
                             {currentUser && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
@@ -275,7 +275,7 @@ const SettingsView = () => {
                     )}
 
                     {/* Danger Zone */}
-                    <div style={{ marginBottom: '100px' }}>
+                    <div className="card" style={{ marginBottom: '100px' }}>
                         <h2 style={{color: 'var(--danger-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Zona pericolosa</h2>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
                             {isGuest
