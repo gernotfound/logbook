@@ -23,61 +23,61 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
     }}
   >
     <div className="nav-container" aria-label="Sezioni dell'applicazione">
-      <button 
+      <button
         type="button"
         aria-label="Home"
-        className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} 
+        className={`nav-item ${activeTab === 'home' ? 'active' : ''}`}
         onClick={() => setActiveTab('home')}
       >
         <Home size={24} aria-hidden="true" />
         <span>Home</span>
       </button>
-      <button 
+      <button
         type="button"
         aria-label="Allenamento"
-        className={`nav-item ${activeTab === 'training' ? 'active' : ''}`} 
+        className={`nav-item ${activeTab === 'training' ? 'active' : ''}`}
         onClick={() => setActiveTab('training')}
       >
         <Dumbbell size={24} aria-hidden="true" />
         <span>Allenamento</span>
       </button>
-      <button 
+      <button
         type="button"
         aria-label="Nutrizione"
-        className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} 
+        className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`}
         onClick={() => setActiveTab('nutrition')}
         style={{ position: 'relative' }}
       >
         <Utensils size={24} aria-hidden="true" />
         {hasNutritionConflict && (
-          <span 
-            style={{ 
-              position: 'absolute', 
-              top: '4px', 
-              right: '25%', 
-              width: '8px', 
-              height: '8px', 
-              background: 'var(--warning-color)', 
-              borderRadius: '50%' 
-            }} 
+          <span
+            style={{
+              position: 'absolute',
+              top: '4px',
+              right: '25%',
+              width: '8px',
+              height: '8px',
+              background: 'var(--warning-color)',
+              borderRadius: '50%'
+            }}
             title="Conflitto nutrizionale pendente"
           />
         )}
         <span>Nutrizione</span>
       </button>
-      <button 
+      <button
         type="button"
         aria-label="Dati e statistiche"
-        className={`nav-item ${activeTab === 'data' ? 'active' : ''}`} 
+        className={`nav-item ${activeTab === 'data' ? 'active' : ''}`}
         onClick={() => setActiveTab('data')}
       >
         <Activity size={24} aria-hidden="true" />
         <span>Dati</span>
       </button>
-      <button 
+      <button
         type="button"
         aria-label="Impostazioni"
-        className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} 
+        className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
         onClick={() => setActiveTab('settings')}
       >
         <Settings size={24} aria-hidden="true" />

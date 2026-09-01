@@ -3,6 +3,7 @@ import { set as idbSet, del as idbDel } from 'idb-keyval';
 import { UserDataSchema } from '../../lib/schema';
 import type { UserData } from '../../types';
 import type { AppState } from '../useAppStore';
+import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
 import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
 
@@ -19,12 +20,12 @@ export const getInitialUserData = (): UserData | null => {
         if (!cached) return null;
         const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
         if (!parsed || typeof parsed !== 'object') return null;
-        
+
         const start = performance.now();
         const validated = UserDataSchema.parse(parsed) as unknown as UserData;
         const end = performance.now();
         console.log(`[BOOT] Parsing Zod completato in ${(end - start).toFixed(2)}ms`);
-        
+
         return validated;
     } catch (err) {
         console.warn("[BOOT] Errore parsing Zod:", err);
@@ -57,8 +58,8 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
 
     setUserData: (dataOrUpdater) => {
         set((state) => {
-            const rawNextData = typeof dataOrUpdater === 'function' 
-                ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData) 
+            const rawNextData = typeof dataOrUpdater === 'function'
+                ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData)
                 : dataOrUpdater;
 
             if (!rawNextData) {
@@ -67,7 +68,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             }
 
             let syncedLocalWorkout = state.localWorkout;
-            
+
             // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
             // The local device's localStorage is the source of truth for an ongoing workout.
             if (state.localWorkout) {
@@ -92,7 +93,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                     }
                 }
             }
-            
+
             const nextData: UserData = {
                 ...rawNextData,
                 activeWorkout: syncedLocalWorkout ?? null
@@ -108,7 +109,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
 
         // 1. Check if conflict exists
         if (!userData || !userData.pendingConflicts?.nutritionPlanning) {
-            return { ok: false, status: 'failed', error: new Error("No conflict pending.") };
+            return { ok: false, status: 'failed', error: new Error("conflict-resolved-elsewhere") };
         }
 
         // 2. Auth Context checking:
@@ -116,8 +117,13 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         if (!expectedUid) {
             return { ok: false, status: 'failed', error: new Error("Missing expectedUid context.") };
         }
-        
-        const currentFingerprint = JSON.stringify(userData.pendingConflicts.nutritionPlanning);
+
+        const currentFingerprint = getNutritionConflictFingerprint(userData.pendingConflicts.nutritionPlanning);
+
+        if (!currentFingerprint || !expectedConflictFingerprint) {
+            return { ok: false, status: 'failed', error: new Error("Nutrition conflict is missing or invalid") };
+        }
+
         if (currentFingerprint !== expectedConflictFingerprint) {
             return { ok: false, status: 'failed', error: new Error("Stale conflict data.") };
         }
@@ -129,13 +135,13 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                 const nextData = { ...draftState.userData };
                 const nextConflicts = { ...nextData.pendingConflicts };
                 delete nextConflicts.nutritionPlanning;
-                
+
                 if (Object.keys(nextConflicts).length === 0) {
                     delete nextData.pendingConflicts;
                 } else {
                     nextData.pendingConflicts = nextConflicts;
                 }
-                
+
                 saveUserDataToCache(nextData);
                 return { userData: nextData };
             });
@@ -146,7 +152,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             const result = await state.updateUserData((prev: import('../../types').UserData) => {
                 const nextConflicts = { ...prev.pendingConflicts };
                 delete nextConflicts.nutritionPlanning;
-                
+
                 const nextData = {
                     ...prev,
                     nutritionPlanning: localPlan,

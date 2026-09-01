@@ -12,28 +12,38 @@ interface Props {
   isSyncing?: boolean;
 }
 
-export const NutritionConflictDialog: React.FC<Props> = ({ 
-  isOpen, 
-  onClose, 
-  onResolve, 
-  cloudPlan, 
+export const NutritionConflictDialog: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onResolve,
+  cloudPlan,
   localPlan,
-  isSyncing 
+  isSyncing
 }) => {
   const [view, setView] = useState<'compare' | 'confirm-cloud'>('compare');
   const dialogRef = useRef<HTMLDialogElement>(null);
-  
+
   // A11y Focus management
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
     if (isOpen) {
-      previousFocusRef.current = document.activeElement as HTMLElement;
-      dialogRef.current?.showModal();
+      if (!dialog.open) {
+        previousFocusRef.current = document.activeElement as HTMLElement;
+        dialog.showModal();
+      }
     } else {
-      dialogRef.current?.close();
-      setView('compare');
-      previousFocusRef.current?.focus();
+      if (dialog.open) {
+        dialog.close();
+        setView('compare');
+        if (previousFocusRef.current) {
+          previousFocusRef.current.focus();
+          previousFocusRef.current = null;
+        }
+      }
     }
   }, [isOpen]);
 
@@ -51,8 +61,6 @@ export const NutritionConflictDialog: React.FC<Props> = ({
     dialog.addEventListener('cancel', handleCancel);
     return () => dialog.removeEventListener('cancel', handleCancel);
   }, [onClose, isSyncing]);
-
-  if (!isOpen) return null;
 
   const handleExport = () => {
     const userData = useAppStore.getState().userData;
@@ -108,7 +116,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
             <p id="conflict-dialog-desc" className="text-sm text-muted mb-4">
               È stata rilevata una bozza locale del tuo piano nutrizionale. Confrontala con il piano salvato nell'account e decidi quale mantenere.
             </p>
-            
+
             {renderPlanPreview("Piano Account (Cloud)", cloudPlan, true)}
             {renderPlanPreview("Bozza Locale (Dispositivo)", localPlan, false)}
           </>
@@ -125,30 +133,30 @@ export const NutritionConflictDialog: React.FC<Props> = ({
       <div className="p-4 border-t flex flex-col gap-2" style={{ borderColor: 'var(--glass-border)' }}>
         {view === 'compare' ? (
           <>
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={() => onResolve('local')}
               disabled={isSyncing}
               style={{ background: 'var(--warning-color)', color: '#000' }}
             >
               Mantieni Dispositivo
             </button>
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               onClick={() => setView('confirm-cloud')}
               disabled={isSyncing}
             >
               Mantieni Cloud (Elimina Bozza)
             </button>
-            <button 
-              className="btn btn-secondary text-sm" 
+            <button
+              className="btn btn-secondary text-sm"
               onClick={handleExport}
             >
               Esporta backup JSON
             </button>
-            <button 
+            <button
               autoFocus
-              className="btn" 
+              className="btn"
               onClick={onClose}
               disabled={isSyncing}
               style={{ marginTop: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)' }}
@@ -158,23 +166,23 @@ export const NutritionConflictDialog: React.FC<Props> = ({
           </>
         ) : (
           <>
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               style={{ background: 'var(--danger-color)', color: '#fff' }}
               onClick={() => onResolve('cloud')}
               disabled={isSyncing}
             >
               Elimina bozza e mantieni account
             </button>
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               onClick={handleExport}
             >
               Esporta backup JSON
             </button>
-            <button 
+            <button
               autoFocus
-              className="btn" 
+              className="btn"
               onClick={() => setView('compare')}
               disabled={isSyncing}
             >
