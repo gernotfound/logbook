@@ -9,6 +9,8 @@ export interface AuthContextType {
     loginAsGuest: () => void | Promise<void>;
     linkGoogleAccount: () => Promise<void>;
     logout: (skipConfirm?: boolean) => Promise<void>;
+    loginWithEmail: (email: string, pass: string) => Promise<void>;
+    registerWithEmail: (email: string, pass: string) => Promise<void>;
 }
 
 export const defaultAuthContext: AuthContextType = {
@@ -18,7 +20,9 @@ export const defaultAuthContext: AuthContextType = {
     login: async () => {},
     loginAsGuest: () => {},
     linkGoogleAccount: async () => {},
-    logout: async (_skipConfirm?: boolean) => {}
+    logout: async (_skipConfirm?: boolean) => {},
+    loginWithEmail: async () => {},
+    registerWithEmail: async () => {}
 };
 
 export const AuthContext = createContext<AuthContextType>(defaultAuthContext);
