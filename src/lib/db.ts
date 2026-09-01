@@ -95,6 +95,10 @@ export const DB = {
                 if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
                 if(data.supplements) state.supplements = data.supplements;
                 if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
+                // Strict normalization: only accept known enum values, never trust raw Firestore data
+                state.nutritionPlanningOrigin = (data.nutritionPlanningOrigin === 'generated-default' || data.nutritionPlanningOrigin === 'user-edited')
+                    ? data.nutritionPlanningOrigin
+                    : undefined;
                 if(data.activePains) state.activePains = data.activePains;
                 if(data.legalConsent) state.legalConsent = data.legalConsent;
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
