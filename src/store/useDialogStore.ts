@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type UnsyncedLogoutReason = 'offline' | 'rejected' | 'failed' | 'conflict';
-export type UnsyncedLogoutAction = 'wait' | 'export' | 'force-exit' | 'cancel';
+export type UnsyncedLogoutAction = 'wait' | 'export' | 'force-exit' | 'cancel' | 'safe-exit';
 
 interface DialogState {
   isOpen: boolean;
