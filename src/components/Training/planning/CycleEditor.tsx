@@ -467,7 +467,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 </div>
             </div>
 
-            <div className="grid-2 gap-15 mb-15">
+            <div className="mb-15" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 <div>
                     <label htmlFor="cycle-duration-weeks" className="text-xs text-muted font-bold block mb-4">
                         Durata (settimane)
