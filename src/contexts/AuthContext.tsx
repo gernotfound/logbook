@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
@@ -236,6 +236,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [setSaveError]);
 
+    const handleAuthError = useCallback((error: any) => {
+        let msg = "Errore di autenticazione.";
+        switch (error.code) {
+            case 'auth/email-already-in-use': msg = "Questa email è già registrata."; break;
+            case 'auth/invalid-email': msg = "Formato email non valido."; break;
+            case 'auth/weak-password': msg = "La password è troppo debole (min. 6 caratteri per Firebase)."; break;
+            case 'auth/user-not-found': 
+            case 'auth/wrong-password': 
+            case 'auth/invalid-credential':
+                msg = "Email o password errati."; break;
+            case 'auth/too-many-requests': msg = "Troppi tentativi falliti. Riprova più tardi."; break;
+            default: msg = error.message;
+        }
+        setSaveError(msg);
+        throw error;
+    }, [setSaveError]);
+
+    const loginWithEmail = useCallback(async (email: string, pass: string) => {
+        setSaveError(null);
+        try {
+            await signInWithEmailAndPassword(auth, email, pass);
+        } catch (error) {
+            handleAuthError(error);
+        }
+    }, [handleAuthError, setSaveError]);
+
+    const registerWithEmail = useCallback(async (email: string, pass: string) => {
+        setSaveError(null);
+        migrationDataRef.current = useAppStore.getState().userData;
+        try {
+            await createUserWithEmailAndPassword(auth, email, pass);
+        } catch (error) {
+            handleAuthError(error);
+        }
+    }, [handleAuthError, setSaveError]);
+
     // Accesso guest: solo localStorage, zero Firebase
     const loginAsGuest = useCallback(async () => {
         localStorage.setItem(GUEST_KEY, 'true');
@@ -327,8 +363,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         loginAsGuest,
         linkGoogleAccount,
-        logout
-    }), [currentUser, loading, isGuest, login, loginAsGuest, linkGoogleAccount, logout]);
+        logout,
+        loginWithEmail,
+        registerWithEmail
+    }), [currentUser, loading, isGuest, login, loginAsGuest, linkGoogleAccount, logout, loginWithEmail, registerWithEmail]);
 
     return (
         <AuthContext.Provider value={value}>

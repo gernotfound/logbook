@@ -3,8 +3,18 @@ import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
 import { 
     getAuth, 
     GoogleAuthProvider, 
+    EmailAuthProvider,
     signInWithPopup, 
     signInWithRedirect,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
+    updateEmail,
+    updatePassword,
+    linkWithCredential,
+    linkWithPopup,
+    reauthenticateWithCredential,
+    reauthenticateWithPopup,
     getRedirectResult,
     signOut, 
     onAuthStateChanged,
@@ -115,4 +125,25 @@ export const setAnalyticsConsent = (consent: boolean) => {
         analytics = null;
     }
 };
-export { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, waitForPendingWrites, deleteUser, analytics };
+export { 
+    auth, 
+    provider, 
+    EmailAuthProvider,
+    signInWithPopup, 
+    signInWithRedirect, 
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
+    updateEmail,
+    updatePassword,
+    linkWithCredential,
+    linkWithPopup,
+    reauthenticateWithCredential,
+    reauthenticateWithPopup,
+    getRedirectResult, 
+    signOut, 
+    onAuthStateChanged, 
+    waitForPendingWrites, 
+    deleteUser, 
+    analytics 
+};
