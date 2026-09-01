@@ -5,6 +5,44 @@ import { UserDataSchema } from './schema';
 import type { UserData } from '../types';
 
 export const Exporter = {
+    exportEmergencyJSON(userData: UserData): void {
+        const payload = {
+            format: 'logbook-backup',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            reason: 'logout-with-unsynced-data',
+            userData: {
+                profile: userData.profile,
+                library: userData.library,
+                routines: userData.routines,
+                customFoods: userData.customFoods,
+                activeWorkout: userData.activeWorkout,
+                trainingCycles: userData.trainingCycles,
+                activeCycleId: userData.activeCycleId,
+                nutritionPlanning: userData.nutritionPlanning,
+                supplements: userData.supplements,
+                activePains: userData.activePains,
+                catalogOverrides: userData.catalogOverrides,
+                legalConsent: userData.legalConsent,
+                nutritionPlanningOrigin: userData.nutritionPlanningOrigin,
+                pendingConflicts: userData.pendingConflicts,
+                history: userData.history,
+                nutrition: userData.nutrition,
+            }
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const dateStr = new Date().toISOString().split('T')[0];
+        a.download = `logbook_emergency_backup_${dateStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    },
+
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
         let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";

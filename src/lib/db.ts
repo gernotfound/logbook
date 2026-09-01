@@ -1,4 +1,4 @@
-import { auth, getDb, waitForPendingWrites, deleteUser, ensureAppCheck } from './firebase';
+import { auth, getDb, deleteUser, ensureAppCheck } from './firebase';
 import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
@@ -417,13 +417,7 @@ export const DB = {
         }
     },
     async secureLogOut() {
-        console.log("Attendo il completamento delle scritture offline...");
-        try {
-            await withTimeout(waitForPendingWrites(getDb()), 2500, "Timeout scritture offline");
-            console.log("Tutti i dati sincronizzati. Eseguo il Log Out.");
-        } catch (err) {
-            console.warn("Disconnessione con scritture in cache locale:", err);
-        }
+        console.log("Eseguo il Log Out protetto...");
         await auth.signOut();
         try {
             await del('logbook_cached_user_data');

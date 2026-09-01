@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         try {
             const cloudData = await DB.loadUserData();
-            
+
             // Protezione semantica: scarta l'hydration se nel frattempo l'utente è cambiato
             // o se l'app è passata in modalità Guest (previene race condition tra loadData e loginAsGuest)
             const isNowGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (latestData) {
                     try {
                         // Merge non distruttivo: preserva storico locale fuori finestra
-                        // In caso di collisione, la policy vince il LOCALE per proteggere 
+                        // In caso di collisione, la policy vince il LOCALE per proteggere
                         // proattivamente modifiche offline pendenti.
                         const merged = mergeCloudIntoLocal(latestData, cloudData);
                         setUserData(merged); // Aggiorna IndexedDB ma NON innesca DB.saveUserData
@@ -149,7 +149,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         setSyncing(true);
                         // Carica i dati esistenti sul cloud (se presenti)
                         const cloudData = await DB.loadUserData();
-                        
+
                         const cloudHasData = hasUserData(cloudData);
                         const guestHasData = hasUserData(guestData);
 
@@ -159,7 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         } else if (guestHasData) {
                             // Se il guest ha dati creati, unisce in modo deterministico con il cloud (se presente)
                             const mergedData = mergeUserData(cloudData, guestData);
-                            
+
                             await DB.saveUserData(mergedData);
                             // Ricarica per avere la risoluzione completa del catalogo globale per le viste
                             const resolvedData = await DB.loadUserData();
@@ -253,8 +253,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             case 'auth/email-already-in-use': msg = "Questa email è già registrata."; break;
             case 'auth/invalid-email': msg = "Formato email non valido."; break;
             case 'auth/weak-password': msg = "La password è troppo debole (min. 6 caratteri per Firebase)."; break;
-            case 'auth/user-not-found': 
-            case 'auth/wrong-password': 
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
             case 'auth/invalid-credential':
                 msg = "Email o password errati."; break;
             case 'auth/too-many-requests': msg = "Troppi tentativi falliti. Riprova più tardi."; break;
@@ -337,13 +337,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [setSaveError]);
 
-    // Logout
-    const logout = useCallback(async (skipConfirm?: boolean) => {
+    // Costante per il timeout
+    const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;
+    const logout = useCallback(async (options?: { mode?: 'normal' | 'force', skipConfirm?: boolean }) => {
+        const skipConfirm = options?.skipConfirm;
+        const mode = options?.mode || 'normal';
+        const initialUid = auth.currentUser?.uid;
+
         // Logout guest: avvisa e poi pulisce il localStorage
         if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
             if (!skipConfirm) {
                 const confirmed = await useDialogStore.getState().showConfirm(
-                    "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
+                    "Sei in modalit\u00E0 locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
                 );
                 if (!confirmed) return;
             }
@@ -353,7 +358,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             useAppStore.getState().resetStore();
             return;
         }
-        // Logout Google normale
+
+        if (mode === 'normal') {
+            setSyncing(true);
+            const state = useAppStore.getState();
+            let isSafe = state.syncHealth === 'synced' && !state.userData?.pendingConflicts;
+
+            if (!isSafe) {
+                try {
+                    const { waitForPendingWrites } = await import('firebase/firestore');
+                    const { getDb } = await import('../lib/firebase');
+
+                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), LOGOUT_SYNC_CHECK_TIMEOUT_MS));
+                    await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
+                } catch (e) {
+                    // Timeout o rete disconnessa
+                }
+
+                // Verifica se l'utente è cambiato nel frattempo
+                if (auth.currentUser?.uid !== initialUid) {
+                    setSyncing(false);
+                    return;
+                }
+
+                const finalState = useAppStore.getState();
+                isSafe = finalState.syncHealth === 'synced' && !finalState.userData?.pendingConflicts;
+            }
+            setSyncing(false);
+
+            if (!isSafe) {
+                const finalState = useAppStore.getState();
+                let reason: 'conflict' | 'offline' | 'rejected' | 'failed' = 'offline';
+
+                if (finalState.userData?.pendingConflicts) {
+                    reason = 'conflict';
+                } else if (finalState.syncHealth === 'rejected') {
+                    reason = 'rejected';
+                } else if (finalState.syncHealth === 'failed') {
+                    reason = 'failed';
+                }
+
+                // Mostra il dialog bloccante (resta aperto finché l'utente non sceglie Cancel o Force-Exit)
+                const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
+
+                // Verifica di nuovo utente
+                if (auth.currentUser?.uid !== initialUid) {
+                    return;
+                }
+
+                if (action === 'cancel' || action === 'wait') {
+                    return; // Annulla o attende e interrompe il flusso qui (la logica vive in GlobalDialog per 'force-exit')
+                }
+                // Se action === 'force-exit', prosegui
+            }
+        }
+
+        // Esecuzione force o normal-safe
         setSyncing(true);
         try {
             await DB.secureLogOut();
