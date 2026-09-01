@@ -9,6 +9,7 @@ import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTeleme
 export interface DataSlice {
     userData: UserData | null;
     setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
+    resolveNutritionConflict: (input: import('../../types').ResolveNutritionConflictInput) => Promise<import('../../types').SyncResult>;
 }
 
 export const getInitialUserData = (): UserData | null => {
@@ -51,7 +52,7 @@ export const saveUserDataToCache = (data: UserData | null) => {
     }
 };
 
-export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set) => ({
+export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
     userData: getInitialUserData(),
 
     setUserData: (dataOrUpdater) => {
@@ -100,4 +101,80 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set) 
             return { userData: nextData, localWorkout: syncedLocalWorkout };
         });
     },
+
+    resolveNutritionConflict: async ({ resolution, expectedUid, expectedConflictFingerprint }) => {
+        const state = get();
+        const userData = state.userData;
+
+        // 1. Check if conflict exists
+        if (!userData || !userData.pendingConflicts?.nutritionPlanning) {
+            return { ok: false, status: 'failed', error: new Error("No conflict pending.") };
+        }
+
+        // 2. Auth Context checking:
+        // We ensure a valid expectedUid was provided by the UI layer to prevent cross-account bugs
+        if (!expectedUid) {
+            return { ok: false, status: 'failed', error: new Error("Missing expectedUid context.") };
+        }
+        
+        const currentFingerprint = JSON.stringify(userData.pendingConflicts.nutritionPlanning);
+        if (currentFingerprint !== expectedConflictFingerprint) {
+            return { ok: false, status: 'failed', error: new Error("Stale conflict data.") };
+        }
+
+        if (resolution === 'cloud') {
+            // Mantieni Cloud: Rimuove pendingConflicts localmente, senza invocare Firestore.
+            set((draftState) => {
+                if (!draftState.userData || !draftState.userData.pendingConflicts) return draftState;
+                const nextData = { ...draftState.userData };
+                const nextConflicts = { ...nextData.pendingConflicts };
+                delete nextConflicts.nutritionPlanning;
+                
+                if (Object.keys(nextConflicts).length === 0) {
+                    delete nextData.pendingConflicts;
+                } else {
+                    nextData.pendingConflicts = nextConflicts;
+                }
+                
+                saveUserDataToCache(nextData);
+                return { userData: nextData };
+            });
+            return { ok: true, status: 'synced' };
+        } else {
+            // Mantieni Locale: Sovrascrive il cloud plan
+            const localPlan = userData.pendingConflicts.nutritionPlanning;
+            const result = await state.updateUserData((prev: import('../../types').UserData) => {
+                const nextConflicts = { ...prev.pendingConflicts };
+                delete nextConflicts.nutritionPlanning;
+                
+                const nextData = {
+                    ...prev,
+                    nutritionPlanning: localPlan,
+                    nutritionPlanningOrigin: 'user-edited' as const,
+                };
+
+                if (Object.keys(nextConflicts).length === 0) {
+                    delete nextData.pendingConflicts;
+                } else {
+                    nextData.pendingConflicts = nextConflicts;
+                }
+                return nextData;
+            });
+
+            // Se il risultato NON è synced, revertiamo il pendingConflicts in store in modo che resti recuperabile
+            if (!result.ok || result.status !== 'synced') {
+                set((draftState) => {
+                    if (!draftState.userData) return draftState;
+                    const nextData = { ...draftState.userData };
+                    nextData.pendingConflicts = {
+                        ...(nextData.pendingConflicts || {}),
+                        nutritionPlanning: localPlan
+                    };
+                    saveUserDataToCache(nextData);
+                    return { userData: nextData };
+                });
+            }
+            return result;
+        }
+    }
 });

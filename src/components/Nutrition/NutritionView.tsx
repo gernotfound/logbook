@@ -5,8 +5,13 @@ import NutritionMeals from './NutritionMeals';
 import NutritionFoodArchive from './NutritionFoodArchive';
 import NutritionHistory from './NutritionHistory';
 import NutritionSupplements from './NutritionSupplements';
+import { NutritionConflictBanner } from './NutritionConflictBanner';
+import { NutritionConflictDialog } from '../UI/NutritionConflictDialog';
 import { useNutritionHistory } from '../../hooks/useNutritionHistory';
 import { Logic } from '../../lib/logic';
+import { useAppStore } from '../../store/useAppStore';
+import { useAuth } from '../../hooks/useAuth';
+import { useDialogStore } from '../../store/useDialogStore';
 
 interface NutritionViewProps {
     subTab?: string;
@@ -19,6 +24,42 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
     const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
     const mealsHook = useNutritionMeals(selectedDate);
     const historyHook = useNutritionHistory();
+
+    const userData = useAppStore(state => state.userData);
+    const resolveConflict = useAppStore(state => state.resolveNutritionConflict);
+    const { currentUser } = useAuth();
+    const showAlert = useDialogStore(state => state.showAlert);
+    const [isConflictDialogOpen, setConflictDialogOpen] = useState(false);
+    const [isResolving, setIsResolving] = useState(false);
+
+    const pendingConflict = userData?.pendingConflicts?.nutritionPlanning;
+
+    const handleResolveConflict = async (resolution: 'cloud' | 'local') => {
+        if (!currentUser?.uid || !pendingConflict) return;
+        setIsResolving(true);
+        try {
+            const fingerprint = JSON.stringify(pendingConflict);
+            const result = await resolveConflict({
+                resolution,
+                expectedUid: currentUser.uid,
+                expectedConflictFingerprint: fingerprint
+            });
+
+            if (result.ok) {
+                setConflictDialogOpen(false);
+            } else if (result.status === 'local-pending') {
+                showAlert('Piano locale salvato, in attesa di connessione per la sincronizzazione cloud.', 'warning');
+                setConflictDialogOpen(false);
+            } else {
+                showAlert(`Errore durante il salvataggio: ${result.error}`, 'error');
+                // Non chiudiamo il dialog, lasciamo all'utente la possibilità di esportare
+            }
+        } catch (e: any) {
+            showAlert(`Si è verificato un errore: ${e.message}`, 'error');
+        } finally {
+            setIsResolving(false);
+        }
+    };
 
     const handleEditFoodFromArchive = (food: any) => {
         mealsHook.startEditCustomFood(food);
@@ -42,6 +83,10 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
 
     return (
         <div id="view-nutrition" className="view-section active">
+            {pendingConflict && (
+                <NutritionConflictBanner onResolveClick={() => setConflictDialogOpen(true)} />
+            )}
+
             <div className="sub-nav" onWheel={handleWheel}>
                 <div 
                     className={`sub-nav-btn ${activeSubTab === 'meals' ? 'active' : ''}`} 
@@ -125,6 +170,17 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                         setSelectedDate={setSelectedDate} 
                     />
                 </div>
+            )}
+
+            {pendingConflict && (
+                <NutritionConflictDialog 
+                    isOpen={isConflictDialogOpen}
+                    onClose={() => setConflictDialogOpen(false)}
+                    onResolve={handleResolveConflict}
+                    cloudPlan={userData?.nutritionPlanning || null}
+                    localPlan={pendingConflict}
+                    isSyncing={isResolving}
+                />
             )}
         </div>
     );
