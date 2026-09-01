@@ -1,12 +1,15 @@
 import React from 'react';
 import { Dumbbell, Utensils, Home, Settings, Activity } from 'lucide-react';
+import { useAppStore } from '../../store/useAppStore';
 
 interface BottomNavProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setActiveTab }) => (
+export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setActiveTab }) => {
+  const hasNutritionConflict = useAppStore(state => !!state.userData?.pendingConflicts?.nutritionPlanning);
+  return (
   <nav
     className="bottom-nav safe-bottom"
     aria-label="Navigazione principale"
@@ -43,8 +46,23 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
         aria-label="Nutrizione"
         className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`} 
         onClick={() => setActiveTab('nutrition')}
+        style={{ position: 'relative' }}
       >
         <Utensils size={24} aria-hidden="true" />
+        {hasNutritionConflict && (
+          <span 
+            style={{ 
+              position: 'absolute', 
+              top: '4px', 
+              right: '25%', 
+              width: '8px', 
+              height: '8px', 
+              background: 'var(--warning-color)', 
+              borderRadius: '50%' 
+            }} 
+            title="Conflitto nutrizionale pendente"
+          />
+        )}
         <span>Nutrizione</span>
       </button>
       <button 
@@ -67,6 +85,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       </button>
     </div>
   </nav>
-));
+  );
+});
 
 export default BottomNav;
