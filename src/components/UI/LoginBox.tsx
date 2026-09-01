@@ -104,6 +104,7 @@ export const LoginBox = () => {
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
+                    autoComplete="email"
                     style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '16px' }}
                 />
                 
@@ -115,6 +116,7 @@ export const LoginBox = () => {
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
+                            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                             style={{ padding: '12px', paddingRight: '40px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
                         />
                         <button 
@@ -134,6 +136,7 @@ export const LoginBox = () => {
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
                         required
+                        autoComplete="new-password"
                         style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
                     />
                 )}
