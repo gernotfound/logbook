@@ -342,3 +342,53 @@ export function mergeUserData(
     return UserDataSchema.parse(rawMerged) as unknown as UserData;
 }
 
+/**
+ * Union of local and cloud history by ID.
+ * In case of collision, LOCAL wins (conservative policy to preserve un-synced offline edits).
+ * Local records absent in cloud are preserved.
+ */
+export function mergeHistoryNonDestructive(
+    localHistory?: any[] | null,
+    cloudHistory?: any[] | null
+): any[] {
+    // mergeArrayById uses Guest priority, so if we pass cloud as first arg and local as second arg,
+    // local will win on collision.
+    return mergeArrayById(cloudHistory, localHistory);
+}
+
+/**
+ * Union of local and cloud nutrition by date.
+ * In case of collision, LOCAL wins (conservative policy).
+ * Local dates absent in cloud are preserved.
+ */
+export function mergeNutritionNonDestructive(
+    localNutrition?: Record<string, NutritionDay> | null,
+    cloudNutrition?: Record<string, NutritionDay> | null
+): Record<string, NutritionDay> {
+    // mergeNutrition uses Guest priority (second arg).
+    // So passing cloud as first arg and local as second arg means local wins on collision.
+    return mergeNutrition(cloudNutrition, localNutrition);
+}
+
+/**
+ * Merges a partial cloud response (e.g., windowed 3-month history/nutrition) into the local cache.
+ * - Non-windowed fields (profile, routines, library, etc.): Cloud overrides local.
+ * - Windowed fields (history, nutrition): Non-destructive union where local data is preserved 
+ *   and local wins on collision (to protect un-synced offline edits).
+ */
+export function mergeCloudIntoLocal(
+    localData: UserData,
+    cloudData: UserData
+): UserData {
+    const rawMerged: UserData = {
+        ...cloudData, // Base: cloud overrides everything
+        history: mergeHistoryNonDestructive(localData.history, cloudData.history),
+        nutrition: mergeNutritionNonDestructive(localData.nutrition, cloudData.nutrition),
+        // Preserve active local state that shouldn't be touched by hydration
+        activeWorkout: localData.activeWorkout !== undefined && localData.activeWorkout !== null
+            ? localData.activeWorkout
+            : (cloudData.activeWorkout || null),
+    };
+
+    return UserDataSchema.parse(rawMerged) as unknown as UserData;
+}

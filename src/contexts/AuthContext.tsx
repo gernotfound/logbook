@@ -5,7 +5,7 @@ import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
-import { mergeUserData, hasUserData } from '../lib/merge';
+import { mergeUserData, hasUserData, mergeCloudIntoLocal } from '../lib/merge';
 import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
@@ -66,19 +66,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadData = useCallback(async (user: User) => {
         if (!user) return;
         const currentData = useAppStore.getState().userData;
-        const isSyncing = useAppStore.getState().syncing;
         if (!currentData) {
             setSyncing(true);
         }
         try {
             const cloudData = await DB.loadUserData();
-            if (cloudData && cloudData !== currentData) {
+            
+            // Protezione semantica: scarta l'hydration se nel frattempo l'utente è cambiato
+            // o se l'app è passata in modalità Guest (previene race condition tra loadData e loginAsGuest)
+            const isNowGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+            if (auth.currentUser?.uid !== user.uid || isNowGuest) {
+                return;
+            }
+
+            if (cloudData) {
                 const latestData = useAppStore.getState().userData;
-                const isCurrentlySyncing = isSyncing || useAppStore.getState().syncing;
-                if (isCurrentlySyncing && latestData) {
-                    console.log("Riconciliazione: fusione modifiche locali pendenti con dati cloud.");
-                    const merged = mergeUserData(cloudData, latestData);
-                    setUserData(merged);
+                if (latestData) {
+                    try {
+                        // Merge non distruttivo: preserva storico locale fuori finestra
+                        // In caso di collisione, la policy vince il LOCALE per proteggere 
+                        // proattivamente modifiche offline pendenti.
+                        const merged = mergeCloudIntoLocal(latestData, cloudData);
+                        setUserData(merged); // Aggiorna IndexedDB ma NON innesca DB.saveUserData
+                    } catch (mergeError) {
+                        console.error("Zod parse failed during hydration merge, preserving local valid state:", mergeError);
+                        // Fallback Zod: NON chiamiamo setUserData, mantenendo lo stato locale valido
+                    }
                 } else {
                     setUserData(cloudData);
                 }
