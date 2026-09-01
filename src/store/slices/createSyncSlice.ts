@@ -19,6 +19,7 @@ export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
     syncHealth: SyncHealth;
+    syncGeneration: number;
     setSyncing: (val: boolean) => void;
     setSaveError: (error: string | null) => void;
     saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<SyncResult>;
@@ -43,6 +44,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
     saveError: null,
     syncing: false,
     syncHealth: 'synced',
+    syncGeneration: 0,
 
     setSyncing: (val: boolean) => set((state) => state.syncing === val ? state : { syncing: val }),
     setSaveError: (error: string | null) => set({ saveError: error }),
@@ -96,26 +98,30 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                         promisesToCall.forEach(p => p.resolve(result));
                     } else {
                         if (result.status === 'local-pending') {
-                            set({ saveError: "Salvato localmente. Sincronizzazione in attesa.", syncHealth: 'local-pending' });
+                            const newGen = get().syncGeneration + 1;
+                            set({ 
+                                saveError: "Salvato localmente. Sincronizzazione in attesa.", 
+                                syncHealth: 'local-pending',
+                                syncGeneration: newGen
+                            });
                             promisesToCall.forEach(p => p.resolve(result));
 
                             // Listen for background sync completion to automatically update syncHealth
                             import('firebase/firestore').then(({ waitForPendingWrites }) => {
                                 import('../../lib/firebase').then(({ getDb }) => {
                                     waitForPendingWrites(getDb()).then(() => {
-                                        // Only clear if the current health is still local-pending
-                                        // (don't override if a rejected/failed state happened in the meantime)
-                                        if (get().syncHealth === 'local-pending') {
+                                        const latest = get();
+                                        if (latest.syncHealth === 'local-pending' && latest.syncGeneration === newGen) {
                                             set({ saveError: null, syncHealth: 'synced' });
                                         }
                                     }).catch(() => {});
                                 });
                             });
                         } else if (result.status === 'rejected') {
-                            set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", syncHealth: 'rejected' });
+                            set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", syncHealth: 'rejected', syncGeneration: get().syncGeneration + 1 });
                             promisesToCall.forEach(p => p.resolve(result));
                         } else {
-                            set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed' });
+                            set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed', syncGeneration: get().syncGeneration + 1 });
                             promisesToCall.forEach(p => p.resolve(result));
                         }
                     }
@@ -132,7 +138,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                         // Non-blocking safe fail-through
                     }
 
-                    set({ saveError: formattedError.message, syncHealth: 'failed' });
+                    set({ saveError: formattedError.message, syncHealth: 'failed', syncGeneration: get().syncGeneration + 1 });
                     promisesToCall.forEach(p => p.reject(error));
                 } finally {
                     if (!globalSaveTimer && pendingPromises.length === 0) {

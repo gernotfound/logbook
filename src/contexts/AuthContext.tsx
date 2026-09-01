@@ -337,93 +337,110 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [setSaveError]);
 
+    const logoutInFlightRef = useRef(false);
+
     // Costante per il timeout
     const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;
+
+    // Logout
     const logout = useCallback(async (options?: { mode?: 'normal' | 'force', skipConfirm?: boolean }) => {
-        const skipConfirm = options?.skipConfirm;
-        const mode = options?.mode || 'normal';
-        const initialUid = auth.currentUser?.uid;
-
-        // Logout guest: avvisa e poi pulisce il localStorage
-        if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
-            if (!skipConfirm) {
-                const confirmed = await useDialogStore.getState().showConfirm(
-                    "Sei in modalit\u00E0 locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
-                );
-                if (!confirmed) return;
-            }
-            localStorage.removeItem(GUEST_KEY);
-            isGuestRef.current = false;
-            setIsGuest(false);
-            useAppStore.getState().resetStore();
-            return;
-        }
-
-        if (mode === 'normal') {
-            setSyncing(true);
-            const state = useAppStore.getState();
-            let isSafe = state.syncHealth === 'synced' && !state.userData?.pendingConflicts;
-
-            if (!isSafe) {
-                try {
-                    const { waitForPendingWrites } = await import('firebase/firestore');
-                    const { getDb } = await import('../lib/firebase');
-
-                    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), LOGOUT_SYNC_CHECK_TIMEOUT_MS));
-                    await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
-                } catch (e) {
-                    // Timeout o rete disconnessa
-                }
-
-                // Verifica se l'utente è cambiato nel frattempo
-                if (auth.currentUser?.uid !== initialUid) {
-                    setSyncing(false);
-                    return;
-                }
-
-                const finalState = useAppStore.getState();
-                isSafe = finalState.syncHealth === 'synced' && !finalState.userData?.pendingConflicts;
-            }
-            setSyncing(false);
-
-            if (!isSafe) {
-                const finalState = useAppStore.getState();
-                let reason: 'conflict' | 'offline' | 'rejected' | 'failed' = 'offline';
-
-                if (finalState.userData?.pendingConflicts) {
-                    reason = 'conflict';
-                } else if (finalState.syncHealth === 'rejected') {
-                    reason = 'rejected';
-                } else if (finalState.syncHealth === 'failed') {
-                    reason = 'failed';
-                }
-
-                // Mostra il dialog bloccante (resta aperto finché l'utente non sceglie Cancel o Force-Exit)
-                const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
-
-                // Verifica di nuovo utente
-                if (auth.currentUser?.uid !== initialUid) {
-                    return;
-                }
-
-                if (action === 'cancel' || action === 'wait') {
-                    return; // Annulla o attende e interrompe il flusso qui (la logica vive in GlobalDialog per 'force-exit')
-                }
-                // Se action === 'force-exit', prosegui
-            }
-        }
-
-        // Esecuzione force o normal-safe
-        setSyncing(true);
+        if (logoutInFlightRef.current) return;
+        logoutInFlightRef.current = true;
+        
         try {
-            await DB.secureLogOut();
-            DB.resetCache();
-            useAppStore.getState().resetStore();
-        } catch (error: any) {
-            console.error("Errore durante il logout:", error);
-            await useDialogStore.getState().showAlert("Errore durante il logout. Controlla la connessione.");
+            const skipConfirm = options?.skipConfirm;
+            const mode = options?.mode || 'normal';
+            const initialUid = auth.currentUser?.uid;
+
+            // Logout guest: avvisa e poi pulisce il localStorage
+            if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
+                if (!skipConfirm) {
+                    const confirmed = await useDialogStore.getState().showConfirm(
+                        "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
+                    );
+                    if (!confirmed) return;
+                }
+                localStorage.removeItem(GUEST_KEY);
+                isGuestRef.current = false;
+                setIsGuest(false);
+                useAppStore.getState().resetStore();
+                return;
+            }
+            
+            if (mode === 'normal') {
+                setSyncing(true);
+                const state = useAppStore.getState();
+                let isSafe = state.syncHealth === 'synced' && !state.userData?.pendingConflicts;
+                
+                if (!isSafe) {
+                    try {
+                        const { waitForPendingWrites } = await import('firebase/firestore');
+                        const { getDb } = await import('../lib/firebase');
+                        
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), LOGOUT_SYNC_CHECK_TIMEOUT_MS));
+                        await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
+                    } catch (e) {
+                        // Timeout o rete disconnessa
+                    }
+                    
+                    // Verifica se l'utente è cambiato nel frattempo
+                    if (auth.currentUser?.uid !== initialUid) {
+                        setSyncing(false);
+                        return;
+                    }
+
+                    const finalState = useAppStore.getState();
+                    isSafe = finalState.syncHealth === 'synced' && !finalState.userData?.pendingConflicts;
+                }
+                setSyncing(false);
+
+                if (!isSafe) {
+                    const finalState = useAppStore.getState();
+                    let reason: 'conflict' | 'offline' | 'rejected' | 'failed' = 'offline';
+                    
+                    if (finalState.userData?.pendingConflicts) {
+                        reason = 'conflict';
+                    } else if (finalState.syncHealth === 'rejected') {
+                        reason = 'rejected';
+                    } else if (finalState.syncHealth === 'failed') {
+                        reason = 'failed';
+                    }
+
+                    // Mostra il dialog bloccante (resta aperto finché l'utente non sceglie Cancel o Force-Exit)
+                    const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
+                    
+                    // Verifica di nuovo utente
+                    if (auth.currentUser?.uid !== initialUid) {
+                        return;
+                    }
+
+                    if (action === 'cancel' || action === 'wait') {
+                        return; // Annulla o attende e interrompe il flusso qui (la logica vive in GlobalDialog per 'force-exit')
+                    } else if (action === 'safe-exit') {
+                        // Ulteriore doppio controllo di sicurezza
+                        const finalCheck = useAppStore.getState();
+                        if (finalCheck.syncHealth !== 'synced' || finalCheck.userData?.pendingConflicts) {
+                            return; // Se in realtà non era sicuro, interrompi
+                        }
+                    }
+                    // Se action === 'force-exit', o superato il safe-exit, prosegui
+                }
+            }
+
+            // Esecuzione force o normal-safe
+            setSyncing(true);
+            try {
+                await DB.secureLogOut();
+                DB.resetCache();
+                useAppStore.getState().resetStore();
+            } catch (error: any) {
+                console.error("Errore durante il logout:", error);
+                await useDialogStore.getState().showAlert("Errore durante il logout. Controlla la connessione.");
+            } finally {
+                setSyncing(false);
+            }
         } finally {
-            setSyncing(false);
+            logoutInFlightRef.current = false;
         }
     }, [setSyncing]);
 

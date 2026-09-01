@@ -62,7 +62,7 @@ export const GlobalDialog: React.FC = () => {
                 <button
                   className="btn btn-primary"
                   style={{ background: 'var(--success-color)', color: '#000' }}
-                  onClick={() => onAction?.('force-exit')}
+                  onClick={() => onAction?.('safe-exit')}
                 >
                   Esci in sicurezza
                 </button>
