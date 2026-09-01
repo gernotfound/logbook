@@ -39,16 +39,18 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     });
 
     describe('Single Save Flow', () => {
-        it('resolves saveUserData promise when DB.saveUserData succeeds', async () => {
-            const saveSpy = vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce(undefined);
+        it('resolves saveUserData promise with SyncResult when DB.saveUserData succeeds', async () => {
+            const saveSpy = vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
 
             const savePromise = useAppStore.getState().saveUserData(mockUserData1);
             expect(useAppStore.getState().syncing).toBe(true);
             expect(useAppStore.getState().saveError).toBeNull();
 
             await vi.advanceTimersByTimeAsync(1100);
-            await expect(savePromise).resolves.toBeUndefined();
+            const result = await savePromise;
 
+            expect(result.ok).toBe(true);
+            expect(result.status).toBe('synced');
             expect(saveSpy).toHaveBeenCalledTimes(1);
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
                 profile: expect.objectContaining({ name: 'User One' })
@@ -73,8 +75,8 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
-        it('supports updater function syntax and resolves on success', async () => {
-            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce(undefined);
+        it('supports updater function syntax and resolves with SyncResult on success', async () => {
+            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
             useAppStore.setState({ userData: mockUserData1 });
 
             const savePromise = useAppStore.getState().saveUserData((prev) => ({
@@ -83,8 +85,9 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             }));
 
             await vi.advanceTimersByTimeAsync(1100);
-            await expect(savePromise).resolves.toBeUndefined();
+            const result = await savePromise;
 
+            expect(result.ok).toBe(true);
             expect(useAppStore.getState().userData?.profile?.name).toBe('Updated Via Function');
             expect(useAppStore.getState().syncing).toBe(false);
         });
@@ -92,7 +95,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
 
     describe('Concurrent & Debounced Calls Flow', () => {
         it('debounces multiple rapid calls into 1 DB write and resolves all caller promises on success', async () => {
-            const saveSpy = vi.spyOn(DB, 'saveUserData').mockResolvedValue(undefined);
+            const saveSpy = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' });
 
             const p1 = useAppStore.getState().saveUserData(mockUserData1);
             await vi.advanceTimersByTimeAsync(200);
@@ -145,8 +148,8 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
     });
 
     describe('updateUserData Helper Flow', () => {
-        it('updateUserData resolves when underlying saveUserData succeeds', async () => {
-            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce(undefined);
+        it('updateUserData resolves with SyncResult when underlying saveUserData succeeds', async () => {
+            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
             useAppStore.setState({ userData: mockUserData1 });
 
             const updatePromise = useAppStore.getState().updateUserData((prev) => ({
@@ -155,13 +158,15 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             }));
 
             await vi.advanceTimersByTimeAsync(1100);
-            await expect(updatePromise).resolves.toBeUndefined();
+            const result = await updatePromise;
 
+            expect(result.ok).toBe(true);
+            expect(result.status).toBe('synced');
             expect(useAppStore.getState().userData?.profile?.name).toBe('Mutated Name');
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
-        it('updateUserData propagates rejection when underlying saveUserData fails', async () => {
+        it('updateUserData propagates rejection when underlying saveUserData throws', async () => {
             const dbError = new Error('Database permission denied');
             vi.spyOn(DB, 'saveUserData').mockRejectedValueOnce(dbError);
             useAppStore.setState({ userData: mockUserData1 });
@@ -180,11 +185,13 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
-        it('updateUserData does nothing and resolves when userData is null in store', async () => {
+        it('updateUserData does nothing and resolves with synced when userData is null in store', async () => {
             const saveSpy = vi.spyOn(DB, 'saveUserData');
             useAppStore.setState({ userData: null });
 
-            await expect(useAppStore.getState().updateUserData((prev) => prev)).resolves.toBeUndefined();
+            const result = await useAppStore.getState().updateUserData((prev) => prev);
+            expect(result.ok).toBe(true);
+            expect(result.status).toBe('synced');
             expect(saveSpy).not.toHaveBeenCalled();
         });
     });
@@ -204,7 +211,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
         });
 
         it('subsequent successful save clears previous saveError', async () => {
-            // First save fails
+            // First save fails with a throw (unrecoverable)
             vi.spyOn(DB, 'saveUserData').mockRejectedValueOnce(new Error('First fail'));
             const p1 = useAppStore.getState().saveUserData(mockUserData1);
             const a1 = expect(p1).rejects.toThrow('First fail');
@@ -213,13 +220,14 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
 
             // Second save succeeds
-            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce(undefined);
+            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
             const p2 = useAppStore.getState().saveUserData(mockUserData2);
             // Starting second save resets saveError to null
             expect(useAppStore.getState().saveError).toBeNull();
 
             await vi.advanceTimersByTimeAsync(1100);
-            await expect(p2).resolves.toBeUndefined();
+            const result = await p2;
+            expect(result.ok).toBe(true);
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().syncing).toBe(false);
         });

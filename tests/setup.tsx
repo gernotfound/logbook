@@ -222,7 +222,7 @@ vi.mock('../src/lib/db', () => ({
       const state = useAppStore.getState();
       return state.userData;
     }),
-    saveUserData: vi.fn().mockResolvedValue(undefined),
+    saveUserData: vi.fn().mockResolvedValue({ ok: true, status: 'synced' }),
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
   },

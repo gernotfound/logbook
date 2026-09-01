@@ -15,7 +15,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
     vi.useFakeTimers();
     clearSyncTimers();
     vi.mocked(DB.saveUserData).mockReset();
-    vi.mocked(DB.saveUserData).mockResolvedValue(undefined);
+    vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     useAppStore.setState({
       userData: { ...defaultMockUserData },
       localWorkout: null,
@@ -31,7 +31,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
       useAppStore.getState().resetStore();
     });
     vi.mocked(DB.saveUserData).mockReset();
-    vi.mocked(DB.saveUserData).mockResolvedValue(undefined);
+    vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
     vi.useRealTimers();
     vi.restoreAllMocks();
   });

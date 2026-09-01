@@ -347,3 +347,9 @@ declare global {
     }
 }
 
+
+export type SyncResult =
+    | { ok: true; status: 'synced' }
+    | { ok: false; status: 'local-pending'; error: unknown }
+    | { ok: false; status: 'rejected'; error: unknown }
+    | { ok: false; status: 'failed'; error: unknown };
