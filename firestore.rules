@@ -48,8 +48,13 @@ service cloud.firestore {
           'supplements',
           'activePains',
           'catalogOverrides',
-          'legalConsent'
-        ]);
+          'legalConsent',
+          'nutritionPlanningOrigin'
+        ])
+        && (!('nutritionPlanningOrigin' in incomingData())
+            || incomingData().nutritionPlanningOrigin == null
+            || incomingData().nutritionPlanningOrigin == 'generated-default'
+            || incomingData().nutritionPlanningOrigin == 'user-edited');
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}
       match /history_months/{monthId} {
