@@ -96,18 +96,48 @@ export function useSettings() {
         if (!(await showConfirm("⚠️ ATTENZIONE: questa operazione è IRREVERSIBILE.\n\nVerranno eliminati TUTTI i tuoi dati (allenamenti, nutrizione, misurazioni).\n\nConfermi di voler eliminare il tuo account?"))) return;
         if (!(await showConfirm("Ultima conferma: eliminare definitivamente il tuo account LogBook?"))) return;
         
-        setDeletingAccount(true);
-        try {
-            await DB.deleteAccount();
-            // logout handled by onAuthStateChanged
-        } catch (error: any) {
-            setDeletingAccount(false);
-            console.error("Errore eliminazione account:", error);
-            await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
-            if (error.message?.includes("effettuare di nuovo il login")) {
-                logout({ mode: 'force' });
+        const tryDelete = async (isRetry = false) => {
+            setDeletingAccount(true);
+            try {
+                await DB.deleteAccount();
+                // logout handled by onAuthStateChanged
+            } catch (error: any) {
+                setDeletingAccount(false);
+                console.error("Errore eliminazione account:", error);
+                
+                if (error.message?.includes("effettuare di nuovo il login")) {
+                    const providerId = currentUser?.providerData[0]?.providerId;
+                    if (providerId === 'google.com' && !isRetry) {
+                        const wantsReauth = await showConfirm("La sessione è scaduta. È necessaria una rapida riautenticazione per confermare l'eliminazione. Vuoi procedere?");
+                        if (wantsReauth) {
+                            try {
+                                console.log("Richiesta riautenticazione per eliminazione account...");
+                                const { auth, provider, reauthenticateWithPopup } = await import('../lib/firebase');
+                                await reauthenticateWithPopup(auth.currentUser!, provider);
+                                console.log("Riautenticazione completata. Avvio eliminazione account...");
+                                await tryDelete(true); // retry after reauth
+                                return;
+                            } catch (reauthErr: any) {
+                                console.error("Riautenticazione fallita", reauthErr);
+                                if (reauthErr.code === 'auth/popup-closed-by-user') {
+                                    await showAlert("Eliminazione annullata. Devi completare l'accesso per poter eliminare l'account.");
+                                } else {
+                                    await showAlert("Autenticazione fallita. Impossibile eliminare l'account.");
+                                }
+                                return;
+                            }
+                        }
+                    } else {
+                         await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
+                         // If we couldn't reauth via popup (e.g. email/password), we don't force logout, just let the user do it manually.
+                    }
+                } else {
+                    await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
+                }
             }
-        }
+        };
+        
+        await tryDelete();
     };
 
     return {

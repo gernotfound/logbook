@@ -26,7 +26,7 @@ export const GlobalDialog: React.FC = () => {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 99999
+      zIndex: 100000
     }}>
       <div
         className="dialog-box card safe-top safe-bottom"
