@@ -4,14 +4,19 @@ import TrainingRoutines from './TrainingRoutines';
 import TrainingExercises from './TrainingExercises';
 import TrainingHistory from './TrainingHistory';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
-import type { WorkoutSession } from '../../types';
+import type { WorkoutSession, TrainingSubTab } from '../../types';
 
-const TrainingView = ({ subTab = 'session', setSubTab }: any) => {
+interface TrainingViewProps {
+    subTab?: TrainingSubTab;
+    setSubTab?: (tab: TrainingSubTab) => void;
+}
+
+const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
     const { startEditHistoricalWorkout } = useWorkoutSession();
 
     const handleEditWorkout = async (wo: WorkoutSession) => {
         const ok = await startEditHistoricalWorkout(wo);
-        if (ok) {
+        if (ok && setSubTab) {
             setSubTab('session');
         }
     };
@@ -25,17 +30,17 @@ const TrainingView = ({ subTab = 'session', setSubTab }: any) => {
     return (
         <div id="view-training" className="view-section active">
             <div className="sub-nav" onWheel={handleWheel}>
-                <div className={`sub-nav-btn ${subTab === 'session' ? 'active' : ''}`} onClick={() => setSubTab('session')}>Sessione</div>
-                <div className={`sub-nav-btn ${subTab === 'planning' ? 'active' : ''}`} onClick={() => setSubTab('planning')}>Pianificazione</div>
-                <div className={`sub-nav-btn ${subTab === 'routines' ? 'active' : ''}`} onClick={() => setSubTab('routines')}>Schede</div>
-                <div className={`sub-nav-btn ${subTab === 'exercises' ? 'active' : ''}`} onClick={() => setSubTab('exercises')}>Esercizi</div>
-                <div className={`sub-nav-btn ${subTab === 'history' ? 'active' : ''}`} onClick={() => setSubTab('history')}>Storico</div>
+                <div className={`sub-nav-btn ${subTab === 'session' ? 'active' : ''}`} onClick={() => setSubTab?.('session')}>Sessione</div>
+                <div className={`sub-nav-btn ${subTab === 'planning' ? 'active' : ''}`} onClick={() => setSubTab?.('planning')}>Pianificazione</div>
+                <div className={`sub-nav-btn ${subTab === 'routines' ? 'active' : ''}`} onClick={() => setSubTab?.('routines')}>Schede</div>
+                <div className={`sub-nav-btn ${subTab === 'exercises' ? 'active' : ''}`} onClick={() => setSubTab?.('exercises')}>Esercizi</div>
+                <div className={`sub-nav-btn ${subTab === 'history' ? 'active' : ''}`} onClick={() => setSubTab?.('history')}>Storico</div>
             </div>
 
             {subTab === 'session' && (
                 <TrainingSession
-                    onNavigateToHistory={() => setSubTab('history')}
-                    onNavigateToPlanning={() => setSubTab('planning')}
+                    onNavigateToHistory={() => setSubTab?.('history')}
+                    onNavigateToPlanning={() => setSubTab?.('planning')}
                 />
             )}
             {subTab === 'planning' && <TrainingPlanning />}

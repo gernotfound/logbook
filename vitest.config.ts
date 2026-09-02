@@ -14,6 +14,8 @@ export default defineConfig({
     testTimeout: 10000,
     exclude: [
       ...configDefaults.exclude,
+      '**/e2e/**',
+      '**/tests-e2e/**',
       '**/teamwork_projects/**',
       '**/.agents/**',
       ...(process.env.npm_lifecycle_event === 'test:stress' ? [] : [

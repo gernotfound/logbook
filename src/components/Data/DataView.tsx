@@ -6,10 +6,11 @@ import DataMeasurements from './DataMeasurements';
 import DataBiometry from './DataBiometry';
 import DataSleep from './DataSleep';
 import DataHistory from './DataHistory';
+import type { DataSubTab } from '../../types';
 
 interface DataViewProps {
-    subTab?: string;
-    setSubTab?: (tab: string) => void;
+    subTab?: DataSubTab;
+    setSubTab?: (tab: DataSubTab) => void;
 }
 
 const DataView: React.FC<DataViewProps> = ({ 
@@ -19,7 +20,7 @@ const DataView: React.FC<DataViewProps> = ({
     const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
     const measurementsHook = useNutritionMeasurements(selectedDate);
     const sleepHook = useSleepMeasurements();
-    const [localSubTab, setLocalSubTab] = useState('measurements');
+    const [localSubTab, setLocalSubTab] = useState<DataSubTab>('measurements');
 
     const currentSubTab = setSubTab ? subTab : localSubTab;
     const changeSubTab = setSubTab || setLocalSubTab;

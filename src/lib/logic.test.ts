@@ -66,9 +66,6 @@ describe('Logic Library Tests', () => {
     });
 
     it('calculateTDEE: estimates TDEE correctly when gaining weight', () => {
-        // Mock 14 days of data, eating 3000 kcal, weight goes from 80 to 81 (+1kg in 14 days)
-        // 1kg of tissue = ~7000 kcal surplus. 7000 / 14 days = 500 kcal surplus/day.
-        // If intake is 3000, TDEE should be 3000 - 500 = 2500.
         const chronoData = [];
         for (let i = 0; i < 14; i++) {
             const date = Logic.getLocalDateString(new Date(2023, 0, i + 1));
@@ -78,16 +75,97 @@ describe('Logic Library Tests', () => {
                 weight: 80 + (i * (1/13)) // linear increase from 80 to 81
             });
         }
-        // Force the first and last to be exactly 80 and 81 to avoid floating math issues
         chronoData[0].weight = 80;
         chronoData[13].weight = 81;
 
         const tdee = Logic.calculateTDEE(chronoData);
         expect(tdee.error).toBe(false);
-        // Depending on exact formula (sometimes uses 7700 instead of 7000)
-        // Let's assume it's in the ballpark of 2400-2600
         expect(tdee.tdee).toBeGreaterThan(2300);
         expect(tdee.tdee).toBeLessThan(2700);
+    });
+
+    it('calculateTDEE: produces identical results for pre-sorted, reverse-sorted, and randomly shuffled arrays', () => {
+        const ascendingData = [];
+        for (let i = 0; i < 14; i++) {
+            const date = Logic.getLocalDateString(new Date(2026, 7, i + 1));
+            ascendingData.push({
+                date,
+                kcal: 2800,
+                weight: 75 + (i * 0.1) // 75.0 to 76.3
+            });
+        }
+        ascendingData[0].weight = 75;
+        ascendingData[13].weight = 76;
+
+        const descendingData = [...ascendingData].reverse();
+        const shuffledData = [...ascendingData].sort(() => 0.5 - Math.random());
+
+        const resAsc = Logic.calculateTDEE(ascendingData);
+        const resDesc = Logic.calculateTDEE(descendingData);
+        const resShuffled = Logic.calculateTDEE(shuffledData);
+
+        expect(resAsc.error).toBe(false);
+        expect(resDesc.error).toBe(false);
+        expect(resShuffled.error).toBe(false);
+
+        expect(resDesc.tdee).toBe(resAsc.tdee);
+        expect(resShuffled.tdee).toBe(resAsc.tdee);
+        expect(resDesc.weightDiff).toBe(resAsc.weightDiff);
+        expect(resShuffled.weightDiff).toBe(resAsc.weightDiff);
+    });
+
+    it('calculateTDEE: handles edge cases gracefully (0, 1, 6 measurements, same day, non-array)', () => {
+        // Non-array
+        expect(Logic.calculateTDEE(null as any)).toEqual({ error: true, message: 'Dati non validi' });
+        expect(Logic.calculateTDEE(undefined as any)).toEqual({ error: true, message: 'Dati non validi' });
+        expect(Logic.calculateTDEE('string' as any)).toEqual({ error: true, message: 'Dati non validi' });
+
+        // 0 measurements
+        expect(Logic.calculateTDEE([])).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (0/7 giorni richiesti)'
+        });
+
+        // 1 measurement
+        expect(Logic.calculateTDEE([{ date: '2026-08-01', weight: 80, kcal: 2500 }])).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (1/7 giorni richiesti)'
+        });
+
+        // 6 measurements
+        const sixDays = [];
+        for (let i = 0; i < 6; i++) {
+            sixDays.push({ date: `2026-08-0${i + 1}`, weight: 80, kcal: 2500 });
+        }
+        expect(Logic.calculateTDEE(sixDays)).toEqual({
+            error: true,
+            message: 'Raccolta dati in corso... (6/7 giorni richiesti)'
+        });
+
+        // 7 measurements on the exact same date
+        const sameDay = [];
+        for (let i = 0; i < 7; i++) {
+            sameDay.push({ date: '2026-08-01', weight: 80, kcal: 2500 });
+        }
+        expect(Logic.calculateTDEE(sameDay)).toEqual({
+            error: true,
+            message: 'Dati insufficienti (stesso giorno)'
+        });
+    });
+
+    it('calculateTDEE: correctly parses string weights and commas', () => {
+        const stringData = [];
+        for (let i = 0; i < 14; i++) {
+            const date = Logic.getLocalDateString(new Date(2026, 7, i + 1));
+            stringData.push({
+                date,
+                kcal: '2500,0',
+                weight: i === 0 ? '80,0' : (i === 13 ? '81,0' : '80,5')
+            });
+        }
+        const res = Logic.calculateTDEE(stringData);
+        expect(res.error).toBe(false);
+        expect(res.weightDiff).toBe('1.00');
     });
 
     it('getLocalDateString: formats local date YYYY-MM-DD correctly', () => {

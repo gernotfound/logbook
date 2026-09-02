@@ -10,6 +10,18 @@ import {
   LOCAL_STORAGE_NUTRITION_TAB, 
   LOCAL_STORAGE_DATA_TAB 
 } from './constants';
+import { 
+  AppTabSchema, 
+  TrainingSubTabSchema, 
+  NutritionSubTabSchema, 
+  DataSubTabSchema 
+} from './lib/schema';
+import type { 
+  AppTab, 
+  TrainingSubTab, 
+  NutritionSubTab, 
+  DataSubTab 
+} from './types';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
@@ -34,10 +46,10 @@ function App() {
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
   const setSaveError = useAppStore(state => state.setSaveError);
-  const [activeTab, setActiveTab] = useLocalStorage(LOCAL_STORAGE_ACTIVE_TAB, 'home');
-  const [trainingSubTab, setTrainingSubTab] = useLocalStorage(LOCAL_STORAGE_TRAINING_TAB, 'session');
-  const [nutritionSubTab, setNutritionSubTab] = useLocalStorage(LOCAL_STORAGE_NUTRITION_TAB, 'meals');
-  const [dataSubTab, setDataSubTab] = useLocalStorage(LOCAL_STORAGE_DATA_TAB, 'measurements');
+  const [activeTab, setActiveTab] = useLocalStorage<AppTab>(LOCAL_STORAGE_ACTIVE_TAB, 'home', AppTabSchema);
+  const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(LOCAL_STORAGE_TRAINING_TAB, 'session', TrainingSubTabSchema);
+  const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
+  const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
@@ -62,9 +74,10 @@ function App() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['home', 'training', 'nutrition', 'data', 'settings'].includes(tabParam)) {
-        if (tabParam !== activeTab) {
-          setActiveTab(tabParam);
+      if (tabParam) {
+        const parsed = AppTabSchema.safeParse(tabParam);
+        if (parsed.success && parsed.data !== activeTab) {
+          setActiveTab(parsed.data);
         }
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -110,11 +123,15 @@ function App() {
   const currentTabRef = useState<{ current: string }>({ current: activeTab })[0];
 
   const handleTabChange = (newTab: string) => {
-    if (newTab === activeTab) {
+    const parsed = AppTabSchema.safeParse(newTab);
+    if (!parsed.success) return;
+    const validTab = parsed.data;
+
+    if (validTab === activeTab) {
       // Comportamento di "reset": clicco sulla tab già attiva
-      if (newTab === 'training') setTrainingSubTab('session');
-      if (newTab === 'nutrition') setNutritionSubTab('meals');
-      if (newTab === 'data') setDataSubTab('measurements');
+      if (validTab === 'training') setTrainingSubTab('session');
+      if (validTab === 'nutrition') setNutritionSubTab('meals');
+      if (validTab === 'data') setDataSubTab('measurements');
       
       tabScrollPositions[activeTab] = 0;
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -122,18 +139,22 @@ function App() {
     }
 
     tabScrollPositions[activeTab] = window.scrollY;
-    setVisitedTabs(prev => prev[newTab] ? prev : { ...prev, [newTab]: true });
-    setActiveTab(newTab);
-    currentTabRef.current = newTab;
+    setVisitedTabs(prev => prev[validTab] ? prev : { ...prev, [validTab]: true });
+    setActiveTab(validTab);
+    currentTabRef.current = validTab;
     requestAnimationFrame(() => {
-      const savedPos = tabScrollPositions[newTab] || 0;
+      const savedPos = tabScrollPositions[validTab] || 0;
       window.scrollTo({ top: savedPos, behavior: 'instant' });
     });
   };
 
   useEffect(() => {
     const handleNavEvent = (e: Event) => {
-      handleTabChange((e as CustomEvent).detail);
+      const detail = (e as CustomEvent).detail;
+      const parsed = AppTabSchema.safeParse(detail);
+      if (parsed.success) {
+        handleTabChange(parsed.data);
+      }
     };
     window.addEventListener('app:navigate', handleNavEvent);
     return () => window.removeEventListener('app:navigate', handleNavEvent);
