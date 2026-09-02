@@ -363,3 +363,10 @@ export type ResolveNutritionConflictInput = {
     expectedUid: string;
     expectedConflictFingerprint: string;
 };
+
+export type AppTab = 'home' | 'training' | 'nutrition' | 'data' | 'settings';
+export type MainTab = AppTab;
+export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
+export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';
+export type DataSubTab = 'measurements' | 'sleep' | 'biometry' | 'history';
+

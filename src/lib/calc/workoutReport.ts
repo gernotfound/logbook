@@ -1,4 +1,5 @@
 import type { WorkoutSession, SessionExercise } from '../../types';
+import { calculateEffectiveSetWeight, VolumeExerciseRef } from './workout';
 
 export interface ExerciseComparison {
     exId: string;
@@ -29,54 +30,62 @@ export interface WorkoutReport {
     newPRs: ExerciseComparison[];
 }
 
-function calculateExerciseStats(ex: SessionExercise) {
+function calculateExerciseStats(
+    ex: SessionExercise,
+    libEx?: VolumeExerciseRef | null,
+    userWeight: number = 80
+) {
     let volume = 0;
     let totalReps = 0;
     let totalWeight = 0;
     let weightCount = 0;
 
     for (const set of (ex.sets || [])) {
-        const kgStr = String(set.kg || '').replace(',', '.');
-        const kg = parseFloat(kgStr) || 0;
         const reps = parseInt(String(set.reps), 10) || 0;
+        if (reps <= 0) continue;
 
-        if (kg > 0 && reps > 0) {
-            volume += kg * reps;
-            totalReps += reps;
-            totalWeight += kg;
+        const effectiveKg = calculateEffectiveSetWeight(set.kg, libEx, userWeight);
+        volume += effectiveKg * reps;
+        totalReps += reps;
+
+        if (effectiveKg > 0) {
+            totalWeight += effectiveKg;
             weightCount++;
-        } else if (reps > 0) { // bodyweight
-            totalReps += reps;
         }
 
         // Dropsets
         for (const ds of (set.dropsets || [])) {
-            const dskgStr = String(ds.kg || '').replace(',', '.');
-            const dskg = parseFloat(dskgStr) || 0;
             const dsreps = parseInt(String(ds.reps), 10) || 0;
-            if (dskg > 0 && dsreps > 0) {
-                volume += dskg * dsreps;
-                totalReps += dsreps;
+            if (dsreps <= 0) continue;
+
+            const dskg = calculateEffectiveSetWeight(ds.kg, libEx, userWeight);
+            volume += dskg * dsreps;
+            totalReps += dsreps;
+
+            if (dskg > 0) {
                 totalWeight += dskg;
                 weightCount++;
-            } else if (dsreps > 0) {
-                totalReps += dsreps;
             }
         }
     }
 
-    const avgWeight = weightCount > 0 ? totalWeight / weightCount : 0;
+    const avgWeight = weightCount > 0 ? Math.round((totalWeight / weightCount) * 10) / 10 : 0;
 
     return { volume, totalReps, avgWeight };
 }
 
-export function computeWorkoutReport(currentWorkout: WorkoutSession, history: WorkoutSession[], libraryMap?: Map<string, any>): WorkoutReport {
+export function computeWorkoutReport(
+    currentWorkout: WorkoutSession,
+    history: WorkoutSession[] = [],
+    libraryMap?: Map<string, any> | null,
+    userWeight: number = 80
+): WorkoutReport {
     const routineId = currentWorkout.routineId;
     let previousWorkout: WorkoutSession | undefined;
 
     // Assumiamo che history sia ordinato dal più recente al più vecchio
     for (const w of history) {
-        if (w.id === currentWorkout.id) continue;
+        if (!w || w.id === currentWorkout.id) continue;
         if (w.routineId === routineId && w.date && currentWorkout.date && w.date <= currentWorkout.date) {
             previousWorkout = w;
             break;
@@ -108,7 +117,8 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
 
     if (!previousWorkout) {
         for (const ex of (currentWorkout.exercises || [])) {
-            const stats = calculateExerciseStats(ex);
+            const libEx = ex.exId && libraryMap ? libraryMap.get(ex.exId) : null;
+            const stats = calculateExerciseStats(ex, libEx, userWeight);
             currentTotalVolume += stats.volume;
         }
         report.totalVolume = currentTotalVolume;
@@ -123,20 +133,21 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
     for (const ex of (currentWorkout.exercises || [])) {
         if (!ex.exId) continue;
         
-        const currStats = calculateExerciseStats(ex);
+        const libEx = libraryMap ? libraryMap.get(ex.exId) : null;
+        const currStats = calculateExerciseStats(ex, libEx, userWeight);
         currentTotalVolume += currStats.volume;
 
         let exName = 'Esercizio';
-        if (libraryMap && libraryMap.has(ex.exId)) {
-            exName = libraryMap.get(ex.exId).name;
+        if (libEx && libEx.name) {
+            exName = libEx.name;
         }
 
         const prevEx = prevExMap.get(ex.exId);
         if (prevEx) {
-            const prevStats = calculateExerciseStats(prevEx);
+            const prevStats = calculateExerciseStats(prevEx, libEx, userWeight);
             previousTotalVolume += prevStats.volume;
 
-            let volumeDelta = currStats.volume - prevStats.volume;
+            const volumeDelta = currStats.volume - prevStats.volume;
             let volumeDeltaPercent = 0;
             if (prevStats.volume > 0) {
                 volumeDeltaPercent = (volumeDelta / prevStats.volume) * 100;
@@ -145,16 +156,16 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
             }
 
             const repsDelta = currStats.totalReps - prevStats.totalReps;
-            const weightDelta = currStats.avgWeight - prevStats.avgWeight;
+            const weightDelta = Math.round((currStats.avgWeight - prevStats.avgWeight) * 10) / 10;
 
-            // PR logic:
+            // PR logic: only valid when comparing against a real previous baseline
             const isPR = (volumeDelta > 0 && currStats.volume > 0) || 
                          (weightDelta > 0 && currStats.totalReps >= prevStats.totalReps) ||
                          (currStats.volume === 0 && repsDelta > 0 && currStats.totalReps > 0);
 
             const comp: ExerciseComparison = {
                 exId: ex.exId,
-                exName: exName,
+                exName,
                 currentVolume: currStats.volume,
                 previousVolume: prevStats.volume,
                 volumeDelta,
@@ -175,10 +186,11 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
             }
         } else {
             // Esercizio eseguito per la prima volta in questa scheda (non c'è in prevExMap)
-            const isPR = currStats.totalReps > 0;
+            // Se non è mai stato eseguito prima, non è un PR
+            const isPR = false;
             const comp: ExerciseComparison = {
                 exId: ex.exId,
-                exName: exName,
+                exName,
                 currentVolume: currStats.volume,
                 previousVolume: 0,
                 volumeDelta: currStats.volume,
@@ -193,10 +205,6 @@ export function computeWorkoutReport(currentWorkout: WorkoutSession, history: Wo
             };
 
             report.exerciseComparisons.push(comp);
-            
-            if (isPR) {
-                report.newPRs.push(comp);
-            }
         }
     }
 

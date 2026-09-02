@@ -13,10 +13,11 @@ import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
+import type { NutritionSubTab } from '../../types';
 
 interface NutritionViewProps {
-    subTab?: string;
-    setSubTab?: (tab: string) => void;
+    subTab?: NutritionSubTab;
+    setSubTab?: (tab: NutritionSubTab) => void;
 }
 
 const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {

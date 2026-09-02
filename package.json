@@ -13,7 +13,8 @@
     "test:ci": "npm run test:unit && npm run test:integration",
     "test:stress": "vitest run \"tests/**/*adversarial*.test.{ts,tsx}\" \"tests/**/*stress*.test.{ts,tsx}\" \"tests/**/challenger_*.test.{ts,tsx}\"",
     "test:unit": "vitest run src/",
-    "test:integration": "vitest run tests/"
+    "test:integration": "vitest run tests/",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

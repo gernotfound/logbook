@@ -5,27 +5,37 @@ export function calculateTDEE(nutritionHistoryList: { date?: string; weight?: st
     if (!Array.isArray(nutritionHistoryList)) {
         return { error: true, message: "Dati non validi" };
     }
-    const validDays = nutritionHistoryList.filter((d): d is { date: string; weight: string | number; kcal: string | number } => Boolean(d && d.date && parseFloat(d.weight as any) > 0 && parseFloat(d.kcal as any) > 0));
-    if (validDays.length < 7) { 
-        return { error: true, message: `Raccolta dati in corso... (${validDays.length}/7 giorni richiesti)` }; 
+    const validDays = nutritionHistoryList.filter((d): d is { date: string; weight: string | number; kcal: string | number } => {
+        if (!d || !d.date || typeof d.date !== 'string') return false;
+        const w = parseFloat(String(d.weight).replace(',', '.'));
+        const k = parseFloat(String(d.kcal).replace(',', '.'));
+        return !isNaN(w) && w > 0 && !isNaN(k) && k > 0;
+    });
+
+    const sortedValidDays = [...validDays].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (sortedValidDays.length < 7) { 
+        return { error: true, message: `Raccolta dati in corso... (${sortedValidDays.length}/7 giorni richiesti)` }; 
     }
-    const recentDays = validDays.slice(-14); 
-    const wLast = parseFloat(recentDays[recentDays.length - 1].weight as any);
-    const wFirst = parseFloat(recentDays[0].weight as any);
+    const recentDays = sortedValidDays.slice(-14); 
+    const wFirst = parseFloat(String(recentDays[0].weight).replace(',', '.'));
+    const wLast = parseFloat(String(recentDays[recentDays.length - 1].weight).replace(',', '.'));
     const firstDate = new Date(recentDays[0].date);
     const lastDate = new Date(recentDays[recentDays.length - 1].date);
     const diffDays = Math.ceil(Math.abs(lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays === 0) return { error: true, message: "Dati insufficienti (stesso giorno)" };
-    const avgKcal = recentDays.reduce((sum, d) => sum + parseFloat(d.kcal as any), 0) / recentDays.length;
+    const avgKcal = recentDays.reduce((sum, d) => sum + parseFloat(String(d.kcal).replace(',', '.')), 0) / recentDays.length;
     const weightDiff = wLast - wFirst;
-    const estimatedTDEE = avgKcal - ((weightDiff / diffDays) * 7700);
+    const dailySurplusKcal = (weightDiff / diffDays) * 7700;
+    const estimatedTDEE = avgKcal - dailySurplusKcal;
     return {
         error: false,
         tdee: Math.round(estimatedTDEE),
         avgKcal: Math.round(avgKcal),
         weightDiff: weightDiff.toFixed(2),
         daysTracked: recentDays.length,
-        timeSpanDays: diffDays
+        timeSpanDays: diffDays,
+        dailyDeficit: Math.round(dailySurplusKcal)
     };
 }
 
