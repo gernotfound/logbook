@@ -24,6 +24,8 @@ export interface SyncSlice {
     setSaveError: (error: string | null) => void;
     saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<SyncResult>;
     updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<SyncResult>;
+    submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
+    cancelPendingSyncs: () => void;
     resetStore: () => void;
 }
 
@@ -99,8 +101,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                     } else {
                         if (result.status === 'local-pending') {
                             const newGen = get().syncGeneration + 1;
-                            set({ 
-                                saveError: "Salvato localmente. Sincronizzazione in attesa.", 
+                            set({
+                                saveError: "Salvato localmente. Sincronizzazione in attesa.",
                                 syncHealth: 'local-pending',
                                 syncGeneration: newGen
                             });
@@ -119,10 +121,10 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                             });
                         } else if (result.status === 'rejected') {
                             set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", syncHealth: 'rejected', syncGeneration: get().syncGeneration + 1 });
-                            promisesToCall.forEach(p => p.resolve(result));
+                            promisesToCall.forEach(p => p.reject(new Error("Sincronizzazione rifiutata dal server")));
                         } else {
                             set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed', syncGeneration: get().syncGeneration + 1 });
-                            promisesToCall.forEach(p => p.resolve(result));
+                            promisesToCall.forEach(p => p.reject(new Error("Errore inatteso durante il salvataggio")));
                         }
                     }
                 } catch (error) {
@@ -156,23 +158,56 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         return get().saveUserData(nextData);
     },
 
-    resetStore: () => {
-        // Cancella i timer pendenti prima di pulire il localStorage,
-        // così nessun salvataggio "fantasma" può riscrivere il workout dopo il logout.
+    submitLegalConsent: async (consent) => {
+        const { userData, localWorkout } = get();
+        if (!userData) throw new Error("Dati utente non caricati");
+
+        const nextData: UserData = { ...userData, legalConsent: consent };
+        const finalData: UserData = {
+            ...nextData,
+            activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
+        };
+
+        const result = await DB.saveUserData(finalData);
+
+        if (result.ok || result.status === 'local-pending') {
+            saveUserDataToCache(finalData);
+            set({ userData: finalData, saveError: null, syncHealth: result.status });
+            return;
+        }
+
+        // Se arriviamo qui, il risultato è rejected o failed
+        if (result.status === 'rejected') {
+            set({ saveError: "Sincronizzazione rifiutata dal server.", syncHealth: 'rejected' });
+        } else {
+            set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed' });
+        }
+
+        throw new Error("Salvataggio del consenso fallito o rifiutato");
+    },
+
+    cancelPendingSyncs: () => {
         clearWorkoutTimer();
         if (globalSaveTimer) {
             clearTimeout(globalSaveTimer);
             globalSaveTimer = null;
         }
+
+        // Resolve or reject all pending promises immediately to unblock callers
+        pendingPromises.forEach(p => p.reject(new Error("Sync cancelled due to logout/reset")));
         pendingPromises = [];
+
+        set({ syncing: false });
+    },
+
+    resetStore: () => {
+        // Just call cancelPendingSyncs for safety in case caller forgot
+        get().cancelPendingSyncs();
+
         try {
-            localStorage.removeItem('logbook_local_workout');
             clearStorageMarker();
-            idbDel('logbook_cached_user_data').catch((e) => {
-                console.warn("Impossibile rimuovere cache da IndexedDB", e);
-            });
         } catch (e) {
-            console.warn("Impossibile rimuovere cache", e);
+            console.warn("Impossibile pulire il marker di storage", e);
         }
         set({ userData: null, localWorkout: null, saveError: null, syncing: false });
     }

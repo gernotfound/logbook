@@ -346,7 +346,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = useCallback(async (options?: { mode?: 'normal' | 'force', skipConfirm?: boolean }) => {
         if (logoutInFlightRef.current) return;
         logoutInFlightRef.current = true;
-        
+
         try {
             const skipConfirm = options?.skipConfirm;
             const mode = options?.mode || 'normal';
@@ -360,29 +360,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     );
                     if (!confirmed) return;
                 }
+
+                useAppStore.getState().cancelPendingSyncs();
+                await DB.purgeAllLocalUserData(); // [SEC-02]
+
                 localStorage.removeItem(GUEST_KEY);
                 isGuestRef.current = false;
                 setIsGuest(false);
                 useAppStore.getState().resetStore();
                 return;
             }
-            
+
             if (mode === 'normal') {
                 setSyncing(true);
                 const state = useAppStore.getState();
                 let isSafe = state.syncHealth === 'synced' && !state.userData?.pendingConflicts;
-                
+
                 if (!isSafe) {
                     try {
                         const { waitForPendingWrites } = await import('firebase/firestore');
                         const { getDb } = await import('../lib/firebase');
-                        
+
                         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), LOGOUT_SYNC_CHECK_TIMEOUT_MS));
                         await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
                     } catch (e) {
                         // Timeout o rete disconnessa
                     }
-                    
+
                     // Verifica se l'utente è cambiato nel frattempo
                     if (auth.currentUser?.uid !== initialUid) {
                         setSyncing(false);
@@ -397,7 +401,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (!isSafe) {
                     const finalState = useAppStore.getState();
                     let reason: 'conflict' | 'offline' | 'rejected' | 'failed' = 'offline';
-                    
+
                     if (finalState.userData?.pendingConflicts) {
                         reason = 'conflict';
                     } else if (finalState.syncHealth === 'rejected') {
@@ -408,10 +412,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                     // Mostra il dialog bloccante (resta aperto finché l'utente non sceglie Cancel o Force-Exit)
                     const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
-                    
+
                     // Verifica di nuovo utente
                     if (auth.currentUser?.uid !== initialUid) {
                         return;
+                    }
+
+                    if (action === 'export') {
+                        const { Exporter } = await import('../lib/export');
+                        const currentState = useAppStore.getState().userData;
+                        if (currentState) {
+                            Exporter.exportEmergencyJSON(currentState);
+                        }
+                        return; // Annulla il logout per permettere all'utente di verificare il file
                     }
 
                     if (action === 'cancel' || action === 'wait') {
@@ -430,6 +443,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Esecuzione force o normal-safe
             setSyncing(true);
             try {
+                useAppStore.getState().cancelPendingSyncs();
                 await DB.secureLogOut();
                 DB.resetCache();
                 useAppStore.getState().resetStore();

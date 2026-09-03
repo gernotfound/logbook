@@ -43,27 +43,55 @@ export const Exporter = {
         setTimeout(() => URL.revokeObjectURL(url), 100);
     },
 
+    formatCsvField(value: any): string {
+        if (value === null || value === undefined) return "";
+
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+
+        let str = String(value);
+
+        // Se la stringa convertita sembra un numero negativo legittimo, non prependere l'apostrofo
+        if (/^-\d/.test(str)) {
+             return `"${str.replace(/"/g, '""')}"`;
+        }
+
+        // OWASP: Qualsiasi stringa che dopo (o all'inizio) di un trim inizia con = + - @ \t \r
+        const trimmed = str.trimStart();
+        if (/^[=+\-@\t\r]/.test(trimmed) || /^[\uFEFF\xA0]*[=+\-@\t\r]/.test(str)) {
+            str = "'" + str;
+        }
+
+        return `"${str.replace(/"/g, '""')}"`;
+    },
+
+    formatCsvRow(fields: Array<string | number | boolean | null | undefined>): string {
+        return fields.map(field => this.formatCsvField(field)).join(",") + "\n";
+    },
+
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
         let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";
+
         history.forEach(session => {
-            const dateStr = session.globalStartTime 
-                ? new Date(session.globalStartTime).toLocaleString() 
+            const dateStr = session.globalStartTime
+                ? new Date(session.globalStartTime).toLocaleString()
                 : (session.date || "Data sconosciuta");
-            const routineName = `"${session.routineName || 'Allenamento libero'}"`;
-            
+            const routineName = session.routineName || 'Allenamento libero';
+
             // Session global metrics
             const sessionDuration = session.globalDurationStr || session.manualDurationStr || "";
             const mood = session.moodRating || "";
             const pump = session.pumpRating || "";
             const fatigue = session.fatigueRating || "";
-            const water = session.waterLiters || "";
-            const globalMetrics = `${sessionDuration},${mood},${pump},${fatigue},${water}`;
+            const water = session.waterLiters !== undefined ? session.waterLiters : "";
 
             if (session.exercises && session.exercises.length > 0) {
                 session.exercises.forEach((ex: any) => {
                     const libEx = libMap.get(ex.exId);
-                    const exName = `"${libEx ? libEx.name : (ex.name || ex.exId || 'Sconosciuto')}"`;
+                    const exName = libEx ? libEx.name : (ex.name || ex.exId || 'Sconosciuto');
+
                     if (ex.sets && ex.sets.length > 0) {
                         ex.sets.forEach((set: any, idx: number) => {
                             const kg = set.kg !== undefined ? set.kg : (set.weight !== undefined ? set.weight : "");
@@ -73,27 +101,35 @@ export const Exporter = {
                             const speed = set.speed !== undefined ? set.speed : "";
                             const incline = set.incline !== undefined ? set.incline : "";
                             const kcal = set.kcal !== undefined ? set.kcal : "";
-                            const setPrefix = `"${dateStr}",${routineName},${exName}`;
-                            
-                            workoutCsv += `${setPrefix},${idx + 1},${reps},${time},${kg},${distance},${speed},${incline},${kcal},${globalMetrics}\n`;
-                            
+
+                            workoutCsv += this.formatCsvRow([
+                                dateStr, routineName, exName, idx + 1, reps, time, kg, distance, speed, incline, kcal,
+                                sessionDuration, mood, pump, fatigue, water
+                            ]);
+
                             // Gestione Dropset nel CSV
                             if (set.dropsets && set.dropsets.length > 0) {
                                 set.dropsets.forEach((ds: any, dsIdx: number) => {
                                     const dsKg = ds.kg !== undefined ? ds.kg : "";
                                     const dsReps = ds.reps !== undefined ? ds.reps : "";
                                     const label = set.dropsets.length > 1 ? `${idx + 1} (Dropset ${dsIdx + 1})` : `${idx + 1} (Dropset)`;
-                                    workoutCsv += `${setPrefix},"${label}",${dsReps},,${dsKg},,,,,${globalMetrics}\n`;
+                                    workoutCsv += this.formatCsvRow([
+                                        dateStr, routineName, exName, label, dsReps, "", dsKg, "", "", "", "",
+                                        sessionDuration, mood, pump, fatigue, water
+                                    ]);
                                 });
                             }
-                            
+
                             // Gestione Isometrie nel CSV
                             if (set.isometrics && set.isometrics.length > 0) {
                                 set.isometrics.forEach((iso: any, isoIdx: number) => {
                                     const isoKg = iso.kg !== undefined ? iso.kg : "";
                                     const isoTime = iso.time ? `${iso.time}s` : "";
                                     const label = set.isometrics.length > 1 ? `${idx + 1} (Isometria ${isoIdx + 1})` : `${idx + 1} (Isometria)`;
-                                    workoutCsv += `${setPrefix},"${label}",,${isoTime},${isoKg},,,,,${globalMetrics}\n`;
+                                    workoutCsv += this.formatCsvRow([
+                                        dateStr, routineName, exName, label, "", isoTime, isoKg, "", "", "", "",
+                                        sessionDuration, mood, pump, fatigue, water
+                                    ]);
                                 });
                             }
                         });
@@ -101,24 +137,24 @@ export const Exporter = {
                 });
             }
         });
-        
+
         let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Ore sonno,Sonno profondo,Sonno leggero,Sonno REM,Tempo sveglio,Note\n";
         const nutritionDates = Object.keys(nutrition).sort();
         nutritionDates.forEach(date => {
             const n = nutrition[date];
-            let safeNotes = "";
-            if (n.notes) {
-                // Rimuove newlines per non rompere il formato CSV, e escape di virgolette
-                safeNotes = `"${n.notes.replace(/(\r\n|\n|\r)/gm, " ").replace(/"/g, '""')}"`;
-            }
             const sHours = Logic.formatSleepTime(n.sleepHours);
             const sDeep = Logic.formatSleepTime(n.sleepDeep);
             const sLight = Logic.formatSleepTime(n.sleepLight);
             const sRem = Logic.formatSleepTime(n.sleepRem);
             const sAwake = Logic.formatSleepTime(n.sleepAwake);
-            nutritionCsv += `${date},${n.weight || ''},${n.kcal || ''},${n.carbs || ''},${n.pro || ''},${n.fat || ''},${n.bf || ''},${n.neck || ''},${n.chest || ''},${n.shoulders || ''},${n.biceps || ''},${n.waist || ''},${n.hips || n.hip || ''},${n.thighs || ''},${n.calves || ''},${sHours},${sDeep},${sLight},${sRem},${sAwake},${safeNotes}\n`;
+
+            nutritionCsv += this.formatCsvRow([
+                date, n.weight, n.kcal, n.carbs, n.pro, n.fat, n.bf,
+                n.neck, n.chest, n.shoulders, n.biceps, n.waist, n.hips || n.hip, n.thighs, n.calves,
+                sHours, sDeep, sLight, sRem, sAwake, n.notes
+            ]);
         });
-        
+
         const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";
         if (workoutCsv !== workoutHeader) {
             this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
@@ -135,7 +171,7 @@ export const Exporter = {
     async downloadFile(filename: string, content: string, type: string = "text/csv;charset=utf-8;") {
         const prefix = type.includes("csv") ? "\uFEFF" : "";
         const blob = new Blob([prefix + content], { type });
-        
+
         if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
             try {
                 const handle = await (window as any).showSaveFilePicker({
@@ -163,7 +199,7 @@ export const Exporter = {
                 }
             }
         }
-        
+
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
@@ -183,7 +219,7 @@ export const Exporter = {
             exportTrainingCycles?: boolean | string[]
         } = { exportLibrary: true, exportRoutines: true, exportTrainingCycles: true }
     ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number }> {
-        
+
         const libraryIds = new Set<string>();
         const routineIds = new Set<string>();
         const cycleIds = new Set<string>();
@@ -241,7 +277,7 @@ export const Exporter = {
 
         const content = JSON.stringify(payload, null, 2);
         this.downloadFile("logbook_condivisione.json", content, 'application/json');
-        
+
         return {
             libraryCount: finalLibrary.length,
             routinesCount: finalRoutines.length,
@@ -275,7 +311,7 @@ export const Exporter = {
                 try {
                     const content = e.target?.result as string;
                     const payload = JSON.parse(content);
-                    
+
                     if (payload.version !== 1 || !['share', 'backup'].includes(payload.type)) {
                         throw new Error("Formato file non valido o non supportato.");
                     }
@@ -311,7 +347,7 @@ export const Exporter = {
                             mergedData.nutritionPlanning = payload.nutritionPlanning;
                         }
                         mergedData.supplements = mergeArrayById(currentData.supplements || [], payload.supplements || []);
-                        
+
                         // History: append by ID or original fallback
                         const currentHistory = currentData.history || [];
                         const histMap = new Map(currentHistory.map(h => [h.id || ((h.date || '') + (h.routineName || '')), h]));
@@ -340,13 +376,13 @@ export const Exporter = {
                     }
 
                     const finalData = UserDataSchema.parse(mergedData);
-                    
+
                     // Applica al globale in modo safe tramite store
                     await saveUserData(() => finalData);
-                    
+
                     useDialogStore.getState().showAlert(
-                        payload.type === 'share' 
-                        ? "Importazione completata: Esercizi, Schede e Pianificazioni aggiornati." 
+                        payload.type === 'share'
+                        ? "Importazione completata: Esercizi, Schede e Pianificazioni aggiornati."
                         : "Ripristino backup completato con successo."
                     );
                     resolve();

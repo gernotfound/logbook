@@ -41,16 +41,15 @@ describe('ARCH-02: createSyncSlice', () => {
         });
     });
 
-    it('should resolve with rejected SyncResult when DB returns rejected', async () => {
+    it('should reject with Error when DB returns rejected', async () => {
         vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: false, status: 'rejected', error: { code: 'permission-denied' } });
         
         const promise = useAppStore.getState().updateUserData((prev) => ({ ...prev, profile: { ...prev.profile, height: '180' } }));
         
+        // Attach rejection handler BEFORE running timers to avoid PromiseRejectionHandledWarning
+        const expectation = expect(promise).rejects.toThrow("Sincronizzazione rifiutata dal server");
         await vi.runAllTimersAsync();
-        const result = await promise;
-        
-        expect(result.ok).toBe(false);
-        expect(result.status).toBe('rejected');
+        await expectation;
         
         const state = useAppStore.getState();
         expect(state.saveError).toBe("Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.");
