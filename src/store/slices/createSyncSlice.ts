@@ -1,5 +1,4 @@
 import type { StateCreator } from 'zustand';
-import { del as idbDel } from 'idb-keyval';
 import { DB } from '../../lib/db';
 import { mapFirebaseErrorCode } from '../../lib/errorHandler';
 import type { UserData } from '../../types';
