@@ -225,6 +225,20 @@ vi.mock('../src/lib/db', () => ({
     saveUserData: vi.fn().mockResolvedValue({ ok: true, status: 'synced' }),
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
+    purgeAllLocalUserData: vi.fn().mockImplementation(async () => {
+      delete idbStore['logbook_cached_user_data'];
+      delete idbStore['pending_sync_token'];
+      delete idbStore['pending_sync_payload'];
+      localStorage.removeItem('logbook_local_workout');
+      localStorage.removeItem('logbook_timer_state');
+      localStorage.removeItem('logbook_timer_start');
+      localStorage.removeItem('logbook_timer_accumulated');
+      localStorage.removeItem('draft_measurement');
+      localStorage.removeItem('draft_exercise');
+      localStorage.removeItem('draft_routine');
+      localStorage.removeItem('logbook_is_guest');
+      localStorage.removeItem('logbook_awaiting_redirect');
+    }),
   },
 }));
 

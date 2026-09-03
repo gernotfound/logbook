@@ -64,7 +64,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(cachedInStorage.profile.name).toBe('Mario Rossi');
   });
 
-  test('Save and Reset Store manages local cached data correctly', () => {
+  test('Save and Reset Store manages local cached data correctly', async () => {
     const sampleData: UserData = {
       profile: { name: 'Luigi' },
       library: [],
@@ -79,6 +79,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     useAppStore.getState().setUserData(sampleData);
     expect(idbStore['logbook_cached_user_data']?.profile?.name).toBe('Luigi');
 
+    await DB.purgeAllLocalUserData();
     useAppStore.getState().resetStore();
     expect(idbStore['logbook_cached_user_data']).toBeUndefined();
     expect(useAppStore.getState().userData).toBeNull();

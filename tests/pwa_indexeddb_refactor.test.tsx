@@ -3,6 +3,7 @@ import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { useAppStore, getInitialUserData } from '../src/store/useAppStore';
 import { idbStore } from './setup';
+import { DB } from '../src/lib/db';
 
 import type { UserData, WorkoutSession } from '../src/types';
 import App from '../src/App';
@@ -117,7 +118,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       vi.useRealTimers();
     });
 
-    test('resetStore removes logbook_cached_user_data from IndexedDB and clears store', () => {
+    test('purgeAllLocalUserData removes logbook_cached_user_data from IndexedDB and clears store', async () => {
       const mockData: UserData = {
         profile: { name: 'User to Clear' },
         library: [],
@@ -132,12 +133,13 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       useAppStore.getState().setUserData(mockData);
       expect(idbStore['logbook_cached_user_data']).toBeDefined();
 
+      await DB.purgeAllLocalUserData();
       useAppStore.getState().resetStore();
       expect(idbStore['logbook_cached_user_data']).toBeUndefined();
       expect(useAppStore.getState().userData).toBeNull();
     });
 
-    test('localWorkout strictly remains in localStorage, never in IndexedDB', () => {
+    test('localWorkout strictly remains in localStorage, never in IndexedDB', async () => {
       const mockWorkout: WorkoutSession = {
         id: 'session-123',
         date: '2026-08-14',
@@ -153,10 +155,11 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(idbStore['logbook_local_workout']).toBeUndefined();
       expect(idbStore['localWorkout']).toBeUndefined();
 
-      // Verify resetStore clears local workout from localStorage
+      // Verify purgeAllLocalUserData clears local workout from localStorage
       localStorage.setItem('logbook_local_workout', JSON.stringify(mockWorkout));
       expect(localStorage.getItem('logbook_local_workout')).toBeTruthy();
 
+      await DB.purgeAllLocalUserData();
       useAppStore.getState().resetStore();
       expect(localStorage.getItem('logbook_local_workout')).toBeNull();
     });
@@ -313,8 +316,8 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         nutritionPlanning: {} as any
       };
 
-      // Trigger save
-      useAppStore.getState().saveUserData(mockData);
+      // Trigger save. Catch the promise rejection since resetStore cancels it.
+      useAppStore.getState().saveUserData(mockData).catch(() => {});
       expect(useAppStore.getState().syncing).toBe(true);
 
       // Reset store before debounce fires

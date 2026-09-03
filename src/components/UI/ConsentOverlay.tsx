@@ -6,29 +6,37 @@ import { PrivacyPolicy } from '../../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../../pages/TermsAndConditions';
 import { useSettings } from '../../hooks/useSettings';
 import { useScrollLock } from '../../hooks/useScrollLock';
+import { useDialogStore } from '../../store/useDialogStore';
 
 export const ConsentOverlay: React.FC = () => {
     useScrollLock();
     const { isGuest } = useAuth();
     const { handleExportCSV, handleDeleteAccount } = useSettings();
-    const updateUserData = useAppStore(state => state.updateUserData);
+    const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
     const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [acceptedHealth, setAcceptedHealth] = useState(false);
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handleAccept = () => {
-        if (!acceptedTerms || !acceptedHealth) return;
-        updateUserData((prev) => ({
-            ...prev,
-            legalConsent: {
+    const handleAccept = async () => {
+        if (!acceptedTerms || !acceptedHealth || isSaving) return;
+        setIsSaving(true);
+        try {
+            await submitLegalConsent({
                 hasAcceptedTerms: true,
                 hasAcceptedHealthData: true,
                 acceptedAt: new Date().toISOString(),
                 privacyVersion: LEGAL_VERSIONS.privacy,
                 termsVersion: LEGAL_VERSIONS.terms
-            }
-        }));
+            });
+            // App.tsx smonta l'overlay perché legalConsent è stato valorizzato.
+        } catch {
+            setIsSaving(false);
+            useDialogStore.getState().showAlert(
+                'Errore durante il salvataggio del consenso. Controlla la connessione e riprova.'
+            );
+        }
     };
 
     return (
@@ -93,11 +101,11 @@ export const ConsentOverlay: React.FC = () => {
 
                 <button
                     className="btn btn-primary"
-                    disabled={!acceptedTerms || !acceptedHealth}
+                    disabled={!acceptedTerms || !acceptedHealth || isSaving}
                     onClick={handleAccept}
                     style={{ padding: '14px', fontSize: '1rem', marginTop: '10px' }}
                 >
-                    Accetta e Continua
+                    {isSaving ? 'Salvataggio...' : 'Accetta e continua'}
                 </button>
 
                 <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>

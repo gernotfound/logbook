@@ -53,12 +53,12 @@ export const DB = {
                 del('pending_sync_token')
             ]).catch(() => {});
 
-            const state: Record<string, any> = { 
-                profile: {}, 
-                library: [], 
-                routines: [], 
-                history: [], 
-                nutrition: {}, 
+            const state: Record<string, any> = {
+                profile: {},
+                library: [],
+                routines: [],
+                history: [],
+                nutrition: {},
                 customFoods: [],
                 activeWorkout: null,
                 trainingCycles: [],
@@ -79,16 +79,16 @@ export const DB = {
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
                 const data = docSnap.data() as Record<string, any>;
                 if(data.profile) state.profile = data.profile;
-                
+
                 state.catalogOverrides = data.catalogOverrides || {};
-                
+
                 // 2. Resolve Library and CustomFoods using deltaResolver!
                 const customExercises = data.library || [];
                 const customFoods = data.customFoods || [];
-                
+
                 state.library = resolveEffectiveExercises(catalog.exercises, customExercises, state.catalogOverrides);
                 state.customFoods = resolveEffectiveFoods(catalog.foods, customFoods, state.catalogOverrides);
-                
+
                 if(data.routines) state.routines = data.routines;
                 if(data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
                 if(data.trainingCycles) state.trainingCycles = data.trainingCycles;
@@ -118,7 +118,7 @@ export const DB = {
                 if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
-                
+
                 lastSavedStateStr = JSON.stringify(state);
                 return state as unknown as UserData;
             }
@@ -143,7 +143,7 @@ export const DB = {
                     }
                 }
             });
-            
+
             const nutritionDocs = await withTimeout(
                 Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "nutrition_months", m)))),
                 6000,
@@ -159,9 +159,9 @@ export const DB = {
                     }
                 }
             });
-            
+
             state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
-            
+
             state.profile = DomainParsers.parseProfile(state.profile);
             state.library = DomainParsers.parseLibrary(state.library);
             state.routines = DomainParsers.parseRoutines(state.routines);
@@ -174,7 +174,7 @@ export const DB = {
             if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
-            
+
             lastSavedStateStr = JSON.stringify(state);
             return state as unknown as UserData;
         } catch (error: any) {
@@ -186,14 +186,14 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
         try {
-            let oldState: Record<string, any> = { 
-                profile: {}, 
-                library: [], 
-                routines: [], 
-                customFoods: [], 
-                history: [], 
-                nutrition: {}, 
-                activeWorkout: null, 
+            let oldState: Record<string, any> = {
+                profile: {},
+                library: [],
+                routines: [],
+                customFoods: [],
+                history: [],
+                nutrition: {},
+                activeWorkout: null,
                 trainingCycles: [],
                 activeCycleId: null,
                 nutritionPlanning: null,
@@ -205,18 +205,18 @@ export const DB = {
             if (lastSavedStateStr) {
                 oldState = JSON.parse(lastSavedStateStr);
             }
-            
+
             await ensureAppCheck();
             const batch = writeBatch(getDb());
             let hasWrites = false;
             const restWrites: any[] = [];
             const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-            
+
             // Re-split library & customFoods into pure overrides/custom so we don't save the whole catalog
             const catalog = getInMemoryCatalog(true) || getSeedCatalog();
             const { customExercises, overrides: exOverrides } = extractCustomExercisesAndOverrides(state.library || [], catalog.exercises);
             const { customFoods, overrides: foodOverrides } = extractCustomFoodsAndOverrides(state.customFoods || [], catalog.foods);
-            
+
             const overridesToSave: CatalogOverrides = {
                 ...(state.catalogOverrides || {}),
                 exercises: {
@@ -238,7 +238,7 @@ export const DB = {
             };
             const effectiveCustomExercises = customExercises;
             const effectiveCustomFoods = customFoods;
-            
+
             // 1. User doc updates
             if (!deepEqual(state.profile, oldState.profile) ||
                 !deepEqual(state.library, oldState.library) ||
@@ -253,7 +253,7 @@ export const DB = {
                 !deepEqual(state.catalogOverrides, oldState.catalogOverrides) ||
                 !deepEqual(state.legalConsent, oldState.legalConsent) ||
                 !deepEqual(state.nutritionPlanningOrigin, oldState.nutritionPlanningOrigin)) {
-                
+
                 const userRef = doc(getDb(), "users", user.uid);
                 const userDocData = {
                     profile: state.profile || {},
@@ -375,22 +375,22 @@ export const DB = {
                     await set('sync_failed', false); // Clear flag on success
                     return { ok: true, status: 'synced' };
                 } catch (batchErr: unknown) {
-                    const code = (batchErr && typeof batchErr === 'object' && 'code' in batchErr) 
-                        ? (batchErr as any).code 
+                    const code = (batchErr && typeof batchErr === 'object' && 'code' in batchErr)
+                        ? (batchErr as any).code
                         : undefined;
-                        
+
                     if (code === 'permission-denied') {
                         return { ok: false, status: 'rejected', error: batchErr };
                     }
                     if (batchErr instanceof SyncTimeoutError || code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
                         console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
                         // Do NOT update lastSavedStateStr: diffing will retry when back online
-                        
+
                         try {
                             const token = await user.getIdToken();
                             await set('pending_sync_payload', { writes: restWrites, projectId });
                             await set('pending_sync_token', token);
-                            
+
                             if ('serviceWorker' in navigator) {
                                 const reg = await navigator.serviceWorker.ready;
                                 if ('sync' in reg) {
@@ -416,29 +416,57 @@ export const DB = {
             return { ok: false, status: 'failed', error };
         }
     },
+    async purgeAllLocalUserData() {
+        console.log("[purgeAllLocalUserData] Avvio pulizia sicura dei dati locali.");
+
+        // 1. IndexedDB Purge
+        try {
+            await Promise.allSettled([
+                del('logbook_cached_user_data'),
+                del('pending_sync_token'),
+                del('pending_sync_payload')
+            ]);
+        } catch (e) {
+            console.warn("[purgeAllLocalUserData] Errore durante la pulizia di IndexedDB:", e);
+        }
+
+        // 2. localStorage Purge
+        const keysToRemove = [
+            'logbook_local_workout',
+            'logbook_timer_state',
+            'logbook_timer_start',
+            'logbook_timer_accumulated',
+            'draft_measurement',
+            'draft_exercise',
+            'draft_routine',
+            'logbook_is_guest',
+            'logbook_awaiting_redirect'
+        ];
+
+        keysToRemove.forEach(key => {
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {
+                console.warn(`[purgeAllLocalUserData] Errore durante la rimozione della chiave ${key} in localStorage:`, e);
+            }
+        });
+    },
     async secureLogOut() {
         console.log("Eseguo il Log Out protetto...");
-        await auth.signOut();
         try {
-            await del('logbook_cached_user_data');
-            localStorage.removeItem('logbook_local_workout');
-            localStorage.removeItem('logbook_is_guest');
-            // Nota: non eliminiamo le cache del Service Worker (caches.keys()) perché 
-            // contengono solo gli asset statici (App Shell) e non i dati sensibili.
-            // Cancellarle romperebbe il supporto offline della PWA.
-        } catch (e) {
-            console.warn("Errore pulizia storage offline al logout:", e);
+            await auth.signOut();
+        } catch (error) {
+            console.error("Errore durante auth.signOut, proseguo comunque con la purga:", error);
+        } finally {
+            await this.purgeAllLocalUserData();
         }
     },
     async deleteAccount() {
         const user = auth.currentUser;
         if (!user) throw new Error("Nessun utente autenticato.");
         try {
-            try {
-                await del('logbook_cached_user_data');
-                localStorage.removeItem('logbook_local_workout');
-                localStorage.removeItem('logbook_is_guest');
-            } catch (e) {}
+            useAppStore.getState().cancelPendingSyncs();
+            await this.purgeAllLocalUserData();
             // 1. Fetch subcollection documents while auth is valid
             await ensureAppCheck();
             const [histSnap, nutSnap, errSnap, evtSnap, anomSnap] = await Promise.all([
@@ -498,6 +526,10 @@ export const DB = {
                 throw new Error("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
             }
             throw error;
+        } finally {
+            await this.purgeAllLocalUserData();
+            this.resetCache();
+            useAppStore.getState().resetStore();
         }
     }
 };
