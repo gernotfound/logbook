@@ -200,6 +200,11 @@ p {
     border-color: var(--primary-color); 
     box-shadow: 0 4px 15px var(--primary-glow);
 }
+.sub-nav-btn:focus-visible {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
 .training-sub-view { display: none; }
 .training-sub-view.active { display: block; animation: fadeSlideUp 0.3s ease; }
 
@@ -259,6 +264,11 @@ input:focus, select:focus, textarea:focus {
     word-break: normal;
     margin-bottom: 12px; 
     transition: all 0.2s ease; 
+}
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--primary-glow);
+    border-color: var(--primary-color);
 }
 .btn:active { transform: scale(0.98); }
 .btn-primary { 
