@@ -11,6 +11,7 @@ import { resolveEffectiveExercises, resolveEffectiveFoods, extractCustomExercise
 import { wrapInFirestoreDocument } from './firestore-rest';
 import { set, get, del } from 'idb-keyval';
 import { useDialogStore } from '../store/useDialogStore';
+import { useAppStore } from '../store/useAppStore';
 
 export class SyncTimeoutError extends Error {
     constructor(message: string = "Timeout operazione Firestore") {
