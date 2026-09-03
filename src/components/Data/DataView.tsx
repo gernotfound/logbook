@@ -13,9 +13,9 @@ interface DataViewProps {
     setSubTab?: (tab: DataSubTab) => void;
 }
 
-const DataView: React.FC<DataViewProps> = ({ 
-    subTab = 'measurements', 
-    setSubTab 
+const DataView: React.FC<DataViewProps> = ({
+    subTab = 'measurements',
+    setSubTab
 }) => {
     const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
     const measurementsHook = useNutritionMeasurements(selectedDate);
@@ -40,36 +40,48 @@ const DataView: React.FC<DataViewProps> = ({
 
     return (
         <div id="view-data" className="view-section active">
-            <div className="sub-nav" onWheel={handleWheel}>
-                <div 
-                    className={`sub-nav-btn ${currentSubTab === 'measurements' ? 'active' : ''}`} 
+            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Dati" onWheel={handleWheel}>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'measurements'}
+                    className={`sub-nav-btn ${currentSubTab === 'measurements' ? 'active' : ''}`}
                     onClick={() => changeSubTab('measurements')}
                 >
                     Misurazioni
-                </div>
-                <div 
-                    className={`sub-nav-btn ${currentSubTab === 'sleep' ? 'active' : ''}`} 
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'sleep'}
+                    className={`sub-nav-btn ${currentSubTab === 'sleep' ? 'active' : ''}`}
                     onClick={() => changeSubTab('sleep')}
                 >
                     Sonno
-                </div>
-                <div 
-                    className={`sub-nav-btn ${currentSubTab === 'biometry' ? 'active' : ''}`} 
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'biometry'}
+                    className={`sub-nav-btn ${currentSubTab === 'biometry' ? 'active' : ''}`}
                     onClick={() => changeSubTab('biometry')}
                 >
                     Biometria
-                </div>
-                <div 
-                    className={`sub-nav-btn ${currentSubTab === 'history' ? 'active' : ''}`} 
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'history'}
+                    className={`sub-nav-btn ${currentSubTab === 'history' ? 'active' : ''}`}
                     onClick={() => changeSubTab('history')}
                 >
                     Storico
-                </div>
+                </button>
             </div>
 
             {currentSubTab === 'measurements' && (
                 <div className="data-sub-view active">
-                    <DataMeasurements 
+                    <DataMeasurements
                         profile={measurementsHook.profile}
                         selectedDate={selectedDate}
                         setSelectedDate={setSelectedDate}
@@ -131,7 +143,7 @@ const DataView: React.FC<DataViewProps> = ({
 
             {currentSubTab === 'history' && (
                 <div className="data-sub-view active">
-                    <DataHistory 
+                    <DataHistory
                         measurementsHistory={measurementsHook.measurementsHistory}
                         editingDate={measurementsHook.editingDate}
                         onSelectEdit={handleSelectEdit}

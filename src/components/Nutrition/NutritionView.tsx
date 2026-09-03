@@ -93,37 +93,52 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                 <NutritionConflictBanner onResolveClick={() => setConflictDialogOpen(true)} />
             )}
 
-            <div className="sub-nav" onWheel={handleWheel}>
-                <div
+            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Nutrizione" onWheel={handleWheel}>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSubTab === 'meals'}
                     className={`sub-nav-btn ${activeSubTab === 'meals' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('meals')}
                 >
                     Pasti
-                </div>
-                <div
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSubTab === 'planning'}
                     className={`sub-nav-btn ${activeSubTab === 'planning' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('planning')}
                 >
                     Pianificazione
-                </div>
-                <div
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSubTab === 'supplements'}
                     className={`sub-nav-btn ${activeSubTab === 'supplements' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('supplements')}
                 >
                     Integratori
-                </div>
-                <div
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSubTab === 'archive'}
                     className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('archive')}
                 >
                     Alimenti
-                </div>
-                <div
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeSubTab === 'history'}
                     className={`sub-nav-btn ${activeSubTab === 'history' ? 'active' : ''}`}
                     onClick={() => setSubTab && setSubTab('history')}
                 >
                     Storico
-                </div>
+                </button>
             </div>
 
             {activeSubTab === 'meals' && (

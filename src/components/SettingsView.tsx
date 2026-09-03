@@ -166,10 +166,10 @@ const SettingsView = () => {
         <div id="view-settings" className="view-section active">
             <h1 style={{marginBottom: '15px'}}><span aria-hidden="true">⚙️</span> Impostazioni</h1>
 
-            <div className="sub-nav" style={{ marginBottom: '20px' }}>
-                <div className={`sub-nav-btn ${activeTab === 'account' ? 'active' : ''}`} onClick={() => setActiveTab('account')}>Account</div>
-                <div className={`sub-nav-btn ${activeTab === 'privacy' ? 'active' : ''}`} onClick={() => setActiveTab('privacy')}>Privacy</div>
-                <div className={`sub-nav-btn ${activeTab === 'export' ? 'active' : ''}`} onClick={() => setActiveTab('export')}>Esporta</div>
+            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Impostazioni" style={{ marginBottom: '20px' }}>
+                <button type="button" role="tab" aria-selected={activeTab === 'account'} className={`sub-nav-btn ${activeTab === 'account' ? 'active' : ''}`} onClick={() => setActiveTab('account')}>Account</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'privacy'} className={`sub-nav-btn ${activeTab === 'privacy' ? 'active' : ''}`} onClick={() => setActiveTab('privacy')}>Privacy</button>
+                <button type="button" role="tab" aria-selected={activeTab === 'export'} className={`sub-nav-btn ${activeTab === 'export' ? 'active' : ''}`} onClick={() => setActiveTab('export')}>Esporta</button>
             </div>
 
             {activeTab === 'account' && (
