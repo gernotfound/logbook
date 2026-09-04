@@ -157,6 +157,7 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
 ## 14. Git workflow & buone pratiche di sviluppo
 - **Vietato teorizzare e proporre modifiche cieche:** Usa sempre `grep_search` e `view_file` in modo approfondito per ispezionare l'implementazione reale prima di toccare qualsiasi riga di codice. **Prima di proporre o aggiungere un elemento (es. un banner, un form o una logica), verifica rigorosamente in tutto il codebase che non sia giÃ  presente.**
 - **Chiedere prima di presumere:** Se un requisito di design o una logica di business non Ã¨ chiara, non tirare a indovinare: chiedi sempre chiarimenti.
+- **Commenti e contesto nel codice (Il "Perché"):** Quando scrivi o modifichi del codice, inserisci sempre delle note o commenti che spieghino *il perché* hai inserito quel codice o scelto quell'approccio. In questo modo, quando l'IA o un altro sviluppatore leggerà quella parte di codice in futuro, avrà immediatamente a disposizione tutto il contesto decisionale.
 - **Invarianti non negoziabili per Commit/Push:** Ogni modifica deve passare silenziosamente `npm run test`, `npm run build` e `npm run lint`. Mai committare codice con fallimenti, warning o errori di tipizzazione.
 - **Igiene del repository:** File temporanei, note e file di istruzioni locali restano esclusi dal version control tramite `.gitignore`. Non inquinare i branch di produzione.
 
