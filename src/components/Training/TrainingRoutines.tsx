@@ -4,6 +4,8 @@ import { RoutineEditor } from './routines/RoutineEditor';
 import { RoutineCard } from './routines/RoutineCard';
 
 const TrainingRoutines: React.FC = () => {
+    const [isCreating, setIsCreating] = React.useState(false);
+    const [isSaving, setIsSaving] = React.useState(false);
     const {
         routineName, setRoutineName,
         editingRoutineId,
@@ -30,25 +32,54 @@ const TrainingRoutines: React.FC = () => {
         }
     });
 
+    const handleEditItem = (rtn: any) => {
+        setIsCreating(false);
+        handleEditClick(rtn);
+    };
+
     return (
         <div className="training-sub-view active">
-            <RoutineEditor
-                routineName={routineName}
-                setRoutineName={setRoutineName}
-                editingRoutineId={editingRoutineId}
-                routineExercises={routineExercises}
-                library={library}
-                editMuscles={editMuscles}
-                editSecMuscles={editSecMuscles}
-                onAddExercise={handleAddExerciseToRoutine}
-                onMoveExercise={moveExercise}
-                onRemoveExercise={handleRemoveExerciseFromRoutine}
-                onUpdateSetsCount={handleUpdateSetsCount}
-                onUpdateReps={handleUpdateReps}
-                onUpdateTechnique={handleUpdateTechnique}
-                onSave={handleSave}
-                onCancel={handleCancelEdit}
-            />
+            {!isCreating && !editingRoutineId && (
+                <div className="mb-20">
+                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(true)}>
+                        Crea scheda
+                    </button>
+                </div>
+            )}
+
+            {(isCreating || editingRoutineId) && (
+                <div className={editingRoutineId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
+                    <RoutineEditor
+                        routineName={routineName}
+                        setRoutineName={setRoutineName}
+                        editingRoutineId={editingRoutineId}
+                        routineExercises={routineExercises}
+                        library={library}
+                        editMuscles={editMuscles}
+                        editSecMuscles={editSecMuscles}
+                        onAddExercise={handleAddExerciseToRoutine}
+                        onMoveExercise={moveExercise}
+                        onRemoveExercise={handleRemoveExerciseFromRoutine}
+                        onUpdateSetsCount={handleUpdateSetsCount}
+                        onUpdateReps={handleUpdateReps}
+                        onUpdateTechnique={handleUpdateTechnique}
+                        onSave={async () => {
+                            if (isSaving) return;
+                            setIsSaving(true);
+                            try {
+                                const success = await handleSave();
+                                if (success) setIsCreating(false);
+                            } finally {
+                                setIsSaving(false);
+                            }
+                        }}
+                        onCancel={() => {
+                            handleCancelEdit();
+                            setIsCreating(false);
+                        }}
+                    />
+                </div>
+            )}
 
             <h2 className="mt-20">Archivio schede ({routines.length})</h2>
             <p className="text-muted text-sm">Clicca su una scheda per vederne i dettagli.</p>
@@ -62,8 +93,9 @@ const TrainingRoutines: React.FC = () => {
                             routine={rtn}
                             isExpanded={expandedRoutineId === rtn.id}
                             library={library}
+                            isCreating={isCreating}
                             onToggleExpand={handleRoutineClick}
-                            onEdit={handleEditClick}
+                            onEdit={handleEditItem}
                             onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                         />

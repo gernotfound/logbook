@@ -20,6 +20,7 @@ interface RoutineEditorProps {
     onUpdateTechnique: (index: number, tech: 'dropset' | 'isometrics') => void;
     onSave: () => void;
     onCancel: () => void;
+    isSaving?: boolean;
 }
 
 export const RoutineEditor: React.FC<RoutineEditorProps> = ({
@@ -37,7 +38,8 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     onUpdateReps,
     onUpdateTechnique,
     onSave,
-    onCancel
+    onCancel,
+    isSaving
 }) => {
     return (
         <div className="section-divider">
@@ -102,23 +104,23 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
             </div>
 
             <div className="flex gap-10 mt-10" style={{ width: '100%', minWidth: 0 }}>
-                {editingRoutineId && (
-                    <button 
-                        type="button" 
-                        className="btn flex-1 mb-0" 
-                        style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
-                        onClick={onCancel}
-                    >
-                        Annulla
-                    </button>
-                )}
                 <button 
                     type="button" 
-                    className={`btn btn-primary ${editingRoutineId ? 'flex-2' : 'w-full'} mb-0`} 
+                    className="btn flex-1 mb-0" 
+                    style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                    onClick={onCancel}
+                    disabled={isSaving}
+                >
+                    Annulla
+                </button>
+                <button 
+                    type="button" 
+                    className="btn btn-primary flex-1 mb-0" 
                     style={{ whiteSpace: 'nowrap', margin: 0 }} 
                     onClick={onSave}
+                    disabled={isSaving}
                 >
-                    {editingRoutineId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">➕</span> Salva nuova scheda</>}
+                    {isSaving ? 'Salvataggio...' : (editingRoutineId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : 'Crea scheda')}
                 </button>
             </div>
         </div>

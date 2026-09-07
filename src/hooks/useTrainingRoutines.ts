@@ -85,7 +85,7 @@ export function useTrainingRoutines() {
         if (e) e.preventDefault();
         if (!routineName.trim()) {
             await showAlert("Inserisci il nome della scheda");
-            return;
+            return false;
         }
 
         try {
@@ -116,8 +116,10 @@ export function useTrainingRoutines() {
             setRoutineExercises([]);
             setEditingRoutineId(null);
             localStorage.removeItem('draft_routine');
+            return true;
         } catch {
             showAlert("Errore durante il salvataggio della scheda.");
+            return false;
         }
     };
 
