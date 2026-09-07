@@ -350,7 +350,7 @@ export function useTrainingExercises() {
         const trimmedName = exName.trim();
         if (!trimmedName) {
             await showAlert("Inserisci un nome per l'esercizio.");
-            return;
+            return false;
         }
 
         const isDuplicate = library.some(ex => 
@@ -360,7 +360,7 @@ export function useTrainingExercises() {
 
         if (isDuplicate) {
             await showAlert("Esiste già un esercizio con questo nome nell'archivio.");
-            return;
+            return false;
         }
 
         const parsedEqWeight = equipmentWeight ? parseFloat(String(equipmentWeight).replace(',', '.')) : undefined;
@@ -406,8 +406,10 @@ export function useTrainingExercises() {
         try {
             await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
             handleCancelEdit(); // Reset form
+            return true;
         } catch {
             showAlert("Errore durante il salvataggio dell'esercizio.");
+            return false;
         }
     };
 

@@ -104,7 +104,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders TrainingRoutines without crashing', () => {
     const { container } = renderWithProviders(<TrainingRoutines />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Crea Nuova Scheda/i)).toBeDefined();
+    expect(screen.getByText(/Crea scheda/i)).toBeDefined();
   });
 
   test('renders TrainingHistory / HistoryView without crashing', () => {
@@ -116,7 +116,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders TrainingExercises without crashing', () => {
     const { container } = renderWithProviders(<TrainingExercises />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Nuovo Esercizio/i)).toBeDefined();
+    expect(screen.getByText(/Crea esercizio/i)).toBeDefined();
   });
 
   test('renders NutritionView with meals subtab', () => {

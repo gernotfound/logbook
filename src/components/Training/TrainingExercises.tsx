@@ -7,6 +7,8 @@ import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
 const TrainingExercises = () => {
+    const [isCreating, setIsCreating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [expandedExId, setExpandedExId] = useState<string | null>(null);
     const {
         editingExId, exName, setExName, exNotes, setExNotes,
@@ -21,13 +23,27 @@ const TrainingExercises = () => {
     const selectedMuscleIds = useMemo(() => selectedMuscles.map(m => m.id), [selectedMuscles]);
     const editingExercise = useMemo(() => library.find(ex => ex.id === editingExId), [library, editingExId]);
 
+    const handleEditItem = (ex: any) => {
+        setIsCreating(false);
+        handleEditClick(ex);
+    };
+
     return (
         <div className="training-sub-view active">
-            <div className={editingExId ? 'border-primary' : ''}>
-                <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{marginBottom: '15px'}}>
-                    {editingExId ? '✏️ Modifica esercizio' : '➕ Crea nuovo esercizio'}
-                </h2>
-                <div className="flex-col gap-10 mt-15 mb-20">
+            {!isCreating && !editingExId && (
+                <div className="mb-20">
+                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(true)}>
+                        Crea esercizio
+                    </button>
+                </div>
+            )}
+
+            {(isCreating || editingExId) && (
+                <div className={editingExId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
+                    <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{marginBottom: '15px'}}>
+                        {editingExId ? '✏️ Modifica esercizio' : '➕ Crea nuovo esercizio'}
+                    </h2>
+                    <div className="flex-col gap-10 mt-15 mb-20">
                     <div>
                         <input 
                             type="text" 
@@ -257,23 +273,37 @@ const TrainingExercises = () => {
                 </div>
 
                 <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>
-                    {editingExId && (
-                        <button 
-                            type="button" 
-                            className="btn flex-1 mb-0" 
-                            style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
-                            onClick={handleCancelEdit}
-                        >
-                            Annulla
-                        </button>
-                    )}
                     <button 
                         type="button" 
-                        className={`btn btn-primary ${editingExId ? 'flex-2' : 'w-full'} mb-0`} 
-                        style={{ whiteSpace: 'nowrap', margin: 0 }} 
-                        onClick={handleSaveExercise}
+                        className="btn flex-1 mb-0" 
+                        style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                        onClick={() => {
+                            handleCancelEdit();
+                            setIsCreating(false);
+                        }}
+                        disabled={isSaving}
                     >
-                        {editingExId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : '+ Aggiungi in archivio'}
+                        Annulla
+                    </button>
+                    <button 
+                        type="button" 
+                        className="btn btn-primary flex-1 mb-0" 
+                        style={{ whiteSpace: 'nowrap', margin: 0 }} 
+                        disabled={isSaving}
+                        onClick={async () => {
+                            if (isSaving) return;
+                            setIsSaving(true);
+                            try {
+                                const success = await handleSaveExercise();
+                                if (success) {
+                                    setIsCreating(false);
+                                }
+                            } finally {
+                                setIsSaving(false);
+                            }
+                        }}
+                    >
+                        {isSaving ? 'Salvataggio...' : (editingExId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : 'Crea esercizio')}
                     </button>
                 </div>
                 
@@ -290,6 +320,7 @@ const TrainingExercises = () => {
                     </div>
                 )}
             </div>
+            )}
 
             <h2 className="mt-20">Archivio esercizi ({library.length})</h2>
             <p className="text-muted text-sm">Clicca su un esercizio per vederne i dettagli o sull'icona per modificarlo.</p>
@@ -349,8 +380,9 @@ const TrainingExercises = () => {
                                             {
                                                 label: 'Modifica',
                                                 icon: <Pencil size={16} />,
+                                                disabled: isCreating,
                                                 onClick: () => {
-                                                    handleEditClick(ex);
+                                                    handleEditItem(ex);
                                                     setExpandedExId(ex.id);
                                                 }
                                             },

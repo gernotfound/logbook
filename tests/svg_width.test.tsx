@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { renderWithProviders } from './setup';
+import { screen, fireEvent } from '@testing-library/react';
 import MuscleModel from '../src/components/Training/MuscleModel';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import fs from 'fs';
@@ -80,6 +81,9 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       </div>
     );
 
+    const createBtn = screen.getByText(/Crea esercizio/i);
+    fireEvent.click(createBtn);
+
     const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;
     expect(muscleMapContainer).not.toBeNull();
 
@@ -123,6 +127,9 @@ describe('SVG Muscle Model Layout Width Verification', () => {
         </div>,
         { userData: longNameUserData }
       );
+
+      const createBtn = screen.getByText(/Crea esercizio/i);
+      fireEvent.click(createBtn);
 
       // Expand card to view muscle model
       const exerciseTitle = container.querySelector('.card .font-bold');

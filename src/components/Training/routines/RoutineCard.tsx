@@ -12,6 +12,7 @@ interface RoutineCardProps {
     onEdit: (routine: Routine) => void;
     onDelete: (id: string, e: React.MouseEvent) => void;
     onDuplicate: (routine: Routine, e: React.MouseEvent) => void;
+    isCreating?: boolean;
 }
 
 export const RoutineCard: React.FC<RoutineCardProps> = ({
@@ -21,7 +22,8 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     onToggleExpand,
     onEdit,
     onDuplicate,
-    onDelete
+    onDelete,
+    isCreating
 }) => {
     const muscles: string[] = [];
     const secMuscles: string[] = [];
@@ -42,6 +44,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
             id: 'edit-routine',
             label: 'Modifica',
             icon: <Pencil size={16} />,
+            disabled: isCreating,
             onClick: () => onEdit(routine)
         },
         {

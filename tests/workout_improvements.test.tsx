@@ -90,8 +90,8 @@ describe('Workout Improvements & History Edit Suite', () => {
         userData: { ...emptyUserData, routines: [] } as any
       });
 
-      // Click "Crea Nuova Scheda"
-      const createBtn = screen.getByText(/Crea Nuova Scheda/i);
+      // Click "Crea scheda"
+      const createBtn = screen.getByText(/Crea scheda/i);
       act(() => {
         fireEvent.click(createBtn);
       });

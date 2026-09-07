@@ -173,6 +173,9 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         it('renders isBodyweight checkbox and equipmentWeight input when trackingType is weight_reps', () => {
             renderWithProviders(<TrainingExercises />, { userData: emptyUserData });
 
+            const createBtn = screen.getByText(/Crea esercizio/i);
+            fireEvent.click(createBtn);
+
             const bwCheckbox = screen.getByLabelText(/Esercizio a corpo libero/i) as HTMLInputElement;
             expect(bwCheckbox).toBeDefined();
             expect(bwCheckbox.type).toBe('checkbox');
