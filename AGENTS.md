@@ -6,7 +6,7 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
 
 ## 1. Stack tecnologico & strumenti
 - **Core:** React 19 (`react`, `react-dom` ^19.2), TypeScript, Vite.
-- **Hosting & deployment:** Vercel (deploy automatico a ogni `git push`, servito sulla radice `/` del dominio, zero-config CI/CD).
+- **Hosting & deployment:** Vercel (deploy automatico a ogni `git push`, servito sulla radice `/` del dominio). I rilasci in produzione sono protetti dai **Vercel Deployment Checks**, che bloccano il deploy se i workflow di GitHub Actions (Unit/E2E tests) falliscono.
 - **State management:** Zustand 5 (Store globale centralizzato in `src/store/useAppStore.ts`).
 - **Validazione runtime & sanitizzazione:** Zod (Gateway obbligatorio in `src/lib/schema.ts`).
 - **Persistenza & storage ibrido:** IndexedDB (`idb-keyval`) per la cache globale persistente; `localStorage` sincrono per il workout attivo (`logbook_local_workout`), modalitÃ  guest (`logbook_is_guest`) e stati volatili (tab/timer/draft).
@@ -15,7 +15,7 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
 - **Iconografia:** `lucide-react` (usare proporzioni coerenti, di norma `size={24}` o `size={20}`).
 - **PWA & monitoraggio:** `vite-plugin-pwa` per la gestione del service worker e del manifest; `@vercel/analytics` e `@vercel/speed-insights` per metriche real user.
 - **Librerie di supporto:** `date-fns` per date e intervalli temporali, `fast-deep-equal` per il diffing delle scritture Firestore, `chart.js` & `react-chartjs-2` per i grafici (stack grafico ufficiale basato su HTML5 Canvas 2D per rendering ad alte prestazioni, compatibilitÃ  garantita con React 19, Vite e ottimizzato a 60fps per dispositivi mobili iOS/PWA), `fuse.js` per la ricerca fuzzy.
-- **Testing & quality:** `vitest` (`@testing-library/react`, `jsdom`) e `oxlint`.
+- **Testing & quality:** `vitest` (`@testing-library/react`, `jsdom`) per unit/integration, Playwright per E2E, `oxlint` per il linting e **Snyk** per la sicurezza e la scansione del codice.
 
 ## 2. Architettura di rete e storage ibrido (3-Tier Storage & Offline-First)
 - **Architettura a 3 livelli (Storage tiering):**
@@ -92,7 +92,7 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
   - Le chiavi Firebase Web sono pubbliche per natura client-side. PoichÃ© il fail-fast fa crashare l'app in assenza delle variabili, Ã¨ obbligatorio fornire un file `.env.production` (da committare nel repository) oppure configurare le variabili d'ambiente direttamente nella dashboard di Vercel (*Project Settings* $\rightarrow$ *Environment Variables*), altrimenti la build andrÃ  a buon fine ma il sito in cloud si tradurrÃ  in una schermata nera (crash a runtime).
 - **Hosting e deploy continuo su Vercel (Root base path):**
   - L'applicazione Ã¨ ospitata ufficialmente sulla piattaforma **Vercel**.
-  - Il deploy Ã¨ continuo e automatico a ogni `git push` sul branch principale. Non Ã¨ richiesto alcun file di workflow o pipeline di build dedicata (zero-config CI/CD).
+  - Il deploy è continuo e automatico a ogni `git push` sul branch principale. Tuttavia, **non è più zero-config**: Vercel attende tassativamente il completamento con successo dei workflow di GitHub Actions ("Unit and Integration Tests" e "Playwright E2E Tests") tramite la funzionalità **Deployment Checks** prima di promuovere la build a Production.
   - L'app gira tassativamente sulla radice (`/`) del dominio, come configurato in `vite.config.ts` (`base: '/'`). Ãˆ vietato l'utilizzo di subpath o prefissi URL annidati.
   - Il monitoraggio delle prestazioni e l'analisi degli utenti reali sono affidati ai pacchetti integrati `@vercel/analytics` e `@vercel/speed-insights`.
 - **Invarianti non negoziabili per Sicurezza e Domini:**
