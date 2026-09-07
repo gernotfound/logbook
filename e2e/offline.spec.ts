@@ -28,9 +28,12 @@ test.describe('Offline scenarios & Background suspension', () => {
     // 5. Crea una scheda vuota per poter avviare una sessione
     await page.click('button.sub-nav-btn:has-text("Schede")');
     
-    // Compila il nome della scheda (l'editor è sempre visibile in cima)
+    // Apri il box di creazione
+    await page.click('button:has-text("Crea scheda")');
+
+    // Compila il nome della scheda
     await page.fill('input[placeholder*="Spinta"]', 'Scheda E2E Offline');
-    await page.click('button:has-text("Salva nuova scheda")');
+    await page.click('button:has-text("Crea scheda")');
 
     // 6. Torna alla vista Sessione
     await page.click('button.sub-nav-btn:has-text("Sessione")');
