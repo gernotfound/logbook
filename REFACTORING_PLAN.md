@@ -69,7 +69,7 @@ Seguire questa sequenza per garantire un approccio a zero-rischi.
     - Avviare un allenamento da scheda → inserire kg/ripetizioni → completare l'allenamento → verificare che il log compaia in History.
     - Avviare un allenamento libero e cancellarlo in corso → verificare che si resetti.
 
-- [ ] **Step 3: Refactoring di `CycleEditor.tsx`**
+- [x] **Step 3: Refactoring di `CycleEditor.tsx`**
   - Estrarre le logiche del form in `useCycleForm.ts`.
   - Spostare il JSX della preview in `CycleSchedulePreview.tsx`.
   - **Test di regressione minima (Manuale su App/Preview):**
