@@ -64,6 +64,20 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
   - `src/lib/schema.ts` (Gateway Zod e fallback difensivi)
   - `src/lib/db.ts` (`loadUserData` e `saveUserData` con diffing strutturale)
   - `src/contexts/AuthContext.tsx` (`defaultUserData`)
+  - `firestore.rules` (whitelist delle chiavi root in `incomingData().keys().hasOnly([...])`),
+    **solo quando viene modificato lo schema dei dati cloud-sincronizzati in
+    `users/{uid}`**.
+  - `tests/firestore_security_rules.test.ts` (lista di chiavi consentite e
+    test di autorizzazione), quando cambia la whitelist Firestore.
+
+  L’aggiunta di stato UI, temporaneo o solo locale non implica automaticamente
+  una modifica alle Firestore Rules: prima classificare esplicitamente il dato
+  come effimero, locale persistito, cloud-root oppure mensilizzato.
+
+  Per ogni nuova chiave cloud-root verificare e, se necessario, aggiornare:
+  `src/types.ts`, `src/lib/schema.ts`, `src/contexts/AuthContext.tsx`,
+  `src/lib/db.ts`, `firestore.rules`, `tests/firestore_security_rules.test.ts`,
+  logica di merge/import-export e controlli di dimensione del documento.
   *Violare questa invariante causerÃ  la perdita silenziosa dei dati al primo ciclo di salvataggio/caricamento a causa dello strip di Zod o del fast-deep-equal.*
 
 ## 4. Gestione delle date e dei timezone
@@ -178,8 +192,8 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
 - **Sintomo tipico se le regole non sono mai state deployate:** Tutti i tentativi di lettura/scrittura Firestore restituiscono `FirebaseError: Missing or insufficient permissions`, incluso il CatalogService che tenta di leggere `global_catalog/manifest`.
 - **Come deployare le regole:**
   ```
-  npx.cmd firebase login          # autenticazione browser (una tantum per macchina)
-  npx.cmd firebase deploy --only firestore:rules
+  npx firebase-tools login          # autenticazione browser (una tantum per macchina)
+  npx firebase-tools deploy --only firestore:rules
   ```
   I file `firebase.json` (punta a `firestore.rules`) e `.firebaserc` (progetto `logbook-db-98cc4`) sono giÃ  presenti nel repository e non vanno toccati.
 - **Quando ri-deployare:** Ogni volta che si modifica `firestore.rules`. Non Ã¨ necessario un redeploy Vercel â€” le regole sono separate dall'app.
