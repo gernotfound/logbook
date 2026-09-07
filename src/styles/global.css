@@ -43,6 +43,7 @@ body {
     padding-right: env(safe-area-inset-right, 0px);
     -webkit-tap-highlight-color: transparent; 
     touch-action: manipulation;
+    overscroll-behavior-y: contain;
 }
 
 input, select, textarea, button {
@@ -70,8 +71,23 @@ input, select, textarea {
     margin: 0 auto; 
     position: relative; 
     min-height: 100vh;
+    min-height: 100dvh;
     display: block;
     overflow-x: clip;
+}
+
+/* Prevenzione selezione testo accidentale su controlli interattivi */
+.btn,
+.btn-small,
+.btn-icon,
+.nav-item,
+.sub-nav-btn,
+.tab-btn,
+.toggle-btn,
+.timer-btn,
+.sync-error-close {
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 h1 { font-size: 1.5rem; }
@@ -193,6 +209,7 @@ p {
     font-weight: 600; 
     transition: all 0.3s ease; 
     white-space: nowrap;
+    min-height: 44px;
 }
 .sub-nav-btn.active { 
     background: var(--primary-color); 
@@ -282,8 +299,8 @@ input:focus, select:focus, textarea:focus {
 .btn-secondary:hover { background: rgba(255, 255, 255, 0.12); }
 .btn-danger { background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); }
 .btn-success { background: linear-gradient(135deg, var(--success-color), #16a34a); color: #fff; border:none;}
-.btn-small { padding: 8px 14px; font-size: 0.85rem; width: auto; margin-bottom: 0; white-space: nowrap; flex-shrink: 0; }
-.btn-icon { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; padding: 6px; border-radius: 50%; transition: background 0.2s;}
+.btn-small { padding: 8px 14px; font-size: 0.85rem; width: auto; margin-bottom: 0; white-space: nowrap; flex-shrink: 0; min-height: 44px; }
+.btn-icon { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; padding: 6px; border-radius: 50%; transition: background 0.2s; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .btn-icon:hover { background: rgba(255,255,255,0.1); }
 
 
@@ -330,8 +347,8 @@ input:focus, select:focus, textarea:focus {
 .timer-controls { display: flex; gap: 8px; }
 
 .timer-btn {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     border: 1px solid rgba(255,255,255,0.1);
     display: flex;
@@ -418,6 +435,7 @@ input:focus, select:focus, textarea:focus {
     transition: color 0.2s ease, transform 0.2s ease;
     outline: none;
     -webkit-tap-highlight-color: transparent;
+    min-height: 44px;
 }
 .nav-item:active {
     transform: scale(0.95);
@@ -521,6 +539,8 @@ input:focus, select:focus, textarea:focus {
     justify-content: center;
     transition: color 0.2s ease;
     flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 .sync-error-close:hover {
@@ -640,6 +660,10 @@ input:focus, select:focus, textarea:focus {
     font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.2s ease;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 .toggle-btn:hover {
     background: rgba(255, 255, 255, 0.1);
