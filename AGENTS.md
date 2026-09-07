@@ -10,10 +10,10 @@ Questo file Ã¨ la "Bibbia" architetturale dell'app **LogBook**. Ogni sessione 
 - **State management:** Zustand 5 (Store globale centralizzato in `src/store/useAppStore.ts`).
 - **Validazione runtime & sanitizzazione:** Zod (Gateway obbligatorio in `src/lib/schema.ts`).
 - **Persistenza & storage ibrido:** IndexedDB (`idb-keyval`) per la cache globale persistente; `localStorage` sincrono per il workout attivo (`logbook_local_workout`), modalitÃ  guest (`logbook_is_guest`) e stati volatili (tab/timer/draft).
-- **Backend & database:** Firebase Modular SDK v12 (`firebase/firestore`, `firebase/auth`). Configurazione rigorosamente da variabili d'ambiente `VITE_FIREBASE_*` con fail-fast immediato e divieto assoluto di credenziali hardcoded.
+- **Backend, Sicurezza & Database:** Firebase Modular SDK v12 (`firebase/firestore`, `firebase/auth`, `firebase/analytics`, `firebase/app-check`). Configurazione rigorosamente da variabili d'ambiente (`VITE_FIREBASE_*` e `VITE_RECAPTCHA_V3_SITE_KEY` per App Check con reCAPTCHA Enterprise) con fail-fast immediato e divieto assoluto di credenziali hardcoded.
 - **Styling:** CSS nativo (Vanilla CSS) basato su variabili (CSS custom properties in `src/styles/global.css`). Assolutamente **NO Tailwind** o framework CSS esterni.
 - **Iconografia:** `lucide-react` (usare proporzioni coerenti, di norma `size={24}` o `size={20}`).
-- **PWA & monitoraggio:** `vite-plugin-pwa` per la gestione del service worker e del manifest; `@vercel/analytics` e `@vercel/speed-insights` per metriche real user.
+- **PWA & monitoraggio:** `vite-plugin-pwa` per la gestione del service worker e del manifest; `@vercel/analytics` e `@vercel/speed-insights` per metriche real user, integrati con **Google Analytics** (`firebase/analytics`) per il tracciamento degli eventi lato Firebase.
 - **Librerie di supporto:** `date-fns` per date e intervalli temporali, `fast-deep-equal` per il diffing delle scritture Firestore, `chart.js` & `react-chartjs-2` per i grafici (stack grafico ufficiale basato su HTML5 Canvas 2D per rendering ad alte prestazioni, compatibilitÃ  garantita con React 19, Vite e ottimizzato a 60fps per dispositivi mobili iOS/PWA), `fuse.js` per la ricerca fuzzy.
 - **Testing & quality:** `vitest` (`@testing-library/react`, `jsdom`) per unit/integration, Playwright per E2E, `oxlint` per il linting e **Snyk** per la sicurezza e la scansione del codice.
 
