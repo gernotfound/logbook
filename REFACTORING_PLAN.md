@@ -76,8 +76,9 @@ Seguire questa sequenza per garantire un approccio a zero-rischi.
     - Creare un nuovo ciclo → modificare data inizio/durata in settimane → verificare che la preview del calendario si aggiorni istantaneamente.
     - Salvare il ciclo e verificare che persista ricaricando l'app.
 
-- [ ] **Step 4 (Opzionale): Split di Backend e Validazione**
+- [x] **Step 4 (Opzionale): Split di Backend e Validazione**
   - Creare `src/lib/schemas/` e dividere `schema.ts`. Mantenere l'export di `UserDataSchema` dal file principale.
+  - Creare `src/lib/db/` e dividere `db.ts`. Mantenere `DB` esportato dal file principale.
 
 ---
 

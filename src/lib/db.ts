@@ -1,9 +1,8 @@
-import { auth, getDb, deleteUser, ensureAppCheck } from './firebase';
-import { doc, getDoc, collection, getDocs, writeBatch } from "firebase/firestore";
+import { auth, getDb, ensureAppCheck } from './firebase';
+import { doc, getDoc, writeBatch } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
 import type { UserData, CatalogOverrides, SyncResult } from '../types';
-import { getLocalDateString } from './utils/date';
 import { removeUndefinedValues } from './utils/object';
 import { checkDocSize } from './checkDocSize';
 import { syncGlobalCatalog, getInMemoryCatalog, getCachedCatalog, getSeedCatalog } from './catalog/catalogService';
@@ -11,28 +10,16 @@ import { resolveEffectiveExercises, resolveEffectiveFoods, extractCustomExercise
 import { wrapInFirestoreDocument } from './firestore-rest';
 import { set, get, del } from 'idb-keyval';
 import { useDialogStore } from '../store/useDialogStore';
-import { useAppStore } from '../store/useAppStore';
 
-export class SyncTimeoutError extends Error {
-    constructor(message: string = "Timeout operazione Firestore") {
-        super(message);
-        this.name = "SyncTimeoutError";
-    }
-}
-
-let lastSavedStateStr: string | null = null;
-
-function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione Firestore"): Promise<T> {
-    let timer: any;
-    const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new SyncTimeoutError(errMsg)), ms);
-    });
-    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
+// Nuovi import per la parte splittata del DB
+import { SyncTimeoutError, withTimeout, dbState, setLastSavedStateStr } from './db/db_core';
+import { loadHistoryMonths, syncHistoryMonths } from './db/db_training';
+import { loadNutritionMonths, syncNutritionMonths } from './db/db_nutrition';
+import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
 
 export const DB = {
     resetCache() {
-        lastSavedStateStr = null;
+        setLastSavedStateStr(null);
     },
     async loadUserData(): Promise<UserData | null> {
         const user = auth.currentUser;
@@ -120,7 +107,7 @@ export const DB = {
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
-                lastSavedStateStr = JSON.stringify(state);
+                setLastSavedStateStr(JSON.stringify(state));
                 return state as unknown as UserData;
             }
 
@@ -131,35 +118,8 @@ export const DB = {
                 return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             });
 
-            const historyDocs = await withTimeout(
-                Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "history_months", m)))),
-                6000,
-                "Timeout recupero storico"
-            );
-            historyDocs.forEach(d => {
-                if (d && typeof d.exists === 'function' && d.exists()) {
-                    const monthData = d.data() as Record<string, any>;
-                    if (monthData) {
-                        Object.values(monthData).forEach((h: any) => state.history.push(h));
-                    }
-                }
-            });
-
-            const nutritionDocs = await withTimeout(
-                Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "nutrition_months", m)))),
-                6000,
-                "Timeout recupero nutrizione"
-            );
-            nutritionDocs.forEach(d => {
-                if (d && typeof d.exists === 'function' && d.exists()) {
-                    const monthData = d.data() as Record<string, any>;
-                    if (monthData) {
-                        Object.keys(monthData).forEach((date: string) => {
-                            (state.nutrition as any)[date] = monthData[date];
-                        });
-                    }
-                }
-            });
+            await loadHistoryMonths(user, targetMonths, state);
+            await loadNutritionMonths(user, targetMonths, state);
 
             state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
 
@@ -176,7 +136,7 @@ export const DB = {
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
-            lastSavedStateStr = JSON.stringify(state);
+            setLastSavedStateStr(JSON.stringify(state));
             return state as unknown as UserData;
         } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
@@ -203,8 +163,8 @@ export const DB = {
                 catalogOverrides: {},
                 legalConsent: null
             };
-            if (lastSavedStateStr) {
-                oldState = JSON.parse(lastSavedStateStr);
+            if (dbState.lastSavedStateStr) {
+                oldState = JSON.parse(dbState.lastSavedStateStr);
             }
 
             await ensureAppCheck();
@@ -286,93 +246,19 @@ export const DB = {
                 hasWrites = true;
             }
 
-            // 2. Group History by Month (YYYY-MM) with timezone-safe monthKey
-            const newHistMonths: Record<string, any> = {};
-            state.history.forEach((h: any) => {
-                const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
-                    ? h.date.substring(0, 7)
-                    : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
-                if (!newHistMonths[monthKey]) newHistMonths[monthKey] = {};
-                newHistMonths[monthKey][h.id] = h;
-            });
+            // 2. Group History by Month
+            const hasHistoryWrites = syncHistoryMonths(batch, user, state, oldState, restWrites, projectId);
+            if (hasHistoryWrites) hasWrites = true;
 
-            const oldHistMonths: Record<string, any> = {};
-            (oldState.history || []).forEach((h: any) => {
-                const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
-                    ? h.date.substring(0, 7)
-                    : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
-                if (!oldHistMonths[monthKey]) oldHistMonths[monthKey] = {};
-                oldHistMonths[monthKey][h.id] = h;
-            });
-
-            Object.keys(newHistMonths).forEach(month => {
-                if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
-                    const cleanDoc = removeUndefinedValues(newHistMonths[month]);
-                    checkDocSize(cleanDoc, `History ${month}`);
-                    batch.set(doc(getDb(), "users", user.uid, "history_months", month), cleanDoc);
-                    restWrites.push({
-                        update: {
-                            name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/history_months/${month}`,
-                            ...wrapInFirestoreDocument(cleanDoc)
-                        }
-                    });
-                    hasWrites = true;
-                }
-            });
-            Object.keys(oldHistMonths).forEach(month => {
-                if (!newHistMonths[month]) {
-                    batch.delete(doc(getDb(), "users", user.uid, "history_months", month));
-                    restWrites.push({
-                        delete: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/history_months/${month}`
-                    });
-                    hasWrites = true;
-                }
-            });
-
-            // 3. Group Nutrition by Month (YYYY-MM)
-            const newNutMonths: Record<string, any> = {};
-            Object.keys(state.nutrition || {}).forEach(date => {
-                const monthKey = date.substring(0, 7);
-                if (!newNutMonths[monthKey]) newNutMonths[monthKey] = {};
-                newNutMonths[monthKey][date] = state.nutrition[date];
-            });
-
-            const oldNutMonths: Record<string, any> = {};
-            Object.keys(oldState.nutrition || {}).forEach(date => {
-                const monthKey = date.substring(0, 7);
-                if (!oldNutMonths[monthKey]) oldNutMonths[monthKey] = {};
-                oldNutMonths[monthKey][date] = oldState.nutrition[date];
-            });
-
-            Object.keys(newNutMonths).forEach(month => {
-                if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
-                    const cleanDoc = removeUndefinedValues(newNutMonths[month]);
-                    checkDocSize(cleanDoc, `Nutrition ${month}`);
-                    batch.set(doc(getDb(), "users", user.uid, "nutrition_months", month), cleanDoc);
-                    restWrites.push({
-                        update: {
-                            name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/nutrition_months/${month}`,
-                            ...wrapInFirestoreDocument(cleanDoc)
-                        }
-                    });
-                    hasWrites = true;
-                }
-            });
-            Object.keys(oldNutMonths).forEach(month => {
-                if (!newNutMonths[month]) {
-                    batch.delete(doc(getDb(), "users", user.uid, "nutrition_months", month));
-                    restWrites.push({
-                        delete: `projects/${projectId}/databases/(default)/documents/users/${user.uid}/nutrition_months/${month}`
-                    });
-                    hasWrites = true;
-                }
-            });
+            // 3. Group Nutrition by Month
+            const hasNutritionWrites = syncNutritionMonths(batch, user, state, oldState, restWrites, projectId);
+            if (hasNutritionWrites) hasWrites = true;
 
             if (hasWrites) {
                 try {
                     await withTimeout(batch.commit(), 7000, "Timeout sincronizzazione Firestore");
                     console.log(`Sincronizzazione DB completata.`);
-                    lastSavedStateStr = JSON.stringify(state);
+                    setLastSavedStateStr(JSON.stringify(state));
                     await set('sync_failed', false); // Clear flag on success
                     return { ok: true, status: 'synced' };
                 } catch (batchErr: unknown) {
@@ -409,7 +295,7 @@ export const DB = {
                     }
                 }
             } else {
-                lastSavedStateStr = JSON.stringify(state);
+                setLastSavedStateStr(JSON.stringify(state));
                 return { ok: true, status: 'synced' };
             }
         } catch (error) {
@@ -418,39 +304,7 @@ export const DB = {
         }
     },
     async purgeAllLocalUserData() {
-        console.log("[purgeAllLocalUserData] Avvio pulizia sicura dei dati locali.");
-
-        // 1. IndexedDB Purge
-        try {
-            await Promise.allSettled([
-                del('logbook_cached_user_data'),
-                del('pending_sync_token'),
-                del('pending_sync_payload')
-            ]);
-        } catch (e) {
-            console.warn("[purgeAllLocalUserData] Errore durante la pulizia di IndexedDB:", e);
-        }
-
-        // 2. localStorage Purge
-        const keysToRemove = [
-            'logbook_local_workout',
-            'logbook_timer_state',
-            'logbook_timer_start',
-            'logbook_timer_accumulated',
-            'draft_measurement',
-            'draft_exercise',
-            'draft_routine',
-            'logbook_is_guest',
-            'logbook_awaiting_redirect'
-        ];
-
-        keysToRemove.forEach(key => {
-            try {
-                localStorage.removeItem(key);
-            } catch (e) {
-                console.warn(`[purgeAllLocalUserData] Errore durante la rimozione della chiave ${key} in localStorage:`, e);
-            }
-        });
+        return purgeAllLocalUserData();
     },
     async secureLogOut() {
         console.log("Eseguo il Log Out protetto...");
@@ -463,74 +317,6 @@ export const DB = {
         }
     },
     async deleteAccount() {
-        const user = auth.currentUser;
-        if (!user) throw new Error("Nessun utente autenticato.");
-        try {
-            useAppStore.getState().cancelPendingSyncs();
-            await this.purgeAllLocalUserData();
-            // 1. Fetch subcollection documents while auth is valid
-            await ensureAppCheck();
-            const [histSnap, nutSnap, errSnap, evtSnap, anomSnap] = await Promise.all([
-                getDocs(collection(getDb(), "users", user.uid, "history_months")).catch(e => {
-                    console.warn("Permesso negato per leggere history_months, proseguo...", e);
-                    return { forEach: () => {} } as any;
-                }),
-                getDocs(collection(getDb(), "users", user.uid, "nutrition_months")).catch(e => {
-                    console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
-                    return { forEach: () => {} } as any;
-                }),
-                getDocs(collection(getDb(), "users", user.uid, "telemetry_errors")).catch(e => {
-                    console.warn("Permesso negato per leggere telemetry_errors, proseguo...", e);
-                    return { forEach: () => {} } as any;
-                }),
-                getDocs(collection(getDb(), "users", user.uid, "telemetry_events")).catch(e => {
-                    console.warn("Permesso negato per leggere telemetry_events, proseguo...", e);
-                    return { forEach: () => {} } as any;
-                }),
-                getDocs(collection(getDb(), "users", user.uid, "telemetry_anomalies")).catch(e => {
-                    console.warn("Permesso negato per leggere telemetry_anomalies, proseguo...", e);
-                    return { forEach: () => {} } as any;
-                })
-            ]);
-
-            const allRefs: any[] = [];
-            histSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-            nutSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-            errSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-            evtSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-            anomSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-            allRefs.push(doc(getDb(), "users", user.uid));
-
-            // Chunk in max 400 operations per batch to strictly adhere to Firestore 500 limit
-            const CHUNK_SIZE = 400;
-            for (let i = 0; i < allRefs.length; i += CHUNK_SIZE) {
-                const chunk = allRefs.slice(i, i + CHUNK_SIZE);
-                const batch = writeBatch(getDb());
-                chunk.forEach(ref => batch.delete(ref));
-                try {
-                    await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
-                } catch (batchErr: any) {
-                    if (batchErr?.code === 'permission-denied') {
-                        console.warn("Impossibile eliminare i dati cloud (permesso Firestore), procedo con l'eliminazione dell'account Auth.");
-                    } else {
-                        throw batchErr;
-                    }
-                }
-            }
-
-            // 2. Delete Firebase Auth user account
-            await deleteUser(user);
-            console.log("Account e relative subcollection eliminati con successo.");
-        } catch (error: any) {
-            console.error("Errore nell'eliminazione dell'account:", error);
-            if (error.code === 'auth/requires-recent-login') {
-                throw new Error("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
-            }
-            throw error;
-        } finally {
-            await this.purgeAllLocalUserData();
-            this.resetCache();
-            useAppStore.getState().resetStore();
-        }
+        return deleteAccount(this);
     }
 };
