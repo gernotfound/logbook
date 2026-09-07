@@ -13,19 +13,19 @@ interface SessionExerciseCardProps {
     openSpecialMenuId: string | null;
     onMoveExercise?: (index: number, direction: 'up' | 'down') => void;
     onMoveToPosition?: (fromIndex: number, toIndex: number) => void;
-    onToggleHistory: () => void;
-    onToggleSetup: () => void;
-    onRemoveExercise: () => void;
-    onUpdateSetupNote: (note: string) => void;
-    onUpdateSessionNote: (note: string) => void;
-    onAddSet: () => void;
-    onRemoveSet: (sIndex: number) => void;
-    onUpdateSet: (setId: string, field: string, value: any) => void;
-    onAddSpecialSet: (type: string, setId: string) => void;
-    onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
-    onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number) => void;
+    onToggleHistory: (exIndex: number) => void;
+    onToggleSetup: (exIndex: number) => void;
+    onRemoveExercise: (exIndex: number) => void;
+    onUpdateSetupNote: (exId: string, note: string) => void;
+    onUpdateSessionNote: (exIndex: number, note: string) => void;
+    onAddSet: (exIndex: number) => void;
+    onRemoveSet: (exIndex: number, sIndex: number) => void;
+    onUpdateSet: (exIndex: number, setId: string, field: string, value: any) => void;
+    onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
+    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
+    onRemoveSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number) => void;
     onToggleSpecialMenu: (setId: string) => void;
-    onRemoveLastSet?: () => void;
+    onRemoveLastSet?: (exIndex: number) => void;
 }
 
 const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
@@ -75,7 +75,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
     const handleRemoveLastSet = useCallback(async () => {
         if (onRemoveLastSet) {
-            onRemoveLastSet();
+            onRemoveLastSet(exIndex);
             return;
         }
 
@@ -111,14 +111,14 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             if (!confirmed) return;
         }
 
-        onRemoveSet(lastIndex);
-    }, [exItem.sets, onRemoveSet, onRemoveLastSet]);
+        onRemoveSet(exIndex, lastIndex);
+    }, [exItem.sets, onRemoveSet, onRemoveLastSet, exIndex]);
 
     const handleCardioChange = (field: 'time' | 'distance', value: string) => {
         const setId = exItem.sets[0]?.id;
         if (!setId) return;
         
-        onUpdateSet(setId, field, value);
+        onUpdateSet(exIndex, setId, field, value);
 
         const currentSet = exItem.sets[0];
         const newTimeStr = field === 'time' ? value : (currentSet?.time || '');
@@ -129,9 +129,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         
         if (!isNaN(timeVal) && !isNaN(distVal) && timeVal > 0) {
             const speed = distVal / (timeVal / 60);
-            onUpdateSet(setId, 'speed', speed.toFixed(2));
+            onUpdateSet(exIndex, setId, 'speed', speed.toFixed(2));
         } else if (newTimeStr === '' || newDistStr === '') {
-            onUpdateSet(setId, 'speed', '');
+            onUpdateSet(exIndex, setId, 'speed', '');
         }
     };
 
@@ -172,7 +172,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     type="button"
                     className="btn-small"
                     style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
-                    onClick={onRemoveExercise}
+                    onClick={() => onRemoveExercise(exIndex)}
                     aria-label="Rimuovi esercizio dalla sessione"
                 >
                     🗑️
@@ -181,7 +181,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     type="button"
                     className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
                     style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
-                    onClick={onToggleHistory}
+                    onClick={() => onToggleHistory(exIndex)}
                 >
                     🕒 Storico
                 </button>
@@ -189,7 +189,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     type="button"
                     className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
                     style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
-                    onClick={onToggleSetup}
+                    onClick={() => onToggleSetup(exIndex)}
                 >
                     ⚙️ Setup
                 </button>
@@ -247,7 +247,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         type="text"
                         defaultValue={exNotes}
                         placeholder="Note di setup (es. altezza sedile...)"
-                        onBlur={(e) => onUpdateSetupNote(e.target.value)}
+                        onBlur={(e) => onUpdateSetupNote(exItem.exId, e.target.value)}
                         style={{ margin: 0, width: '100%' }}
                     />
                 </div>
@@ -292,7 +292,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
-                                onChange={e => onUpdateSet(exItem.sets[0]?.id, 'speed', e.target.value)}
+                                onChange={e => onUpdateSet(exIndex, exItem.sets[0]?.id, 'speed', e.target.value)}
                                 placeholder="es. 10.5"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -304,7 +304,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
-                                onChange={e => onUpdateSet(exItem.sets[0]?.id, 'incline', e.target.value)}
+                                onChange={e => onUpdateSet(exIndex, exItem.sets[0]?.id, 'incline', e.target.value)}
                                 placeholder="es. 2.0"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -317,7 +317,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
-                            onChange={e => onUpdateSet(exItem.sets[0]?.id, 'kcal', e.target.value)}
+                            onChange={e => onUpdateSet(exIndex, exItem.sets[0]?.id, 'kcal', e.target.value)}
                             placeholder="es. 350"
                             className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                             style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -335,11 +335,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             trackingType={libDef?.trackingType}
                             isOpenMenu={openSpecialMenuId === s.id}
                             onToggleMenu={() => onToggleSpecialMenu(s.id)}
-                            onRemoveSet={onRemoveSet}
-                            onUpdateSet={(field, val) => onUpdateSet(s.id, field, val)}
-                            onAddSpecialSet={(type) => onAddSpecialSet(type, s.id)}
-                            onUpdateSpecialSet={(type, dsIdx, field, val) => onUpdateSpecialSet(s.id, type, dsIdx, field, val)}
-                            onRemoveSpecialSet={(type, dsIdx) => onRemoveSpecialSet(s.id, type, dsIdx)}
+                            onRemoveSet={() => onRemoveSet(exIndex, sIndex)}
+                            onUpdateSet={(setId, field, val) => onUpdateSet(exIndex, setId, field, val)}
+                            onAddSpecialSet={(type, setId) => onAddSpecialSet(exIndex, type, setId)}
+                            onUpdateSpecialSet={(setId, type, dsIdx, field, val) => onUpdateSpecialSet(exIndex, setId, type, dsIdx, field, val)}
+                            onRemoveSpecialSet={(setId, type, dsIdx) => onRemoveSpecialSet(exIndex, setId, type, dsIdx)}
                         />
                     ))}
 
@@ -358,7 +358,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             type="button"
                             className="btn btn-small"
                             style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginBottom: 0 }}
-                            onClick={onAddSet}
+                            onClick={() => onAddSet(exIndex)}
                             aria-label="Aggiungi serie"
                         >
                             + Aggiungi serie
@@ -370,7 +370,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             <textarea
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
-                onChange={(e: any) => onUpdateSessionNote(e.target.value)}
+                onChange={(e: any) => onUpdateSessionNote(exIndex, e.target.value)}
                 style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
             />
         </div>

@@ -1544,7 +1544,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 const timeInput = container.querySelector('input[placeholder="es. 30"]') as HTMLInputElement;
                 expect(timeInput).not.toBeNull();
                 fireEvent.change(timeInput, { target: { value: '30' } });
-                expect(onUpdateSet).toHaveBeenCalledWith('s_cardio', 'time', '30');
+                expect(onUpdateSet).toHaveBeenCalledWith(0, 's_cardio', 'time', '30');
             });
 
             it('T2.6.5: Cancelling history edit (cancelHistoryEdit) discards ad-hoc edits cleanly', async () => {

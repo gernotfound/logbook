@@ -596,7 +596,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect(isometryBtn).toBeDefined();
 
                 fireEvent.click(dropsetBtn);
-                expect(mockAdd).toHaveBeenCalledWith('dropset');
+                expect(mockAdd).toHaveBeenCalledWith('dropset', 's1');
             });
 
             it('T1.4.4: renders Dropset rows beneath the parent set with kg and reps inputs', () => {
@@ -692,7 +692,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
                 const kgInput = screen.getByDisplayValue('70');
                 fireEvent.change(kgInput, { target: { value: '75' } });
-                expect(mockUpdate).toHaveBeenCalledWith('kg', '75');
+                expect(mockUpdate).toHaveBeenCalledWith('s1', 'kg', '75');
             });
         });
 
@@ -1204,7 +1204,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
                 const removeBtns = screen.getAllByRole('button', { name: '✕' });
                 fireEvent.click(removeBtns[0]);
-                expect(mockRemove).toHaveBeenCalledWith('dropsets', 0);
+                expect(mockRemove).toHaveBeenCalledWith('s1', 'dropsets', 0);
             });
 
             it('T2.4.6: SessionSetRow handles empty string kg and reps without throwing', () => {

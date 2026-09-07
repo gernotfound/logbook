@@ -8,10 +8,10 @@ interface SessionSetRowProps {
     isOpenMenu: boolean;
     onToggleMenu: () => void;
     onRemoveSet: (sIndex: number) => void;
-    onUpdateSet: (field: string, value: any) => void;
-    onAddSpecialSet: (type: string) => void;
-    onUpdateSpecialSet: (type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
-    onRemoveSpecialSet: (type: 'dropsets' | 'isometrics', idx: number) => void;
+    onUpdateSet: (setId: string, field: string, value: any) => void;
+    onAddSpecialSet: (type: string, setId: string) => void;
+    onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
+    onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number) => void;
 }
 
 const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
@@ -49,7 +49,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 step="0.25" 
                                 placeholder="Kg (opz)" 
                                 value={s.kg ?? ''} 
-                                onChange={e => onUpdateSet('kg', e.target.value)} 
+                                onChange={e => onUpdateSet(s.id, 'kg', e.target.value)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
@@ -58,7 +58,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 type="text" 
                                 placeholder="Tempo (es. 60s)" 
                                 value={s.time ?? ''} 
-                                onChange={e => onUpdateSet('time', e.target.value)} 
+                                onChange={e => onUpdateSet(s.id, 'time', e.target.value)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 2, minWidth: 0 }} 
                             />
@@ -71,7 +71,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 step="0.25" 
                                 placeholder="Kg" 
                                 value={s.kg ?? ''} 
-                                onChange={e => onUpdateSet('kg', e.target.value)} 
+                                onChange={e => onUpdateSet(s.id, 'kg', e.target.value)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
@@ -80,7 +80,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 type="number" 
                                 placeholder="Reps" 
                                 value={s.reps ?? ''} 
-                                onChange={e => onUpdateSet('reps', e.target.value)} 
+                                onChange={e => onUpdateSet(s.id, 'reps', e.target.value)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
@@ -131,8 +131,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                     border: '1px solid var(--glass-border)' 
                                 }}
                             >
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet('dropset')}>+ Dropset</button>
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => onAddSpecialSet('isometry')}>+ Isometria</button>
+                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet('dropset', s.id)}>+ Dropset</button>
+                                <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => onAddSpecialSet('isometry', s.id)}>+ Isometria</button>
                             </div>
                         </>
                     )}
@@ -145,9 +145,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
-                            <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={e => onUpdateSpecialSet('dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <button className="btn-icon" style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet('dropsets', dsIdx)}>✕</button>
+                            <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <button className="btn-icon" style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(s.id, 'dropsets', dsIdx)}>✕</button>
                         </div>
                     </div>
                 );
@@ -159,9 +159,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
-                            <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={e => onUpdateSpecialSet('isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <button className="btn-icon" style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet('isometrics', isoIdx)}>✕</button>
+                            <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <button className="btn-icon" style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(s.id, 'isometrics', isoIdx)}>✕</button>
                         </div>
                     </div>
                 );
