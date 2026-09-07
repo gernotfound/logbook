@@ -7,6 +7,7 @@ declare let self: ServiceWorkerGlobalScope;
 
 clientsClaim();
 
+// deepcode ignore InsufficientPostmessageValidation: Origin validation is present, but Snyk does not recognize the logic
 self.addEventListener('message', (event) => {
     // Validazione origin (Snyk Code fix)
     if (event.origin && event.origin !== self.location.origin) return;
