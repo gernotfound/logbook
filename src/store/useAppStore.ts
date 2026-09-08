@@ -3,6 +3,7 @@ import type { UserProfile, NutritionPlanning, UserData } from '../types';
 import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
+import { draftRegistry } from '../lib/utils/draftRegistry';
 
 export type { UserProfile, NutritionPlanning, UserData };
 
@@ -22,6 +23,7 @@ export const useAppStore = create<AppState>()((...a) => ({
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
+            draftRegistry.flushAll();
             const state = useAppStore.getState();
             if (state.localWorkout) {
                 try {
