@@ -21,7 +21,7 @@ export const LoginBox = () => {
         if (!/\d/.test(pass)) return "La password deve contenere almeno 1 numero.";
         if (!/[a-z]/.test(pass)) return "La password deve contenere almeno 1 lettera minuscola.";
         if (!/[A-Z]/.test(pass)) return "La password deve contenere almeno 1 lettera maiuscola.";
-        if (!/[!@#$%^&*(),.?":{}|<>_\+\-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
+        if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
         return null; // OK
     };
 
