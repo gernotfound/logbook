@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from './zod';
 import type { UserData } from '../types';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
 import { reportZodSchemaFallback, safeString } from './schemas/schema_utils';

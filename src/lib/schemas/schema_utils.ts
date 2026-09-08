@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 import { formatSleepTime } from '../utils/date';
 import { telemetryHub } from '../telemetryHub';
 
