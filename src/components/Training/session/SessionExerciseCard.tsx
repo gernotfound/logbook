@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
+import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
 
 interface SessionExerciseCardProps {
     exItem: any;
@@ -264,11 +265,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Durata (min)</label>
-                            <input 
+                            <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.time || ''} 
-                                onChange={e => handleCardioChange('time', e.target.value)}
+                                onChange={val => handleCardioChange('time', val)}
                                 placeholder="es. 30"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -276,11 +277,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         </div>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Distanza (km)</label>
-                            <input 
+                            <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.distance || ''} 
-                                onChange={e => handleCardioChange('distance', e.target.value)}
+                                onChange={val => handleCardioChange('distance', val)}
                                 placeholder="es. 5.2"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -288,11 +289,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         </div>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Velocità media</label>
-                            <input 
+                            <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
-                                onChange={e => onUpdateSet(exIndex, exItem.sets[0]?.id, 'speed', e.target.value)}
+                                onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'speed', val)}
                                 placeholder="es. 10.5"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -300,11 +301,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         </div>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Inclinazione (%)</label>
-                            <input 
+                            <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
-                                onChange={e => onUpdateSet(exIndex, exItem.sets[0]?.id, 'incline', e.target.value)}
+                                onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'incline', val)}
                                 placeholder="es. 2.0"
                                 className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                                 style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -313,11 +314,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     </div>
                     <div>
                         <label className="text-muted text-xs mb-4 block">Kcal stimate</label>
-                        <input 
+                        <BufferedInput 
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
-                            onChange={e => onUpdateSet(exIndex, exItem.sets[0]?.id, 'kcal', e.target.value)}
+                            onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'kcal', val)}
                             placeholder="es. 350"
                             className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
                             style={{ fontSize: '16px', boxSizing: 'border-box' }}
@@ -367,10 +368,10 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 </>
             )}
 
-            <textarea
+            <BufferedTextarea
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
-                onChange={(e: any) => onUpdateSessionNote(exIndex, e.target.value)}
+                onChange={val => onUpdateSessionNote(exIndex, val)}
                 style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
             />
         </div>

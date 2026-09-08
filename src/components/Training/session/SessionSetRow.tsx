@@ -1,4 +1,5 @@
 import React from 'react';
+import { BufferedInput } from '../../UI/BufferedInput';
 
 interface SessionSetRowProps {
     set: any;
@@ -43,44 +44,44 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, position: 'relative', minWidth: 0 }}>
                     {trackingType === 'time' ? (
                         <>
-                            <input 
+                            <BufferedInput 
                                 id={`kg-${s.id}`} 
                                 type="number" 
                                 step="0.25" 
                                 placeholder="Kg (opz)" 
                                 value={s.kg ?? ''} 
-                                onChange={e => onUpdateSet(s.id, 'kg', e.target.value)} 
+                                onChange={val => onUpdateSet(s.id, 'kg', val)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
-                            <input 
+                            <BufferedInput 
                                 id={`time-${s.id}`} 
                                 type="text" 
                                 placeholder="Tempo (es. 60s)" 
                                 value={s.time ?? ''} 
-                                onChange={e => onUpdateSet(s.id, 'time', e.target.value)} 
+                                onChange={val => onUpdateSet(s.id, 'time', val)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 2, minWidth: 0 }} 
                             />
                         </>
                     ) : (
                         <>
-                            <input 
+                            <BufferedInput 
                                 id={`kg-${s.id}`} 
                                 type="number" 
                                 step="0.25" 
                                 placeholder="Kg" 
                                 value={s.kg ?? ''} 
-                                onChange={e => onUpdateSet(s.id, 'kg', e.target.value)} 
+                                onChange={val => onUpdateSet(s.id, 'kg', val)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
-                            <input 
+                            <BufferedInput 
                                 id={`reps-${s.id}`} 
                                 type="number" 
                                 placeholder="Reps" 
                                 value={s.reps ?? ''} 
-                                onChange={e => onUpdateSet(s.id, 'reps', e.target.value)} 
+                                onChange={val => onUpdateSet(s.id, 'reps', val)} 
                                 onFocus={e => e.target.select()}
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
@@ -145,8 +146,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
-                            <input id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <input id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'reps', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <BufferedInput id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <BufferedInput id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'reps', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
                             <button className="btn-icon" style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(s.id, 'dropsets', dsIdx)}>✕</button>
                         </div>
                     </div>
@@ -159,8 +160,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
-                            <input id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'kg', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
-                            <input id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={e => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'time', e.target.value)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <BufferedInput id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
+                            <BufferedInput id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'time', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
                             <button className="btn-icon" style={{ color: 'var(--danger-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} onClick={() => onRemoveSpecialSet(s.id, 'isometrics', isoIdx)}>✕</button>
                         </div>
                     </div>
