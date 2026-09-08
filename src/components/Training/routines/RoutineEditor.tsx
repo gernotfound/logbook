@@ -43,19 +43,29 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
 }) => {
     return (
         <div className="section-divider">
-            <h2 style={{marginTop: 0}}>{editingRoutineId ? '✏️ Modifica scheda' : '➕ Crea nuova scheda'}</h2>
-            <p className="text-muted text-sm mb-15">Crea o modifica la tua scheda di allenamento.</p>
+            <h2 style={{marginTop: 0}}>{editingRoutineId ? '✏️ Modifica scheda' : '➕ Crea scheda'}</h2>
 
             <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">Nome scheda</label>
                 <input 
                     type="text" 
-                    placeholder="es. Spinta (Push), Gambe (Legs)..." 
+                    placeholder="Nome scheda" 
                     value={routineName} 
                     onChange={e => setRoutineName(e.target.value)}
                     onFocus={e => e.target.select()}
                     style={{ fontSize: '16px' }}
                 />
+            </div>
+
+            <div className="mb-15">
+                <ExerciseSearchDropdown
+                    library={library}
+                    onSelectExercise={onAddExercise}
+                    placeholder="Cerca esercizi da aggiungere"
+                />
+            </div>
+
+            <div className="flex-between items-center mb-10">
+                <label className="text-muted text-xs block">Esercizi nella scheda ({routineExercises.length})</label>
             </div>
 
             {/* MuscleModel rimane sempre visibile anche con lista esercizi vuota */}
@@ -67,17 +77,6 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
             </div>
 
             <div className="mb-15">
-                <div className="flex-between items-center mb-10">
-                    <label className="text-muted text-xs block">Esercizi nella scheda ({routineExercises.length})</label>
-                </div>
-                <div className="mb-15">
-                    <ExerciseSearchDropdown
-                        library={library}
-                        onSelectExercise={onAddExercise}
-                        placeholder="🔍 Cerca esercizio da aggiungere..."
-                    />
-                </div>
-
                 {routineExercises.length === 0 ? (
                     <p className="text-muted text-md mb-15">Nessun esercizio presente. Aggiungine uno dalla libreria!</p>
                 ) : (
