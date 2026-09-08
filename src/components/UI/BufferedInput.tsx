@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
 
 interface BufferedInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
@@ -12,14 +12,17 @@ export const BufferedInput = React.forwardRef<HTMLInputElement, BufferedInputPro
         const isDirty = useRef(false);
         const isFocused = useRef(false);
         const latestLocalValue = useRef(localValue);
-        latestLocalValue.current = localValue;
         
         const onChangeRef = useRef(onChange);
-        onChangeRef.current = onChange;
         const typeRef = useRef(type);
-        typeRef.current = type;
         const inputModeRef = useRef(inputMode);
-        inputModeRef.current = inputMode;
+
+        useLayoutEffect(() => {
+            latestLocalValue.current = localValue;
+            onChangeRef.current = onChange;
+            typeRef.current = type;
+            inputModeRef.current = inputMode;
+        });
 
         // Sync from external value if not focused or dirty
         useEffect(() => {
@@ -101,15 +104,18 @@ interface BufferedTextareaProps extends Omit<React.TextareaHTMLAttributes<HTMLTe
 }
 
 export const BufferedTextarea = React.forwardRef<HTMLTextAreaElement, BufferedTextareaProps>(
-    ({ value, onChange, onBlur, onFocus, onKeyDown, ...props }, ref) => {
+    ({ value, onChange, onBlur, onFocus, ...props }, ref) => {
         const [localValue, setLocalValue] = useState(value ?? '');
         const isDirty = useRef(false);
         const isFocused = useRef(false);
         const latestLocalValue = useRef(localValue);
-        latestLocalValue.current = localValue;
         
         const onChangeRef = useRef(onChange);
-        onChangeRef.current = onChange;
+
+        useLayoutEffect(() => {
+            latestLocalValue.current = localValue;
+            onChangeRef.current = onChange;
+        });
 
         useEffect(() => {
             if (!isFocused.current && !isDirty.current) {
