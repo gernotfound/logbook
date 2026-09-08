@@ -3,7 +3,7 @@ import { Virtuoso } from 'react-virtuoso';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
-import { z } from 'zod';
+import { z } from '../../lib/zod';
 
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
