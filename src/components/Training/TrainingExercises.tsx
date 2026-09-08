@@ -2,12 +2,14 @@ import { useState, useMemo } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { z } from 'zod';
 
 import MuscleModel from './MuscleModel';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 
 const TrainingExercises = () => {
-    const [isCreating, setIsCreating] = useState(false);
+    const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_exercise', false, z.boolean());
     const [isSaving, setIsSaving] = useState(false);
     const [expandedExId, setExpandedExId] = useState<string | null>(null);
     const {

@@ -2,9 +2,11 @@ import React from 'react';
 import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
 import { RoutineEditor } from './routines/RoutineEditor';
 import { RoutineCard } from './routines/RoutineCard';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { z } from 'zod';
 
 const TrainingRoutines: React.FC = () => {
-    const [isCreating, setIsCreating] = React.useState(false);
+    const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_routine', false, z.boolean());
     const [isSaving, setIsSaving] = React.useState(false);
     const {
         routineName, setRoutineName,
