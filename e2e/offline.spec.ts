@@ -32,7 +32,7 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.click('button:has-text("Crea scheda")');
 
     // Compila il nome della scheda
-    await page.fill('input[placeholder*="Spinta"]', 'Scheda E2E Offline');
+    await page.fill('input[placeholder="Nome scheda"]', 'Scheda E2E Offline');
     await page.click('button:has-text("Crea scheda")');
 
     // 6. Torna alla vista Sessione
