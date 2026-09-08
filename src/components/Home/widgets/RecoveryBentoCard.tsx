@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import MuscleModel from '../../Training/MuscleModel';
-import { Activity } from 'lucide-react';
+import { Activity, ChevronDown } from 'lucide-react';
 import { Logic } from '../../../lib/logic';
 
 interface RecoveryBentoCardProps {
@@ -13,6 +13,11 @@ interface RecoveryBentoCardProps {
 const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [], painColors, muscleColors = {}, onTogglePain }) => {
     const combinedColors = { ...muscleColors, ...painColors };
     const [searchQuery, setSearchQuery] = useState('');
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    useEffect(() => {
+        if (activePains.length === 0) setIsExpanded(false);
+    }, [activePains.length]);
 
     const searchResults = useMemo(() => {
         if (!searchQuery.trim()) return [];
@@ -28,19 +33,37 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                     <Activity size={18} color="#ff4d6d" />
                     Recupero e Dolori
                 </h2>
-                <span 
+                <button
+                    type="button"
+                    onClick={() => activePains.length > 0 && setIsExpanded(v => !v)}
+                    disabled={activePains.length === 0}
+                    aria-expanded={isExpanded}
                     style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
                         fontSize: '0.75rem',
                         fontWeight: 600,
                         padding: '3px 8px',
                         borderRadius: '6px',
                         background: activePains.length > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.08)',
                         color: activePains.length > 0 ? '#ff4d6d' : 'var(--text-muted)',
-                        border: activePains.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)'
+                        border: activePains.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        cursor: activePains.length > 0 ? 'pointer' : 'default',
+                        transition: 'all 0.2s ease'
                     }}
                 >
                     {activePains.length > 0 ? `${activePains.length} dolori attivi` : '0 dolori attivi'}
-                </span>
+                    {activePains.length > 0 && (
+                        <ChevronDown 
+                            size={14} 
+                            style={{ 
+                                transition: 'transform 0.25s ease',
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
+                            }} 
+                        />
+                    )}
+                </button>
             </div>
 
             {/* Muscle Search Input */}
@@ -139,48 +162,61 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
             )}
 
             {/* Active Pain Badges */}
-            {activePains.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {activePains.map(mId => (
-                        <span 
-                            key={mId} 
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                border: '1px solid rgba(239, 68, 68, 0.5)',
-                                color: '#ff6b81',
-                                padding: '4px 10px',
-                                borderRadius: '8px',
-                                fontSize: '0.85rem',
-                                fontWeight: 600
-                            }}
-                        >
-                            {Logic.getMuscleName(mId)}
-                            <button
-                                type="button"
-                                onClick={() => onTogglePain(mId)}
+            <div 
+                style={{
+                    overflow: 'hidden',
+                    transition: 'max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease',
+                    maxHeight: isExpanded && activePains.length > 0 ? '500px' : '0',
+                    opacity: isExpanded && activePains.length > 0 ? 1 : 0,
+                    visibility: isExpanded && activePains.length > 0 ? 'visible' : 'hidden',
+                    marginTop: isExpanded && activePains.length > 0 ? '5px' : '0',
+                    marginBottom: isExpanded && activePains.length > 0 ? '5px' : '0'
+                }}
+                aria-hidden={!isExpanded}
+            >
+                {activePains.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {activePains.map(mId => (
+                            <span 
+                                key={mId} 
                                 style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    color: '#ff4d6d',
-                                    fontWeight: 'bold',
-                                    fontSize: '0.85rem',
-                                    cursor: 'pointer',
-                                    padding: '0 2px',
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    lineHeight: 1
+                                    gap: '6px',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1px solid rgba(239, 68, 68, 0.5)',
+                                    color: '#ff6b81',
+                                    padding: '4px 10px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 600
                                 }}
-                                aria-label={`Rimuovi dolore ${Logic.getMuscleName(mId)}`}
                             >
-                                ✕
-                            </button>
-                        </span>
-                    ))}
-                </div>
-            )}
+                                {Logic.getMuscleName(mId)}
+                                <button
+                                    type="button"
+                                    onClick={() => onTogglePain(mId)}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#ff4d6d',
+                                        fontWeight: 'bold',
+                                        fontSize: '0.85rem',
+                                        cursor: 'pointer',
+                                        padding: '0 2px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        lineHeight: 1
+                                    }}
+                                    aria-label={`Rimuovi dolore ${Logic.getMuscleName(mId)}`}
+                                >
+                                    ✕
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px' }}>
                 <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
