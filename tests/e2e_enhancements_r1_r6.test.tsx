@@ -1544,6 +1544,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 const timeInput = container.querySelector('input[placeholder="es. 30"]') as HTMLInputElement;
                 expect(timeInput).not.toBeNull();
                 fireEvent.change(timeInput, { target: { value: '30' } });
+                fireEvent.blur(timeInput);
                 expect(onUpdateSet).toHaveBeenCalledWith(0, 's_cardio', 'time', '30');
             });
 

@@ -692,6 +692,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
                 const kgInput = screen.getByDisplayValue('70');
                 fireEvent.change(kgInput, { target: { value: '75' } });
+                fireEvent.blur(kgInput);
                 expect(mockUpdate).toHaveBeenCalledWith('s1', 'kg', '75');
             });
         });
