@@ -102,6 +102,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     };
   }, [isOpen, toggleOpen]);
 
+  // Gestione fallback per z-index stacking context su vecchi browser (senza supporto a :has)
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const parentCard = containerRef.current.closest('.card, [style*="relative"], [style*="relative"]');
+      if (parentCard) {
+        parentCard.classList.add('context-menu-active-parent');
+        return () => parentCard.classList.remove('context-menu-active-parent');
+      }
+    }
+  }, [isOpen]);
+
   // Gestione tasto Escape globale
   useEffect(() => {
     if (!isOpen) return;

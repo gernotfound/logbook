@@ -18,8 +18,20 @@ export function useTrainingHistory() {
             try {
                 await saveUserData(prev => {
                     if (!prev) return prev;
+                    
+                    const workoutToDelete = prev.history?.find((w: any) => w.id === id);
                     const updatedHistory = (prev.history || []).filter((w: any) => w.id !== id);
-                    return { ...prev, history: updatedHistory };
+                    
+                    let updatedActivePains = prev.activePains || [];
+                    if (workoutToDelete?.pains?.length) {
+                        updatedActivePains = updatedActivePains.filter(p => !workoutToDelete.pains!.includes(p));
+                    }
+
+                    return { 
+                        ...prev, 
+                        history: updatedHistory,
+                        activePains: updatedActivePains
+                    };
                 });
                 const localWorkout = useAppStore.getState().localWorkout;
                 if (localWorkout && (localWorkout.id === id || localWorkout.originalHistoryId === id)) {
