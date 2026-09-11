@@ -1,11 +1,14 @@
 import type { StateCreator } from 'zustand';
-import { set as idbSet, del as idbDel } from 'idb-keyval';
+import { del as idbDel } from 'idb-keyval';
 import { UserDataSchema } from '../../lib/schema';
 import type { UserData } from '../../types';
 import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
 import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
+import { commitLocal, initializeLocal, clearNutritionConflict } from '../../lib/sync/localRepository';
+import { writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 
 export interface DataSlice {
     userData: UserData | null;
@@ -33,24 +36,21 @@ export const getInitialUserData = (): UserData | null => {
     }
 };
 
-export const saveUserDataToCache = (data: UserData | null) => {
-    try {
+export const saveUserDataToCache = async (data: UserData | null, base?: UserData) => {
+        const session = captureSession();
         if (data) {
-            idbSet('logbook_cached_user_data', data).then(() => {
-                updateStorageMarker();
-            }).catch((e) => {
-                console.warn("Errore salvataggio cache userData in IndexedDB:", e);
-            });
+            if (base) await commitLocal(session.owner, data, base);
+            else await initializeLocal(session.owner, data);
+            if (isCurrentSession(session)) updateStorageMarker();
         } else {
-            idbDel('logbook_cached_user_data').then(() => {
-                clearStorageMarker();
-            }).catch((e) => {
-                console.warn("Errore rimozione cache userData da IndexedDB:", e);
-            });
+            await idbDel(`logbook:v2:${session.owner}`);
+            if (isCurrentSession(session)) clearStorageMarker();
         }
-    } catch (e) {
-        console.warn("Errore salvataggio cache userData in IndexedDB:", e);
-    }
+};
+
+const persistHydration = (data: UserData | null, onFailure: (error: unknown) => void) => {
+    const session = captureSession();
+    void saveUserDataToCache(data).catch(error => { if (isCurrentSession(session)) onFailure(error); });
 };
 
 export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
@@ -63,7 +63,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                 : dataOrUpdater;
 
             if (!rawNextData) {
-                saveUserDataToCache(null);
+                // Resetting the view must not erase a durable journal.
                 return { userData: null, localWorkout: state.localWorkout };
             }
 
@@ -80,13 +80,13 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                     syncedLocalWorkout = rawNextData.activeWorkout;
                     if (syncedLocalWorkout) {
                         try {
-                            localStorage.setItem('logbook_local_workout', JSON.stringify(syncedLocalWorkout));
+                            writeDeviceValue('workout', JSON.stringify(syncedLocalWorkout));
                         } catch (e) {
                             console.error("Errore salvataggio localWorkout in localStorage:", e);
                         }
                     } else {
                         try {
-                            localStorage.removeItem('logbook_local_workout');
+                            writeDeviceValue('workout', null);
                         } catch {
                             // Ignore removal error
                         }
@@ -94,11 +94,11 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                 }
             }
 
-            const nextData: UserData = {
+            const nextData = UserDataSchema.parse({
                 ...rawNextData,
                 activeWorkout: syncedLocalWorkout ?? null
-            };
-            saveUserDataToCache(nextData);
+            }) as unknown as UserData;
+            persistHydration(nextData, () => set({ saveError: 'Impossibile salvare i dati su questo dispositivo.', syncHealth: 'failed' }));
             return { userData: nextData, localWorkout: syncedLocalWorkout };
         });
     },
@@ -112,10 +112,9 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             return { ok: false, status: 'failed', error: new Error("conflict-resolved-elsewhere") };
         }
 
-        // 2. Auth Context checking:
-        // We ensure a valid expectedUid was provided by the UI layer to prevent cross-account bugs
-        if (!expectedUid) {
-            return { ok: false, status: 'failed', error: new Error("Missing expectedUid context.") };
+        const session = captureSession();
+        if (!expectedUid || session.owner !== `user:${expectedUid}`) {
+            return { ok: false, status: 'failed', error: new Error('Sessione utente non corrispondente') };
         }
 
         const currentFingerprint = getNutritionConflictFingerprint(userData.pendingConflicts.nutritionPlanning);
@@ -128,59 +127,25 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             return { ok: false, status: 'failed', error: new Error("Stale conflict data.") };
         }
 
-        if (resolution === 'cloud') {
-            // Mantieni Cloud: Rimuove pendingConflicts localmente, senza invocare Firestore.
-            set((draftState) => {
-                if (!draftState.userData || !draftState.userData.pendingConflicts) return draftState;
-                const nextData = { ...draftState.userData };
-                const nextConflicts = { ...nextData.pendingConflicts };
-                delete nextConflicts.nutritionPlanning;
-
-                if (Object.keys(nextConflicts).length === 0) {
-                    delete nextData.pendingConflicts;
-                } else {
-                    nextData.pendingConflicts = nextConflicts;
-                }
-
-                saveUserDataToCache(nextData);
-                return { userData: nextData };
-            });
-            return { ok: true, status: 'synced' };
-        } else {
-            // Mantieni Locale: Sovrascrive il cloud plan
+        // Keep the recoverable alternative visible and durable until both saves succeed.
+        if (resolution === 'local') {
             const localPlan = userData.pendingConflicts.nutritionPlanning;
-            const result = await state.updateUserData((prev: import('../../types').UserData) => {
-                const nextConflicts = { ...prev.pendingConflicts };
-                delete nextConflicts.nutritionPlanning;
-
-                const nextData = {
-                    ...prev,
-                    nutritionPlanning: localPlan,
-                    nutritionPlanningOrigin: 'user-edited' as const,
-                };
-
-                if (Object.keys(nextConflicts).length === 0) {
-                    delete nextData.pendingConflicts;
-                } else {
-                    nextData.pendingConflicts = nextConflicts;
-                }
-                return nextData;
-            });
-
-            // Se il risultato NON è synced, revertiamo il pendingConflicts in store in modo che resti recuperabile
-            if (!result.ok || result.status !== 'synced') {
-                set((draftState) => {
-                    if (!draftState.userData) return draftState;
-                    const nextData = { ...draftState.userData };
-                    nextData.pendingConflicts = {
-                        ...(nextData.pendingConflicts || {}),
-                        nutritionPlanning: localPlan
-                    };
-                    saveUserDataToCache(nextData);
-                    return { userData: nextData };
-                });
-            }
-            return result;
+            const result = await state.updateUserData(prev => ({
+                ...prev, nutritionPlanning: localPlan, nutritionPlanningOrigin: 'user-edited',
+            }));
+            if (!result.ok || !isCurrentSession(session)) return result;
         }
+        if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la risoluzione');
+        const currentData = get().userData;
+        if (!currentData) throw new Error('Dati utente non disponibili');
+        await clearNutritionConflict(session.owner, expectedConflictFingerprint, currentData);
+        if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la risoluzione');
+        set(draft => {
+            if (!draft.userData || getNutritionConflictFingerprint(draft.userData.pendingConflicts?.nutritionPlanning) !== expectedConflictFingerprint) return draft;
+            const { nutritionPlanning: _resolved, ...remaining } = draft.userData.pendingConflicts ?? {};
+            const { pendingConflicts: _old, ...rest } = draft.userData;
+            return { userData: Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest };
+        });
+        return { ok: true, status: 'synced' };
     }
 });

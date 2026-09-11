@@ -55,7 +55,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
         vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: false, status: 'rejected' });
 
         const promise = useAppStore.getState().submitLegalConsent(mockConsent);
-        await expect(promise).rejects.toThrow("Salvataggio del consenso fallito o rifiutato");
+        await expect(promise).rejects.toThrow("Sincronizzazione rifiutata dal server");
 
         const state = useAppStore.getState();
         // Il campo legalConsent DEVE rimanere undefined/null per lasciare l'overlay aperto
@@ -130,7 +130,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         
         // Secondo click (simulato per sicurezza, ma disabilitato dal DOM)
         fireEvent.click(button);
-        expect(DB.saveUserData).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(DB.saveUserData).toHaveBeenCalledTimes(1));
 
         resolveSave({ ok: true, status: 'synced' });
         await waitFor(() => expect(useAppStore.getState().userData?.legalConsent).toBeDefined());

@@ -6,6 +6,8 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import App from '../src/App';
 import { renderWithProviders } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { BufferedInput } from '../src/components/UI/BufferedInput';
+import { invalidateSession } from '../src/lib/sync/session';
 
 describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   let mockSetNeedRefresh: ReturnType<typeof vi.fn>;
@@ -13,6 +15,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
   const originalServiceWorker = navigator.serviceWorker;
 
   beforeEach(() => {
+    useAppStore.getState().resetStore();
     mockSetNeedRefresh = vi.fn();
     mockUpdateServiceWorker = vi.fn().mockResolvedValue(undefined);
     vi.clearAllMocks();
@@ -37,6 +40,31 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     const { container } = render(<ReloadPrompt />);
     expect(container.firstChild).toBeNull();
     expect(screen.queryByText(/Nuova versione disponibile/i)).toBeNull();
+  });
+
+  test('a chunk failure opens a dismissible prompt instead of reloading automatically', () => {
+    vi.mocked(useRegisterSW).mockReturnValue({ needRefresh: [false, mockSetNeedRefresh], offlineReady: [false, vi.fn()], updateServiceWorker: mockUpdateServiceWorker });
+    render(<ReloadPrompt />);
+    const event = new Event('vite:preloadError', { cancelable: true });
+    act(() => { window.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+    expect(screen.getByText('Aggiornamento richiesto per caricare questa schermata')).toBeDefined();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Chiudi/i }));
+    expect(screen.queryByText('Aggiornamento richiesto per caricare questa schermata')).toBeNull();
+  });
+
+  test('unmount flushes a buffered input only in its original session', () => {
+    const update = vi.fn();
+    const first = render(<BufferedInput value="" onChange={update} aria-label="Bozza" />);
+    fireEvent.change(screen.getByLabelText('Bozza'), { target: { value: '7,5' } });
+    first.unmount();
+    expect(update).toHaveBeenCalledExactlyOnceWith('7,5');
+    update.mockClear();
+    const second = render(<BufferedInput value="" onChange={update} aria-label="Bozza" />);
+    fireEvent.change(screen.getByLabelText('Bozza'), { target: { value: 'private' } });
+    invalidateSession(); second.unmount();
+    expect(update).not.toHaveBeenCalled();
   });
 
   test('R1 & R2: ReloadPrompt renders non-invasive dark glassmorphic banner when needRefresh is true', () => {
@@ -306,7 +334,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     });
 
     expect(rejectingUpdate).toHaveBeenCalledWith(true);
-    expect(consoleSpy).toHaveBeenCalledWith('SW update trigger error:', expect.any(Error));
+    expect(screen.getByText('Failed to postMessage to SW')).toBeDefined();
     consoleSpy.mockRestore();
   });
 
@@ -495,7 +523,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     });
 
     expect(throwingUpdate).toHaveBeenCalledWith(true);
-    expect(consoleSpy).toHaveBeenCalledWith('SW update invocation error:', expect.any(Error));
+    expect(screen.getByText('Immediate sync throw')).toBeDefined();
     consoleSpy.mockRestore();
   });
 });

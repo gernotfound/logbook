@@ -12,7 +12,10 @@ import type { UserData } from '../src/types';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {
-        currentUser: { uid: 'challenger_test_user' },
+        currentUser: {
+            uid: 'test-user-id',
+            getIdTokenResult: vi.fn().mockResolvedValue({ authTime: new Date().toISOString() }),
+        },
         signOut: vi.fn().mockResolvedValue(undefined),
     },
     db: {},
@@ -22,20 +25,60 @@ vi.mock('../src/lib/firebase', () => ({
     deleteUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../src/lib/sync/session', async () => {
+    const actual = await vi.importActual<typeof import('../src/lib/sync/session')>('../src/lib/sync/session');
+    const { auth } = await import('../src/lib/firebase');
+    return {
+        ...actual,
+        storageOwner: () => auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest',
+        captureSession: () => ({ owner: auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest', epoch: 0 }),
+        isCurrentSession: (session: any) => session.owner === (auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest'),
+    };
+});
+
 describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
     let mockBatch: any;
+    let mockDocs: Record<string, any> = {};
 
     beforeEach(() => {
         vi.clearAllMocks();
         DB.resetCache();
         useAppStore.getState().resetStore();
+        mockDocs = {};
+
+        vi.mocked(getDoc).mockImplementation(async (docRef: any) => {
+            const path = docRef?.path || String(docRef);
+            if (mockDocs[path] !== undefined) {
+                return { exists: () => true, data: () => structuredClone(mockDocs[path]) } as any;
+            }
+            return { exists: () => false, data: () => ({}) } as any;
+        });
+
+        let pendingWrites: Array<() => void> = [];
 
         mockBatch = {
-            set: vi.fn(),
-            delete: vi.fn(),
-            commit: vi.fn().mockResolvedValue(undefined),
+            set: vi.fn().mockImplementation((docRef: any, data: any) => {
+                const path = docRef?.path || String(docRef);
+                pendingWrites.push(() => {
+                    mockDocs[path] = structuredClone(data);
+                });
+            }),
+            delete: vi.fn().mockImplementation((docRef: any) => {
+                const path = docRef?.path || String(docRef);
+                pendingWrites.push(() => {
+                    delete mockDocs[path];
+                });
+            }),
+            commit: vi.fn().mockImplementation(async () => {
+                const writes = pendingWrites;
+                pendingWrites = [];
+                for (const write of writes) write();
+            }),
         };
-        vi.mocked(writeBatch).mockReturnValue(mockBatch);
+        vi.mocked(writeBatch).mockImplementation(() => {
+            pendingWrites = [];
+            return mockBatch;
+        });
     });
 
     describe('Scope 1: Save Amnesia & Offline Diffing Resilience', () => {
@@ -111,7 +154,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             permError.code = 'permission-denied';
             mockBatch.commit.mockRejectedValueOnce(permError);
 
-            await expect(DB.saveUserData(state)).rejects.toThrow('Missing or insufficient permissions');
+            const saveRes = await DB.saveUserData(state);
+            expect(saveRes).toEqual({ ok: false, status: 'rejected', error: permError });
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
@@ -292,17 +336,17 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
     describe('Scope 3: Memoization Referential Identity Verification', () => {
         it('verifies EMPTY_HISTORY_ARRAY in TrainingSession preserves strict reference equality (===) for multiple exercises without history', async () => {
-            const trainingSessionFile = fs.readFileSync(
-                path.resolve(__dirname, '../src/components/Training/TrainingSession.tsx'),
+            const activeSessionFile = fs.readFileSync(
+                path.resolve(__dirname, '../src/components/Training/ActiveWorkoutSession.tsx'),
                 'utf-8'
             );
 
             // Verify module-level declaration exists
-            expect(trainingSessionFile).toMatch(/const EMPTY_HISTORY_ARRAY:\s*Array<.*?>\s*=\s*\[\];/);
+            expect(activeSessionFile).toMatch(/const EMPTY_HISTORY_ARRAY:\s*Array<.*?>\s*=\s*\[\];/);
 
             // Verify the fallback uses EMPTY_HISTORY_ARRAY instead of inline []
-            expect(trainingSessionFile).toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*EMPTY_HISTORY_ARRAY/);
-            expect(trainingSessionFile).not.toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*\[\]/);
+            expect(activeSessionFile).toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*EMPTY_HISTORY_ARRAY/);
+            expect(activeSessionFile).not.toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*\[\]/);
 
             // Emulate the exact lookup logic
             const exerciseHistoryMap = new Map<string, any[]>();
@@ -387,7 +431,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'supplements',
                 'activePains',
                 'catalogOverrides',
-                'legalConsent'
+                'legalConsent',
+                'nutritionPlanningOrigin'
             ];
 
             expectedKeys.forEach(key => {
@@ -441,7 +486,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'supplements',
                 'activePains',
                 'catalogOverrides',
-                'legalConsent'
+                'legalConsent',
+                'nutritionPlanningOrigin'
             ];
 
             expect(writtenKeys.sort()).toEqual(expectedKeys.sort());
@@ -566,23 +612,39 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 mockRefs.push({ id: `doc_${i}` });
             }
 
-            // Mock getDocs to return large snapshots
-            const { getDocs } = await import('firebase/firestore');
-            vi.mocked(getDocs).mockResolvedValueOnce({
-                forEach: (cb: any) => mockRefs.slice(0, 500).forEach(r => cb({ ref: r }))
-            } as any).mockResolvedValueOnce({
-                forEach: (cb: any) => mockRefs.slice(500, 950).forEach(r => cb({ ref: r }))
-            } as any);
+            const firestore = await import('firebase/firestore');
+            (firestore as any).query = vi.fn((path: any, ..._rest: any[]) => path);
+            (firestore as any).limit = vi.fn((count: number) => count);
+            let queryCount = 0;
+            const mockedGetDocsFromServer = vi.fn().mockImplementation(async () => {
+                queryCount++;
+                if (queryCount === 1) {
+                    // Chunk 1 of history_months: 400 docs
+                    return { empty: false, docs: mockRefs.slice(0, 400).map(r => ({ ref: r })) };
+                } else if (queryCount === 2) {
+                    // Chunk 2 of history_months: 400 docs
+                    return { empty: false, docs: mockRefs.slice(400, 800).map(r => ({ ref: r })) };
+                } else if (queryCount === 3) {
+                    // Chunk 3 of history_months: 150 docs
+                    return { empty: false, docs: mockRefs.slice(800, 950).map(r => ({ ref: r })) };
+                } else {
+                    // Empty: collection drained or residual check empty
+                    return { empty: true, docs: [] };
+                }
+            });
+            (firestore as any).getDocsFromServer = mockedGetDocsFromServer;
+            (firestore as any).getDocFromServer = vi.fn().mockResolvedValue({ exists: () => false });
 
             await DB.deleteAccount();
 
-            // Total refs = 500 + 450 + 1 (user doc) = 951 refs.
-            // Sliced into chunks of 400:
+            // Total refs = 400 + 400 + 150 (history) + 1 (user doc) = 951 refs.
+            // Sliced into chunks of <= 400:
             // Chunk 1: 400
             // Chunk 2: 400
-            // Chunk 3: 151
-            // Total batches = 3 batches committed
-            expect(mockBatch.commit).toHaveBeenCalledTimes(3);
+            // Chunk 3: 150
+            // Chunk 4: 1 (root user doc)
+            // Total batches committed = 4 batches
+            expect(mockBatch.commit).toHaveBeenCalledTimes(4);
         });
     });
 });

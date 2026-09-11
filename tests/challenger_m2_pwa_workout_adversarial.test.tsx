@@ -475,6 +475,10 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
 
       const { unmount } = render(React.createElement(SettingsView));
 
+      // Navigate to Privacy tab to access analytics toggle
+      const privacyTab = screen.getByRole('tab', { name: /Privacy/i });
+      fireEvent.click(privacyTab);
+
       const analyticsToggle = screen.getByRole('checkbox');
       expect(analyticsToggle).toBeDefined();
 
@@ -484,6 +488,10 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
         fireEvent.click(analyticsToggle);
         fireEvent.click(analyticsToggle);
       });
+
+      // Switch back to Account tab to access Cerca aggiornamenti
+      const accountTab = screen.getByRole('tab', { name: /Account/i });
+      fireEvent.click(accountTab);
 
       const updateBtn = screen.getByRole('button', { name: /Cerca aggiornamenti/i });
       await act(async () => {

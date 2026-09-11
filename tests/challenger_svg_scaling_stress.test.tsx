@@ -1,5 +1,6 @@
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
+import { fireEvent } from '@testing-library/react';
 import { renderWithProviders } from './setup';
 import MuscleModel from '../src/components/Training/MuscleModel';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
@@ -91,6 +92,11 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
           <TrainingExercises />
         </div>
       );
+
+      const createBtn = container.querySelector('button.btn-primary');
+      if (createBtn) {
+        fireEvent.click(createBtn);
+      }
 
       const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;
       expect(muscleMapContainer).not.toBeNull();

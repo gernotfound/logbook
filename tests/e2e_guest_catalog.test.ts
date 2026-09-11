@@ -64,18 +64,7 @@ import type {
 import { idbStore } from './setup';
 
 // Mock Firebase Auth and DB for persistence tests
-vi.mock('../src/lib/firebase', () => ({
-    auth: {
-        currentUser: { uid: 'e2e_test_user_777', email: 'guest_migrated@example.com' },
-        signOut: vi.fn().mockResolvedValue(undefined),
-    },
-    db: { type: 'firestore_mock' },
-    getDb: vi.fn().mockReturnValue({}),
-    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
-    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    deleteUser: vi.fn().mockResolvedValue(undefined),
-    isAppCheckFallbackOffline: vi.fn().mockReturnValue(false),
-}));
+
 
 describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
 
@@ -104,15 +93,15 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             // Action: Retrieve catalog on cold start
             const catalog = await getCachedCatalog();
 
-            // Assertions: Catalog is valid, non-null, and comes from seed (which is intentionally empty)
+            // Assertions: Catalog is valid, non-null, and comes from standard seed catalog
             expect(catalog).toBeDefined();
             expect(catalog.manifest.version).toBe('1.0.0');
             expect(Array.isArray(catalog.exercises)).toBe(true);
             expect(Array.isArray(catalog.foods)).toBe(true);
-            expect(catalog.exercises).toHaveLength(0);
-            expect(catalog.foods).toHaveLength(0);
-            expect(catalog.manifest.itemCounts.exercises).toBe(0);
-            expect(catalog.manifest.itemCounts.foods).toBe(0);
+            expect(catalog.exercises.length).toBeGreaterThan(0);
+            expect(catalog.foods.length).toBeGreaterThan(0);
+            expect(catalog.manifest.itemCounts.exercises).toBeGreaterThan(0);
+            expect(catalog.manifest.itemCounts.foods).toBeGreaterThan(0);
 
             // In-memory catalog is now warm
             expect(getInMemoryCatalog()).not.toBeNull();
@@ -323,11 +312,11 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             const catalog = await getCachedCatalog();
             expect(catalog).toBeDefined();
             expect(catalog.manifest.version).toBe('1.0.0');
-            // Seed is intentionally empty (commit e61a133): fallback returns valid empty arrays
+            // Fallback returns valid seed catalog arrays
             expect(Array.isArray(catalog.exercises)).toBe(true);
             expect(Array.isArray(catalog.foods)).toBe(true);
-            expect(catalog.exercises).toHaveLength(0);
-            expect(catalog.foods).toHaveLength(0);
+            expect(catalog.exercises.length).toBeGreaterThan(0);
+            expect(catalog.foods.length).toBeGreaterThan(0);
         });
 
         it('T2.2: Missing or undefined catalogOverrides object handled safely with full catalog fallback', () => {
@@ -702,7 +691,7 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             const currentData = useAppStore.getState().userData!;
             expect(currentData.nutrition?.['2026-08-23']).toBeDefined();
             expect(currentData.nutrition?.['2026-08-23'].meals).toHaveLength(3);
-            expect(currentData.nutrition?.['2026-08-23'].weight).toBe('79.5');
+            expect(currentData.nutrition?.['2026-08-23'].weight).toBe(79.5);
         });
     });
 

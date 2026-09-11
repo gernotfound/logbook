@@ -1,5 +1,5 @@
 import React from 'react';
-import { addDays } from 'date-fns';
+import { shiftDateString } from '../../lib/utils/date';
 import { Logic } from '../../lib/logic';
 import { X } from 'lucide-react';
 
@@ -18,21 +18,13 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
 
     const handlePrevDay = () => {
         if (!setSelectedDate) return;
-        const validStr = Logic.parseDateInput(activeDateStr) || activeDateStr;
-        const [y, m, d] = validStr.split('-').map(Number);
-        const baseDate = (y && m && d) ? new Date(y, m - 1, d) : new Date();
-        const prev = addDays(baseDate, -1);
-        setSelectedDate(Logic.getLocalDateString(prev));
+        setSelectedDate(shiftDateString(activeDateStr, -1));
     };
 
     const handleNextDay = () => {
         if (!setSelectedDate) return;
         if (activeDateStr === today) return;
-        const validStr = Logic.parseDateInput(activeDateStr) || activeDateStr;
-        const [y, m, d] = validStr.split('-').map(Number);
-        const baseDate = (y && m && d) ? new Date(y, m - 1, d) : new Date();
-        const next = addDays(baseDate, 1);
-        setSelectedDate(Logic.getLocalDateString(next));
+        setSelectedDate(shiftDateString(activeDateStr, 1));
     };
 
     const handleToday = () => {

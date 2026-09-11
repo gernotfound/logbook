@@ -1,3 +1,9 @@
+import type { UserData } from '../../types';
+
+const loadedMonths = new WeakMap<UserData, string[]>();
+export const recordLoadedMonths = (data: UserData, months: string[]) => { loadedMonths.set(data, [...months]); };
+export const getLoadedMonths = (data: UserData) => loadedMonths.get(data) ?? [];
+
 export class SyncTimeoutError extends Error {
     constructor(message: string = "Timeout operazione Firestore") {
         super(message);
@@ -14,9 +20,11 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeou
 }
 
 export let dbState = {
-    lastSavedStateStr: null as string | null
+    lastSavedStateStr: null as string | null,
+    lastSavedOwner: null as string | null,
 };
 
-export function setLastSavedStateStr(val: string | null) {
+export function setLastSavedStateStr(val: string | null, owner: string | null = null) {
     dbState.lastSavedStateStr = val;
+    dbState.lastSavedOwner = owner;
 }

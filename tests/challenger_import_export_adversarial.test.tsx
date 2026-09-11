@@ -10,6 +10,15 @@ vi.mock('../src/store/useAppStore', () => ({
     }
 }));
 
+vi.mock('../src/lib/sync/session', async () => {
+    const actual = await vi.importActual('../src/lib/sync/session');
+    return {
+        ...actual,
+        captureSession: () => ({ owner: 'user:my_user_id', epoch: 0 }),
+        isCurrentSession: () => true,
+    };
+});
+
 describe('Adversarial Import/Export Logic', () => {
     let saveUserDataMock: any;
     let mockUserData: UserData;
@@ -94,8 +103,8 @@ describe('Adversarial Import/Export Logic', () => {
         const updater = saveUserDataMock.mock.calls[0][0];
         const finalData = typeof updater === 'function' ? updater(mockUserData) : updater;
 
-        // Since parseLibrary strips invalid IDs, the library should be empty or contain original
-        expect(finalData.library.length).toBe(1); // the original ex1
+        // Since safeString sanitizes and preserves valid numeric IDs, the library contains original + sanitized
+        expect(finalData.library.length).toBe(2);
     });
 
     it('stress test: handles large arrays without freezing', async () => {

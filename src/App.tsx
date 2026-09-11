@@ -33,6 +33,7 @@ import { InstallPrompt } from './components/UI/InstallPrompt';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
+import { SyncConflictPanel } from './components/UI/SyncConflictPanel';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
@@ -53,15 +54,6 @@ function App() {
   const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
-
-  // Handle Vite lazy chunk loading failure gracefully (e.g. after a new production deployment)
-  useEffect(() => {
-    const handlePreloadError = () => {
-      window.location.reload();
-    };
-    window.addEventListener('vite:preloadError', handlePreloadError);
-    return () => window.removeEventListener('vite:preloadError', handlePreloadError);
-  }, []);
 
   useEffect(() => {
     const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
@@ -92,6 +84,17 @@ function App() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [saveError, setSaveError]);
+
+  // Clear saveError on online event if it was due to missing connection during save
+  useEffect(() => {
+    const handleOnline = () => {
+      if (useAppStore.getState().saveError === 'Connessione assente durante il salvataggio') {
+        setSaveError(null);
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [setSaveError]);
 
   // Tracciamento dei tab su Google Analytics (SPA tab tracking)
   useEffect(() => {
@@ -272,8 +275,9 @@ function App() {
       )}
 
       <main id="app-container" style={isGuest ? { paddingTop: '36px' } : undefined}>
+        <SyncConflictPanel key={isGuest ? 'guest' : currentUser?.uid} />
         {/* Render Active View */}
-        <ErrorBoundary>
+        <ErrorBoundary key={isGuest ? 'guest' : currentUser?.uid}>
           <Suspense fallback={
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
               <div className="spinner"></div>

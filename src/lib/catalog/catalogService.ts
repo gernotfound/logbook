@@ -38,6 +38,37 @@ const DEFAULT_SYNC_TIMEOUT_MS = 4000;
 
 let inMemoryCatalogCache: CachedGlobalCatalog | null = null;
 let isLoadedFromPersistentCache = false;
+let syncInFlight: Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> | null = null;
+
+export type CatalogUpdateListener = (catalog: CachedGlobalCatalog) => void;
+const catalogListeners = new Set<CatalogUpdateListener>();
+
+export function subscribeCatalogUpdates(listener: CatalogUpdateListener): () => void {
+    catalogListeners.add(listener);
+    return () => {
+        catalogListeners.delete(listener);
+    };
+}
+
+function validManifest(value: unknown): value is CatalogManifest {
+    if (!value || typeof value !== 'object') return false;
+    const manifest = value as CatalogManifest;
+    return typeof manifest.version === 'string' && !!manifest.version.trim() && manifest.schemaVersion === 1 &&
+        [manifest.docRefs?.exercises, manifest.docRefs?.foods].every(ref => typeof ref === 'string' && !!ref && !ref.includes('/')) &&
+        [manifest.itemCounts?.exercises, manifest.itemCounts?.foods].every(count => Number.isSafeInteger(count) && count >= 0);
+}
+
+function validItems(items: unknown, count: number): items is Array<{ id: string | number; name: string }> {
+    if (!Array.isArray(items) || items.length !== count) return false;
+    const ids = new Set<string>();
+    return items.every(item => {
+        if (!item || !((typeof item.id === 'string' && item.id.trim()) || (typeof item.id === 'number' && Number.isFinite(item.id))) || typeof item.name !== 'string' || !item.name.trim()) return false;
+        const id = String(item.id);
+        if (ids.has(id)) return false;
+        ids.add(id);
+        return true;
+    });
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, errMsg = "Timeout operazione catalogo"): Promise<T> {
     let timer: any;
@@ -94,7 +125,7 @@ export async function getCachedCatalog(): Promise<CachedGlobalCatalog> {
         const rawCached = await idbGet<unknown>(CATALOG_CACHE_KEY);
         if (rawCached) {
             const parsed = CachedGlobalCatalogSchema.safeParse(rawCached);
-            if (parsed.success) {
+            if (parsed.success && validManifest(parsed.data.manifest) && validItems(parsed.data.exercises, parsed.data.manifest.itemCounts.exercises) && validItems(parsed.data.foods, parsed.data.manifest.itemCounts.foods)) {
                 inMemoryCatalogCache = parsed.data;
                 isLoadedFromPersistentCache = true;
                 return parsed.data;
@@ -152,10 +183,10 @@ export async function fetchRemoteManifest(
 
         const data = snapshot.data();
         const parsed = CatalogManifestSchema.safeParse(data);
-        if (parsed.success) {
+        if (validManifest(data) && parsed.success) {
             return parsed.data;
         } else {
-            console.warn("[CatalogService] Manifest remoto non conforme allo schema:", parsed.error);
+            console.warn("[CatalogService] Manifest remoto non conforme allo schema.");
             return null;
         }
     } catch (err) {
@@ -178,6 +209,14 @@ export async function syncGlobalCatalog(
     dbInstance: Firestore,
     options?: { force?: boolean; timeoutMs?: number }
 ): Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> {
+    if (syncInFlight) return syncInFlight;
+    const work = performCatalogSync(dbInstance, options);
+    syncInFlight = work;
+    try { return await work; }
+    finally { if (syncInFlight === work) syncInFlight = null; }
+}
+
+async function performCatalogSync(dbInstance: Firestore, options?: { force?: boolean; timeoutMs?: number }): Promise<{ catalog: CachedGlobalCatalog; updated: boolean }> {
     const cached = await getCachedCatalog();
     const timeoutMs = options?.timeoutMs ?? DEFAULT_SYNC_TIMEOUT_MS;
 
@@ -193,6 +232,10 @@ export async function syncGlobalCatalog(
 
         const isOutdated = cached.manifest.version !== remoteManifest.version ||
             cached.manifest.schemaVersion !== remoteManifest.schemaVersion ||
+            cached.manifest.docRefs.exercises !== remoteManifest.docRefs.exercises ||
+            cached.manifest.docRefs.foods !== remoteManifest.docRefs.foods ||
+            !validItems(cached.exercises, remoteManifest.itemCounts.exercises) ||
+            !validItems(cached.foods, remoteManifest.itemCounts.foods) ||
             options?.force === true;
 
         if (!isOutdated) {
@@ -212,37 +255,12 @@ export async function syncGlobalCatalog(
             "Timeout scaricamento documenti catalogo globale"
         );
 
-        let newExercises: CatalogExercise[] = cached.exercises;
-        if (exercisesSnap.exists()) {
-            const data = exercisesSnap.data();
-            const items = Array.isArray(data?.items) ? data.items : [];
-            const sanitizedExercises: CatalogExercise[] = [];
-            for (const item of items) {
-                const parsed = CatalogExerciseSchema.safeParse(item);
-                if (parsed.success) {
-                    sanitizedExercises.push(parsed.data);
-                }
-            }
-            if (sanitizedExercises.length > 0) {
-                newExercises = sanitizedExercises;
-            }
-        }
-
-        let newFoods: CatalogFood[] = cached.foods;
-        if (foodsSnap.exists()) {
-            const data = foodsSnap.data();
-            const items = Array.isArray(data?.items) ? data.items : [];
-            const sanitizedFoods: CatalogFood[] = [];
-            for (const item of items) {
-                const parsed = CatalogFoodSchema.safeParse(item);
-                if (parsed.success) {
-                    sanitizedFoods.push(parsed.data);
-                }
-            }
-            if (sanitizedFoods.length > 0) {
-                newFoods = sanitizedFoods;
-            }
-        }
+        if (!exercisesSnap.exists() || !foodsSnap.exists()) throw new Error('Documenti catalogo mancanti');
+        const exerciseItems: unknown = exercisesSnap.data()?.items;
+        const foodItems: unknown = foodsSnap.data()?.items;
+        if (!validItems(exerciseItems, remoteManifest.itemCounts.exercises) || !validItems(foodItems, remoteManifest.itemCounts.foods)) throw new Error('Catalogo incompleto o con identità non valide');
+        const newExercises = exerciseItems.map(item => CatalogExerciseSchema.parse(item));
+        const newFoods = foodItems.map(item => CatalogFoodSchema.parse(item));
 
         const updatedCatalog: CachedGlobalCatalog = {
             manifest: remoteManifest,
@@ -252,6 +270,9 @@ export async function syncGlobalCatalog(
         };
 
         await saveCatalogToCache(updatedCatalog);
+        for (const listener of catalogListeners) {
+            try { listener(updatedCatalog); } catch (e) { console.error(e); }
+        }
         return { catalog: updatedCatalog, updated: true };
     } catch (err) {
         console.warn("[CatalogService] Sincronizzazione remota catalogo fallita, mantenuta versione locale:", err);

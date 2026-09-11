@@ -33,17 +33,17 @@ export const defaultUserDataFallback: UserData = {
 
 export const UserDataSchema = z.object({
     profile: UserProfileSchema.optional().catch({}).default({}),
-    library: z.array(ExerciseSchema).max(500).optional().catch([]).default([]),
-    routines: z.array(WorkoutRoutineSchema).max(300).optional().catch([]).default([]),
+    library: z.array(ExerciseSchema).optional().catch([]).default([]),
+    routines: z.array(WorkoutRoutineSchema).optional().catch([]).default([]),
     history: z.array(WorkoutSessionSchema).optional().catch([]).default([]), // Actually stored in history_months in Firebase
     nutrition: z.record(z.string(), NutritionDaySchema).optional().catch({}).default({}), // nutrition_months
-    customFoods: z.array(FoodSchema).max(500).optional().catch([]).default([]),
+    customFoods: z.array(FoodSchema).optional().catch([]).default([]),
     activeWorkout: WorkoutSessionSchema.nullable().optional().catch(null).default(null),
     nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined),
-    trainingCycles: z.array(TrainingCycleSchema).max(100).optional().catch([]).default([]),
+    trainingCycles: z.array(TrainingCycleSchema).optional().catch([]).default([]),
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
-    supplements: z.array(SupplementSchema).max(100).optional().catch([]).default([]),
-    activePains: z.array(safeString('')).max(50).optional().catch([]).default([]),
+    supplements: z.array(SupplementSchema).optional().catch([]).default([]),
+    activePains: z.array(safeString('')).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
     legalConsent: LegalConsentSchema,
     nutritionPlanningOrigin: z.enum(['generated-default', 'user-edited']).optional().catch(undefined),
@@ -60,7 +60,21 @@ export const UserDataSchema = z.object({
     return defaultUserDataFallback as any;
 }).default(defaultUserDataFallback as any);
 
-const isValidParsedId = (id: unknown) => typeof id === 'string' && id.trim().length > 0;
+const isValidParsedId = (id: unknown) =>
+    (typeof id === 'string' && id.trim().length > 0) || (typeof id === 'number' && Number.isFinite(id));
+
+export function quarantineCorruptedRecord(context: {
+    collection: string;
+    raw: unknown;
+    error?: unknown;
+}): void {
+    reportZodSchemaFallback({
+        schema: context.collection,
+        field: 'quarantine',
+        fallbackUsed: 'record_quarantined',
+        error: context.error,
+    });
+}
 
 export const DomainParsers = {
     // Oggetti singoli: fallback al default schema in caso di dato corrotto
@@ -93,7 +107,14 @@ export const DomainParsers = {
             }
             return [];
         }
-        return data.map((item) => WorkoutSessionSchema.parse(item));
+        return data.map((item) => {
+            try {
+                return WorkoutSessionSchema.parse(item);
+            } catch (e) {
+                quarantineCorruptedRecord({ collection: 'history', raw: item, error: e });
+                return { exercises: [], pains: [] };
+            }
+        });
     },
     parseLibrary: (data: unknown) => {
         if (!Array.isArray(data)) {
@@ -141,7 +162,14 @@ export const DomainParsers = {
             }
             return [];
         }
-        return data.map((item) => WorkoutRoutineSchema.parse(item));
+        return data.map((item) => {
+            try {
+                return WorkoutRoutineSchema.parse(item);
+            } catch (e) {
+                quarantineCorruptedRecord({ collection: 'routines', raw: item, error: e });
+                return { name: '', exercises: [] };
+            }
+        });
     },
     parseTrainingCycles: (data: unknown) => {
         if (!Array.isArray(data)) {

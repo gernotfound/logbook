@@ -331,8 +331,8 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
   // =========================================================================
   // 4. Guest / Anonymous to Authenticated User ID Migration upon Login
   // =========================================================================
-  describe('4. Guest / Anonymous User ID Migration upon Login Flush', () => {
-    it('4.1: Updates queued guest/anonymous items with active authenticated user ID upon flushQueue', async () => {
+  describe('4. Guest / Anonymous User ID Isolation upon Login Flush (LB-18 Privacy)', () => {
+    it('4.1: Preserves guest/anonymous items without retroactively assigning authenticated user ID on flush', async () => {
       // Step 1: User is guest / anonymous offline
       localStorage.setItem('logbook_is_guest', 'true');
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -357,19 +357,17 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       // Step 3: Trigger flush
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(3);
-      expect(dispatchedDocs.length).toBe(3);
-
-      // Verify that all 3 dispatched documents have been migrated to the authenticated user ID
-      dispatchedDocs.forEach((docEntry) => {
-        expect(docEntry.data.userId).toBe('firebase_auth_uid_99999');
-        expect(docEntry.path).toContain('users/firebase_auth_uid_99999/');
+      // Under GDPR and LB-18 invariants, anonymous guest events must never be dispatched under the user's UID
+      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(dispatchedDocs.length).toBe(0);
+      const remaining = telemetryHub.getQueuedEvents();
+      expect(remaining.length).toBe(3);
+      remaining.forEach((docEntry) => {
+        expect(docEntry.payload.userId).toBeNull();
       });
-
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
     });
 
-    it('4.2: Migrates "anonymous" placeholder strings to authenticated user ID on flush', async () => {
+    it('4.2: Isolates "anonymous" placeholder strings from authenticated user ID on flush', async () => {
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
       telemetryHub.setUserId('anonymous');
@@ -387,11 +385,13 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       await telemetryHub.flushQueue();
 
-      expect(dispatchedDocs.length).toBe(2);
-      expect(dispatchedDocs[0].data.userId).toBe('authenticated_user_abc');
-      expect(dispatchedDocs[1].data.userId).toBe('authenticated_user_abc');
-      expect(dispatchedDocs[0].path).toContain('users/authenticated_user_abc/');
-      expect(dispatchedDocs[1].path).toContain('users/authenticated_user_abc/');
+      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(dispatchedDocs.length).toBe(0);
+      const remaining = telemetryHub.getQueuedEvents();
+      expect(remaining.length).toBe(2);
+      remaining.forEach((item) => {
+        expect(item.payload.userId).toBe('anonymous');
+      });
     });
   });
 

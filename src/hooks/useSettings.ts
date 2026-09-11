@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Exporter } from '../lib/export';
 import { DB } from '../lib/db';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
+import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
+import type { ImportMode } from '../lib/backup';
+import { get } from 'idb-keyval';
+import { isAccountDeletionPending } from '../lib/sync/accountGate';
 
 export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
@@ -31,13 +36,20 @@ export function useSettings() {
     const setHeight = (val: string) => setLocalProfile({ ...profile, height: val });
     const setGender = (val: string) => setLocalProfile({ ...profile, gender: val });
     const [deletingAccount, setDeletingAccount] = useState(false);
+    const deleteBusy = useRef(false);
     const [importingData, setImportingData] = useState(false);
+    const importBusy = useRef(false);
+    const exportBusy = useRef(false);
+    const [exportingData, setExportingData] = useState(false);
+    let pendingAccountDeletion = false;
+    try { pendingAccountDeletion = isAccountDeletionPending(captureSession().owner); }
+    catch { /* The writer separately refuses an unreadable deletion marker. */ }
 
     const handleSaveProfile = async (e?: any) => {
         if (e) e.preventDefault();
         const newProfile = { dob, height, gender };
         try {
-            await saveUserData(prev => ({ ...prev, profile: newProfile } as any));
+            await saveUserData(prev => ({ ...prev, profile: { ...prev?.profile, ...newProfile } } as any));
             setLocalProfile(null);
             await showAlert("Profilo aggiornato!");
         } catch {
@@ -62,23 +74,61 @@ export function useSettings() {
         }
     };
 
-    const handleExportBackup = () => {
+    const handleExportBackup = async () => {
+        if (exportBusy.current) return;
         const userData = useAppStore.getState().userData;
-        if(userData) {
-            Exporter.exportBackupJson(userData, currentUser);
+        if (!userData) return;
+        const session = captureSession();
+        exportBusy.current = true;
+        setExportingData(true);
+        try {
+            try { await useAppStore.getState().flushPendingSyncs(); }
+            catch { /* A rejected cloud write must not prevent exporting its durable local copy. */ }
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+            let snapshot;
+            try {
+                snapshot = await collectBackupSnapshot(userData, !isGuest);
+            } catch (error) {
+                if (!isCurrentSession(session)) throw error;
+                if (!(await showConfirm('Il backup completo del cloud non è disponibile. Vuoi esportare solo i dati presenti su questo dispositivo? La copia sarà indicata come parziale.'))) return;
+                if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+                snapshot = await collectBackupSnapshot(userData, false);
+            }
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+            await Exporter.exportBackupJson(snapshot.data, session.owner === 'guest' ? null : { uid: session.owner.slice(5) }, snapshot.coverage, snapshot.recovery);
+        } catch (error) {
+            if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Backup non riuscito.');
+        } finally {
+            exportBusy.current = false;
+            setExportingData(false);
         }
     };
 
-    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleExportRecovery = async () => {
+        const session = captureSession();
+        try {
+            const original = await get('logbook:recovery:legacy') ?? await get('logbook_cached_user_data');
+            if (!isCurrentSession(session)) return;
+            if (original === undefined) { void showAlert('Nessun archivio precedente da recuperare.'); return; }
+            if (!(await showConfirm('Questo archivio precedente non identifica il proprietario. Esportalo solo se i dati su questo dispositivo sono tuoi. Il file originale resterà conservato.'))) return;
+            if (!isCurrentSession(session)) return;
+            await Exporter.downloadFile('logbook_recupero_precedente.json', JSON.stringify({ format: 'logbook-backup', version: 1, userData: original, recovery: { localWorkout: localStorage.getItem('logbook_local_workout') } }, null, 2), 'application/json');
+        } catch (error) {
+            if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Recupero non riuscito.');
+        }
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>, mode: ImportMode = 'merge') => {
         const file = e.target.files?.[0];
-        if (!file) return;
-        
+        if (!file || importBusy.current) return;
+        importBusy.current = true;
         setImportingData(true);
         try {
-            await Exporter.importFromJson(file, currentUser, saveUserData);
+            await Exporter.importFromJson(file, currentUser, saveUserData, mode);
         } catch (error) {
             console.error("Import error:", error);
         } finally {
+            importBusy.current = false;
             setImportingData(false);
             if (e.target) {
                 e.target.value = ''; // Reset input
@@ -87,66 +137,51 @@ export function useSettings() {
     };
 
     const handleDeleteAccount = async () => {
-        if (isGuest) {
-            if (!(await showConfirm("⚠️ ATTENZIONE: Questa operazione eliminerà permanentemente tutti i dati salvati su questo dispositivo.\n\nConfermi l'eliminazione dei dati locali?"))) return;
-            await logout({ mode: 'force' });
-            return;
-        }
-
-        if (!(await showConfirm("⚠️ ATTENZIONE: questa operazione è IRREVERSIBILE.\n\nVerranno eliminati TUTTI i tuoi dati (allenamenti, nutrizione, misurazioni).\n\nConfermi di voler eliminare il tuo account?"))) return;
-        if (!(await showConfirm("Ultima conferma: eliminare definitivamente il tuo account LogBook?"))) return;
-        
-        const tryDelete = async (isRetry = false) => {
-            setDeletingAccount(true);
-            try {
-                await DB.deleteAccount();
-                // logout handled by onAuthStateChanged
-            } catch (error: any) {
-                setDeletingAccount(false);
-                console.error("Errore eliminazione account:", error);
-                
-                if (error.message?.includes("effettuare di nuovo il login")) {
-                    const providerId = currentUser?.providerData[0]?.providerId;
-                    if (providerId === 'google.com' && !isRetry) {
-                        const wantsReauth = await showConfirm("La sessione è scaduta. È necessaria una rapida riautenticazione per confermare l'eliminazione. Vuoi procedere?");
-                        if (wantsReauth) {
-                            try {
-                                console.log("Richiesta riautenticazione per eliminazione account...");
-                                const { auth, provider, reauthenticateWithPopup } = await import('../lib/firebase');
-                                await reauthenticateWithPopup(auth.currentUser!, provider);
-                                console.log("Riautenticazione completata. Avvio eliminazione account...");
-                                await tryDelete(true); // retry after reauth
-                                return;
-                            } catch (reauthErr: any) {
-                                console.error("Riautenticazione fallita", reauthErr);
-                                if (reauthErr.code === 'auth/popup-closed-by-user') {
-                                    await showAlert("Eliminazione annullata. Devi completare l'accesso per poter eliminare l'account.");
-                                } else {
-                                    await showAlert("Autenticazione fallita. Impossibile eliminare l'account.");
-                                }
-                                return;
-                            }
-                        }
-                    } else {
-                         await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
-                         // If we couldn't reauth via popup (e.g. email/password), we don't force logout, just let the user do it manually.
-                    }
-                } else {
-                    await showAlert(error.message || "Errore durante l'eliminazione dell'account.");
-                }
-            }
+        if (deleteBusy.current) return;
+        deleteBusy.current = true;
+        const session = captureSession();
+        const assertCurrent = () => {
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata: cancellazione annullata.');
         };
-        
-        await tryDelete();
+        try {
+            if (isGuest) {
+                if (!(await showConfirm('Eliminare permanentemente i dati ospite di questo dispositivo?'))) return;
+                assertCurrent();
+                await logout({ mode: 'force' });
+                return;
+            }
+            if (!(await showConfirm('Questa operazione è irreversibile: elimina allenamenti, nutrizione, misurazioni e account. Prima di continuare, chiudi LogBook sugli altri dispositivi ed esporta un backup se vuoi conservare i dati. Procedere?'))) return;
+            assertCurrent();
+            if (!(await showConfirm('Ultima conferma: eliminare definitivamente il tuo account LogBook?'))) return;
+            assertCurrent();
+            setDeletingAccount(true);
+            const { auth, provider, reauthenticateWithPopup } = await import('../lib/firebase');
+            assertCurrent();
+            const user = auth.currentUser;
+            if (!user || 'user:' + user.uid !== session.owner) throw new Error('Account cambiato.');
+            if (user.providerData.some(item => item.providerId === 'google.com')) {
+                await reauthenticateWithPopup(user, provider);
+                assertCurrent();
+            }
+            // Other providers are checked by DB before any destructive operation.
+            await DB.deleteAccount();
+        } catch (error) {
+            // DB intentionally invalidates the sync epoch when deletion starts.
+            if (captureSession().owner === session.owner) void showAlert(error instanceof Error ? error.message : 'Cancellazione non riuscita.');
+        } finally {
+            deleteBusy.current = false;
+            setDeletingAccount(false);
+        }
     };
-
     return {
         currentUser, handleLogout,
         dob, setDob,
         height, setHeight,
         gender, setGender,
         deletingAccount,
+        pendingAccountDeletion,
         importingData,
+        exportingData, handleExportRecovery,
         handleSaveProfile, 
         handleExportCSV, handleExportShare, handleExportBackup, handleImportFile,
         handleDeleteAccount

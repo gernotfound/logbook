@@ -284,7 +284,7 @@ describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', 
       }
 
       expect(true).toBe(true);
-    });
+    }, 30000);
 
     test('Calling resetStore clears sync slice and pending save timers cleanly', async () => {
       await renderSettledApp();

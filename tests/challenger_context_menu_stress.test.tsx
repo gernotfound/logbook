@@ -223,7 +223,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
         fireEvent.click(trigger);
         expect(onToggleExpand).not.toHaveBeenCalled();
 
-        const editBtn = screen.getByRole('menuitem', { name: /Modifica scheda/i });
+        const editBtn = screen.getByRole('menuitem', { name: /Modifica/i });
         fireEvent.click(editBtn);
 
         expect(onEdit).toHaveBeenCalledTimes(1);
@@ -235,7 +235,7 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
         fireEvent.click(trigger);
         expect(onToggleExpand).not.toHaveBeenCalled();
 
-        const deleteBtn = screen.getByRole('menuitem', { name: /Elimina scheda/i });
+        const deleteBtn = screen.getByRole('menuitem', { name: /Elimina/i });
         fireEvent.click(deleteBtn);
 
         expect(onDelete).toHaveBeenCalledTimes(1);
@@ -288,16 +288,16 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
         expect(screen.getByRole('menu')).not.toBeNull();
 
         // Check menu item labels conform to sentence case
-        const editItem = screen.getByRole('menuitem', { name: /Modifica esercizio/i });
-        const deleteItem = screen.getByRole('menuitem', { name: /Elimina esercizio/i });
+        const editItem = screen.getByRole('menuitem', { name: /Modifica/i });
+        const deleteItem = screen.getByRole('menuitem', { name: /Elimina/i });
         expect(editItem).not.toBeNull();
         expect(deleteItem).not.toBeNull();
 
-        // Default exercise (lib-2) should NOT show "Elimina esercizio" when opened
+        // Default exercise (lib-2) should NOT show "Elimina" when opened
         fireEvent.mouseDown(triggers[1]);
         fireEvent.click(triggers[1]); // Opens second menu, closes first
-        expect(screen.getByRole('menuitem', { name: /Modifica esercizio/i })).not.toBeNull();
-        expect(screen.queryByRole('menuitem', { name: /Elimina esercizio/i })).toBeNull();
+        expect(screen.getByRole('menuitem', { name: /Modifica/i })).not.toBeNull();
+        expect(screen.queryByRole('menuitem', { name: /Elimina/i })).toBeNull();
       });
     });
 
@@ -339,20 +339,20 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
 
         // 1. Edit cycle
         fireEvent.click(trigger);
-        const editItem = screen.getByRole('menuitem', { name: /Modifica ciclo/i });
+        const editItem = screen.getByRole('menuitem', { name: /Modifica/i });
         fireEvent.click(editItem);
         expect(onEdit).toHaveBeenCalledWith(mockCycle);
         expect(onSetActive).not.toHaveBeenCalled();
 
         // 2. Duplicate cycle
         fireEvent.click(trigger);
-        const duplicateItem = screen.getByRole('menuitem', { name: /Duplica ciclo/i });
+        const duplicateItem = screen.getByRole('menuitem', { name: /Duplica/i });
         fireEvent.click(duplicateItem);
         expect(onDuplicate).toHaveBeenCalledWith(mockCycle);
 
         // 3. Delete cycle
         fireEvent.click(trigger);
-        const deleteItem = screen.getByRole('menuitem', { name: /Elimina ciclo/i });
+        const deleteItem = screen.getByRole('menuitem', { name: /Elimina/i });
         expect(deleteItem.classList.contains('context-menu-item-danger')).toBe(true);
         fireEvent.click(deleteItem);
         expect(onDelete).toHaveBeenCalledWith(mockCycle);
@@ -389,14 +389,14 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
 
         // Edit
         fireEvent.click(trigger);
-        const editItem = screen.getByRole('menuitem', { name: /Modifica alimento/i });
+        const editItem = screen.getByRole('menuitem', { name: /Modifica/i });
         fireEvent.click(editItem);
         expect(onEdit).toHaveBeenCalledWith(mockFood);
         expect(onQuickAddToMeal).not.toHaveBeenCalled();
 
         // Delete
         fireEvent.click(trigger);
-        const deleteItem = screen.getByRole('menuitem', { name: /Elimina alimento/i });
+        const deleteItem = screen.getByRole('menuitem', { name: /Elimina/i });
         fireEvent.click(deleteItem);
         expect(onDelete).toHaveBeenCalledWith(mockFood);
         expect(onQuickAddToMeal).not.toHaveBeenCalled();

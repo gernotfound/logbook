@@ -90,43 +90,41 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
 
 // Defensive conversion helpers for robust runtime sanitization
 export const safeOptionalSleepTime = () =>
-    z.string().transform(v => {
-        const trimmed = v.trim();
-        if (!trimmed) return undefined;
-        const formatted = formatSleepTime(trimmed);
+    z.union([z.string(), z.number()]).transform(v => {
+        const formatted = formatSleepTime(v);
         return formatted || undefined;
     }).optional().catch(undefined);
 
 export const safeNumber = (defaultVal = 0) =>
     z.union([
-        z.number().refine(v => !isNaN(v), { message: "NaN is not a valid number" }),
+        z.number().finite(),
         z.string().transform(v => {
             const trimmed = v.trim();
             if (trimmed === '') return defaultVal;
             const num = Number(trimmed);
-            return isNaN(num) ? defaultVal : num;
+            return Number.isFinite(num) ? num : defaultVal;
         })
     ]).catch(defaultVal).default(defaultVal);
 
 export const safeOptionalNumber = () =>
     z.union([
-        z.number().refine(v => !isNaN(v), { message: "NaN is not a valid number" }),
+        z.number().finite(),
         z.string().transform(v => {
             const trimmed = v.trim();
             if (trimmed === '') return undefined;
             const num = Number(trimmed);
-            return isNaN(num) ? undefined : num;
+            return Number.isFinite(num) ? num : undefined;
         })
     ]).optional().catch(undefined);
 
 export const safeOptionalNullableNumber = () =>
     z.union([
-        z.number().refine(v => !isNaN(v)),
+        z.number().finite(),
         z.string().transform(v => {
             const trimmed = v.trim();
             if (trimmed === '') return null;
             const num = Number(trimmed);
-            return isNaN(num) ? null : num;
+            return Number.isFinite(num) ? num : null;
         }),
         z.null()
     ]).optional().catch(null);

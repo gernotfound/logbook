@@ -4,6 +4,9 @@
 
 import { doc, setDoc } from 'firebase/firestore';
 import { getDb, auth } from './firebase';
+import { isAccountDeletionPending } from './sync/accountGate';
+import { deviceKey } from './sync/deviceStorage';
+import { storageOwner } from './sync/session';
 import {
   computeErrorHash,
   sanitizeErrorPayload,
@@ -659,13 +662,20 @@ export class TelemetryHub {
     }
   }
 
+  public getQueueStorageKey(): string {
+    const uid = this.customUserId !== undefined ? this.customUserId : this.getUserId();
+    const owner = uid && uid !== 'anonymous' ? `user:${uid}` : (storageOwner() || 'guest');
+    return deviceKey('telemetry_queue', owner);
+  }
+
   public getQueuedEvents(): QueuedTelemetryItem[] {
     if (this.cachedQueue !== null) {
       return this.cachedQueue;
     }
     try {
       if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+        const ownerKey = this.getQueueStorageKey();
+        const raw = localStorage.getItem(ownerKey) || localStorage.getItem(TELEMETRY_QUEUE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
@@ -697,6 +707,8 @@ export class TelemetryHub {
     try {
       if (typeof localStorage !== 'undefined') {
         const itemsToSave = this.cachedQueue ?? this.getQueuedEvents();
+        const ownerKey = this.getQueueStorageKey();
+        localStorage.setItem(ownerKey, JSON.stringify(itemsToSave));
         localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(itemsToSave));
       }
     } catch {
@@ -778,12 +790,8 @@ export class TelemetryHub {
           break;
         }
 
-        if (!item.payload.userId || item.payload.userId === 'anonymous') {
-          const currentUid = this.getUserId();
-          if (currentUid && currentUid !== 'anonymous') {
-            item.payload.userId = currentUid;
-          }
-        }
+        // Guest or another account's events must never be assigned to this login.
+        if (!item.payload.userId || item.payload.userId === 'anonymous' || item.payload.userId !== this.getUserId()) continue;
 
         let success = false;
         if (item.itemType === 'error') {
@@ -868,8 +876,8 @@ export class TelemetryHub {
 
   public async dispatchErrorToFirestore(payload: TelemetryErrorPayload): Promise<boolean> {
     try {
-      const uid = payload.userId || this.getUserId();
-      if (!uid || uid === 'anonymous') {
+      const uid = payload.userId;
+      if (!uid || uid === 'anonymous' || uid !== this.getUserId() || isAccountDeletionPending('user:' + uid)) {
         return false;
       }
 
@@ -911,8 +919,8 @@ export class TelemetryHub {
 
   public async dispatchEventToFirestore(payload: TelemetryEventPayload): Promise<boolean> {
     try {
-      const uid = payload.userId || this.getUserId();
-      if (!uid || uid === 'anonymous') {
+      const uid = payload.userId;
+      if (!uid || uid === 'anonymous' || uid !== this.getUserId() || isAccountDeletionPending('user:' + uid)) {
         return false;
       }
 

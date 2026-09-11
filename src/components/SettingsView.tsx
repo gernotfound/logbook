@@ -98,8 +98,8 @@ const ExportSelector = React.memo(({
 
 const SettingsView = () => {
     const {
-        deletingAccount,
-        handleExportCSV, handleExportShare, handleExportBackup, handleImportFile, importingData,
+        deletingAccount, pendingAccountDeletion,
+        handleExportCSV, handleExportShare, handleExportBackup, handleExportRecovery, handleImportFile, importingData, exportingData,
         handleDeleteAccount
     } = useSettings();
 
@@ -175,6 +175,7 @@ const SettingsView = () => {
             {activeTab === 'account' && (
                 <>
                     <AccountCard />
+                    {pendingAccountDeletion && <p role="alert" style={{ color: 'var(--warning-color)' }}>Cancellazione account da completare. La sincronizzazione è sospesa e la copia locale è conservata. Puoi esportare un backup e riprendere la cancellazione qui sotto.</p>}
 
                     {isInstallable && (
                         <div className="section-divider">
@@ -251,7 +252,7 @@ const SettingsView = () => {
                             onClick={handleDeleteAccount}
                             disabled={deletingAccount}
                         >
-                            {deletingAccount ? <><span aria-hidden="true">⏳</span> Eliminazione...</> : (isGuest ? <><span aria-hidden="true">🗑️</span> Elimina dati locali</> : <><span aria-hidden="true">🗑️</span> Elimina account e dati</>)}
+                            {deletingAccount ? <><span aria-hidden="true">⏳</span> Eliminazione...</> : (isGuest ? <><span aria-hidden="true">🗑️</span> Elimina dati locali</> : <><span aria-hidden="true">🗑️</span> {pendingAccountDeletion ? 'Riprendi cancellazione account' : 'Elimina account e dati'}</>)}
                         </button>
                     </div>
                 </>
@@ -317,18 +318,20 @@ const SettingsView = () => {
 
                     <div className="section-divider">
                         <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">🔐</span> Backup personale (solo tuo uso)</h3>
-                        <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esporta TUTTI i tuoi dati inclusa la cronologia allenamenti e misurazioni.</p>
+                        <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Il backup legge tutto lo storico disponibile nel cloud e include la copia locale. Senza connessione puoi scegliere una copia parziale del dispositivo.</p>
+                        <p style={{ margin: '0 0 5px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>“Importa JSON” aggiunge i dati mancanti. “Ripristina” sostituisce i campi presenti nel file, dopo un’anteprima. Le modifiche su altri dispositivi durante l’esportazione possono richiedere un nuovo backup.</p>
                         <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: 'var(--warning-color)' }}>L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>
                         
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <button className="btn" style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0 }} onClick={handleExportBackup}>
-                                <span aria-hidden="true">📤</span> Backup JSON
+                            <button className="btn" style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0 }} onClick={handleExportBackup} disabled={exportingData}>
+                                <span aria-hidden="true">📤</span> {exportingData ? 'Preparazione backup…' : 'Backup JSON'}
                             </button>
                             <label className="btn btn-primary" style={{ flex: 1, margin: 0, textAlign: 'center', cursor: 'pointer', opacity: importingData ? 0.7 : 1 }}>
                                 {importingData ? <span aria-hidden="true">⏳</span> : <span aria-hidden="true">📥</span>} {importingData ? 'Import...' : 'Ripristina'}
-                                <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} disabled={importingData} />
+                                <input type="file" accept=".json" style={{ display: 'none' }} onChange={e => handleImportFile(e, 'restore')} disabled={importingData} />
                             </label>
                         </div>
+                        <button className="btn" style={{ marginTop: '12px', minHeight: '44px' }} onClick={handleExportRecovery}>Esporta archivio precedente</button>
                     </div>
 
                     <div className="section-divider">

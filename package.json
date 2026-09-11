@@ -11,10 +11,13 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:ci": "npm run test:unit && npm run test:integration",
-    "test:stress": "vitest run \"tests/**/*adversarial*.test.{ts,tsx}\" \"tests/**/*stress*.test.{ts,tsx}\" \"tests/**/challenger_*.test.{ts,tsx}\"",
+    "test:stress": "vitest run --config vitest.stress.config.ts",
     "test:unit": "vitest run src/",
     "test:integration": "vitest run tests/",
-    "test:e2e": "playwright test"
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "test:isolated": "vitest run --config vitest.isolated.config.ts",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-logbook-audit --config firebase.emulator.json \"vitest run --config vitest.emulator.config.ts\"",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
@@ -38,6 +41,7 @@
     "@babel/plugin-transform-runtime": "^7.29.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
     "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.3",
@@ -46,7 +50,9 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^4.1.11",
     "@vitest/ui": "^4.1.10",
+    "fake-indexeddb": "6.2.5",
     "firebase-admin": "^14.3.0",
+    "firebase-tools": "15.30.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.81.0",
     "rollup-plugin-visualizer": "^7.1.1",

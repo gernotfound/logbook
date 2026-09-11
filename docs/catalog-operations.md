@@ -1,10 +1,10 @@
 # Operazioni Catalogo Globale — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-09 | File verificati: `scripts/seed-catalog.mjs`, `src/lib/catalog/catalogService.ts`, `src/lib/catalog/seedExercises.json`, `src/lib/catalog/seedFoods.json`, `firestore.rules`
+> Stato: implementazione locale in verifica | Ultima verifica: 2026-09-11 | Nessun seeding o deploy eseguito durante la correzione dell'audit.
 
 ## Struttura Firestore — `global_catalog`
 
-La collezione `global_catalog` contiene tre documenti:
+Il manifest punta ai documenti dati della versione corrente. I path legacy sono:
 
 | Documento | Contenuto |
 |---|---|
@@ -28,29 +28,22 @@ Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade sile
 
 Lo script popola `global_catalog` su Firestore usando i seed locali.
 
-### Stato attuale — PERICOLOSO
+### Validazione e pubblicazione
 
-Lo script attualmente:
-- Non controlla se `exercises.length === 0` o `foods.length === 0`
-- Non richiede conferma esplicita
-- Non ha flag `--confirm` o `--dry-run`
-- Non esegue backup del manifest esistente
+Lo script rifiuta array vuoti, ID assenti/duplicati, nomi vuoti, macronutrienti non numerici/negativi e documenti JSON oltre 800.000 byte. Non carica credenziali o Admin SDK durante validazione e dry-run. I seed bundled attuali causano pertanto un errore esplicito, senza inizializzare Firebase.
 
-**MUST:** Non eseguire MAI accidentalmente questo script. Poiché i JSON locali sono stati svuotati per la policy "enforce manual input", eseguirlo sovrascriverebbe `global_catalog` su Firestore con array vuoti, distruggendo il database cloud di esercizi e alimenti per tutti gli utenti.
-
-### Protezioni raccomandate (task separato)
-
-1. Aggiungere dry-run e validazione input
-2. Aggiungere conferma esplicita per overwrite (`--confirm` flag)
-3. Interrompersi con input vuoto (`items.length === 0`)
-4. Backup del manifest esistente prima di sovrascrivere
-5. Documentare procedura di recovery
-
-### Utilizzo attuale
+Progetto e versione sono obbligatori. Una scrittura richiede inoltre `--confirm` uguale al progetto indicato. Il service account opzionale deve appartenere allo stesso progetto; il file resta escluso da Git. Non esiste più un progetto di produzione hardcoded.
 
 ```bash
-# Richiede service-account.json (NON committato, nel .gitignore)
-node scripts/seed-catalog.mjs
+node scripts/seed-catalog.mjs --dry-run --project=demo-logbook-audit --version=test-1 --exercises=/percorso/esercizi.json --foods=/percorso/alimenti.json
 ```
 
-Il file `service-account.json` va scaricato da Firebase Console (*Impostazioni progetto → Account di servizio → Genera nuova chiave privata*) e usato solo localmente.
+La pubblicazione crea `exercises_<versione>` e `foods_<versione>`, conserva l'eventuale manifest precedente in `previous_manifest_<versione>` e aggiorna il manifest in un'unica transazione. Il riuso di una versione esistente fallisce: i documenti letti dai client precedenti non vengono sovrascritti. Il percorso di scrittura richiede una verifica isolata con Admin SDK prima dell'uso operativo; i test attuali coprono validazione e dry-run.
+
+Per il rollback, dopo verifica dei documenti referenziati, ripristinare il manifest archiviato mediante una procedura amministrativa approvata. Non cancellare i documenti delle versioni precedenti mentre possono essere letti da client ancora attivi.
+
+## Freschezza e pubblicazione nel client
+
+La sola versione non certifica una cache completa: il client confronta anche schema, riferimenti e conteggi. Il seed vuoto con versione `1.0.0` non impedisce il download di un manifest popolato con la stessa versione. Documenti mancanti, conteggi diversi e ID non validi/duplicati mantengono la cache precedente senza marcarla aggiornata; una successiva sincronizzazione può riprovare. I download concorrenti condividono un'unica richiesta.
+
+Il caricamento utente attende l'esito del catalogo insieme al documento profilo, quindi risolve esercizi/alimenti con la stessa versione prima della pubblicazione dello stato. Offline resta il fallback locale. Gli omonimi con ID distinti restano visibili; su collisione di ID il custom locale ha precedenza. I test non dimostrano ancora tutti i percorsi guest e di ripristino dall'interfaccia.

@@ -2,27 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.unmock('../src/lib/db');
 import { DB } from '../src/lib/db';
 
-vi.mock('../src/lib/firebase', () => ({
-    auth: { currentUser: { uid: 'user_123', getIdToken: vi.fn().mockResolvedValue('token') } },
-    getDb: vi.fn().mockReturnValue({}),
-    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
-}));
+
 
 let mockBatch: any;
-vi.mock('firebase/firestore', async (importOriginal) => {
-    const actual = await importOriginal() as any;
-    return {
-        ...actual,
-        doc: vi.fn(),
-        writeBatch: vi.fn(() => mockBatch),
-    };
-});
-
-vi.mock('idb-keyval', () => ({
-    set: vi.fn().mockResolvedValue(undefined),
-    get: vi.fn().mockResolvedValue(null),
-    del: vi.fn().mockResolvedValue(undefined)
-}));
+import { writeBatch } from 'firebase/firestore';
 
 describe('ARCH-02: DB.saveUserData', () => {
     beforeEach(() => {
@@ -34,6 +17,7 @@ describe('ARCH-02: DB.saveUserData', () => {
             delete: vi.fn(),
             commit: vi.fn().mockResolvedValue(undefined),
         };
+        vi.mocked(writeBatch).mockReturnValue(mockBatch);
     });
 
     it('should return { ok: false, status: "rejected" } on permission-denied', async () => {

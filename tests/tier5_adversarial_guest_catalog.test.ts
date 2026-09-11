@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
-import {  writeBatch } from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 import { DB } from '../src/lib/db';
@@ -27,19 +27,11 @@ import {
     CATALOG_CACHE_KEY
 } from '../src/lib/catalog/catalogService';
 
+import { storageOwner } from '../src/lib/sync/session';
+
 import {
     resolveEffectiveExercises,
     resolveEffectiveFoods,
-
-
-
-
-
-
-
-
-
-
     mergeCatalogOverrides,
     extractCustomExercisesAndOverrides,
     extractCustomFoodsAndOverrides
@@ -48,18 +40,10 @@ import {
 import {
     mergeUserData,
     hasUserData,
-
-
     mergeNutrition,
-
-
-
 } from '../src/lib/merge';
 
-import {
-
-
-} from '../src/lib/schema';
+import {} from '../src/lib/schema';
 
 import { checkDocSize } from '../src/lib/checkDocSize';
 import { useAppStore } from '../src/store/useAppStore';
@@ -73,7 +57,6 @@ import type {
     WorkoutSession,
     WorkoutRoutine,
     NutritionDay,
-
 } from '../src/types';
 
 import { idbStore } from './setup';
@@ -81,7 +64,7 @@ import { idbStore } from './setup';
 // Mock Firebase Auth and Firestore for controlled persistence tests
 vi.mock('../src/lib/firebase', () => ({
     auth: {
-        currentUser: { uid: 'tier5_adversarial_user_888', email: 'adversarial@example.com' },
+        currentUser: { uid: 'test-user-id', email: 'test@example.com' },
         signOut: vi.fn().mockResolvedValue(undefined),
     },
     db: { type: 'firestore_mock' },
@@ -91,6 +74,18 @@ vi.mock('../src/lib/firebase', () => ({
     deleteUser: vi.fn().mockResolvedValue(undefined),
     isAppCheckFallbackOffline: vi.fn().mockReturnValue(false),
 }));
+
+vi.mock('../src/lib/sync/session', async () => {
+    const actual = await vi.importActual<typeof import('../src/lib/sync/session')>('../src/lib/sync/session');
+    return {
+        ...actual,
+        storageOwner: () => {
+            let guest = false;
+            try { guest = localStorage.getItem('logbook_is_guest') === 'true'; } catch {}
+            return !guest ? 'user:test-user-id' : 'guest';
+        }
+    };
+});
 
 describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
@@ -102,6 +97,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
         if (typeof window !== 'undefined') {
             window.__INITIAL_USER_DATA__ = null;
         }
+        vi.mocked(doc).mockImplementation((_db: any, ...parts: string[]) => ({
+            path: parts.join('/'),
+            toString: () => parts.join('/')
+        } as any));
         await clearCatalogCache();
         DB.resetCache();
         useAppStore.getState().resetStore();
@@ -322,22 +321,22 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // 1. Exact query
             expect(() => searchFood('Petto di Pollo Crudo')).not.toThrow();
             const res1 = searchFood('Petto di Pollo Crudo');
-            expect(res1.length).toBe(0);
+            expect(res1.length).toBeGreaterThanOrEqual(1);
 
             // 2. Uppercase query
             expect(() => searchFood('PETTO DI TACCHINO CRUDO')).not.toThrow();
             const res2 = searchFood('PETTO DI TACCHINO CRUDO');
-            expect(res2.length).toBe(0);
+            expect(res2.length).toBeGreaterThanOrEqual(1);
 
             // 3. Partial substring
             expect(() => searchFood('pollo')).not.toThrow();
             const res3 = searchFood('pollo');
-            expect(res3.length).toBe(0);
+            expect(res3.length).toBeGreaterThanOrEqual(1);
 
             // 4. Brand search
             expect(() => searchFood('Generico')).not.toThrow();
             const res4 = searchFood('Generico');
-            expect(res4.length).toBe(0);
+            expect(res4.length).toBeGreaterThanOrEqual(1);
 
             // 5. Non-existent query
             expect(() => searchFood('unicorn-meat-super-hyper-rare-999')).not.toThrow();
@@ -347,7 +346,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             // 6. Special characters / whitespace
             expect(() => searchFood('   riso   ')).not.toThrow();
             const res6 = searchFood('   riso   ');
-            expect(res6.length).toBe(0);
+            expect(res6.length).toBeGreaterThanOrEqual(1);
         });
 
         it('T5.2.2: Immediate multi-portion meal logging from cold start calculates exact macros and updates IndexedDB cache', async () => {
@@ -438,9 +437,13 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(updatedData.nutrition?.['2026-08-23'].fat).toBe(totalFat);
             expect(updatedData.nutrition?.['2026-08-23'].meals).toHaveLength(3);
 
+            // Allow background saveUserDataToCache promise to settle
+            await new Promise(resolve => setTimeout(resolve, 50));
+
             // IndexedDB user cache receives data
-            expect(idbStore['logbook_cached_user_data']).toBeDefined();
-            expect(idbStore['logbook_cached_user_data'].nutrition['2026-08-23'].kcal).toBe(totalKcal);
+            const ownerKey = `logbook:v2:${storageOwner()}`;
+            expect(idbStore[ownerKey]).toBeDefined();
+            expect(idbStore[ownerKey].data.nutrition['2026-08-23'].kcal).toBe(totalKcal);
         });
 
         it('T5.2.3: Month boundary cross-calendar meal logging (2026-07-31 vs 2026-08-01) preserves distinct dates without collisions', () => {
@@ -828,7 +831,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
             // Populate IDB directly to force concurrent read races without hitting the empty seed fallback
             const fixtureCatalog = {
-                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                manifest: {
+                    version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' },
+                    itemCounts: { exercises: 1, foods: 1 }
+                },
                 exercises: [{ id: 'ex_race_1', name: 'Race Ex 1', isDefault: true, setsCount: 3, trackingType: 'weight_reps', muscles: ['chest'] }],
                 foods: [{ id: 'food_race_1', name: 'Race Food 1', kcal: 100, pro: 10, carbs: 10, fat: 5, isCustom: false, baseQty: 100, unit: 'g' }]
             } as any;
@@ -916,9 +922,10 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 activeWorkout: null
             });
 
+            delete idbStore[`logbook:v2:${storageOwner()}`];
+            DB.resetCache();
             useAppStore.getState().setUserData(createMockData('Initial'));
 
-            // Test real DB.saveUserData error handling directly
             const simulatedFirestoreError = new Error("Firestore Network Failure: Simulated Offline Drop");
             const failingBatch = {
                 set: vi.fn(),
@@ -926,8 +933,16 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                 commit: vi.fn().mockRejectedValue(simulatedFirestoreError)
             };
             vi.mocked(writeBatch).mockReturnValue(failingBatch as any);
+            const { getDoc } = await import('firebase/firestore');
+            vi.mocked(getDoc).mockResolvedValueOnce({
+                exists: () => true,
+                data: () => createMockData('Initial')
+            } as any);
 
-            await expect(DB.saveUserData(createMockData('DirectSaveFail'))).rejects.toThrow("Firestore Network Failure");
+            const result = await DB.saveUserData(createMockData('DirectSaveFail'));
+            expect(result.ok).toBe(false);
+            expect(result.status).toBe('failed');
+            expect((result.error as Error).message).toContain("Firestore Network Failure");
 
             // Verify store error handling when saveError is set
             useAppStore.getState().setSaveError("Errore sincronizzazione. Verifica la connessione.");

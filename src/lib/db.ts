@@ -1,5 +1,5 @@
 import { auth, getDb, ensureAppCheck } from './firebase';
-import { doc, getDoc, writeBatch } from "firebase/firestore";
+import { doc, getDoc, writeBatch, collection, getDocsFromServer, query, limit, orderBy, documentId, startAfter, type QueryDocumentSnapshot } from "firebase/firestore";
 import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
 import type { UserData, CatalogOverrides, SyncResult } from '../types';
@@ -16,12 +16,13 @@ import { SyncTimeoutError, withTimeout, dbState, setLastSavedStateStr } from './
 import { loadHistoryMonths, syncHistoryMonths } from './db/db_training';
 import { loadNutritionMonths, syncNutritionMonths } from './db/db_nutrition';
 import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
+import { storageOwner } from './sync/session';
 
 export const DB = {
     resetCache() {
         setLastSavedStateStr(null);
     },
-    async loadUserData(): Promise<UserData | null> {
+    async loadUserData(options?: { allMonths?: boolean }): Promise<UserData | null> {
         const user = auth.currentUser;
         if (!user) return null;
         try {
@@ -111,15 +112,43 @@ export const DB = {
                 return state as unknown as UserData;
             }
 
-            // Windowed loading: target current month and previous 2 months (O(1) reads)
-            const now = new Date();
-            const targetMonths = [0, 1, 2].map(offset => {
-                const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            });
+            if (options?.allMonths) {
+                // Complete paginated retrieval for guest-to-cloud linking / migration
+                const db = getDb();
+                for (const colName of ['history_months', 'nutrition_months']) {
+                    let cursor: QueryDocumentSnapshot | undefined;
+                    do {
+                        const constraints: any[] = [orderBy(documentId()), limit(400)];
+                        if (cursor) constraints.push(startAfter(cursor));
+                        const page = await withTimeout(
+                            getDocsFromServer(query(collection(db, "users", user.uid, colName), ...constraints)),
+                            10000,
+                            `Timeout recupero ${colName} completo`
+                        );
+                        for (const d of page.docs) {
+                            const mData = d.data() as Record<string, any>;
+                            if (mData) {
+                                if (colName === 'history_months') {
+                                    Object.values(mData).forEach((h: any) => state.history.push(h));
+                                } else {
+                                    Object.keys(mData).forEach(dt => { (state.nutrition as any)[dt] = mData[dt]; });
+                                }
+                            }
+                        }
+                        cursor = page.size === 400 ? page.docs[page.docs.length - 1] : undefined;
+                    } while (cursor);
+                }
+            } else {
+                // Windowed loading: target current month and previous 2 months (O(1) reads)
+                const now = new Date();
+                const targetMonths = [0, 1, 2].map(offset => {
+                    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                });
 
-            await loadHistoryMonths(user, targetMonths, state);
-            await loadNutritionMonths(user, targetMonths, state);
+                await loadHistoryMonths(user, targetMonths, state);
+                await loadNutritionMonths(user, targetMonths, state);
+            }
 
             state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
 
@@ -143,7 +172,7 @@ export const DB = {
             throw error;
         }
     },
-    async saveUserData(state: Record<string, any>): Promise<SyncResult> {
+    async saveUserData(state: Record<string, any>, _revision?: any): Promise<SyncResult> {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
         try {
@@ -303,18 +332,14 @@ export const DB = {
             return { ok: false, status: 'failed', error };
         }
     },
-    async purgeAllLocalUserData() {
-        return purgeAllLocalUserData();
+    async purgeAllLocalUserData(owner?: string) {
+        return purgeAllLocalUserData(owner);
     },
     async secureLogOut() {
         console.log("Eseguo il Log Out protetto...");
-        try {
-            await auth.signOut();
-        } catch (error) {
-            console.error("Errore durante auth.signOut, proseguo comunque con la purga:", error);
-        } finally {
-            await this.purgeAllLocalUserData();
-        }
+        const owner = storageOwner();
+        await auth.signOut();
+        await this.purgeAllLocalUserData(owner);
     },
     async deleteAccount() {
         return deleteAccount(this);

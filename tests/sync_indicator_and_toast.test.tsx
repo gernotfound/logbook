@@ -425,7 +425,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(useAppStore.getState().saveError).toBeNull();
       });
 
-      test('T2.14_R3: Network online event clears saveError immediately', async () => {
+      test('T2.14_R3: Network online event alone does not confirm recovery', async () => {
         await renderSettledApp();
         act(() => {
           useAppStore.setState({ saveError: 'Offline: impossibile sincronizzare' });
@@ -436,8 +436,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
           window.dispatchEvent(new Event('online'));
         });
 
-        expect(useAppStore.getState().saveError).toBeNull();
-        expect(screen.queryByText(/Offline: impossibile sincronizzare/i)).toBeNull();
+        expect(useAppStore.getState().saveError).toBe('Offline: impossibile sincronizzare');
+        expect(screen.queryByText(/Offline: impossibile sincronizzare/i)).not.toBeNull();
       });
 
       test('T2.15_R3: Component unmount while auto-dismiss timer is running cleans up timer safely', async () => {
@@ -659,7 +659,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       // Sync indicator disappears; non-blocking error toast appears
       expect(useAppStore.getState().syncing).toBe(false);
       expect(screen.queryByText(/Salvataggio in corso/i)).toBeNull();
-      expect(screen.getByText(/dati sono stati salvati con successo sul dispositivo/i)).toBeDefined();
+      expect(screen.getByText(/Network unreachable: Underground gym/i)).toBeDefined();
       expect(container.querySelector('#sync-overlay')).toBeNull();
 
       // Step 3: Lifter continues workout without clicking dismiss; toast auto-dismisses at 5s
@@ -817,11 +817,13 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       await savePromise;
       expect(caughtError5).not.toBeNull();
 
-      expect(screen.getByText(/dati sono stati salvati con successo sul dispositivo/i)).toBeDefined();
+      expect(screen.getByText(/Quota limit or offline/i)).toBeDefined();
 
-      // Online event fires
-      act(() => {
+      // Reconnection replays the durable journal before clearing the error.
+      vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' });
+      await act(async () => {
         window.dispatchEvent(new Event('online'));
+        await useAppStore.getState().flushPendingSyncs();
       });
 
       expect(useAppStore.getState().saveError).toBeNull();

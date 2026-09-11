@@ -1,8 +1,9 @@
+import { writeDeviceValue } from '../sync/deviceStorage';
 export const resetGlobalWorkoutTimer = () => {
     try {
-        localStorage.removeItem('logbook_timer_state');
-        localStorage.removeItem('logbook_timer_start');
-        localStorage.removeItem('logbook_timer_accumulated');
+        writeDeviceValue('timer_state', null);
+        writeDeviceValue('timer_start', null);
+        writeDeviceValue('timer_accumulated', null);
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('logbook_reset_timer'));
         }

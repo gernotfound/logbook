@@ -1,3 +1,4 @@
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 import React from 'react';
 import { describe, test, expect, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
@@ -69,9 +70,9 @@ describe('Workout Improvements & History Edit Suite', () => {
 
   describe('2. Top Timer Reset on Session Actions', () => {
     test('resetGlobalWorkoutTimer clears localStorage and dispatches event', () => {
-      localStorage.setItem('logbook_timer_state', 'running');
-      localStorage.setItem('logbook_timer_start', '123456789');
-      localStorage.setItem('logbook_timer_accumulated', '5000');
+      localStorage.setItem(deviceKey('timer_state'), 'running');
+      localStorage.setItem(deviceKey('timer_start'), '123456789');
+      localStorage.setItem(deviceKey('timer_accumulated'), '5000');
 
       const { container } = renderWithProviders(<WorkoutTimer />);
 
@@ -79,7 +80,7 @@ describe('Workout Improvements & History Edit Suite', () => {
         resetGlobalWorkoutTimer();
       });
 
-      expect(localStorage.getItem('logbook_timer_state')).toBeNull();
+      expect(localStorage.getItem(deviceKey('timer_state'))).toBeNull();
       expect(container.textContent).toContain('00:00');
     });
   });

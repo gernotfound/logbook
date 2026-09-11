@@ -3,6 +3,7 @@ import type { UserProfile, NutritionPlanning, UserData } from '../types';
 import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
+import { writeDeviceValue } from '../lib/sync/deviceStorage';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 
 export type { UserProfile, NutritionPlanning, UserData };
@@ -25,21 +26,30 @@ if (typeof document !== 'undefined') {
         if (document.visibilityState === 'hidden') {
             draftRegistry.flushAll();
             const state = useAppStore.getState();
-            if (state.localWorkout) {
-                try {
-                    localStorage.setItem('logbook_local_workout', JSON.stringify(state.localWorkout));
-                } catch (e) {
-                    console.error("Errore salvataggio localWorkout su visibilitychange:", e);
+            try {
+                if (state.localWorkout) {
+                    writeDeviceValue('workout', JSON.stringify(state.localWorkout));
+                } else {
+                    writeDeviceValue('workout', null);
                 }
+            } catch (e) {
+                console.error("Errore salvataggio localWorkout su visibilitychange:", e);
             }
         }
     });
 }
 
-// PWA FIX: Listen for online event to clear saveError if connection is restored
+// Reopening, reconnection and foreground resume all use the same durable journal.
 if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => {
-        useAppStore.getState().setSaveError(null);
+    const replay = () => {
+        void useAppStore.getState().flushPendingSyncs().catch(error => {
+            console.warn('Ripresa sincronizzazione non completata:', error);
+        });
+    };
+    window.addEventListener('online', replay);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') replay(); });
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data?.type === 'LOGBOOK_SYNC_REQUIRED') replay();
     });
 }
 

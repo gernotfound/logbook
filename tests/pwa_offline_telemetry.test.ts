@@ -568,7 +568,7 @@ renderHook(() => usePWAInstall());
       });
     });
 
-    it('attaches current userId to guest/unauthenticated queued items upon replay after login', async () => {
+    it('does not attach the current userId to guest queued items after login', async () => {
       localStorage.setItem(
         TELEMETRY_QUEUE_KEY,
         JSON.stringify([
@@ -591,10 +591,9 @@ renderHook(() => usePWAInstall());
       telemetryHub.setUserId('user_logged_in_123');
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const sentPayload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload;
-      expect(sentPayload.userId).toBe('user_logged_in_123');
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
+      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
+      expect(telemetryHub.getQueuedEvents()[0].payload.userId).toBeNull();
     });
 
     it('retains failing items in queue if Firestore write fails during flush', async () => {

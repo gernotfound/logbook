@@ -147,8 +147,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                     try {
                         setSyncing(true);
-                        // Carica i dati esistenti sul cloud (se presenti)
-                        const cloudData = await DB.loadUserData();
+                        // Carica i dati esistenti sul cloud (completi di tutto lo storico pluriennale)
+                        const cloudData = await DB.loadUserData({ allMonths: true });
 
                         const cloudHasData = hasUserData(cloudData);
                         const guestHasData = hasUserData(guestData);

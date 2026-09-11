@@ -1,57 +1,60 @@
-# Ciclo di Vita Account — LogBook
+# Ciclo di vita account — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-09 | File verificati: `src/lib/db/db_account.ts`, `src/lib/export.ts`, `src/contexts/AuthContext.tsx`, `src/lib/db.ts`
+> Ultima verifica del codice: 2026-09-11. Implementazione sul branch di correzione audit, non pubblicata. Esiti e limiti di test in `remediation_logbook_2026.md`.
 
-## Esportazione dati CSV
+## Backup JSON e importazione
 
-La funzione `Exporter.exportToCSV` in `src/lib/export.ts` genera due file CSV:
+`src/lib/backup.ts` definisce il formato `logbook-backup`, versione 2: owner, data di esportazione, copertura, intero `UserData` e recovery locale. `src/lib/db/backupSnapshot.ts` legge il profilo e tutte le pagine dello storico/nutrizione dal server (50 documenti per pagina), poi confronta cloud, baseline e ultima revisione locale. Gli originali cloud e il registro locale sono inclusi nella sezione recovery.
 
-| File | Contenuto |
-|---|---|
-| `allenamenti.csv` | Dettaglio serie, dropset e isometrie |
-| `misurazioni.csv` | Peso, calorie, macro e circonferenze corporee |
+La lettura di tutti i documenti non costituisce uno snapshot atomico fra dispositivi. Il file registra inizio/fine lettura; con modifiche concorrenti può essere necessario ripetere l'esportazione. Un errore di rete non produce un backup dichiarato completo: l'utente può scegliere esplicitamente la copia del solo dispositivo, marcata `device`.
 
-- **MUST:** I file CSV includono il Byte Order Mark UTF-8 (`\uFEFF`) per compatibilità con Microsoft Excel su Windows e Mac.
-- **MUST:** Ogni nuova metrica o misurazione biometrica aggiunta all'app deve essere mappata in `src/lib/export.ts`.
+Il formato v1 ordinario e quello d'emergenza sono importabili. I formati senza owner richiedono conferma esplicita della provenienza; i backup di un altro account sono rifiutati anche in modalità guest.
+
+- **Importa JSON:** unione incrementale senza mutazioni in place. Le collisioni mantengono il valore locale; i campi mancanti vengono aggiunti. I totali delle giornate con nuovi pasti sono ricalcolati.
+- **Ripristina:** sostituisce i campi presenti nel file rispetto allo stato locale disponibile. Un vecchio backup parziale non azzera i campi che omette. Il writer cloud conserva comunque dati remoti mai caricati; non equivale a cancellare e ricreare l'intero account.
+- Un'anteprima espone dimensione del risultato e collisioni. Cambi di sessione o modifiche mentre l'anteprima è aperta annullano il commit.
+- La conferma segue la persistenza locale; offline il messaggio indica che il cloud è ancora in attesa.
+- I consensi importati non sostituiscono l'accettazione corrente.
+- La recovery conserva anche bozze e alternative ai conflitti. Il ripristino guidato di questi dati aggiuntivi è ancora da completare; il file originale va conservato.
+
+La vecchia cache senza owner viene copiata senza sovrascrivere un archivio recovery già presente. “Esporta archivio precedente” rende disponibile il file per recupero esplicito. Le vecchie credenziali/code REST non vengono riprodotte o esportate.
+
+## Esportazione CSV
+
+`Exporter.exportToCSV` genera `allenamenti.csv` (serie, dropset, isometrie) e `misurazioni.csv` (peso, macro, circonferenze e sonno) dal dataset disponibile in memoria. Il CSV non ha la completezza del nuovo percorso JSON cloud paginato.
+
+- **MUST:** I CSV includono il BOM UTF-8 per compatibilità Excel. Markdown, sorgenti e JSON restano UTF-8 senza BOM.
+- **MUST:** Nuove metriche da esportare devono essere mappate esplicitamente.
 
 ## Eliminazione account
 
-La procedura di eliminazione è in `src/lib/db/db_account.ts` (`deleteAccount`).
+`useSettings` chiede due conferme e riautentica Google prima di invocare `DB.deleteAccount`. Il DB verifica autonomamente il tempo di autenticazione nel token aggiornato prima di ogni operazione distruttiva; per altri provider può essere necessario ripetere il login.
 
-### Fasi dell'eliminazione
+Il flusso client:
 
-1. **Eliminazione dati cloud (paginata):**
-   - Raccoglie tutti i documenti delle subcollection (`history_months`, `nutrition_months`, errori, eventi, anomalie).
-   - Elimina in batch da 400 operazioni (limite Firestore: 500).
-   - Elimina il documento utente principale `users/{uid}`.
+1. Scrive un marker persistente di cancellazione per owner, invalida l'epoch e arresta nuovi writer.
+2. Attende la conclusione della replica precedente e delle scritture SDK pendenti. Un timeout interrompe la procedura prima del passo successivo; non cancella la Promise SDK.
+3. Legge dal server ed elimina pagine da 400 delle cinque raccolte private: storico, nutrizione, errori, eventi, anomalie.
+4. Rilegge sempre la prima pagina dopo un batch confermato: un'interruzione è riprendibile senza cursor perso.
+5. Elimina il profilo e verifica sul server assenza del root e di residui nelle cinque raccolte.
+6. Solo dopo queste verifiche chiama `deleteUser`; soltanto dopo il successo Auth purga il locale e resetta lo store.
 
-2. **Eliminazione account Firebase Auth:**
-   - Chiama `deleteUser(user)` per rimuovere l'account.
+**MUST:** Nessun `permission-denied` viene interpretato come raccolta vuota o successo. Query, batch o verifica falliti mantengono account e copia locale e mostrano un errore di cancellazione incompleta. I batch già riusciti non sono reversibili; riprendere la cancellazione dalle impostazioni.
 
-3. **Pulizia locale (nel `finally`):**
-   - `purgeAllLocalUserData()` — cancella IndexedDB e localStorage.
-   - `resetCache()` — resetta la cache interna.
-   - `resetStore()` — resetta lo store Zustand.
+Il marker sospende replica e telemetria del client e rimane dopo gli errori. Al riavvio la sospensione resta attiva. I backup restano disponibili.
 
-### Problemi noti
+**Limite da risolvere prima del rilascio:** marker e verifiche client non rendono atomiche Firestore e Firebase Auth e non fermano altri dispositivi o vecchi client. Le verifiche residuali riducono il rischio, ma serve coordinamento server per una garanzia globale. La UI chiede di chiudere gli altri dispositivi. Non presentare questo flusso come una cancellazione server atomica.
 
-**`permission-denied` durante eliminazione cloud:**
-Attualmente, se un batch fallisce con `permission-denied`, il codice logga un `console.warn` e procede con `deleteUser`. Questo significa che:
-- L'account Auth viene eliminato anche se i dati cloud non sono stati completamente rimossi.
-- L'utente non viene informato che la cancellazione è parziale.
+## Logout e pulizia locale
 
-**MUST:** L'eliminazione account deve comunicare all'utente se la cancellazione cloud è parziale.
+`secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi v2 degli altri utenti restano separati.
 
-### Errore `auth/requires-recent-login`
+`purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Il registro di avanzamento tiene aperte le questioni di purge della telemetria e di attribuzione degli archivi legacy.
 
-Se l'utente non ha effettuato un login recente, Firebase Auth richiede una ri-autenticazione. L'errore viene intercettato e un messaggio chiaro viene mostrato all'utente.
+**MUST:** Non eliminare la cache del service worker durante logout: contiene gli asset necessari all'avvio offline.
 
-## Logout sicuro
+## Guest e aggiornamenti
 
-In `db.ts` (`secureLogOut`), durante la disconnessione:
-- Viene cancellato `idb-keyval` (IndexedDB) e `localStorage` per garantire la privacy.
-- **MUST:** Non eliminare la cache del Service Worker (`caches.delete()`). Contiene l'App Shell vitale per avviare l'app offline prima del login.
+La modalità guest ha archivio e workout separati dagli utenti. La migrazione conserva la copia guest e registra il risultato locale prima della replica. Le callback vecchie sono invalidate tramite owner ed epoch.
 
-## Modalità Guest
-
-La modalità guest è segnalata da `logbook_is_guest` in `localStorage`. Al collegamento di un account Google (`linkGoogleAccount`), i dati guest vengono fusi con quelli cloud tramite il merge deterministico descritto in `docs/storage-and-sync.md`.
+Gli aggiornamenti PWA sono differibili. Prima del reload: flush delle bozze, attesa dei salvataggi, confronto fra store e copia IndexedDB e snapshot sincrono del workout. Errori locali bloccano il reload. Un errore di caricamento chunk apre lo stesso prompt; non scatena più un reload automatico che può ripetersi.

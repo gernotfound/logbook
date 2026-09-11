@@ -1,5 +1,5 @@
 import React from 'react';
-import { addDays } from 'date-fns';
+import { shiftDateString } from '../../lib/utils/date';
 import { Logic } from '../../lib/logic';
 import { X } from 'lucide-react';
 
@@ -33,7 +33,7 @@ interface DataMeasurementsProps {
     calves: string;
     setCalves: (val: string) => void;
     handleCancelEdit: () => void;
-    calculateAndSave: (e?: any) => Promise<void>;
+    calculateAndSave: (e?: any) => Promise<unknown>;
 }
 
 const DataMeasurements: React.FC<DataMeasurementsProps> = ({
@@ -63,21 +63,13 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
     const handlePrevDay = () => {
         if (!setSelectedDate) return;
-        const validStr = Logic.parseDateInput(activeDateStr) || activeDateStr;
-        const [y, m, d] = validStr.split('-').map(Number);
-        const baseDate = (y && m && d) ? new Date(y, m - 1, d) : new Date();
-        const prev = addDays(baseDate, -1);
-        setSelectedDate(Logic.getLocalDateString(prev));
+        setSelectedDate(shiftDateString(activeDateStr, -1));
     };
 
     const handleNextDay = () => {
         if (!setSelectedDate) return;
         if (activeDateStr === todayStr) return;
-        const validStr = Logic.parseDateInput(activeDateStr) || activeDateStr;
-        const [y, m, d] = validStr.split('-').map(Number);
-        const baseDate = (y && m && d) ? new Date(y, m - 1, d) : new Date();
-        const next = addDays(baseDate, 1);
-        setSelectedDate(Logic.getLocalDateString(next));
+        setSelectedDate(shiftDateString(activeDateStr, 1));
     };
 
     const handleToday = () => {

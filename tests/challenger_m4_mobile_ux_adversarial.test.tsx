@@ -214,7 +214,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       const items = screen.getAllByRole('menuitem');
       const labels = items.map(i => i.querySelector('.context-menu-item-label')?.textContent || '');
 
-      expect(labels).toEqual(['Modifica ciclo', 'Duplica ciclo', 'Elimina ciclo']);
+      expect(labels).toEqual(['Modifica', 'Duplica', 'Elimina']);
       labels.forEach(label => {
         expect(isStrictSentenceCase(label)).toBe(true);
       });
@@ -238,7 +238,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       const items = screen.getAllByRole('menuitem');
       const labels = items.map(i => i.querySelector('.context-menu-item-label')?.textContent || '');
 
-      expect(labels).toEqual(['Modifica scheda', 'Elimina scheda']);
+      expect(labels).toEqual(['Modifica', 'Duplica', 'Elimina']);
       labels.forEach(label => {
         expect(isStrictSentenceCase(label)).toBe(true);
       });
@@ -296,7 +296,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       const items = screen.getAllByRole('menuitem');
       const labels = items.map(i => i.querySelector('.context-menu-item-label')?.textContent || '');
 
-      expect(labels).toEqual(['Modifica alimento', 'Elimina alimento']);
+      expect(labels).toEqual(['Modifica', 'Duplica', 'Elimina']);
       labels.forEach(label => {
         expect(isStrictSentenceCase(label)).toBe(true);
       });

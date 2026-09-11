@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
-import { Logic } from '../../lib/logic';
 import DataMeasurements from './DataMeasurements';
 import DataBiometry from './DataBiometry';
 import DataSleep from './DataSleep';
 import DataHistory from './DataHistory';
 import type { DataSubTab } from '../../types';
+import { useLocalToday } from '../../hooks/useLocalToday';
 
 interface DataViewProps {
     subTab?: DataSubTab;
@@ -17,7 +17,10 @@ const DataView: React.FC<DataViewProps> = ({
     subTab = 'measurements',
     setSubTab
 }) => {
-    const [selectedDate, setSelectedDate] = useState<string>(Logic.getLocalDateString());
+    const today = useLocalToday();
+    const [chosenDate, setChosenDate] = useState<string | null>(null);
+    const selectedDate = chosenDate ?? today;
+    const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
     const measurementsHook = useNutritionMeasurements(selectedDate);
     const sleepHook = useSleepMeasurements();
     const [localSubTab, setLocalSubTab] = useState<DataSubTab>('measurements');
@@ -117,8 +120,8 @@ const DataView: React.FC<DataViewProps> = ({
                         }}
                         calculateAndSave={async (e) => {
                             const wasEditing = !!measurementsHook.editingDate;
-                            await measurementsHook.calculateAndSave(e);
-                            if (wasEditing) changeSubTab('history');
+                            const saved = await measurementsHook.calculateAndSave(e);
+                            if (wasEditing && saved) changeSubTab('history');
                         }}
                     />
                 </div>
@@ -136,7 +139,7 @@ const DataView: React.FC<DataViewProps> = ({
                         sleepHook={sleepHook}
                         selectedDate={sleepHook.selectedDate}
                         setSelectedDate={sleepHook.setSelectedDate}
-                        todayDateStr={Logic.getLocalDateString()}
+                        todayDateStr={today}
                     />
                 </div>
             )}

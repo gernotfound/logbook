@@ -61,12 +61,11 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(seed.manifest.docRefs.foods).toBe('foods_v1');
             expect(seed.manifest.schemaVersion).toBe(1);
 
-            // Seed is intentionally empty (commit e61a133): users build their catalog manually.
-            // The arrays must be valid arrays (never null/undefined), but are expected to be empty.
+            // Baseline seeds are populated with 175 standard exercises and 221 foods (Milestone 3 / LB-19)
             expect(Array.isArray(seed.exercises)).toBe(true);
             expect(Array.isArray(seed.foods)).toBe(true);
-            expect(seed.exercises).toHaveLength(0);
-            expect(seed.foods).toHaveLength(0);
+            expect(seed.exercises).toHaveLength(175);
+            expect(seed.foods).toHaveLength(221);
 
             // Purity: successive calls must return independent array references (no shared state)
             const seed2 = getSeedCatalog();

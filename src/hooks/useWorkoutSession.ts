@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -7,6 +7,8 @@ import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
 import { mapFirebaseErrorCode } from '../lib/errorHandler';
 import { telemetryHub } from '../lib/telemetryHub';
 import type { WorkoutSession, WorkoutRoutine, Exercise } from '../types';
+import { auth } from '../lib/firebase';
+import { draftRegistry } from '../lib/utils/draftRegistry';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
@@ -25,6 +27,7 @@ export function useWorkoutSession() {
     const activeWorkout = localWorkout;
 
     const [selectedRoutine, setSelectedRoutine] = useState('');
+    const endingRef = useRef(false);
     
     // Rating states derivati direttamente da activeWorkout per prevenire perdita di dati
     const mood = activeWorkout?.moodRating !== undefined && activeWorkout.moodRating !== null ? activeWorkout.moodRating.toString() : '';
@@ -290,10 +293,17 @@ export function useWorkoutSession() {
     }, [showConfirm, setLocalWorkout]);
 
     const endWorkout = useCallback(async (): Promise<WorkoutSession | null> => {
+        if (endingRef.current) return null;
+        endingRef.current = true;
+        const expectedUid = auth.currentUser?.uid;
+        const expectedId = useAppStore.getState().localWorkout?.id;
+        try {
+        if (!expectedId || !(await showConfirm("Terminare l'allenamento?"))) return null;
+        draftRegistry.flushAll();
         const currentWorkout = useAppStore.getState().localWorkout;
-        if (!currentWorkout || !(await showConfirm("Terminare l'allenamento?"))) return null;
+        if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
-        const valRes = Logic.validateWorkoutRatings(mood, pump, fatigue);
+        const valRes = Logic.validateWorkoutRatings(String(currentWorkout.moodRating ?? ''), String(currentWorkout.pumpRating ?? ''), String(currentWorkout.fatigueRating ?? ''));
 
         const endTime = new Date().getTime();
         const startTime = currentWorkout.globalStartTime || endTime;
@@ -309,7 +319,7 @@ export function useWorkoutSession() {
             moodRating: valRes.mood,
             pumpRating: valRes.pump,
             fatigueRating: valRes.fatigue,
-            waterLiters: water ? parseFloat(String(water).replace(',', '.')) : 0,
+            waterLiters: currentWorkout.waterLiters ? parseFloat(String(currentWorkout.waterLiters).replace(',', '.')) : 0,
             pains: sessionPains,
             date: currentWorkout.date || Logic.getLocalDateString()
         };
@@ -330,26 +340,14 @@ export function useWorkoutSession() {
 
                 return {
                     ...prev,
-                    history: [finishedWorkout, ...(prev.history || [])],
+                    history: [finishedWorkout, ...(prev.history || []).filter(item => item.id !== finishedWorkout.id)],
                     activeWorkout: null,
                     activePains: finalActivePains
                 };
             });
+            if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            return finishedWorkout;
-        } catch (err: any) {
-            const formatted = mapFirebaseErrorCode(err);
-            if (formatted.isOfflineSafe) {
-                setLocalWorkout(null);
-                resetGlobalWorkoutTimer();
-                return finishedWorkout;
-            } else {
-                showAlert("Errore durante il salvataggio della sessione.");
-                return null;
-            }
-        } finally {
-            // Telemetry: Non-blocking tracking of workout saved
             try {
                 const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
                 const durationVal = finishedWorkout.globalDurationStr || finishedWorkout.manualDurationStr || durationStr;
@@ -363,8 +361,15 @@ export function useWorkoutSession() {
             } catch {
                 // Fail-safe non-blocking telemetry
             }
+            return finishedWorkout;
+        } catch {
+            if (auth.currentUser?.uid === expectedUid) await showAlert("Errore durante il salvataggio della sessione.");
+            return null;
         }
-    }, [mood, pump, fatigue, water, showConfirm, saveUserData, setLocalWorkout, showAlert]);
+        } finally {
+            endingRef.current = false;
+        }
+    }, [showConfirm, saveUserData, setLocalWorkout, showAlert]);
 
     const deleteWorkout = useCallback(async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;

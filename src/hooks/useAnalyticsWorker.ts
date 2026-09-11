@@ -6,9 +6,11 @@ let messageIdCounter = 0;
 
 export function useAnalyticsWorker() {
     const workerRef = useRef<Worker | null>(null);
+    const mounted = useRef(false);
     const pendingPromises = useRef<Map<number, { resolve: (val: any) => void, reject: (err: any) => void, timeoutId: ReturnType<typeof setTimeout> }>>(new Map());
 
     useEffect(() => {
+        mounted.current = true;
         try {
             workerRef.current = new AnalyticsWorker();
             
@@ -43,6 +45,7 @@ export function useAnalyticsWorker() {
         }
 
         return () => {
+            mounted.current = false;
             if (workerRef.current) {
                 workerRef.current.terminate();
                 workerRef.current = null;
@@ -57,6 +60,7 @@ export function useAnalyticsWorker() {
     }, []);
 
     const executeTask = useCallback(async (type: string, payload: any, fallbackFn: () => any, timeoutMs = 8000) => {
+        if (!mounted.current) throw new Error('Calcolo annullato: vista chiusa');
         if (!workerRef.current) {
             console.info(`Worker not available for ${type}, falling back to synchronous execution`);
             const start = performance.now();
@@ -87,6 +91,7 @@ export function useAnalyticsWorker() {
             pendingPromises.current.set(id, {
                 resolve,
                 reject: (err) => {
+                    if (!mounted.current) { reject(err); return; }
                     console.warn(`Worker task ${type} failed/rejected, falling back to synchronous execution. Reason:`, err.message);
                     try {
                         const start = performance.now();

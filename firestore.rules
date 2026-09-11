@@ -51,6 +51,18 @@ service cloud.firestore {
           'legalConsent',
           'nutritionPlanningOrigin'
         ])
+        && (!('profile' in incomingData()) || incomingData().profile == null || incomingData().profile is map)
+        && (!('library' in incomingData()) || incomingData().library is list)
+        && (!('routines' in incomingData()) || incomingData().routines is list)
+        && (!('customFoods' in incomingData()) || incomingData().customFoods is list)
+        && (!('activeWorkout' in incomingData()) || incomingData().activeWorkout == null || incomingData().activeWorkout is map)
+        && (!('trainingCycles' in incomingData()) || incomingData().trainingCycles is list)
+        && (!('activeCycleId' in incomingData()) || incomingData().activeCycleId == null || (incomingData().activeCycleId is string && incomingData().activeCycleId.size() <= 128))
+        && (!('nutritionPlanning' in incomingData()) || incomingData().nutritionPlanning == null || incomingData().nutritionPlanning is map)
+        && (!('supplements' in incomingData()) || incomingData().supplements is list)
+        && (!('activePains' in incomingData()) || incomingData().activePains is list)
+        && (!('catalogOverrides' in incomingData()) || incomingData().catalogOverrides == null || incomingData().catalogOverrides is map)
+        && (!('legalConsent' in incomingData()) || incomingData().legalConsent == null || incomingData().legalConsent is map)
         && (!('nutritionPlanningOrigin' in incomingData())
             || incomingData().nutritionPlanningOrigin == null
             || incomingData().nutritionPlanningOrigin == 'generated-default'
@@ -60,20 +72,23 @@ service cloud.firestore {
       match /history_months/{monthId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) 
-          && isValidMonthId(monthId);
+          && isValidMonthId(monthId)
+          && incomingData() is map;
       }
       
       // Subcollection Nutrizione & Misure Mensile: users/{userId}/nutrition_months/{YYYY-MM}
       match /nutrition_months/{monthId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) 
-          && isValidMonthId(monthId);
+          && isValidMonthId(monthId)
+          && incomingData() is map;
       }
 
       // Subcollection Telemetria Errori: users/{userId}/telemetry_errors/{errorId}
       match /telemetry_errors/{errorId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
+          && (!('userId' in incomingData()) || incomingData().userId == userId)
           && incomingData().keys().hasOnly([
             'timestamp',
             'type',
@@ -94,6 +109,7 @@ service cloud.firestore {
       match /telemetry_events/{eventId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
+          && (!('userId' in incomingData()) || incomingData().userId == userId)
           && incomingData().keys().hasOnly([
             'timestamp',
             'type',

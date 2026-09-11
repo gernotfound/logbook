@@ -137,15 +137,18 @@ export function computeWeeklyVolumeSeries(
 
     const intervals = generateWeekIntervals(numWeeks, referenceDate);
 
-    const workoutsWithData = safeHistory.map(w => {
+    const firstDay = intervals[0].weekStart;
+    const lastDay = intervals[intervals.length - 1].weekEnd;
+    const workoutsWithData = safeHistory.flatMap(w => {
         const dateStr = getWorkoutDateString(w);
+        if (!dateStr || dateStr < firstDay || dateStr > lastDay) return [];
         const volume = calculateWorkoutVolume(w, safeLibrary, safeUserWeight);
-        return {
+        return [{
             session: w,
             dateStr,
             volume: isNaN(volume) ? 0 : volume
-        };
-    }).filter(w => Boolean(w.dateStr));
+        }];
+    });
 
     const points: WeeklyVolumePoint[] = intervals.map((interval, idx) => {
         const matching = workoutsWithData.filter(w => {

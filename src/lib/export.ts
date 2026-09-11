@@ -1,7 +1,9 @@
 import { useDialogStore } from '../store/useDialogStore';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from './logic';
-import { UserDataSchema } from './schema';
+import { createBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
+import { captureSession, isCurrentSession } from './sync/session';
+import equal from 'fast-deep-equal';
 import type { UserData } from '../types';
 
 export const Exporter = {
@@ -184,10 +186,10 @@ export const Exporter = {
                 const writable = await handle.createWritable();
                 await writable.write(blob);
                 await writable.close();
-                return;
+                return true;
             } catch (err: any) {
                 if (err.name === 'AbortError') {
-                    return; // Utente ha annullato
+                    return false;
                 }
                 if (err.name === 'SecurityError' || err.name === 'TypeError') {
                     console.warn("showSaveFilePicker bloccato, uso fallback nativo:", err);
@@ -195,7 +197,7 @@ export const Exporter = {
                 } else {
                     console.error("Esportazione fallita:", err);
                     useDialogStore.getState().showAlert("Esportazione fallita, riprova.");
-                    return;
+                    return false;
                 }
             }
         }
@@ -209,6 +211,7 @@ export const Exporter = {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url); // Cleanup memory
+        return true;
     },
 
     async exportShareJson(
@@ -218,7 +221,7 @@ export const Exporter = {
             exportRoutines?: boolean | string[],
             exportTrainingCycles?: boolean | string[]
         } = { exportLibrary: true, exportRoutines: true, exportTrainingCycles: true }
-    ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number }> {
+    ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number } | undefined> {
 
         const libraryIds = new Set<string>();
         const routineIds = new Set<string>();
@@ -276,7 +279,7 @@ export const Exporter = {
         };
 
         const content = JSON.stringify(payload, null, 2);
-        this.downloadFile("logbook_condivisione.json", content, 'application/json');
+        if (await this.downloadFile("logbook_condivisione.json", content, 'application/json') === false) return;
 
         return {
             libraryCount: finalLibrary.length,
@@ -285,114 +288,56 @@ export const Exporter = {
         };
     },
 
-    async exportBackupJson(userData: UserData, currentUser: any) {
-        const payload = {
-            version: 1,
-            type: 'backup',
-            exportedAt: new Date().toISOString(),
-            userId: currentUser?.uid || null,
-            profile: userData.profile,
-            library: userData.library || [],
-            routines: userData.routines || [],
-            trainingCycles: userData.trainingCycles || [],
-            nutritionPlanning: userData.nutritionPlanning,
-            history: userData.history || [],
-            nutrition: userData.nutrition || {},
-            supplements: userData.supplements || []
-        };
-        const content = JSON.stringify(payload, null, 2);
-        this.downloadFile("logbook_backup.json", content, 'application/json');
+    async exportBackupJson(userData: UserData, currentUser: { uid: string } | null, coverage?: BackupCoverage, recovery?: unknown) {
+        const payload = createBackup(userData, currentUser ? 'user:' + currentUser.uid : 'guest', coverage, recovery);
+        await this.downloadFile("logbook_backup.json", JSON.stringify(payload, null, 2), 'application/json');
     },
 
-    async importFromJson(file: File, currentUser: any, saveUserData: any) {
-        return new Promise<void>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const content = e.target?.result as string;
-                    const payload = JSON.parse(content);
-
-                    if (payload.version !== 1 || !['share', 'backup'].includes(payload.type)) {
-                        throw new Error("Formato file non valido o non supportato.");
-                    }
-
-                    if (payload.type === 'backup') {
-                        if (payload.userId !== null && payload.userId !== undefined && currentUser?.uid && payload.userId !== currentUser.uid) {
-                            throw new Error("Sicurezza: Non puoi importare il backup di un altro utente. Questo sovrascriverebbe le tue cronologie personali.");
-                        }
-                    }
-
-                    const currentData = useAppStore.getState().userData || {};
-                    let mergedData: any = { ...currentData };
-
-                    const mergeArrayById = (arr1: any[], arr2: any[]) => {
-                        const map = new Map<string, any>(arr1.map(item => [item.id, item]));
-                        arr2.forEach(item => {
-                            if (!map.has(item.id)) {
-                                map.set(item.id, item); // Diamo priorità ai dati locali non sovrascrivendo se esiste già
-                            }
-                        });
-                        return Array.from(map.values());
-                    };
-
-                    mergedData.library = mergeArrayById(currentData.library || [], payload.library || []);
-                    mergedData.routines = mergeArrayById(currentData.routines || [], payload.routines || []);
-                    mergedData.trainingCycles = mergeArrayById(currentData.trainingCycles || [], payload.trainingCycles || []);
-
-                    if (payload.type === 'backup') {
-                        if (payload.profile && !currentData.profile) {
-                            mergedData.profile = payload.profile;
-                        }
-                        if (payload.nutritionPlanning && !currentData.nutritionPlanning) {
-                            mergedData.nutritionPlanning = payload.nutritionPlanning;
-                        }
-                        mergedData.supplements = mergeArrayById(currentData.supplements || [], payload.supplements || []);
-
-                        // History: append by ID or original fallback
-                        const currentHistory = currentData.history || [];
-                        const histMap = new Map(currentHistory.map(h => [h.id || ((h.date || '') + (h.routineName || '')), h]));
-                        (payload.history || []).forEach((h: any) => {
-                            const k = h.id || ((h.date || '') + (h.routineName || ''));
-                            if (!histMap.has(k)) histMap.set(k, h);
-                        });
-                        mergedData.history = Array.from(histMap.values());
-
-                        // Nutrition
-                        const currentNut = currentData.nutrition || {};
-                        const payloadNut = payload.nutrition || {};
-                        const newNut = { ...currentNut };
-                        for (const date in payloadNut) {
-                            if (!newNut[date]) {
-                                newNut[date] = payloadNut[date];
-                            } else {
-                                // Merge date
-                                const d1 = newNut[date];
-                                const d2 = payloadNut[date];
-                                d1.meals = mergeArrayById(d1.meals || [], d2.meals || []);
-                                d1.supplementsIntake = mergeArrayById(d1.supplementsIntake || [], d2.supplementsIntake || []);
-                            }
-                        }
-                        mergedData.nutrition = newNut;
-                    }
-
-                    const finalData = UserDataSchema.parse(mergedData);
-
-                    // Applica al globale in modo safe tramite store
-                    await saveUserData(() => finalData);
-
-                    useDialogStore.getState().showAlert(
-                        payload.type === 'share'
-                        ? "Importazione completata: Esercizi, Schede e Pianificazioni aggiornati."
-                        : "Ripristino backup completato con successo."
-                    );
-                    resolve();
-                } catch (err: any) {
-                    console.error("Import error:", err);
-                    useDialogStore.getState().showAlert(err.message || "Errore durante l'importazione del file JSON.");
-                    reject(err);
-                }
-            };
-            reader.readAsText(file);
-        });
+    async importFromJson(
+        file: File,
+        _currentUser: { uid: string } | null,
+        saveUserData: (update: (previous: UserData | null) => UserData) => Promise<unknown>,
+        mode: ImportMode = 'merge'
+    ) {
+        const session = captureSession();
+        const assertCurrent = () => {
+            if (!isCurrentSession(session)) throw new Error('Sessione cambiata: importazione annullata.');
+        };
+        try {
+            const content = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = () => reject(new Error('Impossibile leggere il file.'));
+                reader.onabort = () => reject(new Error('Lettura del file annullata.'));
+                reader.readAsText(file);
+            });
+            assertCurrent();
+            const decoded = decodeImport(JSON.parse(content), session.owner);
+            const snapshot = structuredClone(useAppStore.getState().userData);
+            if (!snapshot) throw new Error('Dati locali non ancora disponibili.');
+            const selectedMode = decoded.share ? 'merge' : mode;
+            const prepared = prepareImport(snapshot, decoded.data, selectedMode);
+            const summary = (selectedMode === 'restore' ? 'Ripristino' : 'Importazione incrementale') +
+                ': ' + (prepared.data.history?.length ?? 0) + ' allenamenti, ' + Object.keys(prepared.data.nutrition ?? {}).length +
+                ' giornate, ' + (prepared.data.library?.length ?? 0) + ' esercizi.\n' + prepared.collisions + ' collisioni su identificativi o giornate.\n' +
+                (selectedMode === 'restore' ? 'I campi presenti nel file sostituiranno i dati locali corrispondenti.' : 'In caso di collisione saranno conservati i valori locali.') +
+                (decoded.ownerUnknown ? '\nIl vecchio formato non identifica il proprietario. Conferma solo se questi dati sono tuoi.' : '') +
+                '\nI consensi importati non verranno applicati.\nProcedere?';
+            if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
+            assertCurrent();
+            await saveUserData(previous => {
+                assertCurrent();
+                if (!equal(previous, snapshot)) throw new Error('I dati sono cambiati durante l’anteprima. Ripeti l’importazione.');
+                return prepared.data;
+            });
+            assertCurrent();
+            const status = useAppStore.getState().syncHealth;
+            void useDialogStore.getState().showAlert(status === 'local-pending'
+                ? 'Importazione salvata sul dispositivo. Sincronizzazione cloud in attesa.'
+                : 'Importazione completata.');
+        } catch (error) {
+            if (isCurrentSession(session)) void useDialogStore.getState().showAlert(error instanceof Error ? error.message : "Errore durante l'importazione.");
+            throw error;
+        }
     }
 };

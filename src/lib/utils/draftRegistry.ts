@@ -11,14 +11,17 @@ class DraftRegistry {
         this.callbacks.delete(cb);
     }
 
-    flushAll() {
+    flushAll(options: { strict?: boolean } = {}) {
+        const errors: unknown[] = [];
         this.callbacks.forEach(cb => {
             try {
                 cb();
             } catch (e) {
+                errors.push(e);
                 console.error("Error during flush:", e);
             }
         });
+        if (options.strict && errors.length) throw new AggregateError(errors, 'Impossibile salvare tutte le bozze.');
     }
 }
 

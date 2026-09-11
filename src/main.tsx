@@ -1,22 +1,18 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { get } from 'idb-keyval'
+import { auth } from './lib/firebase'
+import { readLocal, preserveLegacyCache } from './lib/sync/localRepository'
+import { storageOwner } from './lib/sync/session'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
+import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
 import type { UserData } from './types'
 
 import { getCachedCatalog } from './lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './lib/catalog/deltaResolver';
-
-// Prevent gesture/pinch zoom on iOS PWA
-if (typeof window !== 'undefined') {
-  document.addEventListener('gesturestart', (e) => {
-    e.preventDefault();
-  });
-}
 
 import { requestDurableStorage, setStorageDiagnosticData, getStorageDiagnosticData } from './lib/storageStatus';
 import {
@@ -53,7 +49,10 @@ export const initApp = async () => {
   try {
     const catalog = await getCachedCatalog();
     try {
-      cached = await get<UserData>('logbook_cached_user_data');
+      if (!isGuest && typeof auth.authStateReady === 'function') await auth.authStateReady();
+      await preserveLegacyCache();
+      cached = (await readLocal(storageOwner()))?.data;
+      useAppStore.setState({ localWorkout: getInitialLocalWorkout() });
     } catch (err) {
       readError = err;
       console.warn("Errore recupero cache da IndexedDB:", err);

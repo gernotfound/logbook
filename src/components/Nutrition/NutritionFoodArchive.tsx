@@ -85,7 +85,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 const existing = (prev.customFoods || []) as any[];
                 const updatedCustomFoods = currentEditingId
                     ? existing.map(f => f.id === currentEditingId ? { ...cleanData, id: currentEditingId } : f)
-                    : [...existing, cleanData];
+                    : [...existing, { ...cleanData, id: Logic.generateId('food') }];
                 return { ...prev, customFoods: updatedCustomFoods };
             });
             setShowModal(false);
@@ -136,7 +136,8 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         const todayDateStr = Logic.getLocalDateString();
 
         const addedItem = {
-            id: food.id || Date.now(),
+            id: Logic.generateId('meal'),
+            foodId: food.id,
             name: food.name,
             meal: mealType,
             quantity: food.baseQty || 100,

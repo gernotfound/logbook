@@ -278,10 +278,10 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
                 expect(capturedContent).toContain('Ore sonno,Sonno profondo,Sonno leggero,Sonno REM,Tempo sveglio');
 
                 // Verify day 1 values
-                expect(capturedContent).toContain('2026-08-19,78.2,2400,290,170,70,,,,,,,,,,07:30,01:45,04:15,01:00,00:30,');
+                expect(capturedContent).toContain('"2026-08-19",78.2,2400,290,170,70,,,,,,,,,,"07:30","01:45","04:15","01:00","00:30",');
 
                 // Verify day 2 values with legacy conversion and sanitization
-                expect(capturedContent).toContain('2026-08-20,78,2350,280,165,68,,,,,,,,,,08:00,01:45,03:30,,,');
+                expect(capturedContent).toContain('"2026-08-20",78,2350,280,165,68,,,,,,,,,,"08:00","01:45","03:30","","",');
             } finally {
                 Exporter.downloadFile = origDownload;
             }
