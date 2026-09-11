@@ -439,6 +439,8 @@ describe('Storage Recovery Telemetry Suite', () => {
     });
 
     it('resolves uid via onAuthStateChanged when currentUser is initially null', async () => {
+      const previousUser = firebaseLib.auth.currentUser;
+      (firebaseLib.auth as any).currentUser = null;
       vi.spyOn(firestoreModule, 'doc').mockImplementation((_db: any, ...pathSegments: string[]) => ({
         path: pathSegments.join('/'),
       } as any));
@@ -460,6 +462,7 @@ describe('Storage Recovery Telemetry Suite', () => {
 
       expect(setDocSpy).toHaveBeenCalledTimes(1);
       const [docRef] = setDocSpy.mock.calls[0];
+      (firebaseLib.auth as any).currentUser = previousUser;
       expect(docRef.path).toContain('users/async_auth_uid_456/telemetry_anomalies/');
       expect(unsubSpy).toHaveBeenCalledTimes(1);
     });

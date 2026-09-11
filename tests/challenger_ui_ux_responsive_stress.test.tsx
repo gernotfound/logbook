@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, fireEvent, render, cleanup } from '@testing-library/react';
+import { screen, fireEvent, render, cleanup, waitFor } from '@testing-library/react';
 import WeeklyVolumeChart from '../src/components/analytics/WeeklyVolumeChart';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
 
@@ -192,7 +192,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 2: PARTIAL STATE RENDERING & ASYMMETRIC LOGGING
     // =========================================================================
     describe('2. Partial State Rendering & Data Asymmetry', () => {
-        it('2.1: Workouts present but NO nutrition logs: Volume chart active, Correlation shows insight', () => {
+        it('2.1: Workouts present but NO nutrition logs: Volume chart active, Correlation shows insight', async () => {
             const history = generateRealisticHistory();
 
             const { container: volContainer } = render(
@@ -203,9 +203,11 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 />
             );
 
-            expect(volContainer.querySelector('canvas')).not.toBeNull();
-            expect(screen.getByText(/Attuale:/i)).toBeDefined();
-            expect(screen.getByText(/Media:/i)).toBeDefined();
+            await waitFor(() => {
+                expect(volContainer.querySelector('canvas')).not.toBeNull();
+            });
+            expect(await screen.findByText(/Attuale:/i)).toBeDefined();
+            expect(await screen.findByText(/Media:/i)).toBeDefined();
 
             cleanup();
 
@@ -285,7 +287,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 3: RAPID PERIOD SWITCHING & OSCILLATION STRESS
     // =========================================================================
     describe('3. Rapid Period Switching & State Oscillation', () => {
-        it('3.1: Rapidly toggles periods in WeeklyVolumeChart without error', () => {
+        it('3.1: Rapidly toggles periods in WeeklyVolumeChart without error', async () => {
             const history = generateRealisticHistory();
 
             const { container } = render(
@@ -310,10 +312,13 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
 
             // End on 24 sett
             fireEvent.click(btn24);
+            await waitFor(() => {
+                expect(container.querySelector('canvas')).not.toBeNull();
+            });
             expect(container.querySelector('canvas')).not.toBeNull();
         });
 
-        it('3.2: Rapidly toggles periods in VolumeCaloriesCorrelationChart without error', () => {
+        it('3.2: Rapidly toggles periods in VolumeCaloriesCorrelationChart without error', async () => {
             const history = generateRealisticHistory();
             const nutrition = generateRealisticNutrition();
 
@@ -338,6 +343,9 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             }
 
             fireEvent.click(btn12);
+            await waitFor(() => {
+                expect(container.querySelector('canvas')).not.toBeNull();
+            });
             expect(container.querySelector('canvas')).not.toBeNull();
         });
 
@@ -354,7 +362,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 4: CANVAS, HIGH-DPI, RESIZE & MEMORY LEAK RESILIENCE
     // =========================================================================
     describe('4. Canvas, High-DPI, Resize & Memory Leak Resilience', () => {
-        it('4.1: High-DPI Retina (DPR 2x and 3x) environment simulation', () => {
+        it('4.1: High-DPI Retina (DPR 2x and 3x) environment simulation', async () => {
             // Simulate Retina Display
             const originalDPR = window.devicePixelRatio;
             Object.defineProperty(window, 'devicePixelRatio', {
@@ -371,7 +379,9 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                     userWeight={80}
                 />
             );
-            expect(c1.querySelector('canvas')).not.toBeNull();
+            await waitFor(() => {
+                expect(c1.querySelector('canvas')).not.toBeNull();
+            });
             cleanup();
 
             // Simulate Super Retina Display (DPR 3x)
@@ -389,7 +399,9 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                     userWeight={80}
                 />
             );
-            expect(c2.querySelector('canvas')).not.toBeNull();
+            await waitFor(() => {
+                expect(c2.querySelector('canvas')).not.toBeNull();
+            });
 
             // Restore
             Object.defineProperty(window, 'devicePixelRatio', {
@@ -429,7 +441,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             expect(true).toBe(true);
         });
 
-        it('4.3: Responsive viewport resizing across mobile (320px), mobile standard (375px), tablet (768px), desktop (1024px)', () => {
+        it('4.3: Responsive viewport resizing across mobile (320px), mobile standard (375px), tablet (768px), desktop (1024px)', async () => {
             const history = generateRealisticHistory();
             const nutrition = generateRealisticNutrition();
 
@@ -446,6 +458,9 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 window.dispatchEvent(new Event('resize'));
             });
 
+            await waitFor(() => {
+                expect(container.querySelectorAll('canvas').length).toBe(2);
+            });
             const canvases = container.querySelectorAll('canvas');
             expect(canvases.length).toBe(2);
         });
@@ -455,7 +470,7 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
     // SECTION 5: ITALIAN SENTENCE CASE AUDIT ACROSS ALL USER-FACING LABELS
     // =========================================================================
     describe('5. Italian Sentence Case Strict Compliance Audit', () => {
-        it('5.1: Verifies all headers, labels and button text follow strict Italian sentence case', () => {
+        it('5.1: Verifies all headers, labels and button text follow strict Italian sentence case', async () => {
             const history = generateRealisticHistory();
             const nutrition = generateRealisticNutrition();
 
@@ -472,8 +487,8 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
             expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
 
             // Sub-metrics
-            expect(screen.getByText(/Attuale:/i)).toBeDefined();
-            expect(screen.getByText(/Media:/i)).toBeDefined();
+            expect(await screen.findByText(/Attuale:/i)).toBeDefined();
+            expect(await screen.findByText(/Media:/i)).toBeDefined();
 
             // Period buttons (all lowercase except initial number)
             const buttons = screen.getAllByRole('button');

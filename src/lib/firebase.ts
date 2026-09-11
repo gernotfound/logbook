@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics, isSupported, type Analytics } from "firebase/analytics";
+import { getAnalytics, isSupported, setAnalyticsCollectionEnabled, type Analytics } from "firebase/analytics";
 import { 
     getAuth, 
     GoogleAuthProvider, 
@@ -41,7 +41,7 @@ const envVars: Record<string, string | undefined> = {
 };
 
 const missingEnvVars = Object.entries(envVars)
-    .filter(([_, value]) => typeof value !== 'string' || value.trim() === '')
+    .filter(([, value]) => typeof value !== 'string' || value.trim() === '')
     .map(([key]) => key);
 
 if (missingEnvVars.length > 0) {
@@ -83,15 +83,27 @@ export const ensureAppCheck = () => {
 
 // Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
 let analytics: Analytics | null = null;
-let currentAnalyticsConsent = typeof localStorage !== 'undefined' ? localStorage.getItem('logbook_analytics_consent') === 'true' : false;
+let analyticsInstance: Analytics | null = null;
+let currentAnalyticsConsent = false;
+try {
+    currentAnalyticsConsent = typeof localStorage !== 'undefined' && localStorage.getItem('logbook_analytics_consent') === 'true';
+} catch {
+    // Unreadable consent defaults to disabled collection.
+}
 
-isSupported().then((supported) => {
-    if (supported && currentAnalyticsConsent) {
-        analytics = getAnalytics(app);
+const enableConsentedAnalytics = async () => {
+    try {
+        const supported = await isSupported();
+        // Consent can change while the asynchronous capability check is in flight.
+        if (!supported || !currentAnalyticsConsent) return;
+        analyticsInstance ??= getAnalytics(app);
+        setAnalyticsCollectionEnabled(analyticsInstance, true);
+        analytics = analyticsInstance;
+    } catch (err) {
+        console.warn('Firebase Analytics non supportato o disabilitato:', err);
     }
-}).catch(err => {
-    console.warn("Firebase Analytics non supportato o disabilitato:", err);
-});
+};
+if (currentAnalyticsConsent) void enableConsentedAnalytics();
 
 let _db: any = null;
 export const getDb = () => {
@@ -114,16 +126,18 @@ export const getAnalyticsConsent = () => currentAnalyticsConsent;
 
 export const setAnalyticsConsent = (consent: boolean) => {
     currentAnalyticsConsent = consent;
-    localStorage.setItem('logbook_analytics_consent', consent ? 'true' : 'false');
-    window.dispatchEvent(new Event('analytics_consent_changed'));
-    
-    if (consent && !analytics) {
-        isSupported().then(supported => {
-            if (supported) analytics = getAnalytics(app);
-        });
-    } else if (!consent && analytics) {
+    if (!consent) {
+        if (analyticsInstance) setAnalyticsCollectionEnabled(analyticsInstance, false);
         analytics = null;
+    } else {
+        void enableConsentedAnalytics();
     }
+    try {
+        localStorage.setItem('logbook_analytics_consent', consent ? 'true' : 'false');
+    } catch (err) {
+        console.warn('Impossibile memorizzare la preferenza Analytics:', err);
+    }
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('analytics_consent_changed'));
 };
 export { 
     auth, 

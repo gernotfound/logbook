@@ -36,7 +36,7 @@ export function calculateCycleTimeline(
     cycle: TrainingCycle | null | undefined,
     currentDate: Date | string = new Date()
 ): CycleTimelineInfo {
-    const totalWeeks = Math.max(1, Number(cycle?.durationWeeks) || 4);
+    let totalWeeks = Math.max(1, Number(cycle?.durationWeeks) || 4);
 
     if (!cycle?.startDate) {
         return {
@@ -97,7 +97,8 @@ export function calculateCycleTimeline(
     const formattedRange = `dal ${formattedStartDate} al ${formattedEndDate}`;
 
     const diffDays = differenceInCalendarDays(now, start);
-    const totalDays = totalWeeks * 7;
+    const totalDays = differenceInCalendarDays(end, start) + 1;
+    totalWeeks = Math.ceil(totalDays / 7);
 
     if (diffDays < 0) {
         const daysToStart = Math.abs(diffDays);

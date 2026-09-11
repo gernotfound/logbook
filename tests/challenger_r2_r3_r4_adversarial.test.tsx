@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import type { UserData } from '../src/types';
+import { idbStore } from './setup';
 
 describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R4)', () => {
 
@@ -144,7 +145,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             }
             const firebaseModule = await import('../src/lib/firebase');
             expect(firebaseModule.auth).toBeDefined();
-            expect(firebaseModule.db).toBeDefined();
+            expect(firebaseModule.getDb).toBeDefined();
             expect(firebaseModule.provider).toBeDefined();
             expect(firebaseModule.signInWithPopup).toBeDefined();
             expect(firebaseModule.signOut).toBeDefined();
@@ -173,6 +174,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
 
         beforeEach(async () => {
             vi.useFakeTimers();
+            for (const k in idbStore) delete idbStore[k];
             const storeMod = await import('../src/store/useAppStore');
             const dbMod = await import('../src/lib/db');
             useAppStore = storeMod.useAppStore;
@@ -219,7 +221,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             // Must have received the 50th payload (freshest state)
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
                 profile: expect.objectContaining({ name: 'Adversarial User 50', height: '220' })
-            }));
+            }), expect.any(Number));
 
             // Final store state must be clean
             expect(useAppStore.getState().syncing).toBe(false);
@@ -256,7 +258,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             }
 
             expect(saveSpy).toHaveBeenCalledTimes(1);
-            expect(useAppStore.getState().saveError).toBe('I dati sono stati salvati con successo sul dispositivo. La sincronizzazione con il cloud riprenderà automaticamente al ripristino della connessione.');
+            expect(useAppStore.getState().saveError).toBe(simulatedError.message);
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
@@ -267,11 +269,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             const a1 = expect(p1).rejects.toThrow('Stage 1 Error');
             await vi.advanceTimersByTimeAsync(1100);
             await a1;
-            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
+            expect(useAppStore.getState().saveError).toBe('Stage 1 Error');
             expect(useAppStore.getState().syncing).toBe(false);
 
             // Stage 2: Burst of 5 Successes (recovers error state)
-            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce(undefined);
+            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
             const p2_burst = Array.from({ length: 5 }, (_, idx) => 
                 useAppStore.getState().saveUserData(createMockUserData(10 + idx))
             );
@@ -301,21 +303,22 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
                     expect((res as PromiseRejectedResult).reason).toBe(stage3Err);
                 }
             });
-            expect(useAppStore.getState().saveError).toBe('La sincronizzazione con il server ha impiegato troppo tempo. I dati sono salvati sul dispositivo e il tentativo verrà ripetuto in seguito.');
+            expect(useAppStore.getState().saveError).toBe(stage3Err.message);
             expect(useAppStore.getState().syncing).toBe(false);
 
             // Stage 4: saveUserData(null) immediately clears everything
+            for (const k in idbStore) delete idbStore[k];
             const p4 = useAppStore.getState().saveUserData(null);
-            await expect(p4).resolves.toBeUndefined();
+            await expect(p4).resolves.toEqual({ ok: true, status: 'synced' });
             expect(useAppStore.getState().userData).toBeNull();
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().syncing).toBe(false);
 
             // Stage 5: Final Single Success
-            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce(undefined);
+            vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
             const p5 = useAppStore.getState().saveUserData(createMockUserData(100));
             await vi.advanceTimersByTimeAsync(1100);
-            await expect(p5).resolves.toBeUndefined();
+            await expect(p5).resolves.toEqual({ ok: true, status: 'synced' });
             expect(useAppStore.getState().userData?.profile?.name).toBe('Adversarial User 100');
             expect(useAppStore.getState().saveError).toBeNull();
             expect(useAppStore.getState().syncing).toBe(false);
@@ -334,7 +337,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             await vi.advanceTimersByTimeAsync(1100);
             await assertion;
 
-            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
+            expect(useAppStore.getState().saveError).toBe(dbError.message);
             expect(useAppStore.getState().syncing).toBe(false);
         });
     });

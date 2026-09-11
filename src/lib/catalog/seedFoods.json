@@ -1,1 +1,2191 @@
-[]
+[
+  {
+    "id": "petto-di-pollo-crudo",
+    "name": "Petto di Pollo Crudo",
+    "brand": "Generico",
+    "kcal": 103,
+    "pro": 23,
+    "carbs": 0,
+    "fat": 1.2
+  },
+  {
+    "id": "petto-di-tacchino-crudo",
+    "name": "Petto di Tacchino Crudo",
+    "brand": "Generico",
+    "kcal": 110,
+    "pro": 24,
+    "carbs": 0,
+    "fat": 1.5
+  },
+  {
+    "id": "vitello-magro-crudo",
+    "name": "Vitello Magro Crudo",
+    "brand": "Generico",
+    "kcal": 111,
+    "pro": 21,
+    "carbs": 0,
+    "fat": 3
+  },
+  {
+    "id": "manzo-magro-crudo",
+    "name": "Manzo Magro Crudo",
+    "brand": "Generico",
+    "kcal": 133,
+    "pro": 22,
+    "carbs": 0,
+    "fat": 5
+  },
+  {
+    "id": "lonza-di-maiale-cruda",
+    "name": "Lonza di Maiale Cruda",
+    "brand": "Generico",
+    "kcal": 138,
+    "pro": 21,
+    "carbs": 0,
+    "fat": 6
+  },
+  {
+    "id": "salmone-fresco-crudo",
+    "name": "Salmone Fresco Crudo",
+    "brand": "Generico",
+    "kcal": 197,
+    "pro": 20,
+    "carbs": 0,
+    "fat": 13
+  },
+  {
+    "id": "tonno-al-naturale-sgocciolato",
+    "name": "Tonno al Naturale Sgocciolato",
+    "brand": "Generico",
+    "kcal": 109,
+    "pro": 25,
+    "carbs": 0,
+    "fat": 1
+  },
+  {
+    "id": "merluzzo-fresco-crudo",
+    "name": "Merluzzo Fresco Crudo",
+    "brand": "Generico",
+    "kcal": 77,
+    "pro": 18,
+    "carbs": 0,
+    "fat": 0.5
+  },
+  {
+    "id": "uovo-intero-crudo",
+    "name": "Uovo Intero Crudo",
+    "brand": "Generico",
+    "kcal": 146,
+    "pro": 13,
+    "carbs": 1,
+    "fat": 10
+  },
+  {
+    "id": "albume-d-uovo-crudo",
+    "name": "Albume d'Uovo Crudo",
+    "brand": "Generico",
+    "kcal": 48,
+    "pro": 11,
+    "carbs": 1,
+    "fat": 0
+  },
+  {
+    "id": "yogurt-greco-0-grassi",
+    "name": "Yogurt Greco 0% Grassi",
+    "brand": "Generico",
+    "kcal": 56,
+    "pro": 10,
+    "carbs": 4,
+    "fat": 0
+  },
+  {
+    "id": "yogurt-greco-5-grassi",
+    "name": "Yogurt Greco 5% Grassi",
+    "brand": "Generico",
+    "kcal": 93,
+    "pro": 9,
+    "carbs": 3,
+    "fat": 5
+  },
+  {
+    "id": "latte-parzialmente-scremato",
+    "name": "Latte Parzialmente Scremato",
+    "brand": "Generico",
+    "kcal": 47,
+    "pro": 3.3,
+    "carbs": 5,
+    "fat": 1.5
+  },
+  {
+    "id": "latte-intero",
+    "name": "Latte Intero",
+    "brand": "Generico",
+    "kcal": 66,
+    "pro": 3.3,
+    "carbs": 5,
+    "fat": 3.6
+  },
+  {
+    "id": "ricotta-vaccina",
+    "name": "Ricotta Vaccina",
+    "brand": "Generico",
+    "kcal": 146,
+    "pro": 11,
+    "carbs": 3,
+    "fat": 10
+  },
+  {
+    "id": "mozzarella-light",
+    "name": "Mozzarella Light",
+    "brand": "Generico",
+    "kcal": 169,
+    "pro": 20,
+    "carbs": 2,
+    "fat": 9
+  },
+  {
+    "id": "parmigiano-reggiano",
+    "name": "Parmigiano Reggiano",
+    "brand": "Generico",
+    "kcal": 389,
+    "pro": 32,
+    "carbs": 0,
+    "fat": 29
+  },
+  {
+    "id": "tofu-al-naturale-crudo",
+    "name": "Tofu al Naturale Crudo",
+    "brand": "Generico",
+    "kcal": 140,
+    "pro": 15,
+    "carbs": 2,
+    "fat": 8
+  },
+  {
+    "id": "tempeh-al-naturale-crudo",
+    "name": "Tempeh al Naturale Crudo",
+    "brand": "Generico",
+    "kcal": 211,
+    "pro": 19,
+    "carbs": 9,
+    "fat": 11
+  },
+  {
+    "id": "seitan-al-naturale-crudo",
+    "name": "Seitan al Naturale Crudo",
+    "brand": "Generico",
+    "kcal": 218,
+    "pro": 36,
+    "carbs": 14,
+    "fat": 2
+  },
+  {
+    "id": "pasta-di-semola-cruda",
+    "name": "Pasta di Semola Cruda",
+    "brand": "Generico",
+    "kcal": 358,
+    "pro": 13,
+    "carbs": 73,
+    "fat": 1.5
+  },
+  {
+    "id": "pasta-integrale-cruda",
+    "name": "Pasta Integrale Cruda",
+    "brand": "Generico",
+    "kcal": 343,
+    "pro": 14,
+    "carbs": 66,
+    "fat": 2.5
+  },
+  {
+    "id": "riso-basmati-crudo",
+    "name": "Riso Basmati Crudo",
+    "brand": "Generico",
+    "kcal": 353,
+    "pro": 9,
+    "carbs": 77,
+    "fat": 1
+  },
+  {
+    "id": "riso-integrale-crudo",
+    "name": "Riso Integrale Crudo",
+    "brand": "Generico",
+    "kcal": 355,
+    "pro": 8,
+    "carbs": 74,
+    "fat": 3
+  },
+  {
+    "id": "avena-in-fiocchi-cruda",
+    "name": "Avena in Fiocchi Cruda",
+    "brand": "Generico",
+    "kcal": 359,
+    "pro": 14,
+    "carbs": 60,
+    "fat": 7
+  },
+  {
+    "id": "pane-integrale",
+    "name": "Pane Integrale",
+    "brand": "Generico",
+    "kcal": 243,
+    "pro": 11,
+    "carbs": 43,
+    "fat": 3
+  },
+  {
+    "id": "pane-bianco",
+    "name": "Pane Bianco",
+    "brand": "Generico",
+    "kcal": 263,
+    "pro": 9,
+    "carbs": 50,
+    "fat": 3
+  },
+  {
+    "id": "patate-crude",
+    "name": "Patate Crude",
+    "brand": "Generico",
+    "kcal": 77,
+    "pro": 2,
+    "carbs": 17,
+    "fat": 0.1
+  },
+  {
+    "id": "patate-dolci-crude",
+    "name": "Patate Dolci Crude",
+    "brand": "Generico",
+    "kcal": 87,
+    "pro": 1.6,
+    "carbs": 20,
+    "fat": 0.1
+  },
+  {
+    "id": "ceci-secchi-crudi",
+    "name": "Ceci Secchi Crudi",
+    "brand": "Generico",
+    "kcal": 322,
+    "pro": 20,
+    "carbs": 47,
+    "fat": 6
+  },
+  {
+    "id": "ceci-in-scatola-sgocciolati",
+    "name": "Ceci in Scatola Sgocciolati",
+    "brand": "Generico",
+    "kcal": 115,
+    "pro": 7,
+    "carbs": 16,
+    "fat": 2.5
+  },
+  {
+    "id": "lenticchie-secche-crude",
+    "name": "Lenticchie Secche Crude",
+    "brand": "Generico",
+    "kcal": 318,
+    "pro": 24,
+    "carbs": 52,
+    "fat": 1.5
+  },
+  {
+    "id": "lenticchie-in-scatola-sgocciolate",
+    "name": "Lenticchie in Scatola Sgocciolate",
+    "brand": "Generico",
+    "kcal": 101,
+    "pro": 8,
+    "carbs": 15,
+    "fat": 1
+  },
+  {
+    "id": "fagioli-cannellini-in-scatola-sgocciolati",
+    "name": "Fagioli Cannellini in Scatola Sgocciolati",
+    "brand": "Generico",
+    "kcal": 97,
+    "pro": 7,
+    "carbs": 15,
+    "fat": 1
+  },
+  {
+    "id": "fagioli-borlotti-in-scatola-sgocciolati",
+    "name": "Fagioli Borlotti in Scatola Sgocciolati",
+    "brand": "Generico",
+    "kcal": 97,
+    "pro": 7,
+    "carbs": 15,
+    "fat": 1
+  },
+  {
+    "id": "quinoa-cruda",
+    "name": "Quinoa Cruda",
+    "brand": "Generico",
+    "kcal": 366,
+    "pro": 14,
+    "carbs": 64,
+    "fat": 6
+  },
+  {
+    "id": "cous-cous-crudo",
+    "name": "Cous Cous Crudo",
+    "brand": "Generico",
+    "kcal": 354,
+    "pro": 13,
+    "carbs": 72,
+    "fat": 1.5
+  },
+  {
+    "id": "gallette-di-riso",
+    "name": "Gallette di Riso",
+    "brand": "Generico",
+    "kcal": 379,
+    "pro": 8,
+    "carbs": 80,
+    "fat": 3
+  },
+  {
+    "id": "grano-saraceno-crudo",
+    "name": "Grano Saraceno Crudo",
+    "brand": "Generico",
+    "kcal": 363,
+    "pro": 13,
+    "carbs": 71,
+    "fat": 3
+  },
+  {
+    "id": "farro-crudo",
+    "name": "Farro Crudo",
+    "brand": "Generico",
+    "kcal": 351,
+    "pro": 15,
+    "carbs": 67,
+    "fat": 2.5
+  },
+  {
+    "id": "olio-extravergine-di-oliva",
+    "name": "Olio Extravergine di Oliva",
+    "brand": "Generico",
+    "kcal": 900,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100
+  },
+  {
+    "id": "burro",
+    "name": "Burro",
+    "brand": "Generico",
+    "kcal": 755,
+    "pro": 1,
+    "carbs": 1,
+    "fat": 83
+  },
+  {
+    "id": "burro-di-arachidi-100",
+    "name": "Burro di Arachidi 100%",
+    "brand": "Generico",
+    "kcal": 614,
+    "pro": 25,
+    "carbs": 16,
+    "fat": 50
+  },
+  {
+    "id": "burro-di-mandorle-100",
+    "name": "Burro di Mandorle 100%",
+    "brand": "Generico",
+    "kcal": 655,
+    "pro": 21,
+    "carbs": 19,
+    "fat": 55
+  },
+  {
+    "id": "noci-sgusciate",
+    "name": "Noci Sgusciate",
+    "brand": "Generico",
+    "kcal": 701,
+    "pro": 15,
+    "carbs": 14,
+    "fat": 65
+  },
+  {
+    "id": "mandorle-sgusciate",
+    "name": "Mandorle Sgusciate",
+    "brand": "Generico",
+    "kcal": 622,
+    "pro": 21,
+    "carbs": 22,
+    "fat": 50
+  },
+  {
+    "id": "nocciole-sgusciate",
+    "name": "Nocciole Sgusciate",
+    "brand": "Generico",
+    "kcal": 677,
+    "pro": 15,
+    "carbs": 17,
+    "fat": 61
+  },
+  {
+    "id": "arachidi-tostate",
+    "name": "Arachidi Tostate",
+    "brand": "Generico",
+    "kcal": 609,
+    "pro": 26,
+    "carbs": 16,
+    "fat": 49
+  },
+  {
+    "id": "pistacchi-sgusciati",
+    "name": "Pistacchi Sgusciati",
+    "brand": "Generico",
+    "kcal": 597,
+    "pro": 20,
+    "carbs": 28,
+    "fat": 45
+  },
+  {
+    "id": "anacardi-sgusciati",
+    "name": "Anacardi Sgusciati",
+    "brand": "Generico",
+    "kcal": 588,
+    "pro": 18,
+    "carbs": 30,
+    "fat": 44
+  },
+  {
+    "id": "semi-di-chia",
+    "name": "Semi di Chia",
+    "brand": "Generico",
+    "kcal": 515,
+    "pro": 17,
+    "carbs": 42,
+    "fat": 31
+  },
+  {
+    "id": "semi-di-lino",
+    "name": "Semi di Lino",
+    "brand": "Generico",
+    "kcal": 566,
+    "pro": 18,
+    "carbs": 29,
+    "fat": 42
+  },
+  {
+    "id": "semi-di-zucca",
+    "name": "Semi di Zucca",
+    "brand": "Generico",
+    "kcal": 621,
+    "pro": 30,
+    "carbs": 15,
+    "fat": 49
+  },
+  {
+    "id": "semi-di-girasole",
+    "name": "Semi di Girasole",
+    "brand": "Generico",
+    "kcal": 623,
+    "pro": 21,
+    "carbs": 20,
+    "fat": 51
+  },
+  {
+    "id": "avocado-crudo",
+    "name": "Avocado Crudo",
+    "brand": "Generico",
+    "kcal": 179,
+    "pro": 2,
+    "carbs": 9,
+    "fat": 15
+  },
+  {
+    "id": "cioccolato-fondente-85",
+    "name": "Cioccolato Fondente 85%",
+    "brand": "Generico",
+    "kcal": 522,
+    "pro": 8,
+    "carbs": 19,
+    "fat": 46
+  },
+  {
+    "id": "olio-di-cocco",
+    "name": "Olio di Cocco",
+    "brand": "Generico",
+    "kcal": 900,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100
+  },
+  {
+    "id": "maionese-classica",
+    "name": "Maionese Classica",
+    "brand": "Generico",
+    "kcal": 683,
+    "pro": 1,
+    "carbs": 1,
+    "fat": 75
+  },
+  {
+    "id": "broccoli-crudi",
+    "name": "Broccoli Crudi",
+    "brand": "Generico",
+    "kcal": 45,
+    "pro": 3,
+    "carbs": 7,
+    "fat": 0.5
+  },
+  {
+    "id": "spinaci-crudi",
+    "name": "Spinaci Crudi",
+    "brand": "Generico",
+    "kcal": 33,
+    "pro": 3,
+    "carbs": 4,
+    "fat": 0.5
+  },
+  {
+    "id": "zucchine-crude",
+    "name": "Zucchine Crude",
+    "brand": "Generico",
+    "kcal": 20,
+    "pro": 1.5,
+    "carbs": 3,
+    "fat": 0.2
+  },
+  {
+    "id": "melanzane-crude",
+    "name": "Melanzane Crude",
+    "brand": "Generico",
+    "kcal": 30,
+    "pro": 1,
+    "carbs": 6,
+    "fat": 0.2
+  },
+  {
+    "id": "peperoni-rossi-crudi",
+    "name": "Peperoni Rossi Crudi",
+    "brand": "Generico",
+    "kcal": 31,
+    "pro": 1,
+    "carbs": 6,
+    "fat": 0.3
+  },
+  {
+    "id": "pomodori-crudi",
+    "name": "Pomodori Crudi",
+    "brand": "Generico",
+    "kcal": 22,
+    "pro": 1,
+    "carbs": 4,
+    "fat": 0.2
+  },
+  {
+    "id": "carote-crude",
+    "name": "Carote Crude",
+    "brand": "Generico",
+    "kcal": 46,
+    "pro": 1,
+    "carbs": 10,
+    "fat": 0.2
+  },
+  {
+    "id": "cipolle-crude",
+    "name": "Cipolle Crude",
+    "brand": "Generico",
+    "kcal": 41,
+    "pro": 1,
+    "carbs": 9,
+    "fat": 0.1
+  },
+  {
+    "id": "aglio-crudo",
+    "name": "Aglio Crudo",
+    "brand": "Generico",
+    "kcal": 161,
+    "pro": 6,
+    "carbs": 33,
+    "fat": 0.5
+  },
+  {
+    "id": "asparagi-crudi",
+    "name": "Asparagi Crudi",
+    "brand": "Generico",
+    "kcal": 27,
+    "pro": 2.2,
+    "carbs": 4,
+    "fat": 0.2
+  },
+  {
+    "id": "funghi-champignon-crudi",
+    "name": "Funghi Champignon Crudi",
+    "brand": "Generico",
+    "kcal": 27,
+    "pro": 3,
+    "carbs": 3,
+    "fat": 0.3
+  },
+  {
+    "id": "lattuga-cruda",
+    "name": "Lattuga Cruda",
+    "brand": "Generico",
+    "kcal": 20,
+    "pro": 1.5,
+    "carbs": 3,
+    "fat": 0.2
+  },
+  {
+    "id": "rucola-cruda",
+    "name": "Rucola Cruda",
+    "brand": "Generico",
+    "kcal": 29,
+    "pro": 2.5,
+    "carbs": 3.5,
+    "fat": 0.5
+  },
+  {
+    "id": "cetrioli-crudi",
+    "name": "Cetrioli Crudi",
+    "brand": "Generico",
+    "kcal": 17,
+    "pro": 0.5,
+    "carbs": 3.5,
+    "fat": 0.1
+  },
+  {
+    "id": "fagiolini-crudi",
+    "name": "Fagiolini Crudi",
+    "brand": "Generico",
+    "kcal": 38,
+    "pro": 2,
+    "carbs": 7,
+    "fat": 0.2
+  },
+  {
+    "id": "cavolfiore-crudo",
+    "name": "Cavolfiore Crudo",
+    "brand": "Generico",
+    "kcal": 31,
+    "pro": 2,
+    "carbs": 5,
+    "fat": 0.3
+  },
+  {
+    "id": "cavolo-cappuccio-crudo",
+    "name": "Cavolo Cappuccio Crudo",
+    "brand": "Generico",
+    "kcal": 32,
+    "pro": 1.5,
+    "carbs": 6,
+    "fat": 0.2
+  },
+  {
+    "id": "zucca-cruda",
+    "name": "Zucca Cruda",
+    "brand": "Generico",
+    "kcal": 29,
+    "pro": 1,
+    "carbs": 6,
+    "fat": 0.1
+  },
+  {
+    "id": "mela-con-buccia-cruda",
+    "name": "Mela con Buccia Cruda",
+    "brand": "Generico",
+    "kcal": 59,
+    "pro": 0.3,
+    "carbs": 14,
+    "fat": 0.2
+  },
+  {
+    "id": "banana-cruda",
+    "name": "Banana Cruda",
+    "brand": "Generico",
+    "kcal": 99,
+    "pro": 1,
+    "carbs": 23,
+    "fat": 0.3
+  },
+  {
+    "id": "arancia-cruda",
+    "name": "Arancia Cruda",
+    "brand": "Generico",
+    "kcal": 54,
+    "pro": 1,
+    "carbs": 12,
+    "fat": 0.2
+  },
+  {
+    "id": "fragole-crude",
+    "name": "Fragole Crude",
+    "brand": "Generico",
+    "kcal": 38,
+    "pro": 0.7,
+    "carbs": 8,
+    "fat": 0.3
+  },
+  {
+    "id": "mirtilli-crudi",
+    "name": "Mirtilli Crudi",
+    "brand": "Generico",
+    "kcal": 62,
+    "pro": 0.7,
+    "carbs": 14,
+    "fat": 0.3
+  },
+  {
+    "id": "lamponi-crudi",
+    "name": "Lamponi Crudi",
+    "brand": "Generico",
+    "kcal": 58,
+    "pro": 1.2,
+    "carbs": 12,
+    "fat": 0.6
+  },
+  {
+    "id": "kiwi-crudo",
+    "name": "Kiwi Crudo",
+    "brand": "Generico",
+    "kcal": 69,
+    "pro": 1,
+    "carbs": 15,
+    "fat": 0.5
+  },
+  {
+    "id": "ananas-crudo",
+    "name": "Ananas Crudo",
+    "brand": "Generico",
+    "kcal": 55,
+    "pro": 0.5,
+    "carbs": 13,
+    "fat": 0.1
+  },
+  {
+    "id": "melone-crudo",
+    "name": "Melone Crudo",
+    "brand": "Generico",
+    "kcal": 37,
+    "pro": 0.8,
+    "carbs": 8,
+    "fat": 0.2
+  },
+  {
+    "id": "anguria-cruda",
+    "name": "Anguria Cruda",
+    "brand": "Generico",
+    "kcal": 36,
+    "pro": 0.6,
+    "carbs": 8,
+    "fat": 0.2
+  },
+  {
+    "id": "pesca-cruda",
+    "name": "Pesca Cruda",
+    "brand": "Generico",
+    "kcal": 45,
+    "pro": 0.9,
+    "carbs": 10,
+    "fat": 0.2
+  },
+  {
+    "id": "prugna-cruda",
+    "name": "Prugna Cruda",
+    "brand": "Generico",
+    "kcal": 50,
+    "pro": 0.7,
+    "carbs": 11,
+    "fat": 0.3
+  },
+  {
+    "id": "pera-cruda",
+    "name": "Pera Cruda",
+    "brand": "Generico",
+    "kcal": 63,
+    "pro": 0.4,
+    "carbs": 15,
+    "fat": 0.1
+  },
+  {
+    "id": "uva-cruda",
+    "name": "Uva Cruda",
+    "brand": "Generico",
+    "kcal": 77,
+    "pro": 0.7,
+    "carbs": 18,
+    "fat": 0.2
+  },
+  {
+    "id": "mango-crudo",
+    "name": "Mango Crudo",
+    "brand": "Generico",
+    "kcal": 67,
+    "pro": 0.8,
+    "carbs": 15,
+    "fat": 0.4
+  },
+  {
+    "id": "limone-crudo",
+    "name": "Limone Crudo",
+    "brand": "Generico",
+    "kcal": 43,
+    "pro": 1.1,
+    "carbs": 9,
+    "fat": 0.3
+  },
+  {
+    "id": "pompelmo-crudo",
+    "name": "Pompelmo Crudo",
+    "brand": "Generico",
+    "kcal": 48,
+    "pro": 0.8,
+    "carbs": 11,
+    "fat": 0.1
+  },
+  {
+    "id": "miele",
+    "name": "Miele",
+    "brand": "Generico",
+    "kcal": 329,
+    "pro": 0.3,
+    "carbs": 82,
+    "fat": 0
+  },
+  {
+    "id": "sciroppo-d-acero",
+    "name": "Sciroppo d'Acero",
+    "brand": "Generico",
+    "kcal": 268,
+    "pro": 0,
+    "carbs": 67,
+    "fat": 0
+  },
+  {
+    "id": "aceto-balsamico",
+    "name": "Aceto Balsamico",
+    "brand": "Generico",
+    "kcal": 70,
+    "pro": 0.5,
+    "carbs": 17,
+    "fat": 0
+  },
+  {
+    "id": "salsa-di-soia",
+    "name": "Salsa di Soia",
+    "brand": "Generico",
+    "kcal": 53,
+    "pro": 8,
+    "carbs": 5,
+    "fat": 0.1
+  },
+  {
+    "id": "passata-di-pomodoro",
+    "name": "Passata di Pomodoro",
+    "brand": "Generico",
+    "kcal": 24,
+    "pro": 1.5,
+    "carbs": 4,
+    "fat": 0.2
+  },
+  {
+    "id": "ketchup",
+    "name": "Ketchup",
+    "brand": "Generico",
+    "kcal": 105,
+    "pro": 1,
+    "carbs": 25,
+    "fat": 0.1
+  },
+  {
+    "id": "senape",
+    "name": "Senape",
+    "brand": "Generico",
+    "kcal": 63,
+    "pro": 4,
+    "carbs": 5,
+    "fat": 3
+  },
+  {
+    "id": "proteina-in-polvere-whey",
+    "name": "Proteina in Polvere Whey",
+    "brand": "Generico",
+    "kcal": 365,
+    "pro": 75,
+    "carbs": 5,
+    "fat": 5
+  },
+  {
+    "id": "bresaola-della-valtellina",
+    "name": "Bresaola della Valtellina",
+    "brand": "Generico",
+    "kcal": 151,
+    "pro": 32,
+    "carbs": 0,
+    "fat": 2.6
+  },
+  {
+    "id": "prosciutto-crudo-sgrassato",
+    "name": "Prosciutto Crudo (Sgrassato)",
+    "brand": "Generico",
+    "kcal": 144,
+    "pro": 28,
+    "carbs": 0,
+    "fat": 3.5
+  },
+  {
+    "id": "prosciutto-cotto-alta-qualita",
+    "name": "Prosciutto Cotto Alta QualitÃ ",
+    "brand": "Generico",
+    "kcal": 215,
+    "pro": 20,
+    "carbs": 1,
+    "fat": 14.5
+  },
+  {
+    "id": "fesa-di-tacchino-affettato",
+    "name": "Fesa di Tacchino (Affettato)",
+    "brand": "Generico",
+    "kcal": 105,
+    "pro": 24,
+    "carbs": 1,
+    "fat": 0.5
+  },
+  {
+    "id": "orata-fresca-cruda",
+    "name": "Orata Fresca Cruda",
+    "brand": "Generico",
+    "kcal": 89,
+    "pro": 20,
+    "carbs": 0,
+    "fat": 1
+  },
+  {
+    "id": "gamberi-sgusciati-crudi",
+    "name": "Gamberi Sgusciati Crudi",
+    "brand": "Generico",
+    "kcal": 71,
+    "pro": 15,
+    "carbs": 0.5,
+    "fat": 1
+  },
+  {
+    "id": "polpo-crudo",
+    "name": "Polpo Crudo",
+    "brand": "Generico",
+    "kcal": 57,
+    "pro": 11,
+    "carbs": 1.5,
+    "fat": 0.8
+  },
+  {
+    "id": "fiocchi-di-latte",
+    "name": "Fiocchi di Latte",
+    "brand": "Generico",
+    "kcal": 99,
+    "pro": 11,
+    "carbs": 3,
+    "fat": 4.8
+  },
+  {
+    "id": "kefir-intero",
+    "name": "Kefir Intero",
+    "brand": "Generico",
+    "kcal": 64,
+    "pro": 3.3,
+    "carbs": 4.8,
+    "fat": 3.5
+  },
+  {
+    "id": "latte-di-soia-senza-zuccheri",
+    "name": "Latte di Soia Senza Zuccheri",
+    "brand": "Generico",
+    "kcal": 33,
+    "pro": 3.3,
+    "carbs": 1,
+    "fat": 1.8
+  },
+  {
+    "id": "latte-di-mandorla-senza-zuccheri",
+    "name": "Latte di Mandorla Senza Zuccheri",
+    "brand": "Generico",
+    "kcal": 25,
+    "pro": 0.4,
+    "carbs": 0.1,
+    "fat": 2.6
+  },
+  {
+    "id": "farina-d-avena",
+    "name": "Farina d'Avena",
+    "brand": "Generico",
+    "kcal": 359,
+    "pro": 14,
+    "carbs": 60,
+    "fat": 7
+  },
+  {
+    "id": "fette-biscottate-integrali",
+    "name": "Fette Biscottate Integrali",
+    "brand": "Generico",
+    "kcal": 356,
+    "pro": 12,
+    "carbs": 68,
+    "fat": 4
+  },
+  {
+    "id": "orzo-perlato-crudo",
+    "name": "Orzo Perlato Crudo",
+    "brand": "Generico",
+    "kcal": 349,
+    "pro": 10,
+    "carbs": 75,
+    "fat": 1
+  },
+  {
+    "id": "mais-dolce-in-scatola",
+    "name": "Mais Dolce in Scatola",
+    "brand": "Generico",
+    "kcal": 77,
+    "pro": 2.5,
+    "carbs": 14,
+    "fat": 1.2
+  },
+  {
+    "id": "piselli-surgelati",
+    "name": "Piselli Surgelati",
+    "brand": "Generico",
+    "kcal": 67,
+    "pro": 5.5,
+    "carbs": 10,
+    "fat": 0.5
+  },
+  {
+    "id": "edamame-surgelati",
+    "name": "Edamame Surgelati",
+    "brand": "Generico",
+    "kcal": 125,
+    "pro": 11,
+    "carbs": 9,
+    "fat": 5
+  },
+  {
+    "id": "radicchio-crudo",
+    "name": "Radicchio Crudo",
+    "brand": "Generico",
+    "kcal": 13,
+    "pro": 1.4,
+    "carbs": 1.6,
+    "fat": 0.1
+  },
+  {
+    "id": "finocchi-crudi",
+    "name": "Finocchi Crudi",
+    "brand": "Generico",
+    "kcal": 15,
+    "pro": 1.2,
+    "carbs": 2,
+    "fat": 0.2
+  },
+  {
+    "id": "cacao-amaro-in-polvere",
+    "name": "Cacao Amaro in Polvere",
+    "brand": "Generico",
+    "kcal": 325,
+    "pro": 20,
+    "carbs": 14,
+    "fat": 21
+  },
+  {
+    "id": "petto-di-pollo-cotto",
+    "name": "Petto di Pollo Cotto",
+    "brand": "Generico",
+    "kcal": 165,
+    "pro": 31,
+    "carbs": 0,
+    "fat": 3.6,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "coscia-di-pollo-cotta",
+    "name": "Coscia di Pollo Cotta",
+    "brand": "Generico",
+    "kcal": 209,
+    "pro": 26,
+    "carbs": 0,
+    "fat": 10.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "petto-di-tacchino-cotto",
+    "name": "Petto di Tacchino Cotto",
+    "brand": "Generico",
+    "kcal": 135,
+    "pro": 30,
+    "carbs": 0,
+    "fat": 1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tacchino-macinato-93-microcotto",
+    "name": "Tacchino Macinato 93% Magro Cotto",
+    "brand": "Generico",
+    "kcal": 176,
+    "pro": 27,
+    "carbs": 0,
+    "fat": 8,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "controfiletto-di-manzo-cotto",
+    "name": "Controfiletto di Manzo Magro Cotto",
+    "brand": "Generico",
+    "kcal": 183,
+    "pro": 29,
+    "carbs": 0,
+    "fat": 6.8,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "manzo-macinato-85-cotto",
+    "name": "Manzo Macinato 85% Magro Cotto",
+    "brand": "Generico",
+    "kcal": 250,
+    "pro": 26,
+    "carbs": 0,
+    "fat": 15,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "filetto-di-maiale-cotto",
+    "name": "Filetto di Maiale Cotto",
+    "brand": "Generico",
+    "kcal": 143,
+    "pro": 26,
+    "carbs": 0,
+    "fat": 4,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pancetta-cotta",
+    "name": "Pancetta Cotta",
+    "brand": "Generico",
+    "kcal": 541,
+    "pro": 37,
+    "carbs": 1.4,
+    "fat": 42,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "coscia-di-agnello-cotta",
+    "name": "Coscia di Agnello Magra Cotta",
+    "brand": "Generico",
+    "kcal": 178,
+    "pro": 26,
+    "carbs": 0,
+    "fat": 7.7,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "salmone-atlantico-cotto",
+    "name": "Salmone Atlantico Cotto",
+    "brand": "Generico",
+    "kcal": 208,
+    "pro": 25,
+    "carbs": 0,
+    "fat": 13,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tonno-in-olio-sgocciolato",
+    "name": "Tonno in Scatola in Olio Sgocciolato",
+    "brand": "Generico",
+    "kcal": 198,
+    "pro": 29,
+    "carbs": 0,
+    "fat": 8.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "merluzzo-cotto",
+    "name": "Merluzzo Cotto",
+    "brand": "Generico",
+    "kcal": 105,
+    "pro": 23,
+    "carbs": 0,
+    "fat": 0.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tilapia-cotta",
+    "name": "Tilapia Cotta",
+    "brand": "Generico",
+    "kcal": 129,
+    "pro": 26,
+    "carbs": 0,
+    "fat": 2.7,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "gamberetti-cotti",
+    "name": "Gamberetti Cotti",
+    "brand": "Generico",
+    "kcal": 99,
+    "pro": 24,
+    "carbs": 0.2,
+    "fat": 1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "sardine-in-olio",
+    "name": "Sardine in Scatola in Olio",
+    "brand": "Generico",
+    "kcal": 208,
+    "pro": 25,
+    "carbs": 0,
+    "fat": 11,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tuorlo-d-uovo-crudo",
+    "name": "Tuorlo d'Uovo Crudo",
+    "brand": "Generico",
+    "kcal": 322,
+    "pro": 16,
+    "carbs": 3.6,
+    "fat": 27,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "latte-scremato",
+    "name": "Latte Scremato",
+    "brand": "Generico",
+    "kcal": 34,
+    "pro": 3.4,
+    "carbs": 5,
+    "fat": 0.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "yogurt-greco-2-grassi",
+    "name": "Yogurt Greco 2% Grassi",
+    "brand": "Generico",
+    "kcal": 73,
+    "pro": 8.5,
+    "carbs": 3.6,
+    "fat": 2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "yogurt-greco-intero",
+    "name": "Yogurt Greco Intero",
+    "brand": "Generico",
+    "kcal": 97,
+    "pro": 8.8,
+    "carbs": 3.6,
+    "fat": 4.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "formaggio-cheddar",
+    "name": "Formaggio Cheddar",
+    "brand": "Generico",
+    "kcal": 403,
+    "pro": 25,
+    "carbs": 1.3,
+    "fat": 33,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "formaggio-feta",
+    "name": "Formaggio Feta",
+    "brand": "Generico",
+    "kcal": 264,
+    "pro": 14,
+    "carbs": 4.1,
+    "fat": 21,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "formaggio-spalmabile",
+    "name": "Formaggio Spalmabile",
+    "brand": "Generico",
+    "kcal": 342,
+    "pro": 6.2,
+    "carbs": 4.1,
+    "fat": 34,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "isolato-proteine-pisello",
+    "name": "Isolato di Proteine di Pisello",
+    "brand": "Generico",
+    "kcal": 375,
+    "pro": 80,
+    "carbs": 5,
+    "fat": 5,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "isolato-proteine-soia",
+    "name": "Isolato di Proteine di Soia",
+    "brand": "Generico",
+    "kcal": 360,
+    "pro": 81,
+    "carbs": 4,
+    "fat": 3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "semi-di-canapa",
+    "name": "Semi di Canapa",
+    "brand": "Generico",
+    "kcal": 553,
+    "pro": 31,
+    "carbs": 9,
+    "fat": 49,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-integrale-cotto",
+    "name": "Riso Integrale Cotto",
+    "brand": "Generico",
+    "kcal": 112,
+    "pro": 2.6,
+    "carbs": 23,
+    "fat": 0.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-bianco-cotto",
+    "name": "Riso Bianco Cotto",
+    "brand": "Generico",
+    "kcal": 130,
+    "pro": 2.7,
+    "carbs": 28,
+    "fat": 0.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-basmati-cotto",
+    "name": "Riso Basmati Cotto",
+    "brand": "Generico",
+    "kcal": 121,
+    "pro": 3.5,
+    "carbs": 25,
+    "fat": 0.5,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "riso-selvatico-cotto",
+    "name": "Riso Selvatico Cotto",
+    "brand": "Generico",
+    "kcal": 101,
+    "pro": 4,
+    "carbs": 21,
+    "fat": 0.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pasta-integrale-cotta",
+    "name": "Pasta Integrale Cotta",
+    "brand": "Generico",
+    "kcal": 149,
+    "pro": 5.3,
+    "carbs": 30,
+    "fat": 1.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pasta-bianca-cotta",
+    "name": "Pasta Bianca Cotta",
+    "brand": "Generico",
+    "kcal": 158,
+    "pro": 5.8,
+    "carbs": 30,
+    "fat": 0.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cous-cous-cotto",
+    "name": "Cous Cous Cotto",
+    "brand": "Generico",
+    "kcal": 112,
+    "pro": 3.8,
+    "carbs": 23,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bulgur-cotto",
+    "name": "Bulgur Cotto",
+    "brand": "Generico",
+    "kcal": 83,
+    "pro": 3.1,
+    "carbs": 19,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "orzo-perlato-cotto",
+    "name": "Orzo Perlato Cotto",
+    "brand": "Generico",
+    "kcal": 123,
+    "pro": 2.3,
+    "carbs": 28,
+    "fat": 0.4,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "farro-cotto",
+    "name": "Farro Cotto",
+    "brand": "Generico",
+    "kcal": 130,
+    "pro": 5,
+    "carbs": 26,
+    "fat": 1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bagel-semplice",
+    "name": "Bagel Semplice",
+    "brand": "Generico",
+    "kcal": 257,
+    "pro": 10,
+    "carbs": 53,
+    "fat": 1.7,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pane-di-segale",
+    "name": "Pane di Segale",
+    "brand": "Generico",
+    "kcal": 259,
+    "pro": 8.5,
+    "carbs": 48,
+    "fat": 3.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pane-a-lievitazione-naturale",
+    "name": "Pane a Lievitazione Naturale",
+    "brand": "Generico",
+    "kcal": 231,
+    "pro": 9,
+    "carbs": 45,
+    "fat": 2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tortilla-di-mais",
+    "name": "Tortilla di Mais",
+    "brand": "Generico",
+    "kcal": 218,
+    "pro": 5.7,
+    "carbs": 45,
+    "fat": 2.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tortilla-di-farina-bianca",
+    "name": "Tortilla di Farina Bianca",
+    "brand": "Generico",
+    "kcal": 306,
+    "pro": 8,
+    "carbs": 49,
+    "fat": 8,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavoletti-di-bruxelles-crudi",
+    "name": "Cavoletti di Bruxelles Crudi",
+    "brand": "Generico",
+    "kcal": 43,
+    "pro": 3.4,
+    "carbs": 9,
+    "fat": 0.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavolo-riccio-crudo",
+    "name": "Cavolo Riccio (Kale) Crudo",
+    "brand": "Generico",
+    "kcal": 49,
+    "pro": 4.3,
+    "carbs": 9,
+    "fat": 0.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bietola-cruda",
+    "name": "Bietola Cruda",
+    "brand": "Generico",
+    "kcal": 19,
+    "pro": 1.8,
+    "carbs": 3.7,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "bok-choy-crudo",
+    "name": "Bok Choy Crudo",
+    "brand": "Generico",
+    "kcal": 13,
+    "pro": 1.5,
+    "carbs": 2.2,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavolo-collard-crudo",
+    "name": "Cavolo Collard Crudo",
+    "brand": "Generico",
+    "kcal": 32,
+    "pro": 3,
+    "carbs": 5.4,
+    "fat": 0.6,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "barbabietole-cotte",
+    "name": "Barbabietole Cotte",
+    "brand": "Generico",
+    "kcal": 44,
+    "pro": 1.7,
+    "carbs": 10,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "peperone-verde-crudo",
+    "name": "Peperone Verde Crudo",
+    "brand": "Generico",
+    "kcal": 20,
+    "pro": 0.9,
+    "carbs": 4.6,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pomodorini-crudi",
+    "name": "Pomodorini Crudi",
+    "brand": "Generico",
+    "kcal": 18,
+    "pro": 1,
+    "carbs": 3.9,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melanzane-cotte",
+    "name": "Melanzane Cotte",
+    "brand": "Generico",
+    "kcal": 35,
+    "pro": 0.8,
+    "carbs": 9,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "patata-dolce-cotta",
+    "name": "Patata Dolce Cotta",
+    "brand": "Generico",
+    "kcal": 90,
+    "pro": 2,
+    "carbs": 21,
+    "fat": 0.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "more-crude",
+    "name": "More Crude",
+    "brand": "Generico",
+    "kcal": 43,
+    "pro": 1.4,
+    "carbs": 10,
+    "fat": 0.5,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "ciliegie-crude",
+    "name": "Ciliegie Crude",
+    "brand": "Generico",
+    "kcal": 63,
+    "pro": 1.1,
+    "carbs": 16,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melone-cantalupo-crudo",
+    "name": "Melone Cantalupo Crudo",
+    "brand": "Generico",
+    "kcal": 34,
+    "pro": 0.8,
+    "carbs": 8.2,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melone-giallo-inverno-crudo",
+    "name": "Melone Giallo (Honeydew) Crudo",
+    "brand": "Generico",
+    "kcal": 36,
+    "pro": 0.5,
+    "carbs": 9.1,
+    "fat": 0.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "datteri-medjool-secchi",
+    "name": "Datteri Medjool Secchi",
+    "brand": "Generico",
+    "kcal": 277,
+    "pro": 1.8,
+    "carbs": 75,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "albicocche-crude",
+    "name": "Albicocche Crude",
+    "brand": "Generico",
+    "kcal": 30,
+    "pro": 0.4,
+    "carbs": 6.8,
+    "fat": 0.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "melograno-crudo",
+    "name": "Melograno Crudo",
+    "brand": "Generico",
+    "kcal": 83,
+    "pro": 1.7,
+    "carbs": 18.7,
+    "fat": 1.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cachi-crudi",
+    "name": "Cachi Crudi",
+    "brand": "Generico",
+    "kcal": 69,
+    "pro": 0.6,
+    "carbs": 16,
+    "fat": 0.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "fichi-freschi",
+    "name": "Fichi Freschi",
+    "brand": "Generico",
+    "kcal": 74,
+    "pro": 0.7,
+    "carbs": 19.2,
+    "fat": 0.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "castagne-crude",
+    "name": "Castagne Crude",
+    "brand": "Generico",
+    "kcal": 189,
+    "pro": 3.5,
+    "carbs": 42.4,
+    "fat": 2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "zenzero-fresco",
+    "name": "Zenzero Fresco",
+    "brand": "Generico",
+    "kcal": 80,
+    "pro": 1.8,
+    "carbs": 17.7,
+    "fat": 0.7,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "noci-pecan",
+    "name": "Noci Pecan",
+    "brand": "Generico",
+    "kcal": 691,
+    "pro": 9.2,
+    "carbs": 14,
+    "fat": 72,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "noci-del-brasile",
+    "name": "Noci del Brasile",
+    "brand": "Generico",
+    "kcal": 656,
+    "pro": 14,
+    "carbs": 12,
+    "fat": 66,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "noci-macadamia",
+    "name": "Noci Macadamia",
+    "brand": "Generico",
+    "kcal": 718,
+    "pro": 8,
+    "carbs": 14,
+    "fat": 76,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pinoli",
+    "name": "Pinoli",
+    "brand": "Generico",
+    "kcal": 673,
+    "pro": 14,
+    "carbs": 13,
+    "fat": 68,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "semi-di-sesamo",
+    "name": "Semi di Sesamo",
+    "brand": "Generico",
+    "kcal": 573,
+    "pro": 18,
+    "carbs": 23,
+    "fat": 50,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "fiocchi-di-cocco",
+    "name": "Fiocchi di Cocco Non Zuccherati",
+    "brand": "Generico",
+    "kcal": 660,
+    "pro": 7.5,
+    "carbs": 24,
+    "fat": 64,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "barretta-proteica",
+    "name": "Barretta Proteica (Media)",
+    "brand": "Generico",
+    "kcal": 315,
+    "pro": 25,
+    "carbs": 28,
+    "fat": 10,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "barretta-granola",
+    "name": "Barretta di Granola",
+    "brand": "Generico",
+    "kcal": 406,
+    "pro": 5.5,
+    "carbs": 66,
+    "fat": 14,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "proteine-del-siero-isolate",
+    "name": "Proteine del Siero Isolate",
+    "brand": "Generico",
+    "kcal": 380,
+    "pro": 90,
+    "carbs": 4,
+    "fat": 1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "proteine-della-caseina",
+    "name": "Proteine della Caseina in Polvere",
+    "brand": "Generico",
+    "kcal": 385,
+    "pro": 80,
+    "carbs": 9,
+    "fat": 2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "frullato-sostitutivo-pasto",
+    "name": "Frullato Sostitutivo del Pasto",
+    "brand": "Generico",
+    "kcal": 170,
+    "pro": 12,
+    "carbs": 20,
+    "fat": 4,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "maionese-light",
+    "name": "Maionese Light",
+    "brand": "Generico",
+    "kcal": 278,
+    "pro": 1,
+    "carbs": 8,
+    "fat": 26,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "salsa-piccante",
+    "name": "Salsa Piccante",
+    "brand": "Generico",
+    "kcal": 21,
+    "pro": 1.3,
+    "carbs": 1,
+    "fat": 1.8,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "hummus-pronto",
+    "name": "Hummus Pronto",
+    "brand": "Generico",
+    "kcal": 177,
+    "pro": 7.9,
+    "carbs": 14,
+    "fat": 10,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "guacamole",
+    "name": "Guacamole",
+    "brand": "Generico",
+    "kcal": 150,
+    "pro": 1.8,
+    "carbs": 7,
+    "fat": 13,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "salsa-di-pomodoro-pronta",
+    "name": "Salsa di Pomodoro Pronta",
+    "brand": "Generico",
+    "kcal": 36,
+    "pro": 1.5,
+    "carbs": 7,
+    "fat": 0.4,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "pesto-alla-genovese",
+    "name": "Pesto alla Genovese",
+    "brand": "Generico",
+    "kcal": 418,
+    "pro": 6,
+    "carbs": 7,
+    "fat": 39,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "tahini",
+    "name": "Tahini (Crema di Sesamo)",
+    "brand": "Generico",
+    "kcal": 595,
+    "pro": 17,
+    "carbs": 21,
+    "fat": 54,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "lievito-nutrizionale",
+    "name": "Lievito Nutrizionale in Scaglie",
+    "brand": "Generico",
+    "kcal": 290,
+    "pro": 45,
+    "carbs": 36,
+    "fat": 8,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "biscotti-frollini",
+    "name": "Biscotti Frollini",
+    "brand": "Generico",
+    "kcal": 429,
+    "pro": 7.2,
+    "carbs": 73.7,
+    "fat": 13.8,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "biscotti-secchi",
+    "name": "Biscotti Secchi",
+    "brand": "Generico",
+    "kcal": 416,
+    "pro": 6.6,
+    "carbs": 84.8,
+    "fat": 7.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "brioche-semplice",
+    "name": "Brioche Semplice",
+    "brand": "Generico",
+    "kcal": 358,
+    "pro": 8.3,
+    "carbs": 38,
+    "fat": 20,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "muesli-cereali",
+    "name": "Muesli ai Cereali",
+    "brand": "Generico",
+    "kcal": 364,
+    "pro": 9.7,
+    "carbs": 72.2,
+    "fat": 6,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-semi-di-girasole",
+    "name": "Olio di Semi di Girasole",
+    "brand": "Generico",
+    "kcal": 884,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-sesamo",
+    "name": "Olio di Sesamo",
+    "brand": "Generico",
+    "kcal": 884,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-semi-di-lino",
+    "name": "Olio di Semi di Lino",
+    "brand": "Generico",
+    "kcal": 884,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "olio-di-avocado",
+    "name": "Olio di Avocado",
+    "brand": "Generico",
+    "kcal": 884,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "ghee",
+    "name": "Ghee (Burro Chiarificato)",
+    "brand": "Generico",
+    "kcal": 900,
+    "pro": 0,
+    "carbs": 0,
+    "fat": 100,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "yogurt-intero-naturale",
+    "name": "Yogurt Intero Naturale",
+    "brand": "Generico",
+    "kcal": 61,
+    "pro": 3.5,
+    "carbs": 4.7,
+    "fat": 3.3,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "ricotta-magra",
+    "name": "Ricotta Magra",
+    "brand": "Generico",
+    "kcal": 72,
+    "pro": 12,
+    "carbs": 3.4,
+    "fat": 1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "carciofi-crudi",
+    "name": "Carciofi Crudi",
+    "brand": "Generico",
+    "kcal": 23,
+    "pro": 2.7,
+    "carbs": 2.5,
+    "fat": 0.2,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "sgombro-cotto",
+    "name": "Sgombro Cotto",
+    "brand": "Generico",
+    "kcal": 262,
+    "pro": 24,
+    "carbs": 0,
+    "fat": 17,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "aringhe-sotto-aceto",
+    "name": "Aringhe Sotto Aceto",
+    "brand": "Generico",
+    "kcal": 262,
+    "pro": 14,
+    "carbs": 10,
+    "fat": 18,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "trota-arcobaleno-cotta",
+    "name": "Trota Arcobaleno Cotta",
+    "brand": "Generico",
+    "kcal": 168,
+    "pro": 24,
+    "carbs": 0,
+    "fat": 6.6,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "granchio-cotto",
+    "name": "Granchio Cotto",
+    "brand": "Generico",
+    "kcal": 97,
+    "pro": 20,
+    "carbs": 0,
+    "fat": 1.5,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "aragosta-cotta",
+    "name": "Aragosta Cotta",
+    "brand": "Generico",
+    "kcal": 89,
+    "pro": 19,
+    "carbs": 0,
+    "fat": 0.9,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "capesante-cotte",
+    "name": "Capesante Cotte",
+    "brand": "Generico",
+    "kcal": 137,
+    "pro": 24,
+    "carbs": 5.4,
+    "fat": 1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "cavolo-verde-crudo",
+    "name": "Cavolo Verde Crudo",
+    "brand": "Generico",
+    "kcal": 25,
+    "pro": 1.3,
+    "carbs": 5.8,
+    "fat": 0.1,
+    "baseQty": 100,
+    "unit": "g"
+  },
+  {
+    "id": "lattuga-romana-cruda",
+    "name": "Lattuga Romana Cruda",
+    "brand": "Generico",
+    "kcal": 17,
+    "pro": 1.2,
+    "carbs": 3.3,
+    "fat": 0.3,
+    "baseQty": 100,
+    "unit": "g"
+  }
+]

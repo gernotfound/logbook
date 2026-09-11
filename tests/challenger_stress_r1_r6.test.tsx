@@ -388,11 +388,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
 
             const dropsetOpt = screen.getByText('+ Dropset');
             fireEvent.click(dropsetOpt);
-            expect(mockAdd).toHaveBeenCalledWith('dropset');
+            expect(mockAdd).toHaveBeenCalledWith('dropset', 'set_1');
 
             const isometryOpt = screen.getByText('+ Isometria');
             fireEvent.click(isometryOpt);
-            expect(mockAdd).toHaveBeenCalledWith('isometry');
+            expect(mockAdd).toHaveBeenCalledWith('isometry', 'set_1');
         });
 
         it('renders nested dropsets and isometrics rows with proper change callbacks', () => {
@@ -427,7 +427,8 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
 
             const dsKgInput = screen.getByDisplayValue('70');
             fireEvent.change(dsKgInput, { target: { value: '75' } });
-            expect(mockUpdateSpecial).toHaveBeenCalledWith('dropsets', 0, 'kg', '75');
+            fireEvent.blur(dsKgInput);
+            expect(mockUpdateSpecial).toHaveBeenCalledWith('set_1', 'dropsets', 0, 'kg', '75');
         });
     });
 

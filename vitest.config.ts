@@ -2,6 +2,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+export const stressPatterns = ['**/challenger_*.test.{ts,tsx}', '**/*adversarial*.test.{ts,tsx}', '**/*stress*.test.{ts,tsx}'];
+
 export default defineConfig({
   plugins: [
     react(),
@@ -12,17 +14,22 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./tests/setup.tsx'],
     testTimeout: 10000,
+    maxWorkers: 2,
+    coverage: {
+      thresholds: {
+        'src/lib/merge.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/lib/schema.ts': { branches: 90, functions: 90, lines: 90 },
+      },
+    },
     exclude: [
       ...configDefaults.exclude,
       '**/e2e/**',
       '**/tests-e2e/**',
       '**/teamwork_projects/**',
       '**/.agents/**',
-      ...(process.env.npm_lifecycle_event === 'test:stress' ? [] : [
-        '**/challenger_*.test.{ts,tsx}',
-        '**/*adversarial*.test.{ts,tsx}',
-        '**/*stress*.test.{ts,tsx}'
-      ])
+      '**/tests/isolated/**',
+      '**/tests/emulator/**',
+      ...stressPatterns,
     ],
   },
 });

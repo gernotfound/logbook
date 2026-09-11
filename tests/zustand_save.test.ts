@@ -54,7 +54,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(saveSpy).toHaveBeenCalledTimes(1);
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
                 profile: expect.objectContaining({ name: 'User One' })
-            }));
+            }), expect.any(Number));
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
         });
@@ -71,7 +71,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             await assertion;
 
             expect(saveSpy).toHaveBeenCalledTimes(1);
-            expect(useAppStore.getState().saveError).toBe('I dati sono stati salvati con successo sul dispositivo. La sincronizzazione con il cloud riprenderà automaticamente al ripristino della connessione.');
+            expect(useAppStore.getState().saveError).toBe(networkError.message);
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
@@ -119,7 +119,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(saveSpy).toHaveBeenCalledTimes(1);
             expect(saveSpy).toHaveBeenCalledWith(expect.objectContaining({
                 profile: expect.objectContaining({ name: 'User Three' })
-            }));
+            }), expect.any(Number));
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().saveError).toBeNull();
         });
@@ -142,7 +142,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             await Promise.all([a1, a2, a3]);
 
             expect(saveSpy).toHaveBeenCalledTimes(1);
-            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
+            expect(useAppStore.getState().saveError).toBe(error.message);
             expect(useAppStore.getState().syncing).toBe(false);
         });
     });
@@ -181,33 +181,32 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             await vi.advanceTimersByTimeAsync(1100);
             await assertion;
 
-            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
+            expect(useAppStore.getState().saveError).toBe(dbError.message);
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
-        it('updateUserData does nothing and resolves with synced when userData is null in store', async () => {
+        it('updateUserData rejects without a loaded user instead of confirming a no-op', async () => {
             const saveSpy = vi.spyOn(DB, 'saveUserData');
             useAppStore.setState({ userData: null });
 
-            const result = await useAppStore.getState().updateUserData((prev) => prev);
-            expect(result.ok).toBe(true);
-            expect(result.status).toBe('synced');
+            await expect(useAppStore.getState().updateUserData((prev) => prev)).rejects.toThrow('Dati utente non caricati');
             expect(saveSpy).not.toHaveBeenCalled();
         });
     });
 
     describe('Null User Data & Error Recovery', () => {
-        it('clears debounce timer and immediately resolves pending promises on saveUserData(null)', async () => {
+        it('cancels pending callers on saveUserData(null) without claiming a save', async () => {
             const p1 = useAppStore.getState().saveUserData(mockUserData1);
             expect(useAppStore.getState().syncing).toBe(true);
 
             // Nullify while save is pending
+            const canceled = expect(p1).rejects.toThrow('cambio sessione');
             const p2 = useAppStore.getState().saveUserData(null);
             expect(useAppStore.getState().syncing).toBe(false);
             expect(useAppStore.getState().userData).toBeNull();
             expect(useAppStore.getState().saveError).toBeNull();
 
-            await Promise.all([p1, p2]);
+            await Promise.all([canceled, p2]);
         });
 
         it('subsequent successful save clears previous saveError', async () => {
@@ -217,7 +216,7 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             const a1 = expect(p1).rejects.toThrow('First fail');
             await vi.advanceTimersByTimeAsync(1100);
             await a1;
-            expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
+            expect(useAppStore.getState().saveError).toBe('First fail');
 
             // Second save succeeds
             vi.spyOn(DB, 'saveUserData').mockResolvedValueOnce({ ok: true, status: 'synced' });
@@ -232,12 +231,12 @@ describe('R3: Zustand saveUserData Error Rejection & Debouncing Suite', () => {
             expect(useAppStore.getState().syncing).toBe(false);
         });
 
-        it('online window event clears saveError', () => {
+        it('online alone does not clear an error without a confirmed replay', () => {
             useAppStore.setState({ saveError: 'Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.' });
             expect(useAppStore.getState().saveError).toBe('Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.');
 
             window.dispatchEvent(new Event('online'));
-            expect(useAppStore.getState().saveError).toBeNull();
+            expect(useAppStore.getState().saveError).not.toBeNull();
         });
     });
 });

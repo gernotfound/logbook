@@ -318,6 +318,8 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       ];
 
       for (const corrupt of corruptedPayloads) {
+        const ownerKey = telemetryHub.getQueueStorageKey();
+        localStorage.removeItem(ownerKey);
         localStorage.setItem(TELEMETRY_QUEUE_KEY, corrupt);
         telemetryHub.init();
 
@@ -342,6 +344,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         expect(parsed[0].payload.type).toBe('recovery_event_check');
 
         telemetryHub.destroy();
+        localStorage.removeItem(ownerKey);
       }
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });

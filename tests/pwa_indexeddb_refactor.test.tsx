@@ -1,3 +1,4 @@
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 import React from 'react';
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
@@ -61,14 +62,14 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       useAppStore.getState().setUserData(mockData);
 
       // IndexedDB store mock should receive the item
-      expect(idbStore['logbook_cached_user_data']).toBeDefined();
-      expect(idbStore['logbook_cached_user_data'].profile.name).toBe('Cache Test User');
+      expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
+      expect(idbStore['logbook:v2:user:test-user-id'].data.profile.name).toBe('Cache Test User');
 
       // LocalStorage should NOT contain logbook_cached_user_data
       expect(localStorage.getItem('logbook_cached_user_data')).toBeNull();
     });
 
-    test('setUserData(null) deletes logbook_cached_user_data from IndexedDB', () => {
+    test('setUserData(null) clears the view and preserves the durable archive', () => {
       const mockData: UserData = {
         profile: { name: 'User to Nullify' },
         library: [],
@@ -81,14 +82,14 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       useAppStore.getState().setUserData(mockData);
-      expect(idbStore['logbook_cached_user_data']).toBeDefined();
+      expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
 
       useAppStore.getState().setUserData(null);
-      expect(idbStore['logbook_cached_user_data']).toBeUndefined();
+      expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
       expect(useAppStore.getState().userData).toBeNull();
     });
 
-    test('saveUserData(null) clears pending debounce timer, resolves pending promises, and clears IndexedDB cache', async () => {
+    test('saveUserData(null) cancels the timer, rejects callers and preserves the staged edit', async () => {
       vi.useFakeTimers();
 
       const mockData: UserData = {
@@ -103,22 +104,23 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       const p1 = useAppStore.getState().saveUserData(mockData);
+      const canceled = expect(p1).rejects.toThrow('cambio sessione');
       expect(useAppStore.getState().syncing).toBe(true);
 
       // Now saveUserData(null) before timer fires
       const p2 = useAppStore.getState().saveUserData(null);
       expect(useAppStore.getState().syncing).toBe(false);
       expect(useAppStore.getState().userData).toBeNull();
-      expect(idbStore['logbook_cached_user_data']).toBeUndefined();
+      expect(idbStore['logbook:v2:user:test-user-id'].pending).toHaveLength(1);
 
-      await Promise.all([p1, p2]);
+      await Promise.all([canceled, p2]);
       await vi.advanceTimersByTimeAsync(1500);
       expect(useAppStore.getState().syncing).toBe(false);
 
       vi.useRealTimers();
     });
 
-    test('purgeAllLocalUserData removes logbook_cached_user_data from IndexedDB and clears store', async () => {
+    test('explicit purge removes the owner archive and clears the view', async () => {
       const mockData: UserData = {
         profile: { name: 'User to Clear' },
         library: [],
@@ -131,11 +133,11 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       useAppStore.getState().setUserData(mockData);
-      expect(idbStore['logbook_cached_user_data']).toBeDefined();
+      expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
 
       await DB.purgeAllLocalUserData();
       useAppStore.getState().resetStore();
-      expect(idbStore['logbook_cached_user_data']).toBeUndefined();
+      expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
       expect(useAppStore.getState().userData).toBeNull();
     });
 
@@ -152,16 +154,16 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       useAppStore.getState().setLocalWorkout(mockWorkout);
 
       // Verify it is NOT saved in IndexedDB
-      expect(idbStore['logbook_local_workout']).toBeUndefined();
+      expect(idbStore[deviceKey('workout')]).toBeUndefined();
       expect(idbStore['localWorkout']).toBeUndefined();
 
       // Verify purgeAllLocalUserData clears local workout from localStorage
-      localStorage.setItem('logbook_local_workout', JSON.stringify(mockWorkout));
-      expect(localStorage.getItem('logbook_local_workout')).toBeTruthy();
+      localStorage.setItem(deviceKey('workout'), JSON.stringify(mockWorkout));
+      expect(localStorage.getItem(deviceKey('workout'))).toBeTruthy();
 
       await DB.purgeAllLocalUserData();
       useAppStore.getState().resetStore();
-      expect(localStorage.getItem('logbook_local_workout')).toBeNull();
+      expect(localStorage.getItem(deviceKey('workout'))).toBeNull();
     });
 
     test('getInitialUserData safely handles corrupt JSON string or non-object structures without crashing', () => {
@@ -348,7 +350,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
       document.dispatchEvent(new Event('visibilitychange'));
 
-      const saved = localStorage.getItem('logbook_local_workout');
+      const saved = localStorage.getItem(deviceKey('workout'));
       expect(saved).toBeTruthy();
       const parsed = JSON.parse(saved!);
       expect(parsed.id).toBe('session-vis-test');

@@ -1,114 +1,119 @@
-import { auth, getDb, deleteUser, ensureAppCheck } from '../firebase';
-import { doc, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { auth, getDb, deleteUser, ensureAppCheck, waitForPendingWrites } from '../firebase';
+import { doc, collection, getDocsFromServer, getDocFromServer, query, limit, writeBatch } from 'firebase/firestore';
 import { del } from 'idb-keyval';
 import { useAppStore } from '../../store/useAppStore';
 import { withTimeout } from './db_core';
+import { storageOwner, captureSession, isCurrentSession } from '../sync/session';
+import { markAccountDeletion } from '../sync/accountGate';
+import { waitForJournalIdle } from '../sync/replicateJournal';
 
-export async function purgeAllLocalUserData() {
-    console.log("[purgeAllLocalUserData] Avvio pulizia sicura dei dati locali.");
-
-    // 1. IndexedDB Purge
+export async function purgeAllLocalUserData(owner = storageOwner()) {
+    const failures: unknown[] = [];
+    const results = await Promise.allSettled([
+        del('logbook:v2:' + owner), del('logbook_cached_user_data'),
+        del('pending_sync_token'), del('pending_sync_payload')
+    ]);
+    for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
+    const keys = new Set([
+        'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
+        'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
+        'logbook_telemetry_queue'
+    ]);
     try {
-        await Promise.allSettled([
-            del('logbook_cached_user_data'),
-            del('pending_sync_token'),
-            del('pending_sync_payload')
-        ]);
-    } catch (e) {
-        console.warn("[purgeAllLocalUserData] Errore durante la pulizia di IndexedDB:", e);
-    }
-
-    // 2. localStorage Purge
-    const keysToRemove = [
-        'logbook_local_workout',
-        'logbook_timer_state',
-        'logbook_timer_start',
-        'logbook_timer_accumulated',
-        'draft_measurement',
-        'draft_exercise',
-        'draft_routine',
-        'logbook_is_guest',
-        'logbook_awaiting_redirect'
-    ];
-
-    keysToRemove.forEach(key => {
-        try {
-            localStorage.removeItem(key);
-        } catch (e) {
-            console.warn(`[purgeAllLocalUserData] Errore durante la rimozione della chiave ${key} in localStorage:`, e);
+        const prefix = 'logbook:v2:' + owner + ':';
+        for (let index = 0; index < localStorage.length; index++) {
+            const key = localStorage.key(index);
+            if (key?.startsWith(prefix)) keys.add(key);
         }
-    });
+        if (owner === 'guest') keys.add('logbook_is_guest');
+    } catch (error) { failures.push(error); }
+    for (const key of keys) {
+        try { localStorage.removeItem(key); }
+        catch (error) { failures.push(error); }
+    }
+    if (failures.length) throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
 }
 
+const privateCollections = ['history_months', 'nutrition_months', 'telemetry_errors', 'telemetry_events', 'telemetry_anomalies'];
+let deleting: Promise<void> | undefined;
 
-export async function deleteAccount(context: any) {
+export function deleteAccount(context: { purgeAllLocalUserData: (owner: string) => Promise<void>; resetCache: () => void }): Promise<void> {
+    if (deleting) return deleting;
+    const work = performDeletion(context);
+    deleting = work;
+    void work.finally(() => { if (deleting === work) deleting = undefined; }).catch(() => {});
+    return work;
+}
+
+async function performDeletion(context: { purgeAllLocalUserData: (owner: string) => Promise<void>; resetCache: () => void }) {
     const user = auth.currentUser;
-    if (!user) throw new Error("Nessun utente autenticato.");
+    if (!user) throw new Error('Nessun utente autenticato.');
+    const before = captureSession();
+    const owner = 'user:' + user.uid;
+    if (before.owner !== owner) throw new Error('Esci dalla modalità ospite prima di eliminare l’account.');
+    // The UI reauthenticates first. Enforce recent identity here as well, before any deletion.
+    const token = await withTimeout(user.getIdTokenResult(true), 10000, 'Verifica identità non disponibile.');
+    if (!isCurrentSession(before) || auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata.');
+    const authenticatedAt = new Date(token.authTime).getTime();
+    if (!Number.isFinite(authenticatedAt) || authenticatedAt > Date.now() + 60000 || Date.now() - authenticatedAt > 5 * 60 * 1000) {
+        throw new Error('Per eliminare l’account devi effettuare di nuovo il login. Nessun dato è stato cancellato.');
+    }
+    markAccountDeletion(owner);
+    useAppStore.getState().cancelPendingSyncs();
+    const session = captureSession();
+    const assertCurrent = () => {
+        if (!isCurrentSession(session) || auth.currentUser?.uid !== user.uid) throw new Error('Sessione cambiata durante la cancellazione.');
+    };
+    let authDeleted = false;
     try {
-        useAppStore.getState().cancelPendingSyncs();
-        await context.purgeAllLocalUserData();
-        // 1. Fetch subcollection documents while auth is valid
+        const db = getDb();
+        await withTimeout(waitForJournalIdle(owner), 10000, 'Scritture precedenti ancora in corso.');
+        assertCurrent();
+        await withTimeout(waitForPendingWrites(db), 10000, 'Scritture Firebase precedenti ancora in corso.');
+        assertCurrent();
         await ensureAppCheck();
-        const [histSnap, nutSnap, errSnap, evtSnap, anomSnap] = await Promise.all([
-            getDocs(collection(getDb(), "users", user.uid, "history_months")).catch(e => {
-                console.warn("Permesso negato per leggere history_months, proseguo...", e);
-                return { forEach: () => {} } as any;
-            }),
-            getDocs(collection(getDb(), "users", user.uid, "nutrition_months")).catch(e => {
-                console.warn("Permesso negato per leggere nutrition_months, proseguo...", e);
-                return { forEach: () => {} } as any;
-            }),
-            getDocs(collection(getDb(), "users", user.uid, "telemetry_errors")).catch(e => {
-                console.warn("Permesso negato per leggere telemetry_errors, proseguo...", e);
-                return { forEach: () => {} } as any;
-            }),
-            getDocs(collection(getDb(), "users", user.uid, "telemetry_events")).catch(e => {
-                console.warn("Permesso negato per leggere telemetry_events, proseguo...", e);
-                return { forEach: () => {} } as any;
-            }),
-            getDocs(collection(getDb(), "users", user.uid, "telemetry_anomalies")).catch(e => {
-                console.warn("Permesso negato per leggere telemetry_anomalies, proseguo...", e);
-                return { forEach: () => {} } as any;
-            })
-        ]);
-
-        const allRefs: any[] = [];
-        histSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-        nutSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-        errSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-        evtSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-        anomSnap?.forEach?.((d: any) => allRefs.push(d.ref));
-        allRefs.push(doc(getDb(), "users", user.uid));
-
-        // Chunk in max 400 operations per batch to strictly adhere to Firestore 500 limit
-        const CHUNK_SIZE = 400;
-        for (let i = 0; i < allRefs.length; i += CHUNK_SIZE) {
-            const chunk = allRefs.slice(i, i + CHUNK_SIZE);
-            const batch = writeBatch(getDb());
-            chunk.forEach(ref => batch.delete(ref));
-            try {
-                await withTimeout(batch.commit(), 7000, "Timeout eliminazione batch account");
-            } catch (batchErr: any) {
-                if (batchErr?.code === 'permission-denied') {
-                    console.warn("Impossibile eliminare i dati cloud (permesso Firestore), procedo con l'eliminazione dell'account Auth.");
-                } else {
-                    throw batchErr;
-                }
+        assertCurrent();
+        for (const name of privateCollections) {
+            // Re-read the first page after each acknowledged batch: interrupted
+            // runs can resume without an unsafe cursor or a guessed document count.
+            for (;;) {
+                const page = await withTimeout(getDocsFromServer(query(collection(db, 'users', user.uid, name), limit(400))), 10000, 'Lettura dati da eliminare interrotta.');
+                assertCurrent();
+                if (page.empty) break;
+                const batch = writeBatch(db);
+                for (const item of page.docs) batch.delete(item.ref);
+                assertCurrent();
+                await withTimeout(batch.commit(), 10000, 'Conferma cancellazione in attesa.');
+                assertCurrent();
             }
         }
-
-        // 2. Delete Firebase Auth user account
-        await deleteUser(user);
-        console.log("Account e relative subcollection eliminati con successo.");
-    } catch (error: any) {
-        console.error("Errore nell'eliminazione dell'account:", error);
-        if (error.code === 'auth/requires-recent-login') {
-            throw new Error("Per motivi di sicurezza, devi ricaricare la pagina ed effettuare di nuovo il login prima di poter eliminare il tuo account.");
+        const root = doc(db, 'users', user.uid);
+        const batch = writeBatch(db);
+        batch.delete(root);
+        assertCurrent();
+        await withTimeout(batch.commit(), 10000, 'Conferma cancellazione profilo in attesa.');
+        assertCurrent();
+        const remainingRoot = await withTimeout(getDocFromServer(root), 10000, 'Verifica finale del profilo non disponibile.');
+        assertCurrent();
+        if (remainingRoot.exists()) throw new Error('Il profilo cloud è ancora presente.');
+        for (const name of privateCollections) {
+            const residual = await withTimeout(getDocsFromServer(query(collection(db, 'users', user.uid, name), limit(1))), 10000, 'Verifica finale dei dati non disponibile.');
+            assertCurrent();
+            if (!residual.empty) throw new Error('Sono presenti dati residui: ' + name + '.');
         }
-        throw error;
-    } finally {
-        await context.purgeAllLocalUserData();
+        // This verifies this client's observed state, not global atomicity with
+        // other devices. Server-coordinated deletion remains a rollout requirement.
+        assertCurrent();
+        await deleteUser(user);
+        authDeleted = true;
+        await context.purgeAllLocalUserData(owner);
         context.resetCache();
-        useAppStore.getState().resetStore();
+        if (storageOwner() === owner || !auth.currentUser) useAppStore.getState().resetStore();
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : String((error as { code?: string })?.code ?? error);
+        throw new Error(authDeleted
+            ? 'Account cloud eliminato, ma pulizia locale incompleta. ' + detail
+            : 'Cancellazione non completata: alcuni dati cloud potrebbero essere già eliminati. Account e copia locale conservati; riprendi l’operazione dalle impostazioni. ' + detail,
+        { cause: error });
     }
 }

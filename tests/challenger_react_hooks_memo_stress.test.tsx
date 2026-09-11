@@ -211,7 +211,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
 
         it('1.5 handleSave Sanitization and Error Rejection Handling', async () => {
             // Mock DB.saveUserData to resolve immediately (bypasses the 1000ms global debouncer)
-            const dbSaveMock = vi.spyOn(DB, 'saveUserData').mockResolvedValue();
+            const dbSaveMock = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' } as any);
             const showAlertSpy = vi.spyOn(useDialogStore.getState(), 'showAlert').mockResolvedValue();
             const { result } = renderHook(() => useNutritionPlanning());
 
@@ -231,7 +231,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 await new Promise(r => setTimeout(r, 0));
             });
 
-            expect(showAlertSpy).toHaveBeenCalledWith('Pianificazione salvata sul cloud!');
+            expect(showAlertSpy).toHaveBeenCalledWith('Pianificazione salvata.');
             const updatedInStore = useAppStore.getState().userData?.nutritionPlanning;
             expect(updatedInStore?.weight).toBe(82.5);
             expect(updatedInStore?.normocalorica?.kcal).toBe(2600);
@@ -517,6 +517,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             // so we can advance the globalSaveTimer (1000ms) without infinite loops.
             vi.useFakeTimers({ shouldAdvanceTime: false });
             vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+            const dbSaveMock2 = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' } as any);
             const endBtn = screen.getByText(/Termina sessione/i);
 
             await act(async () => {
@@ -530,6 +531,10 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             });
 
             vi.useRealTimers();
+            await act(async () => {
+                await new Promise(r => setTimeout(r, 50));
+            });
+            dbSaveMock2.mockRestore();
 
             // Workout saved to history and cleared from localWorkout
             expect(useAppStore.getState().localWorkout).toBeNull();

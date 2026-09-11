@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useDialogStore } from '../../store/useDialogStore';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -14,11 +15,50 @@ export const GlobalDialog: React.FC = () => {
 
   const syncHealth = useAppStore(state => state.syncHealth);
   const hasConflicts = useAppStore(state => !!state.userData?.pendingConflicts);
+  const syncing = useAppStore(state => state.syncing);
+  const hasWorkout = useAppStore(state => !!state.localWorkout);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen || !overlayRef.current || !boxRef.current) return;
+    const overlay = overlayRef.current;
+    const box = boxRef.current;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const siblings = Array.from(document.body.children).filter((el): el is HTMLElement => el instanceof HTMLElement && el !== overlay);
+    const previousInert = siblings.map(el => el.inert);
+    siblings.forEach(el => { el.inert = true; });
+    const focusable = () => Array.from(box.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]'));
+    const buttons = focusable();
+    (buttons.find(el => el.textContent?.startsWith('Annulla')) ?? buttons[0] ?? box).focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        onCancel();
+      } else if (event.key === 'Tab') {
+        const elements = focusable();
+        const first = elements[0] ?? box;
+        const last = elements[elements.length - 1] ?? box;
+        if (event.shiftKey && (document.activeElement === first || !box.contains(document.activeElement))) {
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !box.contains(document.activeElement))) {
+          event.preventDefault(); first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey, true);
+    return () => {
+      document.removeEventListener('keydown', handleKey, true);
+      siblings.forEach((el, index) => { el.inert = previousInert[index]; });
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isOpen, onCancel]);
 
   if (!isOpen) return null;
 
-  return (
-    <div className="dialog-overlay" style={{
+  return createPortal(
+    <div ref={overlayRef} className="dialog-overlay" style={{
       position: 'fixed',
       top: 0, left: 0, right: 0, bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -26,9 +66,11 @@ export const GlobalDialog: React.FC = () => {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 100000
+      zIndex: 99999
     }}>
       <div
+        ref={boxRef}
+        tabIndex={-1}
         className="dialog-box card safe-top safe-bottom"
         role="alertdialog"
         aria-modal="true"
@@ -51,7 +93,7 @@ export const GlobalDialog: React.FC = () => {
         <h2 id="global-dialog-title" style={{color: 'var(--text-main)', margin: '0 0 15px 0'}}>{title}</h2>
 
         {type === 'unsynced-data-logout' ? (() => {
-          const isSafeNow = syncHealth === 'synced' && !hasConflicts;
+          const isSafeNow = syncHealth === 'synced' && !syncing && !hasConflicts && !hasWorkout;
 
           if (isSafeNow) {
             return (
@@ -137,6 +179,6 @@ export const GlobalDialog: React.FC = () => {
           </>
         )}
       </div>
-    </div>
+    </div>, document.body
   );
 };

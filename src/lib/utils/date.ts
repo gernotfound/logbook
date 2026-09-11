@@ -94,6 +94,19 @@ export function parseDateInput(input: string | undefined | null): string | null 
     return null;
 }
 
+/**
+ * Shift a calendar date string (YYYY-MM-DD) by deltaDays in a timezone-safe manner.
+ * Anchoring at local noon (12:00:00) prevents DST transitions and negative UTC offsets
+ * from crossing midnight boundaries.
+ */
+export function shiftDateString(dateStr: string | undefined | null, deltaDays: number): string {
+    const validStr = parseDateInput(dateStr) || getLocalDateString();
+    const [y, m, d] = validStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d, 12, 0, 0);
+    date.setDate(date.getDate() + deltaDays);
+    return getLocalDateString(date);
+}
+
 export function calculateAge(dob: string | Date | number): number {
     if (!dob) return 30;
     let date: Date;
@@ -203,25 +216,50 @@ export function getCalendarMonthGrid(year: any, month: any): CalendarDayCell[] {
     }));
 }
 
-export function formatSleepTime(val: string | undefined | null): string {
+export function formatSleepTime(val: string | number | undefined | null): string {
     if (val === undefined || val === null) return '';
-    const trimmed = val.trim();
-    if (!trimmed) return '';
 
-    // Match HH:MM or H:MM
-    const timeMatch = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
-    if (timeMatch) {
-        const h = parseInt(timeMatch[1], 10);
-        const m = parseInt(timeMatch[2], 10);
-        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    let hours: number | null = null;
+
+    if (typeof val === 'number') {
+        if (!Number.isFinite(val) || val < 0 || val > 24) return '';
+        hours = val;
+    } else if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return '';
+
+        // Match legacy decimal/integer strings with optional 'h'/'H' suffix (e.g. "7.5", "7,5", "8h", "7.5h", "7,5H", " 8.25 h ")
+        const decimalMatch = trimmed.match(/^(\d+(?:[.,]\d+)?)\s*[hH]?$/);
+        if (decimalMatch) {
+            const parsed = Number(decimalMatch[1].replace(',', '.'));
+            if (!Number.isFinite(parsed) || parsed < 0 || parsed > 24) return '';
+            hours = parsed;
+        } else {
+            // Match HH:MM or H:MM
+            const timeMatch = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
+            if (timeMatch) {
+                const h = parseInt(timeMatch[1], 10);
+                const m = parseInt(timeMatch[2], 10);
+                if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+                    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                }
+            }
+            return '';
         }
+    } else {
+        return '';
+    }
+
+    if (hours !== null) {
+        let minutes = Math.round(hours * 60);
+        if (minutes >= 1440) minutes = 1439;
+        return `${Math.floor(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}`;
     }
 
     return '';
 }
 
-export function parseSleepInput(val: string | undefined | null): string | null {
+export function parseSleepInput(val: string | number | undefined | null): string | null {
     if (val === undefined || val === null) return null;
     const formatted = formatSleepTime(val);
     return formatted !== '' ? formatted : null;
@@ -231,4 +269,3 @@ export function isSleepTimeValid(val: string | undefined | null): boolean {
     if (!val || typeof val !== 'string' || !val.trim()) return false;
     return parseSleepInput(val) !== null;
 }
-

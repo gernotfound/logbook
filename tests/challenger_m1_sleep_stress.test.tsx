@@ -249,6 +249,10 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             };
 
             const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+            await act(async () => {
+                await Promise.resolve();
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            });
 
             const deepInput = container.querySelector('#sleep-deep') as HTMLInputElement;
             const lightInput = container.querySelector('#sleep-light') as HTMLInputElement;
@@ -268,6 +272,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
             await act(async () => {
                 fireEvent.click(saveBtn!);
+                await new Promise((resolve) => setTimeout(resolve, 50));
             });
 
             const state = useAppStore.getState();
@@ -300,6 +305,10 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             };
 
             const { container } = renderWithProviders(<SleepIntegratedView />, { userData: customUserData });
+            await act(async () => {
+                await Promise.resolve();
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            });
 
             const remInput = container.querySelector('#sleep-rem') as HTMLInputElement;
             const awakeInput = container.querySelector('#sleep-awake') as HTMLInputElement;
@@ -313,6 +322,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
 
             await act(async () => {
                 fireEvent.click(saveBtn!);
+                await new Promise((resolve) => setTimeout(resolve, 50));
             });
 
             const day = useAppStore.getState().userData?.nutrition?.[today];

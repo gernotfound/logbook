@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { useDatedDraft } from './useDatedDraft';
+import { useLocalToday } from './useLocalToday';
+import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
@@ -10,37 +13,26 @@ export function useSleepMeasurements() {
     const saveUserData = useAppStore(state => state.saveUserData);
     const showAlert = useDialogStore(state => state.showAlert);
     
-    const todayDateStr = Logic.getLocalDateString();
-
+    const todayDateStr = useLocalToday();
     const [editingDate, setEditingDate] = useState<string | null>(null);
-    const [selectedDate, setSelectedDate] = useState<string>(todayDateStr);
-    const [sleepHours, setSleepHours] = useState('');
-    const [sleepDeep, setSleepDeep] = useState('');
-    const [sleepLight, setSleepLight] = useState('');
-    const [sleepRem, setSleepRem] = useState('');
-    const [sleepAwake, setSleepAwake] = useState('');
-
-    useEffect(() => {
-        const targetDate = editingDate || selectedDate;
-        const targetData = (nutrition as any)[targetDate];
-
-        if (targetData) {
-            setSleepHours(Logic.formatSleepTime(targetData.sleepHours));
-            setSleepDeep(Logic.formatSleepTime(targetData.sleepDeep));
-            setSleepLight(Logic.formatSleepTime(targetData.sleepLight));
-            setSleepRem(Logic.formatSleepTime(targetData.sleepRem));
-            setSleepAwake(Logic.formatSleepTime(targetData.sleepAwake));
-        } else {
-            setSleepHours('');
-            setSleepDeep('');
-            setSleepLight('');
-            setSleepRem('');
-            setSleepAwake('');
-        }
-    }, [selectedDate, todayDateStr, nutrition, editingDate]);
-
+    const [chosenDate, setChosenDate] = useState<string | null>(null);
+    const selectedDate = chosenDate ?? todayDateStr;
+    const setSelectedDate = (date: string) => { setEditingDate(null); setChosenDate(date === todayDateStr ? null : date); };
+    const targetDate = editingDate || selectedDate;
+    const day = (nutrition as any)[targetDate];
+    const draft = useDatedDraft('sleep', targetDate, {
+        sleepHours: Logic.formatSleepTime(day?.sleepHours), sleepDeep: Logic.formatSleepTime(day?.sleepDeep),
+        sleepLight: Logic.formatSleepTime(day?.sleepLight), sleepRem: Logic.formatSleepTime(day?.sleepRem), sleepAwake: Logic.formatSleepTime(day?.sleepAwake)
+    });
+    const { sleepHours, sleepDeep, sleepLight, sleepRem, sleepAwake } = draft.values;
+    const saving = useRef(false);
     const saveSleep = async (e?: any) => {
         if (e) e.preventDefault();
+        if (saving.current) return false;
+        saving.current = true;
+        const session = captureSession();
+        const submitted = { ...draft.values };
+        try {
         
         if (!sleepHours || !Logic.isSleepTimeValid(sleepHours)) {
             await showAlert("Le ore di sonno sono obbligatorie e devono essere in un formato valido (HH:MM).");
@@ -77,18 +69,18 @@ export function useSleepMeasurements() {
 
         const targetDate = editingDate || selectedDate;
 
-        try {
-            await saveUserData((prev) => {
+        await saveUserData((prev) => {
+                if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
                 if (!prev) return prev;
                 const existingDay = prev.nutrition?.[targetDate] || { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
                 const updatedDay = {
                     ...existingDay,
                     sleepHours: parsedHours,
-                    sleepDeep: parsedDeep,
-                    sleepLight: parsedLight,
-                    sleepRem: parsedRem,
-                    sleepAwake: parsedAwake,
                 };
+                for (const [key, value] of Object.entries({ sleepDeep: parsedDeep, sleepLight: parsedLight, sleepRem: parsedRem, sleepAwake: parsedAwake })) {
+                    if (value === undefined) delete (updatedDay as Record<string, unknown>)[key];
+                    else (updatedDay as Record<string, unknown>)[key] = value;
+                }
 
                 return {
                     ...prev,
@@ -98,24 +90,27 @@ export function useSleepMeasurements() {
                     }
                 };
             });
+            if (!isCurrentSession(session)) return false;
+            const cleared = draft.clear(submitted);
             await showAlert(`Dati sonno salvati per il ${targetDate}!`);
-            setEditingDate(null);
+            if (cleared && isCurrentSession(session)) setEditingDate(null);
+            return cleared;
         } catch {
-            await showAlert("Errore durante il salvataggio dei dati del sonno.");
-        }
+            if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio dei dati del sonno.");
+            return false;
+        } finally { saving.current = false; }
     };
 
     return {
         editingDate,
         setEditingDate,
-        selectedDate,
+        selectedDate: targetDate,
         setSelectedDate,
-        sleepHours, setSleepHours,
-        sleepDeep, setSleepDeep,
-        sleepLight, setSleepLight,
-        sleepRem, setSleepRem,
-        sleepAwake, setSleepAwake,
+        sleepHours, setSleepHours: (value: string) => draft.setField('sleepHours', value),
+        sleepDeep, setSleepDeep: (value: string) => draft.setField('sleepDeep', value),
+        sleepLight, setSleepLight: (value: string) => draft.setField('sleepLight', value),
+        sleepRem, setSleepRem: (value: string) => draft.setField('sleepRem', value),
+        sleepAwake, setSleepAwake: (value: string) => draft.setField('sleepAwake', value),
         saveSleep
     };
 }
-

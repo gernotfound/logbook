@@ -571,7 +571,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   // 6. Identity & Auth Context Transition
   // =========================================================================
   describe('6. Identity & Auth Transition', () => {
-    it('updates null/anonymous userId on replayed items to current authenticated user', async () => {
+    it('preserves null/anonymous guest telemetry without retroactively stamping authenticated UID (LB-18 privacy)', async () => {
       const items: QueuedTelemetryItem[] = [
         {
           id: 'item_anon_1',
@@ -604,14 +604,13 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       telemetryHub.setUserId('authenticated_user_777');
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
-
-      const firstCallPayload = mockSetDoc.mock.calls[0][1];
-      const secondCallPayload = mockSetDoc.mock.calls[1][1];
-
-      expect(firstCallPayload.userId).toBe('authenticated_user_777');
-      expect(secondCallPayload.userId).toBe('authenticated_user_777');
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
+      // Under GDPR and LB-18 privacy invariants, unauthenticated/guest telemetry must never
+      // be retroactively attributed to the newly authenticated user UID upon login flush.
+      expect(mockSetDoc).not.toHaveBeenCalled();
+      const remaining = telemetryHub.getQueuedEvents();
+      expect(remaining.length).toBe(2);
+      expect(remaining[0].payload.userId).toBeNull();
+      expect(remaining[1].payload.userId).toBeNull();
     });
   });
 });

@@ -14,6 +14,7 @@ import {
 } from '../src/lib/calc/workout';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { renderWithProviders, defaultMockUserData } from './setup';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import { SessionRatings } from '../src/components/Training/session/SessionRatings';
@@ -379,7 +380,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             }))).rejects.toThrow('Firestore Network Quota Exceeded');
 
             const state = useAppStore.getState();
-            expect(state.saveError).toBe('I dati sono stati salvati con successo sul dispositivo. La sincronizzazione con il cloud riprenderà automaticamente al ripristino della connessione.');
+            expect(state.saveError).toBe('Firestore Network Quota Exceeded');
             expect(state.syncing).toBe(false);
         });
 
@@ -416,7 +417,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             Object.defineProperty(document, 'visibilityState', { value: 'hidden', writable: true, configurable: true });
             document.dispatchEvent(new Event('visibilitychange'));
 
-            const stored = localStorage.getItem('logbook_local_workout');
+            const stored = localStorage.getItem(deviceKey('workout'));
             expect(stored).toBeDefined();
             expect(JSON.parse(stored!)).toEqual(mockWorkout);
         });

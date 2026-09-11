@@ -13,14 +13,6 @@ const buildTime = new Date().toISOString()
 const basePath = '/'
 
 export default defineConfig({
-  test: {
-    coverage: {
-      thresholds: {
-        'src/lib/merge.ts': { branches: 90, functions: 90, lines: 90 },
-        'src/lib/schema.ts': { branches: 90, functions: 90, lines: 90 }
-      }
-    }
-  },
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __BUILD_HASH__: JSON.stringify(buildHash),

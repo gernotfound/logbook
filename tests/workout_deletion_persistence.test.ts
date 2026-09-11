@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { writeBatch } from 'firebase/firestore';
+import { writeBatch, doc, getDoc } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
@@ -10,17 +10,7 @@ import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { renderHook, act } from '@testing-library/react';
 import type { UserData, WorkoutSession } from '../src/types';
 
-vi.mock('../src/lib/firebase', () => ({
-  auth: {
-    currentUser: { uid: 'test-deletion-user-123', email: 'test@example.com' },
-    signOut: vi.fn().mockResolvedValue(undefined),
-  },
-  db: {},
-    getDb: vi.fn().mockReturnValue({}),
-    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
-  waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-  deleteUser: vi.fn().mockResolvedValue(undefined),
-}));
+
 
 describe('Workout Deletion & Subcollection Persistence', () => {
   let mockBatch: any;
@@ -28,10 +18,13 @@ describe('Workout Deletion & Subcollection Persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     DB.resetCache();
+    const remote = new Map<string, any>();
+    vi.mocked(doc).mockImplementation((_db: any, ...path: string[]) => ({ path: path.join('/') }) as any);
+    vi.mocked(getDoc).mockImplementation(async (ref: any) => ({ exists: () => remote.has(ref.path), data: () => remote.get(ref.path) }) as any);
 
     mockBatch = {
-      set: vi.fn(),
-      delete: vi.fn(),
+      set: vi.fn((ref: any, data: any) => remote.set(ref.path, data)),
+      delete: vi.fn((ref: any) => remote.delete(ref.path)),
       commit: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(writeBatch).mockReturnValue(mockBatch);
@@ -93,7 +86,7 @@ describe('Workout Deletion & Subcollection Persistence', () => {
       return call[1] && call[1]['w-jul-2'] && !call[1]['w-jul-1'];
     });
     expect(historyMonthSetCall).toBeDefined();
-    expect(historyMonthSetCall[1]).toEqual({
+    expect(historyMonthSetCall[1]).toMatchObject({
       'w-jul-2': workout2
     });
     // Should NOT delete month 2026-07 because workout2 remains

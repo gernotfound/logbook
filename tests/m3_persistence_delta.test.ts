@@ -20,18 +20,7 @@ import { saveUserDataToCache, getInitialUserData } from '../src/store/slices/cre
 import { idbStore } from './setup';
 import type { UserData, Exercise, Food, CatalogOverrides } from '../src/types';
 
-vi.mock('../src/lib/firebase', () => ({
-    auth: {
-        currentUser: { uid: 'test_m3_user_999' },
-        signOut: vi.fn().mockResolvedValue(undefined),
-    },
-    db: { type: 'firestore_mock' },
-    getDb: vi.fn().mockReturnValue({}),
-    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
-    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    deleteUser: vi.fn().mockResolvedValue(undefined),
-    isAppCheckFallbackOffline: vi.fn().mockReturnValue(false),
-}));
+
 
 describe('M3: Storage & Persistence Delta Isolation Suite', () => {
     let mockBatch: any;
@@ -118,7 +107,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 activeWorkout: null
             };
 
-            await DB.saveUserData(stateToSave);
+            expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
 
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocData).toBeDefined();
@@ -196,7 +185,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 activeWorkout: null
             };
 
-            await DB.saveUserData(stateToSave);
+            expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
 
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocData).toBeDefined();
@@ -236,7 +225,7 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
             };
 
             // Should not throw and should still isolate deltas via getSeedCatalog fallback
-            await DB.saveUserData(stateToSave);
+            expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
 
             expect(mockBatch.commit).toHaveBeenCalled();
             expect(capturedUserDocData).toBeDefined();
@@ -316,16 +305,14 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
 
             const loaded = await DB.loadUserData();
 
-            expect(loaded).not.toBeNull();
-            // When user doc is missing and seed is empty (commit e61a133), both arrays must be empty.
-            // This is the correct offline-first cold start: no items, no crash.
-            expect(loaded?.library).toEqual([]);
-            expect(loaded?.customFoods).toEqual([]);
+            // When user doc is missing, standard catalog defaults are loaded from seeds.
+            expect(loaded?.library?.length).toBeGreaterThan(0);
+            expect(loaded?.customFoods?.length).toBeGreaterThan(0);
         });
     });
 
     describe('createDataSlice Cache Tiering', () => {
-        it('saveUserDataToCache stores and removes user data in IndexedDB key logbook_cached_user_data', async () => {
+        it('saveUserDataToCache stores and removes user data in an owner-scoped IndexedDB envelope', async () => {
             const testData: UserData = {
                 profile: { name: 'Cache User' },
                 library: [],
@@ -337,12 +324,12 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
                 nutritionPlanning: null
             };
 
-            saveUserDataToCache(testData);
-            expect(idbStore['logbook_cached_user_data']).toBeDefined();
-            expect(idbStore['logbook_cached_user_data'].profile.name).toBe('Cache User');
+            await saveUserDataToCache(testData);
+            expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
+            expect(idbStore['logbook:v2:user:test-user-id'].data.profile.name).toBe('Cache User');
 
-            saveUserDataToCache(null);
-            expect(idbStore['logbook_cached_user_data']).toBeUndefined();
+            await saveUserDataToCache(null);
+            expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
         });
 
         it('getInitialUserData safely returns validated UserData from window.__INITIAL_USER_DATA__', () => {

@@ -48,6 +48,8 @@ test.describe('Offline scenarios & Background suspension', () => {
     await expect(page.locator('button:has-text("Termina")')).toBeVisible();
 
     // 8. Vai offline
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await context.setOffline(true);
 
     // 10. Simula la sospensione del thread o del tab
@@ -60,10 +62,7 @@ test.describe('Offline scenarios & Background suspension', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    // 11. Torna online per riaprire l'app senza crashare se il SW non ha claimato il client in tempo
-    await context.setOffline(false);
-
-    // Chiudi e riapri il tab simulando la riapertura dell'app dopo il kill
+    // Reopen while still offline: prove cold startup from the installed service worker and local data.
     await page.close();
     const newPage = await context.newPage();
     await newPage.goto('/');

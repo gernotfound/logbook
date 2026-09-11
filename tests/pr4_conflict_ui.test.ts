@@ -23,7 +23,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
     });
 
     it('Mantieni Cloud: should just remove the local conflict and not call updateUserData', async () => {
-        const expectedUid = '123';
+        const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
 
         const result = await useAppStore.getState().resolveNutritionConflict({
@@ -42,7 +42,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
     });
 
     it('Mantieni Dispositivo: should overwrite cloud plan and call updateUserData', async () => {
-        const expectedUid = '123';
+        const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
 
         const result = await useAppStore.getState().resolveNutritionConflict({
@@ -61,7 +61,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
     });
 
     it('Stale Conflict Prevention: should fail if fingerprint differs', async () => {
-        const expectedUid = '123';
+        const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 1111, onDaysCount: 1 });
 
         const result = await useAppStore.getState().resolveNutritionConflict({
@@ -85,7 +85,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
             return { ok: false, status: 'failed', error: new Error('Network Error') };
         });
 
-        const expectedUid = '123';
+        const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
 
         const result = await useAppStore.getState().resolveNutritionConflict({
@@ -111,7 +111,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         });
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'cloud',
-            expectedUid: '123',
+            expectedUid: 'test-user-id',
             expectedConflictFingerprint: 'v1:xyz'
         });
 
@@ -123,7 +123,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
     });
 
     it('Empty/Invalid Fingerprint Prevention: should return failed if fingerprint is empty', async () => {
-        const expectedUid = '123';
+        const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = ''; // Empty string simulates missing/invalid
 
         const result = await useAppStore.getState().resolveNutritionConflict({

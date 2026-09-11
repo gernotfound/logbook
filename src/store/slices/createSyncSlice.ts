@@ -1,213 +1,179 @@
 import type { StateCreator } from 'zustand';
 import { DB } from '../../lib/db';
-import { mapFirebaseErrorCode } from '../../lib/errorHandler';
-import type { UserData } from '../../types';
+import type { UserData, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
 import { saveUserDataToCache } from './createDataSlice';
 import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
+import { captureSession, invalidateSession, isCurrentSession } from '../../lib/sync/session';
+import { readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
+import { UserDataSchema } from '../../lib/schema';
 
-import { clearStorageMarker } from '../../lib/storageTelemetry';
-import { telemetryHub } from '../../lib/telemetryHub';
-
-import type { SyncResult } from '../../types';
-
-export type SyncHealth = 'synced' | 'local-pending' | 'rejected' | 'failed';
-
+export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
     syncHealth: SyncHealth;
     syncGeneration: number;
-    setSyncing: (val: boolean) => void;
-    setSaveError: (error: string | null) => void;
-    saveUserData: (newDataOrUpdater: UserData | null | ((prev: UserData | null) => UserData | null)) => Promise<SyncResult>;
-    updateUserData: (updater: (prevUserData: UserData) => UserData) => Promise<SyncResult>;
+    setSyncing: (value: boolean) => void;
+    setSaveError: (value: string | null) => void;
+    saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null)) => Promise<SyncResult>;
+    updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
+    flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
     resetStore: () => void;
 }
 
-let globalSaveTimer: ReturnType<typeof setTimeout> | null = null;
-const SYNCED_RESULT: SyncResult = { ok: true, status: 'synced' };
-type PendingPromise = { resolve: (result: SyncResult) => void; reject: (err: unknown) => void };
-let pendingPromises: PendingPromise[] = [];
-
-export const clearSyncTimers = () => {
-    if (globalSaveTimer) {
-        clearTimeout(globalSaveTimer);
-        globalSaveTimer = null;
-    }
-    pendingPromises = [];
+type CacheResult = { ok: true } | { ok: false; error: unknown };
+type Job = {
+    session: ReturnType<typeof captureSession>;
+    generation: number;
+    cache: Promise<CacheResult>;
+    resolve: (result: SyncResult) => void;
+    reject: (error: unknown) => void;
 };
+let timer: ReturnType<typeof setTimeout> | null = null;
+let pending: Job[] = [];
+let active: Job[] = [];
+let running: Promise<void> | null = null;
+const synced: SyncResult = { ok: true, status: 'synced' };
 
-export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => ({
-    saveError: null,
-    syncing: false,
-    syncHealth: 'synced',
-    syncGeneration: 0,
+export function clearSyncTimers() {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    pending = [];
+}
 
-    setSyncing: (val: boolean) => set((state) => state.syncing === val ? state : { syncing: val }),
-    setSaveError: (error: string | null) => set({ saveError: error }),
-
-    saveUserData: async (newDataOrUpdater) => {
-        const { userData, localWorkout } = get();
-        const nextData = typeof newDataOrUpdater === 'function'
-            ? (newDataOrUpdater as (prev: UserData | null) => UserData | null)(userData)
-            : newDataOrUpdater;
-
-        if (!nextData) {
-            if (globalSaveTimer) {
-                clearTimeout(globalSaveTimer);
-                globalSaveTimer = null;
-            }
-            const promises = [...pendingPromises];
-            pendingPromises = [];
-            promises.forEach(p => p.resolve(SYNCED_RESULT));
-            saveUserDataToCache(null);
-            set({ userData: null, saveError: null, syncing: false });
-            return SYNCED_RESULT;
-        }
-
-        const finalData: UserData = {
-            ...nextData,
-            activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
-        };
-
-        saveUserDataToCache(finalData);
-        set({ userData: finalData, saveError: null, syncing: true });
-
-        return new Promise<SyncResult>((resolve, reject) => {
-            pendingPromises.push({ resolve, reject });
-            if (globalSaveTimer) clearTimeout(globalSaveTimer);
-            globalSaveTimer = setTimeout(async () => {
-                globalSaveTimer = null;
-                const promisesToCall = [...pendingPromises];
-                pendingPromises = [];
-                try {
-                    // Always pull the freshest state at the time of execution
-                    const currentState = get().userData;
-                    if (!currentState) {
-                        promisesToCall.forEach(p => p.resolve(SYNCED_RESULT));
-                        return;
-                    }
-
-                    const result = await DB.saveUserData(currentState);
-
-                    if (result.ok) {
-                        set({ saveError: null, syncHealth: 'synced' });
-                        promisesToCall.forEach(p => p.resolve(result));
-                    } else {
-                        if (result.status === 'local-pending') {
-                            const newGen = get().syncGeneration + 1;
-                            set({
-                                saveError: "Salvato localmente. Sincronizzazione in attesa.",
-                                syncHealth: 'local-pending',
-                                syncGeneration: newGen
-                            });
-                            promisesToCall.forEach(p => p.resolve(result));
-
-                            // Listen for background sync completion to automatically update syncHealth
-                            import('firebase/firestore').then(({ waitForPendingWrites }) => {
-                                import('../../lib/firebase').then(({ getDb }) => {
-                                    waitForPendingWrites(getDb()).then(() => {
-                                        const latest = get();
-                                        if (latest.syncHealth === 'local-pending' && latest.syncGeneration === newGen) {
-                                            set({ saveError: null, syncHealth: 'synced' });
-                                        }
-                                    }).catch(() => {});
-                                });
-                            });
-                        } else if (result.status === 'rejected') {
-                            set({ saveError: "Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", syncHealth: 'rejected', syncGeneration: get().syncGeneration + 1 });
-                            promisesToCall.forEach(p => p.reject(new Error("Sincronizzazione rifiutata dal server")));
-                        } else {
-                            set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed', syncGeneration: get().syncGeneration + 1 });
-                            promisesToCall.forEach(p => p.reject(new Error("Errore inatteso durante il salvataggio")));
-                        }
-                    }
-                } catch (error) {
-                    const formattedError = mapFirebaseErrorCode(error);
-                    console.error("[SyncSlice] Errore durante il salvataggio:", formattedError);
-
-                    try {
-                        telemetryHub.trackError(error, {
-                            source: 'app_error',
-                            customMessage: `Firestore save error: ${formattedError.code} - ${formattedError.message}`,
-                        });
-                    } catch {
-                        // Non-blocking safe fail-through
-                    }
-
-                    set({ saveError: formattedError.message, syncHealth: 'failed', syncGeneration: get().syncGeneration + 1 });
-                    promisesToCall.forEach(p => p.reject(error));
-                } finally {
-                    if (!globalSaveTimer && pendingPromises.length === 0) {
-                        set({ syncing: false });
-                    }
-                }
-            }, DEBOUNCE_DELAY_GLOBAL);
-        });
-    },
-
-    updateUserData: async (updater: (prev: UserData) => UserData): Promise<SyncResult> => {
-        const { userData } = get();
-        if (!userData) return SYNCED_RESULT;
-        const nextData = updater(userData);
-        return get().saveUserData(nextData);
-    },
-
-    submitLegalConsent: async (consent) => {
-        const { userData, localWorkout } = get();
-        if (!userData) throw new Error("Dati utente non caricati");
-
-        const nextData: UserData = { ...userData, legalConsent: consent };
-        const finalData: UserData = {
-            ...nextData,
-            activeWorkout: nextData.activeWorkout !== undefined ? nextData.activeWorkout : localWorkout
-        };
-
-        const result = await DB.saveUserData(finalData);
-
-        if (result.ok || result.status === 'local-pending') {
-            saveUserDataToCache(finalData);
-            set({ userData: finalData, saveError: null, syncHealth: result.status });
+export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
+    const run = async (): Promise<void> => {
+        if (running) {
+            await running;
+            if (pending.length) await run();
             return;
         }
+        if (!pending.length) return;
+        const jobs = pending;
+        pending = [];
+        active = jobs;
+        const last = jobs[jobs.length - 1];
+        const session = last.session;
+        const current = () => isCurrentSession(session);
+        running = (async () => {
+            let failureStatus: SyncHealth = 'failed';
+            try {
+                const commits = await Promise.all(jobs.map(job => job.cache));
+                const failed = commits.find(result => !result.ok);
+                if (failed && !failed.ok) throw failed.error;
+                if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
+                const envelope = await readLocal(session.owner);
+                if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
+                if (!envelope) throw new Error('Copia locale non disponibile');
+                if (envelope.conflicts?.length) throw new Error('Modifiche locali concorrenti: alternative conservate nel registro di recupero');
+                const result = await DB.saveUserData(envelope.data, envelope.revision);
+                if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
+                if (result.ok) {
+                    const saved = await readLocal(session.owner);
+                    if (saved && current() && get().syncGeneration === last.generation) {
+                        set({ userData: { ...saved.data, activeWorkout: get().localWorkout } });
+                    }
+                } else if (result.status !== 'local-pending') {
+                    failureStatus = result.status;
+                    throw result.status === 'rejected'
+                        ? new Error("Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", { cause: result.error })
+                        : result.error instanceof Error ? result.error : new Error('Salvataggio fallito', { cause: result.error });
+                }
+                if (current() && get().syncGeneration === last.generation) {
+                    set({ syncHealth: result.status, saveError: result.status === 'local-pending' ? 'Salvato localmente. Sincronizzazione in attesa.' : null });
+                }
+                jobs.forEach(job => job.resolve(result));
+            } catch (error) {
+                if (current() && get().syncGeneration === last.generation) {
+                    set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
+                }
+                jobs.forEach(job => job.reject(error));
+            } finally {
+                active = [];
+                if (current() && !pending.length) set({ syncing: false });
+            }
+        })();
+        try { await running; } finally { running = null; }
+    };
 
-        // Se arriviamo qui, il risultato è rejected o failed
-        if (result.status === 'rejected') {
-            set({ saveError: "Sincronizzazione rifiutata dal server.", syncHealth: 'rejected' });
-        } else {
-            set({ saveError: "Errore inatteso durante il salvataggio.", syncHealth: 'failed' });
-        }
-
-        throw new Error("Salvataggio del consenso fallito o rifiutato");
-    },
-
-    cancelPendingSyncs: () => {
-        clearWorkoutTimer();
-        if (globalSaveTimer) {
-            clearTimeout(globalSaveTimer);
-            globalSaveTimer = null;
-        }
-
-        // Resolve or reject all pending promises immediately to unblock callers
-        pendingPromises.forEach(p => p.reject(new Error("Sync cancelled due to logout/reset")));
-        pendingPromises = [];
-
-        set({ syncing: false });
-    },
-
-    resetStore: () => {
-        // Just call cancelPendingSyncs for safety in case caller forgot
-        get().cancelPendingSyncs();
-
-        try {
-            clearStorageMarker();
-        } catch (e) {
-            console.warn("Impossibile pulire il marker di storage", e);
-        }
-        set({ userData: null, localWorkout: null, saveError: null, syncing: false });
-    }
-});
+    return {
+        saveError: null, syncing: false, syncHealth: 'synced', syncGeneration: 0,
+        setSyncing: value => set({ syncing: value }),
+        setSaveError: value => set({ saveError: value }),
+        saveUserData: async dataOrUpdater => {
+            const { userData, localWorkout } = get();
+            const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
+            if (!next) {
+                // A reset clears only the view; deletion requires the explicit purge flow.
+                get().cancelPendingSyncs();
+                set({ userData: null, saveError: null });
+                return synced;
+            }
+            const data = UserDataSchema.parse({ ...next, activeWorkout: next.activeWorkout !== undefined ? next.activeWorkout : localWorkout }) as unknown as UserData;
+            const generation = get().syncGeneration + 1;
+            const session = captureSession();
+            set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
+            // Start the durable write before the cloud debounce. Observe rejection immediately.
+            const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
+                .then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
+            return new Promise<SyncResult>((resolve, reject) => {
+                pending.push({ session, generation, cache, resolve, reject });
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => { timer = null; void run(); }, DEBOUNCE_DELAY_GLOBAL);
+            });
+        },
+        updateUserData: updater => {
+            const data = get().userData;
+            if (!data) return Promise.reject(new Error('Dati utente non caricati'));
+            return get().saveUserData(updater(data));
+        },
+        submitLegalConsent: async consent => {
+            const session = captureSession();
+            const previous = get().userData?.legalConsent;
+            const result = get().updateUserData(data => ({ ...data, legalConsent: consent }));
+            // Keep the form mounted until the durable operation has an explicit outcome.
+            set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: previous } : null }));
+            const observed = result.then(value => ({ value }), error => ({ error }));
+            await get().flushPendingSyncs();
+            const settled = await observed;
+            if ('error' in settled) {
+                await revertRejectedConsent(session.owner, consent, previous);
+                throw settled.error;
+            }
+            if (isCurrentSession(session)) set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: consent } : null }));
+        },
+        flushPendingSyncs: async () => {
+            if (timer) clearTimeout(timer);
+            timer = null;
+            if (pending.length || running) {
+                await run();
+                return;
+            }
+            const session = captureSession();
+            const saved = await readLocal(session.owner);
+            if (!isCurrentSession(session) || !saved?.pending.length) return;
+            const generation = get().syncGeneration + 1;
+            set({ syncing: true, syncHealth: 'saving', syncGeneration: generation });
+            const completion = new Promise<SyncResult>((resolve, reject) => pending.push({ session, generation, cache: Promise.resolve({ ok: true }), resolve, reject }));
+            const observed = completion.then(() => undefined, error => { throw error; });
+            void observed.catch(() => {});
+            await run();
+            await observed;
+        },
+        cancelPendingSyncs: () => {
+            invalidateSession();
+            clearWorkoutTimer();
+            [...pending, ...active].forEach(job => job.reject(new Error('Sincronizzazione annullata per cambio sessione')));
+            clearSyncTimers();
+            set({ syncing: false, syncGeneration: get().syncGeneration + 1 });
+        },
+        resetStore: () => {
+            get().cancelPendingSyncs();
+            set({ userData: null, localWorkout: null, saveError: null, syncing: false, syncHealth: 'synced' });
+        },
+    };
+};

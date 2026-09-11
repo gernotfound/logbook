@@ -46,7 +46,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                 borderLeft: editingDate === day.date ? '4px solid var(--primary-color)' : '1px solid var(--glass-border)',
                                 transition: 'all 0.2s ease'
                             }}
-                            
+                            onClick={() => onSelectEdit(day)}
                         >
                             <div>
                                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: editingDate === day.date ? 'var(--primary-color)' : 'white' }}>

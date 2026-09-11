@@ -56,9 +56,11 @@ describe('JSON Export/Import Logic', () => {
         const parsed = JSON.parse(content);
         
         expect(parsed.type).toBe('backup');
-        expect(parsed.userId).toBe('user123');
-        expect(parsed.history.length).toBe(1);
-        expect(parsed.profile.dob).toBe('2000-01-01');
+        expect(parsed.version).toBe(2);
+        expect(parsed.owner).toBe('user:user123');
+        expect(parsed.coverage.scope).toBe('device');
+        expect(parsed.userData.history.length).toBe(1);
+        expect(parsed.userData.profile.dob).toBe('2000-01-01');
     });
 
     it('importFromJson blocks importing backup from different user', async () => {

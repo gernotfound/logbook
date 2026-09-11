@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
 import { Logic } from '../../lib/logic';
@@ -32,18 +33,14 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
     const handlePrevDay = () => {
         if (!setSelectedDate || !targetDateStr) return;
-        const d = new Date(targetDateStr);
-        d.setDate(d.getDate() - 1);
-        setSelectedDate(Logic.getLocalDateString(d));
+        setSelectedDate(shiftDateString(targetDateStr, -1));
     };
 
     const handleNextDay = () => {
         if (!setSelectedDate || !targetDateStr) return;
         const today = Logic.getLocalDateString();
         if (targetDateStr === today) return;
-        const d = new Date(targetDateStr);
-        d.setDate(d.getDate() + 1);
-        setSelectedDate(Logic.getLocalDateString(d));
+        setSelectedDate(shiftDateString(targetDateStr, 1));
     };
 
     const handleToday = () => {
@@ -336,6 +333,5 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         </div>
     );
 }
-
 
 

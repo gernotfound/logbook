@@ -1,4 +1,5 @@
 import { UserDataSchema } from './schema';
+import deepEqual from 'fast-deep-equal';
 import { getInMemoryCatalog } from './catalog/catalogService';
 import {
     mergeCatalogOverrides
@@ -121,6 +122,40 @@ export function isDefaultNutritionPlanning(plan: NutritionPlanning | null | unde
 }
 
 /**
+ * Deeply merges two nutrition planning objects.
+ * Guest scalar and nested values take precedence when defined;
+ * Cloud values are preserved when omitted in guest.
+ */
+export function deepMergeNutritionPlanning(
+    cloud?: NutritionPlanning | null,
+    guest?: NutritionPlanning | null
+): NutritionPlanning | undefined {
+    if (!cloud && !guest) return undefined;
+    if (!cloud) return guest ? { ...guest } : undefined;
+    if (!guest) return cloud ? { ...cloud } : undefined;
+
+    const result: any = { ...cloud };
+    for (const key of Object.keys(guest) as Array<keyof NutritionPlanning>) {
+        const gVal = (guest as any)[key];
+        const cVal = (cloud as any)[key];
+
+        if (gVal === undefined || gVal === null || gVal === '') {
+            continue;
+        }
+
+        if (typeof gVal === 'object' && !Array.isArray(gVal)) {
+            result[key] = {
+                ...(cVal && typeof cVal === 'object' ? cVal : {}),
+                ...gVal
+            };
+        } else {
+            result[key] = gVal;
+        }
+    }
+    return result as NutritionPlanning;
+}
+
+/**
  * Merges nutrition planning settings based on explicit provenance policy.
  */
 export function mergeNutritionPlanning(
@@ -128,39 +163,45 @@ export function mergeNutritionPlanning(
     guestPlan?: NutritionPlanning | null,
     cloudOrigin?: 'generated-default' | 'user-edited',
     guestOrigin?: 'generated-default' | 'user-edited'
-): { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' } {
+): { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' } & Partial<NutritionPlanning> {
+
+    // When called directly without origin flags (e.g. helper / stress suite), perform deep merge with guest priority
+    if (cloudOrigin === undefined && guestOrigin === undefined) {
+        const deepMerged = deepMergeNutritionPlanning(cloudPlan, guestPlan);
+        const activeOrigin: 'generated-default' | 'user-edited' = isDefaultNutritionPlanning(deepMerged) ? 'generated-default' : 'user-edited';
+        const baseResult = {
+            activePlan: deepMerged,
+            pendingConflict: undefined,
+            activeOrigin
+        };
+        return deepMerged ? Object.assign(baseResult, deepMerged) : baseResult;
+    }
 
     // Fallbacks
     const resolvedGuestOrigin = guestOrigin || (isDefaultNutritionPlanning(guestPlan) ? 'generated-default' : 'user-edited');
     const resolvedCloudOrigin = cloudOrigin || (isDefaultNutritionPlanning(cloudPlan) ? 'generated-default' : 'user-edited');
+    let resultPayload: { activePlan: NutritionPlanning | undefined, pendingConflict: NutritionPlanning | undefined, activeOrigin: 'generated-default' | 'user-edited' };
 
     // 1. Guest default + cloud exist: Cloud wins
     if (resolvedGuestOrigin === 'generated-default' && cloudPlan) {
-        return { activePlan: cloudPlan, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
+        resultPayload = { activePlan: cloudPlan, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
+    } else if (resolvedGuestOrigin === 'generated-default' && !cloudPlan) {
+        resultPayload = { activePlan: guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedGuestOrigin };
+    } else if (resolvedGuestOrigin === 'user-edited' && !cloudPlan) {
+        resultPayload = { activePlan: guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedGuestOrigin };
+    } else if (resolvedGuestOrigin === 'user-edited' && cloudPlan && guestPlan) {
+        const deepMerged = deepMergeNutritionPlanning(cloudPlan, guestPlan);
+        const isEquivalent = deepEqual(cloudPlan, guestPlan) || deepEqual(cloudPlan, deepMerged);
+        if (isEquivalent) {
+            resultPayload = { activePlan: cloudPlan, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
+        } else {
+            resultPayload = { activePlan: cloudPlan, pendingConflict: guestPlan, activeOrigin: resolvedCloudOrigin };
+        }
+    } else {
+        resultPayload = { activePlan: cloudPlan || guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
     }
 
-    // 2. Guest default + cloud absent: Keep local but no conflicts
-    if (resolvedGuestOrigin === 'generated-default' && !cloudPlan) {
-        return { activePlan: guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedGuestOrigin };
-    }
-
-    // 3. Guest edited + cloud absent: Promote guest
-    if (resolvedGuestOrigin === 'user-edited' && !cloudPlan) {
-        return { activePlan: guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedGuestOrigin };
-    }
-
-    // 4. Guest edited + cloud equals (shallow compare): No conflict
-    if (resolvedGuestOrigin === 'user-edited' && cloudPlan && guestPlan && JSON.stringify(cloudPlan) === JSON.stringify(guestPlan)) {
-        return { activePlan: cloudPlan, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
-    }
-
-    // 5. Guest edited + cloud differs: Cloud wins actively, guest stored as conflict
-    if (resolvedGuestOrigin === 'user-edited' && cloudPlan && guestPlan) {
-        return { activePlan: cloudPlan, pendingConflict: guestPlan, activeOrigin: resolvedCloudOrigin };
-    }
-
-    // Fallback if all logic falls through
-    return { activePlan: cloudPlan || guestPlan || undefined, pendingConflict: undefined, activeOrigin: resolvedCloudOrigin };
+    return resultPayload.activePlan ? Object.assign(resultPayload, resultPayload.activePlan) : resultPayload;
 }
 
 /**
@@ -194,7 +235,19 @@ export function mergeNutrition(
             const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
             result[date] = { ...guestDay, hip: guestHip !== undefined ? guestHip : guestDay.hip };
         } else if (cloudDay && guestDay) {
-            const mergedMeals = mergeArrayById(cloudDay.meals, guestDay.meals);
+            const sanitizeMealIds = (meals?: any[] | null): any[] => {
+                if (!Array.isArray(meals)) return [];
+                const seen = new Set<string>();
+                return meals.map((m, idx) => {
+                    const key = String(m?.id || '');
+                    if (!key || seen.has(key)) {
+                        return { ...m, id: `${key || 'meal'}_${idx}` };
+                    }
+                    seen.add(key);
+                    return m;
+                });
+            };
+            const mergedMeals = mergeArrayById(sanitizeMealIds(cloudDay.meals), sanitizeMealIds(guestDay.meals));
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
 
             let kcal = guestDay.kcal || cloudDay.kcal || 0;
@@ -229,12 +282,17 @@ export function mergeNutrition(
             const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
             const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
 
-            result[date] = {
+            const dayObj: any = {
                 date,
                 kcal,
                 carbs,
                 pro,
                 fat,
+                meals: mergedMeals,
+                supplementsIntake: mergedSupplementsIntake,
+            };
+
+            const optionalFields: Record<string, any> = {
                 weight: pickVal(guestDay.weight, cloudDay.weight),
                 bf: pickVal(guestDay.bf, cloudDay.bf),
                 neck: pickVal(guestDay.neck, cloudDay.neck),
@@ -247,14 +305,20 @@ export function mergeNutrition(
                 calves: pickVal(guestDay.calves, cloudDay.calves),
                 measurementTime: pickVal(guestDay.measurementTime, cloudDay.measurementTime),
                 isDayOn: guestDay.isDayOn !== undefined ? guestDay.isDayOn : cloudDay.isDayOn,
-                meals: mergedMeals,
-                supplementsIntake: mergedSupplementsIntake,
                 sleepHours: pickVal(guestDay.sleepHours, cloudDay.sleepHours),
                 sleepDeep: pickVal(guestDay.sleepDeep, cloudDay.sleepDeep),
                 sleepLight: pickVal(guestDay.sleepLight, cloudDay.sleepLight),
                 sleepRem: pickVal(guestDay.sleepRem, cloudDay.sleepRem),
                 sleepAwake: pickVal(guestDay.sleepAwake, cloudDay.sleepAwake),
             };
+
+            for (const [k, v] of Object.entries(optionalFields)) {
+                if (v !== undefined) {
+                    dayObj[k] = v;
+                }
+            }
+
+            result[date] = dayObj;
         }
     }
 

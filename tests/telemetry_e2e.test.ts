@@ -2027,7 +2027,7 @@ describe('Unified Telemetry Hub E2E Suite (Tiers 1 - 5)', () => {
       expect(payload.message).toContain('[REDACTED_PATH]');
     });
 
-    it('T4-5: Guest User Session Account Linking: offline telemetry generated during guest session is replayed with authenticated UID after Google login', async () => {
+    it('T4-5: guest telemetry keeps its original identity and is not uploaded after Google login', async () => {
       // 1. Guest user offline actions
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
       telemetryHub.init();
@@ -2040,13 +2040,12 @@ describe('Unified Telemetry Hub E2E Suite (Tiers 1 - 5)', () => {
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       telemetryHub.setUserId('google_auth_uid_999');
 
-      // 3. Queue flushed with updated authenticated context
+      // 3. Login cannot retroactively assign guest events to an account.
       await telemetryHub.flushQueue();
 
-      expect(mockSetDoc).toHaveBeenCalledTimes(1);
-      const payload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload;
-      expect(payload.userId).toBe('google_auth_uid_999');
-      expect(telemetryHub.getQueuedEvents().length).toBe(0);
+      expect(mockSetDoc).not.toHaveBeenCalled();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
+      expect(telemetryHub.getQueuedEvents()[0].payload.userId).toBeNull();
     });
   });
 

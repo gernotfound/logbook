@@ -5,17 +5,7 @@ vi.unmock('../src/lib/db');
 
 import { DB } from '../src/lib/db';
 
-vi.mock('../src/lib/firebase', () => ({
-    auth: {
-        currentUser: { uid: 'user_123' },
-        signOut: vi.fn().mockResolvedValue(undefined),
-    },
-    db: {},
-    getDb: vi.fn().mockReturnValue({}),
-    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
-    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    deleteUser: vi.fn().mockResolvedValue(undefined),
-}));
+
 
 describe('DB Persistence for Training Cycles and Planning', () => {
     let mockBatch: any;
@@ -53,7 +43,7 @@ describe('DB Persistence for Training Cycles and Planning', () => {
             nutritionPlanning: null
         };
 
-        await DB.saveUserData(stateToSave);
+        expect(await DB.saveUserData(stateToSave)).toEqual({ ok: true, status: 'synced' });
 
         expect(mockBatch.set).toHaveBeenCalled();
         const setCalls = mockBatch.set.mock.calls;

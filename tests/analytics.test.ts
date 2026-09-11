@@ -77,6 +77,12 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
     });
 
     describe('computeWeeklyVolumeSeries', () => {
+        it('does not inspect exercise sets outside the requested window', () => {
+            const old = { id: 'old', date: '2016-01-01', get exercises() { throw new Error('Old sets must not be traversed'); } };
+            const future = { id: 'future', date: '2027-01-01', get exercises() { throw new Error('Future sets must not be traversed'); } };
+            const result = computeWeeklyVolumeSeries([old, future] as WorkoutSession[], mockLibrary, 80, 8, '2026-09-11');
+            expect(result.stats.totalWorkouts).toBe(0);
+        });
         it('calculates weekly training volume correctly including equipment and bodyweight', () => {
             const refDate = '2026-08-22';
             const history: WorkoutSession[] = [

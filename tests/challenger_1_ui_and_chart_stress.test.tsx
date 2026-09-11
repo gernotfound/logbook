@@ -12,7 +12,7 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         { id: 'ex_squat', name: 'Squat', equipmentWeight: 20, setsCount: 3, sets: [] }
     ];
 
-    it('renders WeeklyVolumeChart with 500 workouts across 24 weeks seamlessly without lag or crash', () => {
+    it('renders WeeklyVolumeChart with 500 workouts across 24 weeks seamlessly without lag or crash', async () => {
         const history: WorkoutSession[] = [];
         const baseDate = new Date('2026-08-20T12:00:00Z').getTime();
 
@@ -38,8 +38,8 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         );
 
         expect(screen.getByText('Volume di allenamento settimanale')).toBeDefined();
-        expect(screen.getByText(/Attuale:/i)).toBeDefined();
-        expect(screen.getByText(/Media:/i)).toBeDefined();
+        expect(await screen.findByText(/Attuale:/i)).toBeDefined();
+        expect(await screen.findByText(/Media:/i)).toBeDefined();
     });
 
     it('handles interactive period toggling across 4, 8, 12, and 24 weeks without error', () => {
@@ -76,7 +76,7 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         expect(btn8.style.background).toBe('var(--primary-color)');
     });
 
-    it('renders VolumeCaloriesCorrelationChart empty and non-empty states correctly', () => {
+    it('renders VolumeCaloriesCorrelationChart empty and non-empty states correctly', async () => {
         const { unmount } = renderWithProviders(
             <VolumeCaloriesCorrelationChart
                 history={[]}
@@ -112,7 +112,7 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         );
 
         expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
-        expect(screen.getByText(/r = \+1\.00/i)).toBeDefined();
-        expect(screen.getByText(/Forte correlazione positiva/i)).toBeDefined();
+        expect(await screen.findByText(/r = \+1\.00/i)).toBeDefined();
+        expect(await screen.findByText(/Forte correlazione positiva/i)).toBeDefined();
     });
 });

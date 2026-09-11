@@ -59,9 +59,9 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     // When store is updated or loaded, it syncs with IndexedDB cache
     useAppStore.getState().setUserData(mockCache);
 
-    const cachedInStorage = idbStore['logbook_cached_user_data'];
+    const cachedInStorage = idbStore['logbook:v2:user:test-user-id'];
     expect(cachedInStorage).toBeTruthy();
-    expect(cachedInStorage.profile.name).toBe('Mario Rossi');
+    expect(cachedInStorage.data.profile.name).toBe('Mario Rossi');
   });
 
   test('Save and Reset Store manages local cached data correctly', async () => {
@@ -77,11 +77,11 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     };
 
     useAppStore.getState().setUserData(sampleData);
-    expect(idbStore['logbook_cached_user_data']?.profile?.name).toBe('Luigi');
+    expect(idbStore['logbook:v2:user:test-user-id']?.data.profile?.name).toBe('Luigi');
 
     await DB.purgeAllLocalUserData();
     useAppStore.getState().resetStore();
-    expect(idbStore['logbook_cached_user_data']).toBeUndefined();
+    expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
     expect(useAppStore.getState().userData).toBeNull();
   });
 

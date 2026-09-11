@@ -329,7 +329,7 @@ describe('Empirical Challenger: Deep Adversarial Sleep Format Suite (R1)', () =>
                 }, { timeout: 3000 });
 
                 expect(capturedContent).toContain('Ore sonno,Sonno profondo,Sonno leggero,Sonno REM,Tempo sveglio');
-                expect(capturedContent).toContain('2026-08-20,77.5,2300,280,160,65,,,,,,,,,,08:15,01:45,04:30,01:15,00:45,');
+                expect(capturedContent).toContain('"2026-08-20",77.5,2300,280,160,65,,,,,,,,,,"08:15","01:45","04:30","01:15","00:45",');
             } finally {
                 Exporter.downloadFile = origDownload;
             }

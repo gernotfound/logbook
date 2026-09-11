@@ -181,7 +181,8 @@ export function useNutritionMeals(dateStr?: string) {
 
     const addFood = async (food: any, mealType: string) => {
         const addedItem = {
-            id: Logic.generateId('food'),
+            id: Logic.generateId('meal'),
+            foodId: food.id,
             name: food.name,
             meal: mealType,
             quantity: food.baseQty || 100,
@@ -285,7 +286,7 @@ export function useNutritionMeals(dateStr?: string) {
                     const foods = (prev.customFoods || []) as any[];
                     const updatedFoods = currentEditingId
                         ? foods.map((f: any) => f.id === currentEditingId ? { ...cleanData, id: currentEditingId } : f)
-                        : [...foods, cleanData];
+                        : [...foods, { ...cleanData, id: Logic.generateId('food') }];
                     return { ...prev, customFoods: updatedFoods };
                 });
                 setShowCustomModal(false);

@@ -1,24 +1,33 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { useAppStore } from '../../store/useAppStore';
 import { formatTimerMs } from '../../lib/utils/timer';
 
 export default function WorkoutTimer() {
+    const { currentUser, isGuest } = useAuth();
+    const owner = !isGuest && currentUser ? `user:${currentUser.uid}` : 'guest';
+    return <OwnerWorkoutTimer key={owner} owner={owner} />;
+}
+
+function OwnerWorkoutTimer({ owner }: { owner: string }) {
     // Rest Timer State
     const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>(() => {
-        const saved = localStorage.getItem('logbook_timer_state');
-        return (saved as any) || 'stopped';
+        const saved = readDeviceValue('timer_state', owner);
+        return saved === 'running' || saved === 'paused' ? saved : 'stopped';
     });
     const [restStartTime, setRestStartTime] = useState<number>(() => {
-        const saved = localStorage.getItem('logbook_timer_start');
+        const saved = readDeviceValue('timer_start', owner);
         return saved ? (parseInt(saved, 10) || 0) : 0;
     });
     const [restAccumulated, setRestAccumulated] = useState<number>(() => {
-        const saved = localStorage.getItem('logbook_timer_accumulated');
+        const saved = readDeviceValue('timer_accumulated', owner);
         return saved ? (parseInt(saved, 10) || 0) : 0;
     });
     const [restDisplay, setRestDisplay] = useState<string>(() => {
-        const savedState = localStorage.getItem('logbook_timer_state');
-        const savedStart = localStorage.getItem('logbook_timer_start');
-        const savedAcc = localStorage.getItem('logbook_timer_accumulated');
+        const savedState = readDeviceValue('timer_state', owner);
+        const savedStart = readDeviceValue('timer_start', owner);
+        const savedAcc = readDeviceValue('timer_accumulated', owner);
         const start = savedStart ? (parseInt(savedStart, 10) || 0) : 0;
         const acc = savedAcc ? (parseInt(savedAcc, 10) || 0) : 0;
         
@@ -42,16 +51,20 @@ export default function WorkoutTimer() {
     }, []);
 
     useEffect(() => {
+      try {
         if (restState === 'stopped' && restStartTime === 0 && restAccumulated === 0) {
-            localStorage.removeItem('logbook_timer_state');
-            localStorage.removeItem('logbook_timer_start');
-            localStorage.removeItem('logbook_timer_accumulated');
+            writeDeviceValue('timer_state', null, owner);
+            writeDeviceValue('timer_start', null, owner);
+            writeDeviceValue('timer_accumulated', null, owner);
             return;
         }
-        localStorage.setItem('logbook_timer_state', restState);
-        localStorage.setItem('logbook_timer_start', restStartTime.toString());
-        localStorage.setItem('logbook_timer_accumulated', restAccumulated.toString());
-    }, [restState, restStartTime, restAccumulated]);
+        writeDeviceValue('timer_state', restState, owner);
+        writeDeviceValue('timer_start', restStartTime.toString(), owner);
+        writeDeviceValue('timer_accumulated', restAccumulated.toString(), owner);
+      } catch {
+        useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
+      }
+    }, [restState, restStartTime, restAccumulated, owner]);
 
     // Rest Timer Ticker con aggiornamento istantaneo al ripristino da background
     useEffect(() => {

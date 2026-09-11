@@ -1,6 +1,77 @@
+import { vi, beforeEach } from 'vitest';
+
+const storageMocks = vi.hoisted(() => {
+  const localStorageStore: Record<string, string> = {};
+  const localStorageMock = {
+    getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      localStorageStore[key] = String(value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete localStorageStore[key];
+    }),
+    clear: vi.fn(() => {
+      for (const k of Object.keys(localStorageStore)) delete localStorageStore[k];
+    }),
+    get length() {
+      return Object.keys(localStorageStore).length;
+    },
+    key: vi.fn((index: number) => Object.keys(localStorageStore)[index] ?? null),
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: localStorageMock,
+    configurable: true,
+    writable: true,
+  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', {
+      value: localStorageMock,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  const sessionStorageStore: Record<string, string> = {};
+  const sessionStorageMock = {
+    getItem: vi.fn((key: string) => sessionStorageStore[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      sessionStorageStore[key] = String(value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete sessionStorageStore[key];
+    }),
+    clear: vi.fn(() => {
+      for (const k of Object.keys(sessionStorageStore)) delete sessionStorageStore[k];
+    }),
+    get length() {
+      return Object.keys(sessionStorageStore).length;
+    },
+    key: vi.fn((index: number) => Object.keys(sessionStorageStore)[index] ?? null),
+  };
+
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: sessionStorageMock,
+    configurable: true,
+    writable: true,
+  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'sessionStorage', {
+      value: sessionStorageMock,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  return { localStorageMock, sessionStorageMock };
+});
+
+export const localStorageMock = storageMocks.localStorageMock;
+export const sessionStorageMock = storageMocks.sessionStorageMock;
+
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { vi } from 'vitest';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
@@ -120,30 +191,20 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(function (th
   fillText: vi.fn(),
 }; }) as any;
 
-// Mock localStorage
-const localStorageStore: Record<string, string> = {};
-const localStorageMock = {
-  getItem: vi.fn((key: string) => localStorageStore[key] || null),
-  setItem: vi.fn((key: string, value: string) => {
-    localStorageStore[key] = value.toString();
-  }),
-  removeItem: vi.fn((key: string) => {
-    delete localStorageStore[key];
-  }),
-  clear: vi.fn(() => {
-    for (const k in localStorageStore) delete localStorageStore[k];
-  }),
-  length: 0,
-  key: vi.fn((_index: number) => null),
-};
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
-
 // Mock idb-keyval
 export const idbStore: Record<string, any> = {};
+beforeEach(() => {
+  for (const key of Object.keys(idbStore)) delete idbStore[key];
+  localStorageMock.clear();
+  sessionStorageMock.clear();
+});
 vi.mock('idb-keyval', () => ({
   get: vi.fn(async (key: string) => idbStore[key] ?? undefined),
   set: vi.fn(async (key: string, value: any) => {
     idbStore[key] = value;
+  }),
+  update: vi.fn(async (key: string, updater: (value: any) => any) => {
+    idbStore[key] = updater(idbStore[key]);
   }),
   del: vi.fn(async (key: string) => {
     delete idbStore[key];
@@ -168,18 +229,19 @@ vi.mock('firebase/app', () => ({
 }));
 
 vi.mock('firebase/auth', () => ({
-  getAuth: vi.fn(() => ({})),
+  getAuth: vi.fn(() => ({ currentUser: { uid: 'test-user-id', email: 'test@example.com', displayName: 'Test User' } })),
   GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
   getRedirectResult: vi.fn().mockResolvedValue(null),
   signOut: vi.fn(),
   onAuthStateChanged: vi.fn((_auth, callback) => {
-    callback({
+    _auth.currentUser ??= {
       uid: 'test-user-id',
       email: 'test@example.com',
       displayName: 'Test User',
-    });
+    };
+    callback(_auth.currentUser);
     return () => {};
   }),
   setPersistence: vi.fn().mockResolvedValue(undefined),
@@ -195,29 +257,30 @@ vi.mock('firebase/app-check', () => ({
   isSupported: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock('firebase/firestore', () => ({
-  getFirestore: vi.fn(() => ({})),
-  initializeFirestore: vi.fn(() => ({})),
-  persistentLocalCache: vi.fn(),
-  persistentMultipleTabManager: vi.fn(),
-  waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-  doc: vi.fn(),
-  getDoc: vi.fn().mockResolvedValue({ exists: () => false }),
-  setDoc: vi.fn().mockResolvedValue(undefined),
-  deleteDoc: vi.fn().mockResolvedValue(undefined),
-  collection: vi.fn(),
-  getDocs: vi.fn().mockResolvedValue({ docs: [] }),
-  deleteField: vi.fn(),
-  writeBatch: vi.fn().mockReturnValue({
-    set: vi.fn(),
-    delete: vi.fn(),
-    commit: vi.fn().mockResolvedValue(undefined),
-  }),
-}));
+vi.mock('firebase/firestore', () => {
+  const getDoc = vi.fn().mockResolvedValue({ exists: () => false });
+  const writeBatch = vi.fn().mockReturnValue({ set: vi.fn(), delete: vi.fn(), commit: vi.fn().mockResolvedValue(undefined) });
+  return {
+    getFirestore: vi.fn(() => ({})), initializeFirestore: vi.fn(() => ({})),
+    persistentLocalCache: vi.fn(), persistentMultipleTabManager: vi.fn(),
+    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
+    doc: vi.fn(), getDoc, setDoc: vi.fn().mockResolvedValue(undefined),
+    deleteDoc: vi.fn().mockResolvedValue(undefined), collection: vi.fn(),
+    getDocs: vi.fn().mockResolvedValue({ docs: [] }), deleteField: vi.fn(), writeBatch,
+    // Adapter for UI/contract tests only. Real retries and authorization run in test:rules.
+    runTransaction: vi.fn(async (_db, callback) => {
+      const batch = writeBatch();
+      const result = await callback({ get: getDoc, set: batch.set, delete: batch.delete });
+      if (!result?.conflicts?.length) await batch.commit();
+      return result;
+    }),
+  };
+});
 
 // Mock DB module
 vi.mock('../src/lib/db', () => ({
   DB: {
+    resetCache: vi.fn(),
     loadUserData: vi.fn().mockImplementation(() => {
       const state = useAppStore.getState();
       return state.userData;
@@ -226,9 +289,11 @@ vi.mock('../src/lib/db', () => ({
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
     purgeAllLocalUserData: vi.fn().mockImplementation(async () => {
+      delete idbStore['logbook:v2:user:test-user-id'];
       delete idbStore['logbook_cached_user_data'];
       delete idbStore['pending_sync_token'];
       delete idbStore['pending_sync_payload'];
+      localStorage.removeItem(deviceKey('workout'));
       localStorage.removeItem('logbook_local_workout');
       localStorage.removeItem('logbook_timer_state');
       localStorage.removeItem('logbook_timer_start');

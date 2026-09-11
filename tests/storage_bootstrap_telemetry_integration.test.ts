@@ -44,7 +44,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
       catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
     };
 
-    vi.spyOn(idbKeyval, 'get').mockResolvedValue(validData);
+    vi.spyOn(idbKeyval, 'get').mockImplementation(async key => key === 'logbook:v2:user:test-user-id' ? { version: 2, owner: 'user:test-user-id', revision: 0, data: validData, baseline: validData, pending: [], completeMonths: [] } : undefined);
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();

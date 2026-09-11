@@ -51,7 +51,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         sensitiveKeys.forEach(k => localStorage.setItem(k, 'sensitive_data'));
         deviceKeys.forEach(k => localStorage.setItem(k, 'device_pref'));
 
-        await DB.purgeAllLocalUserData();
+        await DB.purgeAllLocalUserData('guest');
 
         sensitiveKeys.forEach(k => {
             expect(localStorage.getItem(k)).toBeNull();
@@ -70,13 +70,13 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(idb.del).toHaveBeenCalledWith('pending_sync_payload');
     });
 
-    it('purgeAllLocalUserData operates best-effort and does not throw if IndexedDB fails', async () => {
+    it('purgeAllLocalUserData reports IndexedDB failure and still cleans localStorage', async () => {
         vi.mocked(idb.del).mockRejectedValueOnce(new Error('IndexedDB quota exceeded'));
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
         localStorage.setItem('draft_measurement', 'draft_data');
 
-        await expect(DB.purgeAllLocalUserData()).resolves.toBeUndefined();
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
 
         expect(localStorage.getItem('draft_measurement')).toBeNull();
         
@@ -100,12 +100,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         
         const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-        await DB.purgeAllLocalUserData();
-
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-            '[purgeAllLocalUserData] Errore durante la rimozione della chiave logbook_local_workout in localStorage:',
-            expect.any(Error)
-        );
+        await expect(DB.purgeAllLocalUserData()).rejects.toThrow('Pulizia locale incompleta');
         // Ensure subsequent keys were still deleted
         expect(localStorage.getItem('draft_measurement')).toBeNull();
 
@@ -126,17 +121,15 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         consoleWarnSpy.mockRestore();
     });
 
-    it('secureLogOut executes purgeAllLocalUserData even if auth.signOut fails', async () => {
+    it('secureLogOut preserves the local archive and rejects when auth.signOut fails', async () => {
         const { auth } = await import('../src/lib/firebase');
         vi.mocked(auth.signOut).mockRejectedValueOnce(new Error('Network offline'));
         
         const purgeSpy = vi.spyOn(DB, 'purgeAllLocalUserData').mockResolvedValue(undefined);
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-        await DB.secureLogOut();
-
-        expect(consoleErrorSpy).toHaveBeenCalledWith("Errore durante auth.signOut, proseguo comunque con la purga:", expect.any(Error));
-        expect(purgeSpy).toHaveBeenCalled();
+        await expect(DB.secureLogOut()).rejects.toThrow('Network offline');
+        expect(purgeSpy).not.toHaveBeenCalled();
 
         purgeSpy.mockRestore();
         consoleErrorSpy.mockRestore();

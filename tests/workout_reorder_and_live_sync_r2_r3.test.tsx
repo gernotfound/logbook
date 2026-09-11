@@ -1,3 +1,4 @@
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
@@ -177,7 +178,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                     { id: 'se_preserved', exId: 'ex_squat', sessionNote: '', sets: [] }
                 ]
             };
-            localStorage.setItem('logbook_local_workout', JSON.stringify(legacyWorkout));
+            localStorage.setItem(deviceKey('workout'), JSON.stringify(legacyWorkout));
 
             const initial = getInitialLocalWorkout();
             expect(initial).not.toBeNull();

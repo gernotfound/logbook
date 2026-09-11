@@ -1,3 +1,4 @@
+import { initializeLocal } from '../src/lib/sync/localRepository';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mergeCloudIntoLocal, mergeHistoryNonDestructive, mergeNutritionNonDestructive } from '../src/lib/merge';
 import { DB } from '../src/lib/db';
@@ -108,10 +109,12 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         });
 
         it('T10 & Integration: Hydration merges non-destructively without triggering DB.saveUserData', async () => {
+            (auth as any).currentUser = { uid: 'user123' };
             // Setup local state with OLD history
             const initialLocal = getEmptyUserData();
             initialLocal.history = [{ id: 'local-old', globalStartTime: 1000 } as any];
             useAppStore.setState({ userData: initialLocal });
+            await initializeLocal('user:user123', initialLocal);
 
             // Setup cloud response with NEW history only
             const cloudResponse = getEmptyUserData();
@@ -158,6 +161,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         });
 
         it('Zod Fallback: Failed parse during hydration preserves local state', async () => {
+            (auth as any).currentUser = { uid: 'user123' };
             const initialLocal = getEmptyUserData();
             initialLocal.profile = { name: 'Valid Local' } as any;
             useAppStore.setState({ userData: initialLocal });

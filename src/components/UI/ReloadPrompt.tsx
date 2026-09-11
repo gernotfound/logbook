@@ -1,8 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { prepareForReload } from '../../lib/sync/reloadBarrier';
+import { isCurrentSession } from '../../lib/sync/session';
 
 export const ReloadPrompt: React.FC = () => {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const updateInFlight = useRef(false);
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [chunkFailed, setChunkFailed] = useState(false);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -32,6 +38,15 @@ export const ReloadPrompt: React.FC = () => {
       console.log('SW registration error:', error);
     },
   });
+
+  useEffect(() => {
+    const handlePreloadError = (event: Event) => {
+      event.preventDefault();
+      setChunkFailed(true);
+    };
+    window.addEventListener('vite:preloadError', handlePreloadError);
+    return () => window.removeEventListener('vite:preloadError', handlePreloadError);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -76,25 +91,31 @@ export const ReloadPrompt: React.FC = () => {
     };
   }, []);
 
-  if (!needRefresh) {
+  if (!needRefresh && !chunkFailed) {
     return null;
   }
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
+    if (updateInFlight.current) return;
+    updateInFlight.current = true;
+    setUpdating(true);
+    setUpdateError(null);
     try {
-      if (typeof updateServiceWorker === 'function') {
-        const updatePromise = updateServiceWorker(true);
-        if (updatePromise && typeof updatePromise.catch === 'function') {
-          updatePromise.catch(err => console.log('SW update trigger error:', err));
-        }
-      }
+      const session = await prepareForReload();
+      if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+      if (chunkFailed) window.location.reload();
+      else await updateServiceWorker(true);
     } catch (err) {
-      console.log('SW update invocation error:', err);
+      setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
+    } finally {
+      updateInFlight.current = false;
+      setUpdating(false);
     }
   };
 
   const handleClose = () => {
     setNeedRefresh(false);
+    setChunkFailed(false);
   };
 
   return (
@@ -118,8 +139,9 @@ export const ReloadPrompt: React.FC = () => {
           color: 'var(--text-main)',
         }}
       >
-        Nuova versione disponibile
+        {chunkFailed ? 'Aggiornamento richiesto per caricare questa schermata' : 'Nuova versione disponibile'}
       </div>
+      {updateError && <p role="alert" style={{ color: 'var(--danger-color)', margin: 0 }}>{updateError}</p>}
 
       <div className="reload-prompt-actions" style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
         <button
@@ -127,26 +149,30 @@ export const ReloadPrompt: React.FC = () => {
           aria-label="Aggiorna applicazione"
           className="btn btn-primary btn-small"
           onClick={handleUpdate}
+          disabled={updating}
           style={{
             flex: 1,
             padding: '10px',
             fontSize: '0.95rem',
             margin: 0,
+            minHeight: '44px',
             cursor: 'pointer',
           }}
         >
-          Aggiorna
+          {updating ? 'Salvataggio…' : 'Aggiorna'}
         </button>
         <button
           type="button"
           aria-label="Chiudi notifica"
           className="btn btn-secondary btn-small"
           onClick={handleClose}
+          disabled={updating}
           style={{
             flex: 1,
             padding: '10px',
             fontSize: '0.95rem',
             margin: 0,
+            minHeight: '44px',
             cursor: 'pointer',
           }}
         >

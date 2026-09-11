@@ -8,7 +8,7 @@ import type {} from '../src/types';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {
-        currentUser: { uid: 'adversarial_test_user' },
+        currentUser: { uid: 'test-user-id' },
         signOut: vi.fn().mockResolvedValue(undefined),
     },
     db: {},
@@ -18,21 +18,64 @@ vi.mock('../src/lib/firebase', () => ({
     deleteUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../src/lib/sync/session', async () => {
+    const actual = await vi.importActual<typeof import('../src/lib/sync/session')>('../src/lib/sync/session');
+    const { auth } = await import('../src/lib/firebase');
+    return {
+        ...actual,
+        storageOwner: () => auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest',
+        captureSession: () => ({ owner: auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest', epoch: 0 }),
+        isCurrentSession: (session: any) => session.owner === (auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest'),
+    };
+});
+
 describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & DomainParsers Stress Suite', () => {
     let mockBatch: any;
+    let mockDocs: Record<string, any> = {};
 
     beforeEach(() => {
         vi.clearAllMocks();
         DB.resetCache();
+        mockDocs = {};
 
-        vi.mocked(doc).mockImplementation((_db: any, ...parts: string[]) => ({ path: parts.join('/') } as any));
+        vi.mocked(doc).mockImplementation((_db: any, ...parts: string[]) => {
+            const path = parts.join('/');
+            return { path, toString: () => path } as any;
+        });
+
+        let pendingWrites: Array<() => void> = [];
 
         mockBatch = {
-            set: vi.fn(),
-            delete: vi.fn(),
-            commit: vi.fn().mockResolvedValue(undefined),
+            set: vi.fn().mockImplementation((docRef: any, data: any) => {
+                const path = docRef?.path || String(docRef);
+                pendingWrites.push(() => {
+                    mockDocs[path] = structuredClone(data);
+                });
+            }),
+            delete: vi.fn().mockImplementation((docRef: any) => {
+                const path = docRef?.path || String(docRef);
+                pendingWrites.push(() => {
+                    delete mockDocs[path];
+                });
+            }),
+            commit: vi.fn().mockImplementation(async () => {
+                const writes = pendingWrites;
+                pendingWrites = [];
+                for (const write of writes) write();
+            }),
         };
-        vi.mocked(writeBatch).mockReturnValue(mockBatch);
+        vi.mocked(writeBatch).mockImplementation(() => {
+            pendingWrites = [];
+            return mockBatch;
+        });
+
+        vi.mocked(getDoc).mockImplementation(async (docRef: any) => {
+            const path = docRef?.path || String(docRef);
+            if (mockDocs[path] !== undefined) {
+                return { exists: () => true, data: () => structuredClone(mockDocs[path]) } as any;
+            }
+            return { exists: () => false, data: () => ({}) } as any;
+        });
     });
 
     describe('1. Persistence and Save Amnesia Adversarial Tests', () => {
@@ -121,7 +164,8 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             permError.code = 'permission-denied';
             mockBatch.commit.mockRejectedValueOnce(permError);
 
-            await expect(DB.saveUserData(state)).rejects.toThrow('Missing or insufficient permissions.');
+            const saveRes = await DB.saveUserData(state);
+            expect(saveRes).toEqual({ ok: false, status: 'rejected', error: permError });
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
@@ -225,7 +269,10 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             const oversizedState = { ...state, customFoods: massiveFoods };
 
-            await expect(DB.saveUserData(oversizedState)).rejects.toThrow(/supera il limite di dimensione/);
+            const saveRes = await DB.saveUserData(oversizedState);
+            expect(saveRes.ok).toBe(false);
+            expect(saveRes.status).toBe('failed');
+            expect(String(saveRes.error)).toMatch(/supera il limite di dimensione/);
             expect(mockBatch.commit).not.toHaveBeenCalled();
 
             // Clean state can still be saved afterwards

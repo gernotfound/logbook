@@ -3,6 +3,8 @@ import { Logic } from '../../lib/logic';
 import { WorkoutSessionSchema } from '../../lib/schema';
 import type { WorkoutSession, SessionExercise, SessionExerciseSet } from '../../types';
 import { DEBOUNCE_DELAY_LOCAL } from '../../constants';
+import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import type { AppState } from '../useAppStore';
 
 export interface WorkoutSlice {
@@ -20,13 +22,25 @@ export const clearWorkoutTimer = () => {
 };
 
 const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
+    const session = captureSession();
     if (saveTimer) clearTimeout(saveTimer);
+    if (!workout) {
+        saveTimer = null;
+        try {
+            writeDeviceValue('workout', null, session.owner);
+        } catch (error) {
+            console.error('Impossibile rimuovere il workout locale:', error);
+            throw error;
+        }
+        return;
+    }
     saveTimer = setTimeout(() => {
+        if (!isCurrentSession(session)) return;
         try {
             if (workout) {
-                localStorage.setItem('logbook_local_workout', JSON.stringify(workout));
+                writeDeviceValue('workout', JSON.stringify(workout), session.owner);
             } else {
-                localStorage.removeItem('logbook_local_workout');
+                writeDeviceValue('workout', null, session.owner);
             }
         } catch (e) {
             console.error("Errore salvataggio localWorkout:", e);
@@ -36,7 +50,7 @@ const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
 
 export const getInitialLocalWorkout = (): WorkoutSession | null => {
     try {
-        const saved = localStorage.getItem('logbook_local_workout');
+        const saved = readDeviceValue('workout');
         if (!saved) return null;
         const parsed = JSON.parse(saved);
         if (!parsed || typeof parsed !== 'object') return null;

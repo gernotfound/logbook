@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import type { NutritionPlanning } from '../types';
+import { normalizeOnDaysCount } from '../lib/nutritionDefaults';
 
 export function useNutritionPlanning() {
     const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
@@ -40,7 +41,7 @@ export function useNutritionPlanning() {
         ...basePlanning,
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
         onBoost: basePlanning.onBoost ? { ...defaultPlanning.onBoost, ...basePlanning.onBoost } : defaultPlanning.onBoost,
-        onDaysCount: basePlanning.onDaysCount !== undefined ? basePlanning.onDaysCount : 4,
+        onDaysCount: normalizeOnDaysCount(basePlanning.onDaysCount),
         weight: basePlanning.weight || latestWeight,
         normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
     };
@@ -111,7 +112,7 @@ export function useNutritionPlanning() {
         const updatedPlanning = {
             ...planning,
             weight: parseFloat(planning.weight as any) || latestWeight,
-            onDaysCount: parseInt(planning.onDaysCount as any) || 4,
+            onDaysCount: normalizeOnDaysCount(planning.onDaysCount),
             normocalorica: sanitizedNormo,
             // Convert to numbers safely
             avgMacros: {
@@ -136,7 +137,7 @@ export function useNutritionPlanning() {
                 nutritionPlanningOrigin: 'user-edited',
                 nutritionPlanning: updatedPlanning
             }));
-            await showAlert("Pianificazione salvata sul cloud!");
+            await showAlert("Pianificazione salvata.");
         } catch {
             await showAlert("Errore durante il salvataggio della pianificazione.");
         }

@@ -6,11 +6,10 @@ export function useLocalStorage<T>(
     initialValue: T,
     schema?: ZodType<T, any, any>
 ): [T, (value: T) => void] {
-    const [storedValue, setStoredValue] = useState<T>(() => {
-        const item = window.localStorage.getItem(key);
-        if (item === null) return initialValue;
-
+    const readStoredValue = (): T => {
         try {
+            const item = window.localStorage.getItem(key);
+            if (item === null) return initialValue;
             const parsed = JSON.parse(item);
 
             if (schema) {
@@ -27,15 +26,18 @@ export function useLocalStorage<T>(
             console.error(`Errore di parsing del localStorage key "${key}":`, error);
             return initialValue;
         }
-    });
+    };
+    const [stored, setStored] = useState(() => ({ key, value: readStoredValue() }));
+    if (stored.key !== key) setStored({ key, value: readStoredValue() });
 
     useEffect(() => {
+        if (stored.key !== key) return;
         try {
-            window.localStorage.setItem(key, JSON.stringify(storedValue));
+            window.localStorage.setItem(key, JSON.stringify(stored.value));
         } catch (error) {
             console.error(`Errore di salvataggio nel localStorage key "${key}":`, error);
         }
-    }, [key, storedValue]);
+    }, [key, stored]);
 
-    return [storedValue, setStoredValue];
+    return [stored.value, value => setStored({ key, value })];
 }
