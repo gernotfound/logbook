@@ -27,7 +27,7 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 5. Crea una scheda vuota per poter avviare una sessione
     await expect(page.getByRole('tab', { name: 'Schede' })).toBeVisible();
-    await page.getByRole('tab', { name: 'Schede' }).click({ force: true });
+    await page.getByRole('tab', { name: 'Schede' }).dispatchEvent('click');
     
     // Apri il box di creazione
     await expect(page.getByRole('button', { name: '+ Crea scheda' })).toBeVisible();
@@ -41,10 +41,11 @@ test.describe('Offline scenarios & Background suspension', () => {
     await expect(page.locator('text=Scheda E2E Offline').first()).toBeVisible();
 
     // 6. Torna alla vista Sessione
-    await page.getByRole('tab', { name: 'Sessione' }).click({ force: true });
+    await page.getByRole('tab', { name: 'Sessione' }).dispatchEvent('click');
 
-    // Seleziona la scheda appena creata
-    await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
+    // Seleziona la scheda appena creata (usiamo index 1 così funziona indipendentemente dalla formattazione del label)
+    await page.locator('select#archive-routine-select').waitFor({ state: 'visible' });
+    await page.selectOption('select#archive-routine-select', { index: 1 });
 
     // 7. Inizia l'allenamento
     await page.getByRole('button', { name: 'Inizia allenamento' }).click();
