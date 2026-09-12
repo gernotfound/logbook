@@ -67,6 +67,7 @@ Ruoli dei livelli di storage:
 - **MUST:** Offline, l'app deve avviarsi e operare dai dati locali.
 - **MUST:** Una write rifiutata non deve essere esposta come confermata. La sincronizzazione tramite `replicateJournal` e transazioni gestisce gli esiti e mantiene i dati se offline.
 - **MUST:** Le funzioni di aggiornamento devono rigettare la Promise se la persistenza fallisce. Vietato risolvere silenziosamente nel `catch`.
+- **MUST:** Il PWA reload barrier (`prepareForReload`) deve essere fail-safe: se `userData` esiste in memoria ma `envelope` è nullo o illeggibile, la sessione deve essere considerata *unsafe* (non salvata) per prevenire perdita di dati. Non autorizzare il reload alla cieca.
 
 ### `permission-denied` — gestione per contesto
 
@@ -158,6 +159,9 @@ Ruoli dei livelli di storage:
 
 Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi standard e sentence case italiano.
 
+- **MUST:** Prestare massima attenzione alla sintassi CSS (chiusura corretta di tutte le parentesi graffe `}`). Un errore di sintassi silenzioso corrompe l'intera interfaccia senza far fallire la build.
+- **MUST:** Durante il refactoring delle variabili CSS (es. estraendo in `tokens.css`), verificare minuziosamente che TUTTE le variabili originali usate nel codice (es. `--primary-dark`) siano migrate e presenti, per evitare fallback errati del browser (es. testo nero su nero).
+
 → Dettagli completi: `docs/design-system.md`
 
 ### Vincoli UX mobile
@@ -172,6 +176,7 @@ Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi s
 
 ### Anti-pattern React
 
+- **MUST:** MAI usare l'attributo HTML `hidden={...}` sui figli di un componente `<Suspense>` in React 18 (o sullo stesso Suspense). React usa internamente `hidden` per gestire le transizioni offscreen, e sovrascriverlo causa conflitti e blocchi permanenti del rendering (schermate vuote). Usare sempre `style={{ display: condizione ? 'block' : 'none' }}`.
 - **MUST:** Mai fallback inline per array/oggetti nei selettori Zustand (es. `state.dati || []` crea referenza nuova a ogni render). Usare costanti condivise stabili dichiarate fuori dal componente.
 - **SHOULD:** `React.memo` con comparatore custom nei componenti ad alta frequenza (`SessionExerciseCard`, `SessionSetRow`), solo dopo profiling.
 
