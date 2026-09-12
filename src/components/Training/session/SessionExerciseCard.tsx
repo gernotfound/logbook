@@ -264,69 +264,86 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
-                            <label className="text-muted text-xs mb-4 block">Durata (min)</label>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Durata (min)</label>
                             <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.time || ''} 
                                 onChange={val => handleCardioChange('time', val)}
                                 placeholder="es. 30"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="workout-set-input"
+                                style={{ width: '100%', boxSizing: 'border-box' }}
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block">Distanza (km)</label>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Distanza (km)</label>
                             <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.distance || ''} 
                                 onChange={val => handleCardioChange('distance', val)}
                                 placeholder="es. 5.2"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="workout-set-input"
+                                style={{ width: '100%', boxSizing: 'border-box' }}
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block">Velocità media</label>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Velocità media</label>
                             <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
                                 onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'speed', val)}
                                 placeholder="es. 10.5"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="workout-set-input"
+                                style={{ width: '100%', boxSizing: 'border-box' }}
                             />
                         </div>
                         <div>
-                            <label className="text-muted text-xs mb-4 block">Inclinazione (%)</label>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Inclinazione (%)</label>
                             <BufferedInput 
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
                                 onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'incline', val)}
                                 placeholder="es. 2.0"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="workout-set-input"
+                                style={{ width: '100%', boxSizing: 'border-box' }}
                             />
                         </div>
                     </div>
                     <div>
-                        <label className="text-muted text-xs mb-4 block">Kcal stimate</label>
+                        <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Kcal stimate</label>
                         <BufferedInput 
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
                             onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'kcal', val)}
                             placeholder="es. 350"
-                            className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                            style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                            className="workout-set-input"
+                            style={{ width: '100%', boxSizing: 'border-box' }}
                         />
                     </div>
                 </div>
             ) : (
                 <>
+                    <div className="workout-set-headers">
+                        <span style={{ minWidth: '75px' }}>Serie</span>
+                        <div style={{ display: 'flex', flex: 1, gap: '4px' }}>
+                            {libDef?.trackingType === 'time' ? (
+                                <>
+                                    <span style={{ flex: 1, textAlign: 'center' }}>Kg (opz)</span>
+                                    <span style={{ flex: 2, textAlign: 'center' }}>Tempo</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span style={{ flex: 1, textAlign: 'center' }}>Kg</span>
+                                    <span style={{ flex: 1, textAlign: 'center' }}>Reps</span>
+                                </>
+                            )}
+                            <span style={{ width: '36px' }}></span>
+                        </div>
+                    </div>
                     {(exItem.sets || []).map((s: any, sIndex: number) => (
                         <SessionSetRow
                             key={s.id || sIndex}

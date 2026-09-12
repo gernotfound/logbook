@@ -26,6 +26,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       <button
         type="button"
         aria-label="Home"
+        aria-current={activeTab === 'home' ? 'page' : undefined}
         className={`nav-item ${activeTab === 'home' ? 'active' : ''}`}
         onClick={() => setActiveTab('home')}
       >
@@ -35,6 +36,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       <button
         type="button"
         aria-label="Allenamento"
+        aria-current={activeTab === 'training' ? 'page' : undefined}
         className={`nav-item ${activeTab === 'training' ? 'active' : ''}`}
         onClick={() => setActiveTab('training')}
       >
@@ -44,6 +46,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       <button
         type="button"
         aria-label="Nutrizione"
+        aria-current={activeTab === 'nutrition' ? 'page' : undefined}
         className={`nav-item ${activeTab === 'nutrition' ? 'active' : ''}`}
         onClick={() => setActiveTab('nutrition')}
         style={{ position: 'relative' }}
@@ -68,6 +71,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       <button
         type="button"
         aria-label="Dati e statistiche"
+        aria-current={activeTab === 'data' ? 'page' : undefined}
         className={`nav-item ${activeTab === 'data' ? 'active' : ''}`}
         onClick={() => setActiveTab('data')}
       >
@@ -77,6 +81,7 @@ export const BottomNav: React.FC<BottomNavProps> = React.memo(({ activeTab, setA
       <button
         type="button"
         aria-label="Impostazioni"
+        aria-current={activeTab === 'settings' ? 'page' : undefined}
         className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
         onClick={() => setActiveTab('settings')}
       >

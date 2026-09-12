@@ -41,7 +41,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         <Trash2 size={16} />
                     </button>
                 </div>
-                <div className="set-row-metrics">
+                <div className="set-row-metrics" style={{ display: 'flex', alignItems: 'center' }}>
                     {trackingType === 'time' ? (
                         <>
                             <BufferedInput 
@@ -99,6 +99,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         className="workout-set-special-trigger btn-icon" 
                         onClick={onToggleMenu}
                         aria-label="Aggiungi dropset o isometria"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', borderRadius: '50%' }}
                     >
                         <Plus size={18} />
                     </button>
@@ -121,14 +122,14 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             {(s.dropsets || []).map((ds: any, dsIdx: number) => {
                 const label = (s.dropsets && s.dropsets.length > 1) ? `↳ Dropset ${dsIdx + 1}` : '↳ Dropset';
                 return (
-                    <div key={ds.id || dsIdx} className="special-set-row special-set-row--dropset">
-                        <div className="special-set-label">
-                            <CornerDownRight size={14} /> {label.replace('↳ ', '')}
+                    <div key={ds.id || dsIdx} className="special-set-row special-set-row--dropset" style={{ alignItems: 'center' }}>
+                        <div className="special-set-label" style={{ display: 'flex', alignItems: 'center' }}>
+                            <CornerDownRight size={14} /> {label}
                         </div>
                         <div className="set-row-metrics">
                             <BufferedInput id={`ds-kg-${s.id}-${dsIdx}`} type="number" inputMode="decimal" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'kg', val)} onFocus={e => e.target.select()} className="workout-set-input" style={{ minWidth: 0, flex: 1 }} />
                             <BufferedInput id={`ds-reps-${s.id}-${dsIdx}`} type="number" inputMode="numeric" placeholder="Reps" value={ds.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'reps', val)} onFocus={e => e.target.select()} className="workout-set-input" style={{ minWidth: 0, flex: 1 }} />
-                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'dropsets', dsIdx)}>
+                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} aria-label="✕" onClick={() => onRemoveSpecialSet(s.id, 'dropsets', dsIdx)}>
                                 <X size={16} />
                             </button>
                         </div>
@@ -139,14 +140,14 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             {(s.isometrics || []).map((iso: any, isoIdx: number) => {
                 const label = (s.isometrics && s.isometrics.length > 1) ? `↳ Isometria ${isoIdx + 1}` : '↳ Isometria';
                 return (
-                    <div key={iso.id || isoIdx} className="special-set-row special-set-row--isometric">
-                        <div className="special-set-label">
-                            <CornerDownRight size={14} /> {label.replace('↳ ', '')}
+                    <div key={iso.id || isoIdx} className="special-set-row special-set-row--isometric" style={{ alignItems: 'center' }}>
+                        <div className="special-set-label" style={{ display: 'flex', alignItems: 'center' }}>
+                            <CornerDownRight size={14} /> {label}
                         </div>
                         <div className="set-row-metrics">
                             <BufferedInput id={`iso-kg-${s.id}-${isoIdx}`} type="number" inputMode="decimal" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'kg', val)} onFocus={e => e.target.select()} className="workout-set-input" style={{ minWidth: 0, flex: 1 }} />
                             <BufferedInput id={`iso-time-${s.id}-${isoIdx}`} type="number" inputMode="decimal" placeholder="Sec" value={iso.time ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'time', val)} onFocus={e => e.target.select()} className="workout-set-input" style={{ minWidth: 0, flex: 1 }} />
-                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'isometrics', isoIdx)}>
+                            <button className="btn-icon" style={{ color: 'var(--danger-color)' }} aria-label="✕" onClick={() => onRemoveSpecialSet(s.id, 'isometrics', isoIdx)}>
                                 <X size={16} />
                             </button>
                         </div>

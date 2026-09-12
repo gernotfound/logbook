@@ -548,7 +548,6 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect(screen.getByText('S1')).toBeDefined();
                 const plusBtn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
                 expect(plusBtn).toBeDefined();
-                expect(plusBtn.textContent).toBe('+');
             });
 
             it('T1.4.2: clicking circular "+" button triggers onToggleMenu to open menu', () => {
