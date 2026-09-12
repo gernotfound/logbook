@@ -102,51 +102,65 @@ export function useWorkoutSession() {
         }
 
         const userData = useAppStore.getState().userData;
-        const currentRoutines = userData?.routines || [];
-        const routine = currentRoutines.find(r => r.id === targetId);
-        if (!routine) {
-            await showAlert("Scheda non trovata.");
-            return;
-        }
-        
-        resetGlobalWorkoutTimer();
+        let newActiveWorkout: WorkoutSession;
 
-        const activeCycleId = userData?.activeCycleId;
-        const activeCycle = activeCycleId ? (userData?.trainingCycles || []).find(c => c.id === activeCycleId) : null;
-        const belongsToActiveCycle = activeCycle && (activeCycle.routines || []).some(r => r.routineId === routine.id);
+        if (targetId === 'free') {
+            resetGlobalWorkoutTimer();
+            newActiveWorkout = {
+                id: Logic.generateId('w'),
+                routineId: Logic.generateId('free'),
+                routineName: 'Allenamento libero',
+                date: Logic.getLocalDateString(),
+                globalStartTime: new Date().getTime(),
+                exercises: []
+            };
+        } else {
+            const currentRoutines = userData?.routines || [];
+            const routine = currentRoutines.find(r => r.id === targetId);
+            if (!routine) {
+                await showAlert("Scheda non trovata.");
+                return;
+            }
+            
+            resetGlobalWorkoutTimer();
 
-        const assignedCycleId = cycleInfo?.cycleId || (belongsToActiveCycle ? activeCycle.id : undefined);
-        const assignedCycleName = cycleInfo?.cycleName || (belongsToActiveCycle ? activeCycle.name : undefined);
+            const activeCycleId = userData?.activeCycleId;
+            const activeCycle = activeCycleId ? (userData?.trainingCycles || []).find(c => c.id === activeCycleId) : null;
+            const belongsToActiveCycle = activeCycle && (activeCycle.routines || []).some(r => r.routineId === routine.id);
 
-        const newActiveWorkout: WorkoutSession = {
-            id: Logic.generateId('w'),
-            routineId: routine.id,
-            routineName: routine.name,
-            cycleId: assignedCycleId,
-            cycleName: assignedCycleName,
-            date: Logic.getLocalDateString(),
-            globalStartTime: new Date().getTime(),
-            exercises: (routine.exercises || []).map((ex: any) => {
-                const libDef = (userData?.library || []).find(l => l.id === ex.exId);
-                const isCardio = libDef?.trackingType === 'cardio';
-                const setsCount = isCardio ? 1 : (ex.setsCount || 3);
-                const sets = [];
-                for (let i = 0; i < setsCount; i++) {
-                    const setObj: any = { id: Logic.generateId('s'), kg: '', reps: '' };
-                    if (ex.defaultTechnique === 'dropset') {
-                        setObj.dropsets = [{ id: Logic.generateId('ds'), kg: '', reps: '' }];
-                    } else if (ex.defaultTechnique === 'isometrics') {
-                        setObj.isometrics = [{ id: Logic.generateId('iso'), kg: '', time: '' }];
+            const assignedCycleId = cycleInfo?.cycleId || (belongsToActiveCycle ? activeCycle.id : undefined);
+            const assignedCycleName = cycleInfo?.cycleName || (belongsToActiveCycle ? activeCycle.name : undefined);
+
+            newActiveWorkout = {
+                id: Logic.generateId('w'),
+                routineId: routine.id,
+                routineName: routine.name,
+                cycleId: assignedCycleId,
+                cycleName: assignedCycleName,
+                date: Logic.getLocalDateString(),
+                globalStartTime: new Date().getTime(),
+                exercises: (routine.exercises || []).map((ex: any) => {
+                    const libDef = (userData?.library || []).find(l => l.id === ex.exId);
+                    const isCardio = libDef?.trackingType === 'cardio';
+                    const setsCount = isCardio ? 1 : (ex.setsCount || 3);
+                    const sets = [];
+                    for (let i = 0; i < setsCount; i++) {
+                        const setObj: any = { id: Logic.generateId('s'), kg: '', reps: '' };
+                        if (ex.defaultTechnique === 'dropset') {
+                            setObj.dropsets = [{ id: Logic.generateId('ds'), kg: '', reps: '' }];
+                        } else if (ex.defaultTechnique === 'isometrics') {
+                            setObj.isometrics = [{ id: Logic.generateId('iso'), kg: '', time: '' }];
+                        }
+                        sets.push(setObj);
                     }
-                    sets.push(setObj);
-                }
-                const result: any = { id: Logic.generateId('se'), exId: ex.exId, sets, sessionNote: '' };
-                if (ex.defaultTechnique) result.defaultTechnique = ex.defaultTechnique;
-                if (ex.minReps) result.minReps = ex.minReps;
-                if (ex.maxReps) result.maxReps = ex.maxReps;
-                return result;
-            })
-        };
+                    const result: any = { id: Logic.generateId('se'), exId: ex.exId, sets, sessionNote: '' };
+                    if (ex.defaultTechnique) result.defaultTechnique = ex.defaultTechnique;
+                    if (ex.minReps) result.minReps = ex.minReps;
+                    if (ex.maxReps) result.maxReps = ex.maxReps;
+                    return result;
+                })
+            };
+        }
 
         setLocalWorkout(newActiveWorkout);
 
@@ -155,8 +169,8 @@ export function useWorkoutSession() {
             const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
             telemetryHub.trackEvent('workout_started', {
                 offline: isOffline,
-                routineId: routine?.id || null,
-                routineName: routine?.name || null
+                routineId: newActiveWorkout.routineId || null,
+                routineName: newActiveWorkout.routineName || null
             });
         } catch {
             // Fail-safe non-blocking telemetry

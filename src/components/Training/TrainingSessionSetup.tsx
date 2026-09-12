@@ -238,14 +238,28 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                         </div>
                         <button
                             type="button"
-                            className="btn btn-secondary"
-                            style={{ width: '100%', marginBottom: 0 }}
+                            className="btn btn-secondary mb-10"
+                            style={{ width: '100%' }}
                             onClick={() => startWorkout(selectedRoutine)}
                         >
                             <span aria-hidden="true">🏋️</span> Inizia allenamento
                         </button>
                     </div>
                 )}
+                
+                <div className="mt-20 pt-15 border-t">
+                    <label className="text-muted text-xs m-0 mb-8 block">
+                        Oppure avvia una sessione senza scheda
+                    </label>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ width: '100%', marginBottom: 0 }}
+                        onClick={() => startWorkout('free')}
+                    >
+                        <span aria-hidden="true">🎯</span> Allenamento libero
+                    </button>
+                </div>
             </div>
         </div>
     );

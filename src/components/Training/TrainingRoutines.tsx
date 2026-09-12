@@ -41,10 +41,10 @@ const TrainingRoutines: React.FC = () => {
 
     return (
         <div className="training-sub-view active">
-            {!isCreating && !editingRoutineId && (
+            {!editingRoutineId && (
                 <div className="mb-20">
-                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(true)}>
-                        Crea scheda
+                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(!isCreating)}>
+                        {isCreating ? '- Crea scheda' : '+ Crea scheda'}
                     </button>
                 </div>
             )}

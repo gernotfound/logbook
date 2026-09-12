@@ -42,7 +42,7 @@ const DataView = lazy(() => import('./components/Data/DataView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
 function App() {
-  const { currentUser, loading, linkGoogleAccount, isGuest } = useAuth();
+  const { currentUser, loading, isGuest } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -117,6 +117,8 @@ function App() {
       }
     }
   }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab, analyticsEnabled]);
+
+  const [showGuestLogin, setShowGuestLogin] = useState(false);
 
   // Track visited tabs for lazy Keep-Alive rendering
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
@@ -203,6 +205,13 @@ function App() {
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
+      
+      {showGuestLogin && (
+          <div id="auth-overlay">
+              <LoginBox onClose={() => setShowGuestLogin(false)} />
+          </div>
+      )}
+      
       {/* Banner utente guest — visibile finché non collega Google */}
       {isGuest && (
         <div style={{
@@ -223,7 +232,7 @@ function App() {
         }}>
           <span style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>⚠️ Modalità locale · I dati sono solo su questo dispositivo</span>
           <button
-            onClick={linkGoogleAccount}
+            onClick={() => setShowGuestLogin(true)}
             style={{
               background: '#fff',
               color: '#92400e',
@@ -237,7 +246,7 @@ function App() {
               whiteSpace: 'nowrap'
             }}
           >
-            Collega Google
+            Accedi
           </button>
         </div>
       )}
