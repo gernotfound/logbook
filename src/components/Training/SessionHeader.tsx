@@ -2,9 +2,7 @@ import React from 'react';
 import WorkoutTimer from './WorkoutTimer';
 
 // Responsabilità: renderizzare l'header e il timer di una sessione attiva o in modifica.
-// Props: isEditingHistory, routineName, date, onCancelHistory.
-// Effetti: nessuno diretto sul DB; chiama callback o renderizza timer globale.
-
+// Il timer sticky e i suoi tre controlli sono un invariante UX della sessione.
 export interface SessionHeaderProps {
     isEditingHistory?: boolean;
     routineName?: string;
@@ -20,41 +18,31 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
 }) => {
     return (
         <React.Fragment>
-            {/* Sticky Timer */}
-            <div style={{ position: 'sticky', top: 'env(safe-area-inset-top, 0px)', zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
+            <div className="session-timer-bar">
                 <WorkoutTimer />
             </div>
 
             {isEditingHistory && (
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: 'rgba(234, 179, 8, 0.15)',
-                    border: '1px solid var(--warning-color, #eab308)',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    marginBottom: '15px'
-                }}>
+                <div className="session-history-banner">
                     <div>
-                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
-                            ✏️ Modifica allenamento dello storico
+                        <div className="session-history-banner__title">
+                            Modifica allenamento dello storico
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <div className="session-history-banner__meta">
                             {routineName || 'Sessione'} • {date || ''}
                         </div>
                     </div>
-                    <button 
-                        className="btn btn-small" 
-                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.1)' }}
+                    <button
+                        type="button"
+                        className="btn btn-small session-history-banner__action"
                         onClick={onCancelHistory}
                     >
                         Annulla
                     </button>
                 </div>
             )}
-            
-            {routineName && <h1 style={{marginTop: 0}}>{routineName}</h1>}
+
+            {routineName && <h1 className="session-routine-title">{routineName}</h1>}
         </React.Fragment>
     );
 };

@@ -8,6 +8,8 @@ import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
+import './styles/tokens.css'
+import './styles/modern.css'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
 import type { UserData } from './types'
 
@@ -72,11 +74,11 @@ export const initApp = async () => {
         customFoods: resolveEffectiveFoods(catalog.foods, cached.customFoods || [], cached.catalogOverrides),
       };
       window.__INITIAL_USER_DATA__ = cached;
-      
+
       // Yield al main thread per garantire che il browser disegni lo spinner HTML
       // prima che Zod congeli il thread con la validazione sincrona massiva
       await new Promise(resolve => setTimeout(resolve, 0));
-      
+
       const initialData = getInitialUserData();
       if (initialData) {
         if (!useAppStore.getState().userData) {

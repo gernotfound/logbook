@@ -1,0 +1,59 @@
+:root {
+  /* OLED-first canvas: intentionally pure black for long gym sessions. */
+  --bg-color: #000000;
+  --surface-color: #090a0c;
+  --surface-light: #121418;
+  --surface-raised: #17191e;
+  --surface-interactive: #1d2026;
+
+  --primary-color: #00e5ff;
+  --primary-dark: #00b8d4;
+  --primary-hover: #48ecff;
+  --primary-soft: rgba(0, 229, 255, 0.11);
+  --primary-soft-strong: rgba(0, 229, 255, 0.18);
+  --primary-glow: rgba(0, 229, 255, 0.18);
+  --on-primary: #001014;
+  --accent-color: #a855f7;
+
+  --text-main: #f7f8fa;
+  --text-muted: #9ba3af;
+  --text-subtle: #6f7782;
+
+  --danger-color: #ff5d75;
+  --warning-color: #ffbd2e;
+  --success-color: #39d98a;
+
+  --border-subtle: rgba(255, 255, 255, 0.075);
+  --border-default: rgba(255, 255, 255, 0.105);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --glass-border: var(--border-default);
+  --glass-bg: rgba(12, 13, 16, 0.94);
+
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+  --border-radius: var(--radius-lg);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --spacing: var(--space-4);
+
+  --shadow-surface: 0 1px 0 rgba(255, 255, 255, 0.025) inset, 0 12px 30px rgba(0, 0, 0, 0.28);
+  --shadow-floating: 0 16px 42px rgba(0, 0, 0, 0.58);
+  --focus-ring: 0 0 0 3px rgba(0, 229, 255, 0.22);
+
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 260ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+}

@@ -12,46 +12,28 @@ const HeaderDashboard: React.FC<HeaderDashboardProps> = ({ streak, totalWorkouts
     const formattedDate = Logic.formatItalianDate ? Logic.formatItalianDate(today) : today;
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-                <h1 style={{margin: 0,color: 'var(--text-main)'}}>LogBook</h1>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formattedDate}</p>
+        <header className="dashboard-header">
+            <div className="dashboard-header__brand">
+                <h1 className="dashboard-header__title">LogBook</h1>
+                <p className="dashboard-header__date">{formattedDate}</p>
             </div>
-            
-            <div style={{ display: 'flex', gap: '10px' }}>
-                <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px', 
-                    background: 'rgba(255, 255, 255, 0.05)', 
-                    padding: '6px 10px', 
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                }}>
-                    <Flame size={16} color={streak > 0 ? 'var(--warning-color)' : 'var(--text-muted)'} />
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: streak > 0 ? 'var(--warning-color)' : 'var(--text-muted)' }}>
+
+            <div className="dashboard-header__stats" aria-label="Riepilogo attività">
+                <div className="metric-chip" title="Streak di allenamento">
+                    <Flame size={16} color={streak > 0 ? 'var(--warning-color)' : 'var(--text-subtle)'} aria-hidden="true" />
+                    <span className={`metric-chip__value ${streak > 0 ? 'metric-chip__value--warning' : ''}`}>
                         {streak || 0}
                     </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '2px' }}>Streak</span>
+                    <span className="metric-chip__label">Streak</span>
                 </div>
-                
-                <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px', 
-                    background: 'rgba(255, 255, 255, 0.05)', 
-                    padding: '6px 10px', 
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                }}>
-                    <Dumbbell size={16} color="var(--primary-color)" />
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                        {totalWorkouts}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '2px' }}>Sessioni</span>
+
+                <div className="metric-chip" title="Sessioni totali">
+                    <Dumbbell size={16} color="var(--primary-color)" aria-hidden="true" />
+                    <span className="metric-chip__value">{totalWorkouts}</span>
+                    <span className="metric-chip__label">Sessioni</span>
                 </div>
             </div>
-        </div>
+        </header>
     );
 };
 
