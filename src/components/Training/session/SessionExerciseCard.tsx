@@ -160,12 +160,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         #{exIndex + 1}
                     </button>
                     {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
-                        <div className="workout-position-menu" role="menu" aria-label="Posizione esercizio">
+                        <div className="workout-position-menu" role="group" aria-label="Posizione esercizio">
                             {Array.from({ length: totalExercises }, (_, index) => index).map(targetIdx => (
                                 <button
                                     key={targetIdx}
                                     type="button"
-                                    role="menuitem"
                                     className={`workout-position-menu__item ${targetIdx === exIndex ? 'active' : ''}`}
                                     onClick={() => {
                                         setShowPositionMenu(false);

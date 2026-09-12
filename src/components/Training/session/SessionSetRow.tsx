@@ -69,7 +69,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         <BufferedInput
                             id={`time-${s.id}`}
                             type="text"
-                            placeholder="Tempo"
+                            placeholder="Tempo (es. 60s)"
                             value={s.time ?? ''}
                             onChange={val => onUpdateSet(s.id, 'time', val)}
                             onFocus={e => e.target.select()}
@@ -159,7 +159,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             type="button"
                             className="btn-icon"
                             onClick={() => onRemoveSpecialSet(s.id, 'dropsets', dsIdx)}
-                            aria-label={`Rimuovi ${label.toLowerCase()}`}
+                            aria-label="✕"
+                            title={`Rimuovi ${label.toLowerCase()}`}
                         >
                             <X size={17} aria-hidden="true" />
                         </button>
@@ -195,7 +196,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             type="button"
                             className="btn-icon"
                             onClick={() => onRemoveSpecialSet(s.id, 'isometrics', isoIdx)}
-                            aria-label={`Rimuovi ${label.toLowerCase()}`}
+                            aria-label="✕"
+                            title={`Rimuovi ${label.toLowerCase()}`}
                         >
                             <X size={17} aria-hidden="true" />
                         </button>
