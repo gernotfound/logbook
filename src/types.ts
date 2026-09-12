@@ -226,6 +226,12 @@ export interface TrainingCycle {
     isActive?: boolean;
 }
 
+export interface ExportShareOptions {
+    exportLibrary?: boolean | string[];
+    exportRoutines?: boolean | string[];
+    exportTrainingCycles?: boolean | string[];
+}
+
 export interface CatalogManifest {
     version: string;
     updatedAt: string;
@@ -369,4 +375,3 @@ export type MainTab = AppTab;
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';
 export type DataSubTab = 'measurements' | 'sleep' | 'biometry' | 'history';
-
