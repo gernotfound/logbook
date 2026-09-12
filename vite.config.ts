@@ -52,14 +52,14 @@ export default defineConfig({
             short_name: "Allenamento",
             description: "Vai alla sezione allenamento",
             url: "/?tab=training",
-            icons: [{ src: "icon-192.png", sizes: "192x192" }]
+            icons: [{ src: "icon-192.png", sizes: "192x192", type: "image/png" }]
           },
           {
             name: "Alimentazione",
             short_name: "Alimentazione",
             description: "Vai alla sezione nutrizione",
             url: "/?tab=nutrition",
-            icons: [{ src: "icon-192.png", sizes: "192x192" }]
+            icons: [{ src: "icon-192.png", sizes: "192x192", type: "image/png" }]
           }
         ],
         icons: [
