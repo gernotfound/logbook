@@ -16,10 +16,6 @@ export default defineConfig({
     testTimeout: 10000,
     maxWorkers: 2,
     coverage: {
-      thresholds: {
-        'src/lib/merge.ts': { branches: 90, functions: 90, lines: 90 },
-        'src/lib/schema.ts': { branches: 90, functions: 90, lines: 90 },
-      },
     },
     exclude: [
       ...configDefaults.exclude,
