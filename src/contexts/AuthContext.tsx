@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isGuest, setIsGuest] = useState(isGuestRef.current);
 
     // Dati da migrare da guest a Google al momento del link
-    const migrationDataRef = useRef<UserData | null>(null);
+    const migrationDataRef = useRef<UserData | 'DISCARD' | null>(null);
 
     const setUserData = useAppStore(state => state.setUserData);
     const setSyncing = useAppStore(state => state.setSyncing);
@@ -142,7 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     isGuestRef.current = false;
                     setIsGuest(false);
 
-                    const guestData = migrationDataRef.current || useAppStore.getState().userData;
+                    const guestData = migrationDataRef.current === 'DISCARD' ? null : (migrationDataRef.current || useAppStore.getState().userData);
                     migrationDataRef.current = null;
 
                     try {
@@ -227,8 +227,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [loadData, setSyncing, setUserData]);
 
     // Login con Google (dalla schermata di login, nessun guest precedente)
-    const login = useCallback(async () => {
+    const login = useCallback(async (keepGuestData: boolean = true) => {
         setSaveError(null);
+        if (!keepGuestData) {
+            migrationDataRef.current = 'DISCARD';
+        } else if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
+            migrationDataRef.current = useAppStore.getState().userData;
+        }
         try {
             await signInWithPopup(auth, provider);
         } catch (error: any) {
@@ -264,8 +269,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw error;
     }, [setSaveError]);
 
-    const loginWithEmail = useCallback(async (email: string, pass: string) => {
+    const loginWithEmail = useCallback(async (email: string, pass: string, keepGuestData: boolean = true) => {
         setSaveError(null);
+        if (!keepGuestData) {
+            migrationDataRef.current = 'DISCARD';
+        } else if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
+            migrationDataRef.current = useAppStore.getState().userData;
+        }
         try {
             await signInWithEmailAndPassword(auth, email, pass);
         } catch (error) {
@@ -273,9 +283,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [handleAuthError, setSaveError]);
 
-    const registerWithEmail = useCallback(async (email: string, pass: string) => {
+    const registerWithEmail = useCallback(async (email: string, pass: string, keepGuestData: boolean = true) => {
         setSaveError(null);
-        migrationDataRef.current = useAppStore.getState().userData;
+        if (!keepGuestData) {
+            migrationDataRef.current = 'DISCARD';
+        } else {
+            migrationDataRef.current = useAppStore.getState().userData;
+        }
         try {
             await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {

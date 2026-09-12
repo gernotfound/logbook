@@ -32,10 +32,10 @@ const TrainingExercises = () => {
 
     return (
         <div className="training-sub-view active">
-            {!isCreating && !editingExId && (
+            {!editingExId && (
                 <div className="mb-20">
-                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(true)}>
-                        Crea esercizio
+                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(!isCreating)}>
+                        {isCreating ? '- Crea esercizio' : '+ Crea esercizio'}
                     </button>
                 </div>
             )}

@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, X } from 'lucide-react';
 
-export const LoginBox = () => {
-    const { login, loginWithEmail, registerWithEmail, loginAsGuest } = useAuth();
+export const LoginBox = ({ onClose }: { onClose?: () => void }) => {
+    const { login, loginWithEmail, registerWithEmail, loginAsGuest, isGuest } = useAuth();
     const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -13,6 +13,7 @@ export const LoginBox = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [resetSent, setResetSent] = useState(false);
+    const [keepGuestData, setKeepGuestData] = useState(true);
     
     const { showAlert } = useDialogStore();
 
@@ -30,7 +31,7 @@ export const LoginBox = () => {
         setLoading(true);
         try {
             if (mode === 'login') {
-                await loginWithEmail(email, password);
+                await loginWithEmail(email, password, keepGuestData);
             } else if (mode === 'register') {
                 if (password !== confirmPassword) {
                     await showAlert("Le password non coincidono.");
@@ -43,7 +44,7 @@ export const LoginBox = () => {
                     setLoading(false);
                     return;
                 }
-                await registerWithEmail(email, password);
+                await registerWithEmail(email, password, keepGuestData);
             } else if (mode === 'forgot') {
                 if (!email) {
                     await showAlert("Inserisci la tua email.");
@@ -72,7 +73,26 @@ export const LoginBox = () => {
     };
 
     return (
-        <div id="auth-login-box" style={{ textAlign: 'center', width: '90%', maxWidth: '400px', margin: '0 auto', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+        <div id="auth-login-box" style={{ textAlign: 'center', width: '90%', maxWidth: '400px', margin: '0 auto', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', position: 'relative' }}>
+            {onClose && (
+                <button
+                    onClick={onClose}
+                    style={{
+                        position: 'absolute',
+                        top: '15px',
+                        right: '15px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '5px'
+                    }}
+                    aria-label="Chiudi"
+                >
+                    <X size={20} />
+                </button>
+            )}
+            
             <h1 style={{ color: 'var(--primary-color)', marginBottom: '10px' }}>LogBook</h1>
             <p style={{ marginBottom: '20px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
                 Accedi o registrati per sincronizzare i tuoi allenamenti sul cloud.
@@ -141,6 +161,21 @@ export const LoginBox = () => {
                     />
                 )}
                 
+                {isGuest && mode !== 'forgot' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', textAlign: 'left', marginTop: '5px' }}>
+                        <input 
+                            type="checkbox" 
+                            id="keep-guest-data" 
+                            checked={keepGuestData} 
+                            onChange={e => setKeepGuestData(e.target.checked)}
+                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary-color)' }}
+                        />
+                        <label htmlFor="keep-guest-data" style={{ fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+                            Salva i progressi della sessione locale
+                        </label>
+                    </div>
+                )}
+
                 <button 
                     type="submit" 
                     className="btn btn-primary" 
@@ -168,7 +203,7 @@ export const LoginBox = () => {
                 <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
             </div>
 
-            <button id="btn-login-google" type="button" className="btn" style={{ fontSize: '1rem', padding: '12px', width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--text-main)', marginBottom: '15px' }} onClick={login}>
+            <button id="btn-login-google" type="button" className="btn" style={{ fontSize: '1rem', padding: '12px', width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--text-main)', marginBottom: '15px' }} onClick={() => login(keepGuestData)}>
                 <svg style={{ width: '20px', height: '20px', marginRight: '10px', fill: 'currentColor', verticalAlign: 'middle' }} viewBox="0 0 24 24">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -178,18 +213,22 @@ export const LoginBox = () => {
                 Accedi con Google
             </button>
 
-            <button
-                id="btn-login-anonymous"
-                type="button"
-                className="btn"
-                style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.9rem', padding: '10px', textDecoration: 'underline' }}
-                onClick={loginAsGuest}
-            >
-                Continua senza account
-            </button>
-            <p style={{ marginTop: '5px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                I dati saranno salvati solo sul dispositivo.
-            </p>
+            {!onClose && (
+                <>
+                    <button
+                        id="btn-login-anonymous"
+                        type="button"
+                        className="btn"
+                        style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.9rem', padding: '10px', textDecoration: 'underline' }}
+                        onClick={loginAsGuest}
+                    >
+                        Continua senza account
+                    </button>
+                    <p style={{ marginTop: '5px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                        I dati saranno salvati solo sul dispositivo.
+                    </p>
+                </>
+            )}
         </div>
     );
 };
