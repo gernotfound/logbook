@@ -59,3 +59,6 @@ Solo la primissima lettera della frase va in maiuscolo. Le parole successive son
 ## Regola di consistenza
 
 Quando aggiungi un elemento di UI, assicurati che rispetti la densità, il contrasto e il feeling premium del tema dark glassmorphism.
+
+- **MUST:** Prestare massima attenzione alla sintassi CSS (chiusura corretta di tutte le parentesi graffe `}`). Un errore di sintassi silenzioso nel CSS rompe l'intero layout senza far fallire la build.
+- **MUST:** Durante un refactoring delle variabili CSS (es. l'estrazione in file di token dedicati), verificare minuziosamente che TUTTE le variabili originali (es. `--primary-dark`) siano migrate e caricate correttamente per evitare fallback del browser.
