@@ -44,8 +44,7 @@ export function syncHistoryMonths(batch: any, user: any, state: any, oldState: a
     });
 
     Object.keys(newHistMonths).forEach(month => {
-        const normalizedNewMonth = JSON.parse(JSON.stringify(newHistMonths[month]));
-        if (!deepEqual(normalizedNewMonth, oldHistMonths[month])) {
+        if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
             const cleanDoc = removeUndefinedValues(newHistMonths[month]);
             checkDocSize(cleanDoc, `History ${month}`);
             batch.set(doc(getDb(), "users", user.uid, "history_months", month), cleanDoc);

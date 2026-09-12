@@ -7,12 +7,12 @@ export interface AuthContextType {
     currentUser: User | null;
     loading: boolean;
     isGuest: boolean;
-    login: (keepGuestData?: boolean) => Promise<void>;
+    login: () => Promise<void>;
     loginAsGuest: () => Promise<void>;
     linkGoogleAccount: () => Promise<void>;
     logout: (options?: LogoutOptions) => Promise<void>;
-    loginWithEmail: (email: string, pass: string, keepGuestData?: boolean) => Promise<void>;
-    registerWithEmail: (email: string, pass: string, keepGuestData?: boolean) => Promise<void>;
+    loginWithEmail: (email: string, pass: string) => Promise<void>;
+    registerWithEmail: (email: string, pass: string) => Promise<void>;
 }
 
 export const defaultAuthContext: AuthContextType = {

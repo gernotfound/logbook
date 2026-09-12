@@ -5,7 +5,6 @@ import TrainingExercises from './TrainingExercises';
 import TrainingHistory from './TrainingHistory';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import type { WorkoutSession, TrainingSubTab } from '../../types';
-import SectionTabs from '../UI/SectionTabs';
 
 interface TrainingViewProps {
     subTab?: TrainingSubTab;
@@ -22,22 +21,21 @@ const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
         }
     };
 
-    const TRAINING_TABS = [
-        { value: 'session', label: 'Sessione' },
-        { value: 'planning', label: 'Pianificazione' },
-        { value: 'routines', label: 'Schede' },
-        { value: 'exercises', label: 'Esercizi' },
-        { value: 'history', label: 'Storico' },
-    ] as const;
+    const handleWheel = (e: any) => {
+        if (e.deltaY !== 0) {
+            e.currentTarget.scrollLeft += e.deltaY;
+        }
+    };
 
     return (
         <div id="view-training" className="view-section active">
-            <SectionTabs
-                value={subTab}
-                onChange={(val) => setSubTab?.(val)}
-                tabs={TRAINING_TABS}
-                ariaLabel="Sotto-menu Allenamento"
-            />
+            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Allenamento" onWheel={handleWheel}>
+                <button type="button" role="tab" aria-selected={subTab === 'session'} className={`sub-nav-btn ${subTab === 'session' ? 'active' : ''}`} onClick={() => setSubTab?.('session')}>Sessione</button>
+                <button type="button" role="tab" aria-selected={subTab === 'planning'} className={`sub-nav-btn ${subTab === 'planning' ? 'active' : ''}`} onClick={() => setSubTab?.('planning')}>Pianificazione</button>
+                <button type="button" role="tab" aria-selected={subTab === 'routines'} className={`sub-nav-btn ${subTab === 'routines' ? 'active' : ''}`} onClick={() => setSubTab?.('routines')}>Schede</button>
+                <button type="button" role="tab" aria-selected={subTab === 'exercises'} className={`sub-nav-btn ${subTab === 'exercises' ? 'active' : ''}`} onClick={() => setSubTab?.('exercises')}>Esercizi</button>
+                <button type="button" role="tab" aria-selected={subTab === 'history'} className={`sub-nav-btn ${subTab === 'history' ? 'active' : ''}`} onClick={() => setSubTab?.('history')}>Storico</button>
+            </div>
 
             {subTab === 'session' && (
                 <TrainingSession
