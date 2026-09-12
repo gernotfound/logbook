@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { RefreshCw, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { prepareForReload } from '../../lib/sync/reloadBarrier';
 import { isCurrentSession } from '../../lib/sync/session';
@@ -14,21 +15,16 @@ export const ReloadPrompt: React.FC = () => {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
-      if (r && typeof r.update === 'function') {
-        // Controllo periodico degli aggiornamenti SW ogni 60 minuti
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
+    onRegistered(registration) {
+      if (registration && typeof registration.update === 'function') {
+        if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = setInterval(() => {
-          if (r && typeof r.update === 'function') {
+          if (registration && typeof registration.update === 'function') {
             try {
-              const updateRes = r.update();
-              if (updateRes && typeof updateRes.catch === 'function') {
-                updateRes.catch(err => console.log('SW periodic update error:', err));
-              }
-            } catch (err) {
-              console.log('SW periodic update synchronous error:', err);
+              const result = registration.update();
+              if (result && typeof result.catch === 'function') result.catch(error => console.log('SW periodic update error:', error));
+            } catch (error) {
+              console.log('SW periodic update synchronous error:', error);
             }
           }
         }, 60 * 60 * 1000);
@@ -48,16 +44,13 @@ export const ReloadPrompt: React.FC = () => {
     return () => window.removeEventListener('vite:preloadError', handlePreloadError);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
+  useEffect(() => () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
   }, []);
 
-  // Al risveglio dell'app o cambio di visibilità, controlla la presenza di aggiornamenti
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (
@@ -68,32 +61,26 @@ export const ReloadPrompt: React.FC = () => {
         typeof navigator.serviceWorker.getRegistration === 'function'
       ) {
         try {
-          navigator.serviceWorker.getRegistration().then(reg => {
-            if (reg && typeof reg.update === 'function') {
+          navigator.serviceWorker.getRegistration().then(registration => {
+            if (registration && typeof registration.update === 'function') {
               try {
-                const updateRes = reg.update();
-                if (updateRes && typeof updateRes.catch === 'function') {
-                  updateRes.catch(err => console.log('SW visibility update error:', err));
-                }
-              } catch (err) {
-                console.log('SW visibility update synchronous error:', err);
+                const result = registration.update();
+                if (result && typeof result.catch === 'function') result.catch(error => console.log('SW visibility update error:', error));
+              } catch (error) {
+                console.log('SW visibility update synchronous error:', error);
               }
             }
           }).catch(() => {});
-        } catch (err) {
-          console.log('SW getRegistration error:', err);
+        } catch (error) {
+          console.log('SW getRegistration error:', error);
         }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  if (!needRefresh && !chunkFailed) {
-    return null;
-  }
+  if (!needRefresh && !chunkFailed) return null;
 
   const handleUpdate = async () => {
     if (updateInFlight.current) return;
@@ -105,8 +92,8 @@ export const ReloadPrompt: React.FC = () => {
       if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
       if (chunkFailed) window.location.reload();
       else await updateServiceWorker(true);
-    } catch (err) {
-      setUpdateError(err instanceof Error ? err.message : 'Aggiornamento non riuscito. Riprova.');
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : 'Aggiornamento non riuscito. Riprova.');
     } finally {
       updateInFlight.current = false;
       setUpdating(false);
@@ -118,68 +105,27 @@ export const ReloadPrompt: React.FC = () => {
     setChunkFailed(false);
   };
 
-  return (
-    <div
-      role="alert"
-      aria-live="polite"
-      aria-atomic="true"
-      className="reload-prompt-toast"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        alignItems: 'center',
-        textAlign: 'center'
-      }}
-    >
-      <div
-        style={{
-          fontWeight: 700,
-          fontSize: '1rem',
-          color: 'var(--text-main)',
-        }}
-      >
-        {chunkFailed ? 'Aggiornamento richiesto per caricare questa schermata' : 'Nuova versione disponibile'}
-      </div>
-      {updateError && <p role="alert" style={{ color: 'var(--danger-color)', margin: 0 }}>{updateError}</p>}
+  const heading = chunkFailed
+    ? 'Aggiornamento richiesto per caricare questa schermata'
+    : 'Nuova versione disponibile';
 
-      <div className="reload-prompt-actions" style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
-        <button
-          type="button"
-          aria-label="Aggiorna applicazione"
-          className="btn btn-primary btn-small"
-          onClick={handleUpdate}
-          disabled={updating}
-          style={{
-            flex: 1,
-            padding: '10px',
-            fontSize: '0.95rem',
-            margin: 0,
-            minHeight: '44px',
-            cursor: 'pointer',
-          }}
-        >
-          {updating ? 'Salvataggio…' : 'Aggiorna'}
+  return (
+    <aside role="alert" aria-live="polite" aria-atomic="true" className="reload-prompt-toast product-toast">
+      <div className="product-toast__icon"><RefreshCw size={19} aria-hidden="true" /></div>
+      <div className="product-toast__content">
+        <strong>{heading}</strong>
+        <span>{chunkFailed ? 'Aggiorna LogBook per caricare correttamente questa schermata.' : 'È pronta una versione più recente dell’app.'}</span>
+        {updateError && <span className="product-toast__error" role="alert">{updateError}</span>}
+      </div>
+      <div className="product-toast__actions">
+        <button type="button" aria-label="Aggiorna applicazione" className="btn btn-primary btn-small" onClick={handleUpdate} disabled={updating}>
+          <RefreshCw size={15} aria-hidden="true" /> {updating ? 'Salvataggio…' : 'Aggiorna'}
         </button>
-        <button
-          type="button"
-          aria-label="Chiudi notifica"
-          className="btn btn-secondary btn-small"
-          onClick={handleClose}
-          disabled={updating}
-          style={{
-            flex: 1,
-            padding: '10px',
-            fontSize: '0.95rem',
-            margin: 0,
-            minHeight: '44px',
-            cursor: 'pointer',
-          }}
-        >
-          Chiudi
+        <button type="button" aria-label="Chiudi notifica" className="product-toast__close" onClick={handleClose} disabled={updating}>
+          <X size={17} aria-hidden="true" />
         </button>
       </div>
-    </div>
+    </aside>
   );
 };
 

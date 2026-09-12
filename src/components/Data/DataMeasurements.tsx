@@ -1,7 +1,7 @@
 import React from 'react';
+import { ChevronLeft, ChevronRight, Clock3, Save, X } from 'lucide-react';
 import { shiftDateString } from '../../lib/utils/date';
 import { Logic } from '../../lib/logic';
-import { X } from 'lucide-react';
 
 interface DataMeasurementsProps {
     profile: any;
@@ -36,6 +36,30 @@ interface DataMeasurementsProps {
     calculateAndSave: (e?: any) => Promise<unknown>;
 }
 
+interface MeasurementFieldProps {
+    id: string;
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+}
+
+const MeasurementField = ({ id, label, value, onChange, placeholder }: MeasurementFieldProps) => (
+    <label className="field-stack measurement-field">
+        <span className="field-label">{label}</span>
+        <input
+            id={id}
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            placeholder={placeholder}
+            value={value}
+            onChange={event => onChange(event.target.value)}
+            onFocus={event => event.target.select()}
+        />
+    </label>
+);
+
 const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     profile,
     selectedDate,
@@ -67,8 +91,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     };
 
     const handleNextDay = () => {
-        if (!setSelectedDate) return;
-        if (activeDateStr === todayStr) return;
+        if (!setSelectedDate || activeDateStr === todayStr) return;
         setSelectedDate(shiftDateString(activeDateStr, 1));
     };
 
@@ -77,255 +100,94 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
     };
 
     return (
-        <div>
-            {/* Date Navigator */}
+        <div className="data-measurements-view">
             {setSelectedDate && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <button 
-                        className="btn btn-small" 
-                        onClick={handlePrevDay} 
-                        style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
-                    >
-                        ◀ Prec.
+                <div className="date-navigator" aria-label="Seleziona data misurazione">
+                    <button className="date-navigator__button" type="button" onClick={handlePrevDay} aria-label="Giorno precedente">
+                        <ChevronLeft size={18} aria-hidden="true" />
                     </button>
-                    <div 
-                        style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} 
-                        onClick={handleToday} 
-                        title="Torna a oggi"
-                    >
-                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                            {Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}
-                        </div>
-                        {activeDateStr === todayStr && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
-                        )}
-                    </div>
-                    <button 
-                        className="btn btn-small" 
-                        onClick={handleNextDay} 
-                        disabled={activeDateStr === todayStr} 
-                        style={{ 
-                            background: 'rgba(255,255,255,0.05)', 
-                            color: 'var(--text-main)', 
-                            opacity: activeDateStr === todayStr ? 0.3 : 1 
-                        }}
-                    >
-                        Succ. ▶
+                    <button className="date-navigator__current" type="button" onClick={handleToday} title="Torna a oggi">
+                        <span>{Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}</span>
+                        {activeDateStr === todayStr && <small>Oggi</small>}
+                    </button>
+                    <button className="date-navigator__button" type="button" onClick={handleNextDay} disabled={activeDateStr === todayStr} aria-label="Giorno successivo">
+                        <ChevronRight size={18} aria-hidden="true" />
                     </button>
                 </div>
             )}
 
-            <div id="measurement-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
-                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
-                    {isEditing ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
-                </h2>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                    Registra il tuo peso, la massa grassa e le circonferenze corporee.
-                </p>
-
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' }}>
-                <div style={{ flex: 1, minWidth: 0, maxWidth: '200px' }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Orario rilevazione</label>
-                    <div style={{ position: 'relative' }}>
-                        <input
-                            id="measure-time"
-                            type="time"
-                            value={measureTime}
-                            onChange={e => setMeasureTime(e.target.value)}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', paddingRight: '35px', margin: 0 }}
-                        />
-                        {measureTime && (
-                            <button
-                                type="button"
-                                onClick={() => setMeasureTime('')}
-                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
-                                aria-label="Cancella orario"
-                            >
-                                <X size={18} />
-                            </button>
-                        )}
+            <section id="measurement-form-card" className={`measurement-form ${isEditing ? 'is-editing' : ''}`}>
+                <header className="measurement-form__header">
+                    <div>
+                        <span className="page-header__eyebrow">Composizione corporea</span>
+                        <h2>{isEditing ? 'Modifica misurazione' : 'Nuova misurazione'}</h2>
+                        <p>Registra peso, massa grassa e circonferenze. I campi non necessari possono restare vuoti.</p>
                     </div>
-                </div>
-            </div>
+                </header>
 
+                <div className="measurement-time-row">
+                    <label className="field-stack measurement-time-field">
+                        <span className="field-label"><Clock3 size={14} aria-hidden="true" /> Orario rilevazione</span>
+                        <span className="measurement-time-control">
+                            <input id="measure-time" type="time" value={measureTime} onChange={event => setMeasureTime(event.target.value)} />
+                            {measureTime && (
+                                <button type="button" className="measurement-time-clear" onClick={() => setMeasureTime('')} aria-label="Cancella orario">
+                                    <X size={17} aria-hidden="true" />
+                                </button>
+                            )}
+                        </span>
+                    </label>
+                </div>
 
-            {/* SEZIONE 1: Dati principali */}
-            <h3 style={{color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px'}}>Dati principali</h3>
-            
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>Peso (kg)</label>
-                    <input 
-                        id="measure-weight" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        placeholder="0.0" 
-                        value={weight} 
-                        onChange={e => setWeight(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', margin: 0, lineHeight: 1 }}
-                    />
-                </div>
-                
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>BF % (Bilancia)</label>
-                    <input 
-                        id="measure-bf" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        placeholder="Opzionale" 
-                        value={manualBf} 
-                        onChange={e => setManualBf(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', fontWeight: 'bold', fontSize: '16px', padding: '10px', margin: 0, lineHeight: 1 }}
-                    />
-                </div>
-            </div>
-
-            {/* SEZIONE 2: Circonferenze opzionali */}
-            <h3 style={{color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px'}}>Misure circonferenze (opzionali)</h3>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                Se inserisci questi dati ma non la BF % dalla bilancia, la massa grassa verrà calcolata automaticamente (Metodo US Navy).
-            </p>
-
-            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Vita (cm)</label>
-                    <input 
-                        id="measure-waist" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={waist} 
-                        onChange={e => setWaist(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Collo (cm)</label>
-                    <input 
-                        id="measure-neck" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={neck} 
-                        onChange={e => setNeck(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-            </div>
-            
-            {profile.gender === 'F' && (
-                <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                    <div style={{ width: '50%', minWidth: 0 }}>
-                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Fianchi (cm)</label>
-                        <input 
-                            id="measure-hip" 
-                            type="number" 
-                            inputMode="decimal"
-                            step="0.1" 
-                            value={hip} 
-                            onChange={e => setHip(e.target.value)} 
-                            onFocus={e => e.target.select()}
-                            style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                        />
+                <section className="measurement-section">
+                    <div className="measurement-section__heading">
+                        <h3>Dati principali</h3>
+                        <span>Base</span>
                     </div>
-                </div>
-            )}
+                    <div className="form-grid form-grid--two">
+                        <MeasurementField id="measure-weight" label="Peso (kg)" value={weight} onChange={setWeight} placeholder="0.0" />
+                        <MeasurementField id="measure-bf" label="BF % (bilancia)" value={manualBf} onChange={setManualBf} placeholder="Opzionale" />
+                    </div>
+                </section>
 
-            <div style={{ width: '100%', height: '1px', background: 'var(--glass-border)', margin: '20px 0' }}></div>
-            <h3 style={{color: 'var(--text-muted)', marginBottom: '15px'}}>Altre misure (Bodybuilding)</h3>
+                <section className="measurement-section">
+                    <div className="measurement-section__heading">
+                        <h3>Circonferenze</h3>
+                        <span>Opzionali</span>
+                    </div>
+                    <p className="measurement-section__hint">Se la BF % non è disponibile, LogBook può stimarla con il metodo US Navy usando le circonferenze necessarie.</p>
+                    <div className="form-grid form-grid--two">
+                        <MeasurementField id="measure-waist" label="Vita (cm)" value={waist} onChange={setWaist} />
+                        <MeasurementField id="measure-neck" label="Collo (cm)" value={neck} onChange={setNeck} />
+                        {profile.gender === 'F' && <MeasurementField id="measure-hip" label="Fianchi (cm)" value={hip} onChange={setHip} />}
+                    </div>
+                </section>
 
-            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Torace (cm)</label>
-                    <input 
-                        id="measure-chest" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={chest} 
-                        onChange={e => setChest(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Spalle (cm)</label>
-                    <input 
-                        id="measure-shoulders" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={shoulders} 
-                        onChange={e => setShoulders(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-            </div>
+                <section className="measurement-section measurement-section--secondary">
+                    <div className="measurement-section__heading">
+                        <h3>Altre misure</h3>
+                        <span>Bodybuilding</span>
+                    </div>
+                    <div className="form-grid form-grid--two">
+                        <MeasurementField id="measure-chest" label="Torace (cm)" value={chest} onChange={setChest} />
+                        <MeasurementField id="measure-shoulders" label="Spalle (cm)" value={shoulders} onChange={setShoulders} />
+                        <MeasurementField id="measure-biceps" label="Braccia (cm)" value={biceps} onChange={setBiceps} />
+                        <MeasurementField id="measure-thighs" label="Cosce (cm)" value={thighs} onChange={setThighs} />
+                        <MeasurementField id="measure-calves" label="Polpacci (cm)" value={calves} onChange={setCalves} />
+                    </div>
+                </section>
 
-            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Braccia (cm)</label>
-                    <input 
-                        id="measure-biceps" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={biceps} 
-                        onChange={e => setBiceps(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Cosce (cm)</label>
-                    <input 
-                        id="measure-thighs" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={thighs} 
-                        onChange={e => setThighs(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-            </div>
-
-            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                <div style={{ width: '50%', minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Polpacci (cm)</label>
-                    <input 
-                        id="measure-calves" 
-                        type="number" 
-                        inputMode="decimal"
-                        step="0.1" 
-                        value={calves} 
-                        onChange={e => setCalves(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto', fontSize: '16px' }}
-                    />
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
-                {isEditing && (
-                    <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={handleCancelEdit}>
-                        Annulla
+                <div className="measurement-actions">
+                    {isEditing && (
+                        <button className="btn btn-secondary" type="button" onClick={handleCancelEdit}>Annulla</button>
+                    )}
+                    <button className="btn btn-primary" type="button" onClick={calculateAndSave}>
+                        <Save size={18} aria-hidden="true" />
+                        {isEditing ? 'Salva modifiche' : 'Salva misurazione'}
                     </button>
-                )}
-                <button className="btn btn-primary" style={{ flex: 2 }} onClick={calculateAndSave}>
-                    {isEditing ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva misurazione</>}
-                </button>
-            </div>
+                </div>
+            </section>
         </div>
-    </div>
     );
 };
 

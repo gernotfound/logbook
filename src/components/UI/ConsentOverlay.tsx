@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Download, HeartPulse, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
@@ -30,99 +31,58 @@ export const ConsentOverlay: React.FC = () => {
                 privacyVersion: LEGAL_VERSIONS.privacy,
                 termsVersion: LEGAL_VERSIONS.terms
             });
-            // App.tsx smonta l'overlay perché legalConsent è stato valorizzato.
         } catch {
             setIsSaving(false);
-            useDialogStore.getState().showAlert(
-                'Errore durante il salvataggio del consenso. Controlla la connessione e riprova.'
-            );
+            useDialogStore.getState().showAlert('Errore durante il salvataggio del consenso. Controlla la connessione e riprova.');
         }
     };
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(13, 13, 13, 0.95)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 99999,
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            padding: '16px',
-            overflowY: 'auto',
-        }}>
-            <div style={{
-                backgroundColor: 'var(--surface-color)',
-                border: '1px solid var(--glass-border)',
-                borderRadius: '16px',
-                maxWidth: '600px',
-                width: '100%',
-                marginTop: 'auto',
-                marginBottom: 'auto',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '20px'
-            }}>
-                <h2 style={{margin: 0, color: 'var(--text-main)'}}>
-                    Aggiornamento Termini e Privacy
-                </h2>
-                <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: '1.5' }}>
-                    Per continuare a utilizzare LogBook e per essere conformi alle normative europee sulla protezione dei dati (GDPR), ti chiediamo di leggere e accettare i nostri documenti legali e di acconsentire al trattamento dei tuoi dati.
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    {/* Checkbox 1: T&C e Privacy */}
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer' }}>
-                        <input
-                            type="checkbox"
-                            checked={acceptedTerms}
-                            onChange={(e) => setAcceptedTerms(e.target.checked)}
-                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary-color)', marginTop: '2px', flexShrink: 0 }}
-                        />
-                        <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
-                            Ho letto e accetto i <button className="btn-link" style={{ padding: 0, background: 'none', border: 'none', color: 'var(--primary-color)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.95rem' }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button> e l'<button className="btn-link" style={{ padding: 0, background: 'none', border: 'none', color: 'var(--primary-color)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.95rem' }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button>.
-                        </span>
-                    </label>
-
-                    {/* Checkbox 2: Dati Salute */}
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', padding: '16px', border: '2px solid rgba(255, 77, 109, 0.4)', borderRadius: '12px', backgroundColor: 'rgba(255, 77, 109, 0.05)' }}>
-                        <input
-                            type="checkbox"
-                            checked={acceptedHealth}
-                            onChange={(e) => setAcceptedHealth(e.target.checked)}
-                            style={{ width: '20px', height: '20px', accentColor: 'var(--primary-color)', marginTop: '2px', flexShrink: 0 }}
-                        />
-                        <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.4' }}>
-                            <strong>Consenso esplicito dati salute (Art. 9 GDPR):</strong> Acconsento al trattamento dei miei dati relativi alla salute (peso, misure corporee, parametri di allenamento e alimentazione) per le finalità esclusive di tracciamento e fornitura del servizio descritte nell'Informativa sulla Privacy. Questo consenso è essenziale per il funzionamento dell'app.
-                        </span>
-                    </label>
-                </div>
-
-                <button
-                    className="btn btn-primary"
-                    disabled={!acceptedTerms || !acceptedHealth || isSaving}
-                    onClick={handleAccept}
-                    style={{ padding: '14px', fontSize: '1rem', marginTop: '10px' }}
-                >
-                    {isSaving ? 'Salvataggio...' : 'Accetta e continua'}
-                </button>
-
-                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
-                    <p style={{ margin: '0 0 12px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        Se non desideri accettare, puoi comunque esercitare i tuoi diritti sui dati:
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }} onClick={handleExportCSV}>
-                            <span aria-hidden="true">📥</span> Esporta i miei dati (CSV)
-                        </button>
-                        <button className="btn" style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)' }} onClick={handleDeleteAccount}>
-                            <span aria-hidden="true">🗑️</span> {isGuest ? 'Elimina dati locali' : 'Elimina account permanentemente'}
-                        </button>
+        <div className="consent-overlay">
+            <section className="consent-card" aria-labelledby="consent-title">
+                <div className="consent-card__header">
+                    <div className="consent-card__icon"><ShieldCheck size={22} aria-hidden="true" /></div>
+                    <div>
+                        <span className="page-header__eyebrow">Privacy e salute</span>
+                        <h2 id="consent-title">Aggiornamento Termini e Privacy</h2>
+                        <p>Per continuare a utilizzare LogBook e rispettare la normativa europea sulla protezione dei dati, leggi e accetta i documenti legali e il trattamento dei dati necessari al servizio.</p>
                     </div>
                 </div>
 
-            </div>
+                <div className="consent-options">
+                    <label className={`consent-option ${acceptedTerms ? 'is-selected' : ''}`}>
+                        <input type="checkbox" checked={acceptedTerms} onChange={event => setAcceptedTerms(event.target.checked)} />
+                        <span className="consent-option__check" aria-hidden="true" />
+                        <span className="consent-option__copy">
+                            <strong>Termini e privacy</strong>
+                            <span>
+                                Ho letto e accetto i <button className="consent-link" type="button" onClick={event => { event.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button> e l'<button className="consent-link" type="button" onClick={event => { event.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button>.
+                            </span>
+                        </span>
+                    </label>
+
+                    <label className={`consent-option consent-option--health ${acceptedHealth ? 'is-selected' : ''}`}>
+                        <input type="checkbox" checked={acceptedHealth} onChange={event => setAcceptedHealth(event.target.checked)} />
+                        <span className="consent-option__check" aria-hidden="true" />
+                        <span className="consent-option__copy">
+                            <strong><HeartPulse size={16} aria-hidden="true" /> Consenso esplicito dati salute (Art. 9 GDPR)</strong>
+                            <span>Acconsento al trattamento dei dati relativi alla salute — peso, misure corporee, parametri di allenamento e alimentazione — esclusivamente per il tracciamento e la fornitura del servizio descritti nell'Informativa sulla Privacy. Questo consenso è essenziale per il funzionamento dell'app.</span>
+                        </span>
+                    </label>
+                </div>
+
+                <button className="btn btn-primary consent-primary" disabled={!acceptedTerms || !acceptedHealth || isSaving} onClick={handleAccept}>
+                    <ShieldCheck size={18} aria-hidden="true" /> {isSaving ? 'Salvataggio...' : 'Accetta e continua'}
+                </button>
+
+                <div className="consent-alternatives">
+                    <p>Se non desideri accettare, puoi comunque esercitare i tuoi diritti sui dati:</p>
+                    <div>
+                        <button className="btn btn-secondary" type="button" onClick={handleExportCSV}><Download size={18} /> Esporta i miei dati (CSV)</button>
+                        <button className="btn btn-danger" type="button" onClick={handleDeleteAccount}><Trash2 size={18} /> {isGuest ? 'Elimina dati locali' : 'Elimina account permanentemente'}</button>
+                    </div>
+                </div>
+            </section>
 
             {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
             {showTerms && <TermsAndConditions onClose={() => setShowTerms(false)} />}

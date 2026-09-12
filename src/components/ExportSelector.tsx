@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from 'react';
+import { Check, Search } from 'lucide-react';
 import Fuse from 'fuse.js';
 
 export type ExportSelection = 'all' | 'none' | string[];
@@ -31,13 +32,17 @@ export const ExportSelector = memo(function ExportSelector({
     const isCustom = Array.isArray(selection);
 
     return (
-        <fieldset style={{ border: 0, padding: 0, margin: '0 0 15px 0', minWidth: 0 }}>
-            <legend style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
-                {title}
-            </legend>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', minWidth: 0 }}>{title}</span>
+        <fieldset className="export-selector">
+            <legend className="sr-only">{title}</legend>
+            <div className="export-selector__header">
+                <div>
+                    <span className="export-selector__title">{title}</span>
+                    <span className="export-selector__summary">
+                        {selection === 'all' ? `${items.length} elementi` : selection === 'none' ? 'Escluso' : `${selectedIds.length} di ${items.length} selezionati`}
+                    </span>
+                </div>
                 <select
+                    className="export-selector__mode"
                     aria-label={`Modalità selezione ${title}`}
                     value={selection === 'all' ? 'all' : selection === 'none' ? 'none' : 'custom'}
                     onChange={(event) => {
@@ -45,50 +50,51 @@ export const ExportSelector = memo(function ExportSelector({
                         else if (event.target.value === 'none') onChange('none');
                         else onChange([]);
                     }}
-                    style={{ background: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '8px', fontSize: '16px', minHeight: '44px' }}
                 >
-                    <option value="all">Tutti ({items.length})</option>
-                    <option value="custom">Seleziona...</option>
+                    <option value="all">Tutti</option>
+                    <option value="custom">Seleziona</option>
                     <option value="none">Nessuno</option>
                 </select>
             </div>
 
             {isCustom && (
-                <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            {selectedIds.length} selezionati su {items.length}
-                        </span>
-                        {items.length > 5 && (
+                <div className="export-selector__panel">
+                    {items.length > 5 && (
+                        <label className="search-field export-selector__search">
+                            <Search size={17} aria-hidden="true" />
                             <input
                                 type="search"
                                 aria-label={`Cerca in ${title}`}
-                                placeholder="Cerca..."
+                                placeholder="Cerca elemento"
                                 value={searchQuery}
                                 onChange={event => setSearchQuery(event.target.value)}
-                                style={{ width: '150px', maxWidth: '100%', padding: '8px', fontSize: '16px', minHeight: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-main)' }}
                             />
-                        )}
-                    </div>
+                        </label>
+                    )}
 
-                    <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="export-selector__list">
                         {filteredItems.length === 0 ? (
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', padding: '8px 0' }}>Nessun elemento</span>
-                        ) : filteredItems.map(item => (
-                            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '44px', fontSize: '0.9rem', color: 'var(--text-main)', cursor: 'pointer' }}>
-                                <input
-                                    type="checkbox"
-                                    aria-label={item.name}
-                                    checked={selectedIds.includes(item.id)}
-                                    onChange={event => {
-                                        if (event.target.checked) onChange([...selectedIds, item.id]);
-                                        else onChange(selectedIds.filter(id => id !== item.id));
-                                    }}
-                                    style={{ width: '20px', height: '20px', accentColor: 'var(--primary-color)' }}
-                                />
-                                <span style={{ minWidth: 0 }}>{item.name}</span>
-                            </label>
-                        ))}
+                            <span className="export-selector__empty">Nessun elemento corrispondente.</span>
+                        ) : filteredItems.map(item => {
+                            const checked = selectedIds.includes(item.id);
+                            return (
+                                <label key={item.id} className={`export-selector__item ${checked ? 'is-selected' : ''}`}>
+                                    <input
+                                        type="checkbox"
+                                        aria-label={item.name}
+                                        checked={checked}
+                                        onChange={event => {
+                                            if (event.target.checked) onChange([...selectedIds, item.id]);
+                                            else onChange(selectedIds.filter(id => id !== item.id));
+                                        }}
+                                    />
+                                    <span className="export-selector__check" aria-hidden="true">
+                                        {checked && <Check size={14} />}
+                                    </span>
+                                    <span className="export-selector__item-name">{item.name}</span>
+                                </label>
+                            );
+                        })}
                     </div>
                 </div>
             )}

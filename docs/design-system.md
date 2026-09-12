@@ -23,19 +23,24 @@ Lo styling resta **CSS nativo**. Tailwind non è ammesso.
 
 Ordine di caricamento:
 
-1. `src/styles/global.css` — compatibilità e stili storici ancora in migrazione;
-2. `src/styles/tokens.css` — design tokens e alias legacy;
-3. `src/styles/modern.css` — componenti, layout e override moderni.
+1. `src/styles/global.css` — compatibility layer storico;
+2. `src/styles/tokens.css` — design token, colori semantici, spacing, radius, shadow e motion;
+3. `src/styles/modern.css` — primitive e layout moderni condivisi;
+4. `src/styles/product-polish.css` — pattern di prodotto condivisi (auth, form surface, empty state, export selector, legacy normalization);
+5. `src/styles/shell.css` / `overlays.css` — shell PWA, banner, prompt, consenso e dialog;
+6. fogli di dominio (`workout.css`, `workout-start.css`, `nutrition.css`, `measurement.css`, `settings.css`) — composizioni specifiche della singola area funzionale.
 
-Questa stratificazione è intenzionale: consente una migrazione progressiva senza riscrivere contemporaneamente tutte le schermate e riduce il rischio di regressioni.
+Questa stratificazione separa tre responsabilità: **token → primitive → composizioni di dominio**. Evita sia un singolo foglio globale monolitico sia CSS duplicato dentro i componenti.
 
 ### Regola di evoluzione
 
 - Nuovi valori visuali condivisi MUST nascere come token in `tokens.css`.
-- Nuove primitive riusabili SHOULD essere definite in `modern.css`.
-- `global.css` è compatibility baseline: evitare di aggiungervi nuovi pattern se esiste un equivalente moderno.
+- Nuove primitive riusabili SHOULD essere definite in `modern.css` o `product-polish.css`.
+- Le composizioni legate a un dominio (es. riga serie workout) SHOULD stare nel relativo foglio di dominio.
+- `global.css` è compatibility baseline: non aggiungere nuovi pattern se esiste un equivalente moderno.
 - Stili inline statici SHOULD essere migrati verso classi semantiche quando il componente viene modificato.
-- Stili inline sono ammessi per valori realmente dinamici calcolati a runtime.
+- Stili inline sono ammessi per valori realmente dinamici calcolati a runtime (es. percentuali di progresso).
+- Evitare selettori globali aggressivi quando una classe semantica permette di isolare meglio il comportamento.
 
 ## Token principali
 
@@ -83,16 +88,15 @@ Font stack: Inter se disponibile, quindi system UI.
 - Metriche: numeri tabulari quando cambiano frequentemente.
 - Corpo: alta leggibilità e line-height generosa.
 - Input/select/textarea: `font-size: 16px !important` per prevenire zoom iOS.
+- Eyebrow e metadata possono usare uppercase solo come micro-label, non come titolo principale.
 
-Le utility `.text-xs`, `.text-sm`, `.text-md`, `.text-base`, `.text-lg`, `.text-xl` restano valide.
+## Componenti e pattern
 
-## Componenti
+### Surface
 
-### Card / surface
+Le card sono riservate a contenuti che beneficiano realmente di un confine visivo: widget dashboard, riepiloghi, editor ad alta densità, dialog e impostazioni raggruppate.
 
-Le card sono riservate a contenuti che beneficiano realmente di un confine visivo: widget dashboard, grafici, dialog, elementi riassuntivi.
-
-Le sezioni lunghe di form o editor usano preferibilmente `.section-divider` / `.section-divider-last`, evitando il pattern "box dentro box".
+Le liste lunghe devono evitare il pattern "box dentro box". All'interno di una surface, usare divider, righe e chips leggere.
 
 `backdrop-filter` non va applicato alle card normali: il blur è riservato a elementi flottanti o overlay.
 
@@ -106,11 +110,15 @@ Gerarchia:
 4. `.btn-success` — conferma positiva quando semanticamente necessario;
 5. `.btn-icon` — azione iconica.
 
-Touch target principale: almeno 44×44 px.
+Touch target principale: almeno 44×44 px. Un'azione distruttiva non deve sembrare primaria.
 
 ### Form
 
-Input, select e textarea condividono altezza, radius, superficie e focus ring. Gli errori devono essere visibili senza affidarsi solo al colore.
+Input, select e textarea condividono altezza, radius, superficie e focus ring. Gli errori devono essere visibili senza affidarsi solo al colore. Form numerici ad alta frequenza possono essere più densi, ma non sotto i target touch mobile.
+
+### Empty state
+
+Usare `.empty-state` per assenza di dati rilevante: icona, titolo, descrizione breve ed eventuale CTA. Evitare messaggi isolati persi dentro grandi superfici vuote.
 
 ### Navigazione principale
 
@@ -118,7 +126,27 @@ La bottom navigation è flottante sopra il canvas nero. L'elemento attivo usa un
 
 ### Sotto-navigazione
 
-`.sub-nav` + `.sub-nav-btn` rappresentano il pattern standard per i tab interni di Allenamento, Nutrizione e Dati.
+`.sub-nav` + `.sub-nav-btn` rappresentano il pattern standard per i tab interni di Allenamento, Nutrizione, Dati e Impostazioni.
+
+### Settings
+
+Le impostazioni usano `settings-group` e `settings-row`: icona → titolo/descrizione → stato o azione. Backup, privacy, diagnostica e account non devono inventare layout indipendenti.
+
+### Overlay e prompt
+
+Dialog, prompt PWA e consenso legale condividono profondità, radius, contrasto e focus ring. I dialog bloccanti devono mantenere focus trap e ripristino del focus.
+
+## Sessione allenamento
+
+La sessione è il flusso a priorità UX più alta.
+
+- esercizio come surface dedicata;
+- titolo e posizione immediatamente visibili;
+- storico/setup come pannelli secondari;
+- righe serie compatte con input allineati;
+- dropset/isometrie gerarchizzati, non trattati come nuove card;
+- azioni di aggiunta/rimozione riconoscibili ma non dominanti;
+- note della sessione sempre associate all'esercizio corretto.
 
 ## Invariante workout timer
 
@@ -135,6 +163,14 @@ Durante una sessione attiva:
 - **MUST:** preservare persistenza device-local e ricalcolo tramite `Date.now()` al ritorno dal background;
 - **MUST:** preservare il Wake Lock della sessione attiva;
 - icone: `lucide-react`, non emoji.
+
+## Nutrizione
+
+Gerarchia standard: **totale giornaliero → macro → ricerca/logging → pasti → dettaglio**. I colori dei macro sono indicatori secondari; i valori devono restare leggibili anche senza colore.
+
+## Dati
+
+Le misurazioni usano numeri tabulari e gruppi di campi espliciti. Lo storico privilegia data e metriche principali, con azioni secondarie in menu contestuale.
 
 ## Motion
 
@@ -154,13 +190,14 @@ Motion breve e informativa:
 - safe-area iOS rispettata per timer, banner e bottom navigation;
 - nessuno scroll orizzontale involontario a 320 px;
 - contrasto verificato soprattutto per primary pieno, testi muted e stati semantici;
-- non affidarsi soltanto al colore per indicare stato o errore.
+- non affidarsi soltanto al colore per indicare stato o errore;
+- gli overlay bloccanti devono esporre ruoli/label appropriati.
 
 Viewport di verifica minime: 320, 375, 390/430 e 600 px.
 
 ## Iconografia
 
-Usare `lucide-react`, di norma 20–24 px. Le icone devono accompagnare una gerarchia chiara e non sostituire label necessarie all'accessibilità.
+Usare `lucide-react`, di norma 16–24 px in base al contesto. Gli emoji non sono controlli UI: possono essere contenuto editoriale, ma toolbar, menu, bottoni e stati di sistema usano icone vettoriali coerenti.
 
 ## Testo UI
 

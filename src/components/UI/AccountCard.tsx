@@ -1,15 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Cloud, Eye, EyeOff, KeyRound, Link2, LogOut, Mail, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
 import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, reauthenticateWithPopup } from '../../lib/firebase';
-import { Eye, EyeOff } from 'lucide-react';
 
 export const AccountCard = () => {
     const { currentUser, isGuest, linkGoogleAccount, registerWithEmail } = useAuth();
     const { handleLogout } = useSettings();
     const { showAlert } = useDialogStore();
-
     const [loadingAction, setLoadingAction] = useState<string | null>(null);
     const [showReauthModal, setShowReauthModal] = useState<'email' | 'password' | 'linkEmail' | 'guestRegister' | null>(null);
     const [currentPasswordInput, setCurrentPasswordInput] = useState('');
@@ -20,36 +19,45 @@ export const AccountCard = () => {
 
     const providers = useMemo(() => {
         if (!currentUser) return [];
-        return (currentUser.providerData || []).map(p => p.providerId);
+        return (currentUser.providerData || []).map(item => item.providerId);
     }, [currentUser]);
-
     const hasGoogle = providers.includes('google.com');
     const hasPassword = providers.includes('password');
 
     const checkPasswordStrength = (pass: string) => {
-        if (pass.length < 8) return "La password deve contenere almeno 8 caratteri.";
-        if (!/\d/.test(pass)) return "La password deve contenere almeno 1 numero.";
-        if (!/[a-z]/.test(pass)) return "La password deve contenere almeno 1 lettera minuscola.";
-        if (!/[A-Z]/.test(pass)) return "La password deve contenere almeno 1 lettera maiuscola.";
-        if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
+        if (pass.length < 8) return 'La password deve contenere almeno 8 caratteri.';
+        if (!/\d/.test(pass)) return 'La password deve contenere almeno 1 numero.';
+        if (!/[a-z]/.test(pass)) return 'La password deve contenere almeno 1 lettera minuscola.';
+        if (!/[A-Z]/.test(pass)) return 'La password deve contenere almeno 1 lettera maiuscola.';
+        if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return 'La password deve contenere almeno 1 carattere speciale.';
         return null;
+    };
+
+    const resetModal = () => {
+        setShowReauthModal(null);
+        setCurrentPasswordInput('');
+        setNewEmailInput('');
+        setNewPasswordInput('');
+        setShowCurrentPassword(false);
+        setShowNewPassword(false);
     };
 
     const handleReauthenticate = async () => {
         if (!currentUser || !currentUser.email) return false;
         try {
             if (hasPassword && currentPasswordInput) {
-                const cred = EmailAuthProvider.credential(currentUser.email, currentPasswordInput);
-                await reauthenticateWithCredential(currentUser, cred);
+                const credential = EmailAuthProvider.credential(currentUser.email, currentPasswordInput);
+                await reauthenticateWithCredential(currentUser, credential);
                 return true;
-            } else if (hasGoogle && !hasPassword) {
+            }
+            if (hasGoogle && !hasPassword) {
                 await reauthenticateWithPopup(currentUser, provider);
                 return true;
             }
             return false;
         } catch (error: any) {
-            console.error("Reauth error", error);
-            await showAlert("Autenticazione fallita. Controlla la password attuale.");
+            console.error('Reauth error', error);
+            await showAlert('Autenticazione fallita. Controlla la password attuale.');
             return false;
         }
     };
@@ -57,7 +65,6 @@ export const AccountCard = () => {
     const submitReauth = async () => {
         if (!currentUser) return;
         setLoadingAction('reauth');
-        
         const isReauthSuccess = await handleReauthenticate();
         if (!isReauthSuccess) {
             setLoadingAction(null);
@@ -67,47 +74,36 @@ export const AccountCard = () => {
         try {
             if (showReauthModal === 'email') {
                 if (!newEmailInput || !newEmailInput.includes('@')) {
-                    await showAlert("Email non valida.");
-                    setLoadingAction(null);
+                    await showAlert('Email non valida.');
                     return;
                 }
                 await updateEmail(currentUser, newEmailInput);
-                await showAlert("Email aggiornata con successo.");
+                await showAlert('Email aggiornata con successo.');
             } else if (showReauthModal === 'password' || showReauthModal === 'linkEmail') {
                 const weakError = checkPasswordStrength(newPasswordInput);
                 if (weakError) {
                     await showAlert(weakError);
-                    setLoadingAction(null);
                     return;
                 }
-                
                 if (showReauthModal === 'password') {
                     await updatePassword(currentUser, newPasswordInput);
-                    await showAlert("Password aggiornata con successo.");
+                    await showAlert('Password aggiornata con successo.');
                 } else {
-                    const cred = EmailAuthProvider.credential(currentUser.email || '', newPasswordInput);
+                    const credential = EmailAuthProvider.credential(currentUser.email || '', newPasswordInput);
                     try {
-                        await linkWithCredential(currentUser, cred);
-                        await showAlert("Email e password collegate con successo.");
+                        await linkWithCredential(currentUser, credential);
+                        await showAlert('Email e password collegate con successo.');
                     } catch (linkError: any) {
-                        if (linkError.code === 'auth/credential-already-in-use') {
-                            await showAlert("Questa email è già associata a un altro account.");
-                        } else {
-                            throw linkError;
-                        }
+                        if (linkError.code === 'auth/credential-already-in-use') await showAlert('Questa email è già associata a un altro account.');
+                        else throw linkError;
                     }
                 }
             }
-            setShowReauthModal(null);
-            setCurrentPasswordInput('');
-            setNewEmailInput('');
-            setNewPasswordInput('');
-            setShowCurrentPassword(false);
-            setShowNewPassword(false);
-            window.location.reload(); // Ricarica per aggiornare stato utente pulito
+            resetModal();
+            window.location.reload();
         } catch (error: any) {
-            console.error("Action error", error);
-            await showAlert("Errore durante l'operazione: " + error.message);
+            console.error('Action error', error);
+            await showAlert('Errore durante l’operazione: ' + error.message);
         } finally {
             setLoadingAction(null);
         }
@@ -118,14 +114,11 @@ export const AccountCard = () => {
         try {
             setLoadingAction('linkGoogle');
             await linkWithPopup(currentUser, provider);
-            await showAlert("Account Google collegato con successo!");
+            await showAlert('Account Google collegato con successo!');
             window.location.reload();
         } catch (error: any) {
-            if (error.code === 'auth/credential-already-in-use') {
-                await showAlert("Questo account Google è già collegato a un altro utente.");
-            } else {
-                await showAlert("Errore durante il collegamento di Google.");
-            }
+            if (error.code === 'auth/credential-already-in-use') await showAlert('Questo account Google è già collegato a un altro utente.');
+            else await showAlert('Errore durante il collegamento di Google.');
         } finally {
             setLoadingAction(null);
         }
@@ -138,161 +131,159 @@ export const AccountCard = () => {
             return;
         }
         if (!newEmailInput || !newEmailInput.includes('@')) {
-            await showAlert("Email non valida.");
+            await showAlert('Email non valida.');
             return;
         }
         setLoadingAction('guestRegister');
         try {
             await registerWithEmail(newEmailInput, newPasswordInput);
-            // La migrazione avviene automaticamente in onAuthStateChanged
             window.location.reload();
         } catch (error: any) {
             setLoadingAction(null);
-            // Errori gestiti da AuthContext (handleAuthError)
-            console.error("Registrazione guest fallita", error);
+            console.error('Registrazione guest fallita', error);
         }
+    };
+
+    const modalTitle = showReauthModal === 'guestRegister'
+        ? 'Crea account'
+        : showReauthModal === 'email'
+            ? 'Cambia email'
+            : showReauthModal === 'password'
+                ? 'Cambia password'
+                : 'Crea password';
+
+    const renderAccountModal = () => {
+        if (!showReauthModal) return null;
+        const isGuestRegister = showReauthModal === 'guestRegister';
+        return (
+            <div className="account-modal-overlay" role="presentation">
+                <section className="account-modal" role="dialog" aria-modal="true" aria-label={modalTitle}>
+                    <div className="account-modal__header">
+                        <div className="account-modal__icon"><KeyRound size={19} aria-hidden="true" /></div>
+                        <div>
+                            <h3>{modalTitle}</h3>
+                            <p>{isGuestRegister ? 'I dati locali verranno collegati al nuovo account cloud.' : 'Per sicurezza potrebbe essere richiesta una nuova autenticazione.'}</p>
+                        </div>
+                    </div>
+
+                    <div className="account-modal__fields">
+                        {(isGuestRegister || showReauthModal === 'email') && (
+                            <label className="auth-field">
+                                <Mail size={17} aria-hidden="true" />
+                                <input
+                                    type="email"
+                                    placeholder={isGuestRegister ? 'La tua email' : 'Nuova email'}
+                                    value={newEmailInput}
+                                    onChange={event => setNewEmailInput(event.target.value)}
+                                    autoComplete="email"
+                                />
+                            </label>
+                        )}
+
+                        {(isGuestRegister || showReauthModal === 'password' || showReauthModal === 'linkEmail') && (
+                            <label className="auth-field auth-field--password">
+                                <KeyRound size={17} aria-hidden="true" />
+                                <input
+                                    type={showNewPassword ? 'text' : 'password'}
+                                    placeholder="Nuova password"
+                                    value={newPasswordInput}
+                                    onChange={event => setNewPasswordInput(event.target.value)}
+                                    autoComplete="new-password"
+                                />
+                                <button type="button" className="auth-password-toggle" onClick={() => setShowNewPassword(value => !value)} aria-label={showNewPassword ? 'Nascondi nuova password' : 'Mostra nuova password'}>
+                                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </label>
+                        )}
+
+                        {!isGuestRegister && hasPassword && (
+                            <label className="auth-field auth-field--password">
+                                <ShieldCheck size={17} aria-hidden="true" />
+                                <input
+                                    type={showCurrentPassword ? 'text' : 'password'}
+                                    placeholder="Password attuale"
+                                    value={currentPasswordInput}
+                                    onChange={event => setCurrentPasswordInput(event.target.value)}
+                                    autoComplete="current-password"
+                                />
+                                <button type="button" className="auth-password-toggle" onClick={() => setShowCurrentPassword(value => !value)} aria-label={showCurrentPassword ? 'Nascondi password attuale' : 'Mostra password attuale'}>
+                                    {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </label>
+                        )}
+                    </div>
+
+                    <div className="account-modal__actions">
+                        <button className="btn btn-secondary" type="button" onClick={resetModal}>Annulla</button>
+                        <button className="btn btn-primary" type="button" onClick={isGuestRegister ? onGuestRegister : submitReauth} disabled={isGuestRegister ? loadingAction === 'guestRegister' : !!loadingAction}>
+                            {(loadingAction === 'guestRegister' || loadingAction === 'reauth') ? 'Attendere...' : (isGuestRegister ? 'Registrati' : 'Conferma')}
+                        </button>
+                    </div>
+                </section>
+            </div>
+        );
     };
 
     if (isGuest) {
         return (
-            <div className="card">
-                <h2 style={{color: 'var(--warning-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
-                <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
-                    Stai usando LogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <button className="btn btn-primary" onClick={linkGoogleAccount}>
-                        Crea account con Google
-                    </button>
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => setShowReauthModal('guestRegister')}>
-                        Crea account con Email e Password
-                    </button>
-                    <hr style={{ border: 'none', borderTop: '1px solid var(--glass-border)', margin: '10px 0' }} />
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dalla modalità locale</button>
-                </div>
-                
-                {showReauthModal === 'guestRegister' && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ background: 'var(--surface-color)', padding: '20px', borderRadius: '12px', width: '90%', maxWidth: '350px', border: '1px solid var(--glass-border)' }}>
-                            <h3 style={{ marginTop: 0 }}>Crea Account</h3>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>I tuoi dati locali verranno salvati sul cloud.</p>
-                            
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
-                                <input type="email" placeholder="La tua Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
-                                
-                                <div style={{ position: 'relative' }}>
-                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
-                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                    </button>
-                                </div>
-                                
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                    <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => { setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
-                                    <button className="btn btn-primary" style={{ flex: 1 }} onClick={onGuestRegister} disabled={loadingAction === 'guestRegister'}>
-                                        {loadingAction === 'guestRegister' ? 'Attendere...' : 'Registrati'}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+            <section className="account-card account-card--guest">
+                <div className="account-card__header">
+                    <div className="account-avatar account-avatar--guest"><UserRound size={20} aria-hidden="true" /></div>
+                    <div>
+                        <span className="account-card__eyebrow">Modalità locale</span>
+                        <h2>Dati solo su questo dispositivo</h2>
+                        <p>Puoi continuare offline oppure creare un account e portare con te i dati già registrati.</p>
                     </div>
-                )}
-            </div>
+                </div>
+                <div className="account-actions">
+                    <button className="btn btn-primary" type="button" onClick={linkGoogleAccount}><Cloud size={18} /> Crea account con Google</button>
+                    <button className="btn btn-secondary" type="button" onClick={() => setShowReauthModal('guestRegister')}><Mail size={18} /> Crea account con Email e Password</button>
+                    <button className="btn account-logout" type="button" onClick={handleLogout}><LogOut size={18} /> Esci dalla modalità locale</button>
+                </div>
+                {renderAccountModal()}
+            </section>
         );
     }
 
     return (
-        <div className="card">
-            <h2 style={{color: 'var(--primary-color)',marginTop: 0}}>Il tuo Account</h2>
-            
-            {currentUser && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                    {currentUser.photoURL ? (
-                        <img src={currentUser.photoURL} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
-                    ) : (
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-color)', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                            {currentUser.email?.charAt(0).toUpperCase()}
-                        </div>
-                    )}
-                    <div>
-                        <div style={{ fontWeight: 'bold' }}>{currentUser.displayName || 'Utente LogBook'}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
-                    </div>
-                </div>
-            )}
-
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '10px', marginBottom: '15px' }}>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Metodi di accesso collegati:</div>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    {hasGoogle && <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Google</span>}
-                    {hasPassword && <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Email / Password</span>}
+        <section className="account-card">
+            <div className="account-card__header">
+                {currentUser?.photoURL ? (
+                    <img className="account-avatar" src={currentUser.photoURL} alt="Avatar" />
+                ) : (
+                    <div className="account-avatar">{currentUser?.email?.charAt(0).toUpperCase() || <UserRound size={20} />}</div>
+                )}
+                <div className="account-card__identity">
+                    <span className="account-card__eyebrow">Il tuo account</span>
+                    <h2>{currentUser?.displayName || 'Utente LogBook'}</h2>
+                    <p>{currentUser?.email}</p>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="account-providers">
+                <span className="account-providers__label">Metodi di accesso</span>
+                <div>
+                    {hasGoogle && <span><Cloud size={13} /> Google</span>}
+                    {hasPassword && <span><Mail size={13} /> Email / Password</span>}
+                </div>
+            </div>
+
+            <div className="account-actions">
                 {hasPassword && (
                     <>
-                        <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Indirizzo Email</button>
-                        <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => { setShowReauthModal('password'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Password</button>
+                        <button className="btn btn-secondary" type="button" onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}><Mail size={18} /> Cambia indirizzo email</button>
+                        <button className="btn btn-secondary" type="button" onClick={() => { setShowReauthModal('password'); setShowCurrentPassword(false); setShowNewPassword(false); }}><KeyRound size={18} /> Cambia password</button>
                     </>
                 )}
-
                 {!hasGoogle && (
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={onLinkGoogle} disabled={loadingAction === 'linkGoogle'}>
-                        {loadingAction === 'linkGoogle' ? 'Collegamento...' : 'Collega Account Google'}
-                    </button>
+                    <button className="btn btn-secondary" type="button" onClick={onLinkGoogle} disabled={loadingAction === 'linkGoogle'}><Link2 size={18} /> {loadingAction === 'linkGoogle' ? 'Collegamento...' : 'Collega Account Google'}</button>
                 )}
-
                 {!hasPassword && (
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => { setShowReauthModal('linkEmail'); setShowCurrentPassword(false); setShowNewPassword(false); }}>
-                        Crea Password per accedere con Email
-                    </button>
+                    <button className="btn btn-secondary" type="button" onClick={() => { setShowReauthModal('linkEmail'); setShowCurrentPassword(false); setShowNewPassword(false); }}><KeyRound size={18} /> Crea password per accedere con Email</button>
                 )}
-
-                <hr style={{ border: 'none', borderTop: '1px solid var(--glass-border)', margin: '10px 0' }} />
-                <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => handleLogout()}>Esci dall'account</button>
+                <button className="btn account-logout" type="button" onClick={() => handleLogout()}><LogOut size={18} /> Esci dall'account</button>
             </div>
-
-            {showReauthModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ background: 'var(--surface-color)', padding: '20px', borderRadius: '12px', width: '90%', maxWidth: '350px', border: '1px solid var(--glass-border)' }}>
-                        <h3 style={{ marginTop: 0 }}>
-                            {showReauthModal === 'email' ? 'Cambia Email' : showReauthModal === 'password' ? 'Cambia Password' : 'Crea Password'}
-                        </h3>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
-                            {showReauthModal === 'email' && (
-                                <input type="email" placeholder="Nuova Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
-                            )}
-                            
-                            {(showReauthModal === 'password' || showReauthModal === 'linkEmail') && (
-                                <div style={{ position: 'relative' }}>
-                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
-                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                    </button>
-                                </div>
-                            )}
-                            
-                            {hasPassword && (
-                                <div style={{ position: 'relative' }}>
-                                    <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} autoComplete="current-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
-                                    <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                        {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                    </button>
-                                </div>
-                            )}
-                            
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => { setShowReauthModal(null); setCurrentPasswordInput(''); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
-                                <button className="btn btn-primary" style={{ flex: 1 }} onClick={submitReauth} disabled={!!loadingAction}>
-                                    {loadingAction === 'reauth' ? 'Attendere...' : 'Conferma'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+            {renderAccountModal()}
+        </section>
     );
 };

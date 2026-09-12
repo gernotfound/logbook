@@ -1,7 +1,7 @@
 import React from 'react';
+import { CalendarDays, Moon, Percent, Pencil, Ruler, Scale, Trash2 } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 import { ContextMenu } from '../UI/ContextMenu';
-import { Pencil, Trash2 } from 'lucide-react';
 
 interface DataHistoryProps {
     measurementsHistory: any[];
@@ -17,69 +17,80 @@ const DataHistory: React.FC<DataHistoryProps> = ({
     onDeleteMeasurement
 }) => {
     return (
-        <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <h1 style={{margin: 0}}>Storico misurazioni ({measurementsHistory.length})</h1>
-            </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                Tutte le misurazioni registrate in ordine cronologico. Usa le opzioni per modificare o eliminare una misurazione.
-            </p>
+        <div className="data-history-view">
+            <header className="page-header page-header--compact">
+                <div>
+                    <span className="page-header__eyebrow">Progressi</span>
+                    <h1 className="page-header__title">Storico misurazioni</h1>
+                    <p className="page-header__description">
+                        {measurementsHistory.length} {measurementsHistory.length === 1 ? 'rilevazione registrata' : 'rilevazioni registrate'} nel tuo diario corporeo.
+                    </p>
+                </div>
+            </header>
 
             {measurementsHistory.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '10px' }}>📏</div>
-                    <p style={{ margin: 0 }}>Nessuna misurazione registrata finora.</p>
+                <div className="empty-state">
+                    <div className="empty-state__icon"><Ruler size={22} aria-hidden="true" /></div>
+                    <h2>Nessuna misurazione</h2>
+                    <p>Le rilevazioni di peso, massa grassa e circonferenze compariranno qui.</p>
                 </div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {measurementsHistory.map((day: any, idx: number) => (
-                        <div 
-                            key={day.date ? `${day.date}-${day.measurementTime || ''}-${idx}` : `hist-${idx}`} 
-                            className="card" 
-                            style={{ 
-                                padding: '15px', 
-                                marginBottom: 0, 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center', 
-                                cursor: 'pointer',
-                                borderLeft: editingDate === day.date ? '4px solid var(--primary-color)' : '1px solid var(--glass-border)',
-                                transition: 'all 0.2s ease'
-                            }}
-                            onClick={() => onSelectEdit(day)}
-                        >
-                            <div>
-                                <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: editingDate === day.date ? 'var(--primary-color)' : 'white' }}>
-                                    📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date} {day.measurementTime ? `alle ${day.measurementTime}` : ''}
+                <div className="history-list">
+                    {measurementsHistory.map((day: any, idx: number) => {
+                        const isEditing = editingDate === day.date;
+                        return (
+                            <article
+                                key={day.date ? `${day.date}-${day.measurementTime || ''}-${idx}` : `hist-${idx}`}
+                                className={`history-entry ${isEditing ? 'is-active' : ''}`}
+                                onClick={() => onSelectEdit(day)}
+                            >
+                                <div className="history-entry__main">
+                                    <div className="history-entry__date">
+                                        <CalendarDays size={16} aria-hidden="true" />
+                                        <span>{Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date}</span>
+                                        {day.measurementTime && <span className="history-entry__time">· {day.measurementTime}</span>}
+                                    </div>
+                                    <div className="history-entry__metrics">
+                                        {day.weight && (
+                                            <span className="history-metric history-metric--primary">
+                                                <Scale size={14} aria-hidden="true" /><strong>{day.weight} kg</strong>
+                                            </span>
+                                        )}
+                                        {day.bf && (
+                                            <span className="history-metric">
+                                                <Percent size={14} aria-hidden="true" /><strong>{day.bf}% BF</strong>
+                                            </span>
+                                        )}
+                                        {day.waist && <span className="history-metric">Vita {day.waist} cm</span>}
+                                        {day.neck && <span className="history-metric">Collo {day.neck} cm</span>}
+                                        {day.hip && <span className="history-metric">Fianchi {day.hip} cm</span>}
+                                        {day.sleepHours && (
+                                            <span className="history-metric">
+                                                <Moon size={14} aria-hidden="true" />{Logic.formatSleepTime(day.sleepHours)}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                    {day.weight && <span>⚖️ <strong>{day.weight} kg</strong></span>}
-                                    {day.bf && <span>📊 BF: <strong>{day.bf}%</strong></span>}
-                                    {day.waist && <span>| Vita: {day.waist}cm</span>}
-                                    {day.neck && <span>| Collo: {day.neck}cm</span>}
-                                    {day.hip && <span>| Fianchi: {day.hip}cm</span>}
-                                    {day.sleepHours && <span>| 🌙 Sonno: {Logic.formatSleepTime(day.sleepHours)}</span>}
+                                <div className="history-entry__menu" onClick={(event) => event.stopPropagation()}>
+                                    <ContextMenu
+                                        items={[
+                                            {
+                                                label: 'Modifica',
+                                                icon: <Pencil size={16} />,
+                                                onClick: () => onSelectEdit(day)
+                                            },
+                                            {
+                                                label: 'Elimina',
+                                                icon: <Trash2 size={16} />,
+                                                onClick: () => onDeleteMeasurement(day.date),
+                                                variant: 'danger' as const
+                                            }
+                                        ]}
+                                    />
                                 </div>
-                            </div>
-                            <div onClick={(e) => e.stopPropagation()}>
-                                <ContextMenu
-                                    items={[
-                                        {
-                                            label: 'Modifica',
-                                            icon: <Pencil size={16} />,
-                                            onClick: () => onSelectEdit(day)
-                                        },
-                                        {
-                                            label: 'Elimina',
-                                            icon: <Trash2 size={16} />,
-                                            onClick: () => onDeleteMeasurement(day.date),
-                                            variant: 'danger' as const
-                                        }
-                                    ]}
-                                />
-                            </div>
-                        </div>
-                    ))}
+                            </article>
+                        );
+                    })}
                 </div>
             )}
         </div>
