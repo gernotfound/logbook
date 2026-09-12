@@ -1,3 +1,5 @@
+import { Pencil, Plus, Save } from 'lucide-react';
+
 interface CustomFoodFormProps {
     cfData: any;
     setCfData: (data: any) => void;
@@ -50,8 +52,8 @@ export default function CustomFoodForm({
 
     return (
         <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--glass-border)' }}>
-            <h3 style={{color: 'var(--text-main)', marginBottom: '12px'}}>
-                {isEditing ? '✏️ Modifica alimento' : '➕ Nuovo alimento personalizzato'}
+            <h3 style={{color: 'var(--text-main)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                {isEditing ? <><Pencil size={20} aria-hidden="true" /> Modifica alimento</> : <><Plus size={20} aria-hidden="true" /> Nuovo alimento personalizzato</>}
             </h3>
             
             <div style={{ marginBottom: '10px' }}>
@@ -172,8 +174,7 @@ export default function CustomFoodForm({
             <div className="flex gap-10">
                 <button 
                     type="button"
-                    className="btn flex-1" 
-                    style={{ background: 'rgba(255,255,255,0.08)', marginBottom: 0 }} 
+                    className="btn-link flex-1" 
                     onClick={handleCancel}
                 >
                     Annulla
@@ -181,10 +182,10 @@ export default function CustomFoodForm({
                 <button 
                     type="button"
                     className="btn btn-primary flex-2" 
-                    style={{ marginBottom: 0 }} 
+                    style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} 
                     onClick={saveCustomFood}
                 >
-                    {isEditing ? '💾 Salva modifiche' : '💾 Salva alimento'}
+                    <Save size={18} aria-hidden="true" /> {isEditing ? 'Salva modifiche' : 'Salva alimento'}
                 </button>
             </div>
         </div>

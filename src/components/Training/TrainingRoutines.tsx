@@ -4,6 +4,7 @@ import { RoutineEditor } from './routines/RoutineEditor';
 import { RoutineCard } from './routines/RoutineCard';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { z } from '../../lib/zod';
+import { Plus, Minus } from 'lucide-react';
 
 const TrainingRoutines: React.FC = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_routine', false, z.boolean());
@@ -41,16 +42,32 @@ const TrainingRoutines: React.FC = () => {
 
     return (
         <div className="training-sub-view active">
-            {!isCreating && !editingRoutineId && (
+            {!editingRoutineId && (
                 <div className="mb-20">
-                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(true)}>
+                    <button 
+                        type="button" 
+                        className="btn btn-primary w-full flex-center"
+                        style={{ gap: '8px' }}
+                        onClick={() => {
+                            if (isCreating) {
+                                handleCancelEdit();
+                                setIsCreating(false);
+                            } else {
+                                setIsCreating(true);
+                            }
+                        }}
+                        aria-expanded={isCreating}
+                        aria-controls="routine-creation-form"
+                        disabled={isSaving}
+                    >
+                        {isCreating ? <Minus size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
                         Crea scheda
                     </button>
                 </div>
             )}
 
             {(isCreating || editingRoutineId) && (
-                <div className={editingRoutineId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
+                <div id="routine-creation-form" className={editingRoutineId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
                     <RoutineEditor
                         routineName={routineName}
                         setRoutineName={setRoutineName}

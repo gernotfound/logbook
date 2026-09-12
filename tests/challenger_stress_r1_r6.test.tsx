@@ -336,7 +336,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 />
             );
 
-            expect(screen.getByText('➕ Nuova misurazione')).toBeDefined();
+            expect(screen.getByText(/Nuova misurazione/)).toBeDefined();
             expect(screen.getByDisplayValue('77.5')).toBeDefined();
             expect(screen.getByDisplayValue('80')).toBeDefined();
         });

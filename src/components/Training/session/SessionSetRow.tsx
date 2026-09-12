@@ -1,4 +1,5 @@
 import React from 'react';
+import { Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
 
 interface SessionSetRowProps {
@@ -38,7 +39,8 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         onClick={() => onRemoveSet(sIndex)}
                         aria-label={`Rimuovi serie ${sIndex + 1}`}
                     >
-                        🗑️
+                        <Trash2 size={16} aria-hidden="true" />
+
                     </button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, position: 'relative', minWidth: 0 }}>

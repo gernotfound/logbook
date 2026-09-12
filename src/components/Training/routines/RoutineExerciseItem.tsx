@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowUp, ArrowDown, Trash2, Timer, ChevronDown, Activity } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../../types';
 
 interface RoutineExerciseItemProps {
@@ -41,7 +42,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         onClick={() => onMove(index, -1)}
                         aria-label="Sposta in alto"
                     >
-                        ⬆️
+                        <ArrowUp size={18} aria-hidden="true" />
                     </button>
                     <button
                         type="button"
@@ -51,7 +52,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         onClick={() => onMove(index, 1)}
                         aria-label="Sposta in basso"
                     >
-                        ⬇️
+                        <ArrowDown size={18} aria-hidden="true" />
                     </button>
                     <button
                         type="button"
@@ -59,7 +60,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         onClick={() => onRemove(index)}
                         aria-label="Rimuovi esercizio"
                     >
-                        ❌
+                        <Trash2 size={18} aria-hidden="true" />
                     </button>
                 </div>
             </div>
@@ -76,7 +77,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     border: '1px solid rgba(0, 229, 255, 0.2)',
                     marginTop: '4px'
                 }}>
-                    <span style={{ fontSize: '1rem' }}>🏃</span>
+                    <Activity size={18} aria-hidden="true" style={{ color: '#00e5ff' }} />
                     <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         Esercizio cardio — le metriche verranno registrate durante la sessione.
                     </span>
@@ -196,7 +197,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'dropset')}
                             >
-                                <span aria-hidden="true">🔻</span> Dropset {exercise.defaultTechnique === 'dropset' ? '✓' : ''}
+                                <ChevronDown size={14} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Dropset {exercise.defaultTechnique === 'dropset' ? '✓' : ''}
                             </button>
                             <button
                                 type="button"
@@ -213,7 +214,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'isometrics')}
                             >
-                                <span aria-hidden="true">⏱️</span> Isometria {exercise.defaultTechnique === 'isometrics' ? '✓' : ''}
+                                <Timer size={14} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Isometria {exercise.defaultTechnique === 'isometrics' ? '✓' : ''}
                             </button>
                         </div>
                     </div>

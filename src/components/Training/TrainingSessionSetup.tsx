@@ -26,7 +26,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
     const activeCycle = activeCycleId ? trainingCycles.find(c => c.id === activeCycleId) : null;
     
-    const { routines, history, startWorkout, selectedRoutine, setSelectedRoutine } = useWorkoutSession();
+    const { routines, history, startWorkout, startFreeWorkout, selectedRoutine, setSelectedRoutine } = useWorkoutSession();
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle || !activeCycle.routines) return [];
@@ -209,10 +209,22 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                             Avvia nuova sessione
                         </h2>
                         <label htmlFor="archive-routine-select" className="text-muted text-xs m-0 mt-4 block">
-                            Seleziona liberamente qualsiasi scheda dal tuo archivio
+                            Seleziona liberamente qualsiasi scheda dal tuo archivio o inizia senza scheda
                         </label>
                     </div>
                 </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ width: '100%', marginBottom: 0 }}
+                        onClick={() => startFreeWorkout()}
+                    >
+                        <span aria-hidden="true">🚀</span> Allenamento libero
+                    </button>
+                </div>
+
                 {routines.length === 0 ? (
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                         Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.

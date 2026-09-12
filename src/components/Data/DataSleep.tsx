@@ -1,7 +1,7 @@
 import React from 'react';
 import { shiftDateString } from '../../lib/utils/date';
 import { Logic } from '../../lib/logic';
-import { X } from 'lucide-react';
+import { Pencil, X, Save } from 'lucide-react';
 
 interface DataSleepProps {
     sleepHook: any;
@@ -72,7 +72,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
 
             <div id="sleep-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
                 <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
-                    {isEditing ? `✏️ Modifica sonno (${activeDateStr})` : `🌙 Dati sonno (${activeDateStr})`}
+                    {isEditing ? <><Pencil size={18} aria-hidden="true" /> Modifica sonno ({activeDateStr})</> : <>🌙 Dati sonno ({activeDateStr})</>}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
                     Registra la durata e la qualità del tuo sonno.
@@ -217,7 +217,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         </button>
                     )}
                     <button className="btn btn-primary" style={{ flex: 2 }} onClick={sleepHook.saveSleep}>
-                        {isEditing ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva sonno</>}
+                        {isEditing ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : <><Save size={16} aria-hidden="true" /> Salva sonno</>}
                     </button>
                 </div>
             </div>

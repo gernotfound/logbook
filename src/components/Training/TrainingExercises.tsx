@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Virtuoso } from 'react-virtuoso';
-import { Pencil, Copy, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, Minus, Copy } from 'lucide-react';
 import { ContextMenu } from '../UI/ContextMenu';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { z } from '../../lib/zod';
@@ -32,18 +32,34 @@ const TrainingExercises = () => {
 
     return (
         <div className="training-sub-view active">
-            {!isCreating && !editingExId && (
+            {!editingExId && (
                 <div className="mb-20">
-                    <button type="button" className="btn btn-primary w-full" onClick={() => setIsCreating(true)}>
+                    <button 
+                        type="button" 
+                        className="btn btn-primary w-full flex-center"
+                        style={{ gap: '8px' }}
+                        onClick={() => {
+                            if (isCreating) {
+                                handleCancelEdit();
+                                setIsCreating(false);
+                            } else {
+                                setIsCreating(true);
+                            }
+                        }}
+                        aria-expanded={isCreating}
+                        aria-controls="exercise-creation-form"
+                        disabled={isSaving}
+                    >
+                        {isCreating ? <Minus size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
                         Crea esercizio
                     </button>
                 </div>
             )}
 
             {(isCreating || editingExId) && (
-                <div className={editingExId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
+                <div id="exercise-creation-form" className={editingExId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
                     <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{marginBottom: '15px'}}>
-                        {editingExId ? '✏️ Modifica esercizio' : '➕ Crea nuovo esercizio'}
+                        {editingExId ? <><Pencil size={18} aria-hidden="true" /> Modifica esercizio</> : <><Plus size={18} aria-hidden="true" /> Crea nuovo esercizio</>}
                     </h2>
                     <div className="flex-col gap-10 mt-15 mb-20">
                     <div>
@@ -305,7 +321,7 @@ const TrainingExercises = () => {
                             }
                         }}
                     >
-                        {isSaving ? 'Salvataggio...' : (editingExId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : 'Crea esercizio')}
+                        {isSaving ? 'Salvataggio...' : (editingExId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Crea esercizio')}
                     </button>
                 </div>
                 

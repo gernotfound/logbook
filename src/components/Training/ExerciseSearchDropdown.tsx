@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { X, Plus, Search } from 'lucide-react';
+import { X, Plus, Search, Activity, Timer } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../types';
 import { Logic, getDetailedMuscleCategory } from '../../lib/logic';
 
@@ -148,7 +148,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             fontWeight: 500
                         }}
                     >
-                        🏃 Cardio
+                        <Activity size={12} aria-hidden="true" style={{ marginRight: '2px', display: 'inline-block', verticalAlign: 'middle' }} /> Cardio
                     </span>
                 )}
                 {ex.trackingType === 'time' && (
@@ -162,7 +162,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             fontWeight: 500
                         }}
                     >
-                        ⏱️ Tempo
+                        <Timer size={12} aria-hidden="true" style={{ marginRight: '2px', display: 'inline-block', verticalAlign: 'middle' }} /> Tempo
                     </span>
                 )}
             </div>

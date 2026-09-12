@@ -11,6 +11,7 @@ import { useDialogStore } from '../store/useDialogStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog/deltaResolver';
 import { createDefaultNutritionPlanning } from '../lib/nutritionDefaults';
+import { draftRegistry } from '../lib/utils/draftRegistry';
 
 // Imports for default data removed
 
@@ -142,8 +143,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     isGuestRef.current = false;
                     setIsGuest(false);
 
+                    draftRegistry.flushAll();
+
                     const guestData = migrationDataRef.current || useAppStore.getState().userData;
                     migrationDataRef.current = null;
+                    
+                    const policy = localStorage.getItem('guest_migration_policy') || 'merge';
+                    localStorage.removeItem('guest_migration_policy');
+
+                    if (policy === 'skip') {
+                        useAppStore.getState().setLocalWorkout(null);
+                    }
 
                     try {
                         setSyncing(true);
@@ -153,25 +163,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         const cloudHasData = hasUserData(cloudData);
                         const guestHasData = hasUserData(guestData);
 
-                        if (cloudHasData && !guestHasData) {
-                            // Se il cloud ha già dati e il guest era vuoto, adotta i dati del cloud
-                            setUserData(cloudData!);
-                        } else if (guestHasData) {
-                            // Se il guest ha dati creati, unisce in modo deterministico con il cloud (se presente)
-                            const mergedData = mergeUserData(cloudData, guestData);
-
-                            await DB.saveUserData(mergedData);
-                            // Ricarica per avere la risoluzione completa del catalogo globale per le viste
-                            const resolvedData = await DB.loadUserData();
-                            setUserData(resolvedData || mergedData);
+                        if (policy === 'skip') {
+                            if (cloudHasData) {
+                                setUserData(cloudData!);
+                                useAppStore.getState().setLocalWorkout(cloudData!.activeWorkout || null);
+                            } else {
+                                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                                const fallbackData = getResolvedDefaultUserData(catalog);
+                                setUserData(cloudData || (UserDataSchema.parse(fallbackData) as unknown as UserData));
+                                useAppStore.getState().setLocalWorkout(null);
+                            }
                         } else {
-                            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                            const fallbackData = getResolvedDefaultUserData(catalog);
-                            setUserData(cloudData || (UserDataSchema.parse(fallbackData) as unknown as UserData));
+                            if (cloudHasData && !guestHasData) {
+                                // Se il cloud ha già dati e il guest era vuoto, adotta i dati del cloud
+                                setUserData(cloudData!);
+                                useAppStore.getState().setLocalWorkout(cloudData!.activeWorkout || null);
+                            } else if (guestHasData) {
+                                // Se il guest ha dati creati, unisce in modo deterministico con il cloud (se presente)
+                                const mergedData = mergeUserData(cloudData, guestData);
+
+                                await DB.saveUserData(mergedData);
+                                // Ricarica per avere la risoluzione completa del catalogo globale per le viste
+                                const resolvedData = await DB.loadUserData();
+                                setUserData(resolvedData || mergedData);
+                                useAppStore.getState().setLocalWorkout((resolvedData || mergedData).activeWorkout || null);
+                            } else {
+                                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                                const fallbackData = getResolvedDefaultUserData(catalog);
+                                setUserData(cloudData || (UserDataSchema.parse(fallbackData) as unknown as UserData));
+                                useAppStore.getState().setLocalWorkout(cloudData?.activeWorkout || null);
+                            }
                         }
                     } catch (e) {
                         console.warn("Errore sincronizzazione iniziale post-link:", e);
-                        if (guestData) setUserData(guestData);
+                        if (guestData) {
+                            setUserData(guestData);
+                            useAppStore.getState().setLocalWorkout(guestData.activeWorkout || null);
+                        }
                     } finally {
                         setSyncing(false);
                     }

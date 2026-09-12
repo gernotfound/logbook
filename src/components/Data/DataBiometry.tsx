@@ -1,4 +1,5 @@
 import { useSettings } from '../../hooks/useSettings';
+import { Save } from 'lucide-react';
 
 const DataBiometry = () => {
     const {
@@ -63,7 +64,7 @@ const DataBiometry = () => {
             </div>
 
             <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleSaveProfile}>
-                <span aria-hidden="true">💾</span> Salva profilo biometrico
+                <Save size={16} aria-hidden="true" /> Salva profilo biometrico
             </button>
         </div>
     );

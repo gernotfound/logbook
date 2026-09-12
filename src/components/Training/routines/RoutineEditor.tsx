@@ -1,4 +1,5 @@
 import React from 'react';
+import { Pencil, Save, Plus } from 'lucide-react';
 import MuscleModel from '../MuscleModel';
 import { RoutineExerciseItem } from './RoutineExerciseItem';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
@@ -43,7 +44,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
 }) => {
     return (
         <div className="section-divider">
-            <h2 style={{marginTop: 0}}>{editingRoutineId ? '✏️ Modifica scheda' : '➕ Crea scheda'}</h2>
+            <h2 style={{marginTop: 0}}>{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
 
             <div className="mb-15">
                 <input 
@@ -119,7 +120,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                     onClick={onSave}
                     disabled={isSaving}
                 >
-                    {isSaving ? 'Salvataggio...' : (editingRoutineId ? <><span aria-hidden="true">💾</span> Salva modifiche</> : 'Crea scheda')}
+                    {isSaving ? 'Salvataggio...' : (editingRoutineId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Crea scheda')}
                 </button>
             </div>
         </div>

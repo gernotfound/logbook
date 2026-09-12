@@ -1,4 +1,5 @@
 import { useNutritionPlanning } from '../../hooks/useNutritionPlanning';
+import { Save } from 'lucide-react';
 
 const NutritionPlanning = () => {
     const { 
@@ -151,7 +152,7 @@ const NutritionPlanning = () => {
                 style={{ width: '100%', marginTop: '20px', padding: '15px' }} 
                 onClick={handleSave}
             >
-                💾 Salva pianificazione
+                <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva pianificazione
             </button>
 
             {/* TDEE COMPARE (Automatico) */}
