@@ -293,19 +293,19 @@ function App() {
               <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
             </div>
           }>
-            <div hidden={activeTab !== 'home'}>
+            <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
               {(visitedTabs.home || activeTab === 'home') && <HomeView onNavigate={handleTabChange} />}
             </div>
-            <div hidden={activeTab !== 'training'}>
+            <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
               {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
             </div>
-            <div hidden={activeTab !== 'nutrition'}>
+            <div style={{ display: activeTab === 'nutrition' ? 'block' : 'none' }}>
               {(visitedTabs.nutrition || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
             </div>
-            <div hidden={activeTab !== 'data'}>
+            <div style={{ display: activeTab === 'data' ? 'block' : 'none' }}>
               {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
             </div>
-            <div hidden={activeTab !== 'settings'}>
+            <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
               {(visitedTabs.settings || activeTab === 'settings') && <SettingsView />}
             </div>
           </Suspense>
