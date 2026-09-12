@@ -16,13 +16,13 @@ La collezione `global_catalog` contiene tre documenti:
 
 `global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false` (nessuna scrittura da client).
 
-## Seed locali vuoti — policy "enforce manual input"
+## Seed locali (Popolati)
 
-I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono **intenzionalmente vuoti**. L'app impone l'inserimento manuale o il download dal cloud per ridurre il bundle size.
+I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono **pienamente popolati** (oltre 2000 record). L'app garantisce l'accesso immediato e offline all'intero catalogo fin dalla prima installazione.
 
 ### Fallback offline
 
-Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sul seed locale. Essendo quest'ultimo vuoto, il fallback restituisce **array vuoti validi**, non un catalogo popolato. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
+Se `global_catalog/manifest` non è raggiungibile (offline), il `CatalogService` cade silenziosamente sul seed locale e restituisce l'intero catalogo offline. I `customItems` dell'utente vengono fusi normalmente, garantendo operatività al 100%.
 
 ## Script di seeding (`scripts/seed-catalog.mjs`)
 
@@ -36,7 +36,7 @@ Lo script attualmente:
 - Non ha flag `--confirm` o `--dry-run`
 - Non esegue backup del manifest esistente
 
-**MUST:** Non eseguire MAI accidentalmente questo script. Poiché i JSON locali sono stati svuotati per la policy "enforce manual input", eseguirlo sovrascriverebbe `global_catalog` su Firestore con array vuoti, distruggendo il database cloud di esercizi e alimenti per tutti gli utenti.
+**MUST:** Usare con estrema cautela. Essendo i JSON locali ora popolati con migliaia di record, eseguirlo sovrascriverà l'intero catalogo cloud `global_catalog` su Firestore con la versione contenuta nei JSON locali, alterando le referenze per tutti gli utenti se gli ID non combaciano.
 
 ### Protezioni raccomandate (task separato)
 
