@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Pause, Play, RotateCcw, Square } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { useAppStore } from '../../store/useAppStore';
@@ -11,7 +12,6 @@ export default function WorkoutTimer() {
 }
 
 function OwnerWorkoutTimer({ owner }: { owner: string }) {
-    // Rest Timer State
     const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>(() => {
         const saved = readDeviceValue('timer_state', owner);
         return saved === 'running' || saved === 'paused' ? saved : 'stopped';
@@ -30,10 +30,11 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
         const savedAcc = readDeviceValue('timer_accumulated', owner);
         const start = savedStart ? (parseInt(savedStart, 10) || 0) : 0;
         const acc = savedAcc ? (parseInt(savedAcc, 10) || 0) : 0;
-        
+
         if (savedState === 'running' && start > 0) {
             return formatTimerMs(Date.now() - start + acc);
-        } else if (savedState === 'paused' && acc > 0) {
+        }
+        if (savedState === 'paused' && acc > 0) {
             return formatTimerMs(acc);
         }
         return '00:00';
@@ -51,27 +52,28 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     }, []);
 
     useEffect(() => {
-      try {
-        if (restState === 'stopped' && restStartTime === 0 && restAccumulated === 0) {
-            writeDeviceValue('timer_state', null, owner);
-            writeDeviceValue('timer_start', null, owner);
-            writeDeviceValue('timer_accumulated', null, owner);
-            return;
+        try {
+            if (restState === 'stopped' && restStartTime === 0 && restAccumulated === 0) {
+                writeDeviceValue('timer_state', null, owner);
+                writeDeviceValue('timer_start', null, owner);
+                writeDeviceValue('timer_accumulated', null, owner);
+                return;
+            }
+            writeDeviceValue('timer_state', restState, owner);
+            writeDeviceValue('timer_start', restStartTime.toString(), owner);
+            writeDeviceValue('timer_accumulated', restAccumulated.toString(), owner);
+        } catch {
+            useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
         }
-        writeDeviceValue('timer_state', restState, owner);
-        writeDeviceValue('timer_start', restStartTime.toString(), owner);
-        writeDeviceValue('timer_accumulated', restAccumulated.toString(), owner);
-      } catch {
-        useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
-      }
     }, [restState, restStartTime, restAccumulated, owner]);
 
-    // Rest Timer Ticker con aggiornamento istantaneo al ripristino da background
+    // Il display deriva sempre dai timestamp: il setInterval serve solo a ridisegnare,
+    // quindi il timer resta corretto anche quando il browser rallenta i tick in background.
     useEffect(() => {
         if (restState !== 'running') {
             if (restState === 'paused') {
                 setRestDisplay(formatTimerMs(restAccumulated));
-            } else if (restState === 'stopped') {
+            } else {
                 setRestDisplay('00:00');
             }
             return;
@@ -127,18 +129,53 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 10px' }}>
-            <span className="timer-display" style={{ fontSize: '1.6rem', fontFamily: 'monospace', fontWeight: 'bold', color: restState === 'running' ? 'var(--warning-color)' : '#fff', letterSpacing: '2px' }}>
+        <div className="workout-timer-shell">
+            <span
+                className={`timer-display ${restState === 'running' ? 'is-running' : ''}`}
+                aria-label={`Timer recupero ${restDisplay}`}
+            >
                 {restDisplay}
             </span>
-            <div className="timer-controls" style={{ display: 'flex', gap: '8px' }}>
+            <div className="timer-controls" aria-label="Controlli timer recupero">
                 {restState !== 'running' ? (
-                    <button type="button" className="timer-btn play" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={startRest} aria-label="Avvia recupero" title="Avvia recupero">▶</button>
+                    <button
+                        type="button"
+                        className="timer-btn play"
+                        onClick={startRest}
+                        aria-label="Avvia recupero"
+                        title="Avvia recupero"
+                    >
+                        <Play aria-hidden="true" />
+                    </button>
                 ) : (
-                    <button type="button" className="timer-btn pause" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={pauseRest} aria-label="Pausa recupero" title="Pausa recupero">⏸</button>
+                    <button
+                        type="button"
+                        className="timer-btn pause"
+                        onClick={pauseRest}
+                        aria-label="Pausa recupero"
+                        title="Pausa recupero"
+                    >
+                        <Pause aria-hidden="true" />
+                    </button>
                 )}
-                <button type="button" className="timer-btn reset" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={resetRest} aria-label="Riavvia recupero" title="Riavvia recupero">🔄</button>
-                <button type="button" className="timer-btn stop" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={stopRest} aria-label="Ferma recupero" title="Ferma recupero">⏹</button>
+                <button
+                    type="button"
+                    className="timer-btn reset"
+                    onClick={resetRest}
+                    aria-label="Riavvia recupero"
+                    title="Riavvia recupero"
+                >
+                    <RotateCcw aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    className="timer-btn stop"
+                    onClick={stopRest}
+                    aria-label="Ferma recupero"
+                    title="Ferma recupero"
+                >
+                    <Square aria-hidden="true" />
+                </button>
             </div>
         </div>
     );

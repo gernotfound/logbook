@@ -19,27 +19,32 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
     onNavigate
 }) => {
     const kcalPercent = kcalTarget > 0 ? Math.min((kcalEaten / kcalTarget) * 100, 100) : 0;
-    
-    // Simplistic targets for macros (assuming roughly standard split if not provided)
-    // Here we'll just display the amounts in mini circles or bars, or just data.
-    // The main progress ring is for calories.
 
     return (
-        <div style={{ padding: '20px', cursor: 'pointer' }} onClick={() => onNavigate('nutrition')}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{margin: 0,color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                    <Utensils size={20} color="var(--primary-color)" />
+        <div
+            className="home-nutrition-widget"
+            onClick={() => onNavigate('nutrition')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onNavigate('nutrition');
+                }
+            }}
+            aria-label="Apri sezione nutrizione"
+        >
+            <div className="home-widget-heading">
+                <h2>
+                    <Utensils size={19} color="var(--primary-color)" aria-hidden="true" />
                     Nutrizione
                 </h2>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Target: {kcalTarget} kcal
-                </div>
+                <div className="home-widget-meta">Target {kcalTarget} kcal</div>
             </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                {/* Calories Progress Ring */}
-                <div 
-                    className="progress-ring" 
+
+            <div className="home-nutrition-body">
+                <div
+                    className="progress-ring"
                     style={{ '--progress': kcalPercent } as React.CSSProperties}
                     role="progressbar"
                     aria-valuenow={Math.round(kcalPercent)}
@@ -48,39 +53,23 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
                     aria-label={`Calorie: ${Math.round(kcalPercent)}% completato`}
                 >
                     <div className="progress-ring-content">
-                        <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: 1 }}>{kcalEaten}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>kcal</span>
+                        <span className="home-calories-value">{kcalEaten}</span>
+                        <span className="home-calories-unit">kcal</span>
                     </div>
                 </div>
 
-                {/* Macros */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>CARBO</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{carbs}g</span>
-                        </div>
-                        <div className="progress-bg" style={{ height: '6px' }}>
-                            <div className="progress-fill" style={{ width: `${Math.min((carbs / 300) * 100, 100)}%`, background: '#3b82f6' }}></div>
-                        </div>
+                <div className="home-macros">
+                    <div className="home-macro home-macro--carbs">
+                        <div className="home-macro__row"><span>Carbo</span><strong>{carbs} g</strong></div>
+                        <div className="progress-bg"><div className="progress-fill" style={{ width: `${Math.min((carbs / 300) * 100, 100)}%` }} /></div>
                     </div>
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{pro}g</span>
-                        </div>
-                        <div className="progress-bg" style={{ height: '6px' }}>
-                            <div className="progress-fill" style={{ width: `${Math.min((pro / 150) * 100, 100)}%`, background: '#ef4444' }}></div>
-                        </div>
+                    <div className="home-macro home-macro--protein">
+                        <div className="home-macro__row"><span>Proteine</span><strong>{pro} g</strong></div>
+                        <div className="progress-bg"><div className="progress-fill" style={{ width: `${Math.min((pro / 150) * 100, 100)}%` }} /></div>
                     </div>
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>GRASSI</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{fat}g</span>
-                        </div>
-                        <div className="progress-bg" style={{ height: '6px' }}>
-                            <div className="progress-fill" style={{ width: `${Math.min((fat / 80) * 100, 100)}%`, background: '#eab308' }}></div>
-                        </div>
+                    <div className="home-macro home-macro--fat">
+                        <div className="home-macro__row"><span>Grassi</span><strong>{fat} g</strong></div>
+                        <div className="progress-bg"><div className="progress-fill" style={{ width: `${Math.min((fat / 80) * 100, 100)}%` }} /></div>
                     </div>
                 </div>
             </div>

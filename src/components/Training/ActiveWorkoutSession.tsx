@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Flag, Save, Trash2, X } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
@@ -9,15 +10,11 @@ import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 import WorkoutReportModal from './WorkoutReportModal';
 import type { WorkoutSession } from '../../types';
 
-// Responsabilità: renderizzare la UI di un allenamento in corso (lista esercizi, timer).
-// Props: onNavigateToHistory (callback per navigare allo storico).
-// Effetti: chiama le callback di useWorkoutSession, useWakeLock per mantenere lo schermo acceso.
-
 const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: any[]; note: string }> = [];
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     const [display, setDisplay] = useState('00:00:00');
-    
+
     useEffect(() => {
         if (!startTime) return;
         const updateDisplay = () => {
@@ -25,7 +22,7 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             setDisplay(Logic.formatDuration(diff));
         };
 
-        updateDisplay(); // initial call
+        updateDisplay();
         const interval = setInterval(updateDisplay, 1000);
 
         const handleVisibilityChange = () => {
@@ -40,7 +37,13 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [startTime]);
-    return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
+
+    return (
+        <div className="workout-duration" aria-label={`Durata sessione ${display}`}>
+            <span className="workout-duration__label">Durata sessione</span>
+            <div className="workout-duration__value">{display}</div>
+        </div>
+    );
 };
 
 export interface ActiveWorkoutSessionProps {
@@ -61,7 +64,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
         updateSetupNote, updateSessionNote
     } = useWorkoutSession();
 
-    // Previene lo spegnimento automatico dello schermo durante la sessione attiva
     useWakeLock(true);
 
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
@@ -137,20 +139,20 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
         removeLastSet(exIndex);
     }, [removeLastSet]);
 
-    const handleUpdateSet = useCallback((exIndex: number, setId: string, field: string, val: any) => {
-        updateSet(exIndex, setId, field, val);
+    const handleUpdateSet = useCallback((exIndex: number, setId: string, field: string, value: any) => {
+        updateSet(exIndex, setId, field, value);
     }, [updateSet]);
 
     const handleAddSpecialSet = useCallback((exIndex: number, type: string, setId: string) => {
         addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
     }, [addSpecialSet]);
 
-    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, val: any) => {
-        updateSpecialSet(exIndex, setId, type, idx, field, val);
+    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics', index: number, field: string, value: any) => {
+        updateSpecialSet(exIndex, setId, type, index, field, value);
     }, [updateSpecialSet]);
 
-    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number) => {
-        removeSpecialSet(exIndex, setId, type, idx);
+    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics', index: number) => {
+        removeSpecialSet(exIndex, setId, type, index);
     }, [removeSpecialSet]);
 
     const handleToggleSpecialMenu = useCallback((setId: string) => {
@@ -161,21 +163,21 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
         const map = new Map<string, Array<{ date: string; sets: any[]; note: string }>>();
         if (!history || history.length === 0) return map;
 
-        for (const w of history) {
-            if (!w.exercises) continue;
-            for (const ex of w.exercises) {
-                if (!ex.exId) continue;
-                if (!map.has(ex.exId)) map.set(ex.exId, []);
-                const list = map.get(ex.exId)!;
+        for (const workout of history) {
+            if (!workout.exercises) continue;
+            for (const exercise of workout.exercises) {
+                if (!exercise.exId) continue;
+                if (!map.has(exercise.exId)) map.set(exercise.exId, []);
+                const list = map.get(exercise.exId)!;
                 if (list.length < 2) {
-                    list.push({ date: w.date || '', sets: ex.sets || [], note: ex.sessionNote });
+                    list.push({ date: workout.date || '', sets: exercise.sets || [], note: exercise.sessionNote });
                 }
             }
         }
         return map;
     }, [history]);
 
-    const libraryMap = useMemo(() => new Map(library.map(l => [l.id, l])), [library]);
+    const libraryMap = useMemo(() => new Map(library.map(item => [item.id, item])), [library]);
 
     if (!activeWorkout) return null;
 
@@ -206,9 +208,9 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
     };
 
     return (
-        <div className="training-sub-view active">
+        <div className="training-sub-view active workout-session">
             {reportWorkout && (
-                <WorkoutReportModal 
+                <WorkoutReportModal
                     workout={reportWorkout}
                     history={history}
                     library={library}
@@ -217,16 +219,18 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
                 />
             )}
 
-            <SessionHeader 
+            <SessionHeader
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
                 onCancelHistory={handleCancelHistory}
             />
 
-            <div style={{ padding: '0', marginBottom: '20px' }}>
+            <div className="workout-exercises">
                 {(activeWorkout.exercises || []).length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
+                    <div className="empty-state ui-inset">
+                        <div className="empty-state__title">Nessun esercizio presente in questa sessione.</div>
+                    </div>
                 ) : (
                     (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
@@ -263,8 +267,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
                     })
                 )}
 
-                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
-                    <h3 style={{marginBottom: '10px'}}>Aggiungi esercizio extra</h3>
+                <div className="workout-extra">
+                    <h3>Aggiungi esercizio extra</h3>
                     <ExerciseSearchDropdown
                         library={library}
                         onSelectExercise={addExtraExercise}
@@ -288,31 +292,18 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
             />
 
             {activeWorkout.isEditingHistory ? (
-                <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
-                    <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        ⏱️ Durata della sessione
+                <div className="workout-duration">
+                    <label htmlFor="workout-manual-duration" className="workout-duration__label">
+                        Durata della sessione
                     </label>
-                    <input 
+                    <input
                         id="workout-manual-duration"
-                        type="text" 
-                        value={manualDuration} 
-                        onChange={e => setManualDuration(e.target.value)} 
+                        type="text"
+                        value={manualDuration}
+                        onChange={event => setManualDuration(event.target.value)}
                         onBlur={() => setManualDuration(Logic.normalizeDuration(manualDuration))}
-                        onFocus={e => e.target.select()}
+                        onFocus={event => event.target.select()}
                         placeholder="00:00:00"
-                        style={{ 
-                            fontSize: '1.8rem', 
-                            fontFamily: 'monospace', 
-                            fontWeight: 'bold', 
-                            color: 'var(--primary-color)', 
-                            textAlign: 'center', 
-                            maxWidth: '240px', 
-                            width: '100%',
-                            margin: '0 auto', 
-                            padding: '8px 12px',
-                            display: 'block',
-                            boxSizing: 'border-box'
-                        }} 
                     />
                 </div>
             ) : (
@@ -320,23 +311,23 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
             )}
 
             {activeWorkout.isEditingHistory ? (
-                <>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
-                        <span aria-hidden="true">💾</span> Salva modifiche
+                <div className="workout-actions">
+                    <button className="btn btn-primary" onClick={handleSaveHistory}>
+                        <Save size={19} aria-hidden="true" /> Salva modifiche
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
-                        Annulla modifica
+                    <button className="btn btn-danger" onClick={handleCancelHistory}>
+                        <X size={19} aria-hidden="true" /> Annulla modifica
                     </button>
-                </>
+                </div>
             ) : (
-                <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
-                        <span aria-hidden="true">🏁</span> Termina sessione
+                <div className="workout-actions">
+                    <button className="btn btn-success" onClick={handleEndWorkout}>
+                        <Flag size={19} aria-hidden="true" /> Termina sessione
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
-                        <span aria-hidden="true">🗑️</span> Elimina sessione
+                    <button className="btn btn-danger" onClick={deleteWorkout}>
+                        <Trash2 size={19} aria-hidden="true" /> Elimina sessione
                     </button>
-                </>
+                </div>
             )}
         </div>
     );

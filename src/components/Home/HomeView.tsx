@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { Scale } from 'lucide-react';
 import { useHomeView } from '../../hooks/useHomeView';
 import HomeWorkoutWidget from './widgets/HomeWorkoutWidget';
 import HomeNutritionWidget from './widgets/HomeNutritionWidget';
@@ -17,11 +18,21 @@ const PERIOD_OPTIONS = [
   { id: '365d', label: '1 anno' }
 ] as const;
 
+const ChartFallback = ({ height }: { height: number }) => (
+    <div className="card home-card chart-fallback" style={{ height }}>
+        <div className="spinner" />
+    </div>
+);
+
 const HomeView = ({ onNavigate }: any) => {
   const homeState = useHomeView();
-  
+
   if (homeState.loading) {
-      return <div className="view-section active"><div className="spinner"></div></div>;
+      return (
+          <div className="view-section active">
+              <div className="spinner" />
+          </div>
+      );
   }
 
   const {
@@ -36,16 +47,13 @@ const HomeView = ({ onNavigate }: any) => {
 
   return (
     <div id="view-home" className="view-section active">
-      
       <div className="home-bento-grid">
-        {/* Header - Full Width */}
         <div className="bento-full">
             <HeaderDashboard streak={streak} totalWorkouts={totalWorkouts} />
         </div>
 
-        {/* Workout Hero - Full Width */}
         {!isRestDay && (
-            <div className="card bento-full" style={{ padding: 0, overflow: 'hidden', margin: 0 }}>
+            <div className="card home-card home-card--flush bento-full">
                 <HomeWorkoutWidget
                     isRestDay={isRestDay}
                     todaysWorkout={todaysWorkout}
@@ -54,8 +62,7 @@ const HomeView = ({ onNavigate }: any) => {
             </div>
         )}
 
-        {/* Nutrition - Full Width */}
-        <div className="card bento-full" style={{ padding: 0, margin: 0 }}>
+        <div className="card home-card home-card--flush bento-full">
             <HomeNutritionWidget
                 kcalEaten={kcalEaten}
                 kcalTarget={kcalTarget}
@@ -66,23 +73,21 @@ const HomeView = ({ onNavigate }: any) => {
             />
         </div>
 
-        {/* Biometria + Recovery - Half Width Each */}
-        <div className="card" style={{ margin: 0 }}>
+        <div className="card home-card home-card--compact">
             <BiometryBentoCard weightStats={weightStats} bf={bf} />
         </div>
 
-        <div className="card" style={{ margin: 0 }}>
-            <RecoveryBentoCard 
-                activePains={activePains} 
-                painColors={painColors} 
-                muscleColors={muscleColors} 
-                onTogglePain={toggleActivePain} 
+        <div className="card home-card home-card--compact">
+            <RecoveryBentoCard
+                activePains={activePains}
+                painColors={painColors}
+                muscleColors={muscleColors}
+                onTogglePain={toggleActivePain}
             />
         </div>
 
-        {/* Analytics & Progression Dashboard - Full Width */}
-        <div className="bento-full" id="home-analytics-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <Suspense fallback={<div className="card" style={{ height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0 }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
+        <div className="bento-full home-analytics-stack" id="home-analytics-section">
+            <Suspense fallback={<ChartFallback height={220} />}>
                 <WeeklyVolumeChart
                     history={history}
                     library={library}
@@ -90,7 +95,7 @@ const HomeView = ({ onNavigate }: any) => {
                 />
             </Suspense>
 
-            <Suspense fallback={<div className="card" style={{ height: '240px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: 0 }}><div className="spinner" style={{ margin: 'auto' }}></div></div>}>
+            <Suspense fallback={<ChartFallback height={240} />}>
                 <VolumeCaloriesCorrelationChart
                     history={history}
                     nutrition={nutrition}
@@ -98,75 +103,44 @@ const HomeView = ({ onNavigate }: any) => {
                     userWeight={userWeight}
                 />
             </Suspense>
-            
-            {/* Trend Peso Corporeo */}
-            <div className="card" id="home-chart-widget" style={{ padding: '16px', margin: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '15px' }}>
-                    <div>
-                        <h2 style={{margin: 0}}>Trend peso corporeo</h2>
-                    </div>
 
-                    {/* Period Selector Tabs */}
-                    <div style={{
-                        display: 'flex',
-                        background: 'rgba(255, 255, 255, 0.06)',
-                        borderRadius: '10px',
-                        padding: '3px',
-                        gap: '2px',
-                        border: '1px solid rgba(255, 255, 255, 0.08)'
-                    }}>
-                        {PERIOD_OPTIONS.map(p => {
-                            const isActive = weightPeriod === p.id;
+            <div className="card home-chart-card" id="home-chart-widget">
+                <div className="home-chart-header">
+                    <h2>Trend peso corporeo</h2>
+
+                    <div className="segmented-control" aria-label="Periodo trend peso">
+                        {PERIOD_OPTIONS.map(period => {
+                            const isActive = weightPeriod === period.id;
                             return (
                                 <button
-                                    key={p.id}
+                                    key={period.id}
                                     type="button"
-                                    onClick={() => setWeightPeriod(p.id)}
-                                    style={{
-                                        background: isActive ? 'var(--primary-color)' : 'transparent',
-                                        color: isActive ? '#ffffff' : 'var(--text-muted)',
-                                        border: 'none',
-                                        borderRadius: '7px',
-                                        padding: '6px 10px',
-                                        fontSize: '0.85rem',
-                                        fontWeight: isActive ? '600' : 'normal',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        whiteSpace: 'nowrap'
-                                    }}
+                                    onClick={() => setWeightPeriod(period.id)}
+                                    className={`segmented-control__item ${isActive ? 'active' : ''}`}
+                                    aria-pressed={isActive}
                                 >
-                                    {p.label}
+                                    {period.label}
                                 </button>
                             );
                         })}
                     </div>
                 </div>
 
-                <div style={{ height: '220px', width: '100%', position: 'relative' }}>
+                <div className="home-chart-body">
                     {weightStats?.hasDataInPeriod && chartData ? (
-                        <Suspense fallback={<div className="spinner" style={{ margin: 'auto' }}></div>}>
+                        <Suspense fallback={<div className="spinner" />}>
                             <WeightChart chartData={chartData} />
                         </Suspense>
                     ) : (
-                        <div style={{
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--text-muted)',
-                            textAlign: 'center',
-                            padding: '20px'
-                        }}>
-                            <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>⚖️</div>
-                            <div style={{ fontSize: '0.95rem' }}>Nessuna misurazione registrata in questo intervallo.</div>
-                            <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Registra il tuo peso nella sezione Dati.</div>
+                        <div className="empty-state">
+                            <div className="empty-state__icon"><Scale size={21} aria-hidden="true" /></div>
+                            <div className="empty-state__title">Nessuna misurazione in questo intervallo.</div>
+                            <div className="empty-state__hint">Registra il tuo peso nella sezione Dati.</div>
                         </div>
                     )}
                 </div>
             </div>
         </div>
-
       </div>
     </div>
   );
