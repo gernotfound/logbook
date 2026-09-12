@@ -78,7 +78,7 @@ Ruoli dei livelli di storage:
 | Telemetria | MAY: best-effort, può non propagare l'errore alla UI, ma deve registrare localmente il fallimento. |
 | `deleteAccount` | MUST: comunicare all'utente se la cancellazione cloud è parziale. |
 
-→ Dettagli completi: `docs/storage-and-sync.md`
+→ Dettagli completi: `.agents/rules/storage-and-sync.md`
 
 ## Dati e validazione
 
@@ -96,7 +96,7 @@ Ruoli dei livelli di storage:
 - **NOTE:** La policy "guest wins" non equivale a "dato più recente".
 - **VERIFY:** Leggere implementazione e test prima di cambiare la logica di merge.
 
-→ Dettagli completi: `docs/data-model-and-zod.md`
+→ Dettagli completi: `.agents/rules/data-model-and-zod.md`
 
 ## Workout, timer e date
 
@@ -151,7 +151,7 @@ Ruoli dei livelli di storage:
 - **MUST:** Dopo ogni modifica a `firestore.rules`, eseguire: `npx firebase-tools deploy --only firestore:rules`.
 - **MUST:** `service-account.json` è nel `.gitignore` e non va mai committato.
 
-→ Dettagli completi: `docs/firebase-config.md`
+→ Dettagli completi: `.agents/rules/firebase-config.md`
 
 ## Design system e UX
 
@@ -162,7 +162,7 @@ Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi s
 - **MUST:** Prestare massima attenzione alla sintassi CSS (chiusura corretta di tutte le parentesi graffe `}`). Un errore di sintassi silenzioso corrompe l'intera interfaccia senza far fallire la build.
 - **MUST:** Durante il refactoring delle variabili CSS (es. estraendo in `tokens.css`), verificare minuziosamente che TUTTE le variabili originali usate nel codice (es. `--primary-dark`) siano migrate e presenti, per evitare fallback errati del browser (es. testo nero su nero).
 
-→ Dettagli completi: `docs/design-system.md`
+→ Dettagli completi: `.agents/rules/design-system.md`
 
 ### Vincoli UX mobile
 
@@ -243,13 +243,13 @@ npm run test:e2e    # playwright test (se cambiano UI, flussi, testo o routing)
 
 ## Riferimenti
 
-Documentazione di dettaglio in `docs/`:
+Documentazione di dettaglio in `.agents/rules/`:
 
 | Documento | Contenuto |
 |---|---|
-| [`docs/storage-and-sync.md`](docs/storage-and-sync.md) | Architettura storage, pipeline di salvataggio, merge, blindatura background |
-| [`docs/firebase-config.md`](docs/firebase-config.md) | Variabili d'ambiente, App Check, Firestore Rules, CSP, domini |
-| [`docs/data-model-and-zod.md`](docs/data-model-and-zod.md) | UserData, Zod gateway, ghost objects, invarianti di modifica |
-| [`docs/catalog-operations.md`](docs/catalog-operations.md) | Catalogo globale, seeding, seed vuoti, recovery |
-| [`docs/design-system.md`](docs/design-system.md) | Tema dark glassmorphism, variabili CSS, tipografia, sentence case |
-| [`docs/account-lifecycle.md`](docs/account-lifecycle.md) | Export CSV, eliminazione account, logout, modalità guest |
+| [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Architettura storage, pipeline di salvataggio, merge, blindatura background |
+| [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Variabili d'ambiente, App Check, Firestore Rules, CSP, domini |
+| [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | UserData, Zod gateway, ghost objects, invarianti di modifica |
+| [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding, seed vuoti, recovery |
+| [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema dark glassmorphism, variabili CSS, tipografia, sentence case |
+| [`.agents/rules/account-lifecycle.md`](.agents/rules/account-lifecycle.md) | Export CSV, eliminazione account, logout, modalità guest |
