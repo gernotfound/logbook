@@ -44,6 +44,6 @@ Per il rollback, dopo verifica dei documenti referenziati, ripristinare il manif
 
 ## Freschezza e pubblicazione nel client
 
-La sola versione non certifica una cache completa: il client confronta anche schema, riferimenti e conteggi. Il seed vuoto con versione `1.0.0` non impedisce il download di un manifest popolato con la stessa versione. Documenti mancanti, conteggi diversi e ID non validi/duplicati mantengono la cache precedente senza marcarla aggiornata; una successiva sincronizzazione può riprovare. I download concorrenti condividono un'unica richiesta.
+La sola versione non certifica una cache completa: il client confronta anche schema, riferimenti e conteggi. Il seed locale con versione `1.0.0` non impedisce il download di un manifest popolato con la stessa versione. Documenti mancanti, conteggi diversi e ID non validi/duplicati mantengono la cache precedente senza marcarla aggiornata; una successiva sincronizzazione può riprovare. I download concorrenti condividono un'unica richiesta.
 
 Il caricamento utente attende l'esito del catalogo insieme al documento profilo, quindi risolve esercizi/alimenti con la stessa versione prima della pubblicazione dello stato. Offline resta il fallback locale. Gli omonimi con ID distinti restano visibili; su collisione di ID il custom locale ha precedenza. I test non dimostrano ancora tutti i percorsi guest e di ripristino dall'interfaccia.
