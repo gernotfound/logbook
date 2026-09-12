@@ -98,10 +98,10 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             expect(catalog.manifest.version).toBe('1.0.0');
             expect(Array.isArray(catalog.exercises)).toBe(true);
             expect(Array.isArray(catalog.foods)).toBe(true);
-            expect(catalog.exercises.length).toBeGreaterThan(0);
-            expect(catalog.foods.length).toBeGreaterThan(0);
-            expect(catalog.manifest.itemCounts.exercises).toBeGreaterThan(0);
-            expect(catalog.manifest.itemCounts.foods).toBeGreaterThan(0);
+            expect(catalog.exercises.length).toBe(0);
+            expect(catalog.foods.length).toBe(0);
+            expect(catalog.manifest.itemCounts.exercises).toBe(0);
+            expect(catalog.manifest.itemCounts.foods).toBe(0);
 
             // In-memory catalog is now warm
             expect(getInMemoryCatalog()).not.toBeNull();
@@ -315,8 +315,8 @@ describe('E2E Suite: Guest Mode & Global Catalog Resolution', () => {
             // Fallback returns valid seed catalog arrays
             expect(Array.isArray(catalog.exercises)).toBe(true);
             expect(Array.isArray(catalog.foods)).toBe(true);
-            expect(catalog.exercises.length).toBeGreaterThan(0);
-            expect(catalog.foods.length).toBeGreaterThan(0);
+            expect(catalog.exercises.length).toBe(0);
+            expect(catalog.foods.length).toBe(0);
         });
 
         it('T2.2: Missing or undefined catalogOverrides object handled safely with full catalog fallback', () => {

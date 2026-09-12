@@ -61,11 +61,11 @@ describe('Catalog Resolution Pipeline & Service Unit Tests (M1)', () => {
             expect(seed.manifest.docRefs.foods).toBe('foods_v1');
             expect(seed.manifest.schemaVersion).toBe(1);
 
-            // Baseline seeds are populated with 175 standard exercises and 221 foods (Milestone 3 / LB-19)
+            // Baseline seeds are now empty to enforce manual input
             expect(Array.isArray(seed.exercises)).toBe(true);
             expect(Array.isArray(seed.foods)).toBe(true);
-            expect(seed.exercises).toHaveLength(175);
-            expect(seed.foods).toHaveLength(221);
+            expect(seed.exercises).toHaveLength(0);
+            expect(seed.foods).toHaveLength(0);
 
             // Purity: successive calls must return independent array references (no shared state)
             const seed2 = getSeedCatalog();
