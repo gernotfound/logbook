@@ -305,9 +305,9 @@ describe('M3: Storage & Persistence Delta Isolation Suite', () => {
 
             const loaded = await DB.loadUserData();
 
-            // When user doc is missing, standard catalog defaults are loaded from seeds.
-            expect(loaded?.library?.length).toBeGreaterThan(0);
-            expect(loaded?.customFoods?.length).toBeGreaterThan(0);
+            // When user doc is missing, standard catalog defaults are loaded from seeds (which are now empty).
+            expect(loaded?.library?.length).toBe(0);
+            expect(loaded?.customFoods?.length).toBe(0);
         });
     });
 

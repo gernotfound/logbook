@@ -61,11 +61,11 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(state).not.toBeNull();
         expect(Array.isArray(state?.library)).toBe(true);
         expect(Array.isArray(state?.customFoods)).toBe(true);
-        expect(state?.library?.length).toBeGreaterThan(0);
-        expect(state?.customFoods?.length).toBeGreaterThan(0);
+        expect(state?.library?.length).toBe(0);
+        expect(state?.customFoods?.length).toBe(0);
 
-        expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBeGreaterThan(0);
-        expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBeGreaterThan(0);
+        expect(parseInt(screen.getByTestId('exercise-count').textContent || '0')).toBe(0);
+        expect(parseInt(screen.getByTestId('food-count').textContent || '0')).toBe(0);
     });
 
     it('M2.2: Pre-render cache bootstrap resolves custom deltas with global catalog in main.tsx', async () => {
@@ -155,7 +155,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
 
         expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST');
         expect(Array.isArray(useAppStore.getState().userData?.library)).toBe(true);
-        expect(useAppStore.getState().userData?.library?.length).toBeGreaterThan(0);
+        expect(useAppStore.getState().userData?.library?.length).toBe(0);
 
         // Ensure localStorage flag is retained
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
