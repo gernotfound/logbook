@@ -65,14 +65,14 @@ Ruoli dei livelli di storage:
 | **Firestore** | Replica remota e sincronizzazione cloud |
 
 - **MUST:** Offline, l'app deve avviarsi e operare dai dati locali.
-- **MUST:** Una write rifiutata non deve essere esposta come confermata. `DB.saveUserData` restituisce `{ ok, status }` con valori `synced`, `rejected`, `local-pending` o `failed`.
-- **MUST:** `saveUserData`/`updateUserData` devono rigettare la Promise se la persistenza fallisce. Vietato risolvere silenziosamente nel `catch`.
+- **MUST:** Una write rifiutata non deve essere esposta come confermata. La sincronizzazione tramite `replicateJournal` e transazioni gestisce gli esiti e mantiene i dati se offline.
+- **MUST:** Le funzioni di aggiornamento devono rigettare la Promise se la persistenza fallisce. Vietato risolvere silenziosamente nel `catch`.
 
 ### `permission-denied` — gestione per contesto
 
 | Contesto | Comportamento richiesto |
 |---|---|
-| `DB.saveUserData` | MUST: restituire `{ ok: false, status: 'rejected' }`. Non mascherare. |
+| Sincronizzazione (`replicateJournal`) | MUST: gestire e propagare stati di errore (`rejected`). Non mascherare. |
 | Bootstrap App Check | MAY: retry limitato, solo se la causa transitoria è identificata. |
 | Telemetria | MAY: best-effort, può non propagare l'errore alla UI, ma deve registrare localmente il fallimento. |
 | `deleteAccount` | MUST: comunicare all'utente se la cancellazione cloud è parziale. |

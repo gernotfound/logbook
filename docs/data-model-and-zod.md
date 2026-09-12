@@ -79,7 +79,7 @@ Per ogni nuova chiave cloud-root, verificare e aggiornare **tutti** questi file:
 4. `src/lib/db.ts` — persistenza e mapping Firestore
 5. `firestore.rules` — regole di sicurezza
 6. `tests/firestore_security_rules.test.ts` — test delle regole
-7. Logica di merge/import-export
+7. Logica di merge/import-export (`src/lib/merge.ts`, `src/lib/sync/reconcile.ts`, `src/lib/sync/documentProjection.ts`)
 8. Controlli di dimensione del documento
 
 **MUST:** Violare questa invariante causa la perdita silenziosa dei dati al primo ciclo di salvataggio/caricamento a causa dello strip di Zod o del `fast-deep-equal`.

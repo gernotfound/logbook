@@ -1,6 +1,6 @@
 # Ciclo di vita account — LogBook
 
-> Ultima verifica del codice: 2026-09-11. Implementazione sul branch di correzione audit, non pubblicata. Esiti e limiti di test in `remediation_logbook_2026.md`.
+> Stato: normativo | Ultima verifica: 2026-09-12
 
 ## Backup JSON e importazione
 

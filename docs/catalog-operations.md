@@ -1,6 +1,6 @@
 # Operazioni Catalogo Globale — LogBook
 
-> Stato: implementazione locale in verifica | Ultima verifica: 2026-09-11 | Nessun seeding o deploy eseguito durante la correzione dell'audit.
+> Stato: normativo | Ultima verifica: 2026-09-12
 
 ## Struttura Firestore — `global_catalog`
 
@@ -16,13 +16,13 @@ Il manifest punta ai documenti dati della versione corrente. I path legacy sono:
 
 `global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false` (nessuna scrittura da client).
 
-## Seed locali vuoti — policy "enforce manual input"
+## Seed locali
 
-I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono **intenzionalmente vuoti**. L'app impone l'inserimento manuale o il download dal cloud per ridurre il bundle size.
+I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono completamente popolati per fornire immediatamente i dati di base all'avvio offline e per ridurre le chiamate cloud.
 
 ### Fallback offline
 
-Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sul seed locale. Essendo quest'ultimo vuoto, il fallback restituisce **array vuoti validi**, non un catalogo popolato. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
+Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sui seed locali completi, fornendo da subito un catalogo funzionante. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
 
 ## Script di seeding (`scripts/seed-catalog.mjs`)
 
