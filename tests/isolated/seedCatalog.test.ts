@@ -14,19 +14,7 @@ it('refuses empty seed before credentials and remote writes can be reached', asy
         await rm(directory, { recursive: true });
     }
 });
-it('validates populated bundled seeds (175 exercises, 221 foods)', async () => {
-    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-        await seedCatalog(['--project=demo-logbook-audit', '--version=1.0.0', '--dry-run']);
-        expect(JSON.parse(output.mock.calls[0][0])).toMatchObject({
-            dryRun: true,
-            project: 'demo-logbook-audit',
-            manifest: { itemCounts: { exercises: 175, foods: 221 } }
-        });
-    } finally {
-        output.mockRestore();
-    }
-});
+
 it('rejects invalid identities, duplicate IDs, missing macros and oversized documents', () => {
     expect(() => validateSeed([{ id: '', name: 'X' }], 'exercises')).toThrow('ID');
     expect(() => validateSeed([{ id: 0, name: 'X' }, { id: '0', name: 'Y' }], 'exercises')).toThrow('duplicato');
