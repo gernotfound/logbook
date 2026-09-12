@@ -4,7 +4,80 @@ import { Logic } from './logic';
 import { createBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
 import { captureSession, isCurrentSession } from './sync/session';
 import equal from 'fast-deep-equal';
-import type { UserData } from '../types';
+import type { ExportShareOptions, TrainingCycle, UserData, WorkoutRoutine } from '../types';
+
+const DEFAULT_SHARE_OPTIONS: Required<ExportShareOptions> = {
+    exportLibrary: true,
+    exportRoutines: true,
+    exportTrainingCycles: true,
+};
+
+export function buildShareExportData(userData: UserData, options: ExportShareOptions = DEFAULT_SHARE_OPTIONS) {
+    const library = userData.library ?? [];
+    const routines = userData.routines ?? [];
+    const trainingCycles = userData.trainingCycles ?? [];
+    const libraryById = new Map(library.map(item => [item.id, item]));
+    const routinesById = new Map(routines.map(item => [item.id, item]));
+    const cyclesById = new Map(trainingCycles.map(item => [item.id, item]));
+    const libraryIds = new Set<string>();
+    const routineIds = new Set<string>();
+    const cycleIds = new Set<string>();
+
+    const addSelection = <T extends { id: string }>(
+        selection: boolean | string[] | undefined,
+        source: T[],
+        sourceById: Map<string, T>,
+        target: Set<string>,
+    ) => {
+        if (selection === true) {
+            source.forEach(item => target.add(item.id));
+            return;
+        }
+        if (Array.isArray(selection)) {
+            selection.forEach(id => {
+                if (sourceById.has(id)) target.add(id);
+            });
+        }
+    };
+
+    addSelection(options.exportTrainingCycles, trainingCycles, cyclesById, cycleIds);
+    addSelection(options.exportRoutines, routines, routinesById, routineIds);
+    addSelection(options.exportLibrary, library, libraryById, libraryIds);
+
+    cycleIds.forEach(cycleId => {
+        const cycle = cyclesById.get(cycleId);
+        cycle?.routines.forEach(item => {
+            if (routinesById.has(item.routineId)) routineIds.add(item.routineId);
+        });
+    });
+
+    routineIds.forEach(routineId => {
+        const routine = routinesById.get(routineId);
+        routine?.exercises.forEach(item => {
+            if (libraryById.has(item.exId)) libraryIds.add(item.exId);
+        });
+    });
+
+    const finalLibrary = library.filter(item => libraryIds.has(item.id));
+    const finalRoutines: WorkoutRoutine[] = routines
+        .filter(item => routineIds.has(item.id))
+        .map(item => ({
+            ...item,
+            exercises: item.exercises.filter(exercise => libraryIds.has(exercise.exId)),
+        }));
+    const finalCycles: TrainingCycle[] = trainingCycles
+        .filter(item => cycleIds.has(item.id))
+        .map(item => ({
+            ...item,
+            routines: item.routines.filter(routine => routineIds.has(routine.routineId)),
+        }));
+
+    return {
+        library: finalLibrary,
+        routines: finalRoutines,
+        trainingCycles: finalCycles,
+    };
+}
 
 export const Exporter = {
     exportEmergencyJSON(userData: UserData): void {
@@ -54,12 +127,10 @@ export const Exporter = {
 
         let str = String(value);
 
-        // Se la stringa convertita sembra un numero negativo legittimo, non prependere l'apostrofo
         if (/^-\d/.test(str)) {
              return `"${str.replace(/"/g, '""')}"`;
         }
 
-        // OWASP: Qualsiasi stringa che dopo (o all'inizio) di un trim inizia con = + - @ \t \r
         const trimmed = str.trimStart();
         if (/^[=+\-@\t\r]/.test(trimmed) || /^[\uFEFF\xA0]*[=+\-@\t\r]/.test(str)) {
             str = "'" + str;
@@ -82,7 +153,6 @@ export const Exporter = {
                 : (session.date || "Data sconosciuta");
             const routineName = session.routineName || 'Allenamento libero';
 
-            // Session global metrics
             const sessionDuration = session.globalDurationStr || session.manualDurationStr || "";
             const mood = session.moodRating || "";
             const pump = session.pumpRating || "";
@@ -109,7 +179,6 @@ export const Exporter = {
                                 sessionDuration, mood, pump, fatigue, water
                             ]);
 
-                            // Gestione Dropset nel CSV
                             if (set.dropsets && set.dropsets.length > 0) {
                                 set.dropsets.forEach((ds: any, dsIdx: number) => {
                                     const dsKg = ds.kg !== undefined ? ds.kg : "";
@@ -122,7 +191,6 @@ export const Exporter = {
                                 });
                             }
 
-                            // Gestione Isometrie nel CSV
                             if (set.isometrics && set.isometrics.length > 0) {
                                 set.isometrics.forEach((iso: any, isoIdx: number) => {
                                     const isoKg = iso.kg !== undefined ? iso.kg : "";
@@ -193,7 +261,6 @@ export const Exporter = {
                 }
                 if (err.name === 'SecurityError' || err.name === 'TypeError') {
                     console.warn("showSaveFilePicker bloccato, uso fallback nativo:", err);
-                    // Lascia procedere al fallback fuori dal blocco
                 } else {
                     console.error("Esportazione fallita:", err);
                     useDialogStore.getState().showAlert("Esportazione fallita, riprova.");
@@ -210,81 +277,29 @@ export const Exporter = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url); // Cleanup memory
+        URL.revokeObjectURL(url);
         return true;
     },
 
     async exportShareJson(
         userData: UserData,
-        options: {
-            exportLibrary?: boolean | string[],
-            exportRoutines?: boolean | string[],
-            exportTrainingCycles?: boolean | string[]
-        } = { exportLibrary: true, exportRoutines: true, exportTrainingCycles: true }
+        options: ExportShareOptions = DEFAULT_SHARE_OPTIONS
     ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number } | undefined> {
-
-        const libraryIds = new Set<string>();
-        const routineIds = new Set<string>();
-        const cycleIds = new Set<string>();
-
-        // 1. Aggiungi le selezioni esplicite
-        if (options.exportTrainingCycles === true) {
-            (userData.trainingCycles || []).forEach(c => cycleIds.add(c.id));
-        } else if (Array.isArray(options.exportTrainingCycles)) {
-            options.exportTrainingCycles.forEach(id => cycleIds.add(id));
-        }
-
-        if (options.exportRoutines === true) {
-            (userData.routines || []).forEach(r => routineIds.add(r.id));
-        } else if (Array.isArray(options.exportRoutines)) {
-            options.exportRoutines.forEach(id => routineIds.add(id));
-        }
-
-        if (options.exportLibrary === true) {
-            (userData.library || []).forEach(e => libraryIds.add(e.id));
-        } else if (Array.isArray(options.exportLibrary)) {
-            options.exportLibrary.forEach(id => libraryIds.add(id));
-        }
-
-        // 2. Risoluzione dipendenze: Cicli -> Schede
-        if (cycleIds.size > 0) {
-            (userData.trainingCycles || []).forEach(c => {
-                if (cycleIds.has(c.id) && Array.isArray(c.routines)) {
-                    c.routines.forEach(item => routineIds.add(item.routineId));
-                }
-            });
-        }
-
-        // 3. Risoluzione dipendenze: Schede -> Esercizi
-        if (routineIds.size > 0) {
-            (userData.routines || []).forEach(r => {
-                if (routineIds.has(r.id) && Array.isArray(r.exercises)) {
-                    r.exercises.forEach(ex => libraryIds.add(ex.exId));
-                }
-            });
-        }
-
-        // 4. Filtra gli array reali ignorando ID inesistenti o orfani
-        const finalLibrary = (userData.library || []).filter(e => libraryIds.has(e.id));
-        const finalRoutines = (userData.routines || []).filter(r => routineIds.has(r.id));
-        const finalCycles = (userData.trainingCycles || []).filter(c => cycleIds.has(c.id));
-
+        const shareData = buildShareExportData(userData, options);
         const payload = {
             version: 1,
             type: 'share',
             exportedAt: new Date().toISOString(),
-            library: finalLibrary,
-            routines: finalRoutines,
-            trainingCycles: finalCycles
+            ...shareData,
         };
 
         const content = JSON.stringify(payload, null, 2);
         if (await this.downloadFile("logbook_condivisione.json", content, 'application/json') === false) return;
 
         return {
-            libraryCount: finalLibrary.length,
-            routinesCount: finalRoutines.length,
-            cyclesCount: finalCycles.length
+            libraryCount: shareData.library.length,
+            routinesCount: shareData.routines.length,
+            cyclesCount: shareData.trainingCycles.length
         };
     },
 
