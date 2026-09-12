@@ -20,32 +20,37 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.click('button:has-text("Accetta e Continua")');
 
     // Attendiamo di essere loggati e vedere la navbar
-    await expect(page.locator('button[aria-label="Allenamento"]')).toBeVisible();
+    const primaryNav = page.getByRole('navigation', { name: 'Navigazione principale' });
+    const trainingNavButton = primaryNav.getByRole('button', { name: 'Allenamento', exact: true });
+    await expect(trainingNavButton).toBeVisible();
 
     // 4. Naviga alla tab Allenamento (tramite la Bottom Nav)
-    await page.click('button[aria-label="Allenamento"]');
+    await trainingNavButton.click();
+    const activeTrainingPanel = page.locator('.app-tab-panel:not([hidden])');
 
     // 5. Crea una scheda vuota per poter avviare una sessione
-    await page.click('button.sub-nav-btn:has-text("Schede")');
+    await activeTrainingPanel.locator('button.sub-nav-btn:has-text("Schede")').click();
     
     // Apri il box di creazione
-    await page.click('button:has-text("Crea scheda")');
+    await activeTrainingPanel.locator('button:has-text("Crea scheda")').click();
 
     // Compila il nome della scheda
-    await page.fill('input[placeholder="Nome scheda"]', 'Scheda E2E Offline');
-    await page.click('button:has-text("Crea scheda")');
+    await activeTrainingPanel.locator('input[placeholder="Nome scheda"]').fill('Scheda E2E Offline');
+    await activeTrainingPanel.locator('button:has-text("Crea scheda")').click();
 
     // 6. Torna alla vista Sessione
-    await page.click('button.sub-nav-btn:has-text("Sessione")');
+    await activeTrainingPanel.locator('button.sub-nav-btn:has-text("Sessione")').click();
 
     // Seleziona la scheda appena creata
-    await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
+    await activeTrainingPanel.locator('select#archive-routine-select').selectOption({ label: 'Scheda E2E Offline (0 es.)' });
 
-    // 7. Inizia l'allenamento
-    await page.click('button:has-text("Inizia allenamento")');
+    // 7. Inizia l'allenamento nel solo pannello attivo: la Home keep-alive può contenere una CTA omonima nascosta.
+    const startWorkoutButton = activeTrainingPanel.getByRole('button', { name: 'Inizia allenamento', exact: true });
+    await expect(startWorkoutButton).toBeVisible();
+    await startWorkoutButton.click();
     
     // Assicurati di essere nella schermata allenamento attivo
-    await expect(page.locator('button:has-text("Termina")')).toBeVisible();
+    await expect(activeTrainingPanel.getByRole('button', { name: 'Termina', exact: true })).toBeVisible();
 
     // 8. Vai offline
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
@@ -68,17 +73,21 @@ test.describe('Offline scenarios & Background suspension', () => {
     await newPage.goto('/');
     
     // Naviga di nuovo ad allenamento
-    await newPage.click('button[aria-label="Allenamento"]');
+    const reopenedPrimaryNav = newPage.getByRole('navigation', { name: 'Navigazione principale' });
+    await reopenedPrimaryNav.getByRole('button', { name: 'Allenamento', exact: true }).click();
+    const reopenedTrainingPanel = newPage.locator('.app-tab-panel:not([hidden])');
 
     // Assicurati che il workout sia ancora lì
-    await expect(newPage.locator('button:has-text("Termina")')).toBeVisible();
+    await expect(reopenedTrainingPanel.getByRole('button', { name: 'Termina', exact: true })).toBeVisible();
 
     // 12. Termina l'allenamento
-    await newPage.click('button:has-text("Termina")');
+    await reopenedTrainingPanel.getByRole('button', { name: 'Termina', exact: true }).click();
     // Conferma l'alert (GlobalDialog)
-    await newPage.click('button:has-text("Conferma")');
+    await newPage.getByRole('button', { name: 'Conferma', exact: true }).click();
 
-    // Verifica che l'allenamento sia finito
-    await expect(newPage.locator('button:has-text("Inizia allenamento")')).toBeVisible();
+    // Verifica che l'allenamento sia finito nel pannello attivo.
+    await expect(
+      reopenedTrainingPanel.getByRole('button', { name: 'Inizia allenamento', exact: true })
+    ).toBeVisible();
   });
 });

@@ -1,0 +1,24 @@
+/*
+ * Interaction guardrails
+ * Stable accessibility layer loaded after the visual theme.
+ * Keep interactive targets usable on narrow phones without changing product logic.
+ */
+
+:root {
+  --interactive-target-min: 2.75rem;
+}
+
+.segmented-control__item,
+.guest-mode-banner__action,
+.recovery-count {
+  min-height: var(--interactive-target-min);
+}
+
+@media (max-width: 340px) {
+  .timer-btn {
+    width: var(--interactive-target-min);
+    min-width: var(--interactive-target-min);
+    height: var(--interactive-target-min);
+    min-height: var(--interactive-target-min);
+  }
+}

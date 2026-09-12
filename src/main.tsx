@@ -10,6 +10,7 @@ import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
 import './styles/tokens.css'
 import './styles/restyling.css'
+import './styles/interaction-guardrails.css'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
 import type { UserData } from './types'
 
