@@ -61,6 +61,11 @@ Quando `document.visibilityState === 'hidden'` (in `useAppStore.ts`):
 
 **Perché `localStorage` e non IndexedDB?** `localStorage.setItem()` è un'operazione sincrona bloccante che il browser garantisce prima di congelare il processo. IndexedDB si basa su transazioni asincrone che verrebbero abortite dall'OS.
 
+## PWA Update Barrier
+
+Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli aggiornamenti del Service Worker per prevenire la corruzione dei dati.
+- **MUST:** Il reload barrier deve essere fail-safe. Se `state.userData` esiste in memoria ma il file persistito (`envelope`) è assente o corrotto, l'app deve bloccare l'aggiornamento (calcolando `isUnsaved = true`) perché il ricaricamento distruggerebbe lo stato in memoria che non è ancora salvato su disco in modo sicuro. Non assumere MAI `isUnsaved = false` solo perché manca `envelope`.
+
 ## Merge deterministico (Guest → Cloud) e Reconcile
 
 Al login con Google, se esistono dati guest locali, viene eseguito un merge deterministico (`src/lib/merge.ts`) integrato ora con la logica di `reconcile.ts`:
