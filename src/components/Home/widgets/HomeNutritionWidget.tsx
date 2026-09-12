@@ -35,11 +35,11 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
             aria-label="Apri sezione nutrizione"
         >
             <div className="home-widget-heading">
-                <h2>
+                <h2 style={{ color: 'var(--text-main)' }}>
                     <Utensils size={19} color="var(--primary-color)" aria-hidden="true" />
                     Nutrizione
                 </h2>
-                <div className="home-widget-meta">Target {kcalTarget} kcal</div>
+                <div className="home-widget-meta" style={{ color: 'var(--text-muted)' }}>Target {kcalTarget} kcal</div>
             </div>
 
             <div className="home-nutrition-body">
@@ -58,17 +58,17 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
                     </div>
                 </div>
 
-                <div className="home-macros">
+                <div className="home-macros" style={{ flex: 1, minWidth: 0 }}>
                     <div className="home-macro home-macro--carbs">
-                        <div className="home-macro__row"><span>Carbo</span><strong>{carbs} g</strong></div>
+                        <div className="home-macro__row"><span style={{ color: 'var(--text-muted)' }}>CARBO</span><strong>{carbs} g</strong></div>
                         <div className="progress-bg"><div className="progress-fill" style={{ width: `${Math.min((carbs / 300) * 100, 100)}%` }} /></div>
                     </div>
                     <div className="home-macro home-macro--protein">
-                        <div className="home-macro__row"><span>Proteine</span><strong>{pro} g</strong></div>
+                        <div className="home-macro__row"><span style={{ color: 'var(--text-muted)' }}>PRO</span><strong>{pro} g</strong></div>
                         <div className="progress-bg"><div className="progress-fill" style={{ width: `${Math.min((pro / 150) * 100, 100)}%` }} /></div>
                     </div>
                     <div className="home-macro home-macro--fat">
-                        <div className="home-macro__row"><span>Grassi</span><strong>{fat} g</strong></div>
+                        <div className="home-macro__row"><span style={{ color: 'var(--text-muted)' }}>GRASSI</span><strong>{fat} g</strong></div>
                         <div className="progress-bg"><div className="progress-fill" style={{ width: `${Math.min((fat / 80) * 100, 100)}%` }} /></div>
                     </div>
                 </div>

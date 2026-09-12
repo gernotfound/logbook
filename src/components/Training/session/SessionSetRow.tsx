@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
 
 interface SessionSetRowProps {
@@ -29,10 +29,14 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     onRemoveSpecialSet
 }) => {
     const isTime = trackingType === 'time';
+    const fieldCompatStyle = { minWidth: 0, flex: 1 } as React.CSSProperties;
 
     return (
         <>
-            <div className="set-row workout-set-row">
+            <div
+                className="set-row workout-set-row"
+                style={{ '--workout-focus-color': 'var(--primary-color)' } as React.CSSProperties}
+            >
                 <div className="workout-set-index">
                     <span className="workout-set-index__label">S{sIndex + 1}</span>
                     <button
@@ -46,7 +50,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     </button>
                 </div>
 
-                <div className="workout-set-field">
+                <div className="workout-set-field" style={fieldCompatStyle}>
                     <BufferedInput
                         id={`kg-${s.id}`}
                         type="number"
@@ -56,10 +60,11 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         value={s.kg ?? ''}
                         onChange={val => onUpdateSet(s.id, 'kg', val)}
                         onFocus={e => e.target.select()}
+                        style={fieldCompatStyle}
                     />
                 </div>
 
-                <div className="workout-set-field">
+                <div className="workout-set-field" style={fieldCompatStyle}>
                     {isTime ? (
                         <BufferedInput
                             id={`time-${s.id}`}
@@ -68,6 +73,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             value={s.time ?? ''}
                             onChange={val => onUpdateSet(s.id, 'time', val)}
                             onFocus={e => e.target.select()}
+                            style={fieldCompatStyle}
                         />
                     ) : (
                         <BufferedInput
@@ -78,19 +84,21 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             value={s.reps ?? ''}
                             onChange={val => onUpdateSet(s.id, 'reps', val)}
                             onFocus={e => e.target.select()}
+                            style={fieldCompatStyle}
                         />
                     )}
                 </div>
 
-                <div className="workout-special-wrap">
+                <div className="workout-special-wrap" style={{ display: 'flex', alignItems: 'center' }}>
                     <button
                         type="button"
                         className="workout-set-special"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', borderRadius: '50%' }}
                         onClick={onToggleMenu}
                         aria-label="Aggiungi dropset o isometria"
                         title="Aggiungi serie speciale"
                     >
-                        <Plus size={19} aria-hidden="true" />
+                        +
                     </button>
 
                     {isOpenMenu && (
@@ -126,7 +134,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             {(s.dropsets || []).map((ds: any, dsIdx: number) => {
                 const label = (s.dropsets && s.dropsets.length > 1) ? `Dropset ${dsIdx + 1}` : 'Dropset';
                 return (
-                    <div key={ds.id || dsIdx} className="workout-special-row">
+                    <div key={ds.id || dsIdx} className="workout-special-row" style={{ alignItems: 'center' }}>
                         <div className="workout-special-row__label">↳ {label}</div>
                         <BufferedInput
                             id={`ds-kg-${s.id}-${dsIdx}`}
@@ -162,7 +170,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             {(s.isometrics || []).map((iso: any, isoIdx: number) => {
                 const label = (s.isometrics && s.isometrics.length > 1) ? `Isometria ${isoIdx + 1}` : 'Isometria';
                 return (
-                    <div key={iso.id || isoIdx} className="workout-special-row workout-special-row--iso">
+                    <div key={iso.id || isoIdx} className="workout-special-row workout-special-row--iso" style={{ alignItems: 'center' }}>
                         <div className="workout-special-row__label">↳ {label}</div>
                         <BufferedInput
                             id={`iso-kg-${s.id}-${isoIdx}`}

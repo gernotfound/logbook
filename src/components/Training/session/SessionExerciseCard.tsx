@@ -341,7 +341,10 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         />
                     ))}
 
-                    <div className="workout-set-actions">
+                    <div
+                        className="workout-set-actions"
+                        style={{ '--workout-actions-display': 'flex' } as React.CSSProperties}
+                    >
                         <button
                             type="button"
                             className="btn btn-secondary btn-small"
@@ -349,7 +352,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             disabled={(exItem.sets || []).length === 0}
                             aria-label="Rimuovi serie"
                         >
-                            − Rimuovi serie
+                            - Rimuovi serie
                         </button>
                         <button
                             type="button"
