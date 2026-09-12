@@ -1,6 +1,6 @@
 # Storage e Sincronizzazione — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-09 | File verificati: `src/store/useAppStore.ts`, `src/store/slices/createDataSlice.ts`, `src/store/slices/createSyncSlice.ts`, `src/store/slices/createWorkoutSlice.ts`, `src/constants.ts`, `src/lib/db.ts`, `src/main.tsx`
+> Stato: normativo | Ultima verifica: 2026-09-12 | File verificati: `src/store/useAppStore.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/reconcile.ts`, `src/lib/sync/documentProjection.ts`, `src/constants.ts`, `src/main.tsx`
 
 ## Architettura di storage
 
@@ -15,29 +15,30 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 **MUST:** Offline, l'app deve avviarsi e operare dai dati locali (IndexedDB + localStorage).
 
-## Pipeline di salvataggio (Zustand → IndexedDB → Firestore)
+## Pipeline di salvataggio Transazionale (Journaling)
 
-1. I componenti invocano `saveUserData((prev) => ({ ... }))` o `updateUserData`.
-2. Zustand aggiorna lo stato in memoria e chiama immediatamente `saveUserDataToCache(finalData)` per sincronizzare IndexedDB.
-3. Viene avviato il **debouncer locale di 300ms** (`DEBOUNCE_DELAY_LOCAL = 300` in `src/constants.ts`) per il workout attivo, che salva su `localStorage`.
-4. Viene avviato il **debouncer globale di 1000ms** (`DEBOUNCE_DELAY_GLOBAL = 1000`) per la sincronizzazione cloud.
-5. Alla scadenza del timer globale, `DB.saveUserData` in `src/lib/db.ts` effettua il diffing con `fast-deep-equal`.
-6. Se ci sono differenze, viene eseguito un `batch.commit()` su Firestore con timeout di 7 secondi.
+La nuova pipeline sostituisce il precedente approccio basato sul debouncer e diffing globale introducendo un meccanismo a journal e proiezioni:
+
+1. I componenti invocano `saveUserData` tramite le interfacce transazionali.
+2. Viene creato un record nel journal locale. `documentProjection.ts` gestisce lo stato proiettato dei documenti.
+3. `transactionWriter.ts` processa queste mutazioni, preparandole per il cloud e assicurando l'atomicità lato client.
+4. `replicateJournal.ts` replica in background il journal verso Firestore. In caso di offline, le mutazioni rimangono nel journal.
+5. In caso di collisione o aggiornamento da altre fonti, `reconcile.ts` interviene per unire lo stato cloud con le mutazioni in sospeso o in arrivo.
 
 ## Esiti della sincronizzazione
 
-`DB.saveUserData` restituisce un oggetto con stato:
+Il nuovo sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 
 | Status | Significato |
 |---|---|
-| `{ ok: true, status: 'synced' }` | Scrittura confermata su Firestore |
-| `{ ok: false, status: 'rejected' }` | `permission-denied` — la write è stata rifiutata (App Check, rules, dominio, auth) |
-| `{ ok: false, status: 'local-pending' }` | Offline o timeout — dati salvati in cache locale, Background Sync registrato |
-| `{ ok: false, status: 'failed' }` | Errore critico non classificato |
+| `synced` | Mutazioni applicate confermate su Firestore |
+| `rejected` | `permission-denied` — la write è stata rifiutata (App Check, rules, dominio, auth). Il client registra il rigetto. |
+| `local-pending` | Offline o timeout — transazione nel journal, Background Sync in attesa |
+| `failed` | Errore critico non classificato |
 
 **MUST:** Una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
 
-**MUST:** Le funzioni `saveUserData` e `updateUserData` devono rigettare la Promise quando `DB.saveUserData` fallisce. È vietato risolvere silenziosamente nel `catch`.
+**MUST:** Le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel `catch`.
 
 ## Pre-render bootstrap
 
@@ -55,25 +56,22 @@ Questo elimina race condition con il ciclo di vita React e `AuthContext`:
 
 Quando `document.visibilityState === 'hidden'` (in `useAppStore.ts`):
 1. Viene chiamato `draftRegistry.flushAll()` per salvare tutte le bozze.
-2. `localStorage.setItem('logbook_local_workout', JSON.stringify(state.localWorkout))` viene eseguito sincronamente, bypassando il debouncer di 300ms.
+2. `localStorage.setItem('logbook_local_workout', JSON.stringify(state.localWorkout))` viene eseguito sincronamente, bypassando eventuali ritardi.
 3. L'operazione è protetta da `try/catch`.
 
 **Perché `localStorage` e non IndexedDB?** `localStorage.setItem()` è un'operazione sincrona bloccante che il browser garantisce prima di congelare il processo. IndexedDB si basa su transazioni asincrone che verrebbero abortite dall'OS.
 
-## Merge deterministico (Guest → Cloud)
+## Merge deterministico (Guest → Cloud) e Reconcile
 
-Al login con Google, se esistono dati guest locali, viene eseguito un merge deterministico (`src/lib/merge.ts`):
+Al login con Google, se esistono dati guest locali, viene eseguito un merge deterministico (`src/lib/merge.ts`) integrato ora con la logica di `reconcile.ts`:
 
-- **Array con ID** (`library`, `routines`, `customFoods`, `trainingCycles`, `history`, `supplements`): unione deduplicata per `id`, priorità alle modifiche locali (guest) in caso di collisione.
-- **Record per data** (`nutrition`): unione delle date `YYYY-MM-DD`, merge deduplicato dei sotto-array `meals` e `supplementsIntake` per `id`.
-- **Campi scalari** (`profile`, `nutritionPlanning`, `activeWorkout`, `activeCycleId`): priorità ai dati guest se valorizzati, altrimenti cloud.
+- **Array con ID**: unione deduplicata per `id`, priorità alle modifiche locali.
+- **Record per data**: unione delle date `YYYY-MM-DD`, merge deduplicato dei sotto-array.
+- **Campi scalari**: priorità ai dati guest se valorizzati, altrimenti cloud.
 
 **MUST:** Il dato unificato deve transitare e superare `UserDataSchema.parse()` prima del salvataggio.
 
-**NOTE:** La policy "guest wins" è deterministica ma non equivale a "dato più recente". VERIFY l'implementazione e i test prima di cambiare la logica di merge.
-
 ## Offline resilience
 
-In assenza di connessione, l'app opera da IndexedDB locale. L'SDK Firestore gestisce le code offline in background tramite `persistentLocalCache` con `persistentMultipleTabManager`.
-
-Quando la connessione viene ripristinata, un listener `online` in `useAppStore.ts` cancella eventuali `saveError` pendenti.
+In assenza di connessione, l'app opera da IndexedDB locale con le mutazioni accumulate nel journal di `replicateJournal.ts`.
+Quando la connessione viene ripristinata, il replicatore esegue in background il batch di operazioni pendenti, e `reconcile.ts` riconcilia eventuali divergenze esterne.

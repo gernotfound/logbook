@@ -1,6 +1,6 @@
 # Guida operativa & consultazione telemetria Firestore (LogBook)
 
-Questa guida illustra la struttura, le query, le regole di sicurezza e le procedure di troubleshooting per la consultazione degli errori e delle metriche PWA raccolte dall'Hub di Telemetria unificato di LogBook.
+Questa guida illustra la struttura, le query, le regole di sicurezza e le procedure di troubleshooting per la consultazione degli errori e delle metriche PWA raccolte dall'Hub di Telemetria unificato di LogBook (`src/lib/telemetryHub.ts`), ora implementato e supportato tramite Web Worker.
 
 ---
 
