@@ -50,7 +50,7 @@ test.describe('Offline scenarios & Background suspension', () => {
     await startWorkoutButton.click();
     
     // Assicurati di essere nella schermata allenamento attivo
-    await expect(activeTrainingPanel.getByRole('button', { name: 'Termina', exact: true })).toBeVisible();
+    await expect(activeTrainingPanel.getByRole('button', { name: 'Termina sessione', exact: true })).toBeVisible();
 
     // 8. Vai offline
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
@@ -78,10 +78,10 @@ test.describe('Offline scenarios & Background suspension', () => {
     const reopenedTrainingPanel = newPage.locator('.app-tab-panel:not([hidden])');
 
     // Assicurati che il workout sia ancora lì
-    await expect(reopenedTrainingPanel.getByRole('button', { name: 'Termina', exact: true })).toBeVisible();
+    await expect(reopenedTrainingPanel.getByRole('button', { name: 'Termina sessione', exact: true })).toBeVisible();
 
     // 12. Termina l'allenamento
-    await reopenedTrainingPanel.getByRole('button', { name: 'Termina', exact: true }).click();
+    await reopenedTrainingPanel.getByRole('button', { name: 'Termina sessione', exact: true }).click();
     // Conferma l'alert (GlobalDialog)
     await newPage.getByRole('button', { name: 'Conferma', exact: true }).click();
 
