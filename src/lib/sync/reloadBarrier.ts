@@ -16,7 +16,22 @@ export async function prepareForReload() {
     const envelope = await readLocal(session.owner);
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
     const state = useAppStore.getState();
-    if (state.userData && (!envelope || !equal(UserDataSchema.parse(envelope.data), UserDataSchema.parse(state.userData)))) {
+    let isUnsaved = false;
+    if (state.userData && envelope) {
+        // Strip undefined values explicitly via JSON to match how `fast-deep-equal` views them 
+        // compared to missing keys, preventing false positives.
+        const envParsed = JSON.parse(JSON.stringify(UserDataSchema.parse(envelope.data)));
+        const stateParsed = JSON.parse(JSON.stringify(UserDataSchema.parse(state.userData)));
+        
+        // Exclude activeWorkout as it is ephemeral and frequently gets desynced between 
+        // the local cache and Zustand store (e.g. by timer ticks).
+        delete envParsed.activeWorkout;
+        delete stateParsed.activeWorkout;
+        
+        isUnsaved = !equal(envParsed, stateParsed);
+    }
+
+    if (isUnsaved) {
         throw new Error('Le ultime modifiche non sono ancora salvate sul dispositivo. Riprova tra poco.');
     }
     writeDeviceValue('workout', state.localWorkout ? JSON.stringify(state.localWorkout) : null, session.owner);

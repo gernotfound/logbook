@@ -1,21 +1,5 @@
-
 :root {
-    --bg-color: #000000;
-    --surface-color: #0d0d0d;
-    --surface-light: #1a1a1a;
-    --primary-color: #00e5ff;
-    --primary-dark: #00b8d4;
-    --primary-glow: rgba(0, 229, 255, 0.3);
-    --text-main: #f0f0f0;
-    --text-muted: #9ba3af;
-    --danger-color: #ff4d6d;
-    --warning-color: #ffb703;
-    --success-color: #2ecc71;
-    --border-radius: 16px;
-    --spacing: 15px;
-    --glass-bg: rgba(13, 13, 13, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --accent-color: #cc00ff;
+  /* Variables are now managed in tokens.css */
 }
 
 * { 
@@ -1109,4 +1093,260 @@ div[style*="relative"]:has(.context-menu-trigger[aria-expanded="true"]),
 .context-menu-active-parent {
     position: relative;
     z-index: 50;
+}
+
+/* Auth Classes */
+.auth-card {
+  width: 90%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: var(--space-6);
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-floating);
+  text-align: center;
+  position: relative;
+}
+.auth-card .close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 5px;
+}
+.auth-brand {
+  margin-bottom: var(--space-5);
+}
+.auth-brand h1 {
+  color: var(--primary-color);
+  margin-bottom: var(--space-2);
+}
+.auth-brand p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.auth-mode-switch {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.auth-password-field {
+  position: relative;
+  width: 100%;
+}
+.auth-password-toggle {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+.auth-link {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.auth-link--muted {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.auth-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0;
+}
+.auth-separator::before,
+.auth-separator::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.15);
+}
+.auth-separator span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.auth-google {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-main);
+  margin-bottom: 15px;
+}
+.auth-guest {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+.auth-footnote {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 5px;
+/* Timer Component Classes */
+.workout-timer-shell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0 var(--space-3);
+  box-sizing: border-box;
+}
+
+.timer-display {
+  font-size: 1.6rem;
+  font-family: monospace;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 2px;
+  transition: color 0.2s ease;
+}
+
+.timer-display.is-running {
+  color: var(--warning-color);
+}
+
+.timer-controls {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.timer-btn {
+  font-size: 1.2rem;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.timer-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.timer-btn.play {
+  color: var(--success-color);
+}
+
+.timer-btn.pause {
+  color: var(--warning-color);
+}
+
+.timer-btn.stop {
+  color: var(--danger-color);
+}
+
+/* SessionSetRow Classes */
+.workout-set-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-2);
+  gap: var(--space-2);
+  border: 1px solid var(--primary-color);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+
+.workout-set-index {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.set-row-metrics {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.workout-set-input {
+  margin: 0;
+  border: 1px solid var(--glass-border);
+  background: rgba(0,0,0,0.2);
+  color: var(--text-main);
+  padding: 8px;
+  border-radius: var(--radius-xs);
+  font-size: 16px !important;
+}
+
+.workout-set-special-trigger {
+  background: var(--primary-color);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  cursor: pointer;
+  align-self: center;
+}
+
+.special-set-row {
+  margin-left: 20px;
+  padding-left: 10px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  gap: 10px;
+}
+
+.special-set-row--dropset {
+  border-left: 2px solid var(--warning-color);
+}
+
+.special-set-row--isometric {
+  border-left: 2px solid var(--accent-color);
+}
+
+.special-set-label {
+  font-size: 0.75rem;
+  min-width: 78px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.special-set-row--dropset .special-set-label {
+  color: var(--warning-color);
+}
+
+.special-set-row--isometric .special-set-label {
+  color: var(--accent-color);
 }

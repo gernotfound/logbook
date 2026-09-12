@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { useAppStore } from '../../store/useAppStore';
 import { formatTimerMs } from '../../lib/utils/timer';
+import { Play, Pause, RotateCcw, Square } from 'lucide-react';
 
 export default function WorkoutTimer() {
     const { currentUser, isGuest } = useAuth();
@@ -127,18 +128,26 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 10px' }}>
-            <span className="timer-display" style={{ fontSize: '1.6rem', fontFamily: 'monospace', fontWeight: 'bold', color: restState === 'running' ? 'var(--warning-color)' : '#fff', letterSpacing: '2px' }}>
+        <div className="workout-timer-shell" role="timer" aria-label={`Timer recupero ${restDisplay}`}>
+            <span className={`timer-display ${restState === 'running' ? 'is-running' : ''}`} aria-live="off">
                 {restDisplay}
             </span>
-            <div className="timer-controls" style={{ display: 'flex', gap: '8px' }}>
+            <div className="timer-controls" aria-label="Controlli timer recupero">
                 {restState !== 'running' ? (
-                    <button type="button" className="timer-btn play" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={startRest} aria-label="Avvia recupero" title="Avvia recupero">▶</button>
+                    <button type="button" className="timer-btn play" onClick={startRest} aria-label="Avvia recupero" title="Avvia recupero">
+                        <Play size={20} aria-hidden="true" />
+                    </button>
                 ) : (
-                    <button type="button" className="timer-btn pause" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={pauseRest} aria-label="Pausa recupero" title="Pausa recupero">⏸</button>
+                    <button type="button" className="timer-btn pause" onClick={pauseRest} aria-label="Pausa recupero" title="Pausa recupero">
+                        <Pause size={20} aria-hidden="true" />
+                    </button>
                 )}
-                <button type="button" className="timer-btn reset" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={resetRest} aria-label="Riavvia recupero" title="Riavvia recupero">🔄</button>
-                <button type="button" className="timer-btn stop" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={stopRest} aria-label="Ferma recupero" title="Ferma recupero">⏹</button>
+                <button type="button" className="timer-btn reset" onClick={resetRest} aria-label="Riavvia recupero" title="Riavvia recupero">
+                    <RotateCcw size={20} aria-hidden="true" />
+                </button>
+                <button type="button" className="timer-btn stop" onClick={stopRest} aria-label="Ferma recupero" title="Ferma recupero">
+                    <Square size={19} aria-hidden="true" />
+                </button>
             </div>
         </div>
     );

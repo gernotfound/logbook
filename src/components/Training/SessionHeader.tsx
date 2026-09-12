@@ -1,5 +1,6 @@
 import React from 'react';
 import WorkoutTimer from './WorkoutTimer';
+import { Pencil } from 'lucide-react';
 
 // Responsabilità: renderizzare l'header e il timer di una sessione attiva o in modifica.
 // Props: isEditingHistory, routineName, date, onCancelHistory.
@@ -37,8 +38,8 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
                     marginBottom: '15px'
                 }}>
                     <div>
-                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
-                            ✏️ Modifica allenamento dello storico
+                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Pencil size={16} /> Modifica allenamento dello storico
                         </div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             {routineName || 'Sessione'} • {date || ''}

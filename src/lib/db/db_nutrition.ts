@@ -41,7 +41,8 @@ export function syncNutritionMonths(batch: any, user: any, state: any, oldState:
     });
 
     Object.keys(newNutMonths).forEach(month => {
-        if (!deepEqual(newNutMonths[month], oldNutMonths[month])) {
+        const normalizedNewMonth = JSON.parse(JSON.stringify(newNutMonths[month]));
+        if (!deepEqual(normalizedNewMonth, oldNutMonths[month])) {
             const cleanDoc = removeUndefinedValues(newNutMonths[month]);
             checkDocSize(cleanDoc, `Nutrition ${month}`);
             batch.set(doc(getDb(), "users", user.uid, "nutrition_months", month), cleanDoc);

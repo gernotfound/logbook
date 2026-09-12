@@ -14,6 +14,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
 import type { NutritionSubTab } from '../../types';
+import SectionTabs from '../UI/SectionTabs';
 
 interface NutritionViewProps {
     subTab?: NutritionSubTab;
@@ -81,11 +82,13 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
         }
     };
 
-    const handleWheel = (e: any) => {
-        if (e.deltaY !== 0) {
-            e.currentTarget.scrollLeft += e.deltaY;
-        }
-    };
+    const NUTRITION_TABS = [
+        { value: 'meals', label: 'Pasti' },
+        { value: 'planning', label: 'Pianificazione' },
+        { value: 'supplements', label: 'Integratori' },
+        { value: 'archive', label: 'Alimenti' },
+        { value: 'history', label: 'Storico' },
+    ] as const;
 
     return (
         <div id="view-nutrition" className="view-section active">
@@ -93,53 +96,12 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
                 <NutritionConflictBanner onResolveClick={() => setConflictDialogOpen(true)} />
             )}
 
-            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Nutrizione" onWheel={handleWheel}>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'meals'}
-                    className={`sub-nav-btn ${activeSubTab === 'meals' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('meals')}
-                >
-                    Pasti
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'planning'}
-                    className={`sub-nav-btn ${activeSubTab === 'planning' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('planning')}
-                >
-                    Pianificazione
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'supplements'}
-                    className={`sub-nav-btn ${activeSubTab === 'supplements' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('supplements')}
-                >
-                    Integratori
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'archive'}
-                    className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('archive')}
-                >
-                    Alimenti
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'history'}
-                    className={`sub-nav-btn ${activeSubTab === 'history' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('history')}
-                >
-                    Storico
-                </button>
-            </div>
+            <SectionTabs
+                value={activeSubTab}
+                onChange={(val) => setSubTab?.(val)}
+                tabs={NUTRITION_TABS}
+                ariaLabel="Sotto-menu Nutrizione"
+            />
 
             {activeSubTab === 'meals' && (
                 <div className="nutrition-sub-view active">
