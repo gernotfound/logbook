@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Clock3, Flag, Save, Trash2 } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
@@ -17,7 +18,7 @@ const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: any[]; note: string }> = 
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     const [display, setDisplay] = useState('00:00:00');
-    
+
     useEffect(() => {
         if (!startTime) return;
         const updateDisplay = () => {
@@ -25,7 +26,7 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             setDisplay(Logic.formatDuration(diff));
         };
 
-        updateDisplay(); // initial call
+        updateDisplay();
         const interval = setInterval(updateDisplay, 1000);
 
         const handleVisibilityChange = () => {
@@ -40,7 +41,13 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [startTime]);
-    return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
+
+    return (
+        <div className="workout-global-timer" aria-label={`Durata sessione ${display}`}>
+            <Clock3 size={20} aria-hidden="true" />
+            <span>{display}</span>
+        </div>
+    );
 };
 
 export interface ActiveWorkoutSessionProps {
@@ -61,7 +68,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
         updateSetupNote, updateSessionNote
     } = useWorkoutSession();
 
-    // Previene lo spegnimento automatico dello schermo durante la sessione attiva
+    // Previene lo spegnimento automatico dello schermo durante la sessione attiva.
     useWakeLock(true);
 
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
@@ -161,21 +168,21 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
         const map = new Map<string, Array<{ date: string; sets: any[]; note: string }>>();
         if (!history || history.length === 0) return map;
 
-        for (const w of history) {
-            if (!w.exercises) continue;
-            for (const ex of w.exercises) {
-                if (!ex.exId) continue;
-                if (!map.has(ex.exId)) map.set(ex.exId, []);
-                const list = map.get(ex.exId)!;
+        for (const workout of history) {
+            if (!workout.exercises) continue;
+            for (const exercise of workout.exercises) {
+                if (!exercise.exId) continue;
+                if (!map.has(exercise.exId)) map.set(exercise.exId, []);
+                const list = map.get(exercise.exId)!;
                 if (list.length < 2) {
-                    list.push({ date: w.date || '', sets: ex.sets || [], note: ex.sessionNote });
+                    list.push({ date: workout.date || '', sets: exercise.sets || [], note: exercise.sessionNote });
                 }
             }
         }
         return map;
     }, [history]);
 
-    const libraryMap = useMemo(() => new Map(library.map(l => [l.id, l])), [library]);
+    const libraryMap = useMemo(() => new Map(library.map(item => [item.id, item])), [library]);
 
     if (!activeWorkout) return null;
 
@@ -208,7 +215,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
     return (
         <div className="training-sub-view active">
             {reportWorkout && (
-                <WorkoutReportModal 
+                <WorkoutReportModal
                     workout={reportWorkout}
                     history={history}
                     library={library}
@@ -217,16 +224,16 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
                 />
             )}
 
-            <SessionHeader 
+            <SessionHeader
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
                 onCancelHistory={handleCancelHistory}
             />
 
-            <div style={{ padding: '0', marginBottom: '20px' }}>
+            <div className="session-exercises">
                 {(activeWorkout.exercises || []).length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)' }}>Nessun esercizio presente in questa sessione.</p>
+                    <p className="session-empty-copy">Nessun esercizio presente in questa sessione.</p>
                 ) : (
                     (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
@@ -263,12 +270,12 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
                     })
                 )}
 
-                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
-                    <h3 style={{marginBottom: '10px'}}>Aggiungi esercizio extra</h3>
+                <div className="session-extra">
+                    <h3>Aggiungi esercizio extra</h3>
                     <ExerciseSearchDropdown
                         library={library}
                         onSelectExercise={addExtraExercise}
-                        placeholder="🔍 Cerca esercizio extra da aggiungere..."
+                        placeholder="Cerca esercizio extra da aggiungere..."
                     />
                 </div>
             </div>
@@ -288,31 +295,19 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
             />
 
             {activeWorkout.isEditingHistory ? (
-                <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
-                    <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        ⏱️ Durata della sessione
+                <div className="session-duration-card">
+                    <label htmlFor="workout-manual-duration">
+                        Durata della sessione
                     </label>
-                    <input 
+                    <input
                         id="workout-manual-duration"
-                        type="text" 
-                        value={manualDuration} 
-                        onChange={e => setManualDuration(e.target.value)} 
+                        type="text"
+                        value={manualDuration}
+                        onChange={event => setManualDuration(event.target.value)}
                         onBlur={() => setManualDuration(Logic.normalizeDuration(manualDuration))}
-                        onFocus={e => e.target.select()}
+                        onFocus={event => event.target.select()}
                         placeholder="00:00:00"
-                        style={{ 
-                            fontSize: '1.8rem', 
-                            fontFamily: 'monospace', 
-                            fontWeight: 'bold', 
-                            color: 'var(--primary-color)', 
-                            textAlign: 'center', 
-                            maxWidth: '240px', 
-                            width: '100%',
-                            margin: '0 auto', 
-                            padding: '8px 12px',
-                            display: 'block',
-                            boxSizing: 'border-box'
-                        }} 
+                        className="session-duration-input"
                     />
                 </div>
             ) : (
@@ -320,23 +315,26 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
             )}
 
             {activeWorkout.isEditingHistory ? (
-                <>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
-                        <span aria-hidden="true">💾</span> Salva modifiche
+                <div className="session-actions">
+                    <button type="button" className="btn btn-primary session-actions__primary" onClick={handleSaveHistory}>
+                        <Save size={19} aria-hidden="true" />
+                        Salva modifiche
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
+                    <button type="button" className="btn btn-danger" onClick={handleCancelHistory}>
                         Annulla modifica
                     </button>
-                </>
+                </div>
             ) : (
-                <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
-                        <span aria-hidden="true">🏁</span> Termina sessione
+                <div className="session-actions">
+                    <button type="button" className="btn btn-success session-actions__primary" onClick={handleEndWorkout}>
+                        <Flag size={19} aria-hidden="true" />
+                        Termina sessione
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
-                        <span aria-hidden="true">🗑️</span> Elimina sessione
+                    <button type="button" className="btn btn-danger" onClick={deleteWorkout}>
+                        <Trash2 size={18} aria-hidden="true" />
+                        Elimina sessione
                     </button>
-                </>
+                </div>
             )}
         </div>
     );

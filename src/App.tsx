@@ -4,23 +4,24 @@ import { useAppStore } from './store/useAppStore';
 import { analytics, getAnalyticsConsent } from './lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { 
-  LOCAL_STORAGE_ACTIVE_TAB, 
-  LOCAL_STORAGE_TRAINING_TAB, 
-  LOCAL_STORAGE_NUTRITION_TAB, 
-  LOCAL_STORAGE_DATA_TAB 
+import { TriangleAlert, X } from 'lucide-react';
+import {
+  LOCAL_STORAGE_ACTIVE_TAB,
+  LOCAL_STORAGE_TRAINING_TAB,
+  LOCAL_STORAGE_NUTRITION_TAB,
+  LOCAL_STORAGE_DATA_TAB
 } from './constants';
-import { 
-  AppTabSchema, 
-  TrainingSubTabSchema, 
-  NutritionSubTabSchema, 
-  DataSubTabSchema 
+import {
+  AppTabSchema,
+  TrainingSubTabSchema,
+  NutritionSubTabSchema,
+  DataSubTabSchema
 } from './lib/schema';
-import type { 
-  AppTab, 
-  TrainingSubTab, 
-  NutritionSubTab, 
-  DataSubTab 
+import type {
+  AppTab,
+  TrainingSubTab,
+  NutritionSubTab,
+  DataSubTab
 } from './types';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -135,7 +136,7 @@ function App() {
       if (validTab === 'training') setTrainingSubTab('session');
       if (validTab === 'nutrition') setNutritionSubTab('meals');
       if (validTab === 'data') setDataSubTab('measurements');
-      
+
       tabScrollPositions[activeTab] = 0;
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -180,10 +181,10 @@ function App() {
   if (loading) {
     return (
       <div id="auth-overlay">
-        <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
-            <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
-            <div className="spinner" style={{margin: '20px auto'}}></div>
-            <p>Caricamento...</p>
+        <div id="auth-loading" className="auth-loading-card">
+          <h1>LogBook</h1>
+          <div className="spinner" />
+          <p>Caricamento...</p>
         </div>
       </div>
     );
@@ -203,49 +204,26 @@ function App() {
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
-      {/* Banner utente guest — visibile finché non collega Google */}
+
       {isGuest && (
-        <div style={{
-          position: 'fixed',
-          top: 'env(safe-area-inset-top, 0px)',
-          left: 0, right: 0,
-          background: 'rgba(245, 158, 11, 0.92)',
-          backdropFilter: 'blur(6px)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px',
-          padding: '8px 16px',
-          fontSize: '0.85rem',
-          zIndex: 8888,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-        }}>
-          <span style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>⚠️ Modalità locale · I dati sono solo su questo dispositivo</span>
+        <div className="guest-mode-banner">
+          <span className="guest-mode-banner__text">
+            Modalità locale · I dati sono solo su questo dispositivo
+          </span>
           <button
+            type="button"
+            className="guest-mode-banner__action"
             onClick={linkGoogleAccount}
-            style={{
-              background: '#fff',
-              color: '#92400e',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '5px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              flexShrink: 0,
-              whiteSpace: 'nowrap'
-            }}
           >
             Collega Google
           </button>
         </div>
       )}
-      {/* Indicatore sincronizzazione non bloccante */}
+
       {syncing && (
-        <div 
-          className="sync-indicator" 
-          role="status" 
+        <div
+          className="sync-indicator"
+          role="status"
           aria-live="polite"
           aria-label="Salvataggio in corso"
         >
@@ -254,49 +232,47 @@ function App() {
         </div>
       )}
 
-      {/* Toast errore sincronizzazione non bloccante */}
       {saveError && (
-        <div 
-          className="sync-error-toast" 
-          role="alert" 
+        <div
+          className="sync-error-toast"
+          role="alert"
           aria-live="assertive"
         >
-          <span className="sync-error-icon" aria-hidden="true">⚠️</span>
+          <span className="sync-error-icon" aria-hidden="true"><TriangleAlert size={18} /></span>
           <span className="sync-error-text">{saveError}</span>
-          <button 
-            type="button" 
-            className="sync-error-close" 
+          <button
+            type="button"
+            className="sync-error-close"
             aria-label="Chiudi avviso"
             onClick={() => setSaveError(null)}
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
       )}
 
-      <main id="app-container" style={isGuest ? { paddingTop: '36px' } : undefined}>
+      <main id="app-container" className={isGuest ? 'app-shell app-shell--guest' : 'app-shell'}>
         <SyncConflictPanel key={isGuest ? 'guest' : currentUser?.uid} />
-        {/* Render Active View */}
         <ErrorBoundary key={isGuest ? 'guest' : currentUser?.uid}>
           <Suspense fallback={
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
-              <div className="spinner"></div>
-              <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
+            <div className="app-suspense">
+              <div className="spinner" />
+              <p>Caricamento...</p>
             </div>
           }>
-            <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
+            <div className="app-tab-panel" hidden={activeTab !== 'home'}>
               {(visitedTabs.home || activeTab === 'home') && <HomeView onNavigate={handleTabChange} />}
             </div>
-            <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
+            <div className="app-tab-panel" hidden={activeTab !== 'training'}>
               {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
             </div>
-            <div style={{ display: activeTab === 'nutrition' ? 'block' : 'none' }}>
+            <div className="app-tab-panel" hidden={activeTab !== 'nutrition'}>
               {(visitedTabs.nutrition || activeTab === 'nutrition') && <NutritionView subTab={nutritionSubTab} setSubTab={setNutritionSubTab} />}
             </div>
-            <div style={{ display: activeTab === 'data' ? 'block' : 'none' }}>
+            <div className="app-tab-panel" hidden={activeTab !== 'data'}>
               {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
             </div>
-            <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
+            <div className="app-tab-panel" hidden={activeTab !== 'settings'}>
               {(visitedTabs.settings || activeTab === 'settings') && <SettingsView />}
             </div>
           </Suspense>

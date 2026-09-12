@@ -1,0 +1,91 @@
+:root {
+  color-scheme: dark;
+
+  /* Midnight Performance — semantic palette */
+  --color-bg-canvas: #000000;
+  --color-bg-surface: #070809;
+  --color-bg-elevated: #0d0f11;
+  --color-bg-interactive: #13161a;
+  --color-bg-hover: #191d21;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+
+  --color-accent: #22d3ee;
+  --color-accent-strong: #06b6d4;
+  --color-accent-soft: rgba(34, 211, 238, 0.12);
+  --color-accent-ring: rgba(34, 211, 238, 0.28);
+  --color-accent-ink: #001114;
+
+  --color-text-primary: #f7f8f9;
+  --color-text-secondary: #a2aab5;
+  --color-text-tertiary: #737b86;
+
+  --color-success: #34d399;
+  --color-success-soft: rgba(52, 211, 153, 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(251, 191, 36, 0.12);
+  --color-danger: #fb7185;
+  --color-danger-soft: rgba(251, 113, 133, 0.12);
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* Shape */
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.375rem;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-surface: 0 12px 36px rgba(0, 0, 0, 0.34);
+  --shadow-floating: 0 18px 48px rgba(0, 0, 0, 0.56);
+  --shadow-accent: 0 8px 28px rgba(34, 211, 238, 0.14);
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --duration-slow: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout */
+  --content-gutter: clamp(0.75rem, 3.5vw, 1.125rem);
+  --nav-content-max: 42rem;
+
+  /* Legacy aliases. Existing screens inherit the new system without a big-bang rewrite. */
+  --bg-color: var(--color-bg-canvas);
+  --surface-color: var(--color-bg-surface);
+  --surface-light: var(--color-bg-elevated);
+  --primary-color: var(--color-accent);
+  --primary-dark: var(--color-accent-strong);
+  --primary-glow: var(--color-accent-ring);
+  --text-main: var(--color-text-primary);
+  --text-muted: var(--color-text-secondary);
+  --danger-color: var(--color-danger);
+  --warning-color: var(--color-warning);
+  --success-color: var(--color-success);
+  --border-radius: var(--radius-lg);
+  --spacing: var(--space-4);
+  --glass-bg: rgba(7, 8, 9, 0.9);
+  --glass-border: var(--color-border-subtle);
+  --accent-color: var(--color-accent);
+}
+
+html,
+body,
+#root {
+  background: #000000;
+  color: var(--color-text-primary);
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.24);
+  color: var(--color-text-primary);
+}

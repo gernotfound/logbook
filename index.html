@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-title" content="LogBook">
     <meta name="description" content="Traccia i tuoi allenamenti, l'alimentazione e i progressi corporei con LogBook.">
     <meta name="google-site-verification" content="RzIr5Xcvp29-PYayd0yZH_u8ZU7zgJVH5iove5x4z98" />
-    
+
     <!-- Open Graph / Link Preview Tags -->
     <meta property="og:title" content="LogBook">
     <meta property="og:site_name" content="LogBook">
@@ -19,13 +19,13 @@
     <meta property="og:url" content="https://logbook-gnf.vercel.app/">
     <meta property="og:type" content="website">
     <meta property="og:image" content="https://logbook-gnf.vercel.app/icon-512.png">
-    
+
     <!-- Twitter Card Data -->
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="LogBook">
     <meta name="twitter:description" content="Traccia i tuoi allenamenti, l'alimentazione e i progressi corporei con LogBook.">
     <meta name="twitter:image" content="https://logbook-gnf.vercel.app/icon-512.png">
-    
+
     <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="64x64" href="%BASE_URL%favicon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png">
@@ -33,18 +33,23 @@
 </head>
 <body ontouchstart="">
     <style>
+      html,
       body {
         background-color: #000000;
         margin: 0;
       }
+      body {
+        color: #f7f8f9;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
       .initial-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid rgba(0, 229, 255, 0.1);
-        border-top-color: #00e5ff;
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(255, 255, 255, 0.08);
+        border-top-color: #22d3ee;
         border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 20px auto;
+        animation: spin 0.8s linear infinite;
+        margin: 18px auto;
       }
       @keyframes spin {
         0% { transform: rotate(0deg); }
@@ -54,16 +59,42 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 100vh;
-        height: 100dvh;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      .initial-loader-card {
+        width: min(100%, 320px);
+        text-align: center;
+        padding: 26px;
+        background: #070809;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.56);
+        box-sizing: border-box;
+      }
+      .initial-loader-card h1 {
+        margin: 0;
+        color: #f7f8f9;
+        font-size: 1.65rem;
+        letter-spacing: -0.04em;
+      }
+      .initial-loader-card p {
+        margin: 0;
+        color: #a2aab5;
+        font-size: 0.9rem;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .initial-spinner { animation-duration: 1.5s; }
       }
     </style>
     <div id="root">
       <div id="initial-loader">
-        <div style="text-align: center; max-width: 400px; padding: 30px; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
-            <h1 style="color:#00e5ff; margin-bottom: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">LogBook</h1>
+        <div class="initial-loader-card">
+            <h1>LogBook</h1>
             <div class="initial-spinner"></div>
-            <p style="color: #9ba3af; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Caricamento...</p>
+            <p>Caricamento...</p>
         </div>
       </div>
     </div>

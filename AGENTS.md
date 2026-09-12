@@ -1,6 +1,6 @@
 # LogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-09-09 | Progetto: app PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-09-12 | Progetto: app PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
@@ -28,7 +28,7 @@ Ogni regola in questo documento è classificata:
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`)
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono, Firestore cloud
 - **Backend:** Firebase Modular SDK v12 (`firebase/firestore`, `firebase/auth`, `firebase/analytics`, `firebase/app-check`)
-- **Styling:** CSS nativo (variabili in `src/styles/global.css`). **MUST:** No Tailwind.
+- **Styling:** CSS nativo (`src/styles/global.css`, `tokens.css`, `restyling.css`). **MUST:** No Tailwind.
 - **Icone:** `lucide-react`
 - **PWA:** `vite-plugin-pwa`
 - **Monitoring:** `@vercel/analytics`, `@vercel/speed-insights`, Google Analytics (`firebase/analytics`)
@@ -114,6 +114,9 @@ Ruoli dei livelli di storage:
 
 - **MUST:** Mai usare `setInterval` puro (throttling in background su mobile).
 - Il timestamp iniziale `Date.now()` è memorizzato in `localStorage` e il delta viene ricalcolato a ogni tick e al ritorno dal background.
+- **MUST:** Durante la sessione attiva il timer resta sticky in alto.
+- **MUST:** Restano sempre immediatamente disponibili tre controlli: play/pausa, reset e stop.
+- **MUST:** I tre controlli mantengono touch target di almeno 44x44px.
 
 ### Gestione date
 
@@ -156,7 +159,11 @@ Ruoli dei livelli di storage:
 
 ### Tema
 
-Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi standard e sentence case italiano.
+Tema **Midnight Performance**: background canvas nero reale, superfici scure semantiche, accento cyan funzionale e motion contenuta. I token vivono in `src/styles/tokens.css`; `global.css` è il compatibility layer e `restyling.css` contiene primitive/layout correnti.
+
+- **MUST:** `html`, `body`, `#root` e il canvas dell'app restano `#000000`.
+- **MUST:** Stili statici in CSS; inline style solo per valori realmente dinamici derivati dallo stato.
+- **SHOULD:** Limitare `backdrop-filter` a overlay/superfici dove la trasparenza ha valore reale; evitare blur costosi nelle liste e durante il workout.
 
 → Dettagli completi: `docs/design-system.md`
 
@@ -168,6 +175,7 @@ Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi s
 - **SHOULD:** `min-width: 0` nei figli flex soggetti a overflow.
 - **MUST:** Touch target principali almeno 44x44px.
 - **SHOULD:** Menu contestuali con `ContextMenu.tsx` invece di bottoni inline.
+- **MUST:** Rispettare `prefers-reduced-motion` per animazioni/transizioni non essenziali.
 - **VERIFY:** Test manuale su iOS Safari/PWA e viewport stretti.
 
 ### Anti-pattern React
@@ -191,7 +199,7 @@ Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi s
 
 Per modifiche strutturali, dati, sync, sicurezza, dipendenze o multi-file:
 
-1. Preparare un piano (`implementation_plan.md`) con obiettivo, file coinvolti, rischi, test e rollback.
+1. Preparare un piano (`implementation_plan.md` o documento di piano dedicato al progetto) con obiettivo, file coinvolti, rischi, test e rollback.
 2. Richiedere approvazione esplicita dell'utente.
 3. Modificare il repository solo dopo approvazione.
 
@@ -246,5 +254,5 @@ Documentazione di dettaglio in `docs/`:
 | [`docs/firebase-config.md`](docs/firebase-config.md) | Variabili d'ambiente, App Check, Firestore Rules, CSP, domini |
 | [`docs/data-model-and-zod.md`](docs/data-model-and-zod.md) | UserData, Zod gateway, ghost objects, invarianti di modifica |
 | [`docs/catalog-operations.md`](docs/catalog-operations.md) | Catalogo globale, seeding, seed vuoti, recovery |
-| [`docs/design-system.md`](docs/design-system.md) | Tema dark glassmorphism, variabili CSS, tipografia, sentence case |
+| [`docs/design-system.md`](docs/design-system.md) | Midnight Performance, token semantici, primitive UI, responsive e invarianti workout |
 | [`docs/account-lifecycle.md`](docs/account-lifecycle.md) | Export CSV, eliminazione account, logout, modalità guest |

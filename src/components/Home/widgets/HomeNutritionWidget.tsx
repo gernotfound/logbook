@@ -19,27 +19,37 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
     onNavigate
 }) => {
     const kcalPercent = kcalTarget > 0 ? Math.min((kcalEaten / kcalTarget) * 100, 100) : 0;
-    
-    // Simplistic targets for macros (assuming roughly standard split if not provided)
-    // Here we'll just display the amounts in mini circles or bars, or just data.
-    // The main progress ring is for calories.
+    const carbsPercent = Math.min((carbs / 300) * 100, 100);
+    const proteinPercent = Math.min((pro / 150) * 100, 100);
+    const fatPercent = Math.min((fat / 80) * 100, 100);
+
+    const openNutrition = () => onNavigate('nutrition');
 
     return (
-        <div style={{ padding: '20px', cursor: 'pointer' }} onClick={() => onNavigate('nutrition')}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{margin: 0,color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                    <Utensils size={20} color="var(--primary-color)" />
+        <div
+            className="nutrition-summary"
+            role="button"
+            tabIndex={0}
+            onClick={openNutrition}
+            onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openNutrition();
+                }
+            }}
+            aria-label="Apri riepilogo nutrizione"
+        >
+            <div className="nutrition-summary__header">
+                <h2 className="nutrition-summary__title">
+                    <Utensils size={20} aria-hidden="true" />
                     Nutrizione
                 </h2>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Target: {kcalTarget} kcal
-                </div>
+                <div className="nutrition-summary__target">Target {kcalTarget} kcal</div>
             </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                {/* Calories Progress Ring */}
-                <div 
-                    className="progress-ring" 
+
+            <div className="nutrition-summary__body">
+                <div
+                    className="progress-ring"
                     style={{ '--progress': kcalPercent } as React.CSSProperties}
                     role="progressbar"
                     aria-valuenow={Math.round(kcalPercent)}
@@ -48,38 +58,37 @@ export const HomeNutritionWidget: React.FC<HomeNutritionWidgetProps> = ({
                     aria-label={`Calorie: ${Math.round(kcalPercent)}% completato`}
                 >
                     <div className="progress-ring-content">
-                        <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)', lineHeight: 1 }}>{kcalEaten}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>kcal</span>
+                        <span className="nutrition-ring__value">{kcalEaten}</span>
+                        <span className="nutrition-ring__unit">kcal</span>
                     </div>
                 </div>
 
-                {/* Macros */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="macro-stack">
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>CARBO</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{carbs}g</span>
+                        <div className="macro-meta">
+                            <span className="macro-label">CARBO</span>
+                            <span className="macro-value">{carbs} g</span>
                         </div>
-                        <div className="progress-bg" style={{ height: '6px' }}>
-                            <div className="progress-fill" style={{ width: `${Math.min((carbs / 300) * 100, 100)}%`, background: '#3b82f6' }}></div>
+                        <div className="macro-progress">
+                            <div className="macro-progress__fill macro-progress__fill--carbs" style={{ width: `${carbsPercent}%` }} />
                         </div>
                     </div>
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{pro}g</span>
+                        <div className="macro-meta">
+                            <span className="macro-label">PRO</span>
+                            <span className="macro-value">{pro} g</span>
                         </div>
-                        <div className="progress-bg" style={{ height: '6px' }}>
-                            <div className="progress-fill" style={{ width: `${Math.min((pro / 150) * 100, 100)}%`, background: '#ef4444' }}></div>
+                        <div className="macro-progress">
+                            <div className="macro-progress__fill macro-progress__fill--protein" style={{ width: `${proteinPercent}%` }} />
                         </div>
                     </div>
                     <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }}>GRASSI</span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{fat}g</span>
+                        <div className="macro-meta">
+                            <span className="macro-label">GRASSI</span>
+                            <span className="macro-value">{fat} g</span>
                         </div>
-                        <div className="progress-bg" style={{ height: '6px' }}>
-                            <div className="progress-fill" style={{ width: `${Math.min((fat / 80) * 100, 100)}%`, background: '#eab308' }}></div>
+                        <div className="macro-progress">
+                            <div className="macro-progress__fill macro-progress__fill--fat" style={{ width: `${fatPercent}%` }} />
                         </div>
                     </div>
                 </div>

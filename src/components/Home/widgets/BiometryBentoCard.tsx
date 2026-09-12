@@ -7,45 +7,41 @@ interface BiometryBentoCardProps {
 }
 
 const BiometryBentoCard: React.FC<BiometryBentoCardProps> = ({ weightStats, bf }) => {
+    const weightDelta = weightStats?.weightDelta;
+    const deltaClass = weightDelta < 0 ? 'stat-delta--down' : 'stat-delta--up';
+
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '15px' }}>
-            <h2 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '8px'}}>
-                <Scale size={18} color="var(--primary-color)" />
+        <div className="home-card-stack">
+            <h2 className="home-card-title">
+                <Scale size={18} aria-hidden="true" />
                 Biometria
             </h2>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px', marginBottom: '10px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Ultimo peso</div>
+            <div className="stat-tile-grid">
+                <div className="stat-tile">
+                    <div className="stat-tile__label">Ultimo peso</div>
                     {weightStats?.latestWeight ? (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                                {weightStats.latestWeight} <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>kg</span>
+                        <div className="stat-tile__value-row">
+                            <span className="stat-tile__value">
+                                {weightStats.latestWeight} <span className="stat-tile__unit">kg</span>
                             </span>
-                            {weightStats.weightDelta !== null && weightStats.weightDelta !== 0 && (
-                                <span style={{
-                                    fontWeight: '600',
-                                    fontSize: '0.75rem',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    background: weightStats.weightDelta < 0 ? 'rgba(74, 222, 128, 0.15)' : (weightStats.weightDelta > 0 ? 'rgba(248, 113, 113, 0.15)' : 'rgba(255, 255, 255, 0.08)'),
-                                    color: weightStats.weightDelta < 0 ? '#4ade80' : (weightStats.weightDelta > 0 ? '#f87171' : 'var(--text-muted)')
-                                }}>
-                                    {weightStats.weightDelta > 0 ? `+${weightStats.weightDelta.toFixed(1)}` : weightStats.weightDelta.toFixed(1)}
+                            {weightDelta !== null && weightDelta !== undefined && weightDelta !== 0 && (
+                                <span className={`stat-delta ${deltaClass}`}>
+                                    {weightDelta > 0 ? `+${weightDelta.toFixed(1)}` : weightDelta.toFixed(1)}
                                 </span>
                             )}
                         </div>
                     ) : (
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>--</div>
+                        <div className="stat-tile__empty">--</div>
                     )}
                 </div>
 
-                <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Activity size={12} />
+                <div className="stat-tile">
+                    <div className="stat-tile__label">
+                        <Activity size={12} aria-hidden="true" />
                         Massa grassa
                     </div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: bf !== '--' ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                    <div className={bf !== '--' ? 'stat-tile__value' : 'stat-tile__empty'}>
                         {bf !== '--' ? `${bf} %` : '--'}
                     </div>
                 </div>
