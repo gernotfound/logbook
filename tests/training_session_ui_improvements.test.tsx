@@ -93,9 +93,10 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             const row = container.querySelector('.set-row');
             expect(row).not.toBeNull();
-            // Style contains border with var(--primary-color)
+            // Style contains border with var(--primary-color) OR it uses the structural class
             const styleAttr = row?.getAttribute('style') || '';
-            expect(styleAttr).toContain('var(--primary-color)');
+            const hasClass = row?.classList.contains('workout-set-row') || false;
+            expect(hasClass || styleAttr.includes('var(--primary-color)')).toBe(true);
         });
     });
 

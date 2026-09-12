@@ -228,21 +228,22 @@ export const DB = {
             };
             const effectiveCustomExercises = customExercises;
             const effectiveCustomFoods = customFoods;
+            const normalizedState = JSON.parse(JSON.stringify(state));
 
             // 1. User doc updates
-            if (!deepEqual(state.profile, oldState.profile) ||
-                !deepEqual(state.library, oldState.library) ||
-                !deepEqual(state.routines, oldState.routines) ||
-                !deepEqual(state.customFoods, oldState.customFoods) ||
-                !deepEqual(state.activeWorkout, oldState.activeWorkout) ||
-                !deepEqual(state.trainingCycles, oldState.trainingCycles) ||
-                !deepEqual(state.activeCycleId, oldState.activeCycleId) ||
-                !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning) ||
-                !deepEqual(state.supplements, oldState.supplements) ||
-                !deepEqual(state.activePains, oldState.activePains) ||
-                !deepEqual(state.catalogOverrides, oldState.catalogOverrides) ||
-                !deepEqual(state.legalConsent, oldState.legalConsent) ||
-                !deepEqual(state.nutritionPlanningOrigin, oldState.nutritionPlanningOrigin)) {
+            if (!deepEqual(normalizedState.profile, oldState.profile) ||
+                !deepEqual(normalizedState.library, oldState.library) ||
+                !deepEqual(normalizedState.routines, oldState.routines) ||
+                !deepEqual(normalizedState.customFoods, oldState.customFoods) ||
+                !deepEqual(normalizedState.activeWorkout, oldState.activeWorkout) ||
+                !deepEqual(normalizedState.trainingCycles, oldState.trainingCycles) ||
+                !deepEqual(normalizedState.activeCycleId, oldState.activeCycleId) ||
+                !deepEqual(normalizedState.nutritionPlanning, oldState.nutritionPlanning) ||
+                !deepEqual(normalizedState.supplements, oldState.supplements) ||
+                !deepEqual(normalizedState.activePains, oldState.activePains) ||
+                !deepEqual(normalizedState.catalogOverrides, oldState.catalogOverrides) ||
+                !deepEqual(normalizedState.legalConsent, oldState.legalConsent) ||
+                !deepEqual(normalizedState.nutritionPlanningOrigin, oldState.nutritionPlanningOrigin)) {
 
                 const userRef = doc(getDb(), "users", user.uid);
                 const userDocData = {

@@ -1,0 +1,14 @@
+.segmented-control__item,
+.guest-mode-banner__action,
+.recovery-count {
+  min-height: var(--interactive-target-min);
+}
+
+@media (max-width: 340px) {
+  .timer-btn {
+    width: var(--interactive-target-min);
+    min-width: var(--interactive-target-min);
+    height: var(--interactive-target-min);
+    min-height: var(--interactive-target-min);
+  }
+}
