@@ -7,7 +7,6 @@ import DataSleep from './DataSleep';
 import DataHistory from './DataHistory';
 import type { DataSubTab } from '../../types';
 import { useLocalToday } from '../../hooks/useLocalToday';
-import SectionTabs from '../UI/SectionTabs';
 
 interface DataViewProps {
     subTab?: DataSubTab;
@@ -36,21 +35,52 @@ const DataView: React.FC<DataViewProps> = ({
         changeSubTab('measurements');
     };
 
-    const DATA_TABS = [
-        { value: 'measurements', label: 'Misurazioni' },
-        { value: 'sleep', label: 'Sonno' },
-        { value: 'biometry', label: 'Biometria' },
-        { value: 'history', label: 'Storico' },
-    ] as const;
+    const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+        if (e.deltaY !== 0) {
+            e.currentTarget.scrollLeft += e.deltaY;
+        }
+    };
 
     return (
         <div id="view-data" className="view-section active">
-            <SectionTabs
-                value={currentSubTab}
-                onChange={changeSubTab}
-                tabs={DATA_TABS}
-                ariaLabel="Sotto-menu Dati"
-            />
+            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Dati" onWheel={handleWheel}>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'measurements'}
+                    className={`sub-nav-btn ${currentSubTab === 'measurements' ? 'active' : ''}`}
+                    onClick={() => changeSubTab('measurements')}
+                >
+                    Misurazioni
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'sleep'}
+                    className={`sub-nav-btn ${currentSubTab === 'sleep' ? 'active' : ''}`}
+                    onClick={() => changeSubTab('sleep')}
+                >
+                    Sonno
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'biometry'}
+                    className={`sub-nav-btn ${currentSubTab === 'biometry' ? 'active' : ''}`}
+                    onClick={() => changeSubTab('biometry')}
+                >
+                    Biometria
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentSubTab === 'history'}
+                    className={`sub-nav-btn ${currentSubTab === 'history' ? 'active' : ''}`}
+                    onClick={() => changeSubTab('history')}
+                >
+                    Storico
+                </button>
+            </div>
 
             {currentSubTab === 'measurements' && (
                 <div className="data-sub-view active">

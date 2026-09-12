@@ -20,38 +20,32 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.click('button:has-text("Accetta e Continua")');
 
     // Attendiamo di essere loggati e vedere la navbar
-    await expect(page.getByRole('button', { name: 'Allenamento' })).toBeVisible();
+    await expect(page.locator('button[aria-label="Allenamento"]')).toBeVisible();
 
     // 4. Naviga alla tab Allenamento (tramite la Bottom Nav)
-    await page.getByRole('button', { name: 'Allenamento' }).click();
+    await page.click('button[aria-label="Allenamento"]');
 
     // 5. Crea una scheda vuota per poter avviare una sessione
-    await expect(page.getByRole('tab', { name: 'Schede' })).toBeVisible();
-    await page.getByRole('tab', { name: 'Schede' }).dispatchEvent('click');
+    await page.click('button.sub-nav-btn:has-text("Schede")');
     
     // Apri il box di creazione
-    await expect(page.getByRole('button', { name: '+ Crea scheda' })).toBeVisible();
-    await page.getByRole('button', { name: '+ Crea scheda' }).click();
+    await page.click('button:has-text("Crea scheda")');
 
     // Compila il nome della scheda
-    await page.getByPlaceholder('Nome scheda').fill('Scheda E2E Offline');
-    await page.getByRole('button', { name: 'Crea scheda', exact: true }).click();
-    
-    // Attendiamo che la scheda sia effettivamente salvata e compaia in archivio
-    await expect(page.locator('text=Scheda E2E Offline').first()).toBeVisible();
+    await page.fill('input[placeholder="Nome scheda"]', 'Scheda E2E Offline');
+    await page.click('button:has-text("Crea scheda")');
 
     // 6. Torna alla vista Sessione
-    await page.getByRole('tab', { name: 'Sessione' }).dispatchEvent('click');
+    await page.click('button.sub-nav-btn:has-text("Sessione")');
 
-    // Seleziona la scheda appena creata (usiamo index 1 così funziona indipendentemente dalla formattazione del label)
-    await page.locator('select#archive-routine-select').waitFor({ state: 'visible' });
-    await page.selectOption('select#archive-routine-select', { index: 1 });
+    // Seleziona la scheda appena creata
+    await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
 
     // 7. Inizia l'allenamento
-    await page.getByRole('button', { name: 'Inizia allenamento' }).click();
+    await page.click('button:has-text("Inizia allenamento")');
     
     // Assicurati di essere nella schermata allenamento attivo
-    await expect(page.getByRole('button', { name: 'Termina' })).toBeVisible();
+    await expect(page.locator('button:has-text("Termina")')).toBeVisible();
 
     // 8. Vai offline
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
@@ -74,17 +68,17 @@ test.describe('Offline scenarios & Background suspension', () => {
     await newPage.goto('/');
     
     // Naviga di nuovo ad allenamento
-    await newPage.getByRole('button', { name: 'Allenamento' }).click();
+    await newPage.click('button[aria-label="Allenamento"]');
 
     // Assicurati che il workout sia ancora lì
-    await expect(newPage.getByRole('button', { name: 'Termina' })).toBeVisible();
+    await expect(newPage.locator('button:has-text("Termina")')).toBeVisible();
 
     // 12. Termina l'allenamento
-    await newPage.getByRole('button', { name: 'Termina' }).click();
+    await newPage.click('button:has-text("Termina")');
     // Conferma l'alert (GlobalDialog)
-    await newPage.getByRole('button', { name: 'Conferma' }).click();
+    await newPage.click('button:has-text("Conferma")');
 
     // Verifica che l'allenamento sia finito
-    await expect(newPage.getByRole('button', { name: 'Inizia allenamento' })).toBeVisible();
+    await expect(newPage.locator('button:has-text("Inizia allenamento")')).toBeVisible();
   });
 });

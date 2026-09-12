@@ -1,10 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { X, Trophy, ArrowUp, ArrowDown, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
 import { Logic } from '../../lib/logic';
-import type { WorkoutSession, Exercise, WorkoutRoutine } from '../../types';
-import { useAppStore } from '../../store/useAppStore';
-import { useDialogStore } from '../../store/useDialogStore';
+import type { WorkoutSession, Exercise } from '../../types';
 
 interface WorkoutReportModalProps {
     workout: WorkoutSession;
@@ -16,10 +14,6 @@ interface WorkoutReportModalProps {
 
 const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, history, library, onClose, fromEndWorkout }) => {
     
-    const saveUserData = useAppStore(state => state.saveUserData);
-    const showAlert = useDialogStore(state => state.showAlert);
-    const [isSavingFree, setIsSavingFree] = useState(false);
-
     const report = useMemo(() => {
         const libraryMap = new Map(library.map(l => [l.id, l]));
         return computeWorkoutReport(workout, history, libraryMap);
@@ -34,36 +28,6 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
         const prefix = val > 0 ? '+' : '';
         const num = val.toFixed(1).replace(/\.0$/, '');
         return `${prefix}${num}${isPercent ? '%' : ''}`;
-    };
-
-    const handleSaveFreeWorkout = async () => {
-        if (isSavingFree) return;
-        setIsSavingFree(true);
-        try {
-            const newRoutineId = Logic.generateId('r');
-            const newRoutine: WorkoutRoutine = {
-                id: newRoutineId,
-                name: 'Scheda da Allenamento libero',
-                exercises: (workout.exercises || []).map((ex: any) => ({
-                    id: Logic.generateId('re'),
-                    exId: ex.exId,
-                    setsCount: ex.sets?.length || 3
-                }))
-            };
-            
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    routines: [...(prev.routines || []), newRoutine]
-                };
-            });
-            await showAlert("Nuova scheda creata con successo!");
-        } catch (e) {
-            await showAlert("Errore durante il salvataggio della scheda.");
-        } finally {
-            setIsSavingFree(false);
-        }
     };
 
     return (
@@ -252,12 +216,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '16px 20px', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {workout.routineName === 'Allenamento libero' && (
-                        <button className="btn btn-secondary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={handleSaveFreeWorkout} disabled={isSavingFree}>
-                            {isSavingFree ? 'Salvataggio...' : 'Salva come nuova scheda'}
-                        </button>
-                    )}
+                <div style={{ padding: '16px 20px', borderTop: '1px solid var(--glass-border)' }}>
                     <button className="btn btn-primary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={onClose}>
                         {fromEndWorkout ? 'Chiudi e torna alla Home' : 'Chiudi Report'}
                     </button>

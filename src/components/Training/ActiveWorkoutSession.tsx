@@ -7,7 +7,6 @@ import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
 import WorkoutReportModal from './WorkoutReportModal';
-import { Save, Flag, Trash2 } from 'lucide-react';
 import type { WorkoutSession } from '../../types';
 
 // Responsabilità: renderizzare la UI di un allenamento in corso (lista esercizi, timer).
@@ -322,8 +321,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
 
             {activeWorkout.isEditingHistory ? (
                 <>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={handleSaveHistory}>
-                        <Save size={20} /> Salva modifiche
+                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
+                        <span aria-hidden="true">💾</span> Salva modifiche
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
                         Annulla modifica
@@ -331,11 +330,11 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
                 </>
             ) : (
                 <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={handleEndWorkout}>
-                        <Flag size={20} /> Termina sessione
+                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
+                        <span aria-hidden="true">🏁</span> Termina sessione
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={deleteWorkout}>
-                        <Trash2 size={18} /> Elimina sessione
+                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
+                        <span aria-hidden="true">🗑️</span> Elimina sessione
                     </button>
                 </>
             )}
