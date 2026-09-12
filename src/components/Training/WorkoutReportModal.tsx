@@ -1,8 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, Trophy, ArrowUp, ArrowDown, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
 import { Logic } from '../../lib/logic';
-import type { WorkoutSession, Exercise } from '../../types';
+import type { WorkoutSession, Exercise, RoutineExercise, WorkoutRoutine } from '../../types';
+import { useAppStore } from '../../store/useAppStore';
+import { useDialogStore } from '../../store/useDialogStore';
+import { mapFirebaseErrorCode } from '../../lib/errorHandler';
 
 interface WorkoutReportModalProps {
     workout: WorkoutSession;
@@ -14,6 +17,92 @@ interface WorkoutReportModalProps {
 
 const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, history, library, onClose, fromEndWorkout }) => {
     
+    const saveUserData = useAppStore(state => state.saveUserData);
+    const showAlert = useDialogStore(state => state.showAlert);
+
+    const isFreeWorkoutJustEnded = fromEndWorkout && !workout.routineId;
+    const hasExercises = (workout.exercises && workout.exercises.length > 0);
+    const canSaveAsRoutine = isFreeWorkoutJustEnded && hasExercises;
+
+    const [isSavingAsRoutine, setIsSavingAsRoutine] = useState(false);
+    const [newRoutineName, setNewRoutineName] = useState(`Allenamento libero - ${Logic.getLocalDateString()}`);
+    const [isSavingRoutineLoading, setIsSavingRoutineLoading] = useState(false);
+
+    const handleSaveAsRoutine = async () => {
+        if (!newRoutineName.trim()) {
+            showAlert("Inserisci un nome per la scheda.");
+            return;
+        }
+        
+        setIsSavingRoutineLoading(true);
+        
+        try {
+            const newRoutineId = Logic.generateId('r');
+            
+            const routineExercises: RoutineExercise[] = workout.exercises.map(ex => {
+                let minReps = Infinity;
+                let maxReps = -Infinity;
+                let validSetsCount = 0;
+                
+                ex.sets.forEach(set => {
+                    const reps = parseInt(set.reps, 10);
+                    if (!isNaN(reps)) {
+                        if (reps < minReps) minReps = reps;
+                        if (reps > maxReps) maxReps = reps;
+                    }
+                    validSetsCount++;
+                });
+                
+                const finalMinReps = minReps !== Infinity ? minReps : undefined;
+                const finalMaxReps = maxReps !== -Infinity ? maxReps : undefined;
+                
+                let defaultTechnique: 'none' | 'dropset' | 'isometrics' | undefined;
+                const hasDropsets = ex.sets.some(s => s.dropsets && s.dropsets.length > 0);
+                const hasIsometrics = ex.sets.some(s => s.isometrics && s.isometrics.length > 0);
+                
+                if (hasDropsets) defaultTechnique = 'dropset';
+                else if (hasIsometrics) defaultTechnique = 'isometrics';
+                
+                const result: RoutineExercise = {
+                    exId: ex.exId,
+                    setsCount: Math.max(1, validSetsCount)
+                };
+                if (finalMinReps !== undefined) result.minReps = finalMinReps;
+                if (finalMaxReps !== undefined) result.maxReps = finalMaxReps;
+                if (defaultTechnique) result.defaultTechnique = defaultTechnique;
+                
+                return result;
+            });
+
+            const newRoutine: WorkoutRoutine = {
+                id: newRoutineId,
+                name: newRoutineName.trim(),
+                exercises: routineExercises
+            };
+            
+            await saveUserData(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    routines: [...(prev.routines || []), newRoutine]
+                };
+            });
+            
+            setIsSavingAsRoutine(false);
+            showAlert("Scheda salvata con successo!");
+        } catch (err: any) {
+            const formatted = mapFirebaseErrorCode(err);
+            if (formatted.isOfflineSafe) {
+                setIsSavingAsRoutine(false);
+                showAlert("Scheda salvata in locale (offline).");
+            } else {
+                showAlert("Errore durante il salvataggio della scheda.");
+            }
+        } finally {
+            setIsSavingRoutineLoading(false);
+        }
+    };
+
     const report = useMemo(() => {
         const libraryMap = new Map(library.map(l => [l.id, l]));
         return computeWorkoutReport(workout, history, libraryMap);
@@ -216,7 +305,41 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '16px 20px', borderTop: '1px solid var(--glass-border)' }}>
+                <div style={{ padding: '16px 20px', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {canSaveAsRoutine && !isSavingAsRoutine && (
+                        <button className="btn btn-secondary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={() => setIsSavingAsRoutine(true)}>
+                            Salva come scheda
+                        </button>
+                    )}
+                    
+                    {isSavingAsRoutine && (
+                        <div style={{
+                            background: 'rgba(255,255,255,0.05)',
+                            padding: '16px',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '12px'
+                        }}>
+                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome nuova scheda</label>
+                            <input 
+                                type="text" 
+                                className="form-control"
+                                value={newRoutineName}
+                                onChange={e => setNewRoutineName(e.target.value)}
+                                style={{ fontSize: '16px' }}
+                                disabled={isSavingRoutineLoading}
+                            />
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button className="btn btn-secondary" style={{ flex: 1, margin: 0 }} onClick={() => setIsSavingAsRoutine(false)} disabled={isSavingRoutineLoading}>
+                                    Annulla
+                                </button>
+                                <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={handleSaveAsRoutine} disabled={isSavingRoutineLoading}>
+                                    {isSavingRoutineLoading ? 'Salvataggio...' : 'Salva'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <button className="btn btn-primary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={onClose}>
                         {fromEndWorkout ? 'Chiudi e torna alla Home' : 'Chiudi Report'}
                     </button>

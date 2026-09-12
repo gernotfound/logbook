@@ -42,7 +42,7 @@ const DataView = lazy(() => import('./components/Data/DataView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
 function App() {
-  const { currentUser, loading, linkGoogleAccount, isGuest } = useAuth();
+  const { currentUser, loading, isGuest } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -52,6 +52,8 @@ function App() {
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
+
+  const [showGuestLogin, setShowGuestLogin] = useState(false);
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
 
@@ -203,6 +205,12 @@ function App() {
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
+      {/* Overlay per login guest */}
+      {showGuestLogin && (
+        <div id="auth-overlay" style={{ zIndex: 9999 }}>
+          <LoginBox onCancel={() => setShowGuestLogin(false)} />
+        </div>
+      )}
       {/* Banner utente guest — visibile finché non collega Google */}
       {isGuest && (
         <div style={{
@@ -223,7 +231,7 @@ function App() {
         }}>
           <span style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>⚠️ Modalità locale · I dati sono solo su questo dispositivo</span>
           <button
-            onClick={linkGoogleAccount}
+            onClick={() => setShowGuestLogin(true)}
             style={{
               background: '#fff',
               color: '#92400e',
@@ -237,7 +245,7 @@ function App() {
               whiteSpace: 'nowrap'
             }}
           >
-            Collega Google
+            Accedi
           </button>
         </div>
       )}

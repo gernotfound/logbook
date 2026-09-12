@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { LEGAL_VERSIONS } from '../../lib/legalVersions';
@@ -117,7 +118,7 @@ export const ConsentOverlay: React.FC = () => {
                             <span aria-hidden="true">📥</span> Esporta i miei dati (CSV)
                         </button>
                         <button className="btn" style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)' }} onClick={handleDeleteAccount}>
-                            <span aria-hidden="true">🗑️</span> {isGuest ? 'Elimina dati locali' : 'Elimina account permanentemente'}
+                            <Trash2 size={16} aria-hidden="true" /> {isGuest ? 'Elimina dati locali' : 'Elimina account permanentemente'}
                         </button>
                     </div>
                 </div>

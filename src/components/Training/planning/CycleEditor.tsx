@@ -3,6 +3,7 @@
 // Effetti: chiama onSave col nuovo ciclo validato; usa lo state di dialogStore per gli alert.
 
 import React, { useCallback } from 'react';
+import { Pencil, Save, Plus } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
 import { useCycleForm } from './useCycleForm';
@@ -76,7 +77,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         <form onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
             <div className="flex-between mb-15 items-center">
                 <h2 className="m-0" style={{color: 'var(--primary-color)'}}>
-                    {initialCycle ? '✏️ Modifica ciclo' : '➕ Nuovo ciclo di allenamento'}
+                    {initialCycle ? <><Pencil size={18} aria-hidden="true" /> Modifica ciclo</> : <><Plus size={18} aria-hidden="true" /> Nuovo ciclo di allenamento</>}
                 </h2>
                 <button
                     type="button"
@@ -359,7 +360,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     className="btn btn-primary flex-2"
                     style={{ marginBottom: 0 }}
                 >
-                    {initialCycle ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva ciclo</>}
+                    {initialCycle ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : <><Save size={16} aria-hidden="true" /> Salva ciclo</>}
                 </button>
             </div>
         </form>

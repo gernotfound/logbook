@@ -1,7 +1,7 @@
 import React from 'react';
 import { shiftDateString } from '../../lib/utils/date';
 import { Logic } from '../../lib/logic';
-import { X } from 'lucide-react';
+import { Pencil, X, Plus, Save } from 'lucide-react';
 
 interface DataMeasurementsProps {
     profile: any;
@@ -117,7 +117,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
             <div id="measurement-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
                 <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
-                    {isEditing ? '✏️ Modifica misurazione' : '➕ Nuova misurazione'}
+                    {isEditing ? <><Pencil size={18} aria-hidden="true" /> Modifica misurazione</> : <><Plus size={18} aria-hidden="true" /> Nuova misurazione</>}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
                     Registra il tuo peso, la massa grassa e le circonferenze corporee.
@@ -321,7 +321,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     </button>
                 )}
                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={calculateAndSave}>
-                    {isEditing ? <><span aria-hidden="true">💾</span> Salva modifiche</> : <><span aria-hidden="true">💾</span> Salva misurazione</>}
+                    {isEditing ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : <><Save size={16} aria-hidden="true" /> Salva misurazione</>}
                 </button>
             </div>
         </div>
