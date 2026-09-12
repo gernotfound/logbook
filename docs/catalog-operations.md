@@ -16,13 +16,13 @@ Il manifest punta ai documenti dati della versione corrente. I path legacy sono:
 
 `global_catalog` ha `allow read: if true` (pubblico in sola lettura) e `allow write: if false` (nessuna scrittura da client).
 
-## Seed locali
+## Seed locali vuoti — policy "enforce manual input"
 
-I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono completamente popolati per fornire immediatamente i dati di base all'avvio offline e per ridurre le chiamate cloud.
+I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` sono **intenzionalmente vuoti**. L'app impone l'inserimento manuale o il download dal cloud per ridurre il bundle size.
 
 ### Fallback offline
 
-Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sui seed locali completi, fornendo da subito un catalogo funzionante. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
+Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sul seed locale. Essendo quest'ultimo vuoto, il fallback restituisce **array vuoti validi**, non un catalogo popolato. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
 
 ## Script di seeding (`scripts/seed-catalog.mjs`)
 
@@ -33,6 +33,8 @@ Lo script popola `global_catalog` su Firestore usando i seed locali.
 Lo script rifiuta array vuoti, ID assenti/duplicati, nomi vuoti, macronutrienti non numerici/negativi e documenti JSON oltre 800.000 byte. Non carica credenziali o Admin SDK durante validazione e dry-run. I seed bundled attuali causano pertanto un errore esplicito, senza inizializzare Firebase.
 
 Progetto e versione sono obbligatori. Una scrittura richiede inoltre `--confirm` uguale al progetto indicato. Il service account opzionale deve appartenere allo stesso progetto; il file resta escluso da Git. Non esiste più un progetto di produzione hardcoded.
+
+**MUST:** Non eseguire MAI accidentalmente questo script. Poiché i JSON locali sono stati svuotati per la policy "enforce manual input", eseguirlo sovrascriverebbe `global_catalog` su Firestore con array vuoti, distruggendo il database cloud di esercizi e alimenti per tutti gli utenti.
 
 ```bash
 node scripts/seed-catalog.mjs --dry-run --project=demo-logbook-audit --version=test-1 --exercises=/percorso/esercizi.json --foods=/percorso/alimenti.json
