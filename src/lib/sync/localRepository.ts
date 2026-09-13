@@ -245,11 +245,17 @@ export async function hydrateLocal(
                 }
             }
 
-            const baselineData = applyRemoteDocuments(current.data, localDocs, catalog);
+            // A full cloud scan is authoritative for all monthly shards. Since applyRemoteDocuments
+            // preserves months absent from its document map, clear those collections in the apply base.
+            const applicationBase = coverageMode === 'all'
+                ? ({ ...current.data, history: [], nutrition: {} } as UserData)
+                : current.data;
+
+            const baselineData = applyRemoteDocuments(applicationBase, localDocs, catalog);
             const parsedBaseline = parse(baselineData);
 
             const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(localDocs, current.pending, syncMeta);
-            const data = applyRemoteDocuments(current.data, mergedDocs, catalog);
+            const data = applyRemoteDocuments(applicationBase, mergedDocs, catalog);
 
             data.pendingConflicts = current.data.pendingConflicts;
             const parsedData = parse(data);
