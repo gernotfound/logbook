@@ -33,7 +33,6 @@ import { InstallPrompt } from './components/UI/InstallPrompt';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
-import { SyncConflictPanel } from './components/UI/SyncConflictPanel';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
@@ -283,7 +282,6 @@ function App() {
       )}
 
       <main id="app-container" style={isGuest ? { paddingTop: '36px' } : undefined}>
-        <SyncConflictPanel key={isGuest ? 'guest' : currentUser?.uid} />
         {/* Render Active View */}
         <ErrorBoundary key={isGuest ? 'guest' : currentUser?.uid}>
           <Suspense fallback={

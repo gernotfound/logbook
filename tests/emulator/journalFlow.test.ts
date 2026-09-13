@@ -7,8 +7,18 @@ import { doc, getDoc, setDoc, waitForPendingWrites } from 'firebase/firestore';
 const sdk = vi.hoisted(() => ({ db: null as any, auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => sdk.db, ensureAppCheck: async () => {}, waitForPendingWrites: (db: any) => waitForPendingWrites(db) }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
-import { DB } from '../../src/lib/db';
+import { DB as RealDB } from '../../src/lib/db';
+import { dbState as __testDbState } from '../../src/lib/db/db_core';
 import { readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
+const DB = {
+    ...RealDB,
+    saveUserData: async (state: any, _rev?: any) => {
+        let oldState = __testDbState.lastSavedStateStr ? JSON.parse(__testDbState.lastSavedStateStr) : {};
+        const uid = sdk.auth.currentUser?.uid;
+        if (uid) await commitLocal('user:' + uid, state, oldState);
+        return RealDB.saveUserData(state, _rev);
+    }
+};
 import { UserDataSchema } from '../../src/lib/schema';
 import { projectDocuments } from '../../src/lib/sync/documentProjection';
 import type { UserData, CachedGlobalCatalog } from '../../src/types';

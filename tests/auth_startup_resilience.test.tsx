@@ -44,7 +44,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     expect(screen.getByTestId('user-state').textContent).toBe('test@example.com');
   });
 
-  test('IndexedDB Cache Snapshot: stores cached userData in IndexedDB for instant offline start', () => {
+  test('IndexedDB Cache Snapshot: stores cached userData in IndexedDB for instant offline start', async () => {
     const mockCache: UserData = {
       profile: { name: 'Mario Rossi', height: '180' },
       library: [{ id: 'ex1', name: 'Panca Piana', targetMuscle: 'petto', notes: '' }],
@@ -58,6 +58,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
 
     // When store is updated or loaded, it syncs with IndexedDB cache
     useAppStore.getState().setUserData(mockCache);
+    await new Promise(r => setTimeout(r, 0));
 
     const cachedInStorage = idbStore['logbook:v2:user:test-user-id'];
     expect(cachedInStorage).toBeTruthy();
@@ -77,6 +78,7 @@ describe('PWA & iPhone Startup Resilience Tests', () => {
     };
 
     useAppStore.getState().setUserData(sampleData);
+    await new Promise(r => setTimeout(r, 0));
     expect(idbStore['logbook:v2:user:test-user-id']?.data.profile?.name).toBe('Luigi');
 
     await DB.purgeAllLocalUserData();

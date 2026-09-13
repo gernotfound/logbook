@@ -204,7 +204,7 @@ vi.mock('idb-keyval', () => ({
     idbStore[key] = value;
   }),
   update: vi.fn(async (key: string, updater: (value: any) => any) => {
-    idbStore[key] = updater(idbStore[key]);
+    idbStore[key] = await updater(idbStore[key]);
   }),
   del: vi.fn(async (key: string) => {
     delete idbStore[key];

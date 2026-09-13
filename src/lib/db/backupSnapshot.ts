@@ -1,10 +1,10 @@
-import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, type QueryDocumentSnapshot } from 'firebase/firestore';
+﻿import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { getDb, ensureAppCheck } from '../firebase';
 import { captureSession, isCurrentSession } from '../sync/session';
 import { readLocal } from '../sync/localRepository';
 import { getCachedCatalog } from '../catalog/catalogService';
-import { applyRemoteDocuments, type DocumentData } from '../sync/documentProjection';
-import { reconcile } from '../sync/reconcile';
+import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
+import { applySemanticOperations } from '../sync/semanticProjection';
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
@@ -47,7 +47,21 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     const envelope = await readLocal(session.owner);
     assertCurrent();
     const local = envelope?.data ?? fallback;
-    const merged = cloud ? reconcile(envelope?.baseline ?? local, local, cloud) : { value: local, conflicts: [] };
+    let mergedValue = local;
+    if (cloud) {
+        if (envelope?.pending?.length) {
+            const catalog = await getCachedCatalog();
+            const baseDocs = projectDocuments(cloud, catalog);
+            const mergedDocs = applySemanticOperations(baseDocs, envelope.pending);
+            mergedValue = applyRemoteDocuments(cloud, mergedDocs, catalog);
+            // Preserve specific pending conflicts like nutritionPlanning from local
+            mergedValue.pendingConflicts = local.pendingConflicts;
+        } else {
+            mergedValue = cloud;
+            mergedValue.pendingConflicts = local.pendingConflicts;
+        }
+    }
+    
     if (!includeCloud) coverage.months = envelope?.completeMonths ?? [];
     const device: Record<string, string> = {};
     const prefix = 'logbook:v2:' + session.owner + ':';
@@ -59,6 +73,6 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         }
     }
     assertCurrent();
-    return { owner: session.owner, data: UserDataSchema.parse(merged.value) as unknown as UserData, coverage,
-        recovery: { envelope, device, conflicts: merged.conflicts, cloudDocuments: Object.fromEntries(documents) } };
+    return { owner: session.owner, data: UserDataSchema.parse(mergedValue) as unknown as UserData, coverage,
+        recovery: { envelope, device, cloudDocuments: Object.fromEntries(documents) } };
 }

@@ -1,12 +1,10 @@
-import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
+﻿import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
 import { readLocal, acknowledgeThrough } from './localRepository';
 import { captureSession, isCurrentSession } from './session';
-import { documentChanges, applyRemoteDocuments } from './documentProjection';
+import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
 import { getCachedCatalog } from '../catalog/catalogService';
-import { update } from 'idb-keyval';
-import type { LocalEnvelope } from './localRepository';
 import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
 
@@ -18,7 +16,6 @@ export async function waitForJournalIdle(owner: string): Promise<void> {
 async function drain(session: ReturnType<typeof captureSession>): Promise<void> {
     const current = () => isCurrentSession(session) && auth.currentUser?.uid === session.owner.slice(5) && !isAccountDeletionPending(session.owner);
     if (!current()) throw new Error('Sessione cambiata');
-    // Old SDK queued batches must settle before the new transactional writer starts.
     await ensureAppCheck();
     await waitForPendingWrites(getDb());
     const catalog = await getCachedCatalog();
@@ -26,20 +23,17 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
         const envelope = await readLocal(session.owner);
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
-        if (envelope.conflicts?.length) throw new Error('Conflitti da risolvere: alternative conservate nel registro locale');
-        if (!envelope.pending.length) return;
-        const changes = documentChanges(envelope.baseline, envelope.data, catalog);
-        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), changes, current);
-        if (!current()) throw new Error('Sessione cambiata');
-        if (outcome.conflicts.length) {
-            await update<LocalEnvelope>(`logbook:v2:${session.owner}`, latest => {
-                if (!latest || latest.owner !== session.owner) throw new Error('Archivio locale cambiato');
-                return { ...latest, conflicts: [...(latest.conflicts ?? []), ...outcome.conflicts] };
-            });
-            throw new Error('Modifiche concorrenti rilevate. Le alternative sono conservate nel registro locale.');
-        }
+        if (!envelope.pending?.length) return;
+        
+        // Pass SemanticOperation[] directly instead of documentChanges
+        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), envelope.pending, current);
+        
         const remote: UserData = applyRemoteDocuments(envelope.data, outcome.documents, catalog);
-        await acknowledgeThrough(session.owner, envelope.revision, remote, envelope.data, changes.flatMap(change => change.path ? [change.path.split('/')[1]] : []));
+        const seq = envelope.pending[envelope.pending.length - 1].seq;
+        const changedPaths = [...new Set(envelope.pending.map(op => op.docPath))];
+        const changedMonths = changedPaths.flatMap(path => path ? [path.split('/')[1]] : []);
+        
+        await acknowledgeThrough(session.owner, seq, remote, envelope.data, changedMonths, outcome.syncMeta);
     }
     throw new Error('Sessione cambiata');
 }
@@ -50,7 +44,7 @@ export async function replicateJournal(): Promise<SyncResult> {
         if (isAccountDeletionPending(session.owner)) throw new Error('Cancellazione account in sospeso. Riprendila dalle impostazioni; copia locale conservata.');
         const envelope = await readLocal(session.owner);
         if (!envelope) throw new Error('Copia locale non disponibile');
-        if (session.owner === 'guest' || !envelope.pending.length) return { ok: true, status: 'synced' };
+        if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
         if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, status: 'local-pending', error: new Error('Connessione assente') };
         const previous = running.get(session.owner);
         const work = (async () => {
@@ -69,3 +63,6 @@ export async function replicateJournal(): Promise<SyncResult> {
         return { ok: false, status: 'failed', error };
     }
 }
+
+
+

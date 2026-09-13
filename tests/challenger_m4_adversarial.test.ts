@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 vi.unmock('../src/lib/db');
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 import { mergeUserData } from '../src/lib/merge';
 import { DomainParsers } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';

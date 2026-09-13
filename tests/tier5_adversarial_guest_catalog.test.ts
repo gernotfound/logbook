@@ -16,7 +16,7 @@ import { get as idbGet, set as idbSet } from 'idb-keyval';
 import { doc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 
 import {
     getCachedCatalog,
