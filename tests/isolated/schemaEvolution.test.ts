@@ -10,6 +10,8 @@ import {
     normalizeCloudDocument,
     withCurrentDataSchema,
     type CloudMigrationState,
+    type DataMigrationCarrier,
+    type SyncProtocolMigrationCarrier,
 } from '../../src/lib/schemaEvolution';
 
 describe('Schema Evolution registry', () => {
@@ -58,6 +60,48 @@ describe('Schema Evolution registry', () => {
         expect((migrated.sync as any).fields['profile/name']).toBeDefined();
         expect(source.business).toEqual({ profile: { oldName: 'A' } });
         expect((source.sync as any).fields['profile/oldName']).toBeDefined();
+    });
+
+    it('lets data and sync dimensions advance without bumping local/backup container versions', () => {
+        for (const scope of ['local-envelope', 'backup'] as const) {
+            const source: DataMigrationCarrier = {
+                scope,
+                record: {
+                    version: scope === 'local-envelope' ? 4 : 3,
+                    dataSchemaVersion: 1,
+                    syncProtocolVersion: 1,
+                    payload: { oldName: 'A' },
+                },
+            };
+
+            const dataMigrated = migrateSequential<DataMigrationCarrier>(source, 1, 2, {
+                1: value => {
+                    if (value.scope === 'cloud') return structuredClone(value) as DataMigrationCarrier;
+                    const payload = value.record.payload as Record<string, unknown>;
+                    return {
+                        scope: value.scope,
+                        record: { ...value.record, payload: { name: payload.oldName } },
+                    };
+                },
+            }, `${scope} synthetic data schema`);
+
+            expect(dataMigrated.scope).toBe(scope);
+            if (dataMigrated.scope === 'cloud') throw new Error('Unexpected cloud carrier');
+            expect(dataMigrated.record.version).toBe(scope === 'local-envelope' ? 4 : 3);
+            expect(dataMigrated.record.payload).toEqual({ name: 'A' });
+
+            const syncSource: SyncProtocolMigrationCarrier = { scope, record: dataMigrated.record };
+            const syncMigrated = migrateSequential<SyncProtocolMigrationCarrier>(syncSource, 1, 2, {
+                1: value => value.scope === 'cloud'
+                    ? structuredClone(value) as SyncProtocolMigrationCarrier
+                    : { scope: value.scope, record: { ...value.record, syncMarker: 'migrated' } },
+            }, `${scope} synthetic sync protocol`);
+
+            expect(syncMigrated.scope).toBe(scope);
+            if (syncMigrated.scope === 'cloud') throw new Error('Unexpected cloud carrier');
+            expect(syncMigrated.record.version).toBe(scope === 'local-envelope' ? 4 : 3);
+            expect(syncMigrated.record.syncMarker).toBe('migrated');
+        }
     });
 
     it('fails closed when a sequential migration step is missing', () => {
