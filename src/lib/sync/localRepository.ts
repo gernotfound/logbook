@@ -7,7 +7,7 @@ import equal from 'fast-deep-equal';
 import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
-import { normalizeStorageOwner } from './session';
+import { normalizeStorageOwner } from './owner';
 
 export interface LocalEnvelopeV3 {
     version: 3;
