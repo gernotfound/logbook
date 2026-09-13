@@ -12,7 +12,6 @@ import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
-    assertCurrentVersion,
     normalizeLocalEnvelopeRecord,
 } from '../schemaEvolution';
 
@@ -55,10 +54,8 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
     }
 
+    // Container, data schema and sync protocol are normalized as independent dimensions.
     const migrated = normalizeLocalEnvelopeRecord(value);
-    assertCurrentVersion(migrated.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema locale');
-    assertCurrentVersion(migrated.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync locale');
-
     const v4 = migrated as unknown as LocalEnvelopeV4;
     return { ...v4, data: parse(v4.data), baseline: parse(v4.baseline) };
 }
