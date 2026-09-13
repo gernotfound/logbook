@@ -14,8 +14,8 @@ describe('durable owner-scoped journal', () => {
     it('does not resurrect a remote deletion in a complete month and preserves unloaded history', async () => {
         const base = UserDataSchema.parse({ nutrition: { '2026-09-01': { date: '2026-09-01', weight: 80 }, '2025-01-01': { date: '2025-01-01', weight: 70 } } }) as unknown as UserData;
         await initializeLocal('a', base);
-        // In V3, cloudData already contains the merged unloaded history from the local cache.
-        const cloudWithUnloaded = { ...data(170), nutrition: { '2025-01-01': { date: '2025-01-01', weight: 70 } } } as unknown as UserData;
+        // In V3, cloudData might not contain unloaded months. We test that hydrateLocal keeps them.
+        const cloudWithUnloaded = { ...data(170) } as unknown as UserData;
         const hydrated = await hydrateLocal('a', cloudWithUnloaded, ['2026-09']);
         expect(hydrated.data.nutrition?.['2026-09-01']).toBeUndefined();
         expect(hydrated.data.nutrition?.['2025-01-01']?.weight).toBe(70);

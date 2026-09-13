@@ -56,25 +56,38 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
         
-        let actorId = current?.actorId ?? generateId('actor');
-        let seq = (current?.actorSeq ?? 0) + 1;
-        let clock = { ...(current?.clock ?? {}) };
-        clock[actorId] = seq;
-
         const baseDocs = projectDocuments(current?.data ?? fallback, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
         
-        operations = diffDocuments(baseDocs, desiredDocs, actorId, seq, clock);
+        let actorId = current?.actorId ?? generateId('actor');
+        let nextSeq = (current?.actorSeq ?? 0) + 1;
+        let testClock = { ...(current?.clock ?? {}) };
+        testClock[actorId] = nextSeq;
+
+        operations = diffDocuments(baseDocs, desiredDocs, actorId, nextSeq, testClock);
         
+        if (operations.length === 0) {
+            return {
+                ...(current ?? { completeMonths: [] }),
+                version: 3, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {},
+                data: desired, // Still save business data changes that don't produce semantic ops (e.g., fallbacks)
+                baseline: current?.baseline ?? fallback,
+                completeMonths: current?.completeMonths ?? [],
+                pending: current?.pending ?? [],
+                syncMetaByDocument: current?.syncMetaByDocument ?? {},
+                revision: current?.revision ?? 0
+            };
+        }
+
         return {
             ...(current ?? { completeMonths: [] }),
-            version: 3, owner, actorId, actorSeq: seq, clock,
+            version: 3, owner, actorId, actorSeq: nextSeq, clock: testClock,
             data: desired,
             baseline: current?.baseline ?? fallback,
             completeMonths: current?.completeMonths ?? [],
             pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations],
             syncMetaByDocument: current?.syncMetaByDocument ?? {},
-            revision: seq
+            revision: nextSeq
         };
     });
     return operations;
@@ -148,11 +161,18 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             saved = { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, revision: 0 };
         } else {
             
-            let syncMeta = current.syncMetaByDocument ?? {};
+            let syncMeta: Record<string, SyncMeta> = {};
+            const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
+            
+            for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) {
+                if (!authoritativePaths.has(path)) {
+                    syncMeta[path] = meta;
+                }
+            }
+            
             let updatedClock = { ...current.clock };
             // hydrateLocal MUST NOT modify existing pending clocks
 
-            
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
                     if (doc._sync) {
@@ -165,9 +185,25 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 }
             }
             
-            const remoteDocs = projectDocuments(cloud, catalog);
-            const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(remoteDocs, current.pending, syncMeta);
-            const data = applyRemoteDocuments(cloud, mergedDocs, catalog);
+            const localDocs = projectDocuments(current.data, catalog);
+            const cloudDocsForHydration = projectDocuments(cloud, catalog);
+            
+            localDocs.set('', cloudDocsForHydration.get('') ?? {});
+            
+            for (const month of months) {
+                const hKey = `history_months/${month}`;
+                localDocs.set(hKey, cloudDocsForHydration.get(hKey) ?? {});
+                
+                const nKey = `nutrition_months/${month}`;
+                localDocs.set(nKey, cloudDocsForHydration.get(nKey) ?? {});
+            }
+
+            
+            const baselineData = applyRemoteDocuments(current.data, localDocs, catalog);
+            const parsedBaseline = parse(baselineData);
+            
+            const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(localDocs, current.pending, syncMeta);
+            const data = applyRemoteDocuments(current.data, mergedDocs, catalog);
             
             data.pendingConflicts = current.data.pendingConflicts;
             const parsedData = parse(data);
@@ -176,7 +212,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 ...current,
                 clock: updatedClock,
                 data: parsedData,
-                baseline: cloud,
+                baseline: parsedBaseline,
                 completeMonths: [...new Set([...current.completeMonths, ...months])],
                 syncMetaByDocument: mergedMetas
             };

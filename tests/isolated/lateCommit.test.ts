@@ -8,7 +8,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async () => ({ exercises: [], foods: [] }) }));
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 
-import { replicateJournal } from '../../src/lib/sync/replicateJournal';
+import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
 import { initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
@@ -45,7 +45,7 @@ it('retains one writer after timeout and acknowledges its late commit before ret
     
     // Resolve the late commit
     completion.resolve({ documents: new Map(), syncMeta: {} });
-    await vi.advanceTimersByTimeAsync(50);
+    await waitForJournalIdle('user:a');
     
     expect((await retry).status).toBe('synced');
     expect((await readLocal('user:a'))?.pending).toHaveLength(0);
@@ -62,7 +62,7 @@ it('does not acknowledge a late result after A to B to A even though the uid mat
     remote.auth.currentUser = { uid: 'a' }; invalidateSession();
     
     completion.resolve({ documents: new Map(), syncMeta: {} });
-    await vi.advanceTimersByTimeAsync(50);
+    await waitForJournalIdle('user:a');
     
     expect((await first).status).toBe('failed');
     expect((await readLocal('user:a'))?.pending).toHaveLength(1);

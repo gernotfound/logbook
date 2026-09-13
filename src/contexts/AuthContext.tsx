@@ -182,14 +182,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                                 setUserData(hydratedEnv.data);
                                 useAppStore.getState().setLocalWorkout(hydratedEnv.data.activeWorkout || null);
                             } else if (guestHasData) {
-                                const mergedData = mergeUserData(cloudData, guestData);
-                                await DB.saveUserData(mergedData);
+                                const { hydrateLocal, commitLocal } = await import('../lib/sync/localRepository');
+                                const hydratedEnv = await hydrateLocal(user.uid, cloudData!, cloudPayload!.completeMonths, cloudPayload!.cloudDocuments);
+                                const mergedData = mergeUserData(hydratedEnv.data, guestData);
+                                await commitLocal(user.uid, mergedData, hydratedEnv.data);
+                                await DB.replicateJournal();
                                 const resolvedPayload = await DB.loadCloudPayload();
                                 const resolvedData = resolvedPayload?.data || mergedData;
-                                const { hydrateLocal } = await import('../lib/sync/localRepository');
-                                const hydratedEnv = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments);
-                                setUserData(hydratedEnv.data);
-                                useAppStore.getState().setLocalWorkout(hydratedEnv.data.activeWorkout || null);
+                                const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments);
+                                setUserData(hydratedFinal.data);
+                                useAppStore.getState().setLocalWorkout(hydratedFinal.data.activeWorkout || null);
                             } else {
                                 const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
                                 const fallbackData = getResolvedDefaultUserData(catalog);
