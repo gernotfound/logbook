@@ -13,6 +13,7 @@ import {
     CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
     assertCurrentVersion,
+    normalizeLocalEnvelopeRecord,
 } from '../schemaEvolution';
 
 export interface LocalEnvelopeV4 {
@@ -54,11 +55,11 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
     }
 
-    assertCurrentVersion(value.version, CURRENT_LOCAL_ENVELOPE, 'Formato archivio locale');
-    assertCurrentVersion(value.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema locale');
-    assertCurrentVersion(value.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync locale');
+    const migrated = normalizeLocalEnvelopeRecord(value);
+    assertCurrentVersion(migrated.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema locale');
+    assertCurrentVersion(migrated.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync locale');
 
-    const v4 = value as LocalEnvelopeV4;
+    const v4 = migrated as unknown as LocalEnvelopeV4;
     return { ...v4, data: parse(v4.data), baseline: parse(v4.baseline) };
 }
 
@@ -232,7 +233,6 @@ export async function hydrateLocal(
             }
 
             const updatedClock = { ...current.clock };
-            // hydrateLocal MUST NOT modify existing pending clocks
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
                     if (doc._sync) {
@@ -266,8 +266,6 @@ export async function hydrateLocal(
                 }
             }
 
-            // A full cloud scan is authoritative for all monthly shards. Since applyRemoteDocuments
-            // preserves months absent from its document map, clear those collections in the apply base.
             const applicationBase = coverageMode === 'all'
                 ? ({ ...current.data, history: [], nutrition: {} } as UserData)
                 : current.data;
