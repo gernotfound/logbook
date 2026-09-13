@@ -32,6 +32,17 @@ export class MissingMigrationError extends Error {
     }
 }
 
+export function isUpdateRequiredError(error: unknown): boolean {
+    const seen = new Set<unknown>();
+    let current = error;
+    while (current && typeof current === 'object' && !seen.has(current)) {
+        seen.add(current);
+        if (current instanceof FutureVersionError || (current as { code?: unknown }).code === 'update-required') return true;
+        current = (current as { cause?: unknown }).cause;
+    }
+    return false;
+}
+
 export type Migration<T> = (value: Readonly<T>) => T;
 export type MigrationRegistry<T> = Readonly<Record<number, Migration<T>>>;
 
@@ -89,10 +100,22 @@ export interface CloudMigrationState {
 
 export type PersistedRecord = Record<string, unknown>;
 
+export type DataMigrationCarrier =
+    | { scope: 'cloud'; state: CloudMigrationState }
+    | { scope: 'local-envelope'; record: PersistedRecord }
+    | { scope: 'backup'; record: PersistedRecord };
+
+export type SyncProtocolMigrationCarrier =
+    | { scope: 'cloud'; sync: PersistedRecord }
+    | { scope: 'local-envelope'; record: PersistedRecord }
+    | { scope: 'backup'; record: PersistedRecord };
+
 // Clean-cut M1 baseline: no historical pre-M1 product migrations exist.
-// Future N->N+1 migrations are added to these registries when the corresponding CURRENT_* constant is bumped.
-export const DATA_MIGRATIONS: MigrationRegistry<CloudMigrationState> = {};
-export const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
+// Future N->N+1 migrations are added only when the corresponding CURRENT_* constant is bumped.
+// Data/sync migration steps receive a storage-scope carrier so one version dimension can advance
+// independently of the local-envelope or backup container version without coupling those bumps.
+export const DATA_MIGRATIONS: MigrationRegistry<DataMigrationCarrier> = {};
+export const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCarrier> = {};
 export const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 export const BACKUP_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 
@@ -117,15 +140,51 @@ function readSyncProtocol(sync: unknown, kind: string): number | undefined {
 function normalizeSyncProtocol(sync: unknown, sourceVersion: number | undefined, kind: string): unknown {
     if (sync === undefined || sourceVersion === undefined) return undefined;
     if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
-    const migrated = migrateFromBaseline(
-        sync,
+    const migrated = migrateFromBaseline<SyncProtocolMigrationCarrier>(
+        { scope: 'cloud', sync: structuredClone(sync) },
         sourceVersion,
         BASELINE_SYNC_PROTOCOL,
         CURRENT_SYNC_PROTOCOL,
         SYNC_PROTOCOL_MIGRATIONS,
         kind,
     );
-    return { ...migrated, protocolVersion: CURRENT_SYNC_PROTOCOL };
+    if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
+    return { ...migrated.sync, protocolVersion: CURRENT_SYNC_PROTOCOL };
+}
+
+function normalizePersistedDimensions(
+    record: PersistedRecord,
+    scope: 'local-envelope' | 'backup',
+    kind: string,
+): PersistedRecord {
+    const sourceDataVersion = assertVersionNumber(record.dataSchemaVersion, `${kind} data schema`);
+    const sourceSyncVersion = assertVersionNumber(record.syncProtocolVersion, `${kind} sync protocol`);
+
+    const dataCarrier = migrateFromBaseline<DataMigrationCarrier>(
+        { scope, record: structuredClone(record) },
+        sourceDataVersion,
+        BASELINE_DATA_SCHEMA,
+        CURRENT_DATA_SCHEMA,
+        DATA_MIGRATIONS,
+        `${kind} data schema`,
+    );
+    if (dataCarrier.scope !== scope) throw new Error(`${kind}: data migration scope non valido.`);
+
+    const syncCarrier = migrateFromBaseline<SyncProtocolMigrationCarrier>(
+        { scope, record: structuredClone(dataCarrier.record) },
+        sourceSyncVersion,
+        BASELINE_SYNC_PROTOCOL,
+        CURRENT_SYNC_PROTOCOL,
+        SYNC_PROTOCOL_MIGRATIONS,
+        `${kind} sync protocol`,
+    );
+    if (syncCarrier.scope !== scope) throw new Error(`${kind}: sync migration scope non valido.`);
+
+    return {
+        ...syncCarrier.record,
+        dataSchemaVersion: CURRENT_DATA_SCHEMA,
+        syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+    };
 }
 
 export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data schema'): NormalizedCloudDocument {
@@ -139,19 +198,23 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
     const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
     const sourceSyncVersion = readSyncProtocol(_sync, `${kind} sync protocol`);
 
-    const migrated = migrateFromBaseline<CloudMigrationState>(
-        { business: structuredClone(business), sync: _sync === undefined ? undefined : structuredClone(_sync) },
+    const migrated = migrateFromBaseline<DataMigrationCarrier>(
+        {
+            scope: 'cloud',
+            state: { business: structuredClone(business), sync: _sync === undefined ? undefined : structuredClone(_sync) },
+        },
         sourceVersion,
         BASELINE_DATA_SCHEMA,
         CURRENT_DATA_SCHEMA,
         DATA_MIGRATIONS,
         kind,
     );
+    if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
 
-    const normalizedSync = normalizeSyncProtocol(migrated.sync, sourceSyncVersion, `${kind} sync protocol`);
+    const normalizedSync = normalizeSyncProtocol(migrated.state.sync, sourceSyncVersion, `${kind} sync protocol`);
 
     return {
-        business: migrated.business,
+        business: migrated.state.business,
         sync: normalizedSync,
         dataSchemaVersion: CURRENT_DATA_SCHEMA,
     };
@@ -168,7 +231,10 @@ export function normalizeLocalEnvelopeRecord(raw: unknown): PersistedRecord {
         LOCAL_ENVELOPE_MIGRATIONS,
         'Formato archivio locale',
     );
-    return { ...migrated, version: CURRENT_LOCAL_ENVELOPE };
+    return {
+        ...normalizePersistedDimensions(migrated, 'local-envelope', 'Archivio locale'),
+        version: CURRENT_LOCAL_ENVELOPE,
+    };
 }
 
 export function normalizeBackupRecord(raw: unknown): PersistedRecord {
@@ -182,7 +248,10 @@ export function normalizeBackupRecord(raw: unknown): PersistedRecord {
         BACKUP_MIGRATIONS,
         'Formato backup',
     );
-    return { ...migrated, version: CURRENT_BACKUP_SCHEMA };
+    return {
+        ...normalizePersistedDimensions(migrated, 'backup', 'Backup'),
+        version: CURRENT_BACKUP_SCHEMA,
+    };
 }
 
 export function withCurrentDataSchema(
