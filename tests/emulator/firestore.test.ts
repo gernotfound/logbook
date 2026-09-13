@@ -18,15 +18,19 @@ it('allows the owner to create, read and delete their own profile', async () => 
     await assertSucceeds(deleteDoc(ref));
 });
 
-it('allows the clean-cut unversioned schema-1 baseline but rejects explicit future versions', async () => {
+it('allows the clean-cut unversioned schema-1 baseline, marks it lazily, and prevents marker downgrade', async () => {
     const db = env.authenticatedContext('a').firestore();
-    await assertSucceeds(setDoc(doc(db, 'users/a'), { profile: { name: 'baseline' } }));
-    await assertSucceeds(setDoc(doc(db, 'users/a'), { profile: { name: 'current' }, _schemaVersion: 1 }));
-    await assertFails(setDoc(doc(db, 'users/a'), { profile: { name: 'future' }, _schemaVersion: 2 }));
+    const root = doc(db, 'users/a');
+    await assertSucceeds(setDoc(root, { profile: { name: 'baseline' } }));
+    await assertSucceeds(setDoc(root, { profile: { name: 'current' }, _schemaVersion: 1 }));
+    await assertFails(setDoc(root, { profile: { name: 'marker-dropped' } }));
+    await assertFails(setDoc(root, { profile: { name: 'future' }, _schemaVersion: 2 }));
 
     for (const collection of ['history_months', 'nutrition_months']) {
         const ref = doc(db, `users/a/${collection}/2026-09`);
+        await assertSucceeds(setDoc(ref, {}));
         await assertSucceeds(setDoc(ref, { _schemaVersion: 1 }));
+        await assertFails(setDoc(ref, {}));
         await assertFails(setDoc(ref, { _schemaVersion: 2 }));
     }
 });
