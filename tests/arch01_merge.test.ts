@@ -7,9 +7,8 @@ import { renderHook, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { AuthContext } from '../src/contexts/AuthContextDef';
 import { useContext } from 'react';
-import { auth, onAuthStateChanged } from '../src/lib/firebase';
+import { auth } from '../src/lib/firebase';
 import type { UserData, NutritionDay } from '../src/types';
-
 
 const getEmptyUserData = (): UserData => ({
     profile: {},
@@ -32,9 +31,9 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         it('T1: Preserves historical records absent in cloud', () => {
             const localHistory = [{ id: 'WID-2023-01', name: 'Old Workout' }];
             const cloudHistory = [{ id: 'WID-2026-09', name: 'Recent Workout' }];
-            
+
             const merged = mergeHistoryNonDestructive(localHistory, cloudHistory);
-            
+
             expect(merged).toHaveLength(2);
             expect(merged.find(h => h.id === 'WID-2023-01')).toBeDefined();
             expect(merged.find(h => h.id === 'WID-2026-09')).toBeDefined();
@@ -43,9 +42,9 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         it('T2 & T6: Local wins on history ID collision (Conservative Policy)', () => {
             const localHistory = [{ id: 'WID-COLLISION', name: 'Local Edit Offline' }];
             const cloudHistory = [{ id: 'WID-COLLISION', name: 'Cloud Older Version' }];
-            
+
             const merged = mergeHistoryNonDestructive(localHistory, cloudHistory);
-            
+
             expect(merged).toHaveLength(1);
             expect(merged[0].name).toBe('Local Edit Offline');
         });
@@ -59,21 +58,21 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             };
 
             const merged = mergeNutritionNonDestructive(localNut, cloudNut);
-            
+
             expect(merged['2023-01-15']).toBeDefined();
             expect(merged['2026-09-01']).toBeDefined();
         });
 
         it('T4: Local wins on nutrition date collision (Conservative Policy)', () => {
             const localNut: Record<string, NutritionDay> = {
-                '2026-09-01': { date: '2026-09-01', kcal: 9999, carbs: 200, pro: 150, fat: 60 } // local offline edit
+                '2026-09-01': { date: '2026-09-01', kcal: 9999, carbs: 200, pro: 150, fat: 60 }
             };
             const cloudNut: Record<string, NutritionDay> = {
                 '2026-09-01': { date: '2026-09-01', kcal: 2500, carbs: 300, pro: 180, fat: 70 }
             };
 
             const merged = mergeNutritionNonDestructive(localNut, cloudNut);
-            
+
             expect(merged['2026-09-01'].kcal).toBe(9999);
         });
 
@@ -92,7 +91,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
 
             const cloudData = getEmptyUserData();
             cloudData.history = [{ id: 'new-1', globalStartTime: 2000 } as any];
-            cloudData.profile = { name: 'Cloud Name' }; // Cloud overrides non-windowed
+            cloudData.profile = { name: 'Cloud Name' };
 
             const merged = mergeCloudIntoLocal(localData, cloudData);
 
@@ -108,20 +107,21 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             vi.clearAllMocks();
         });
 
-        it.skip('T10 & Integration: Hydration merges non-destructively without triggering DB.saveUserData', async () => {
+        it('T10 & Integration: V3 window hydration preserves unloaded months without triggering DB.saveUserData', async () => {
             (auth as any).currentUser = { uid: 'user123' };
-            // Setup local state with OLD history
+
+            // January is outside the authoritative cloud window and must survive locally.
             const initialLocal = getEmptyUserData();
-            initialLocal.history = [{ id: 'local-old', globalStartTime: 1000 } as any];
+            initialLocal.history = [{ id: 'local-old', date: '2025-01-10', exercises: [] } as any];
             useAppStore.setState({ userData: initialLocal });
             await initializeLocal('user:user123', initialLocal);
 
-            // Setup cloud response with NEW history only
+            // September is the month actually loaded from cloud and is authoritative for that month.
             const cloudResponse = getEmptyUserData();
-            cloudResponse.history = [{ id: 'cloud-new', globalStartTime: 2000 } as any];
+            cloudResponse.history = [{ id: 'cloud-new', date: '2026-09-10', exercises: [] } as any];
             const loadSpy = vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
                 data: cloudResponse,
-                completeMonths: [],
+                completeMonths: ['2026-09'],
                 cloudDocuments: new Map()
             });
             const saveSpy = vi.spyOn(DB, 'saveUserData');
@@ -133,56 +133,51 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 return () => {};
             });
 
-            renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
+            const rendered = renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
 
-            // Give React a moment to run the effect
-            await act(async () => {
-                await new Promise(r => setTimeout(r, 10));
-            });
+            try {
+                await act(async () => {
+                    await new Promise(r => setTimeout(r, 10));
+                });
 
-            if (!authCallback) throw new Error("authCallback was not set by renderHook!");
+                if (!authCallback) throw new Error('authCallback was not set by renderHook');
 
-            // Fire auth callback with a mock user
-            await act(async () => {
-                (auth as any).currentUser = { uid: 'user123' };
-                await authCallback({ uid: 'user123' });
-                // Flush loadData promises
-                await new Promise(r => setTimeout(r, 10));
-            });
+                await act(async () => {
+                    (auth as any).currentUser = { uid: 'user123' };
+                    await authCallback({ uid: 'user123' });
+                    await new Promise(r => setTimeout(r, 10));
+                });
 
-            // Verification
-            const finalState = useAppStore.getState().userData;
-            expect(finalState).not.toBeNull();
-            
-            // 1. Both historical and recent items must be present
-            const historyIds = finalState!.history.map(h => h.id);
-            expect(historyIds).toContain('local-old');
-            expect(historyIds).toContain('cloud-new');
+                const finalState = useAppStore.getState().userData;
+                expect(finalState).not.toBeNull();
 
-            // 2. Hydration must NOT trigger a write to Firestore
-            expect(saveSpy).not.toHaveBeenCalled();
-            expect(loadSpy).toHaveBeenCalledTimes(1);
+                const historyIds = finalState!.history.map(h => h.id);
+                expect(historyIds).toContain('local-old');
+                expect(historyIds).toContain('cloud-new');
+
+                // Hydration is read-path work: it must not invoke the public cloud save path.
+                expect(saveSpy).not.toHaveBeenCalled();
+                expect(loadSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                rendered.unmount();
+                loadSpy.mockRestore();
+                saveSpy.mockRestore();
+            }
         });
 
-        it.skip('Zod Fallback: Failed parse during hydration preserves local state', async () => {
+        it('Zod fallback: malformed cloud hydration preserves the valid local state', async () => {
             (auth as any).currentUser = { uid: 'user123' };
             const initialLocal = getEmptyUserData();
             initialLocal.profile = { name: 'Valid Local' } as any;
             useAppStore.setState({ userData: initialLocal });
+            await initializeLocal('user:user123', initialLocal);
 
-            const cloudResponse = getEmptyUserData();
-            vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
-                data: cloudResponse,
+            const loadSpy = vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
+                data: null as any,
                 completeMonths: [],
                 cloudDocuments: new Map()
             });
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-            // Force the schema parse to fail so we can test the try/catch fallback in AuthContext
-            const { UserDataSchema } = await import('../src/lib/schema');
-            vi.spyOn(UserDataSchema, 'parse').mockImplementation(() => {
-                throw new Error("Simulated Zod error");
-            });
 
             let authCallback: any = null;
             const { onAuthStateChanged } = await import('firebase/auth');
@@ -191,28 +186,32 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 return () => {};
             });
 
-            renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
+            const rendered = renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
 
-            await act(async () => {
-                await new Promise(r => setTimeout(r, 10));
-            });
+            try {
+                await act(async () => {
+                    await new Promise(r => setTimeout(r, 10));
+                });
 
-            if (!authCallback) throw new Error("authCallback was not set by renderHook!");
+                if (!authCallback) throw new Error('authCallback was not set by renderHook');
 
-            await act(async () => {
-                (auth as any).currentUser = { uid: 'user123' };
-                await authCallback({ uid: 'user123' });
-                // Flush loadData promises
-                await new Promise(r => setTimeout(r, 10));
-            });
+                await act(async () => {
+                    (auth as any).currentUser = { uid: 'user123' };
+                    await authCallback({ uid: 'user123' });
+                    await new Promise(r => setTimeout(r, 10));
+                });
 
-            const finalState = useAppStore.getState().userData;
-            // The local state should remain unchanged
-            expect(finalState?.profile?.name).toBe('Valid Local');
-            expect(consoleSpy).toHaveBeenCalledWith(
-                "Zod parse failed during hydration merge, preserving local valid state:", 
-                expect.any(Error)
-            );
+                const finalState = useAppStore.getState().userData;
+                expect(finalState?.profile?.name).toBe('Valid Local');
+                expect(consoleSpy).toHaveBeenCalledWith(
+                    'Zod parse failed during hydration merge, preserving local valid state:',
+                    expect.any(Error)
+                );
+            } finally {
+                rendered.unmount();
+                loadSpy.mockRestore();
+                consoleSpy.mockRestore();
+            }
         });
     });
 });
