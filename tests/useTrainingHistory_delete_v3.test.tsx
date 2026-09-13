@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
@@ -7,6 +7,7 @@ import { UserDataSchema } from '../src/lib/schema';
 import type { UserData } from '../src/types';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+const originalSaveUserData = useAppStore.getState().saveUserData;
 
 describe('useTrainingHistory deleteWorkout', () => {
     beforeEach(() => {
@@ -36,6 +37,10 @@ describe('useTrainingHistory deleteWorkout', () => {
             }) as any
         });
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+    });
+
+    afterEach(() => {
+        useAppStore.setState({ saveUserData: originalSaveUserData });
     });
 
     it('removes the workout, clears pains introduced by it, and clears matching localWorkout', async () => {
