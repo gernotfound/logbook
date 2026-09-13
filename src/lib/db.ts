@@ -1,4 +1,4 @@
-﻿import { auth, getDb, ensureAppCheck } from './firebase';
+import { auth, getDb, ensureAppCheck } from './firebase';
 import { doc, getDoc, collection, getDocsFromServer, query, limit, orderBy, documentId, startAfter, type QueryDocumentSnapshot } from "firebase/firestore";
 // import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
@@ -22,7 +22,7 @@ export const DB = {
     resetCache() {
         setLastSavedStateStr(null);
     },
-    async loadUserData(options?: { allMonths?: boolean }): Promise<UserData | null> {
+    async loadCloudPayload(options?: { allMonths?: boolean }): Promise<{ data: UserData, cloudDocuments: Map<string, any>, completeMonths: string[] } | null> {
         const user = auth.currentUser;
         if (!user) return null;
         try {
@@ -41,6 +41,9 @@ export const DB = {
                 del('pending_sync_payload'),
                 del('pending_sync_token')
             ]).catch(() => {});
+
+            const cloudDocuments = new Map<string, any>();
+            let completeMonths: string[] = [];
 
             const state: Record<string, any> = {
                 profile: {},
@@ -67,6 +70,9 @@ export const DB = {
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
                 const data = docSnap.data() as Record<string, any>;
+                if (data._sync) {
+                    cloudDocuments.set('', data);
+                }
                 if(data.profile) state.profile = data.profile;
 
                 state.catalogOverrides = data.catalogOverrides || {};
@@ -109,7 +115,7 @@ export const DB = {
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
                 setLastSavedStateStr(JSON.stringify(state));
-                return state as unknown as UserData;
+                return { data: state as unknown as UserData, cloudDocuments, completeMonths };
             }
 
             if (options?.allMonths) {
@@ -128,10 +134,18 @@ export const DB = {
                         for (const d of page.docs) {
                             const mData = d.data() as Record<string, any>;
                             if (mData) {
+                                if (mData._sync) cloudDocuments.set(`${colName}/${d.id}`, mData);
+                                if (!completeMonths.includes(d.id)) completeMonths.push(d.id);
                                 if (colName === 'history_months') {
-                                    Object.values(mData).forEach((h: any) => state.history.push(h));
+                                    Object.entries(mData).forEach(([key, h]: [string, any]) => {
+                                        if (key !== '_sync') state.history.push(h);
+                                    });
                                 } else {
-                                    Object.keys(mData).forEach(dt => { (state.nutrition as any)[dt] = mData[dt]; });
+                                    Object.keys(mData).forEach(dt => { 
+                                        if (dt !== '_sync') {
+                                            (state.nutrition as any)[dt] = mData[dt]; 
+                                        }
+                                    });
                                 }
                             }
                         }
@@ -146,8 +160,9 @@ export const DB = {
                     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 });
 
-                await loadHistoryMonths(user, targetMonths, state);
-                await loadNutritionMonths(user, targetMonths, state);
+                await loadHistoryMonths(user, targetMonths, state, cloudDocuments);
+                await loadNutritionMonths(user, targetMonths, state, cloudDocuments);
+                completeMonths = targetMonths;
             }
 
             state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
@@ -166,11 +181,15 @@ export const DB = {
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
             setLastSavedStateStr(JSON.stringify(state));
-            return state as unknown as UserData;
+            return { data: state as unknown as UserData, cloudDocuments, completeMonths };
         } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
             throw error;
         }
+    },
+    async loadUserData(options?: { allMonths?: boolean }): Promise<UserData | null> {
+        const payload = await this.loadCloudPayload(options);
+        return payload ? payload.data : null;
     },
     async saveUserData(state: Record<string, any>, _revision?: any): Promise<SyncResult> {
         const user = auth.currentUser;

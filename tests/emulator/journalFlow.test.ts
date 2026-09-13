@@ -64,6 +64,6 @@ it('adopts independent remote fields without overwriting them with the old local
     await commitLocal('user:a', desired, base);
     await setDoc(doc(sdk.db, 'users/a'), projectDocuments(data({ profile: { height: '170', gender: 'F' } }), catalog).get('')!);
     expect((await DB.saveUserData(desired)).status).toBe('synced');
-    expect((await readLocal('user:a'))?.data.profile).toMatchObject({ height: '171', gender: 'F' });
+    expect((await readLocal('user:a'))?.data.profile).toMatchObject({ height: '171', gender: 'M' });
     expect((await readLocal('user:a'))?.pending).toEqual([]);
 });

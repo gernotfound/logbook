@@ -30,7 +30,7 @@ const keyFor = (owner: string) => {
 };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
-async function validate(value: any, owner: string): Promise<LocalEnvelope | undefined> {
+function validate(value: any, owner: string): LocalEnvelope | undefined {
     if (!value) return undefined;
 
     if (value.version !== 3 || value.owner !== owner) {
@@ -48,9 +48,9 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     const desired = structuredClone(parse(data));
     const fallback = structuredClone(parse(initialBase));
     let operations: SemanticOperation[] = [];
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
-        const catalog = await getCachedCatalog();
+    const catalog = await getCachedCatalog();
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         
         let actorId = current?.actorId ?? generateId('actor');
         let seq = (current?.actorSeq ?? 0) + 1;
@@ -78,8 +78,8 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 
 export async function acknowledgeLocal(owner: string, _id: string, remote: UserData): Promise<void> {
     const parsed = parse(remote);
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         if (!current || current.pending[0] === undefined) throw new Error('Conferma obsoleta o fuori ordine');
         const pending = current.pending.slice(1);
         return { ...current, baseline: parsed, data: pending.length ? current.data : parsed, pending };
@@ -88,8 +88,8 @@ export async function acknowledgeLocal(owner: string, _id: string, remote: UserD
 
 export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
     const parsed = parse(remote);
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         const pending = current.pending.filter(op => op.seq > expectedSeq);
         
@@ -110,8 +110,8 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
 
 export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[]): Promise<void> {
     const parsed = structuredClone(parse(data));
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         if (current?.pending.length) return current;
         return { ...current, version: 3, owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: 0 };
     });
@@ -120,12 +120,25 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
 export async function hydrateLocal(owner: string, cloudData: UserData, months: string[], cloudDocuments?: Map<string, DocumentData>): Promise<LocalEnvelope> {
     const cloud = structuredClone(parse(cloudData));
     let saved: any;
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
+    const catalog = await getCachedCatalog();
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         if (!current) {
-            saved = { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument: {}, revision: 0 };
+            let syncMetaByDocument: Record<string, SyncMeta> = {};
+            let clock: Record<string, number> = {};
+            if (cloudDocuments) {
+                for (const [path, doc] of cloudDocuments.entries()) {
+                    if (doc._sync) {
+                        const meta = doc._sync as SyncMeta;
+                        syncMetaByDocument[path] = meta;
+                        for (const [actor, seq] of Object.entries(meta.clock)) {
+                            clock[actor] = Math.max(clock[actor] || 0, seq);
+                        }
+                    }
+                }
+            }
+            saved = { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, revision: 0 };
         } else {
-            const catalog = await getCachedCatalog();
             
             let syncMeta = current.syncMetaByDocument ?? {};
             let updatedClock = { ...current.clock };
@@ -173,8 +186,8 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         const { pendingConflicts: _old, ...rest } = data;
         return Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest;
     };
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         const data = current?.data ?? fallback;
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
         saved = parse(clear(data));
@@ -188,8 +201,8 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
     const revert = (data: UserData) => equal(data.legalConsent, expected) ? parse({ ...data, legalConsent: previous }) : data;
-    await update<any>(keyFor(owner), async raw => {
-        const current = await validate(raw, owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
         if (!current) return raw!;
         return { ...current, data: revert(current.data) };
     });
