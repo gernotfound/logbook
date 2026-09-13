@@ -110,13 +110,11 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
         it('T10 & Integration: V3 window hydration preserves unloaded months without triggering DB.saveUserData', async () => {
             (auth as any).currentUser = { uid: 'user123' };
 
-            // January is outside the authoritative cloud window and must survive locally.
             const initialLocal = getEmptyUserData();
             initialLocal.history = [{ id: 'local-old', date: '2025-01-10', exercises: [] } as any];
             useAppStore.setState({ userData: initialLocal });
             await initializeLocal('user:user123', initialLocal);
 
-            // September is the month actually loaded from cloud and is authoritative for that month.
             const cloudResponse = getEmptyUserData();
             cloudResponse.history = [{ id: 'cloud-new', date: '2026-09-10', exercises: [] } as any];
             const loadSpy = vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
@@ -150,12 +148,10 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
 
                 const finalState = useAppStore.getState().userData;
                 expect(finalState).not.toBeNull();
-
                 const historyIds = finalState!.history.map(h => h.id);
                 expect(historyIds).toContain('local-old');
                 expect(historyIds).toContain('cloud-new');
 
-                // Hydration is read-path work: it must not invoke the public cloud save path.
                 expect(saveSpy).not.toHaveBeenCalled();
                 expect(loadSpy).toHaveBeenCalledTimes(1);
             } finally {
@@ -165,18 +161,23 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             }
         });
 
-        it('Zod fallback: malformed cloud hydration preserves the valid local state', async () => {
+        it('Hydration fallback: a repository merge failure preserves the valid local state', async () => {
             (auth as any).currentUser = { uid: 'user123' };
             const initialLocal = getEmptyUserData();
             initialLocal.profile = { name: 'Valid Local' } as any;
             useAppStore.setState({ userData: initialLocal });
             await initializeLocal('user:user123', initialLocal);
 
+            const cloudResponse = getEmptyUserData();
+            cloudResponse.profile = { name: 'Cloud Name' } as any;
             const loadSpy = vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
-                data: null as any,
+                data: cloudResponse,
                 completeMonths: [],
                 cloudDocuments: new Map()
             });
+            const localRepository = await import('../src/lib/sync/localRepository');
+            const hydrationError = new Error('Simulated hydration failure');
+            const hydrateSpy = vi.spyOn(localRepository, 'hydrateLocal').mockRejectedValueOnce(hydrationError);
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
             let authCallback: any = null;
@@ -203,13 +204,15 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
 
                 const finalState = useAppStore.getState().userData;
                 expect(finalState?.profile?.name).toBe('Valid Local');
+                expect(hydrateSpy).toHaveBeenCalledTimes(1);
                 expect(consoleSpy).toHaveBeenCalledWith(
                     'Zod parse failed during hydration merge, preserving local valid state:',
-                    expect.any(Error)
+                    hydrationError
                 );
             } finally {
                 rendered.unmount();
                 loadSpy.mockRestore();
+                hydrateSpy.mockRestore();
                 consoleSpy.mockRestore();
             }
         });
