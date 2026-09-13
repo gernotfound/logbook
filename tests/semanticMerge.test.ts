@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMergePolicy } from '../../src/lib/sync/semanticProjection';
+import { getMergePolicy } from '../src/lib/sync/semanticProjection';
 
 describe('Semantic Merge Policy', () => {
     it('1. returns correct policy for root fields', () => {
