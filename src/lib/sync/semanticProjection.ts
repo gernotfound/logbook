@@ -101,10 +101,16 @@ export function diffDocuments(
     // Active workout children are valid only while the same session is active.
     for (const op of ops) {
         if (op.docPath === '' && op.path[0] === 'activeWorkout' && op.path.length > 1) {
-            const dRoot = desired.get('') ?? {};
-            const bRoot = base.get('') ?? {};
+            const dRoot: DocumentData = desired.get('') ?? {};
+            const bRoot: DocumentData = base.get('') ?? {};
             const aw = dRoot.activeWorkout ?? bRoot.activeWorkout;
-            if (aw && aw.id) op.guard = { path: ['activeWorkout', 'id'], equals: aw.id };
+            if (isRecord(aw)) {
+                const awId = aw.id;
+                const hasStableId =
+                    (typeof awId === 'string' && awId.trim().length > 0) ||
+                    (typeof awId === 'number' && Number.isFinite(awId));
+                if (hasStableId) op.guard = { path: ['activeWorkout', 'id'], equals: awId };
+            }
         }
     }
 
