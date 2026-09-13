@@ -58,9 +58,14 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
         expect(downloadSpy).toHaveBeenCalled();
         const [, content] = downloadSpy.mock.calls[0];
         const parsed = JSON.parse(content);
+        const exported = parsed.userData;
+
+        // Share export now uses the versioned backup envelope; selected business data lives in userData.
+        expect(parsed.format).toBe('logbook-backup');
+        expect(parsed.type).toBe('share');
 
         // 5 cycles exported
-        expect(parsed.trainingCycles).toHaveLength(5);
+        expect(exported.trainingCycles).toHaveLength(5);
         expect(result.cyclesCount).toBe(5);
 
         // Each cycle has 2 routines, but they overlap?
@@ -70,12 +75,12 @@ describe('Challenger: Granular Export Adversarial & Stress', () => {
         // cy_3: rt_3, rt_4
         // cy_4: rt_4, rt_5
         // Unique routines: rt_0, rt_1, rt_2, rt_3, rt_4, rt_5 => 6 routines
-        expect(parsed.routines).toHaveLength(6);
+        expect(exported.routines).toHaveLength(6);
         expect(result.routinesCount).toBe(6);
 
         // Each routine has 2 exercises
         // Unique exercises: ex_0 to ex_6 => 7 exercises
-        expect(parsed.library).toHaveLength(7);
+        expect(exported.library).toHaveLength(7);
         expect(result.libraryCount).toBe(7);
 
         // Performance check
