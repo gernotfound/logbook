@@ -1,5 +1,4 @@
 import equal from 'fast-deep-equal';
-// FORCE REBUILD
 import { type DocumentData } from './documentProjection';
 
 export type MergePolicy = 'keyed' | 'ordered-keyed' | 'atomic' | 'property' | 'ignore';
@@ -38,6 +37,7 @@ export function fieldKey(path: string[]): string {
 export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
     if (docPath === '') {
         const root = path[0];
+        if (root === 'profile') return 'property';
         if (['library', 'customFoods'].includes(root)) {
             if (path.length === 1) return 'keyed';
             return 'property';
@@ -71,9 +71,9 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
     if (docPath.startsWith('nutrition_months/')) {
         if (path.length === 1) return 'property'; // day properties
         const prop = path[1];
+        if (path.length === 2 && ['kcal', 'carbs', 'pro', 'fat'].includes(String(prop))) return 'ignore';
         if (prop === 'meals' || prop === 'supplementsIntake') {
             if (path.length === 2) return 'keyed';
-            if (path.length === 4 && ['kcal', 'carbs', 'pro', 'fat'].includes(String(path[3]))) return 'ignore';
             return 'property';
         }
         return 'property';
@@ -97,11 +97,17 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
 }
 
 export function resolveIdentity(path: string[], item: any): string {
-    const root = path[0];
-    if (root === 'routines' && path.length >= 3 && path[2] === 'exercises') return String(item.exId);
-    if (root === 'activeWorkout' && path.length >= 2 && path[1] === 'exercises') return String(item.exId);
-    if (root === 'history' && path.length >= 2 && path[1] === 'exercises') return String(item.exId);
-    return String(item.id ?? item.exId);
+    const collection = path[path.length - 1];
+    if (collection === 'exercises') return String(item.exId ?? item.id);
+    if (path[0] === 'trainingCycles' && collection === 'routines') return String(item.routineId);
+    return String(item.id ?? item.exId ?? item.routineId);
+}
+
+function identitySeed(path: string[], itemId: string): Record<string, string> {
+    const collection = path[path.length - 1];
+    if (collection === 'exercises') return { exId: itemId };
+    if (path[0] === 'trainingCycles' && collection === 'routines') return { routineId: itemId };
+    return { id: itemId };
 }
 
 function traverseAndDiff(
@@ -398,7 +404,6 @@ export function applySemanticOperations(
 
         const doc = resultDocs.get(winner.docPath) || {};
         
-        
         // Navigation array
         const p = winner.path;
         
@@ -415,7 +420,7 @@ export function applySemanticOperations(
                 if (!Array.isArray(current[p[i]])) current[p[i]] = [];
                 const arr = current[p[i]] as any[];
                 const itemId = p[i + 1];
-                let idx = arr.findIndex((x: any) => String(x.id || x.exId) === String(itemId));
+                let idx = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
                 
                 if (i + 1 === p.length - 1) {
                     parentIsArray = true;
@@ -424,12 +429,7 @@ export function applySemanticOperations(
                     break;
                 } else {
                     if (idx < 0) {
-                        // Include id or exId based on what we're pushing
-                        // We can't know for sure, so we just push an empty object,
-                        // but if we need an id, it's safer to push { id: itemId } and hope it's not exId.
-                        // Wait, if it is exId, it might have { id: itemId }. 
-                        // It will match id next time anyway.
-                        arr.push({ id: itemId });
+                        arr.push(identitySeed(currentPath, itemId));
                         idx = arr.length - 1;
                     }
                     current = arr[idx];

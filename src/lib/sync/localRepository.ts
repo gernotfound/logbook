@@ -7,6 +7,7 @@ import equal from 'fast-deep-equal';
 import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
+import { normalizeStorageOwner } from './session';
 
 export interface LocalEnvelopeV3 {
     version: 3;
@@ -25,15 +26,16 @@ export interface LocalEnvelopeV3 {
 export type LocalEnvelope = LocalEnvelopeV3;
 
 const keyFor = (owner: string) => {
-    if (!owner) throw new Error('Owner richiesto per la persistenza locale');
-    return `logbook:v2:${owner}`;
+    const canonicalOwner = normalizeStorageOwner(owner);
+    return `logbook:v2:${canonicalOwner}`;
 };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
 function validate(value: any, owner: string): LocalEnvelope | undefined {
     if (!value) return undefined;
 
-    if (value.version !== 3 || value.owner !== owner) {
+    const canonicalOwner = normalizeStorageOwner(owner);
+    if (value.version !== 3 || value.owner !== canonicalOwner) {
         throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
     }
     const v3 = value as LocalEnvelopeV3;
@@ -41,10 +43,12 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
 }
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
+    owner = normalizeStorageOwner(owner);
     return validate(await get<any>(keyFor(owner)), owner);
 }
 
 export async function commitLocal(owner: string, data: UserData, initialBase: UserData): Promise<SemanticOperation[]> {
+    owner = normalizeStorageOwner(owner);
     const desired = structuredClone(parse(data));
     const fallback = structuredClone(parse(initialBase));
     let operations: SemanticOperation[] = [];
@@ -77,6 +81,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 }
 
 export async function acknowledgeLocal(owner: string, _id: string, remote: UserData): Promise<void> {
+    owner = normalizeStorageOwner(owner);
     const parsed = parse(remote);
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
@@ -87,6 +92,7 @@ export async function acknowledgeLocal(owner: string, _id: string, remote: UserD
 }
 
 export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
+    owner = normalizeStorageOwner(owner);
     const parsed = parse(remote);
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
@@ -109,6 +115,7 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
 }
 
 export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[]): Promise<void> {
+    owner = normalizeStorageOwner(owner);
     const parsed = structuredClone(parse(data));
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
@@ -118,6 +125,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
 }
 
 export async function hydrateLocal(owner: string, cloudData: UserData, months: string[], cloudDocuments?: Map<string, DocumentData>): Promise<LocalEnvelope> {
+    owner = normalizeStorageOwner(owner);
     const cloud = structuredClone(parse(cloudData));
     let saved: any;
     const catalog = await getCachedCatalog();
@@ -179,6 +187,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
 }
 
 export async function clearNutritionConflict(owner: string, fingerprint: string, fallback: UserData): Promise<UserData> {
+    owner = normalizeStorageOwner(owner);
     let saved!: UserData;
     const clear = (data: UserData): UserData => {
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) return data;
@@ -200,6 +209,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 }
 
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
+    owner = normalizeStorageOwner(owner);
     const revert = (data: UserData) => equal(data.legalConsent, expected) ? parse({ ...data, legalConsent: previous }) : data;
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
@@ -214,5 +224,4 @@ export async function preserveLegacyCache(): Promise<boolean> {
     await update('logbook:recovery:legacy', original => original ?? legacy);
     return true;
 }
-
 
