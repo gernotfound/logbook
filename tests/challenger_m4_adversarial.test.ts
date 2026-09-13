@@ -420,6 +420,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
 
             const expectedKeys = [
+                '_sync',
                 'profile',
                 'library',
                 'routines',
@@ -475,6 +476,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             const writtenKeys = Object.keys(userDocCall[1]);
 
             const expectedKeys = [
+                '_sync',
                 'profile',
                 'library',
                 'routines',
