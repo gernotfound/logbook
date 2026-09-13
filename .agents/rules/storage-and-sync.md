@@ -8,7 +8,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 | Livello | Tecnologia | Ruolo | Dati principali |
 |---|---|---|---|
-| **Stato operativo** | Zustand 5 (useAppStore) | Stato in memoria, single source of truth per i componenti React | Tutto UserData, localWorkout, syncing, saveError |
+| **Stato operativo** | Zustand 5 (useAppStore) | Stato in memoria, single source of truth per i componenti React | Tutto UserData, localWorkout, syncing, saveError, compatibilityStatus |
 | **Persistenza locale principale** | IndexedDB (idb-keyval) | Copia locale transazionale asincrona dell'envelope dati V4 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
 | **Persistenza sincrona** | localStorage | Dati che richiedono salvataggio sincrono istantaneo | Namespace owner-scoped `logbook:v2:${owner}:*` tramite `deviceStorage.ts`, flag auth/guest e bozze locali |
 | **Replica remota** | Firestore (Firebase) | Sincronizzazione cloud, backup, condivisione cross-device | Documento utente + subcollection mensilizzate |
@@ -50,7 +50,11 @@ RAW STORAGE
 
 **MUST:** data business e `_sync` fanno parte dello stesso stato di migrazione logico. Una futura rinomina di campo deve poter rinominare anche la causal path corrispondente.
 
+**MUST:** le dimensioni `data schema` e `sync protocol` possono avanzare senza obbligare il bump di `local envelope` o `backup schema`. I registry data/sync ricevono quindi un migration carrier con scope `cloud`, `local-envelope` o `backup`, così lo stesso step N→N+1 può trasformare la rappresentazione persistita corretta per ciascun boundary mantenendo invariata la versione del container quando il container non cambia.
+
 **MUST:** versioni future sconosciute causano fail-closed / `update-required`; è vietato fare downgrade distruttivo o riscrivere il documento come se fosse corrente.
+
+**MUST:** `update-required` è uno stato applicativo persistente per la sessione corrente, non un semplice toast. Quando viene rilevato da un boundary cloud/local, nuove mutazioni e nuovi replay/sync vengono bloccati, i job ancora in debounce vengono chiusi senza partire e l'UI espone una barriera read-only/recoverable fino a reload/aggiornamento.
 
 ### Baseline clean-cut M1
 
@@ -63,7 +67,7 @@ Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 
 - ogni documento Firestore realmente toccato da una semantic write viene riscritto lazy con `_schemaVersion: CURRENT_DATA_SCHEMA`;
 - non esiste una scansione cloud solo per aggiornare i marker.
 
-`DATA_MIGRATIONS` deve contenere in futuro solo step sequenziali N→N+1, puri, deterministici e senza side effect. Saltare uno step è errore.
+`DATA_MIGRATIONS` deve contenere in futuro solo step sequenziali N→N+1, puri, deterministici e senza side effect. Saltare uno step è errore. Uno step data/sync deve gestire esplicitamente gli scope persistiti che contengono quella dimensione; non deve ottenere la compatibilità forzando un bump artificiale del container.
 
 ## Pipeline di salvataggio transazionale (Journaling e Semantic Merge)
 
@@ -100,6 +104,8 @@ Il sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 | local-pending | Offline o timeout - transazione nel journal, sincronizzazione in attesa |
 | failed | Errore critico non classificato |
 
+`update-required` è intenzionalmente separato da questi status di trasporto: rappresenta incompatibilità di versione e porta l'intera sessione in fail-closed.
+
 **MUST:** Una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
 
 **MUST:** Le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel catch.
@@ -111,7 +117,7 @@ All'avvio dell'app (`initApp` in `src/main.tsx`), **prima** di `createRoot().ren
 1. La cache utente viene recuperata da IndexedDB e assegnata a `window.__INITIAL_USER_DATA__`.
 2. Lo store Zustand viene inizializzato tramite `getInitialUserData()`, validando la cache con `UserDataSchema.parse()`.
 
-Un envelope locale con versione legacy/futura non viene reinterpretato: `readLocal()` fallisce in modo conservativo e i bytes restano in IndexedDB per diagnosi/recupero.
+Un envelope locale con versione legacy/futura non viene reinterpretato: `readLocal()` fallisce in modo conservativo e i bytes restano in IndexedDB per diagnosi/recupero. Se la versione è futura, il boundary locale segnala anche lo stato applicativo `update-required` prima che l'app diventi editabile.
 
 ## Blindatura in background (Safari Suspend)
 
