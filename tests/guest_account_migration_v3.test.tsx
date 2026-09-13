@@ -1,5 +1,5 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
@@ -12,6 +12,7 @@ import type { UserData } from '../src/types';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'a', email: 'a@example.com', displayName: 'A' } as any;
+let onlineSpy: ReturnType<typeof vi.spyOn> | undefined;
 
 function fixtures() {
     const cloud = parse({
@@ -26,6 +27,7 @@ function fixtures() {
 }
 
 beforeEach(() => {
+    vi.clearAllMocks();
     localStorage.clear();
     useAppStore.getState().resetStore();
     (auth as any).currentUser = user;
@@ -33,6 +35,11 @@ beforeEach(() => {
         callback(user);
         return () => {};
     });
+});
+
+afterEach(() => {
+    onlineSpy?.mockRestore();
+    onlineSpy = undefined;
 });
 
 describe('guest -> account V3 migration', () => {
@@ -65,7 +72,7 @@ describe('guest -> account V3 migration', () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
         useAppStore.getState().setUserData(guest);
-        vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+        onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
             data: cloud,
