@@ -87,32 +87,40 @@ describe('Empirical Challenger: SVG Width Scaling & Horizontal Overflow Stress S
     ];
 
     keyViewports.forEach(({ name, width }) => {
-      const { container } = renderWithProviders(
+      // TrainingExercises intentionally persists creation state in localStorage.
+      // Each viewport is an independent scenario, so do not leak that state across iterations.
+      localStorage.removeItem('logbook_creating_exercise');
+      const rendered = renderWithProviders(
         <div style={{ width: `${width}px` }}>
           <TrainingExercises />
         </div>
       );
+      const { container } = rendered;
 
-      const createBtn = container.querySelector('button.btn-primary');
-      if (createBtn) {
-        fireEvent.click(createBtn);
+      try {
+        const createBtn = container.querySelector('button.btn-primary');
+        expect(createBtn).not.toBeNull();
+        fireEvent.click(createBtn!);
+
+        const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;
+        expect(muscleMapContainer).not.toBeNull();
+
+        const svgElement = muscleMapContainer.querySelector('svg') as SVGElement;
+        expect(svgElement).not.toBeNull();
+
+        const computedSvgStyle = window.getComputedStyle(svgElement);
+        expect(computedSvgStyle.maxHeight).toBe('none');
+        expect(computedSvgStyle.width).toBe('100%');
+
+        const computedSvgWidth = width;
+        const ratio = computedSvgWidth / width;
+
+        console.log(`[VIEWPORT STRESS - Exercises] ${name}: Container ${width}px, SVG ${computedSvgWidth}px, Ratio ${(ratio * 100).toFixed(1)}%`);
+        expect(ratio).toBeGreaterThanOrEqual(0.90);
+      } finally {
+        rendered.unmount();
+        localStorage.removeItem('logbook_creating_exercise');
       }
-
-      const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;
-      expect(muscleMapContainer).not.toBeNull();
-
-      const svgElement = muscleMapContainer.querySelector('svg') as SVGElement;
-      expect(svgElement).not.toBeNull();
-
-      const computedSvgStyle = window.getComputedStyle(svgElement);
-      expect(computedSvgStyle.maxHeight).toBe('none');
-      expect(computedSvgStyle.width).toBe('100%');
-
-      const computedSvgWidth = width;
-      const ratio = computedSvgWidth / width;
-
-      console.log(`[VIEWPORT STRESS - Exercises] ${name}: Container ${width}px, SVG ${computedSvgWidth}px, Ratio ${(ratio * 100).toFixed(1)}%`);
-      expect(ratio).toBeGreaterThanOrEqual(0.90);
     });
   });
 
