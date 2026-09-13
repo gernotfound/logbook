@@ -6,7 +6,6 @@ import {
     CURRENT_BACKUP_SCHEMA,
     CURRENT_DATA_SCHEMA,
     CURRENT_SYNC_PROTOCOL,
-    assertCurrentVersion,
     normalizeBackupRecord,
 } from './schemaEvolution';
 
@@ -80,10 +79,9 @@ export function decodeImport(payload: unknown, owner: string) {
         throw new Error('Formato file non valido o non supportato.');
     }
 
+    // Container, data schema and sync protocol are normalized as independent dimensions.
     const normalized = normalizeBackupRecord(payload);
     if (normalized.format !== 'logbook-backup') throw new Error('Formato file non valido o non supportato.');
-    assertCurrentVersion(normalized.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema backup');
-    assertCurrentVersion(normalized.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync backup');
 
     if (normalized.type !== 'backup' && normalized.type !== 'share') {
         throw new Error('Tipo file non valido o non supportato.');
