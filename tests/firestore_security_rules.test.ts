@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { UserData } from '../src/types';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
 describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   const rulesPath = path.resolve(process.cwd(), 'firestore.rules');
@@ -25,14 +26,15 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });
 
-  it('allows only schema-1/unversioned baseline documents and forbids dropping an existing marker', () => {
+  it('keeps Firestore data/sync rules aligned with current version constants and forbids marker downgrade', () => {
     expect(rulesContent).toContain("function isValidDataSchema(docData)");
-    expect(rulesContent).toContain("!('_schemaVersion' in docData) || docData._schemaVersion == 1");
+    expect(rulesContent).toContain(`!('_schemaVersion' in docData) || docData._schemaVersion == ${CURRENT_DATA_SCHEMA}`);
+    expect(rulesContent).toContain(`docData._sync.protocolVersion == ${CURRENT_SYNC_PROTOCOL}`);
     expect(rulesContent).toContain('function preservesDataSchema()');
     expect(rulesContent).toContain("!('_schemaVersion' in resource.data)");
     expect(rulesContent).toContain("'_schemaVersion' in incomingData()");
     expect(rulesContent.match(/isValidDataSchema\(incomingData\(\)\)/g)?.length).toBe(3);
-    expect(rulesContent.match(/preservesDataSchema\(\)/g)?.length).toBe(4); // declaration + 3 write paths
+    expect(rulesContent.match(/preservesDataSchema\(\)/g)?.length).toBe(4);
   });
 
   it('users/{userId} whitelist contains all root UserData payload keys plus sync/schema metadata', () => {
@@ -75,7 +77,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       supplements: [],
       activePains: [],
       catalogOverrides: { exercises: {}, hiddenExerciseIds: ['ex_old'], foods: {}, hiddenFoodIds: [] },
-      _schemaVersion: 1,
+      _schemaVersion: CURRENT_DATA_SCHEMA,
     };
 
     const payloadKeys = Object.keys(sampleUserDocData);
