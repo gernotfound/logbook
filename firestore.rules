@@ -1,44 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Funzioni helper di sicurezza e autorizzazione
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
+
     function isValidMonthId(monthId) {
       return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
     }
-    
+
     function incomingData() {
       return request.resource.data;
+    }
+
+    function isValidDataSchema(docData) {
+      return !('_schemaVersion' in docData) || docData._schemaVersion == 1;
     }
 
     function isValidSync(docData) {
       return !('_sync' in docData) || (docData._sync is map && docData._sync.protocolVersion == 1 && docData._sync.clock is map && docData._sync.fields is map);
     }
 
-    // Default deny globale
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Catalogo globale condiviso (sola lettura pubblica per esercizi e alimenti predefiniti)
     match /global_catalog/{document=**} {
       allow read: if true;
       allow write: if false;
     }
 
-    // Documento principale utente: users/{userId}
     match /users/{userId} {
       allow read, delete: if isOwner(userId);
-      
-      // Scrittura consentita solo con whitelist rigorosa dei campi consentiti
+
       allow create, update: if isOwner(userId)
         && incomingData().keys().hasOnly([
           'profile',
@@ -54,6 +52,7 @@ service cloud.firestore {
           'catalogOverrides',
           'legalConsent',
           'nutritionPlanningOrigin',
+          '_schemaVersion',
           '_sync'
         ])
         && (!('profile' in incomingData()) || incomingData().profile == null || incomingData().profile is map)
@@ -72,30 +71,30 @@ service cloud.firestore {
             || incomingData().nutritionPlanningOrigin == null
             || incomingData().nutritionPlanningOrigin == 'generated-default'
             || incomingData().nutritionPlanningOrigin == 'user-edited')
+        && isValidDataSchema(incomingData())
         && isValidSync(incomingData())
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
-        
-      // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}
+
       match /history_months/{monthId} {
         allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) 
+        allow create, update: if isOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
-          && isValidSync(incomingData())
-          && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
-      }
-      
-      // Subcollection Nutrizione & Misure Mensile: users/{userId}/nutrition_months/{YYYY-MM}
-      match /nutrition_months/{monthId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) 
-          && isValidMonthId(monthId)
-          && incomingData() is map
+          && isValidDataSchema(incomingData())
           && isValidSync(incomingData())
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 
-      // Subcollection Telemetria Errori: users/{userId}/telemetry_errors/{errorId}
+      match /nutrition_months/{monthId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidMonthId(monthId)
+          && incomingData() is map
+          && isValidDataSchema(incomingData())
+          && isValidSync(incomingData())
+          && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
+      }
+
       match /telemetry_errors/{errorId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
@@ -116,7 +115,6 @@ service cloud.firestore {
           ]);
       }
 
-      // Subcollection Telemetria Eventi & PWA Analytics: users/{userId}/telemetry_events/{eventId}
       match /telemetry_events/{eventId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
@@ -131,7 +129,6 @@ service cloud.firestore {
           ]);
       }
 
-      // Subcollection Telemetria Anomalie Storage: users/{userId}/telemetry_anomalies/{eventId}
       match /telemetry_anomalies/{eventId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId)
@@ -148,4 +145,3 @@ service cloud.firestore {
     }
   }
 }
-
