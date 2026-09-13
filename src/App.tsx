@@ -46,6 +46,8 @@ function App() {
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
   const setSaveError = useAppStore(state => state.setSaveError);
+  const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
+  const compatibilityError = useAppStore(state => state.compatibilityError);
   const [activeTab, setActiveTab] = useLocalStorage<AppTab>(LOCAL_STORAGE_ACTIVE_TAB, 'home', AppTabSchema);
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(LOCAL_STORAGE_TRAINING_TAB, 'session', TrainingSubTabSchema);
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
@@ -132,7 +134,6 @@ function App() {
     const validTab = parsed.data;
 
     if (validTab === activeTab) {
-      // Comportamento di "reset": clicco sulla tab già attiva
       if (validTab === 'training') setTrainingSubTab('session');
       if (validTab === 'nutrition') setNutritionSubTab('meals');
       if (validTab === 'data') setDataSubTab('measurements');
@@ -190,6 +191,25 @@ function App() {
     );
   }
 
+  if (compatibilityStatus === 'update-required') {
+    return (
+      <div id="auth-overlay" role="alert" aria-live="assertive">
+        <div style={{ textAlign: 'center', maxWidth: '520px', padding: '32px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+          <h1 style={{ color: 'var(--primary-color)', marginBottom: '12px' }}>Aggiornamento richiesto</h1>
+          <p style={{ lineHeight: 1.5 }}>
+            Questa copia di LogBook non può modificare in sicurezza i dati trovati. I dati locali e cloud sono stati lasciati intatti.
+          </p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {compatibilityError ?? 'Aggiorna LogBook alla versione più recente prima di continuare.'}
+          </p>
+          <button type="button" onClick={() => window.location.reload()} style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
+            Ricarica LogBook
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentUser && !isGuest) {
     return (
       <div id="auth-overlay">
@@ -204,13 +224,11 @@ function App() {
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
-      {/* Overlay per login guest */}
       {showGuestLogin && (
         <div id="auth-overlay" style={{ zIndex: 9999 }}>
           <LoginBox onCancel={() => setShowGuestLogin(false)} />
         </div>
       )}
-      {/* Banner utente guest — visibile finché non collega Google */}
       {isGuest && (
         <div style={{
           position: 'fixed',
@@ -248,7 +266,6 @@ function App() {
           </button>
         </div>
       )}
-      {/* Indicatore sincronizzazione non bloccante */}
       {syncing && (
         <div 
           className="sync-indicator" 
@@ -261,7 +278,6 @@ function App() {
         </div>
       )}
 
-      {/* Toast errore sincronizzazione non bloccante */}
       {saveError && (
         <div 
           className="sync-error-toast" 
@@ -282,7 +298,6 @@ function App() {
       )}
 
       <main id="app-container" style={isGuest ? { paddingTop: '36px' } : undefined}>
-        {/* Render Active View */}
         <ErrorBoundary key={isGuest ? 'guest' : currentUser?.uid}>
           <Suspense fallback={
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
