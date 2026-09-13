@@ -8,11 +8,23 @@ export const CURRENT_SYNC_PROTOCOL = 1 as const;
 export const CURRENT_LOCAL_ENVELOPE = 4 as const;
 export const CURRENT_BACKUP_SCHEMA = 3 as const;
 
+export const UPDATE_REQUIRED_EVENT = 'logbook:update-required' as const;
+
+function reportRuntimeUpdateRequired(error: FutureVersionError) {
+    const runtimeKind = error.kind.startsWith('Firestore')
+        || error.kind.startsWith('Archivio locale')
+        || error.kind.startsWith('Formato archivio locale')
+        || error.kind.startsWith('Protocollo sync in scrittura');
+    if (!runtimeKind || typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(UPDATE_REQUIRED_EVENT, { detail: error }));
+}
+
 export class FutureVersionError extends Error {
     readonly code = 'update-required';
     constructor(readonly kind: string, readonly found: number, readonly supported: number) {
         super(`${kind} ${found} non supportato: aggiorna LogBook (versione corrente ${supported}).`);
         this.name = 'FutureVersionError';
+        reportRuntimeUpdateRequired(this);
     }
 }
 
