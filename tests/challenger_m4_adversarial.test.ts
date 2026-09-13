@@ -97,30 +97,23 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 supplements: []
             };
 
-            // 1. Initial save succeeds
             await DB.saveUserData(initialData);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // 2. Next save fails due to timeout (offline simulation)
             const mutatedData1 = {
                 ...initialData,
                 profile: { name: 'Mutated Name 1' }
             };
             mockBatch.commit.mockRejectedValueOnce(new Error('Timeout sincronizzazione Firestore'));
 
-            // The catch block logs warn and does not re-throw for timeout
             await DB.saveUserData(mutatedData1);
             expect(mockBatch.set).toHaveBeenCalledTimes(1);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // 3. CRUCIAL TEST FOR SAVE AMNESIA:
-            // If the bug was present, lastSavedStateStr was overwritten with mutatedData1.
-            // Calling saveUserData again with mutatedData1 would produce hasWrites=false (skipped!).
-            // With the fix, lastSavedStateStr remains initialData, so hasWrites=true and commit IS called!
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(mutatedData1);
 
@@ -129,7 +122,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // 4. Subsequent save with same state should now detect no changes (hasWrites=false)
             await DB.saveUserData(mutatedData1);
             expect(mockBatch.set).not.toHaveBeenCalled();
             expect(mockBatch.commit).not.toHaveBeenCalled();
@@ -159,7 +151,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Next attempt must still detect that state is uncommitted
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(state);
             expect(mockBatch.set).toHaveBeenCalledTimes(1);
@@ -191,12 +182,10 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             mockBatch.commit.mockRejectedValueOnce(offlineError);
             await DB.saveUserData(stateWithHistoryAndNut);
 
-            // Verify both monthly docs were attempted
             expect(mockBatch.set).toHaveBeenCalled();
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Re-attempt must re-send history and nutrition batches
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(stateWithHistoryAndNut);
             expect(mockBatch.set).toHaveBeenCalled();
@@ -231,7 +220,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 profile: { name: 'Cloud User' },
                 library: [
                     { id: 'ex1', name: 'Panca piana', setsCount: 3, sets: [] },
-                    { id: 'ex2', name: 'Croci manubri', setsCount: 3, sets: [] } // Added locally
+                    { id: 'ex2', name: 'Croci manubri', setsCount: 3, sets: [] }
                 ],
                 routines: [{ id: 'r1', name: 'Spinta', exercises: [] }],
                 history: [],
@@ -242,7 +231,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                         meals: [{ id: 'm1', name: 'Avena', meal: 'Colazione', quantity: 80, kcal: 300, carbs: 50, pro: 10, fat: 5 }],
                         supplementsIntake: []
                     },
-                    '2026-08-16': { // Added locally in-flight
+                    '2026-08-16': {
                         date: '2026-08-16',
                         kcal: 2500, carbs: 300, pro: 180, fat: 70,
                         meals: [{ id: 'm2', name: 'Riso e Pollo', meal: 'Pranzo', quantity: 200, kcal: 650, carbs: 80, pro: 50, fat: 10 }],
@@ -251,7 +240,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 },
                 customFoods: [
                     { id: 'cf1', name: 'Whey Protein', kcal: 120, pro: 24, carbs: 2, fat: 1 },
-                    { id: 'cf2', name: 'Barretta Proteica', kcal: 210, pro: 20, carbs: 15, fat: 7 } // Added locally
+                    { id: 'cf2', name: 'Barretta Proteica', kcal: 210, pro: 20, carbs: 15, fat: 7 }
                 ],
                 activeWorkout: null,
                 trainingCycles: [],
@@ -262,7 +251,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             const merged = mergeUserData(staleCloudData, localPendingData);
 
-            // Verify local items were NOT deleted by cloudData
             expect(merged.customFoods).toHaveLength(2);
             expect(merged.customFoods.some(f => f.name === 'Barretta Proteica')).toBe(true);
 
@@ -301,7 +289,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             };
 
             const localData: UserData = {
-                profile: { name: 'Cloud User', height: '180' }, // Mutated height
+                profile: { name: 'Cloud User', height: '180' },
                 library: [],
                 routines: [],
                 history: [],
@@ -309,7 +297,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                     '2026-08-16': {
                         date: '2026-08-16',
                         kcal: 600, carbs: 60, pro: 40, fat: 12,
-                        // Mutated meal quantity and new meal
                         meals: [
                             { id: 'meal_1', name: 'Pasta con Tonno', meal: 'Pranzo', quantity: 150, kcal: 500, carbs: 70, pro: 35, fat: 5 },
                             { id: 'meal_2', name: 'Mela', meal: 'Spuntino', quantity: 150, kcal: 80, carbs: 20, pro: 0, fat: 0 }
@@ -341,21 +328,16 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 'utf-8'
             );
 
-            // Verify module-level declaration exists
             expect(activeSessionFile).toMatch(/const EMPTY_HISTORY_ARRAY:\s*Array<.*?>\s*=\s*\[\];/);
-
-            // Verify the fallback uses EMPTY_HISTORY_ARRAY instead of inline []
             expect(activeSessionFile).toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*EMPTY_HISTORY_ARRAY/);
             expect(activeSessionFile).not.toMatch(/exerciseHistoryMap\.get\(exItem\.exId\)\s*\|\|\s*\[\]/);
 
-            // Emulate the exact lookup logic
             const exerciseHistoryMap = new Map<string, any[]>();
             exerciseHistoryMap.set('ex_with_history', [{ date: '2026-08-10', sets: [], note: '' }]);
 
             const EMPTY_HISTORY_ARRAY: any[] = [];
             const getPastWorkouts = (exId: string) => exerciseHistoryMap.get(exId) || EMPTY_HISTORY_ARRAY;
 
-            // Multiple exercises with no history across multiple render cycles
             const render1_ex1 = getPastWorkouts('ex_new_1');
             const render1_ex2 = getPastWorkouts('ex_new_2');
             const render1_ex3 = getPastWorkouts('ex_new_3');
@@ -363,7 +345,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             const render2_ex1 = getPastWorkouts('ex_new_1');
             const render2_ex2 = getPastWorkouts('ex_new_2');
 
-            // Referential identity checks:
             expect(render1_ex1).toBe(EMPTY_HISTORY_ARRAY);
             expect(render1_ex2).toBe(EMPTY_HISTORY_ARRAY);
             expect(render1_ex3).toBe(EMPTY_HISTORY_ARRAY);
@@ -371,7 +352,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(render1_ex1 === render2_ex1).toBe(true);
             expect(render1_ex2 === render2_ex2).toBe(true);
 
-            // In contrast, inline [] would fail strict equality:
             const brokenLookup = () => exerciseHistoryMap.get('ex_new_1') || [];
             expect(brokenLookup() === brokenLookup()).toBe(false);
         });
@@ -407,7 +387,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(comparator(prevProps, nextPropsWithSameRef)).toBe(true);
 
             const nextPropsWithNewEmptyArray = { ...prevProps, pastWorkouts: [] };
-            expect(comparator(prevProps, nextPropsWithNewEmptyArray)).toBe(false); // Broken memoization!
+            expect(comparator(prevProps, nextPropsWithNewEmptyArray)).toBe(false);
         });
     });
 
@@ -415,11 +395,11 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
         const rulesPath = path.resolve(__dirname, '../firestore.rules');
         const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
 
-        it('verifies firestore.rules whitelists all 11 root document keys and disallows wildcards', () => {
-            // Check that recursive wildcard was removed from users doc
+        it('verifies firestore.rules whitelists the complete root document schema and disallows wildcards', () => {
             expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
 
             const expectedKeys = [
+                '_schemaVersion',
                 '_sync',
                 'profile',
                 'library',
@@ -440,7 +420,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 expect(rulesContent).toContain(`'${key}'`);
             });
 
-            // Match the keys array in incomingData().keys().hasOnly([...])
             const match = rulesContent.match(/incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
             expect(match).not.toBeNull();
             const extractedKeys = match![1]
@@ -451,7 +430,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(extractedKeys.sort()).toEqual(expectedKeys.sort());
         });
 
-        it('verifies DB.saveUserData writes strictly conforming userDocData with exactly the 11 whitelisted keys', async () => {
+        it('verifies DB.saveUserData writes strictly conforming userDocData with the complete whitelisted schema', async () => {
             const sampleUserData = {
                 profile: { name: 'Test' },
                 library: [],
@@ -476,6 +455,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             const writtenKeys = Object.keys(userDocCall[1]);
 
             const expectedKeys = [
+                '_schemaVersion',
                 '_sync',
                 'profile',
                 'library',
@@ -493,19 +473,16 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             ];
 
             expect(writtenKeys.sort()).toEqual(expectedKeys.sort());
-            // Ensure neither history nor nutrition leaked into the root document!
             expect(writtenKeys).not.toContain('history');
             expect(writtenKeys).not.toContain('nutrition');
         });
 
         it('empirically stress-tests isValidMonthId regex from firestore.rules against boundary and hostile inputs', () => {
-            // Extract regex from rules
             const regexMatch = rulesContent.match(/monthId\.matches\('([^']+)'\)/);
             expect(regexMatch).not.toBeNull();
             const regexStr = regexMatch![1];
             const monthRegex = new RegExp(regexStr);
 
-            // Valid month IDs
             const validMonths = [
                 '2026-01', '2026-02', '2026-03', '2026-04',
                 '2026-05', '2026-06', '2026-07', '2026-08',
@@ -516,27 +493,26 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 expect(monthRegex.test(m), `Expected ${m} to be valid`).toBe(true);
             });
 
-            // Hostile & Invalid month IDs
             const invalidMonths = [
-                '2026-00',       // Month 00 invalid
-                '2026-13',       // Month 13 invalid
-                '2026-99',       // Month 99 invalid
-                '2026-1',        // Single digit month
-                '2026-012',      // 3-digit month
-                '26-05',         // 2-digit year
-                '202605',        // Missing dash
-                '2026/05',       // Wrong separator
-                '2026_05',       // Wrong separator
-                'bad-month',     // Non-numeric
-                '2026-aa',       // Non-numeric month
-                'aaaa-01',       // Non-numeric year
-                '2026-05-01',    // Day suffix attached
-                'prefix-2026-05',// Prefix attached
-                '2026-05\n',     // Trailing newline
-                ' 2026-05 ',     // Whitespace padding
-                '',              // Empty string
-                'null',          // Literal string null
-                'undefined'      // Literal string undefined
+                '2026-00',
+                '2026-13',
+                '2026-99',
+                '2026-1',
+                '2026-012',
+                '26-05',
+                '202605',
+                '2026/05',
+                '2026_05',
+                'bad-month',
+                '2026-aa',
+                'aaaa-01',
+                '2026-05-01',
+                'prefix-2026-05',
+                '2026-05\n',
+                ' 2026-05 ',
+                '',
+                'null',
+                'undefined'
             ];
 
             invalidMonths.forEach(m => {
@@ -559,17 +535,15 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(typeof DomainParsers.parseSupplements).toBe('function');
             expect(typeof DomainParsers.parseNutritionPlanning).toBe('function');
 
-            // Defensive test: corrupted input to parseProfile recovers gracefully
             const profile = DomainParsers.parseProfile({ height: 180, invalidProp: 'ok' });
             expect(profile.height).toBe('180');
 
-            // Defensive test: corrupted nutrition day
             const nutrition = DomainParsers.parseNutrition({
                 '2026-08-16': {
                     date: '2026-08-16',
-                    kcal: '2200', // string parsed to number
+                    kcal: '2200',
                     carbs: '250',
-                    pro: 'NaN',  // NaN recovers to default
+                    pro: 'NaN',
                     fat: 70
                 }
             });
@@ -589,7 +563,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
                 activeCycleId: null
             };
 
-            // First call returns userDoc, remaining 6 calls return empty month snapshots
             vi.mocked(getDoc)
                 .mockResolvedValueOnce({
                     exists: () => true,
@@ -604,7 +577,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             expect(loaded).not.toBeNull();
             expect(loaded?.profile.name).toBe('Window User');
-            // getDoc should be called: 1 for manifest + 1 for userDoc + 3 for history_months + 3 for nutrition_months = 8 calls total
             expect(getDoc).toHaveBeenCalledTimes(8);
         });
 
@@ -621,16 +593,12 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             const mockedGetDocsFromServer = vi.fn().mockImplementation(async () => {
                 queryCount++;
                 if (queryCount === 1) {
-                    // Chunk 1 of history_months: 400 docs
                     return { empty: false, docs: mockRefs.slice(0, 400).map(r => ({ ref: r })) };
                 } else if (queryCount === 2) {
-                    // Chunk 2 of history_months: 400 docs
                     return { empty: false, docs: mockRefs.slice(400, 800).map(r => ({ ref: r })) };
                 } else if (queryCount === 3) {
-                    // Chunk 3 of history_months: 150 docs
                     return { empty: false, docs: mockRefs.slice(800, 950).map(r => ({ ref: r })) };
                 } else {
-                    // Empty: collection drained or residual check empty
                     return { empty: true, docs: [] };
                 }
             });
@@ -639,13 +607,6 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             await DB.deleteAccount();
 
-            // Total refs = 400 + 400 + 150 (history) + 1 (user doc) = 951 refs.
-            // Sliced into chunks of <= 400:
-            // Chunk 1: 400
-            // Chunk 2: 400
-            // Chunk 3: 150
-            // Chunk 4: 1 (root user doc)
-            // Total batches committed = 4 batches
             expect(mockBatch.commit).toHaveBeenCalledTimes(4);
         });
     });
