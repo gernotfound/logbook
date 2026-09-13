@@ -21,6 +21,12 @@ service cloud.firestore {
       return !('_schemaVersion' in docData) || docData._schemaVersion == 1;
     }
 
+    function preservesDataSchema() {
+      return resource == null
+        || !('_schemaVersion' in resource.data)
+        || ('_schemaVersion' in incomingData() && incomingData()._schemaVersion >= resource.data._schemaVersion);
+    }
+
     function isValidSync(docData) {
       return !('_sync' in docData) || (docData._sync is map && docData._sync.protocolVersion == 1 && docData._sync.clock is map && docData._sync.fields is map);
     }
@@ -72,6 +78,7 @@ service cloud.firestore {
             || incomingData().nutritionPlanningOrigin == 'generated-default'
             || incomingData().nutritionPlanningOrigin == 'user-edited')
         && isValidDataSchema(incomingData())
+        && preservesDataSchema()
         && isValidSync(incomingData())
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
 
@@ -81,6 +88,7 @@ service cloud.firestore {
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
+          && preservesDataSchema()
           && isValidSync(incomingData())
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
@@ -91,6 +99,7 @@ service cloud.firestore {
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
+          && preservesDataSchema()
           && isValidSync(incomingData())
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
