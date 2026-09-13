@@ -5,12 +5,41 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
 import { hydrateLocal, commitLocal, initializeLocal, preserveLegacyCache, readLocal } from '../../src/lib/sync/localRepository';
+import {
+    CURRENT_DATA_SCHEMA,
+    CURRENT_LOCAL_ENVELOPE,
+    CURRENT_SYNC_PROTOCOL,
+    FutureVersionError,
+    LegacyVersionError,
+} from '../../src/lib/schemaEvolution';
 
 const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
 beforeEach(() => clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe('durable owner-scoped journal', () => {
+    it('writes independent current envelope/data/sync versions', async () => {
+        await initializeLocal('a', data(170));
+        expect(await readLocal('a')).toMatchObject({
+            version: CURRENT_LOCAL_ENVELOPE,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+            owner: 'user:a',
+        });
+    });
+
+    it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
+        const legacy = { owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE - 1 };
+        await set('logbook:v2:user:a', legacy);
+        await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
+        expect(await get('logbook:v2:user:a')).toEqual(legacy);
+
+        const future = { owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE + 1 };
+        await set('logbook:v2:user:a', future);
+        await expect(readLocal('a')).rejects.toThrow(FutureVersionError);
+        expect(await get('logbook:v2:user:a')).toEqual(future);
+    });
+
     it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
         const base = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 80 },
