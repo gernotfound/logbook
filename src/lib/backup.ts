@@ -7,6 +7,7 @@ import {
     CURRENT_DATA_SCHEMA,
     CURRENT_SYNC_PROTOCOL,
     assertCurrentVersion,
+    normalizeBackupRecord,
 } from './schemaEvolution';
 
 export type ImportMode = 'merge' | 'restore';
@@ -33,8 +34,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const arrays = ['library', 'routines', 'history', 'customFoods', 'trainingCycles', 'supplements'] as const;
 
-// The permissive runtime schemas repair old records. A file import must not silently
-// accept a malformed container or erase records whose identity cannot be recovered.
 export function validateImportData(value: unknown): asserts value is Record<string, unknown> {
     if (!isRecord(value)) throw new Error('Dati del backup non validi. Il file originale non è stato modificato.');
     const checkIds = (items: unknown, path: string) => {
@@ -81,21 +80,22 @@ export function decodeImport(payload: unknown, owner: string) {
         throw new Error('Formato file non valido o non supportato.');
     }
 
-    assertCurrentVersion(payload.version, CURRENT_BACKUP_SCHEMA, 'Formato backup');
-    assertCurrentVersion(payload.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema backup');
-    assertCurrentVersion(payload.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync backup');
+    const normalized = normalizeBackupRecord(payload);
+    if (normalized.format !== 'logbook-backup') throw new Error('Formato file non valido o non supportato.');
+    assertCurrentVersion(normalized.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema backup');
+    assertCurrentVersion(normalized.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync backup');
 
-    if (payload.type !== 'backup' && payload.type !== 'share') {
+    if (normalized.type !== 'backup' && normalized.type !== 'share') {
         throw new Error('Tipo file non valido o non supportato.');
     }
 
-    const share = payload.type === 'share';
-    const sourceOwner = typeof payload.owner === 'string' ? payload.owner : null;
+    const share = normalized.type === 'share';
+    const sourceOwner = typeof normalized.owner === 'string' ? normalized.owner : null;
     if (!share && sourceOwner && sourceOwner !== owner) {
         throw new Error('Sicurezza: Non puoi importare il backup di un altro utente. Accedi con il proprietario del backup.');
     }
 
-    const data = payload.userData;
+    const data = normalized.userData;
     validateImportData(data);
     const selected = share
         ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]]))
@@ -105,11 +105,10 @@ export function decodeImport(payload: unknown, owner: string) {
         data: selected,
         share,
         ownerUnknown: !share && !sourceOwner,
-        coverage: !share && isRecord(payload.coverage) ? payload.coverage : undefined,
+        coverage: !share && isRecord(normalized.coverage) ? normalized.coverage : undefined,
     };
 }
 
-// Missing fields are filled recursively; collision priority is explicitly local in merge mode.
 function mergeMissing(local: unknown, incoming: unknown): unknown {
     if (local === undefined || local === null || local === '') return structuredClone(incoming);
     if (Array.isArray(local) && Array.isArray(incoming)) {
@@ -136,7 +135,6 @@ export function prepareImport(current: UserData, incoming: Record<string, unknow
         if (current.nutrition?.[date] && !equal(current.nutrition[date], day)) collisions++;
     }
     const raw = mode === 'restore' ? { ...structuredClone(current), ...structuredClone(incoming) } : mergeMissing(current, incoming);
-    // A backup is evidence of previous consent, never acceptance by this session.
     const data = UserDataSchema.parse({ ...(raw as Record<string, unknown>), legalConsent: current.legalConsent }) as unknown as UserData;
     if (mode === 'merge') for (const [date, day] of Object.entries(data.nutrition ?? {})) {
         if (!isRecord(incoming.nutrition) || !incoming.nutrition[date] || equal(day.meals, current.nutrition?.[date]?.meals) || !day.meals?.length) continue;
