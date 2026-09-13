@@ -82,6 +82,12 @@ export interface NormalizedCloudDocument {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
+function validateSyncProtocol(sync: unknown, kind: string): void {
+    if (sync === undefined) return;
+    if (!isRecord(sync)) throw new Error(`${kind} non valido.`);
+    assertCurrentVersion(sync.protocolVersion, CURRENT_SYNC_PROTOCOL, kind);
+}
+
 export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data schema'): NormalizedCloudDocument {
     if (!isRecord(raw)) throw new Error('Documento Firestore non valido.');
 
@@ -91,13 +97,16 @@ export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data sche
         : assertVersionNumber(raw._schemaVersion, kind);
 
     const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
+    validateSyncProtocol(_sync, `${kind} sync protocol`);
+
     const migrated = migrateSequential<CloudMigrationState>(
-        { business: structuredClone(business), sync: structuredClone(_sync) },
+        { business: structuredClone(business), sync: _sync === undefined ? undefined : structuredClone(_sync) },
         sourceVersion,
         CURRENT_DATA_SCHEMA,
         DATA_MIGRATIONS,
         kind,
     );
+    validateSyncProtocol(migrated.sync, `${kind} migrated sync protocol`);
 
     return {
         business: migrated.business,
@@ -110,6 +119,7 @@ export function withCurrentDataSchema(
     business: Record<string, unknown>,
     sync?: unknown,
 ): Record<string, unknown> {
+    validateSyncProtocol(sync, 'Protocollo sync in scrittura');
     return {
         ...business,
         _schemaVersion: CURRENT_DATA_SCHEMA,
