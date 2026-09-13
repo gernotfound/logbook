@@ -7,7 +7,7 @@ import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
 import { withTimeout } from './db_core';
 
-export async function loadHistoryMonths(user: any, targetMonths: string[], state: any) {
+export async function loadHistoryMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const historyDocs = await withTimeout(
         Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "history_months", m)))),
         6000,
@@ -17,7 +17,14 @@ export async function loadHistoryMonths(user: any, targetMonths: string[], state
         if (d && typeof d.exists === 'function' && d.exists()) {
             const monthData = d.data() as Record<string, any>;
             if (monthData) {
-                Object.values(monthData).forEach((h: any) => state.history.push(h));
+                if (monthData._sync && cloudDocuments) {
+                    cloudDocuments.set('history_months/' + d.id, monthData);
+                }
+                Object.entries(monthData).forEach(([key, h]: [string, any]) => {
+                    if (key !== '_sync') {
+                        state.history.push(h);
+                    }
+                });
             }
         }
     });

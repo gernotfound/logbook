@@ -6,7 +6,7 @@ import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
 import { withTimeout } from './db_core';
 
-export async function loadNutritionMonths(user: any, targetMonths: string[], state: any) {
+export async function loadNutritionMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const nutritionDocs = await withTimeout(
         Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "nutrition_months", m)))),
         6000,
@@ -16,8 +16,13 @@ export async function loadNutritionMonths(user: any, targetMonths: string[], sta
         if (d && typeof d.exists === 'function' && d.exists()) {
             const monthData = d.data() as Record<string, any>;
             if (monthData) {
+                if (monthData._sync && cloudDocuments) {
+                    cloudDocuments.set('nutrition_months/' + d.id, monthData);
+                }
                 Object.keys(monthData).forEach((date: string) => {
-                    (state.nutrition as any)[date] = monthData[date];
+                    if (date !== '_sync') {
+                        (state.nutrition as any)[date] = monthData[date];
+                    }
                 });
             }
         }

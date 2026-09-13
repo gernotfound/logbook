@@ -19,6 +19,10 @@ service cloud.firestore {
       return request.resource.data;
     }
 
+    function isValidSync(docData) {
+      return !('_sync' in docData) || (docData._sync is map && docData._sync.protocolVersion == 1 && docData._sync.clock is map && docData._sync.fields is map);
+    }
+
     // Default deny globale
     match /{document=**} {
       allow read, write: if false;
@@ -68,7 +72,7 @@ service cloud.firestore {
             || incomingData().nutritionPlanningOrigin == null
             || incomingData().nutritionPlanningOrigin == 'generated-default'
             || incomingData().nutritionPlanningOrigin == 'user-edited')
-        && (!('_sync' in incomingData()) || (incomingData()._sync is map && incomingData()._sync.protocolVersion == 1 && incomingData()._sync.clock is map && incomingData()._sync.fields is map))
+        && isValidSync(incomingData())
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}
@@ -77,6 +81,7 @@ service cloud.firestore {
         allow create, update: if isOwner(userId) 
           && isValidMonthId(monthId)
           && incomingData() is map
+          && isValidSync(incomingData())
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
       
@@ -86,6 +91,7 @@ service cloud.firestore {
         allow create, update: if isOwner(userId) 
           && isValidMonthId(monthId)
           && incomingData() is map
+          && isValidSync(incomingData())
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 

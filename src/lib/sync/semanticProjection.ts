@@ -2,7 +2,7 @@ import equal from 'fast-deep-equal';
 // FORCE REBUILD
 import { type DocumentData } from './documentProjection';
 
-export type MergePolicy = 'keyed' | 'ordered-keyed' | 'atomic' | 'property';
+export type MergePolicy = 'keyed' | 'ordered-keyed' | 'atomic' | 'property' | 'ignore';
 
 export interface VectorClock {
     [actorId: string]: number;
@@ -38,10 +38,14 @@ export function fieldKey(path: string[]): string {
 export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
     if (docPath === '') {
         const root = path[0];
-        if (['profile'].includes(root)) return 'property';
+        if (['library', 'customFoods'].includes(root)) {
+            if (path.length === 1) return 'keyed';
+            return 'property';
+        }
         if (['routines', 'trainingCycles', 'supplements'].includes(root)) {
             if (path.length === 1) return 'ordered-keyed';
             if (root === 'routines' && path.length === 3 && path[2] === 'exercises') return 'ordered-keyed';
+            if (root === 'trainingCycles' && path.length === 3 && path[2] === 'routines') return 'ordered-keyed';
             return 'property';
         }
         if (['history'].includes(root)) {
@@ -69,6 +73,7 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
         const prop = path[1];
         if (prop === 'meals' || prop === 'supplementsIntake') {
             if (path.length === 2) return 'keyed';
+            if (path.length === 4 && ['kcal', 'carbs', 'pro', 'fat'].includes(String(path[3]))) return 'ignore';
             return 'property';
         }
         return 'property';
@@ -91,6 +96,14 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
     return 'atomic';
 }
 
+export function resolveIdentity(path: string[], item: any): string {
+    const root = path[0];
+    if (root === 'routines' && path.length >= 3 && path[2] === 'exercises') return String(item.exId);
+    if (root === 'activeWorkout' && path.length >= 2 && path[1] === 'exercises') return String(item.exId);
+    if (root === 'history' && path.length >= 2 && path[1] === 'exercises') return String(item.exId);
+    return String(item.id ?? item.exId);
+}
+
 function traverseAndDiff(
     docPath: string,
     currentPath: string[],
@@ -104,6 +117,8 @@ function traverseAndDiff(
     if (equal(bVal, dVal)) return;
 
     const policy = getMergePolicy(docPath, currentPath);
+
+    if (policy === 'ignore') return;
 
     if (policy === 'atomic') {
         ops.push({
@@ -152,8 +167,8 @@ function traverseAndDiff(
     } else if (policy === 'keyed' || policy === 'ordered-keyed') {
         const bArr = Array.isArray(bVal) ? bVal : [];
         const dArr = Array.isArray(dVal) ? dVal : [];
-        const bMap = new Map(bArr.map((item: any) => [String(item.id || item.exId), item]));
-        const dMap = new Map(dArr.map((item: any, idx: number) => [String(item.id || item.exId), policy === 'ordered-keyed' ? { ...item, $order: idx } : item]));
+        const bMap = new Map(bArr.map((item: any) => [resolveIdentity(currentPath, item), item]));
+        const dMap = new Map(dArr.map((item: any, idx: number) => [resolveIdentity(currentPath, item), policy === 'ordered-keyed' ? { ...item, $order: idx } : item]));
         
         const allIds = new Set([...bMap.keys(), ...dMap.keys()]);
         for (const id of allIds) {
@@ -312,7 +327,13 @@ export function applySemanticOperations(
         grouped.set(key, existing);
     }
 
-    for (const [, opList] of grouped.entries()) {
+    const groupedEntries = Array.from(grouped.entries()).sort((a, b) => {
+        const pathLenA = a[1][0].path.length;
+        const pathLenB = b[1][0].path.length;
+        return pathLenA - pathLenB;
+    });
+
+    for (const [, opList] of groupedEntries) {
         let winner = opList[0];
         for (let i = 1; i < opList.length; i++) {
             if (stampWins(opList[i], winner)) winner = opList[i];
@@ -348,6 +369,31 @@ export function applySemanticOperations(
                 continue;
             }
             jointClock = mergeVectors(remoteStamp.clock, winner.clock);
+        }
+
+        // Ancestor causal barrier
+        let blockedByAncestor = false;
+        for (let i = 1; i < winner.path.length; i++) {
+            const ancKey = fieldKey(winner.path.slice(0, i));
+            const ancStamp = meta.fields[ancKey];
+            if (ancStamp) {
+                const ancLike: StampLike = {
+                    clock: ancStamp.clock,
+                    isDelete: ancStamp.deleted,
+                    actorId: ancStamp.actorId,
+                    seq: ancStamp.seq
+                };
+                if (stampWins(ancLike, localStampLike)) {
+                    blockedByAncestor = true;
+                    jointClock = mergeVectors(jointClock, ancStamp.clock);
+                    break;
+                }
+            }
+        }
+
+        if (blockedByAncestor) {
+            meta.clock = mergeVectors(meta.clock, jointClock);
+            continue;
         }
 
         const doc = resultDocs.get(winner.docPath) || {};
@@ -427,10 +473,10 @@ export function applySemanticOperations(
         resultDocs.set(winner.docPath, doc);
 
         meta.fields[fk] = {
-            clock: jointClock, // join of all observed causal history
+            clock: jointClock,
             actorId: winner.actorId,
             seq: winner.seq,
-            deleted: winner.isDelete ? true : undefined
+            ...(winner.isDelete ? { deleted: true } : {})
         };
         meta.clock = mergeVectors(meta.clock, jointClock);
     }

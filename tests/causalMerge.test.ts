@@ -209,16 +209,7 @@ describe('Causal Semantic Merge', () => {
         expect(res2.documents.get('')?.profile).toEqual({ height: '185' }); // Still B
     });
 
-    it('14. transazione Firestore forzata al retry produce lo stesso risultato', () => {
-        // Just checking idempotency again, which represents a retry.
-        const base = new Map<string, DocumentData>();
-        const ops: SemanticOperation[] = [
-            { docPath: '', path: ['profile', 'height'], value: '185', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
-        ];
-        const res1 = applySemanticOperations(base, ops);
-        const res2 = applySemanticOperations(base, ops);
-        expect(res2).toEqual(res1);
-    });
+
 
     it('15. documento business vuoto con tombstone non viene eliminato', () => {
         // This is handled in transactionWriter (hasFields). We just verify the field exists.
@@ -230,10 +221,7 @@ describe('Causal Semantic Merge', () => {
         expect(res.syncMetas[''].fields['profile']).toBeDefined();
     });
 
-    it('16. checkDocSize comprende _sync.fields', () => {
-        // It's verified logically in transactionWriter adding _sync to data before size check
-        expect(true).toBe(true);
-    });
+
 
     it('17. macro nutrizionali vengono ricalcolate dopo il merge', () => {
         const base = new Map<string, DocumentData>();
