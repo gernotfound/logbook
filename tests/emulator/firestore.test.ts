@@ -13,9 +13,22 @@ afterAll(async () => { await env?.cleanup(); });
 
 it('allows the owner to create, read and delete their own profile', async () => {
     const ref = doc(env.authenticatedContext('a').firestore(), 'users/a');
-    await assertSucceeds(setDoc(ref, { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited' }));
+    await assertSucceeds(setDoc(ref, { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited', _schemaVersion: 1 }));
     expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('175');
     await assertSucceeds(deleteDoc(ref));
+});
+
+it('allows the clean-cut unversioned schema-1 baseline but rejects explicit future versions', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    await assertSucceeds(setDoc(doc(db, 'users/a'), { profile: { name: 'baseline' } }));
+    await assertSucceeds(setDoc(doc(db, 'users/a'), { profile: { name: 'current' }, _schemaVersion: 1 }));
+    await assertFails(setDoc(doc(db, 'users/a'), { profile: { name: 'future' }, _schemaVersion: 2 }));
+
+    for (const collection of ['history_months', 'nutrition_months']) {
+        const ref = doc(db, `users/a/${collection}/2026-09`);
+        await assertSucceeds(setDoc(ref, { _schemaVersion: 1 }));
+        await assertFails(setDoc(ref, { _schemaVersion: 2 }));
+    }
 });
 
 it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
@@ -34,7 +47,7 @@ it('rejects unknown root fields, invalid origin and malformed month paths', asyn
     await assertFails(setDoc(doc(db, 'users/a'), { nutritionPlanningOrigin: 'injected' }));
     for (const name of ['history_months', 'nutrition_months']) {
         await assertFails(setDoc(doc(db, `users/a/${name}/2026-13`), {}));
-        await assertSucceeds(setDoc(doc(db, `users/a/${name}/2026-09`), {}));
+        await assertSucceeds(setDoc(doc(db, `users/a/${name}/2026-09`), { _schemaVersion: 1 }));
     }
 });
 
@@ -48,5 +61,5 @@ it('permits public catalog reads but denies client writes', async () => {
 
 it('rejects untyped root fields', async () => {
     const db = env.authenticatedContext('a').firestore();
-    await assertFails(setDoc(doc(db, 'users/a'), { profile: 'invalid-profile' }));
+    await assertFails(setDoc(doc(db, 'users/a'), { profile: 'invalid-profile', _schemaVersion: 1 }));
 });
