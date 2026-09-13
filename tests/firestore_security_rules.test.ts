@@ -19,48 +19,34 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   });
 
   it('allows owner to delete on history_months and nutrition_months subcollections', () => {
-    // Check history_months
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isOwner\(userId\);/);
-    
-    // Check nutrition_months
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
-
-    // Check telemetry_anomalies
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
-    expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isOwner\(userId\);/);
   });
 
-  it('users/{userId} whitelist contains all root UserData payload keys including catalogOverrides', () => {
-    // Extract whitelist array from firestore.rules
+  it('allows only current-or-unversioned schema-1 Firestore documents', () => {
+    expect(rulesContent).toContain("function isValidDataSchema(docData)");
+    expect(rulesContent).toContain("!('_schemaVersion' in docData) || docData._schemaVersion == 1");
+    expect(rulesContent.match(/isValidDataSchema\(incomingData\(\)\)/g)?.length).toBe(3);
+  });
+
+  it('users/{userId} whitelist contains all root UserData payload keys plus sync/schema metadata', () => {
     const hasOnlyMatch = rulesContent.match(/incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
     expect(hasOnlyMatch).not.toBeNull();
 
-    const rawKeys = hasOnlyMatch![1];
-    const extractedKeys = rawKeys
+    const extractedKeys = hasOnlyMatch![1]
       .split(',')
       .map(k => k.replace(/['"\s]/g, ''))
       .filter(Boolean);
 
-    const expectedRootKeys: (keyof Omit<UserData, 'history' | 'nutrition'>)[] = [
-      'profile',
-      'library',
-      'routines',
-      'customFoods',
-      'activeWorkout',
-      'trainingCycles',
-      'activeCycleId',
-      'nutritionPlanning',
-      'supplements',
-      'activePains',
-      'catalogOverrides',
-      'legalConsent',
-      'nutritionPlanningOrigin',
-      '_sync'
+    const expectedRootKeys: Array<keyof Omit<UserData, 'history' | 'nutrition'> | '_schemaVersion' | '_sync'> = [
+      'profile', 'library', 'routines', 'customFoods', 'activeWorkout', 'trainingCycles', 'activeCycleId',
+      'nutritionPlanning', 'supplements', 'activePains', 'catalogOverrides', 'legalConsent',
+      'nutritionPlanningOrigin', '_schemaVersion', '_sync'
     ];
 
     expect(extractedKeys).toEqual(expect.arrayContaining(expectedRootKeys));
-    expect(extractedKeys).toContain('catalogOverrides');
     expect(extractedKeys.length).toBe(expectedRootKeys.length);
   });
 
@@ -84,44 +70,20 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       nutritionPlanning: null,
       supplements: [],
       activePains: [],
-      catalogOverrides: {
-        exercises: {},
-        hiddenExerciseIds: ['ex_old'],
-        foods: {},
-        hiddenFoodIds: []
-      }
+      catalogOverrides: { exercises: {}, hiddenExerciseIds: ['ex_old'], foods: {}, hiddenFoodIds: [] },
+      _schemaVersion: 1,
     };
 
     const payloadKeys = Object.keys(sampleUserDocData);
-    const isPayloadPermitted = payloadKeys.every(k => allowedKeys.has(k));
-    expect(isPayloadPermitted).toBe(true);
-
-    // Any unauthorized field should fail
-    const invalidPayloadKeys = [...payloadKeys, 'unauthorizedField'];
-    const isInvalidPermitted = invalidPayloadKeys.every(k => allowedKeys.has(k));
-    expect(isInvalidPermitted).toBe(false);
+    expect(payloadKeys.every(k => allowedKeys.has(k))).toBe(true);
+    expect([...payloadKeys, 'unauthorizedField'].every(k => allowedKeys.has(k))).toBe(false);
   });
 
   it('telemetry_anomalies whitelist contains all privacy-minimized payload keys', () => {
     const anomalyMatch = rulesContent.match(/match\s+\/telemetry_anomalies\/\{eventId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
     expect(anomalyMatch).not.toBeNull();
-
-    const rawKeys = anomalyMatch![1];
-    const extractedKeys = rawKeys
-      .split(',')
-      .map(k => k.replace(/['"\s]/g, ''))
-      .filter(Boolean);
-
-    const expectedKeys = [
-      'type',
-      'reason',
-      'timestamp',
-      'elapsedMs',
-      'platform',
-      'standalone',
-      'persisted'
-    ];
-
+    const extractedKeys = anomalyMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
+    const expectedKeys = ['type', 'reason', 'timestamp', 'elapsedMs', 'platform', 'standalone', 'persisted'];
     expect(extractedKeys).toEqual(expect.arrayContaining(expectedKeys));
     expect(extractedKeys.length).toBe(expectedKeys.length);
   });
@@ -134,7 +96,6 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       const rawErrorKeys = errorMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
       expect(rawErrorKeys).toEqual(expect.arrayContaining(['timestamp', 'type', 'message', 'stack', 'context', 'userId', 'sessionId', 'count', 'firstSeen', 'lastSeen']));
     }
-
     if (rulesContent.includes('telemetry_events')) {
       expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
       const eventMatch = rulesContent.match(/match\s+\/telemetry_events\/\{eventId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
@@ -144,4 +105,3 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     }
   });
 });
-
