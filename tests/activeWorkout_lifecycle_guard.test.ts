@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { diffDocuments } from '../src/lib/sync/semanticProjection';
+import { applySemanticOperations, diffDocuments, type SemanticOperation } from '../src/lib/sync/semanticProjection';
 
-describe('activeWorkout Lifecycle Guard', () => {
-    it('generates a guard for child operations of an activeWorkout', () => {
+describe('activeWorkout lifecycle guard', () => {
+    it('generates a session guard for child operations', () => {
         const base = new Map();
         base.set('', {
             activeWorkout: { id: 'w-1', date: '2026-09-01', exercises: [] }
@@ -13,37 +13,94 @@ describe('activeWorkout Lifecycle Guard', () => {
             activeWorkout: { id: 'w-1', date: '2026-09-01', exercises: [{ id: 'ex-1', name: 'Bench' }] }
         });
 
-        const ops = diffDocuments(base, desired, 'actor1', 1, { 'actor1': 1 });
-
-        // We expect one operation for the exercises array insertion
-        expect(ops.length).toBeGreaterThan(0);
-
+        const ops = diffDocuments(base, desired, 'actor1', 1, { actor1: 1 });
         const op = ops.find(o => o.path.includes('exercises'));
-        expect(op).toBeDefined();
 
-        // The guard should verify that the activeWorkout's ID is still 'w-1'
+        expect(op).toBeDefined();
         expect(op?.guard).toEqual({
             path: ['activeWorkout', 'id'],
             equals: 'w-1'
         });
     });
 
-    it('does not generate a guard if activeWorkout has no id', () => {
+    it('falls back to an atomic activeWorkout operation when no stable session id exists', () => {
         const base = new Map();
         base.set('', {
             activeWorkout: { date: '2026-09-01', exercises: [] }
         });
 
+        const desiredWorkout = { date: '2026-09-01', exercises: [{ id: 'ex-1', name: 'Bench' }] };
         const desired = new Map();
-        desired.set('', {
-            activeWorkout: { date: '2026-09-01', exercises: [{ id: 'ex-1', name: 'Bench' }] }
+        desired.set('', { activeWorkout: desiredWorkout });
+
+        const ops = diffDocuments(base, desired, 'actor1', 1, { actor1: 1 });
+
+        expect(ops).toEqual([expect.objectContaining({
+            path: ['activeWorkout'],
+            value: desiredWorkout,
+            isDelete: false
+        })]);
+        expect(ops[0].guard).toBeUndefined();
+    });
+
+    it('does not let a stale child from session A mutate replacement session B', () => {
+        const base = new Map();
+        base.set('', {
+            activeWorkout: { id: 'w-1', date: '2026-09-01', exercises: [] }
         });
 
-        const ops = diffDocuments(base, desired, 'actor1', 1, { 'actor1': 1 });
+        const replacement: SemanticOperation = {
+            docPath: '',
+            path: ['activeWorkout'],
+            value: { id: 'w-2', date: '2026-09-02', exercises: [] },
+            isDelete: false,
+            actorId: 'B',
+            seq: 1,
+            clock: { B: 1 }
+        };
+        const replaced = applySemanticOperations(base, [replacement]);
 
-        const op = ops.find(o => o.path.includes('exercises'));
-        expect(op).toBeDefined();
+        // Actor Z would win the deterministic concurrent tie-break against actor B.
+        // The lifecycle guard must still reject it because it belongs to w-1.
+        const staleChild: SemanticOperation = {
+            docPath: '',
+            path: ['activeWorkout', 'exercises', 'ex-1', 'name'],
+            value: 'Stale bench',
+            isDelete: false,
+            actorId: 'Z',
+            seq: 1,
+            clock: { Z: 1 },
+            guard: { path: ['activeWorkout', 'id'], equals: 'w-1' }
+        };
 
-        expect(op?.guard).toBeUndefined();
+        const afterStale = applySemanticOperations(replaced.documents, [staleChild], replaced.syncMetas);
+        expect(afterStale.documents.get('')?.activeWorkout).toEqual({
+            id: 'w-2',
+            date: '2026-09-02',
+            exercises: []
+        });
+        expect(afterStale.syncMetas[''].fields['activeWorkout/exercises/ex-1/name']).toBeUndefined();
+        expect(afterStale.syncMetas[''].clock.Z).toBe(1);
+    });
+
+    it('accepts a child operation guarded by the current session id', () => {
+        const base = new Map();
+        base.set('', {
+            activeWorkout: { id: 'w-2', date: '2026-09-02', exercises: [] }
+        });
+
+        const child: SemanticOperation = {
+            docPath: '',
+            path: ['activeWorkout', 'exercises', 'ex-1'],
+            value: { id: 'ex-1', name: 'Bench' },
+            isDelete: false,
+            actorId: 'C',
+            seq: 1,
+            clock: { C: 1 },
+            guard: { path: ['activeWorkout', 'id'], equals: 'w-2' }
+        };
+
+        const result = applySemanticOperations(base, [child]);
+        expect(result.documents.get('')?.activeWorkout.exercises).toEqual([{ id: 'ex-1', name: 'Bench' }]);
     });
 });

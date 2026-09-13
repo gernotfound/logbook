@@ -25,9 +25,9 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             businessDocuments.set(path, business);
             if (_sync) {
                 try {
-                    syncMetaByDocument[path === '' ? 'root' : path] = parseSyncMeta(_sync);
-                } catch (e) {
-                    console.warn(`Invalid _sync in backup for ${path}`, e);
+                    syncMetaByDocument[path] = parseSyncMeta(_sync);
+                } catch (error) {
+                    throw new Error(`Metadati _sync non validi nel backup per ${path || 'root'}`, { cause: error });
                 }
             }
         } else {
@@ -81,7 +81,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
             mergedValue.pendingConflicts = local.pendingConflicts;
         }
     }
-    
+
     if (!includeCloud) coverage.months = envelope?.completeMonths ?? [];
     const device: Record<string, string> = {};
     const prefix = 'logbook:v2:' + session.owner + ':';

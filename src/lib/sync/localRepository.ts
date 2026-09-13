@@ -4,7 +4,7 @@ import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations } from './semanticProjection';
+import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, parseSyncMeta } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
@@ -24,6 +24,7 @@ export interface LocalEnvelopeV3 {
 }
 
 export type LocalEnvelope = LocalEnvelopeV3;
+export type CloudCoverageMode = 'window' | 'all';
 
 const keyFor = (owner: string) => {
     const canonicalOwner = normalizeStorageOwner(owner);
@@ -42,6 +43,39 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
     return { ...v3, data: parse(v3.data), baseline: parse(v3.baseline) };
 }
 
+function enforceMonthlyEntityTombstones(
+    baseDocs: Map<string, DocumentData>,
+    desiredDocs: Map<string, DocumentData>,
+    input: SemanticOperation[],
+    actorId: string,
+    seq: number,
+    clock: VectorClock
+): SemanticOperation[] {
+    let operations = [...input];
+    const paths = new Set([...baseDocs.keys(), ...desiredDocs.keys()]);
+
+    for (const docPath of paths) {
+        if (!docPath.startsWith('history_months/') && !docPath.startsWith('nutrition_months/')) continue;
+        const baseDoc = baseDocs.get(docPath) ?? {};
+        const desiredDoc = desiredDocs.get(docPath) ?? {};
+
+        for (const entityId of Object.keys(baseDoc)) {
+            if (Object.hasOwn(desiredDoc, entityId)) continue;
+            operations = operations.filter(op => !(op.docPath === docPath && op.path[0] === entityId));
+            operations.push({
+                docPath,
+                path: [entityId],
+                isDelete: true,
+                actorId,
+                seq,
+                clock
+            });
+        }
+    }
+
+    return operations;
+}
+
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
     owner = normalizeStorageOwner(owner);
     return validate(await get<any>(keyFor(owner)), owner);
@@ -55,22 +89,23 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     const catalog = await getCachedCatalog();
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
-        
+
         const baseDocs = projectDocuments(current?.data ?? fallback, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
-        
-        let actorId = current?.actorId ?? generateId('actor');
-        let nextSeq = (current?.actorSeq ?? 0) + 1;
-        let testClock = { ...(current?.clock ?? {}) };
+
+        const actorId = current?.actorId ?? generateId('actor');
+        const nextSeq = (current?.actorSeq ?? 0) + 1;
+        const testClock = { ...(current?.clock ?? {}) };
         testClock[actorId] = nextSeq;
 
         operations = diffDocuments(baseDocs, desiredDocs, actorId, nextSeq, testClock);
-        
+        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, nextSeq, testClock);
+
         if (operations.length === 0) {
             return {
                 ...(current ?? { completeMonths: [] }),
                 version: 3, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {},
-                data: desired, // Still save business data changes that don't produce semantic ops (e.g., fallbacks)
+                data: desired,
                 baseline: current?.baseline ?? fallback,
                 completeMonths: current?.completeMonths ?? [],
                 pending: current?.pending ?? [],
@@ -111,8 +146,8 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         const pending = current.pending.filter(op => op.seq > expectedSeq);
-        
-        let newClock = { ...current.clock };
+
+        const newClock = { ...current.clock };
         if (syncMeta) {
             for (const meta of Object.values(syncMeta)) {
                 for (const [actor, seq] of Object.entries(meta.clock)) {
@@ -120,7 +155,7 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
                 }
             }
         }
-        
+
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
         return { ...current, clock: newClock, baseline: parsed, data: current.actorSeq === expectedSeq ? parsed : current.data, pending,
             completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
@@ -137,20 +172,26 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
     });
 }
 
-export async function hydrateLocal(owner: string, cloudData: UserData, months: string[], cloudDocuments?: Map<string, DocumentData>): Promise<LocalEnvelope> {
+export async function hydrateLocal(
+    owner: string,
+    cloudData: UserData,
+    months: string[],
+    cloudDocuments?: Map<string, DocumentData>,
+    coverageMode: CloudCoverageMode = 'window'
+): Promise<LocalEnvelope> {
     owner = normalizeStorageOwner(owner);
     const cloud = structuredClone(parse(cloudData));
-    let saved: any;
+    let saved: LocalEnvelope | undefined;
     const catalog = await getCachedCatalog();
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
         if (!current) {
-            let syncMetaByDocument: Record<string, SyncMeta> = {};
-            let clock: Record<string, number> = {};
+            const syncMetaByDocument: Record<string, SyncMeta> = {};
+            const clock: Record<string, number> = {};
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
                     if (doc._sync) {
-                        const meta = doc._sync as SyncMeta;
+                        const meta = parseSyncMeta(doc._sync);
                         syncMetaByDocument[path] = meta;
                         for (const [actor, seq] of Object.entries(meta.clock)) {
                             clock[actor] = Math.max(clock[actor] || 0, seq);
@@ -160,23 +201,21 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             }
             saved = { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, revision: 0 };
         } else {
-            
-            let syncMeta: Record<string, SyncMeta> = {};
+            const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
-            
-            for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) {
-                if (!authoritativePaths.has(path)) {
-                    syncMeta[path] = meta;
+
+            if (coverageMode === 'window') {
+                for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) {
+                    if (!authoritativePaths.has(path)) syncMeta[path] = meta;
                 }
             }
-            
-            let updatedClock = { ...current.clock };
-            // hydrateLocal MUST NOT modify existing pending clocks
 
+            const updatedClock = { ...current.clock };
+            // hydrateLocal MUST NOT modify existing pending clocks
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
                     if (doc._sync) {
-                        const meta = doc._sync as SyncMeta;
+                        const meta = parseSyncMeta(doc._sync);
                         syncMeta[path] = meta;
                         for (const [actor, seq] of Object.entries(meta.clock)) {
                             updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
@@ -184,41 +223,55 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                     }
                 }
             }
-            
+
             const localDocs = projectDocuments(current.data, catalog);
             const cloudDocsForHydration = projectDocuments(cloud, catalog);
-            
             localDocs.set('', cloudDocsForHydration.get('') ?? {});
-            
-            for (const month of months) {
-                const hKey = `history_months/${month}`;
-                localDocs.set(hKey, cloudDocsForHydration.get(hKey) ?? {});
-                
-                const nKey = `nutrition_months/${month}`;
-                localDocs.set(nKey, cloudDocsForHydration.get(nKey) ?? {});
+
+            if (coverageMode === 'all') {
+                for (const path of [...localDocs.keys()]) {
+                    if (path.startsWith('history_months/') || path.startsWith('nutrition_months/')) localDocs.delete(path);
+                }
+                for (const [path, doc] of cloudDocsForHydration.entries()) {
+                    if (path.startsWith('history_months/') || path.startsWith('nutrition_months/')) localDocs.set(path, doc);
+                }
+            } else {
+                for (const month of months) {
+                    const hKey = `history_months/${month}`;
+                    localDocs.set(hKey, cloudDocsForHydration.get(hKey) ?? {});
+
+                    const nKey = `nutrition_months/${month}`;
+                    localDocs.set(nKey, cloudDocsForHydration.get(nKey) ?? {});
+                }
             }
 
-            
-            const baselineData = applyRemoteDocuments(current.data, localDocs, catalog);
+            // A full cloud scan is authoritative for all monthly shards. Since applyRemoteDocuments
+            // preserves months absent from its document map, clear those collections in the apply base.
+            const applicationBase = coverageMode === 'all'
+                ? ({ ...current.data, history: [], nutrition: {} } as UserData)
+                : current.data;
+
+            const baselineData = applyRemoteDocuments(applicationBase, localDocs, catalog);
             const parsedBaseline = parse(baselineData);
-            
+
             const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(localDocs, current.pending, syncMeta);
-            const data = applyRemoteDocuments(current.data, mergedDocs, catalog);
-            
+            const data = applyRemoteDocuments(applicationBase, mergedDocs, catalog);
+
             data.pendingConflicts = current.data.pendingConflicts;
             const parsedData = parse(data);
-            
+
             saved = {
                 ...current,
                 clock: updatedClock,
                 data: parsedData,
                 baseline: parsedBaseline,
-                completeMonths: [...new Set([...current.completeMonths, ...months])],
+                completeMonths: coverageMode === 'all' ? [...new Set(months)] : [...new Set([...current.completeMonths, ...months])],
                 syncMetaByDocument: mergedMetas
             };
         }
         return saved;
     });
+    if (!saved) throw new Error('Hydration locale non riuscita');
     return saved;
 }
 
@@ -260,4 +313,3 @@ export async function preserveLegacyCache(): Promise<boolean> {
     await update('logbook:recovery:legacy', original => original ?? legacy);
     return true;
 }
-

@@ -18,7 +18,8 @@
     "test:isolated": "vitest run --config vitest.isolated.config.ts",
     "test:rules": "firebase emulators:exec --only firestore --project demo-logbook-audit --config firebase.emulator.json \"vitest run --config vitest.emulator.config.ts\"",
     "test:coverage": "vitest run --coverage",
-    "verify:m0": "npm run lint && npm run test && vitest run tests/isolated/ && vitest run tests/emulator/ && npm run build && node -e \"require('fs').readFileSync('tests/emulator/journalFlow.test.ts', 'utf8').includes('it.skip') && process.exit(1)\""
+    "test:no-skips": "node scripts/check-test-skips.mjs",
+    "verify:m0": "npm run lint && npm run test && npm run test:isolated && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
