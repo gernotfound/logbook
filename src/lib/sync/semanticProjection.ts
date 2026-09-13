@@ -174,7 +174,23 @@ function traverseAndDiff(
         const bArr = Array.isArray(bVal) ? bVal : [];
         const dArr = Array.isArray(dVal) ? dVal : [];
         const bMap = new Map(bArr.map((item: any) => [resolveIdentity(currentPath, item), item]));
-        const dMap = new Map(dArr.map((item: any, idx: number) => [resolveIdentity(currentPath, item), policy === 'ordered-keyed' ? { ...item, $order: idx } : item]));
+        const dMap = new Map(dArr.map((item: any) => [resolveIdentity(currentPath, item), item]));
+        
+        if (policy === 'ordered-keyed') {
+            const bOrder = bArr.map((item: any) => resolveIdentity(currentPath, item));
+            const dOrder = dArr.map((item: any) => resolveIdentity(currentPath, item));
+            if (!equal(bOrder, dOrder)) {
+                ops.push({
+                    docPath,
+                    path: [...currentPath, '$order'],
+                    value: dOrder,
+                    isDelete: false,
+                    actorId,
+                    seq,
+                    clock
+                });
+            }
+        }
         
         const allIds = new Set([...bMap.keys(), ...dMap.keys()]);
         for (const id of allIds) {
@@ -274,6 +290,27 @@ export function stampWins(opA: StampLike, opB: StampLike): boolean {
     return opA.actorId > opB.actorId;
 }
 
+export function calculateLoggedMealTotals(meals: any[]) {
+    let kcal = 0, carbs = 0, pro = 0, fat = 0;
+    for (const m of meals ?? []) {
+        const base = m.baseQty != null && m.baseQty > 0
+            ? m.baseQty
+            : (m.unit === 'porzione' || m.meal === 'quick' ? 1 : 100);
+        const qty = m.quantity != null ? m.quantity : base;
+        const ratio = base > 0 ? qty / base : 1;
+        kcal += (Number(m.kcal) || 0) * ratio;
+        carbs += (Number(m.carbs) || 0) * ratio;
+        pro += (Number(m.pro) || 0) * ratio;
+        fat += (Number(m.fat) || 0) * ratio;
+    }
+    return {
+        kcal: Math.round(kcal),
+        carbs: Math.round(carbs * 10) / 10,
+        pro: Math.round(pro * 10) / 10,
+        fat: Math.round(fat * 10) / 10,
+    };
+}
+
 export function normalizeDomainData(docs: Map<string, DocumentData>) {
     // Post-merge normalization (e.g. recalculating nutrition macros)
     for (const [path, doc] of docs.entries()) {
@@ -281,22 +318,17 @@ export function normalizeDomainData(docs: Map<string, DocumentData>) {
             for (const [, dayData] of Object.entries(doc)) {
                 if (dayData && typeof dayData === 'object' && Array.isArray((dayData as any).meals)) {
                     const meals = (dayData as any).meals;
-                    let kcal = 0, carbs = 0, pro = 0, fat = 0;
-                    for (const m of meals) {
-                        kcal += Number(m.kcal) || 0;
-                        carbs += Number(m.carbs) || 0;
-                        pro += Number(m.pro) || 0;
-                        fat += Number(m.fat) || 0;
-                    }
-                    (dayData as any).kcal = Math.round(kcal);
-                    (dayData as any).carbs = Math.round(carbs);
-                    (dayData as any).pro = Math.round(pro);
-                    (dayData as any).fat = Math.round(fat);
+                    const totals = calculateLoggedMealTotals(meals);
+                    (dayData as any).kcal = totals.kcal;
+                    (dayData as any).carbs = totals.carbs;
+                    (dayData as any).pro = totals.pro;
+                    (dayData as any).fat = totals.fat;
                 }
             }
         }
     }
 }
+
 
 export function applySemanticOperations(
     base: Map<string, DocumentData>,
@@ -338,6 +370,8 @@ export function applySemanticOperations(
         const pathLenB = b[1][0].path.length;
         return pathLenA - pathLenB;
     });
+
+    const ordersToApply = new Map<any[], { path: string[], orderIds: string[] }>();
 
     for (const [, opList] of groupedEntries) {
         let winner = opList[0];
@@ -406,6 +440,7 @@ export function applySemanticOperations(
         
         // Navigation array
         const p = winner.path;
+        const isOrderPayload = p[p.length - 1] === '$order';
         
         let current: any = doc;
         let parentIsArray = false;
@@ -420,14 +455,20 @@ export function applySemanticOperations(
                 if (!Array.isArray(current[p[i]])) current[p[i]] = [];
                 const arr = current[p[i]] as any[];
                 const itemId = p[i + 1];
-                let idx = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
                 
                 if (i + 1 === p.length - 1) {
+                    if (isOrderPayload) {
+                        ordersToApply.set(arr, { path: currentPath, orderIds: winner.value as string[] });
+                        parentIsArray = false;
+                        break;
+                    }
                     parentIsArray = true;
                     arrRef = arr;
+                    let idx = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
                     itemIndex = idx;
                     break;
                 } else {
+                    let idx = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
                     if (idx < 0) {
                         arr.push(identitySeed(currentPath, itemId));
                         idx = arr.length - 1;
@@ -443,7 +484,9 @@ export function applySemanticOperations(
 
         const lastSeg = p[p.length - 1];
         
-        if (parentIsArray) {
+        if (isOrderPayload) {
+            // Already handled in traversal
+        } else if (parentIsArray) {
             if (winner.isDelete) {
                 if (itemIndex >= 0) arrRef.splice(itemIndex, 1);
             } else {
@@ -456,11 +499,6 @@ export function applySemanticOperations(
                 } else {
                     arrRef.push(winner.value);
                 }
-            }
-            const parentPolicy = getMergePolicy(winner.docPath, p.slice(0, -1));
-            if (parentPolicy === 'ordered-keyed') {
-                arrRef.sort((a: any, b: any) => (a.$order || 0) - (b.$order || 0));
-                for(const item of arrRef) delete item.$order;
             }
         } else {
             if (winner.isDelete) {
@@ -479,6 +517,22 @@ export function applySemanticOperations(
             ...(winner.isDelete ? { deleted: true } : {})
         };
         meta.clock = mergeVectors(meta.clock, jointClock);
+    }
+    
+    for (const [arr, { path, orderIds }] of ordersToApply.entries()) {
+        const entities = new Map<string, any>();
+        for (const item of arr) {
+            entities.set(resolveIdentity(path, item), item);
+        }
+        
+        const winnerOrder = orderIds.filter(id => entities.has(id));
+        const missing = [...entities.keys()].filter(id => !winnerOrder.includes(id)).sort();
+        const finalOrder = [...winnerOrder, ...missing];
+        
+        arr.length = 0;
+        for (const id of finalOrder) {
+            arr.push(entities.get(id));
+        }
     }
     
     normalizeDomainData(resultDocs);

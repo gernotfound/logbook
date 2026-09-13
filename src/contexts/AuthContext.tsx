@@ -80,7 +80,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (payload) {
                 const cloudData = payload.data;
-                const latestData = useAppStore.getState().userData;
                 try {
                     const { hydrateLocal } = await import('../lib/sync/localRepository');
                     const owner = user.uid;
