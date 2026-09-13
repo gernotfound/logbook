@@ -140,8 +140,23 @@ describe('Workout Deletion & Subcollection Persistence', () => {
     await DB.saveUserData(updatedUserData);
 
     expect(mockBatch.commit).toHaveBeenCalledTimes(1);
-    // Month 2026-07 is now empty -> batch.delete must be called for that subcollection doc
-    expect(mockBatch.delete).toHaveBeenCalledTimes(1);
+    // Month 2026-07 is now empty (only contains tombstones) -> batch.set must be called with _sync
+    expect(mockBatch.delete).not.toHaveBeenCalled();
+    expect(mockBatch.set).toHaveBeenCalled();
+    
+    const setCalls = mockBatch.set.mock.calls;
+    const historyMonthSetCall = setCalls.find((call: any[]) => {
+      return call[0].path === 'users/test-user-id/history_months/2026-07';
+    });
+    
+    expect(historyMonthSetCall).toBeDefined();
+    // No business data keys
+    const dataKeys = Object.keys(historyMonthSetCall[1]).filter(k => k !== '_sync');
+    expect(dataKeys.length).toBe(0);
+    // Should have _sync with tombstone
+    expect(historyMonthSetCall[1]._sync).toBeDefined();
+    expect(historyMonthSetCall[1]._sync.fields['w-jul-sole']).toBeDefined();
+    expect(historyMonthSetCall[1]._sync.fields['w-jul-sole'].deleted).toBe(true);
   });
 
   it('useTrainingHistory hook deleteWorkout confirms and updates store properly', async () => {

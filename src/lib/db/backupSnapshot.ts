@@ -1,4 +1,4 @@
-﻿import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, doc, documentId, getDocFromServer, getDocsFromServer, limit, orderBy, query, startAfter, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { getDb, ensureAppCheck } from '../firebase';
 import { captureSession, isCurrentSession } from '../sync/session';
 import { readLocal } from '../sync/localRepository';
@@ -52,7 +52,7 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
         if (envelope?.pending?.length) {
             const catalog = await getCachedCatalog();
             const baseDocs = projectDocuments(cloud, catalog);
-            const mergedDocs = applySemanticOperations(baseDocs, envelope.pending);
+            const { documents: mergedDocs } = applySemanticOperations(baseDocs, envelope.pending);
             mergedValue = applyRemoteDocuments(cloud, mergedDocs, catalog);
             // Preserve specific pending conflicts like nutritionPlanning from local
             mergedValue.pendingConflicts = local.pendingConflicts;

@@ -9,6 +9,18 @@ export interface VectorClock {
     [actorId: string]: number;
 }
 
+export interface FieldStamp {
+    clock: VectorClock;
+    actorId: string;
+    seq: number;
+    deleted?: boolean;
+}
+
+export interface SyncMeta {
+    clock: VectorClock;
+    fields: Record<string, FieldStamp>;
+}
+
 export interface SemanticOperation {
     docPath: string;
     property: string;
@@ -104,7 +116,14 @@ export function dominates(clockA: VectorClock, clockB: VectorClock): boolean {
     return hasStrictlyGreater;
 }
 
-export function stampWins(opA: SemanticOperation, opB: SemanticOperation): boolean {
+export interface StampLike {
+    clock: VectorClock;
+    isDelete?: boolean;
+    actorId: string;
+    seq: number;
+}
+
+export function stampWins(opA: StampLike, opB: StampLike): boolean {
     // True if opA wins over opB
     if (dominates(opA.clock, opB.clock)) return true;
     if (dominates(opB.clock, opA.clock)) return false;
@@ -120,13 +139,31 @@ export function stampWins(opA: SemanticOperation, opB: SemanticOperation): boole
 
 export function applySemanticOperations(
     base: Map<string, DocumentData>,
-    ops: SemanticOperation[]
-): Map<string, DocumentData> {
-    // In a real implementation we would maintain state and only apply winning ops.
-    // For this migration, we simplify to just projecting the changes over base.
-    const result = new Map<string, DocumentData>();
+    ops: SemanticOperation[],
+    remoteSyncMetas: Record<string, SyncMeta> = {}
+): { documents: Map<string, DocumentData>, syncMetas: Record<string, SyncMeta> } {
+    const resultDocs = new Map<string, DocumentData>();
     for (const [path, doc] of base.entries()) {
-        result.set(path, { ...doc });
+        resultDocs.set(path, { ...doc });
+    }
+
+    const resultMetas: Record<string, SyncMeta> = {};
+    for (const [path, meta] of Object.entries(remoteSyncMetas)) {
+        resultMetas[path] = {
+            clock: { ...meta.clock },
+            fields: { ...meta.fields }
+        };
+    }
+
+    for (const [path] of base.entries()) {
+        if (!resultMetas[path]) {
+            resultMetas[path] = { clock: {}, fields: {} };
+        }
+    }
+    for (const op of ops) {
+        if (!resultMetas[op.docPath]) {
+            resultMetas[op.docPath] = { clock: {}, fields: {} };
+        }
     }
 
     // Group ops by property
@@ -147,7 +184,31 @@ export function applySemanticOperations(
             }
         }
 
-        const doc = result.get(winner.docPath) || {};
+        const fieldKey = `${winner.property}${winner.itemId ? `:${winner.itemId}` : ''}`;
+        const meta = resultMetas[winner.docPath];
+        const remoteStamp = meta.fields[fieldKey];
+
+        const localStampLike: StampLike = {
+            clock: winner.clock,
+            isDelete: winner.isDelete,
+            actorId: winner.actorId,
+            seq: winner.seq
+        };
+
+        if (remoteStamp) {
+            const remoteStampLike: StampLike = {
+                clock: remoteStamp.clock,
+                isDelete: remoteStamp.deleted,
+                actorId: remoteStamp.actorId,
+                seq: remoteStamp.seq
+            };
+            if (!stampWins(localStampLike, remoteStampLike)) {
+                // Remote wins, don't apply local op
+                continue;
+            }
+        }
+
+        const doc = resultDocs.get(winner.docPath) || {};
         const policy = getMergePolicy(winner.docPath, winner.property);
 
         if (policy === 'atomic') {
@@ -171,8 +232,20 @@ export function applySemanticOperations(
                 return copy;
             });
         }
-        result.set(winner.docPath, doc);
+        resultDocs.set(winner.docPath, doc);
+
+        // Update stamp
+        meta.fields[fieldKey] = {
+            clock: winner.clock,
+            actorId: winner.actorId,
+            seq: winner.seq,
+            deleted: winner.isDelete ? true : undefined
+        };
+        // Update document clock
+        for (const [actor, seq] of Object.entries(winner.clock)) {
+            meta.clock[actor] = Math.max(meta.clock[actor] || 0, seq);
+        }
     }
 
-    return result;
+    return { documents: resultDocs, syncMetas: resultMetas };
 }

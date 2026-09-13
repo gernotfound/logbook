@@ -4,7 +4,7 @@ import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValues } from '../utils/object';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
-import { type SemanticOperation, type VectorClock, applySemanticOperations } from './semanticProjection';
+import { type SemanticOperation, type SyncMeta, applySemanticOperations } from './semanticProjection';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
@@ -16,7 +16,7 @@ function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     return parsed.nutrition as unknown as DocumentData;
 }
 
-export interface TransactionOutcome { documents: Map<string, DocumentData>; syncMeta: Record<string, { clock: VectorClock }> }
+export interface TransactionOutcome { documents: Map<string, DocumentData>; syncMeta: Record<string, SyncMeta> }
 
 export async function applyDocumentChanges(db: Firestore, uid: string, ops: SemanticOperation[], isCurrent: () => boolean): Promise<TransactionOutcome> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
@@ -33,15 +33,13 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
         if (!isCurrent()) throw new Error('Sessione cambiata');
 
         const baseDocs = new Map<string, DocumentData>();
-        const oldRawDocs = new Map<string, DocumentData>();
-        const remoteSyncMetas: Record<string, { clock: VectorClock }> = {};
+        const remoteSyncMetas: Record<string, SyncMeta> = {};
 
         pathsToRead.forEach((path, index) => {
             const raw = snapshots[index].exists() ? snapshots[index].data() : {};
-            oldRawDocs.set(path, raw);
             
             if (raw._sync) {
-                remoteSyncMetas[path] = { clock: raw._sync.clock };
+                remoteSyncMetas[path] = raw._sync as SyncMeta;
                 delete raw._sync;
             }
 
@@ -49,30 +47,23 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
             baseDocs.set(path, remote);
         });
 
-        const newDocs = applySemanticOperations(baseDocs, ops);
-        const newSyncMetas: Record<string, { clock: VectorClock }> = {};
+        const { documents: newDocs, syncMetas: newSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
 
         for (const [path, docData] of newDocs.entries()) {
-            const opsForDoc = ops.filter(op => op.docPath === path);
-            if (!opsForDoc.length) continue;
-
-            const oldClock = remoteSyncMetas[path]?.clock || {};
-            const newClock = { ...oldClock };
-            for (const op of opsForDoc) {
-                for (const [actor, seq] of Object.entries(op.clock)) {
-                    newClock[actor] = Math.max(newClock[actor] || 0, seq);
-                }
-            }
-            newSyncMetas[path] = { clock: newClock };
-
             const data = removeUndefinedValues(docData) as DocumentData;
-            data._sync = { clock: newClock };
+            const meta = newSyncMetas[path];
+            if (meta) {
+                data._sync = meta as any;
+            }
 
             checkDocSize(data, path || 'User Profile');
             
             const refIndex = pathsToRead.indexOf(path);
             
-            if (path && Object.keys(data).length === 1 && data._sync) {
+            const hasBusinessData = Object.keys(data).filter(k => k !== '_sync').length > 0;
+            const hasFields = meta && Object.keys(meta.fields).length > 0;
+
+            if (!hasBusinessData && !hasFields) {
                 transaction.delete(refs[refIndex]);
             } else {
                 transaction.set(refs[refIndex], data);
