@@ -55,7 +55,8 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       'activePains',
       'catalogOverrides',
       'legalConsent',
-      'nutritionPlanningOrigin'
+      'nutritionPlanningOrigin',
+      '_sync'
     ];
 
     expect(extractedKeys).toEqual(expect.arrayContaining(expectedRootKeys));

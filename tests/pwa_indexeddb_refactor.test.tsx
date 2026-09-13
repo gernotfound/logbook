@@ -60,6 +60,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
 
       // Set user data
       useAppStore.getState().setUserData(mockData);
+      await new Promise(r => setTimeout(r, 0));
 
       // IndexedDB store mock should receive the item
       expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
@@ -69,7 +70,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       expect(localStorage.getItem('logbook_cached_user_data')).toBeNull();
     });
 
-    test('setUserData(null) clears the view and preserves the durable archive', () => {
+    test('setUserData(null) clears the view and preserves the durable archive', async () => {
       const mockData: UserData = {
         profile: { name: 'User to Nullify' },
         library: [],
@@ -82,9 +83,11 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       useAppStore.getState().setUserData(mockData);
+      await new Promise(r => setTimeout(r, 0));
       expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
 
       useAppStore.getState().setUserData(null);
+      await new Promise(r => setTimeout(r, 0));
       expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
       expect(useAppStore.getState().userData).toBeNull();
     });
@@ -104,11 +107,13 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       const p1 = useAppStore.getState().saveUserData(mockData);
+      await vi.advanceTimersByTimeAsync(0);
       const canceled = expect(p1).rejects.toThrow('cambio sessione');
       expect(useAppStore.getState().syncing).toBe(true);
 
       // Now saveUserData(null) before timer fires
       const p2 = useAppStore.getState().saveUserData(null);
+      await vi.advanceTimersByTimeAsync(0);
       expect(useAppStore.getState().syncing).toBe(false);
       expect(useAppStore.getState().userData).toBeNull();
       expect(idbStore['logbook:v2:user:test-user-id'].pending).toHaveLength(1);
@@ -133,6 +138,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
       };
 
       useAppStore.getState().setUserData(mockData);
+      await new Promise(r => setTimeout(r, 0));
       expect(idbStore['logbook:v2:user:test-user-id']).toBeDefined();
 
       await DB.purgeAllLocalUserData();

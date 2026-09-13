@@ -1,20 +1,20 @@
-import { auth, getDb, ensureAppCheck } from './firebase';
-import { doc, getDoc, writeBatch, collection, getDocsFromServer, query, limit, orderBy, documentId, startAfter, type QueryDocumentSnapshot } from "firebase/firestore";
-import deepEqual from "fast-deep-equal";
+﻿import { auth, getDb, ensureAppCheck } from './firebase';
+import { doc, getDoc, collection, getDocsFromServer, query, limit, orderBy, documentId, startAfter, type QueryDocumentSnapshot } from "firebase/firestore";
+// import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
-import type { UserData, CatalogOverrides, SyncResult } from '../types';
-import { removeUndefinedValues } from './utils/object';
-import { checkDocSize } from './checkDocSize';
-import { syncGlobalCatalog, getInMemoryCatalog, getCachedCatalog, getSeedCatalog } from './catalog/catalogService';
-import { resolveEffectiveExercises, resolveEffectiveFoods, extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides } from './catalog/deltaResolver';
-import { wrapInFirestoreDocument } from './firestore-rest';
+import type { UserData, SyncResult } from '../types';
+// import { removeUndefinedValues } from './utils/object';
+// import { checkDocSize } from './checkDocSize';
+import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
+import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
+// import { wrapInFirestoreDocument } from './firestore-rest';
 import { set, get, del } from 'idb-keyval';
 import { useDialogStore } from '../store/useDialogStore';
 
 // Nuovi import per la parte splittata del DB
-import { SyncTimeoutError, withTimeout, dbState, setLastSavedStateStr } from './db/db_core';
-import { loadHistoryMonths, syncHistoryMonths } from './db/db_training';
-import { loadNutritionMonths, syncNutritionMonths } from './db/db_nutrition';
+import { withTimeout, setLastSavedStateStr } from './db/db_core';
+import { loadHistoryMonths } from './db/db_training';
+import { loadNutritionMonths } from './db/db_nutrition';
 import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
 import { storageOwner } from './sync/session';
 
@@ -30,10 +30,10 @@ export const DB = {
             Promise.all([
                 get('sync_failed').then(failed => {
                     if (failed) {
-                        console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
+                        console.warn("Precedente Background Sync fallito. Ci penserÃ  l'SDK di Firestore ora.");
                         useDialogStore.getState().showAlert(
                             "Sincronizzazione in background interrotta",
-                            "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token è scaduto. Nessun problema: il salvataggio verrà completato automaticamente adesso che sei online."
+                            "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token Ã¨ scaduto. Nessun problema: il salvataggio verrÃ  completato automaticamente adesso che sei online."
                         );
                     }
                     return set('sync_failed', false);
@@ -93,7 +93,7 @@ export const DB = {
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
                 state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
                 state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
-                // Seleziona il branch corretto: se è un nuovo utente, restituiamo lo stato di default invece di null,
+                // Seleziona il branch corretto: se Ã¨ un nuovo utente, restituiamo lo stato di default invece di null,
                 // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
                 state.profile = DomainParsers.parseProfile(state.profile);
                 state.library = DomainParsers.parseLibrary(state.library);
@@ -176,160 +176,17 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
         try {
-            let oldState: Record<string, any> = {
-                profile: {},
-                library: [],
-                routines: [],
-                customFoods: [],
-                history: [],
-                nutrition: {},
-                activeWorkout: null,
-                trainingCycles: [],
-                activeCycleId: null,
-                nutritionPlanning: null,
-                supplements: [],
-                activePains: [],
-                catalogOverrides: {},
-                legalConsent: null
-            };
-            if (dbState.lastSavedStateStr) {
-                oldState = JSON.parse(dbState.lastSavedStateStr);
-            }
-
             await ensureAppCheck();
-            const batch = writeBatch(getDb());
-            let hasWrites = false;
-            const restWrites: any[] = [];
-            const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-
-            // Re-split library & customFoods into pure overrides/custom so we don't save the whole catalog
-            const catalog = getInMemoryCatalog(true) || getSeedCatalog();
-            const { customExercises, overrides: exOverrides } = extractCustomExercisesAndOverrides(state.library || [], catalog.exercises);
-            const { customFoods, overrides: foodOverrides } = extractCustomFoodsAndOverrides(state.customFoods || [], catalog.foods);
-
-            const overridesToSave: CatalogOverrides = {
-                ...(state.catalogOverrides || {}),
-                exercises: {
-                    ...(state.catalogOverrides?.exercises || {}),
-                    ...(exOverrides.exercises || {})
-                },
-                hiddenExerciseIds: Array.from(new Set([
-                    ...(state.catalogOverrides?.hiddenExerciseIds || []),
-                    ...(exOverrides.hiddenExerciseIds || [])
-                ])),
-                foods: {
-                    ...(state.catalogOverrides?.foods || {}),
-                    ...(foodOverrides.foods || {})
-                },
-                hiddenFoodIds: Array.from(new Set([
-                    ...(state.catalogOverrides?.hiddenFoodIds || []),
-                    ...(foodOverrides.hiddenFoodIds || [])
-                ]))
-            };
-            const effectiveCustomExercises = customExercises;
-            const effectiveCustomFoods = customFoods;
-
-            // 1. User doc updates
-            if (!deepEqual(state.profile, oldState.profile) ||
-                !deepEqual(state.library, oldState.library) ||
-                !deepEqual(state.routines, oldState.routines) ||
-                !deepEqual(state.customFoods, oldState.customFoods) ||
-                !deepEqual(state.activeWorkout, oldState.activeWorkout) ||
-                !deepEqual(state.trainingCycles, oldState.trainingCycles) ||
-                !deepEqual(state.activeCycleId, oldState.activeCycleId) ||
-                !deepEqual(state.nutritionPlanning, oldState.nutritionPlanning) ||
-                !deepEqual(state.supplements, oldState.supplements) ||
-                !deepEqual(state.activePains, oldState.activePains) ||
-                !deepEqual(state.catalogOverrides, oldState.catalogOverrides) ||
-                !deepEqual(state.legalConsent, oldState.legalConsent) ||
-                !deepEqual(state.nutritionPlanningOrigin, oldState.nutritionPlanningOrigin)) {
-
-                const userRef = doc(getDb(), "users", user.uid);
-                const userDocData = {
-                    profile: state.profile || {},
-                    library: effectiveCustomExercises,
-                    routines: state.routines || [],
-                    customFoods: effectiveCustomFoods,
-                    activeWorkout: state.activeWorkout || null,
-                    trainingCycles: state.trainingCycles || [],
-                    activeCycleId: state.activeCycleId !== undefined ? state.activeCycleId : null,
-                    nutritionPlanning: state.nutritionPlanning || null,
-                    supplements: state.supplements || [],
-                    activePains: state.activePains || [],
-                    catalogOverrides: overridesToSave,
-                    legalConsent: state.legalConsent || null,
-                    nutritionPlanningOrigin: state.nutritionPlanningOrigin || null
-                };
-                const cleanUserDocData = removeUndefinedValues(userDocData);
-                checkDocSize(cleanUserDocData, "User Profile");
-                batch.set(userRef, cleanUserDocData, { merge: true });
-                restWrites.push({
-                    update: {
-                        name: `projects/${projectId}/databases/(default)/documents/users/${user.uid}`,
-                        ...wrapInFirestoreDocument(cleanUserDocData)
-                    },
-                    updateMask: {
-                        fieldPaths: Object.keys(cleanUserDocData)
-                    }
-                });
-                hasWrites = true;
-            }
-
-            // 2. Group History by Month
-            const hasHistoryWrites = syncHistoryMonths(batch, user, state, oldState, restWrites, projectId);
-            if (hasHistoryWrites) hasWrites = true;
-
-            // 3. Group Nutrition by Month
-            const hasNutritionWrites = syncNutritionMonths(batch, user, state, oldState, restWrites, projectId);
-            if (hasNutritionWrites) hasWrites = true;
-
-            if (hasWrites) {
-                try {
-                    await withTimeout(batch.commit(), 7000, "Timeout sincronizzazione Firestore");
-                    console.log(`Sincronizzazione DB completata.`);
-                    setLastSavedStateStr(JSON.stringify(state));
-                    await set('sync_failed', false); // Clear flag on success
-                    return { ok: true, status: 'synced' };
-                } catch (batchErr: unknown) {
-                    const code = (batchErr && typeof batchErr === 'object' && 'code' in batchErr)
-                        ? (batchErr as any).code
-                        : undefined;
-
-                    if (code === 'permission-denied') {
-                        return { ok: false, status: 'rejected', error: batchErr };
-                    }
-                    if (batchErr instanceof SyncTimeoutError || code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine)) {
-                        console.warn("Scrittura archiviata nella cache locale Firestore (offline):", batchErr);
-                        // Do NOT update lastSavedStateStr: diffing will retry when back online
-
-                        try {
-                            const token = await user.getIdToken();
-                            await set('pending_sync_payload', { writes: restWrites, projectId });
-                            await set('pending_sync_token', token);
-
-                            if ('serviceWorker' in navigator) {
-                                const reg = await navigator.serviceWorker.ready;
-                                if ('sync' in reg) {
-                                    await (reg as any).sync.register('logbook-sync');
-                                    console.log("Background Sync registrato con successo.");
-                                }
-                            }
-                        } catch (syncErr) {
-                            console.error("Errore durante la registrazione del Background Sync:", syncErr);
-                        }
-                        return { ok: false, status: 'local-pending', error: batchErr };
-                    } else {
-                        console.error("Errore critico durante il salvataggio Firestore:", batchErr);
-                        return { ok: false, status: 'failed', error: batchErr };
-                    }
-                }
-            } else {
+            const { replicateJournal } = await import('./sync/replicateJournal');
+            
+            const result = await replicateJournal();
+            if (result.ok) {
                 setLastSavedStateStr(JSON.stringify(state));
-                return { ok: true, status: 'synced' };
             }
+            return result;
         } catch (error) {
-            console.error("Errore durante il salvataggio:", error);
-            return { ok: false, status: 'failed', error };
+            console.error('Errore durante il salvataggio:', error);
+            return { ok: false, status: 'local-pending', error };
         }
     },
     async purgeAllLocalUserData(owner?: string) {
@@ -345,3 +202,5 @@ export const DB = {
         return deleteAccount(this);
     }
 };
+
+

@@ -49,7 +49,8 @@ service cloud.firestore {
           'activePains',
           'catalogOverrides',
           'legalConsent',
-          'nutritionPlanningOrigin'
+          'nutritionPlanningOrigin',
+          '_sync'
         ])
         && (!('profile' in incomingData()) || incomingData().profile == null || incomingData().profile is map)
         && (!('library' in incomingData()) || incomingData().library is list)
@@ -66,14 +67,17 @@ service cloud.firestore {
         && (!('nutritionPlanningOrigin' in incomingData())
             || incomingData().nutritionPlanningOrigin == null
             || incomingData().nutritionPlanningOrigin == 'generated-default'
-            || incomingData().nutritionPlanningOrigin == 'user-edited');
+            || incomingData().nutritionPlanningOrigin == 'user-edited')
+        && (!('_sync' in incomingData()) || incomingData()._sync is map)
+        && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}
       match /history_months/{monthId} {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) 
           && isValidMonthId(monthId)
-          && incomingData() is map;
+          && incomingData() is map
+          && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
       
       // Subcollection Nutrizione & Misure Mensile: users/{userId}/nutrition_months/{YYYY-MM}
@@ -81,7 +85,8 @@ service cloud.firestore {
         allow read, delete: if isOwner(userId);
         allow create, update: if isOwner(userId) 
           && isValidMonthId(monthId)
-          && incomingData() is map;
+          && incomingData() is map
+          && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 
       // Subcollection Telemetria Errori: users/{userId}/telemetry_errors/{errorId}

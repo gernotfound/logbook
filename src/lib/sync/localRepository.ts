@@ -1,31 +1,28 @@
-import { get, update } from 'idb-keyval';
+﻿import { get, update } from 'idb-keyval';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
-import { reconcile, type DataConflict } from './reconcile';
 import { getNutritionConflictFingerprint } from '../utils/object';
 import equal from 'fast-deep-equal';
-import { applyConflictChoice } from './conflictResolution';
+import { type SemanticOperation, type VectorClock, diffDocuments, applySemanticOperations } from './semanticProjection';
+import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
+import { getCachedCatalog } from '../catalog/catalogService';
 
-export interface PendingOperation {
-    id: string;
-    revision: number;
-    base: UserData;
-    desired: UserData;
-    conflicts?: DataConflict[];
-}
-
-export interface LocalEnvelope {
-    version: 2;
+export interface LocalEnvelopeV3 {
+    version: 3;
     owner: string;
-    revision: number;
+    actorId: string;
+    actorSeq: number;
+    clock: VectorClock;
     data: UserData;
     baseline: UserData;
     completeMonths: string[];
-    pending: PendingOperation[];
-    conflicts?: DataConflict[];
-    resolvedConflicts?: Array<{ conflict: DataConflict; choice: 'local' | 'remote'; revision: number }>;
+    pending: SemanticOperation[];
+    syncMetaByDocument: Record<string, { clock: VectorClock }>;
+    revision: number;
 }
+
+export type LocalEnvelope = LocalEnvelopeV3;
 
 const keyFor = (owner: string) => {
     if (!owner) throw new Error('Owner richiesto per la persistenza locale');
@@ -33,118 +30,116 @@ const keyFor = (owner: string) => {
 };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 
-function validate(value: LocalEnvelope | undefined, owner: string): LocalEnvelope | undefined {
+async function validate(value: any, owner: string): Promise<LocalEnvelope | undefined> {
     if (!value) return undefined;
-    if (value.version !== 2 || value.owner !== owner || !Array.isArray(value.pending) || !Number.isSafeInteger(value.revision)) {
+
+    if (value.version !== 3 || value.owner !== owner) {
         throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
     }
-    return { ...value, data: parse(value.data), baseline: parse(value.baseline), pending: value.pending.map(op => ({ ...op, base: parse(op.base), desired: parse(op.desired) })) };
+    const v3 = value as LocalEnvelopeV3;
+    return { ...v3, data: parse(v3.data), baseline: parse(v3.baseline) };
 }
 
 export async function readLocal(owner: string): Promise<LocalEnvelope | undefined> {
-    return validate(await get<LocalEnvelope>(keyFor(owner)), owner);
+    return validate(await get<any>(keyFor(owner)), owner);
 }
 
-export async function commitLocal(owner: string, data: UserData, initialBase: UserData): Promise<PendingOperation> {
-    // Clone before opening the transaction: caller mutations cannot alter an accepted operation.
+export async function commitLocal(owner: string, data: UserData, initialBase: UserData): Promise<SemanticOperation[]> {
     const desired = structuredClone(parse(data));
     const fallback = structuredClone(parse(initialBase));
-    let operation!: PendingOperation;
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
-        operation = {
-            id: generateId('write'), revision: (current?.revision ?? 0) + 1,
-            base: fallback, desired,
-        };
-        const merged = reconcile(fallback, desired, current?.data ?? fallback);
+    let operations: SemanticOperation[] = [];
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
+        const catalog = await getCachedCatalog();
+        
+        let actorId = current?.actorId ?? generateId('actor');
+        let seq = (current?.actorSeq ?? 0) + 1;
+        let clock = current?.clock ?? { [actorId]: seq };
+        clock[actorId] = seq;
+
+        const baseDocs = projectDocuments(current?.data ?? fallback, catalog);
+        const desiredDocs = projectDocuments(desired, catalog);
+        
+        operations = diffDocuments(baseDocs, desiredDocs, actorId, seq, clock);
+        
         return {
-            ...current,
-            version: 2, owner, revision: operation.revision, data: parse(merged.value),
-            baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [],
-            pending: owner === 'guest' ? [] : [...(current?.pending ?? []), operation],
-            conflicts: [...(current?.conflicts ?? []), ...merged.conflicts],
+            ...(current ?? { completeMonths: [] }),
+            version: 3, owner, actorId, actorSeq: seq, clock,
+            data: desired,
+            baseline: current?.baseline ?? fallback,
+            completeMonths: current?.completeMonths ?? [],
+            pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations],
+            syncMetaByDocument: current?.syncMetaByDocument ?? {},
+            revision: seq
         };
     });
-    return operation;
+    return operations;
 }
 
-export async function resolveLocalConflicts(owner: string, expectedRevision: number, expected: DataConflict[], choices: Array<'local' | 'remote'>, isCurrent: () => boolean): Promise<LocalEnvelope> {
-    if (!expected.length || choices.length !== expected.length || choices.some(choice => choice !== 'local' && choice !== 'remote')) throw new Error('Scegli una versione per ogni conflitto.');
-    let saved!: LocalEnvelope;
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        if (!isCurrent()) throw new Error('Sessione cambiata durante la risoluzione.');
-        const current = validate(raw, owner);
-        if (!current || current.revision !== expectedRevision || !equal(current.conflicts, expected)) throw new Error('I conflitti sono cambiati. Riapri il confronto prima di confermare.');
-        let baseline: unknown = current.baseline;
-        let desired: unknown = current.data;
-        expected.forEach((conflict, index) => {
-            baseline = applyConflictChoice(baseline, conflict, 'remote');
-            desired = applyConflictChoice(desired, conflict, choices[index]);
-        });
-        const revision = current.revision + 1;
-        const operation: PendingOperation = { id: generateId('resolution'), revision, base: parse(baseline), desired: parse(desired) };
-        saved = { ...current, revision, baseline: operation.base, data: operation.desired, conflicts: [],
-            pending: owner === 'guest' ? [] : [...current.pending, operation],
-            resolvedConflicts: [...(current.resolvedConflicts ?? []), ...expected.map((conflict, index) => ({ conflict, choice: choices[index], revision }))] };
-        return saved;
-    });
-    return saved;
-}
-
-export async function acknowledgeLocal(owner: string, id: string, remote: UserData): Promise<void> {
+export async function acknowledgeLocal(owner: string, _id: string, remote: UserData): Promise<void> {
     const parsed = parse(remote);
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
-        if (!current || current.pending[0]?.id !== id) throw new Error('Conferma obsoleta o fuori ordine');
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
+        if (!current || current.pending[0] === undefined) throw new Error('Conferma obsoleta o fuori ordine');
         const pending = current.pending.slice(1);
         return { ...current, baseline: parsed, data: pending.length ? current.data : parsed, pending };
     });
 }
 
-export async function preserveConflicts(owner: string, id: string, conflicts: DataConflict[]): Promise<void> {
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
-        if (!current || !current.pending.some(op => op.id === id)) throw new Error('Operazione non trovata');
-        return { ...current, pending: current.pending.map(op => op.id === id ? { ...op, conflicts } : op) };
-    });
-}
-
-export async function acknowledgeThrough(owner: string, revision: number, remote: UserData, expected?: UserData, months: string[] = []): Promise<void> {
+export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, { clock: VectorClock }>): Promise<void> {
     const parsed = parse(remote);
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
-        const pending = current.pending.filter(op => op.revision > revision);
-        const merged = expected ? reconcile(expected, current.data, parsed) : { value: current.data, conflicts: [] };
-        return { ...current, baseline: parsed, data: current.revision === revision ? parsed : parse(merged.value), pending,
-            completeMonths: [...new Set([...current.completeMonths, ...months])], conflicts: [...(current.conflicts ?? []), ...merged.conflicts] };
+        const pending = current.pending.filter(op => op.seq > expectedSeq);
+        const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
+        return { ...current, baseline: parsed, data: current.actorSeq === expectedSeq ? parsed : current.data, pending,
+            completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
     });
 }
 
 export async function initializeLocal(owner: string, data: UserData, completeMonths?: string[]): Promise<void> {
     const parsed = structuredClone(parse(data));
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
-        // A fetch must never replace a durable pending edit, including one from another tab.
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
         if (current?.pending.length) return current;
-        return { ...current, version: 2, owner, revision: current?.revision ?? 0, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], conflicts: current?.conflicts ?? [] };
+        return { ...current, version: 3, owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: 0 };
     });
 }
 
-export async function hydrateLocal(owner: string, cloudData: UserData, months: string[]): Promise<LocalEnvelope> {
+export async function hydrateLocal(owner: string, cloudData: UserData, months: string[], cloudDocuments?: Map<string, DocumentData>): Promise<LocalEnvelope> {
     const cloud = structuredClone(parse(cloudData));
-    const complete = new Set(months);
-    let saved!: LocalEnvelope;
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
+    let saved: any;
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
         if (!current) {
-            saved = { version: 2, owner, revision: 0, data: cloud, baseline: cloud, completeMonths: months, pending: [] };
+            saved = { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument: {}, revision: 0 };
         } else {
-            const history = (current.baseline.history ?? []).filter(workout => !complete.has((workout.date ?? '').slice(0, 7)));
-            const nutrition = Object.fromEntries(Object.entries(current.baseline.nutrition ?? {}).filter(([date]) => !complete.has(date.slice(0, 7))));
-            const remote = parse({ ...cloud, history: [...history, ...(cloud.history ?? [])], nutrition: { ...nutrition, ...cloud.nutrition }, pendingConflicts: current.data.pendingConflicts });
-            const merged = reconcile(current.baseline, current.data, remote);
-            saved = { ...current, data: parse(merged.value), baseline: remote, completeMonths: [...new Set([...current.completeMonths, ...months])], conflicts: [...(current.conflicts ?? []), ...merged.conflicts] };
+            const catalog = await getCachedCatalog();
+            
+            let syncMeta = current.syncMetaByDocument ?? {};
+            if (cloudDocuments) {
+                for (const [path, doc] of cloudDocuments.entries()) {
+                    if (doc._sync) {
+                        syncMeta[path] = { clock: (doc._sync as any).clock as VectorClock };
+                    }
+                }
+            }
+            
+            const remoteDocs = projectDocuments(cloud, catalog);
+            const mergedDocs = applySemanticOperations(remoteDocs, current.pending);
+            const data = applyRemoteDocuments(cloud, mergedDocs, catalog);
+            
+            data.pendingConflicts = current.data.pendingConflicts;
+            const parsedData = parse(data);
+            
+            saved = {
+                ...current,
+                data: parsedData,
+                baseline: cloud,
+                completeMonths: [...new Set([...current.completeMonths, ...months])],
+                syncMetaByDocument: syncMeta
+            };
         }
         return saved;
     });
@@ -159,15 +154,14 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         const { pendingConflicts: _old, ...rest } = data;
         return Object.keys(remaining).length ? { ...rest, pendingConflicts: remaining } : rest;
     };
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
         const data = current?.data ?? fallback;
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
         saved = parse(clear(data));
         return {
-            ...(current ?? { version: 2, owner, revision: 0, completeMonths: [], pending: [] }),
+            ...(current ?? { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, completeMonths: [], pending: [], syncMetaByDocument: {}, revision: 0 }),
             data: saved, baseline: clear(current?.baseline ?? data),
-            pending: (current?.pending ?? []).map(op => ({ ...op, base: clear(op.base), desired: clear(op.desired) })),
         };
     });
     return saved;
@@ -175,17 +169,18 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
     const revert = (data: UserData) => equal(data.legalConsent, expected) ? parse({ ...data, legalConsent: previous }) : data;
-    await update<LocalEnvelope>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
+    await update<any>(keyFor(owner), async raw => {
+        const current = await validate(raw, owner);
         if (!current) return raw!;
-        return { ...current, data: revert(current.data), pending: current.pending.map(op => ({ ...op, base: revert(op.base), desired: revert(op.desired) })) };
+        return { ...current, data: revert(current.data) };
     });
 }
 
 export async function preserveLegacyCache(): Promise<boolean> {
     const legacy = await get('logbook_cached_user_data');
     if (legacy === undefined) return false;
-    // Do not attribute an unowned legacy cache or REST token to the currently signed-in user.
     await update('logbook:recovery:legacy', original => original ?? legacy);
     return true;
 }
+
+

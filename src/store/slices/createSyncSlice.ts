@@ -1,4 +1,4 @@
-import type { StateCreator } from 'zustand';
+﻿import type { StateCreator } from 'zustand';
 import { DB } from '../../lib/db';
 import type { UserData, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
@@ -69,7 +69,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 const envelope = await readLocal(session.owner);
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
                 if (!envelope) throw new Error('Copia locale non disponibile');
-                if (envelope.conflicts?.length) throw new Error('Modifiche locali concorrenti: alternative conservate nel registro di recupero');
                 const result = await DB.saveUserData(envelope.data, envelope.revision);
                 if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
                 if (result.ok) {
@@ -177,3 +176,4 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
     };
 };
+

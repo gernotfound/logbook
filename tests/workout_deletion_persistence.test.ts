@@ -3,7 +3,7 @@ import { writeBatch, doc, getDoc } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
 
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
