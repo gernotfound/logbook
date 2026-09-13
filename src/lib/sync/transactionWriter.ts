@@ -4,7 +4,7 @@ import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValues } from '../utils/object';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
-import { type SemanticOperation, type SyncMeta, applySemanticOperations } from './semanticProjection';
+import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
@@ -37,9 +37,9 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
 
         pathsToRead.forEach((path, index) => {
             const raw = snapshots[index].exists() ? snapshots[index].data() : {};
-            
+
             if (raw._sync) {
-                remoteSyncMetas[path] = raw._sync as SyncMeta;
+                remoteSyncMetas[path] = parseSyncMeta(raw._sync);
                 delete raw._sync;
             }
 
@@ -51,19 +51,19 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
 
         for (const [path, docData] of newDocs.entries()) {
             let data = removeUndefinedValues(docData) as DocumentData;
-            
+
             // Post-merge validation and normalization via Zod (Requirement 6)
             data = removeUndefinedValues(normalizeRemote(path, data)) as DocumentData;
-            
+
             const meta = newSyncMetas[path];
             if (meta) {
                 data._sync = meta as any;
             }
 
             checkDocSize(data, path || 'User Profile');
-            
+
             const refIndex = pathsToRead.indexOf(path);
-            
+
             const hasBusinessData = Object.keys(data).filter(k => k !== '_sync').length > 0;
             const hasFields = meta && Object.keys(meta.fields).length > 0;
 
