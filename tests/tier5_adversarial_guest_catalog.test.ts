@@ -45,7 +45,7 @@ import {
 
 import {} from '../src/lib/schema';
 
-import { checkDocSize } from '../src/lib/checkDocSize';
+import { checkDocSize, calculateDocSizeBytes, DOC_SIZE_LIMIT_BYTES } from '../src/lib/checkDocSize';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 
@@ -301,9 +301,20 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
     // =========================================================================
     describe('5.2: Cold Start with Unpopulated IndexedDB -> Immediate Search -> Real-Time Meal Logging', () => {
 
-        it.skip('T5.2.1: Cold start with 0 IndexedDB entries -> rapid multi-pattern food search returns exact expected items', async () => {
-            // Confirm cold start
+        it('T5.2.1: Cold start with 0 IndexedDB entries -> bootstrap catalog -> rapid multi-pattern food search returns exact expected items', async () => {
+            // Confirm cold start before deterministic bootstrap data is installed.
             expect(await idbGet(CATALOG_CACHE_KEY)).toBeUndefined();
+
+            const fixtureCatalog = {
+                manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
+                exercises: [],
+                foods: [
+                    { id: 'petto-di-pollo-crudo', name: 'Petto di Pollo Crudo', brand: 'Generico', category: 'carne', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
+                    { id: 'petto-di-tacchino-crudo', name: 'Petto di Tacchino Crudo', brand: 'Generico', category: 'carne', kcal: 104, pro: 22, carbs: 0, fat: 1.5, isCustom: false },
+                    { id: 'riso-basmati-crudo', name: 'Riso Basmati Crudo', brand: 'Generico', category: 'cereali', kcal: 350, pro: 8, carbs: 78, fat: 1, isCustom: false }
+                ]
+            } as any;
+            await saveCatalogToCache(fixtureCatalog);
 
             const catalog = await getCachedCatalog();
             const effectiveFoods = resolveEffectiveFoods(catalog.foods);
@@ -637,9 +648,9 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             expect(capturedUserDocWrite.customFoods).toHaveLength(100);
             expect(capturedUserDocWrite.customFoods.every((f: any) => f.isCustom === true)).toBe(true);
 
-            // CRITICAL TEST 3: User doc size is far below 950KB (< 50KB)
-            const userDocPayloadBytes = JSON.stringify(capturedUserDocWrite).length;
-            expect(userDocPayloadBytes).toBeLessThan(95000);
+            // CRITICAL TEST 3: V3 includes causal _sync metadata; keep this stress payload below 20% of the production safety ceiling.
+            const userDocPayloadBytes = calculateDocSizeBytes(capturedUserDocWrite);
+            expect(userDocPayloadBytes).toBeLessThan(DOC_SIZE_LIMIT_BYTES * 0.20);
             expect(() => checkDocSize(capturedUserDocWrite, "User Profile")).not.toThrow();
         });
 
@@ -698,11 +709,11 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
 
         it('T5.4.1: Adversarial override map injection (__proto__, constructor, NaN, Infinity, negative values) is sanitized defensively', () => {
             // Local fixture (seed is empty — commit e61a133)
-            const globalExFixture: CatalogExercise[] = [
+            const globalExFixture: import('../src/types').CatalogExercise[] = [
                 { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 },
                 { id: 'squat-bilanciere', name: 'Squat Bilanciere', muscles: ['quads'], trackingType: 'weight_reps', isDefault: true, setsCount: 4 }
             ];
-            const globalFoodFixture: CatalogFood[] = [
+            const globalFoodFixture: import('../src/types').CatalogFood[] = [
                 { id: 'petto-di-pollo-crudo', name: 'Petto di pollo crudo', kcal: 106, pro: 22.5, carbs: 0, fat: 1.9, isCustom: false },
                 { id: 'petto-di-tacchino-crudo', name: 'Petto di tacchino crudo', kcal: 104, pro: 22.0, carbs: 0, fat: 1.5, isCustom: false }
             ];

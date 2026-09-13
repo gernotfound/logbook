@@ -17,93 +17,104 @@ beforeAll(async () => {
 beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
 
-it('1. V3 API: applySemanticOperations writes correct documents and SyncMeta', async () => {
+it('1. V3 API: writes business data and FieldStamp metadata', async () => {
     const db = env.authenticatedContext('a').firestore();
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'height'], value: '185', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
     ];
-    
+
     await applyDocumentChanges(db, 'a', ops, () => true);
-    
+
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.height).toBe('185');
-    expect(saved._sync.fields['profile/height']).toBeDefined();
-    expect(saved._sync.fields['profile/height'].actorId).toBe('A');
+    expect(saved._sync.fields['profile/height']).toMatchObject({ actorId: 'A', seq: 1, clock: { A: 1 } });
 });
 
-it('2. V3 API: idempotency (double apply) writes same document', async () => {
+it('2. V3 API: replay is idempotent', async () => {
     const db = env.authenticatedContext('a').firestore();
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'name'], value: 'Test', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
     ];
-    
+
     await applyDocumentChanges(db, 'a', ops, () => true);
     await applyDocumentChanges(db, 'a', ops, () => true);
-    
+
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.name).toBe('Test');
     expect(saved._sync.fields['profile/name'].seq).toBe(1);
 });
 
-it('2b. V3 API: real transaction contention/retry', async () => {
+it('2b. V3 API: contention smoke test converges to the semantic operation', async () => {
     const db = env.authenticatedContext('a').firestore();
-    
-    // Write an initial doc so there's something to contend over
     await setDoc(doc(db, 'users/a'), { profile: { name: 'Initial' } });
-    
+
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'name'], value: 'TestRetry', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
     ];
-    
-    let readCount = 0;
-    // We pass a custom isCurrent that on the first evaluation triggers a concurrent write
-    const isCurrent = () => {
-        readCount++;
-        return true;
-    };
-    
-    // We can intercept runTransaction by mocking it, or we can use the concurrent approach.
-    // Since concurrent approach in firestore emulator can be tricky to time perfectly,
-    // we'll simulate contention by running a concurrent setDoc while applyDocumentChanges is executing.
-    // The easiest way is to wrap setDoc in a promise that resolves right after apply starts.
-    const promise = applyDocumentChanges(db, 'a', ops, isCurrent);
-    
-    // Trigger contention: write right after the transaction starts reading
+
+    const promise = applyDocumentChanges(db, 'a', ops, () => true);
     await setDoc(doc(db, 'users/a'), { profile: { name: 'Interfering' } });
-    
     await promise;
-    
-    // If it retried, readCount should be higher. But because isCurrent is called multiple times per attempt, we just ensure it resolved correctly.
+
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.name).toBe('TestRetry');
 });
 
-it('3. V3 API: tombstone-only document persistence and delete/recreate', async () => {
+it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causally later recreation', async () => {
     const db = env.authenticatedContext('a').firestore();
-    const ops: SemanticOperation[] = [
-        { docPath: 'nutrition_months/2026-09', path: ['2026-09-13', 'weight'], value: 80, isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    const createOps: SemanticOperation[] = [
+        {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-13'],
+            value: { date: '2026-09-13', weight: 80, meals: [] },
+            isDelete: false,
+            actorId: 'A',
+            seq: 1,
+            clock: { A: 1 }
+        }
     ];
-    
-    await applyDocumentChanges(db, 'a', ops, () => true);
-    
+    await applyDocumentChanges(db, 'a', createOps, () => true);
+
     const deleteOps: SemanticOperation[] = [
-        { docPath: 'nutrition_months/2026-09', path: ['2026-09-13', 'weight'], isDelete: true, actorId: 'A', seq: 2, clock: { A: 2 } }
+        {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-13'],
+            isDelete: true,
+            actorId: 'A',
+            seq: 2,
+            clock: { A: 2 }
+        }
     ];
-    
     await applyDocumentChanges(db, 'a', deleteOps, () => true);
-    
-    // The document should not be physically deleted because it has tombstone fields in _sync.
-    const saved = (await getDoc(doc(db, 'users/a/nutrition_months/2026-09'))).data();
-    expect(saved).toBeDefined();
-    expect(saved!['2026-09-13']?.weight).toBeUndefined();
-    expect(saved!._sync.fields['2026-09-13/weight'].deleted).toBe(true);
-    expect(saved!._sync.fields['2026-09-13/weight'].seq).toBe(2);
+
+    const ref = doc(db, 'users/a/nutrition_months/2026-09');
+    const deleted = (await getDoc(ref)).data();
+    expect(deleted).toBeDefined();
+    expect(deleted!['2026-09-13']).toBeUndefined();
+    expect(deleted!._sync.fields['2026-09-13']).toMatchObject({ deleted: true, actorId: 'A', seq: 2 });
+
+    const recreateOps: SemanticOperation[] = [
+        {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-13'],
+            value: { date: '2026-09-13', weight: 82, meals: [] },
+            isDelete: false,
+            actorId: 'B',
+            seq: 1,
+            clock: { A: 2, B: 1 }
+        }
+    ];
+    await applyDocumentChanges(db, 'a', recreateOps, () => true);
+
+    const recreated = (await getDoc(ref)).data()!;
+    expect(recreated['2026-09-13'].weight).toBe(82);
+    expect(recreated._sync.fields['2026-09-13'].deleted).toBeUndefined();
+    expect(recreated._sync.fields['2026-09-13'].clock).toEqual({ A: 2, B: 1 });
 });
 
-it('4. V3 API: verify remote FieldStamp vs local operation', async () => {
+it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async () => {
     const db = env.authenticatedContext('a').firestore();
-    
-    // Seed remote with B's update
+
     await setDoc(doc(db, 'users/a'), {
         profile: { height: '190' },
         _sync: {
@@ -114,30 +125,28 @@ it('4. V3 API: verify remote FieldStamp vs local operation', async () => {
             }
         }
     });
-    
-    // Local operation A loses to B (same sequence, actorId B > A)
+
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
     ];
-    
+
     await applyDocumentChanges(db, 'a', ops, () => true);
-    
+
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
-    // Remote B wins, so height remains 190.
     expect(saved.profile.height).toBe('190');
-    // But the clock must include A!
     expect(saved._sync.clock.A).toBe(1);
 });
 
-it('5. V3 API: checkDocSize on real Firestore transaction', async () => {
+it('5. V3 API: checkDocSize receives a document that already contains _sync', async () => {
     const db = env.authenticatedContext('a').firestore();
     const ops: SemanticOperation[] = [
         { docPath: '', path: ['profile', 'name'], value: 'A'.repeat(500), isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
     ];
-    
-    const res = await applyDocumentChanges(db, 'a', ops, () => true);
-    expect(res.syncMeta[''].fields['profile/name']).toBeDefined();
-    
+
+    const result = await applyDocumentChanges(db, 'a', ops, () => true);
+    expect(result.syncMeta[''].fields['profile/name']).toBeDefined();
+
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.name).toHaveLength(500);
+    expect(saved._sync.fields['profile/name']).toBeDefined();
 });

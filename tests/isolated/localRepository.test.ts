@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear, get, set } from 'idb-keyval';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
@@ -11,15 +11,66 @@ beforeEach(() => clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe('durable owner-scoped journal', () => {
-    it('does not resurrect a remote deletion in a complete month and preserves unloaded history', async () => {
-        const base = UserDataSchema.parse({ nutrition: { '2026-09-01': { date: '2026-09-01', weight: 80 }, '2025-01-01': { date: '2025-01-01', weight: 70 } } }) as unknown as UserData;
+    it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
+        const base = UserDataSchema.parse({ nutrition: {
+            '2026-09-01': { date: '2026-09-01', weight: 80 },
+            '2025-01-01': { date: '2025-01-01', weight: 70 }
+        } }) as unknown as UserData;
         await initializeLocal('a', base);
-        // In V3, cloudData might not contain unloaded months. We test that hydrateLocal keeps them.
-        const cloudWithUnloaded = { ...data(170) } as unknown as UserData;
-        const hydrated = await hydrateLocal('a', cloudWithUnloaded, ['2026-09']);
+
+        const cloudWindow = { ...data(170) } as unknown as UserData;
+        const hydrated = await hydrateLocal('a', cloudWindow, ['2026-09']);
+
         expect(hydrated.data.nutrition?.['2026-09-01']).toBeUndefined();
         expect(hydrated.data.nutrition?.['2025-01-01']?.weight).toBe(70);
         expect(hydrated.completeMonths).toEqual(['2026-09']);
+    });
+
+    it('treats exhaustive hydration as authoritative for every monthly shard', async () => {
+        const base = UserDataSchema.parse({ nutrition: {
+            '2025-01-01': { date: '2025-01-01', weight: 70 },
+            '2026-09-01': { date: '2026-09-01', weight: 80 }
+        } }) as unknown as UserData;
+        await initializeLocal('a', base, ['2025-01', '2026-09']);
+
+        const cloud = UserDataSchema.parse({ nutrition: {
+            '2026-09-01': { date: '2026-09-01', weight: 81 }
+        } }) as unknown as UserData;
+        const hydrated = await hydrateLocal('a', cloud, ['2026-09'], undefined, 'all');
+
+        expect(hydrated.data.nutrition?.['2025-01-01']).toBeUndefined();
+        expect(hydrated.data.nutrition?.['2026-09-01']?.weight).toBe(81);
+        expect(hydrated.completeMonths).toEqual(['2026-09']);
+    });
+
+    it('emits parent tombstones when a workout or nutrition day is deleted', async () => {
+        const base = UserDataSchema.parse({
+            history: [{ id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] }],
+            nutrition: { '2026-09-10': { date: '2026-09-10', weight: 80 } }
+        }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ history: [], nutrition: {} }) as unknown as UserData;
+
+        await initializeLocal('a', base);
+        const operations = await commitLocal('a', desired, base);
+
+        const workoutDeletes = operations.filter(op => op.docPath === 'history_months/2026-09');
+        const nutritionDeletes = operations.filter(op => op.docPath === 'nutrition_months/2026-09');
+        expect(workoutDeletes).toEqual([expect.objectContaining({ path: ['w1'], isDelete: true })]);
+        expect(nutritionDeletes).toEqual([expect.objectContaining({ path: ['2026-09-10'], isDelete: true })]);
+    });
+
+    it('does not advance actorSeq for a semantic no-op', async () => {
+        const initial = data(170);
+        await initializeLocal('a', initial);
+        const before = await readLocal('a');
+
+        const operations = await commitLocal('a', initial, initial);
+        const after = await readLocal('a');
+
+        expect(operations).toEqual([]);
+        expect(after?.actorSeq).toBe(before?.actorSeq);
+        expect(after?.clock).toEqual(before?.clock);
+        expect(after?.pending).toEqual(before?.pending);
     });
 
     it('rejects a quota failure without changing the previous data or journal', async () => {
