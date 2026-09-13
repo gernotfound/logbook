@@ -96,13 +96,11 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
         it('1.1: Prevents Save Amnesia when commit fails with network timeout, successfully retrying on next invocation', async () => {
             const state = createBaseState();
 
-            // First save succeeds
             await DB.saveUserData(state);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Mutate profile and attempt save with timeout rejection
             const mutatedState1 = { ...state, profile: { height: '185', gender: 'male' } };
             mockBatch.commit.mockRejectedValueOnce(new Error('Timeout sincronizzazione Firestore'));
 
@@ -112,7 +110,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Next save with the same mutatedState1 MUST detect that data was never committed to Firestore
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(mutatedState1);
 
@@ -121,7 +118,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Subsequent identical save should now be recognized as clean (hasWrites = false)
             await DB.saveUserData(mutatedState1);
             expect(mockBatch.set).not.toHaveBeenCalled();
             expect(mockBatch.commit).not.toHaveBeenCalled();
@@ -151,7 +147,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Retry should re-attempt the uncommitted food_2
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(mutatedState);
             expect(mockBatch.set).toHaveBeenCalled();
@@ -169,7 +164,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Next attempt must still see state as dirty
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(state);
             expect(mockBatch.set).toHaveBeenCalled();
@@ -179,13 +173,11 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
         it('1.4: Accurately skips writes and commits on repeated identical saves (zero redundant traffic)', async () => {
             const state = createBaseState();
 
-            // Initial commit
             await DB.saveUserData(state);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Repeat 5 times with identical state
             for (let i = 0; i < 5; i++) {
                 await DB.saveUserData(state);
                 expect(mockBatch.set).not.toHaveBeenCalled();
@@ -199,13 +191,11 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Offline mutation 1 (Profile changed)
             const timeoutErr = new Error('Timeout sincronizzazione Firestore');
             mockBatch.commit.mockRejectedValueOnce(timeoutErr);
             const state2 = { ...state1, profile: { height: '182', gender: 'male' } };
             await DB.saveUserData(state2);
 
-            // Offline mutation 2 (Routine added)
             mockBatch.commit.mockRejectedValueOnce(timeoutErr);
             const state3 = {
                 ...state2,
@@ -213,7 +203,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             };
             await DB.saveUserData(state3);
 
-            // Offline mutation 3 (Workout added)
             mockBatch.commit.mockRejectedValueOnce(timeoutErr);
             const state4 = {
                 ...state3,
@@ -227,14 +216,12 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Online recovery: save state4 successfully
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(state4);
 
             expect(mockBatch.set).toHaveBeenCalled();
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
 
-            // Check that all mutations (profile, routines, history) are reflected in the committed writeBatch
             const setCalls = mockBatch.set.mock.calls;
             const userDocCall = setCalls.find((c: any) => c[1]?.profile !== undefined);
             expect(userDocCall[1].profile.height).toBe('182');
@@ -247,27 +234,35 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Subsequent save is now clean
             await DB.saveUserData(state4);
             expect(mockBatch.set).not.toHaveBeenCalled();
             expect(mockBatch.commit).not.toHaveBeenCalled();
         });
 
-        it.skip('1.6: Enforces checkDocSize threshold (>950KB) and rejects write before Firestore batch without corrupting cache', async () => {
+        it('1.6: Enforces the real 950KB checkDocSize threshold and rejects before Firestore commit without poisoning the journal', async () => {
             const state = createBaseState();
             await DB.saveUserData(state);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Generate massive custom foods exceeding 950KB (>950,000 bytes)
-            const massiveFoods = Array.from({ length: 8000 }, (_, i) => ({
-                id: `giant_food_${i}`,
-                name: `Massive Food Description with Extensive Ingredients and Micronutrients Details ${i}`,
-                kcal: 500, pro: 30, carbs: 50, fat: 20, brand: 'Giant Brand Name', category: 'Long Category Name',
-                notes: 'Very long description text to ensure document exceeds 950KB limit reliably'
-            }));
-
-            const oversizedState = { ...state, customFoods: massiveFoods };
+            // FoodSchema is passthrough: one valid custom item with a large extension field reaches the V3 root document unchanged.
+            // This avoids relying on an unrealistically huge array that a schema limit could sanitize before checkDocSize runs.
+            const oversizedState = {
+                ...state,
+                customFoods: [
+                    ...state.customFoods,
+                    {
+                        id: 'giant_food',
+                        name: 'Oversized but schema-valid custom food',
+                        kcal: 500,
+                        pro: 30,
+                        carbs: 50,
+                        fat: 20,
+                        isCustom: true,
+                        extraNutritionNote: 'x'.repeat(960_000)
+                    }
+                ]
+            };
 
             const saveRes = await DB.saveUserData(oversizedState);
             expect(saveRes.ok).toBe(false);
@@ -275,10 +270,13 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(String(saveRes.error)).toMatch(/supera il limite di dimensione/);
             expect(mockBatch.commit).not.toHaveBeenCalled();
 
-            // Clean state can still be saved afterwards
+            // A later clean semantic update must supersede the oversized pending operation and sync successfully.
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
             const cleanState = { ...state, profile: { height: '190' } };
             mockBatch.commit.mockResolvedValueOnce(undefined);
-            await DB.saveUserData(cleanState);
+            const cleanRes = await DB.saveUserData(cleanState);
+            expect(cleanRes.ok).toBe(true);
             expect(mockBatch.set).toHaveBeenCalled();
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
         });
@@ -293,7 +291,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(mockBatch.set).not.toHaveBeenCalled();
             expect(mockBatch.commit).not.toHaveBeenCalled();
 
-            // Restore auth
             (auth as any).currentUser = originalUser;
         });
     });
@@ -333,7 +330,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                     if (pathStr.includes(m2)) return { exists: () => true, data: () => mockNutritionM2 } as any;
                     return { exists: () => true, data: () => ({}) } as any;
                 }
-                // Root user doc
                 return { exists: () => true, data: () => mockUserDoc } as any;
             });
 
@@ -342,11 +338,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(loaded).not.toBeNull();
             expect(loaded?.profile.height).toBe('178');
             expect(loaded?.history).toHaveLength(2);
-            expect(loaded?.history[0].id).toBe('h_m0'); // Sorted by globalStartTime descending
+            expect(loaded?.history[0].id).toBe('h_m0');
             expect(loaded?.history[1].id).toBe('h_m1');
             expect(loaded?.nutrition[`${m2}-05`]).toBeDefined();
-
-            // Total getDoc calls must be exactly 1 (manifest) + 1 (user) + 3 (history) + 3 (nutrition) = 8
             expect(getDoc).toHaveBeenCalledTimes(8);
         });
 
@@ -372,12 +366,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             await DB.saveUserData(state);
 
-            // Verify written batches
             const deleteCalls = mockBatch.delete.mock.calls;
-            // No delete calls should have been made for older months not in state
             expect(deleteCalls).toHaveLength(0);
 
-            // Mutate August history
             const updatedState = {
                 ...state,
                 history: [
@@ -391,7 +382,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             await DB.saveUserData(updatedState);
 
-            // Only August history doc should be written
             expect(mockBatch.set).toHaveBeenCalledTimes(1);
             expect(mockBatch.delete).not.toHaveBeenCalled();
         });
@@ -421,8 +411,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             expect(mockBatch.set).toHaveBeenCalled();
             const setCalls = mockBatch.set.mock.calls;
-
-            // 1 user doc + 5 history month docs = 6 set calls
             expect(setCalls).toHaveLength(6);
 
             const monthDocsWritten = setCalls
@@ -436,7 +424,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(monthDocsWritten.some(p => p.includes('2026-08'))).toBe(true);
         });
 
-        it.skip('2.4: Deleting all entries from a specific month triggers batch.delete exclusively for that month', async () => {
+        it('2.4: Deleting the last entity in a month persists a V3 parent tombstone instead of physically deleting the shard', async () => {
             const stateWithTwoMonths = {
                 profile: {},
                 library: [],
@@ -454,12 +442,10 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 nutrition: {}
             };
 
-            // Initial save of July and August
             await DB.saveUserData(stateWithTwoMonths);
             mockBatch.set.mockClear();
             mockBatch.delete.mockClear();
 
-            // Delete July entirely from state
             const stateAugustOnly = {
                 ...stateWithTwoMonths,
                 history: [
@@ -467,14 +453,20 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 ]
             };
 
-            await DB.saveUserData(stateAugustOnly);
+            const result = await DB.saveUserData(stateAugustOnly);
+            expect(result.ok).toBe(true);
 
-            // Must delete 2026-07 doc
-            expect(mockBatch.delete).toHaveBeenCalledTimes(1);
-            const deletedPath = mockBatch.delete.mock.calls[0][0]?.path || '';
-            expect(deletedPath).toContain('2026-07');
-            // August is unchanged so no batch.set for August
-            expect(mockBatch.set).not.toHaveBeenCalled();
+            // A tombstone-only document is intentionally retained until causal GC can prove it is safe to remove.
+            expect(mockBatch.delete).not.toHaveBeenCalled();
+            expect(mockBatch.set).toHaveBeenCalledTimes(1);
+
+            const [writtenRef, writtenData] = mockBatch.set.mock.calls[0];
+            expect(writtenRef?.path || '').toContain('history_months/2026-07');
+            expect(writtenData.h_jul_1).toBeUndefined();
+            expect(writtenData._sync?.fields?.['h_jul_1']).toMatchObject({ deleted: true });
+
+            // August was unchanged, so it must not be rewritten.
+            expect(writtenRef?.path || '').not.toContain('2026-08');
         });
 
         it('2.5: Derives timezone-safe monthKey from date string or fallback timestamp seamlessly', async () => {
@@ -489,9 +481,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 supplements: [],
                 activeWorkout: null,
                 history: [
-                    { id: 'h_str', date: '2026-08-15', exercises: [] }, // String date
-                    { id: 'h_ts', date: null, globalStartTime: 1723766400000, exercises: [] }, // Timestamp
-                    { id: 'h_none', date: null, globalStartTime: null, exercises: [] } // Fallback to current date
+                    { id: 'h_str', date: '2026-08-15', exercises: [] },
+                    { id: 'h_ts', date: null, globalStartTime: 1723766400000, exercises: [] },
+                    { id: 'h_none', date: null, globalStartTime: null, exercises: [] }
                 ],
                 nutrition: {}
             };
@@ -523,7 +515,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 expect(parsed).not.toBeNull();
             });
 
-            // Specific conversion assertions
             const transformed = DomainParsers.parseProfile({ height: 180, waist: '85', dob: 20000101 });
             expect(transformed.height).toBe('180');
             expect(transformed.waist).toBe('85');
@@ -532,38 +523,38 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
         it('3.2: parseWorkoutSession recovers gracefully from corrupted exercises, nested sets, dropsets, and ratings', () => {
             const corruptedSession = {
-                id: 12345, // string union transforms to '12345'
+                id: 12345,
                 routineName: null,
                 date: undefined,
-                moodRating: 'NaN', // string NaN transformed to null
+                moodRating: 'NaN',
                 pumpRating: 5,
-                fatigueRating: '  ', // empty trimmed string converted to null
-                waterLiters: '2.5', // string float parsed to 2.5
+                fatigueRating: '  ',
+                waterLiters: '2.5',
                 exercises: [
                     {
-                        exId: 999, // transformed to '999'
-                        sessionNote: null, // safeString falls back to ''
+                        exId: 999,
+                        sessionNote: null,
                         sets: [
                             {
                                 id: 'set_1',
-                                kg: 100, // converted to '100'
-                                reps: 10, // converted to '10'
-                                done: 'true', // string boolean converted to true
+                                kg: 100,
+                                reps: 10,
+                                done: 'true',
                                 dropsets: [
                                     { id: 'ds_1', kg: 80, reps: '6' },
-                                    'corrupted_dropset_string', // falls back to default
+                                    'corrupted_dropset_string',
                                     null
                                 ],
                                 isometrics: [
                                     { id: 'iso_1', kg: 50, time: 20 },
-                                    12345 // falls back to default
+                                    12345
                                 ]
                             },
-                            null, // corrupted set element falls back to default
+                            null,
                             { kg: 'NaN', reps: null }
                         ]
                     },
-                    'corrupted_exercise_item' // falls back to default
+                    'corrupted_exercise_item'
                 ]
             };
 
@@ -603,9 +594,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 '2026-08-16': {
                     date: '2026-08-16',
                     kcal: '2400',
-                    carbs: 'NaN', // falls back to 0
+                    carbs: 'NaN',
                     pro: '180.5',
-                    fat: null, // falls back to 0
+                    fat: null,
                     weight: '82.3',
                     bf: '14.5',
                     neck: ' ',
@@ -647,7 +638,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsed[0].trackingType).toBe('weight_reps');
             expect(parsed[1].trackingType).toBe('time');
             expect(parsed[2].trackingType).toBe('cardio');
-            expect(parsed[3].trackingType).toBeUndefined(); // invalid enum falls back to undefined
+            expect(parsed[3].trackingType).toBeUndefined();
         });
 
         it('3.6: parseCustomFoods handles full micronutrient schema and stringified floats', () => {
@@ -731,14 +722,13 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
         });
 
         it('3.9: Stress-tests legacy data compatibility without data loss', () => {
-            // Simulate legacy export format from early app version
             const legacyUserData = {
-                profile: { height: 175, weight: 75 }, // Legacy numeric fields
+                profile: { height: 175, weight: 75 },
                 library: [
-                    { id: 'ex_legacy_1', name: 'Panca Piana Manubri', setsCount: 3, sets: [] } // Missing trackingType
+                    { id: 'ex_legacy_1', name: 'Panca Piana Manubri', setsCount: 3, sets: [] }
                 ],
                 routines: [
-                    { id: 'r_legacy_1', name: 'Full Body', exercises: [{ exId: 'ex_legacy_1', setsCount: 3 }] } // Missing defaultTechnique
+                    { id: 'r_legacy_1', name: 'Full Body', exercises: [{ exId: 'ex_legacy_1', setsCount: 3 }] }
                 ],
                 history: [
                     {
@@ -765,7 +755,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                     }
                 },
                 customFoods: [{ id: 'cf_legacy', name: 'Tonno Naturale', kcal: 100, pro: 24, carbs: 0, fat: 0.5 }]
-                // Missing trainingCycles, supplements, nutritionPlanning, activeCycleId
             };
 
             const parsed = UserDataSchema.parse(legacyUserData);
@@ -777,7 +766,6 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsed.history[0].id).toBe('h_legacy_1');
             expect(parsed.nutrition['2025-03-10']).toBeDefined();
             expect(parsed.customFoods).toHaveLength(1);
-            // Missing top-level collections must default cleanly
             expect(parsed.trainingCycles).toEqual([]);
             expect(parsed.supplements).toEqual([]);
             expect(parsed.activeCycleId).toBeNull();
