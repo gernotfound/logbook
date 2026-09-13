@@ -2,6 +2,7 @@ import { doc, runTransaction, type Firestore } from 'firebase/firestore';
 import { UserDataSchema } from '../schema';
 import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValues } from '../utils/object';
+import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolution';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
 import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
@@ -37,40 +38,37 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
 
         pathsToRead.forEach((path, index) => {
             const raw = snapshots[index].exists() ? snapshots[index].data() : {};
+            const normalized = normalizeCloudDocument(raw, `Firestore ${path || 'root'} data schema`);
 
-            if (raw._sync) {
-                remoteSyncMetas[path] = parseSyncMeta(raw._sync);
-                delete raw._sync;
+            if (normalized.sync !== undefined) {
+                remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
             }
 
-            const remote = removeUndefinedValues(normalizeRemote(path, raw));
+            const remote = removeUndefinedValues(normalizeRemote(path, normalized.business));
             baseDocs.set(path, remote);
         });
 
         const { documents: newDocs, syncMetas: newSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
 
         for (const [path, docData] of newDocs.entries()) {
-            let data = removeUndefinedValues(docData) as DocumentData;
+            let business = removeUndefinedValues(docData) as DocumentData;
 
-            // Post-merge validation and normalization via Zod (Requirement 6)
-            data = removeUndefinedValues(normalizeRemote(path, data)) as DocumentData;
+            // Migration/normalization always happens before semantic merge; Zod validates the current business schema afterwards.
+            business = removeUndefinedValues(normalizeRemote(path, business)) as DocumentData;
 
             const meta = newSyncMetas[path];
-            if (meta) {
-                data._sync = meta as any;
-            }
+            const finalData = withCurrentDataSchema(business, meta) as DocumentData;
 
-            checkDocSize(data, path || 'User Profile');
+            checkDocSize(finalData, path || 'User Profile');
 
             const refIndex = pathsToRead.indexOf(path);
-
-            const hasBusinessData = Object.keys(data).filter(k => k !== '_sync').length > 0;
-            const hasFields = meta && Object.keys(meta.fields).length > 0;
+            const hasBusinessData = Object.keys(business).length > 0;
+            const hasFields = Boolean(meta && Object.keys(meta.fields).length > 0);
 
             if (!hasBusinessData && !hasFields) {
                 transaction.delete(refs[refIndex]);
             } else {
-                transaction.set(refs[refIndex], data);
+                transaction.set(refs[refIndex], finalData);
             }
         }
 
