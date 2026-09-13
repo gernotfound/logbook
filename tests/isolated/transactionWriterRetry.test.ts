@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
-    attempts: [] as Array<Array<{ path: string, data?: any, deleted?: boolean }>>
+    attempts: [] as Array<Array<{ path: string, data?: any, deleted?: boolean }>>,
+    checkDocSize: vi.fn()
+}));
+
+vi.mock('../../src/lib/checkDocSize', () => ({
+    checkDocSize: harness.checkDocSize
 }));
 
 vi.mock('firebase/firestore', () => ({
@@ -37,6 +42,7 @@ import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
 describe('transaction writer retry safety', () => {
     it('produces byte-equivalent writes when Firestore re-runs the transaction callback', async () => {
         harness.attempts.length = 0;
+        harness.checkDocSize.mockClear();
         const ops: SemanticOperation[] = [{
             docPath: '',
             path: ['profile', 'height'],
@@ -59,5 +65,11 @@ describe('transaction writer retry safety', () => {
             clock: { A: 1 }
         });
         expect(outcome.syncMeta[''].fields['profile/height'].seq).toBe(1);
+
+        // Size checks happen once per callback attempt, after _sync has been attached.
+        expect(harness.checkDocSize).toHaveBeenCalledTimes(2);
+        for (const [payload] of harness.checkDocSize.mock.calls) {
+            expect(payload._sync.fields['profile/height']).toMatchObject({ actorId: 'A', seq: 1 });
+        }
     });
 });
