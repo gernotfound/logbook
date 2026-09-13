@@ -57,12 +57,21 @@ export function clearSyncTimers() {
 export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
     const enterUpdateRequired = (error: unknown) => {
         const message = updateRequiredMessage(error);
+        invalidateSession();
+        clearWorkoutTimer();
+        if (timer) clearTimeout(timer);
+        timer = null;
+        const queued = pending;
+        pending = [];
+        const blocked = updateRequiredResult(message);
+        queued.forEach(job => job.resolve(blocked));
         set({
             compatibilityStatus: 'update-required',
             compatibilityError: message,
             syncing: false,
             syncHealth: 'failed',
             saveError: null,
+            syncGeneration: get().syncGeneration + 1,
         });
     };
 
