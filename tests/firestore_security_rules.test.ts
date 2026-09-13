@@ -25,10 +25,14 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });
 
-  it('allows only current-or-unversioned schema-1 Firestore documents', () => {
+  it('allows only schema-1/unversioned baseline documents and forbids dropping an existing marker', () => {
     expect(rulesContent).toContain("function isValidDataSchema(docData)");
     expect(rulesContent).toContain("!('_schemaVersion' in docData) || docData._schemaVersion == 1");
+    expect(rulesContent).toContain('function preservesDataSchema()');
+    expect(rulesContent).toContain("!('_schemaVersion' in resource.data)");
+    expect(rulesContent).toContain("'_schemaVersion' in incomingData()");
     expect(rulesContent.match(/isValidDataSchema\(incomingData\(\)\)/g)?.length).toBe(3);
+    expect(rulesContent.match(/preservesDataSchema\(\)/g)?.length).toBe(4); // declaration + 3 write paths
   });
 
   it('users/{userId} whitelist contains all root UserData payload keys plus sync/schema metadata', () => {
