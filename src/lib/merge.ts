@@ -5,7 +5,7 @@ import {
     mergeCatalogOverrides
 } from './catalog/deltaResolver';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
-import { calculateLoggedMealTotals } from './sync/semanticProjection';
+import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
 import type {
     UserData,
     UserProfile,

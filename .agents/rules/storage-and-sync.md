@@ -9,7 +9,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 | Livello | Tecnologia | Ruolo | Dati principali |
 |---|---|---|---|
 | **Stato operativo** | Zustand 5 (useAppStore) | Stato in memoria, single source of truth per i componenti React | Tutto UserData, localWorkout, syncing, saveError |
-| **Persistenza locale principale** | IndexedDB (idb-keyval) | Cache asincrona dell'intero albero UserData | Chiave 'logbook_cached_user_data' |
+| **Persistenza locale principale** | IndexedDB (idb-keyval) | Copia locale transazionale asincrona dell'envelope dati V3 | Chiave `logbook:v2:${owner}` (la vecchia `logbook_cached_user_data` è deprecata) |
 | **Persistenza sincrona** | localStorage | Dati che richiedono salvataggio sincrono istantaneo (sopravvive a suspend/kill del processo PWA) | logbook_local_workout, logbook_is_guest, logbook_activeTab, timer, bozze locali |
 | **Replica remota** | Firestore (Firebase) | Sincronizzazione cloud, backup, condivisione cross-device | Documento utente + subcollection mensilizzate |
 

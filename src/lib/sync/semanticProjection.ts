@@ -1,5 +1,6 @@
 import equal from 'fast-deep-equal';
 import { type DocumentData } from './documentProjection';
+import { calculateLoggedMealTotals } from '../nutrition/calculateLoggedMealTotals';
 
 export type MergePolicy = 'keyed' | 'ordered-keyed' | 'atomic' | 'property' | 'ignore';
 
@@ -20,6 +21,54 @@ export interface SyncMeta {
     fields: Record<string, FieldStamp>;
 }
 
+export function parseSyncMeta(raw: any): SyncMeta {
+    if (!raw || typeof raw !== 'object') throw new Error('Invalid SyncMeta');
+    if (raw.protocolVersion !== 1) throw new Error('Unsupported protocolVersion');
+    
+    const clock: VectorClock = {};
+    if (raw.clock && typeof raw.clock === 'object') {
+        for (const [actor, seq] of Object.entries(raw.clock)) {
+            if (typeof actor !== 'string') throw new Error('Invalid actor ID in clock');
+            if (typeof seq !== 'number' || seq < 0 || !Number.isFinite(seq)) throw new Error('Invalid seq in clock');
+            clock[actor] = seq;
+        }
+    }
+
+    const fields: Record<string, FieldStamp> = {};
+    if (raw.fields && typeof raw.fields === 'object') {
+        for (const [path, stamp] of Object.entries(raw.fields)) {
+            if (!stamp || typeof stamp !== 'object') throw new Error('Invalid FieldStamp');
+            if (typeof stamp.actorId !== 'string') throw new Error('Invalid actorId in FieldStamp');
+            if (typeof stamp.seq !== 'number' || stamp.seq < 0 || !Number.isFinite(stamp.seq)) throw new Error('Invalid seq in FieldStamp');
+            
+            const fieldClock: VectorClock = {};
+            if (stamp.clock && typeof stamp.clock === 'object') {
+                for (const [actor, seq] of Object.entries(stamp.clock)) {
+                    if (typeof actor !== 'string') throw new Error('Invalid actor ID in field clock');
+                    if (typeof seq !== 'number' || seq < 0 || !Number.isFinite(seq)) throw new Error('Invalid seq in field clock');
+                    fieldClock[actor] = seq;
+                }
+            }
+
+            const fieldStamp: FieldStamp = {
+                clock: fieldClock,
+                actorId: stamp.actorId,
+                seq: stamp.seq
+            };
+            
+            if ('deleted' in (stamp as any)) {
+                if (typeof (stamp as any).deleted !== 'boolean') throw new Error('Invalid deleted flag in FieldStamp');
+                fieldStamp.deleted = (stamp as any).deleted;
+            }
+            
+            fields[path] = fieldStamp;
+        }
+    }
+
+    return { protocolVersion: 1, clock, fields };
+}
+
+
 export interface SemanticOperation {
     docPath: string;
     path: string[];
@@ -28,6 +77,43 @@ export interface SemanticOperation {
     actorId: string;
     seq: number;
     clock: VectorClock;
+    guard?: { path: string[], equals: any };
+}
+
+export function diffDocuments(
+    base: Map<string, DocumentData>,
+    desired: Map<string, DocumentData>,
+    actorId: string,
+    seq: number,
+    clock: VectorClock
+): SemanticOperation[] {
+    const ops: SemanticOperation[] = [];
+    const allPaths = new Set([...base.keys(), ...desired.keys()]);
+
+    for (const docPath of allPaths) {
+        const bDoc = base.get(docPath) ?? {};
+        const dDoc = desired.get(docPath) ?? {};
+        
+        const allProps = new Set([...Object.keys(bDoc), ...Object.keys(dDoc)]);
+        for (const prop of allProps) {
+            // Note: we start at path length 1
+            traverseAndDiff(docPath, [prop], bDoc[prop], dDoc[prop], actorId, seq, clock, ops);
+        }
+    }
+
+    // Add lifecycle guards for activeWorkout child operations
+    for (const op of ops) {
+        if (op.docPath === '' && op.path[0] === 'activeWorkout' && op.path.length > 1) {
+            const dRoot = desired.get('') ?? {};
+            const bRoot = base.get('') ?? {};
+            const aw = dRoot.activeWorkout ?? bRoot.activeWorkout;
+            if (aw && aw.id) {
+                op.guard = { path: ['activeWorkout', 'id'], equals: aw.id };
+            }
+        }
+    }
+
+    return ops;
 }
 
 export function fieldKey(path: string[]): string {
@@ -37,7 +123,7 @@ export function fieldKey(path: string[]): string {
 export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
     if (docPath === '') {
         const root = path[0];
-        if (root === 'profile') return 'property';
+        if (['profile', 'nutritionPlanning', 'catalogOverrides'].includes(root)) return 'property';
         if (['library', 'customFoods'].includes(root)) {
             if (path.length === 1) return 'keyed';
             return 'property';
@@ -98,9 +184,16 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
 
 export function resolveIdentity(path: string[], item: any): string {
     const collection = path[path.length - 1];
-    if (collection === 'exercises') return String(item.exId ?? item.id);
-    if (path[0] === 'trainingCycles' && collection === 'routines') return String(item.routineId);
-    return String(item.id ?? item.exId ?? item.routineId);
+    let id: any;
+    if (collection === 'exercises') id = item.exId ?? item.id;
+    else if (path[0] === 'trainingCycles' && collection === 'routines') id = item.routineId;
+    else id = item.id ?? item.exId ?? item.routineId;
+    
+    const strId = String(id);
+    if (id === undefined || id === null || strId === '' || strId === 'undefined' || strId === 'null') {
+        throw new Error(`Invalid identity in ${collection}`);
+    }
+    return strId;
 }
 
 function identitySeed(path: string[], itemId: string): Record<string, string> {
@@ -137,7 +230,23 @@ function traverseAndDiff(
             clock
         });
     } else if (policy === 'property') {
-        if (bVal === undefined || dVal === undefined || typeof bVal !== 'object' || typeof dVal !== 'object' || bVal === null || dVal === null || Array.isArray(bVal) || Array.isArray(dVal)) {
+        const isPropertyContainer = (
+            (docPath.startsWith('nutrition_months/') && currentPath.length === 1) ||
+            (docPath.startsWith('history_months/') && currentPath.length === 1) ||
+            (docPath === '' && currentPath.length === 1 && ['profile', 'nutritionPlanning', 'catalogOverrides'].includes(currentPath[0]))
+        );
+        let effBVal = bVal;
+        let effDVal = dVal;
+
+        if (isPropertyContainer) {
+            if (effBVal === undefined && effDVal !== undefined && typeof effDVal === 'object' && effDVal !== null && !Array.isArray(effDVal)) {
+                effBVal = {};
+            } else if (effDVal === undefined && effBVal !== undefined && typeof effBVal === 'object' && effBVal !== null && !Array.isArray(effBVal)) {
+                effDVal = {};
+            }
+        }
+
+        if (effBVal === undefined || effDVal === undefined || typeof effBVal !== 'object' || typeof effDVal !== 'object' || effBVal === null || effDVal === null || Array.isArray(effBVal) || Array.isArray(effDVal)) {
             // fallback to atomic if not objects
             ops.push({
                 docPath,
@@ -152,7 +261,7 @@ function traverseAndDiff(
         }
 
         if (currentPath.length === 1 && currentPath[0] === 'activeWorkout') {
-            if (bVal.id !== dVal.id) {
+            if (effBVal.id !== effDVal.id) {
                 ops.push({
                     docPath,
                     path: currentPath,
@@ -166,16 +275,48 @@ function traverseAndDiff(
             }
         }
 
-        const allKeys = new Set([...Object.keys(bVal), ...Object.keys(dVal)]);
+        const allKeys = new Set([...Object.keys(effBVal), ...Object.keys(effDVal)]);
         for (const k of allKeys) {
-            traverseAndDiff(docPath, [...currentPath, k], bVal[k], dVal[k], actorId, seq, clock, ops);
+            traverseAndDiff(docPath, [...currentPath, k], effBVal[k], effDVal[k], actorId, seq, clock, ops);
         }
     } else if (policy === 'keyed' || policy === 'ordered-keyed') {
         const bArr = Array.isArray(bVal) ? bVal : [];
         const dArr = Array.isArray(dVal) ? dVal : [];
-        const bMap = new Map(bArr.map((item: any) => [resolveIdentity(currentPath, item), item]));
-        const dMap = new Map(dArr.map((item: any) => [resolveIdentity(currentPath, item), item]));
         
+        let valid = true;
+        const bMap = new Map();
+        const dMap = new Map();
+        
+        try {
+            for (const item of bArr) {
+                const id = resolveIdentity(currentPath, item);
+                if (bMap.has(id)) { valid = false; break; }
+                bMap.set(id, item);
+            }
+            if (valid) {
+                for (const item of dArr) {
+                    const id = resolveIdentity(currentPath, item);
+                    if (dMap.has(id)) { valid = false; break; }
+                    dMap.set(id, item);
+                }
+            }
+        } catch {
+            valid = false;
+        }
+
+        if (!valid) {
+            ops.push({
+                docPath,
+                path: currentPath,
+                value: dVal === undefined ? null : dVal,
+                isDelete: dVal === undefined,
+                actorId,
+                seq,
+                clock
+            });
+            return;
+        }
+
         if (policy === 'ordered-keyed') {
             const bOrder = bArr.map((item: any) => resolveIdentity(currentPath, item));
             const dOrder = dArr.map((item: any) => resolveIdentity(currentPath, item));
@@ -225,28 +366,6 @@ function traverseAndDiff(
     }
 }
 
-export function diffDocuments(
-    base: Map<string, DocumentData>,
-    desired: Map<string, DocumentData>,
-    actorId: string,
-    seq: number,
-    clock: VectorClock
-): SemanticOperation[] {
-    const ops: SemanticOperation[] = [];
-    const allPaths = new Set([...base.keys(), ...desired.keys()]);
-
-    for (const docPath of allPaths) {
-        const bDoc = base.get(docPath) ?? {};
-        const dDoc = desired.get(docPath) ?? {};
-        
-        const allProps = new Set([...Object.keys(bDoc), ...Object.keys(dDoc)]);
-        for (const prop of allProps) {
-            // Note: we start at path length 1
-            traverseAndDiff(docPath, [prop], bDoc[prop], dDoc[prop], actorId, seq, clock, ops);
-        }
-    }
-    return ops;
-}
 
 export function mergeVectors(...clocks: VectorClock[]): VectorClock {
     const res: VectorClock = {};
@@ -290,26 +409,7 @@ export function stampWins(opA: StampLike, opB: StampLike): boolean {
     return opA.actorId > opB.actorId;
 }
 
-export function calculateLoggedMealTotals(meals: any[]) {
-    let kcal = 0, carbs = 0, pro = 0, fat = 0;
-    for (const m of meals ?? []) {
-        const base = m.baseQty != null && m.baseQty > 0
-            ? m.baseQty
-            : (m.unit === 'porzione' || m.meal === 'quick' ? 1 : 100);
-        const qty = m.quantity != null ? m.quantity : base;
-        const ratio = base > 0 ? qty / base : 1;
-        kcal += (Number(m.kcal) || 0) * ratio;
-        carbs += (Number(m.carbs) || 0) * ratio;
-        pro += (Number(m.pro) || 0) * ratio;
-        fat += (Number(m.fat) || 0) * ratio;
-    }
-    return {
-        kcal: Math.round(kcal),
-        carbs: Math.round(carbs * 10) / 10,
-        pro: Math.round(pro * 10) / 10,
-        fat: Math.round(fat * 10) / 10,
-    };
-}
+
 
 export function normalizeDomainData(docs: Map<string, DocumentData>) {
     // Post-merge normalization (e.g. recalculating nutrition macros)
@@ -323,6 +423,14 @@ export function normalizeDomainData(docs: Map<string, DocumentData>) {
                     (dayData as any).carbs = totals.carbs;
                     (dayData as any).pro = totals.pro;
                     (dayData as any).fat = totals.fat;
+                }
+            }
+        } else if (path.startsWith('history_months/')) {
+            // Clean up tombstoned workouts (workouts that were deleted but might still contain empty arrays)
+            for (const [id, workoutData] of Object.entries(doc)) {
+                if (id === '_sync') continue;
+                if (!workoutData || typeof workoutData !== 'object' || !(workoutData as any).id) {
+                    delete doc[id];
                 }
             }
         }
@@ -437,6 +545,25 @@ export function applySemanticOperations(
         }
 
         const doc = resultDocs.get(winner.docPath) || {};
+        
+        if (winner.guard) {
+            let guardPass = true;
+            let target = doc;
+            for (const p of winner.guard.path) {
+                if (!target) { guardPass = false; break; }
+                target = target[p];
+            }
+            if (!guardPass || target !== winner.guard.equals) {
+                meta.fields[fk] = {
+                    clock: jointClock,
+                    actorId: winner.actorId,
+                    seq: winner.seq,
+                    ...(winner.isDelete ? { deleted: true } : {})
+                };
+                meta.clock = mergeVectors(meta.clock, jointClock);
+                continue;
+            }
+        }
         
         // Navigation array
         const p = winner.path;

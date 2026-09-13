@@ -1,4 +1,4 @@
-﻿import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
+import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
 import { readLocal, acknowledgeThrough } from './localRepository';
 import { captureSession, isCurrentSession } from './session';
@@ -27,6 +27,8 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
         
         // Pass SemanticOperation[] directly instead of documentChanges
         const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), envelope.pending, current);
+        
+        if (!current()) throw new Error('Sessione cambiata');
         
         const remote: UserData = applyRemoteDocuments(envelope.data, outcome.documents, catalog);
         const seq = envelope.pending[envelope.pending.length - 1].seq;
