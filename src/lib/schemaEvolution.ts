@@ -10,21 +10,11 @@ export const CURRENT_BACKUP_SCHEMA = 3 as const;
 
 export const UPDATE_REQUIRED_EVENT = 'logbook:update-required' as const;
 
-function reportRuntimeUpdateRequired(error: FutureVersionError) {
-    const runtimeKind = error.kind.startsWith('Firestore')
-        || error.kind.startsWith('Archivio locale')
-        || error.kind.startsWith('Formato archivio locale')
-        || error.kind.startsWith('Protocollo sync in scrittura');
-    if (!runtimeKind || typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
-    window.dispatchEvent(new CustomEvent(UPDATE_REQUIRED_EVENT, { detail: error }));
-}
-
 export class FutureVersionError extends Error {
     readonly code = 'update-required';
     constructor(readonly kind: string, readonly found: number, readonly supported: number) {
         super(`${kind} ${found} non supportato: aggiorna LogBook (versione corrente ${supported}).`);
         this.name = 'FutureVersionError';
-        reportRuntimeUpdateRequired(this);
     }
 }
 
@@ -53,6 +43,11 @@ export function isUpdateRequiredError(error: unknown): boolean {
         current = (current as { cause?: unknown }).cause;
     }
     return false;
+}
+
+function reportRuntimeUpdateRequired(error: unknown) {
+    if (!isUpdateRequiredError(error) || typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(UPDATE_REQUIRED_EVENT, { detail: error }));
 }
 
 export type Migration<T> = (value: Readonly<T>) => T;
@@ -200,53 +195,63 @@ function normalizePersistedDimensions(
 }
 
 export function normalizeCloudDocument(raw: unknown, kind = 'Firestore data schema'): NormalizedCloudDocument {
-    if (!isRecord(raw)) throw new Error('Documento Firestore non valido.');
+    try {
+        if (!isRecord(raw)) throw new Error('Documento Firestore non valido.');
 
-    // Missing marker permanently means the schema-1 baseline, even after future schema bumps.
-    const sourceVersion = raw._schemaVersion === undefined
-        ? BASELINE_DATA_SCHEMA
-        : assertVersionNumber(raw._schemaVersion, kind);
+        // Missing marker permanently means the schema-1 baseline, even after future schema bumps.
+        const sourceVersion = raw._schemaVersion === undefined
+            ? BASELINE_DATA_SCHEMA
+            : assertVersionNumber(raw._schemaVersion, kind);
 
-    const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
-    const sourceSyncVersion = readSyncProtocol(_sync, `${kind} sync protocol`);
+        const { _schemaVersion: _ignoredVersion, _sync, ...business } = raw;
+        const sourceSyncVersion = readSyncProtocol(_sync, `${kind} sync protocol`);
 
-    const migrated = migrateFromBaseline<DataMigrationCarrier>(
-        {
-            scope: 'cloud',
-            state: { business: structuredClone(business), sync: _sync === undefined ? undefined : structuredClone(_sync) },
-        },
-        sourceVersion,
-        BASELINE_DATA_SCHEMA,
-        CURRENT_DATA_SCHEMA,
-        DATA_MIGRATIONS,
-        kind,
-    );
-    if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
+        const migrated = migrateFromBaseline<DataMigrationCarrier>(
+            {
+                scope: 'cloud',
+                state: { business: structuredClone(business), sync: _sync === undefined ? undefined : structuredClone(_sync) },
+            },
+            sourceVersion,
+            BASELINE_DATA_SCHEMA,
+            CURRENT_DATA_SCHEMA,
+            DATA_MIGRATIONS,
+            kind,
+        );
+        if (migrated.scope !== 'cloud') throw new Error(`${kind}: migration scope non valido.`);
 
-    const normalizedSync = normalizeSyncProtocol(migrated.state.sync, sourceSyncVersion, `${kind} sync protocol`);
+        const normalizedSync = normalizeSyncProtocol(migrated.state.sync, sourceSyncVersion, `${kind} sync protocol`);
 
-    return {
-        business: migrated.state.business,
-        sync: normalizedSync,
-        dataSchemaVersion: CURRENT_DATA_SCHEMA,
-    };
+        return {
+            business: migrated.state.business,
+            sync: normalizedSync,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+        };
+    } catch (error) {
+        reportRuntimeUpdateRequired(error);
+        throw error;
+    }
 }
 
 export function normalizeLocalEnvelopeRecord(raw: unknown): PersistedRecord {
-    if (!isRecord(raw)) throw new Error('Archivio locale non valido.');
-    const sourceVersion = assertVersionNumber(raw.version, 'Formato archivio locale');
-    const migrated = migrateFromBaseline(
-        raw,
-        sourceVersion,
-        BASELINE_LOCAL_ENVELOPE,
-        CURRENT_LOCAL_ENVELOPE,
-        LOCAL_ENVELOPE_MIGRATIONS,
-        'Formato archivio locale',
-    );
-    return {
-        ...normalizePersistedDimensions(migrated, 'local-envelope', 'Archivio locale'),
-        version: CURRENT_LOCAL_ENVELOPE,
-    };
+    try {
+        if (!isRecord(raw)) throw new Error('Archivio locale non valido.');
+        const sourceVersion = assertVersionNumber(raw.version, 'Formato archivio locale');
+        const migrated = migrateFromBaseline(
+            raw,
+            sourceVersion,
+            BASELINE_LOCAL_ENVELOPE,
+            CURRENT_LOCAL_ENVELOPE,
+            LOCAL_ENVELOPE_MIGRATIONS,
+            'Formato archivio locale',
+        );
+        return {
+            ...normalizePersistedDimensions(migrated, 'local-envelope', 'Archivio locale'),
+            version: CURRENT_LOCAL_ENVELOPE,
+        };
+    } catch (error) {
+        reportRuntimeUpdateRequired(error);
+        throw error;
+    }
 }
 
 export function normalizeBackupRecord(raw: unknown): PersistedRecord {
@@ -270,11 +275,16 @@ export function withCurrentDataSchema(
     business: Record<string, unknown>,
     sync?: unknown,
 ): Record<string, unknown> {
-    const sourceSyncVersion = readSyncProtocol(sync, 'Protocollo sync in scrittura');
-    const normalizedSync = normalizeSyncProtocol(sync, sourceSyncVersion, 'Protocollo sync in scrittura');
-    return {
-        ...business,
-        _schemaVersion: CURRENT_DATA_SCHEMA,
-        ...(normalizedSync === undefined ? {} : { _sync: normalizedSync }),
-    };
+    try {
+        const sourceSyncVersion = readSyncProtocol(sync, 'Protocollo sync in scrittura');
+        const normalizedSync = normalizeSyncProtocol(sync, sourceSyncVersion, 'Protocollo sync in scrittura');
+        return {
+            ...business,
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            ...(normalizedSync === undefined ? {} : { _sync: normalizedSync }),
+        };
+    } catch (error) {
+        reportRuntimeUpdateRequired(error);
+        throw error;
+    }
 }
