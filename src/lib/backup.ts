@@ -2,6 +2,12 @@ import equal from 'fast-deep-equal';
 import { UserDataSchema } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
+import {
+    CURRENT_BACKUP_SCHEMA,
+    CURRENT_DATA_SCHEMA,
+    CURRENT_SYNC_PROTOCOL,
+    assertCurrentVersion,
+} from './schemaEvolution';
 
 export type ImportMode = 'merge' | 'restore';
 export interface BackupCoverage {
@@ -12,7 +18,9 @@ export interface BackupCoverage {
 }
 export interface BackupPayload {
     format: 'logbook-backup';
-    version: 2;
+    version: typeof CURRENT_BACKUP_SCHEMA;
+    dataSchemaVersion: typeof CURRENT_DATA_SCHEMA;
+    syncProtocolVersion: typeof CURRENT_SYNC_PROTOCOL;
     type: 'backup';
     owner: string | null;
     exportedAt: string;
@@ -54,30 +62,54 @@ export function validateImportData(value: unknown): asserts value is Record<stri
 }
 
 export function createBackup(userData: UserData, owner: string | null, coverage: BackupCoverage = { scope: 'device', months: [] }, recovery?: unknown): BackupPayload {
-    return { format: 'logbook-backup', version: 2, type: 'backup', owner,
-        exportedAt: new Date().toISOString(), coverage, userData: structuredClone(userData), recovery };
+    return {
+        format: 'logbook-backup',
+        version: CURRENT_BACKUP_SCHEMA,
+        dataSchemaVersion: CURRENT_DATA_SCHEMA,
+        syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+        type: 'backup',
+        owner,
+        exportedAt: new Date().toISOString(),
+        coverage,
+        userData: structuredClone(userData),
+        recovery,
+    };
 }
 
 export function decodeImport(payload: unknown, owner: string) {
-    if (!isRecord(payload)) throw new Error('Formato file non valido o non supportato.');
-    const modern = payload.format === 'logbook-backup' && payload.version === 2 && payload.type === 'backup';
-    const emergency = payload.format === 'logbook-backup' && payload.version === 1;
-    const legacy = payload.version === 1 && (payload.type === 'share' || payload.type === 'backup');
-    if (!modern && !emergency && !legacy) throw new Error('Formato file non valido o non supportato.');
+    if (!isRecord(payload) || payload.format !== 'logbook-backup') {
+        throw new Error('Formato file non valido o non supportato.');
+    }
+
+    assertCurrentVersion(payload.version, CURRENT_BACKUP_SCHEMA, 'Formato backup');
+    assertCurrentVersion(payload.dataSchemaVersion, CURRENT_DATA_SCHEMA, 'Data schema backup');
+    assertCurrentVersion(payload.syncProtocolVersion, CURRENT_SYNC_PROTOCOL, 'Protocollo sync backup');
+
+    if (payload.type !== 'backup' && payload.type !== 'share') {
+        throw new Error('Tipo file non valido o non supportato.');
+    }
+
     const share = payload.type === 'share';
-    const sourceOwner = modern ? payload.owner : (typeof payload.userId === 'string' ? `user:${payload.userId}` : null);
+    const sourceOwner = typeof payload.owner === 'string' ? payload.owner : null;
     if (!share && sourceOwner && sourceOwner !== owner) {
         throw new Error('Sicurezza: Non puoi importare il backup di un altro utente. Accedi con il proprietario del backup.');
     }
-    const data = modern || emergency ? payload.userData : Object.fromEntries(
-        Object.entries(payload).filter(([key]) => !['version', 'type', 'userId', 'exportedAt'].includes(key)));
+
+    const data = payload.userData;
     validateImportData(data);
-    const selected = share ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]])) : data;
-    return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage: modern ? payload.coverage : undefined };
+    const selected = share
+        ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]]))
+        : data;
+
+    return {
+        data: selected,
+        share,
+        ownerUnknown: !share && !sourceOwner,
+        coverage: !share && isRecord(payload.coverage) ? payload.coverage : undefined,
+    };
 }
 
-// Missing fields are filled recursively; collision priority is explicitly local in
-// merge mode. Restore only replaces fields present in the file (legacy is partial).
+// Missing fields are filled recursively; collision priority is explicitly local in merge mode.
 function mergeMissing(local: unknown, incoming: unknown): unknown {
     if (local === undefined || local === null || local === '') return structuredClone(incoming);
     if (Array.isArray(local) && Array.isArray(incoming)) {
