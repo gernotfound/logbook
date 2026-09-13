@@ -59,28 +59,24 @@ describe('Semantic Merge & Diffing V3', () => {
     });
 
     it('applies ops commutatively (A->B == B->A)', () => {
-        const base = new Map<string, DocumentData>([
-            ['', { profile: { name: 'Initial' } }]
-        ]);
+        const base = new Map<string, DocumentData>();
+        base.set('', { profile: { name: 'State Base' } });
 
         const opA: SemanticOperation = {
-            actorId: 'A', seq: 1, clock: { A: 1 },
-            docPath: '', property: 'profile',
-            value: { name: 'State A' }, isDelete: false
+            docPath: '', property: 'profile', value: { name: 'State A' }, isDelete: false,
+            actorId: 'client-A', seq: 1, clock: { 'client-A': 1 }
         };
-        
         const opB: SemanticOperation = {
-            actorId: 'B', seq: 1, clock: { B: 1 },
-            docPath: '', property: 'profile',
-            value: { name: 'State B' }, isDelete: false
+            docPath: '', property: 'profile', value: { name: 'State B' }, isDelete: false,
+            actorId: 'client-B', seq: 2, clock: { 'client-A': 1, 'client-B': 2 }
         };
 
-        // Because A and B are concurrent, tie break relies on actorId. B > A so B wins.
         const res1 = applySemanticOperations(base, [opA, opB]);
         const res2 = applySemanticOperations(base, [opB, opA]);
 
-        expect(res1.get('')?.profile).toEqual({ name: 'State B' });
-        expect(res2.get('')?.profile).toEqual({ name: 'State B' });
-        expect(res1).toEqual(res2);
+        expect(res1.documents.get('')?.profile).toEqual({ name: 'State B' });
+        expect(res2.documents.get('')?.profile).toEqual({ name: 'State B' });
+        expect(res1.documents).toEqual(res2.documents);
+        expect(res1.syncMetas).toEqual(res2.syncMetas);
     });
 });

@@ -1,10 +1,10 @@
-﻿import { get, update } from 'idb-keyval';
+import { get, update } from 'idb-keyval';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, diffDocuments, applySemanticOperations } from './semanticProjection';
+import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 
@@ -18,7 +18,7 @@ export interface LocalEnvelopeV3 {
     baseline: UserData;
     completeMonths: string[];
     pending: SemanticOperation[];
-    syncMetaByDocument: Record<string, { clock: VectorClock }>;
+    syncMetaByDocument: Record<string, SyncMeta>;
     revision: number;
 }
 
@@ -86,14 +86,24 @@ export async function acknowledgeLocal(owner: string, _id: string, remote: UserD
     });
 }
 
-export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, { clock: VectorClock }>): Promise<void> {
+export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
     const parsed = parse(remote);
     await update<any>(keyFor(owner), async raw => {
         const current = await validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         const pending = current.pending.filter(op => op.seq > expectedSeq);
+        
+        let newClock = { ...current.clock };
+        if (syncMeta) {
+            for (const meta of Object.values(syncMeta)) {
+                for (const [actor, seq] of Object.entries(meta.clock)) {
+                    newClock[actor] = Math.max(newClock[actor] || 0, seq);
+                }
+            }
+        }
+        
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
-        return { ...current, baseline: parsed, data: current.actorSeq === expectedSeq ? parsed : current.data, pending,
+        return { ...current, clock: newClock, baseline: parsed, data: current.actorSeq === expectedSeq ? parsed : current.data, pending,
             completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
     });
 }
@@ -118,16 +128,22 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const catalog = await getCachedCatalog();
             
             let syncMeta = current.syncMetaByDocument ?? {};
+            let updatedClock = { ...current.clock };
+            
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
                     if (doc._sync) {
-                        syncMeta[path] = { clock: (doc._sync as any).clock as VectorClock };
+                        const meta = doc._sync as SyncMeta;
+                        syncMeta[path] = meta;
+                        for (const [actor, seq] of Object.entries(meta.clock)) {
+                            updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
+                        }
                     }
                 }
             }
             
             const remoteDocs = projectDocuments(cloud, catalog);
-            const mergedDocs = applySemanticOperations(remoteDocs, current.pending);
+            const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(remoteDocs, current.pending, syncMeta);
             const data = applyRemoteDocuments(cloud, mergedDocs, catalog);
             
             data.pendingConflicts = current.data.pendingConflicts;
@@ -135,10 +151,11 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             
             saved = {
                 ...current,
+                clock: updatedClock,
                 data: parsedData,
                 baseline: cloud,
                 completeMonths: [...new Set([...current.completeMonths, ...months])],
-                syncMetaByDocument: syncMeta
+                syncMetaByDocument: mergedMetas
             };
         }
         return saved;
