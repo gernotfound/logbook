@@ -5,6 +5,7 @@ import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSli
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
 import { writeDeviceValue } from '../lib/sync/deviceStorage';
 import { draftRegistry } from '../lib/utils/draftRegistry';
+import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
 
 export type { UserProfile, NutritionPlanning, UserData };
 
@@ -17,6 +18,12 @@ export const useAppStore = create<AppState>()((...a) => ({
     ...createWorkoutSlice(...a),
     ...createSyncSlice(...a),
 }));
+
+if (typeof window !== 'undefined') {
+    window.addEventListener(UPDATE_REQUIRED_EVENT, event => {
+        useAppStore.getState().setUpdateRequired((event as CustomEvent).detail);
+    });
+}
 
 // PWA FIX: Synchronously save the local workout to localStorage when the app goes into the background.
 // This ensures that if the OS suspends or kills the PWA immediately, the last keystrokes are not lost
