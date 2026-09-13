@@ -50,7 +50,11 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
         const { documents: newDocs, syncMetas: newSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
 
         for (const [path, docData] of newDocs.entries()) {
-            const data = removeUndefinedValues(docData) as DocumentData;
+            let data = removeUndefinedValues(docData) as DocumentData;
+            
+            // Post-merge validation and normalization via Zod (Requirement 6)
+            data = removeUndefinedValues(normalizeRemote(path, data)) as DocumentData;
+            
             const meta = newSyncMetas[path];
             if (meta) {
                 data._sync = meta as any;

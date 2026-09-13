@@ -68,7 +68,7 @@ service cloud.firestore {
             || incomingData().nutritionPlanningOrigin == null
             || incomingData().nutritionPlanningOrigin == 'generated-default'
             || incomingData().nutritionPlanningOrigin == 'user-edited')
-        && (!('_sync' in incomingData()) || incomingData()._sync is map)
+        && (!('_sync' in incomingData()) || (incomingData()._sync is map && incomingData()._sync.protocolVersion == 1 && incomingData()._sync.clock is map && incomingData()._sync.fields is map))
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
         
       // Subcollection Storico Allenamenti Mensile: users/{userId}/history_months/{YYYY-MM}

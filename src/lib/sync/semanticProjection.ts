@@ -1,9 +1,8 @@
 import equal from 'fast-deep-equal';
-// import { UserDataSchema } from '../schema';
-// import type { UserData } from '../../types';
+// FORCE REBUILD
 import { type DocumentData } from './documentProjection';
 
-export type MergePolicy = 'keyed' | 'ordered-keyed' | 'atomic';
+export type MergePolicy = 'keyed' | 'ordered-keyed' | 'atomic' | 'property';
 
 export interface VectorClock {
     [actorId: string]: number;
@@ -17,29 +16,176 @@ export interface FieldStamp {
 }
 
 export interface SyncMeta {
+    protocolVersion: 1;
     clock: VectorClock;
     fields: Record<string, FieldStamp>;
 }
 
 export interface SemanticOperation {
     docPath: string;
-    property: string;
-    itemId?: string;
-    value: unknown;
+    path: string[];
     isDelete: boolean;
+    value?: unknown;
     actorId: string;
     seq: number;
     clock: VectorClock;
 }
 
-export function getMergePolicy(docPath: string, property: string): MergePolicy {
+export function fieldKey(path: string[]): string {
+    return path.map(p => encodeURIComponent(String(p))).join('/');
+}
+
+export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
     if (docPath === '') {
-        if (['library', 'routines', 'customFoods', 'trainingCycles', 'supplements'].includes(property)) {
-            return 'ordered-keyed';
+        const root = path[0];
+        if (['profile'].includes(root)) return 'property';
+        if (['routines', 'trainingCycles', 'supplements'].includes(root)) {
+            if (path.length === 1) return 'ordered-keyed';
+            if (root === 'routines' && path.length === 3 && path[2] === 'exercises') return 'ordered-keyed';
+            return 'property';
+        }
+        if (['history'].includes(root)) {
+            if (path.length === 1) return 'keyed';
+            return 'property';
+        }
+        if (root === 'activeWorkout') {
+            if (path.length === 1) return 'property';
+            if (path[1] === 'exercises') {
+                if (path.length === 2) return 'ordered-keyed';
+                if (path.length === 3) return 'property';
+                if (path[3] === 'sets') {
+                    if (path.length === 4) return 'keyed';
+                    return 'property';
+                }
+                return 'property';
+            }
+            return 'property';
         }
         return 'atomic';
     }
+    
+    if (docPath.startsWith('nutrition_months/')) {
+        if (path.length === 1) return 'property'; // day properties
+        const prop = path[1];
+        if (prop === 'meals' || prop === 'supplementsIntake') {
+            if (path.length === 2) return 'keyed';
+            return 'property';
+        }
+        return 'property';
+    }
+
+    if (docPath.startsWith('history_months/')) {
+        if (path.length === 1) return 'property';
+        if (path[1] === 'exercises') {
+            if (path.length === 2) return 'ordered-keyed';
+            if (path.length === 3) return 'property';
+            if (path[3] === 'sets') {
+                if (path.length === 4) return 'keyed'; // or ordered-keyed
+                return 'property';
+            }
+            return 'property';
+        }
+        return 'property';
+    }
+    
     return 'atomic';
+}
+
+function traverseAndDiff(
+    docPath: string,
+    currentPath: string[],
+    bVal: any,
+    dVal: any,
+    actorId: string,
+    seq: number,
+    clock: VectorClock,
+    ops: SemanticOperation[]
+) {
+    if (equal(bVal, dVal)) return;
+
+    const policy = getMergePolicy(docPath, currentPath);
+
+    if (policy === 'atomic') {
+        ops.push({
+            docPath,
+            path: currentPath,
+            value: dVal === undefined ? null : dVal,
+            isDelete: dVal === undefined,
+            actorId,
+            seq,
+            clock
+        });
+    } else if (policy === 'property') {
+        if (bVal === undefined || dVal === undefined || typeof bVal !== 'object' || typeof dVal !== 'object' || bVal === null || dVal === null || Array.isArray(bVal) || Array.isArray(dVal)) {
+            // fallback to atomic if not objects
+            ops.push({
+                docPath,
+                path: currentPath,
+                value: dVal === undefined ? null : dVal,
+                isDelete: dVal === undefined,
+                actorId,
+                seq,
+                clock
+            });
+            return;
+        }
+
+        if (currentPath.length === 1 && currentPath[0] === 'activeWorkout') {
+            if (bVal.id !== dVal.id) {
+                ops.push({
+                    docPath,
+                    path: currentPath,
+                    value: dVal === undefined ? null : dVal,
+                    isDelete: dVal === undefined,
+                    actorId,
+                    seq,
+                    clock
+                });
+                return;
+            }
+        }
+
+        const allKeys = new Set([...Object.keys(bVal), ...Object.keys(dVal)]);
+        for (const k of allKeys) {
+            traverseAndDiff(docPath, [...currentPath, k], bVal[k], dVal[k], actorId, seq, clock, ops);
+        }
+    } else if (policy === 'keyed' || policy === 'ordered-keyed') {
+        const bArr = Array.isArray(bVal) ? bVal : [];
+        const dArr = Array.isArray(dVal) ? dVal : [];
+        const bMap = new Map(bArr.map((item: any) => [String(item.id || item.exId), item]));
+        const dMap = new Map(dArr.map((item: any, idx: number) => [String(item.id || item.exId), policy === 'ordered-keyed' ? { ...item, $order: idx } : item]));
+        
+        const allIds = new Set([...bMap.keys(), ...dMap.keys()]);
+        for (const id of allIds) {
+            const bItem = bMap.get(id);
+            const dItem = dMap.get(id);
+            if (!equal(bItem, dItem)) {
+                if (dItem === undefined) {
+                    ops.push({
+                        docPath,
+                        path: [...currentPath, id],
+                        isDelete: true,
+                        actorId,
+                        seq,
+                        clock
+                    });
+                } else if (bItem === undefined) {
+                    ops.push({
+                        docPath,
+                        path: [...currentPath, id],
+                        value: dItem,
+                        isDelete: false,
+                        actorId,
+                        seq,
+                        clock
+                    });
+                } else {
+                    // Both exist, they are objects, we can diff their properties
+                    traverseAndDiff(docPath, [...currentPath, id], bItem, dItem, actorId, seq, clock, ops);
+                }
+            }
+        }
+    }
 }
 
 export function diffDocuments(
@@ -55,51 +201,24 @@ export function diffDocuments(
     for (const docPath of allPaths) {
         const bDoc = base.get(docPath) ?? {};
         const dDoc = desired.get(docPath) ?? {};
+        
         const allProps = new Set([...Object.keys(bDoc), ...Object.keys(dDoc)]);
-
-        for (const property of allProps) {
-            const bVal = bDoc[property];
-            const dVal = dDoc[property];
-            if (equal(bVal, dVal)) continue;
-
-            const policy = getMergePolicy(docPath, property);
-            if (policy === 'atomic') {
-                ops.push({
-                    docPath,
-                    property,
-                    value: dVal === undefined ? null : dVal,
-                    isDelete: dVal === undefined,
-                    actorId,
-                    seq,
-                    clock
-                });
-            } else if (policy === 'ordered-keyed') {
-                const bArr = Array.isArray(bVal) ? bVal : [];
-                const dArr = Array.isArray(dVal) ? dVal : [];
-                const bMap = new Map(bArr.map((item: any) => [String(item.id), item]));
-                const dMap = new Map(dArr.map((item: any, idx: number) => [String(item.id), { ...item, $order: idx }]));
-                
-                const allIds = new Set([...bMap.keys(), ...dMap.keys()]);
-                for (const id of allIds) {
-                    const bItem = bMap.get(id);
-                    const dItem = dMap.get(id);
-                    if (!equal(bItem, dItem)) {
-                        ops.push({
-                            docPath,
-                            property,
-                            itemId: id,
-                            value: dItem === undefined ? null : dItem,
-                            isDelete: dItem === undefined,
-                            actorId,
-                            seq,
-                            clock
-                        });
-                    }
-                }
-            }
+        for (const prop of allProps) {
+            // Note: we start at path length 1
+            traverseAndDiff(docPath, [prop], bDoc[prop], dDoc[prop], actorId, seq, clock, ops);
         }
     }
     return ops;
+}
+
+export function mergeVectors(...clocks: VectorClock[]): VectorClock {
+    const res: VectorClock = {};
+    for (const c of clocks) {
+        for (const [a, s] of Object.entries(c)) {
+            res[a] = Math.max(res[a] || 0, s);
+        }
+    }
+    return res;
 }
 
 export function dominates(clockA: VectorClock, clockB: VectorClock): boolean {
@@ -124,17 +243,38 @@ export interface StampLike {
 }
 
 export function stampWins(opA: StampLike, opB: StampLike): boolean {
-    // True if opA wins over opB
     if (dominates(opA.clock, opB.clock)) return true;
     if (dominates(opB.clock, opA.clock)) return false;
     
-    // Concurrent
     if (opA.isDelete && !opB.isDelete) return true;
     if (opB.isDelete && !opA.isDelete) return false;
     
-    // Normal tie-break
     if (opA.actorId === opB.actorId) return opA.seq > opB.seq;
     return opA.actorId > opB.actorId;
+}
+
+export function normalizeDomainData(docs: Map<string, DocumentData>) {
+    // Post-merge normalization (e.g. recalculating nutrition macros)
+    for (const [path, doc] of docs.entries()) {
+        if (path.startsWith('nutrition_months/')) {
+            for (const [, dayData] of Object.entries(doc)) {
+                if (dayData && typeof dayData === 'object' && Array.isArray((dayData as any).meals)) {
+                    const meals = (dayData as any).meals;
+                    let kcal = 0, carbs = 0, pro = 0, fat = 0;
+                    for (const m of meals) {
+                        kcal += Number(m.kcal) || 0;
+                        carbs += Number(m.carbs) || 0;
+                        pro += Number(m.pro) || 0;
+                        fat += Number(m.fat) || 0;
+                    }
+                    (dayData as any).kcal = Math.round(kcal);
+                    (dayData as any).carbs = Math.round(carbs);
+                    (dayData as any).pro = Math.round(pro);
+                    (dayData as any).fat = Math.round(fat);
+                }
+            }
+        }
+    }
 }
 
 export function applySemanticOperations(
@@ -144,49 +284,43 @@ export function applySemanticOperations(
 ): { documents: Map<string, DocumentData>, syncMetas: Record<string, SyncMeta> } {
     const resultDocs = new Map<string, DocumentData>();
     for (const [path, doc] of base.entries()) {
-        resultDocs.set(path, { ...doc });
+        // Deep clone to avoid mutating base
+        resultDocs.set(path, JSON.parse(JSON.stringify(doc)));
     }
 
     const resultMetas: Record<string, SyncMeta> = {};
     for (const [path, meta] of Object.entries(remoteSyncMetas)) {
         resultMetas[path] = {
+            protocolVersion: 1,
             clock: { ...meta.clock },
             fields: { ...meta.fields }
         };
     }
 
     for (const [path] of base.entries()) {
-        if (!resultMetas[path]) {
-            resultMetas[path] = { clock: {}, fields: {} };
-        }
+        if (!resultMetas[path]) resultMetas[path] = { protocolVersion: 1, clock: {}, fields: {} };
     }
     for (const op of ops) {
-        if (!resultMetas[op.docPath]) {
-            resultMetas[op.docPath] = { clock: {}, fields: {} };
-        }
+        if (!resultMetas[op.docPath]) resultMetas[op.docPath] = { protocolVersion: 1, clock: {}, fields: {} };
     }
 
-    // Group ops by property
     const grouped = new Map<string, SemanticOperation[]>();
     for (const op of ops) {
-        const key = `${op.docPath}:${op.property}${op.itemId ? `:${op.itemId}` : ''}`;
+        const key = `${op.docPath}:${fieldKey(op.path)}`;
         const existing = grouped.get(key) || [];
         existing.push(op);
         grouped.set(key, existing);
     }
 
     for (const [, opList] of grouped.entries()) {
-        // Find winning op
         let winner = opList[0];
         for (let i = 1; i < opList.length; i++) {
-            if (stampWins(opList[i], winner)) {
-                winner = opList[i];
-            }
+            if (stampWins(opList[i], winner)) winner = opList[i];
         }
 
-        const fieldKey = `${winner.property}${winner.itemId ? `:${winner.itemId}` : ''}`;
+        const fk = fieldKey(winner.path);
         const meta = resultMetas[winner.docPath];
-        const remoteStamp = meta.fields[fieldKey];
+        const remoteStamp = meta.fields[fk];
 
         const localStampLike: StampLike = {
             clock: winner.clock,
@@ -194,6 +328,8 @@ export function applySemanticOperations(
             actorId: winner.actorId,
             seq: winner.seq
         };
+
+        let jointClock = winner.clock;
 
         if (remoteStamp) {
             const remoteStampLike: StampLike = {
@@ -203,49 +339,103 @@ export function applySemanticOperations(
                 seq: remoteStamp.seq
             };
             if (!stampWins(localStampLike, remoteStampLike)) {
-                // Remote wins, don't apply local op
+                // Remote wins. But we still need to join clocks in the meta!
+                meta.fields[fk] = {
+                    ...remoteStamp,
+                    clock: mergeVectors(remoteStamp.clock, winner.clock)
+                };
+                meta.clock = mergeVectors(meta.clock, winner.clock);
                 continue;
             }
+            jointClock = mergeVectors(remoteStamp.clock, winner.clock);
         }
 
         const doc = resultDocs.get(winner.docPath) || {};
-        const policy = getMergePolicy(winner.docPath, winner.property);
-
-        if (policy === 'atomic') {
-            if (winner.isDelete) {
-                delete doc[winner.property];
+        
+        
+        // Navigation array
+        const p = winner.path;
+        
+        let current: any = doc;
+        let parentIsArray = false;
+        let arrRef: any[] = [];
+        let itemIndex = -1;
+        
+        for (let i = 0; i < p.length - 1; i++) {
+            const currentPath = p.slice(0, i + 1);
+            const pol = getMergePolicy(winner.docPath, currentPath);
+            
+            if (pol === 'keyed' || pol === 'ordered-keyed') {
+                if (!Array.isArray(current[p[i]])) current[p[i]] = [];
+                const arr = current[p[i]] as any[];
+                const itemId = p[i + 1];
+                let idx = arr.findIndex((x: any) => String(x.id || x.exId) === String(itemId));
+                
+                if (i + 1 === p.length - 1) {
+                    parentIsArray = true;
+                    arrRef = arr;
+                    itemIndex = idx;
+                    break;
+                } else {
+                    if (idx < 0) {
+                        // Include id or exId based on what we're pushing
+                        // We can't know for sure, so we just push an empty object,
+                        // but if we need an id, it's safer to push { id: itemId } and hope it's not exId.
+                        // Wait, if it is exId, it might have { id: itemId }. 
+                        // It will match id next time anyway.
+                        arr.push({ id: itemId });
+                        idx = arr.length - 1;
+                    }
+                    current = arr[idx];
+                    i++; // skip itemId
+                }
             } else {
-                doc[winner.property] = winner.value;
+                if (current[p[i]] === undefined) current[p[i]] = {};
+                current = current[p[i]];
             }
-        } else if (policy === 'ordered-keyed') {
-            const arr = Array.isArray(doc[winner.property]) ? [...(doc[winner.property] as any[])] : [];
-            const idx = arr.findIndex((x: any) => String(x.id) === winner.itemId);
-            if (winner.isDelete) {
-                if (idx >= 0) arr.splice(idx, 1);
-            } else {
-                if (idx >= 0) arr[idx] = winner.value;
-                else arr.push(winner.value);
-            }
-            doc[winner.property] = arr.sort((a: any, b: any) => (a.$order || 0) - (b.$order || 0)).map((x: any) => {
-                const copy = { ...x };
-                delete copy.$order;
-                return copy;
-            });
         }
+
+        const lastSeg = p[p.length - 1];
+        
+        if (parentIsArray) {
+            if (winner.isDelete) {
+                if (itemIndex >= 0) arrRef.splice(itemIndex, 1);
+            } else {
+                if (itemIndex >= 0) {
+                    if (typeof winner.value === 'object' && winner.value !== null) {
+                        arrRef[itemIndex] = { ...arrRef[itemIndex], ...winner.value };
+                    } else {
+                        arrRef[itemIndex] = winner.value;
+                    }
+                } else {
+                    arrRef.push(winner.value);
+                }
+            }
+            const parentPolicy = getMergePolicy(winner.docPath, p.slice(0, -1));
+            if (parentPolicy === 'ordered-keyed') {
+                arrRef.sort((a: any, b: any) => (a.$order || 0) - (b.$order || 0));
+                for(const item of arrRef) delete item.$order;
+            }
+        } else {
+            if (winner.isDelete) {
+                delete current[lastSeg];
+            } else {
+                current[lastSeg] = winner.value;
+            }
+        }
+        
         resultDocs.set(winner.docPath, doc);
 
-        // Update stamp
-        meta.fields[fieldKey] = {
-            clock: winner.clock,
+        meta.fields[fk] = {
+            clock: jointClock, // join of all observed causal history
             actorId: winner.actorId,
             seq: winner.seq,
             deleted: winner.isDelete ? true : undefined
         };
-        // Update document clock
-        for (const [actor, seq] of Object.entries(winner.clock)) {
-            meta.clock[actor] = Math.max(meta.clock[actor] || 0, seq);
-        }
+        meta.clock = mergeVectors(meta.clock, jointClock);
     }
+    
+    normalizeDomainData(resultDocs);
 
     return { documents: resultDocs, syncMetas: resultMetas };
 }
