@@ -54,7 +54,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         
         let actorId = current?.actorId ?? generateId('actor');
         let seq = (current?.actorSeq ?? 0) + 1;
-        let clock = current?.clock ?? { [actorId]: seq };
+        let clock = { ...(current?.clock ?? {}) };
         clock[actorId] = seq;
 
         const baseDocs = projectDocuments(current?.data ?? fallback, catalog);
@@ -129,6 +129,8 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             
             let syncMeta = current.syncMetaByDocument ?? {};
             let updatedClock = { ...current.clock };
+            // hydrateLocal MUST NOT modify existing pending clocks
+
             
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
