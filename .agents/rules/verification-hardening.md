@@ -10,7 +10,7 @@ M5 distingue tra test normativi di accettazione e suite legacy/stress. Un test n
 
 - Un test normativo MUST chiamare il boundary production che pretende di verificare. Vietato reimplementare nel test logout, ricerca, calcolo o persistenza e poi verificare la propria reimplementazione.
 - Un test normativo MUST avere almeno un'asserzione osservabile sul risultato, sullo stato persistito o su una collaborazione production significativa.
-- Sono vietati `it.skip`, `test.skip`, `describe.skip`, `.todo` e assertion tautologiche nei file normativi M5.
+- Sono vietati `it.skip`, `test.skip`, `describe.skip`, `.todo`, `.only` e assertion tautologiche nei file normativi M5.
 - I test guest login/logout MUST attraversare `AuthProvider` / `useAuth`.
 - La migrazione guest → account MUST osservare il local journal reale al boundary testato; il successo non può essere dedotto soltanto dallo stato Zustand.
 - La ricerca alimenti MUST attraversare `Logic.searchFoods`.
