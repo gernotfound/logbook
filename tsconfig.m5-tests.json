@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "types": ["vitest/globals"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "tests/setup.tsx",
+    "tests/logout_protection.test.ts",
+    "tests/guest_bootstrap_lifecycle.test.tsx",
+    "tests/guest_account_migration_v3.test.tsx",
+    "tests/catalog_resolution_pipeline.test.ts",
+    "tests/hardening/**/*.test.ts",
+    "tests/hardening/**/*.test.tsx"
+  ],
+  "references": []
+}
