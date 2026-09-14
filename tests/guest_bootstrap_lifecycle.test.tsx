@@ -93,7 +93,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         };
 
         const cachedUserData: UserData = {
-            profile: { name: 'Guest Tester' },
+            profile: { height: '175' },
             library: [customEx],
             customFoods: [customFood],
             catalogOverrides: {
@@ -178,7 +178,7 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
 
         localStorage.setItem('logbook_is_guest', 'true');
         useAppStore.getState().setUserData({
-            profile: { name: 'Existing User' },
+            profile: { height: '180' },
             library: [customEx],
             customFoods: [],
             catalogOverrides: {}
