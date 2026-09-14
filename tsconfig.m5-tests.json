@@ -3,8 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "types": ["vitest/globals"]
+    "noUnusedParameters": false
   },
   "include": [
     "src/**/*.ts",
