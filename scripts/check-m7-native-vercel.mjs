@@ -45,10 +45,28 @@ for (const output of ['dist/sw.js', 'dist/manifest.webmanifest']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
 }
 
+if (existsSync('dist/sw.js')) {
+  const sw = readFileSync('dist/sw.js', 'utf8');
+  if (sw.length < 500) failures.push(`generated service worker is unexpectedly small (${sw.length} bytes)`);
+  if (sw.includes('__WB_MANIFEST')) failures.push('generated service worker still contains raw __WB_MANIFEST placeholder');
+  if (!sw.includes('index.html')) failures.push('generated service worker does not include index.html in its precache payload');
+}
+
+if (existsSync('dist/manifest.webmanifest')) {
+  try {
+    const manifest = JSON.parse(readFileSync('dist/manifest.webmanifest', 'utf8'));
+    if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
+    if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
+    if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
+  } catch (error) {
+    failures.push(`PWA manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 if (failures.length) {
   console.error('M7 native Vercel/PWA contract failed:');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log('M7 native Vercel/PWA contract OK: M6 Vite/PWA config byte-identical, native Functions bounded to 300s, daily recovery configured, PWA artifacts present.');
+console.log('M7 native Vercel/PWA contract OK: M6 Vite/PWA config byte-identical, SW precache injected, manifest scope preserved, native Functions bounded to 300s, daily recovery configured.');
