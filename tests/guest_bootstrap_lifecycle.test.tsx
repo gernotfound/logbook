@@ -5,7 +5,7 @@ import { render, screen, act } from '@testing-library/react';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAuth } from '../src/hooks/useAuth';
 import { useAppStore } from '../src/store/useAppStore';
-import {  clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
 import { idbStore } from './setup';
@@ -21,7 +21,7 @@ const GuestTestComponent = () => {
             <div data-testid="exercise-count">{userData?.library?.length ?? 0}</div>
             <div data-testid="food-count">{userData?.customFoods?.length ?? 0}</div>
             <button data-testid="btn-guest" onClick={() => loginAsGuest()}>Guest Login</button>
-            <button data-testid="btn-logout" onClick={() => logout(true)}>Logout</button>
+            <button data-testid="btn-logout" onClick={() => logout({ mode: 'normal' })}>Logout</button>
         </div>
     );
 };
@@ -50,7 +50,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
 
         expect(screen.getByTestId('auth-loading').textContent).toBe('READY');
 
-        // Click loginAsGuest
         await act(async () => {
             screen.getByTestId('btn-guest').click();
         });
@@ -69,7 +68,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
     });
 
     it('M2.2: Pre-render cache bootstrap resolves custom deltas with global catalog in main.tsx', async () => {
-        // Local fixture to simulate a populated global catalog (seed is empty — commit e61a133)
         const catalog = {
             exercises: [
                 { id: 'panca-piana-bilanciere', name: 'Panca Piana Bilanciere', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3 }
@@ -98,7 +96,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             isCustom: true
         };
 
-        // Cached user data in IndexedDB with 1 custom exercise, 1 custom food, and 1 override
         const cachedUserData: UserData = {
             profile: { name: 'Guest Tester' },
             library: [customEx],
@@ -110,7 +107,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             }
         };
 
-        // Simulate main.tsx bootstrap resolution logic
         const resolvedLibrary = resolveEffectiveExercises(catalog.exercises, cachedUserData.library || [], cachedUserData.catalogOverrides);
         const resolvedFoods = resolveEffectiveFoods(catalog.foods, cachedUserData.customFoods || [], cachedUserData.catalogOverrides);
 
@@ -124,16 +120,13 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         useAppStore.getState().setUserData(resolvedBootstrappedData);
 
         const state = useAppStore.getState().userData!;
-        // Total exercises = 1 custom + all standard exercises
         expect(state.library?.length).toBe(catalog.exercises.length + 1);
         expect(state.library?.[0].id).toBe('custom_biceps_curl');
         expect(state.library?.[0].isDefault).toBe(false);
 
-        // Overridden bench has updated notes
         const bench = state.library?.find(e => e.id === 'panca-piana-bilanciere');
         expect(bench?.notes).toBe('Pausa 2s');
 
-        // Total foods = 1 custom + all standard foods
         expect(state.customFoods?.length).toBe(catalog.foods.length + 1);
         expect(state.customFoods?.[0].id).toBe('custom_greek_yogurt');
         expect(state.customFoods?.[0].isCustom).toBe(true);
@@ -148,7 +141,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
             </AuthProvider>
         );
 
-        // When guest is active in localStorage, loginAsGuest loads catalog
         await act(async () => {
             screen.getByTestId('btn-guest').click();
         });
@@ -156,12 +148,10 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST');
         expect(Array.isArray(useAppStore.getState().userData?.library)).toBe(true);
         expect(useAppStore.getState().userData?.library?.length).toBe(0);
-
-        // Ensure localStorage flag is retained
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
     });
 
-    it('M2.4: Guest logout cleans up guest state and resets store cleanly', async () => {
+    it('M2.4: Guest logout cleans up guest state and resets store through AuthProvider', async () => {
         render(
             <AuthProvider>
                 <GuestTestComponent />
@@ -175,7 +165,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         expect(screen.getByTestId('auth-mode').textContent).toBe('GUEST');
         expect(useAppStore.getState().userData).not.toBeNull();
 
-        // Logout with skipConfirm = true
         await act(async () => {
             screen.getByTestId('btn-logout').click();
         });
@@ -186,7 +175,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
     });
 
     it('M2.5: loginAsGuest preserves existing custom exercises and foods when resolving missing catalog', async () => {
-        // Local fixture to populate the cache (seed is empty — commit e61a133)
         const fixtureCatalog = {
             manifest: { version: '1.0.0', schemaVersion: 1, docRefs: { exercises: 'exercises_v1', foods: 'foods_v1' } },
             exercises: [
@@ -205,7 +193,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         };
 
         localStorage.setItem('logbook_is_guest', 'true');
-        // User already has a custom exercise in store, but library was missing standard catalog
         useAppStore.getState().setUserData({
             profile: { name: 'Existing User' },
             library: [customEx],
@@ -224,11 +211,8 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         });
 
         const state = useAppStore.getState().userData!;
-        // 1 custom + 1 global fixture = 2
         expect(state.library?.length).toBe(2);
-        // Custom exercise is preserved
         expect(state.library?.find(e => e.id === 'custom_lat_pull')).toBeDefined();
-        // Standard exercise is also present
         expect(state.library?.find(e => e.id === 'panca-piana-bilanciere')).toBeDefined();
     });
 });
