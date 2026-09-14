@@ -94,7 +94,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
         cache: 'no-store',
     });
     const body = await readJson(response);
-    if (!response.ok && response.status !== 202) {
+    if (!response.ok) {
         const message = typeof body.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
         const error = new Error(message) as Error & { definitiveRejection?: boolean };
         error.definitiveRejection = response.status === 400 || response.status === 401 || response.status === 403;
@@ -123,11 +123,32 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker):
     return body as unknown as ServerDeletionStatus;
 }
 
-async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: DeletionContext): Promise<AccountDeletionOutcome> {
+function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
     try {
-        await auth.signOut();
-    } catch (error) {
-        throw new Error('Account cloud eliminato, ma la sessione locale non è stata chiusa. Copia locale conservata; riapri LogBook per completare la pulizia.', { cause: error });
+        if (localStorage.getItem('logbook_is_guest') === 'true') return true;
+    } catch {
+        // If guest state cannot be read, Firebase Auth below still protects authenticated owners.
+    }
+    const currentUid = auth.currentUser?.uid;
+    return Boolean(currentUid && currentUid !== marker.uid);
+}
+
+async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: DeletionContext): Promise<AccountDeletionOutcome> {
+    // A stale receipt from account A must never sign out, purge global drafts, or reset
+    // the in-memory view of account B (or an explicitly active guest) on a shared device.
+    if (anotherLocalIdentityIsActive(marker)) {
+        return {
+            status: 'pending',
+            message: 'La cancellazione cloud dell’account precedente è completa. La pulizia locale di quell’account resta sospesa finché è attiva un’altra sessione su questo dispositivo.',
+        };
+    }
+
+    if (auth.currentUser?.uid === marker.uid) {
+        try {
+            await auth.signOut();
+        } catch (error) {
+            throw new Error('Account cloud eliminato, ma la sessione locale non è stata chiusa. Copia locale conservata; riapri LogBook per completare la pulizia.', { cause: error });
+        }
     }
 
     try {
