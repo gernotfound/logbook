@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
 const failures = [];
@@ -7,12 +8,24 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
+const M6_VITE_BLOB = '230bc894e60ce05a08bfde621cae73625ec812cd';
+const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
+if (currentViteBlob !== M6_VITE_BLOB) {
+  failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
+}
+
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 for (const forbidden of ['nitro', 'workflow']) {
   if (allDeps[forbidden]) failures.push(`forbidden M7 dependency present: ${forbidden}`);
 }
 if (/workflow\/vite|nitro\/vite|\bnitro\s*\(/.test(vite)) {
   failures.push('vite.config.ts must remain a plain Vite/PWA configuration without Nitro/Workflow');
+}
+if (!packageJson.dependencies?.['firebase-admin']) {
+  failures.push('firebase-admin must be a runtime dependency for native Vercel Functions');
+}
+if (packageJson.devDependencies?.['firebase-admin']) {
+  failures.push('firebase-admin must not remain dev-only');
 }
 
 for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) {
@@ -38,4 +51,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('M7 native Vercel/PWA contract OK: static Vite preserved, native Functions bounded to 300s, daily recovery configured, PWA artifacts present.');
+console.log('M7 native Vercel/PWA contract OK: M6 Vite/PWA config byte-identical, native Functions bounded to 300s, daily recovery configured, PWA artifacts present.');
