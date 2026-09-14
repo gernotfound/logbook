@@ -66,7 +66,7 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
                 throw error;
             }
             if (!current()) throw error;
-            const fullBatchRetained = Boolean(retained) && delivered.every(operation =>
+            const fullBatchRetained = retained !== undefined && delivered.every(operation =>
                 retained.pending.some(candidate => sameOperationIdentity(operation, candidate))
             );
             if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
