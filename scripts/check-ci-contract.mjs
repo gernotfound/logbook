@@ -24,6 +24,11 @@ function stepBlock(name) {
   return workflow.match(new RegExp(`^      - name: ${escaped}\\s*\\n([\\s\\S]*?)(?=^      - name:|(?![\\s\\S]))`, 'm'))?.[0] ?? '';
 }
 
+function forbidCriticalStepBypasses(label, block) {
+  forbidPattern(`${label} conditional skip`, block, /^        if\s*:/m);
+  forbidPattern(`${label} continue-on-error`, block, /^        continue-on-error\s*:/m);
+}
+
 const pullRequestBlock = workflow.match(/^  pull_request:\s*\n([\s\S]*?)(?=^  (?:push|workflow_dispatch):|^[^\s])/m)?.[1];
 if (!pullRequestBlock) {
   failures.push('PR trigger: missing pull_request block under on');
@@ -34,11 +39,26 @@ if (!pullRequestBlock) {
     pullRequestBlock,
     /^      - feat\/ui-workout-guest-flow\s*$/m,
   );
+  forbidPattern('PR trigger event-type filter', pullRequestBlock, /^    types\s*:/m);
+  forbidPattern('PR trigger path filter', pullRequestBlock, /^    paths\s*:/m);
+  forbidPattern('PR trigger path-ignore filter', pullRequestBlock, /^    paths-ignore\s*:/m);
 }
 
 forbidPattern('privileged PR trigger', workflow, /^\s*pull_request_target:\s*$/m);
 forbidPattern('secret references', workflow, /\$\{\{\s*secrets\./);
-requirePattern('read-only repository permission', workflow, /^permissions:\s*\n  contents: read\s*$/m);
+forbidPattern('job-level conditional skip', workflow, /^    if\s*:/m);
+forbidPattern('continue-on-error', workflow, /^\s+continue-on-error\s*:/m);
+
+const permissionDeclarations = workflow.match(/^\s*permissions\s*:/gm) ?? [];
+if (permissionDeclarations.length !== 1) {
+  failures.push(`repository permissions: expected exactly one permissions declaration, found ${permissionDeclarations.length}`);
+}
+requirePattern(
+  'read-only repository permission',
+  workflow,
+  /^permissions:\s*\n  contents: read\s*\n(?=\S)/m,
+);
+
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern(
   'expected SHA binding',
@@ -49,6 +69,7 @@ requirePattern(
 const checkoutStep = stepBlock('Checkout exact event head');
 if (!checkoutStep) failures.push('exact PR-head checkout: named checkout step is missing');
 else {
+  forbidCriticalStepBypasses('exact PR-head checkout', checkoutStep);
   requirePattern('checkout action', checkoutStep, /^        uses: actions\/checkout@v7\s*$/m);
   requirePattern(
     'exact PR-head checkout ref',
@@ -61,7 +82,14 @@ else {
 const verifyStep = stepBlock('Verify exact checkout');
 if (!verifyStep) failures.push('runtime SHA guard: named verification step is missing');
 else {
+  forbidCriticalStepBypasses('runtime SHA guard', verifyStep);
+  forbidPattern('runtime SHA guard step env override', verifyStep, /^        env\s*:/m);
   requirePattern('runtime SHA read', verifyStep, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
+  const actualShaAssignments = verifyStep.match(/^\s*actual_sha=/gm) ?? [];
+  if (actualShaAssignments.length !== 1) {
+    failures.push(`runtime SHA guard: expected exactly one actual_sha assignment, found ${actualShaAssignments.length}`);
+  }
+  forbidPattern('runtime expected SHA reassignment', verifyStep, /^\s*EXPECTED_SHA=/m);
   requirePattern(
     'runtime SHA comparison',
     verifyStep,
@@ -98,16 +126,18 @@ else {
 const auditStep = stepBlock('Run security audit');
 if (!auditStep) failures.push('security audit: named audit step is missing');
 else {
+  forbidCriticalStepBypasses('security audit', auditStep);
   requirePattern('security audit command', auditStep, /^        run: npm audit --audit-level=high\s*$/m);
 }
 
 const verificationStep = stepBlock('Run canonical M6 verification');
 if (!verificationStep) failures.push('canonical M6 gate: named verification step is missing');
 else {
+  forbidCriticalStepBypasses('canonical M6 gate', verificationStep);
   requirePattern(
     'canonical M6 gate command',
     verificationStep,
-    /^          npm run verify:m6(?:\s|$)/m,
+    /^          npm run verify:m6 2>&1 \| tee m6-verification\.log\s*$/m,
   );
   requirePattern('pipeline failure propagation', verificationStep, /^          set -o pipefail\s*$/m);
 }
@@ -126,4 +156,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M6 CI contract OK: active PR targets, exact-head guard, canonical gate, runtime setup, permissions and legacy-workflow removal verified.');
+console.log('M6 CI contract OK: unfiltered PR targets, exact-head guard, canonical gate, runtime setup, failure propagation, read-only permissions and legacy-workflow removal verified.');
