@@ -6,7 +6,7 @@ Questa directory e `vitest.hardening.config.ts` definiscono il gate normativo M5
 
 - `npm run test:hardening` — esegue i test di accettazione M5 in un worker singolo.
 - `npm run test:typecheck:m5` — typecheck dei test normativi selezionati insieme ai contratti production importati.
-- `npm run test:quality:m5` — rifiuta skip/todo, marker di lavoro incompleto e assertion tautologiche nei file normativi.
+- `npm run test:quality:m5` — rifiuta skip/todo, test `.only`, marker di lavoro incompleto e assertion tautologiche nei file normativi; i test sotto `tests/hardening/` vengono scoperti automaticamente.
 - `npm run verify:m5` — gate cumulativo M0–M5.
 
 ## Cosa vale come prova
