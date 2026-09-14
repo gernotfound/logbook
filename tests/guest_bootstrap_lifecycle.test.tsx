@@ -8,7 +8,6 @@ import { useAppStore } from '../src/store/useAppStore';
 import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../src/lib/catalog/deltaResolver';
 import type { UserData, Exercise, Food } from '../src/types';
-import { idbStore } from './setup';
 
 const GuestTestComponent = () => {
     const { currentUser, loading, isGuest, loginAsGuest, logout } = useAuth();
@@ -32,7 +31,6 @@ describe('Milestone M2: Guest Bootstrap & Cold Start Lifecycle', () => {
         (auth as any).currentUser = null;
         vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => { callback(null); return () => {}; });
         localStorage.clear();
-        for (const k in idbStore) delete idbStore[k];
         if (typeof window !== 'undefined') {
             window.__INITIAL_USER_DATA__ = null;
         }
