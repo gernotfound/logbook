@@ -13,12 +13,30 @@ export const maxDuration = 300;
 const POST_BUDGET_MS = 275_000;
 const GET_PROGRESS_BUDGET_MS = 20_000;
 
+class RequestInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RequestInputError';
+  }
+}
+
+function validatedInput<T>(read: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    throw new RequestInputError(error instanceof Error ? error.message : 'Richiesta di cancellazione non valida.');
+  }
+}
+
 function errorResponse(error: unknown): Response {
   if (error instanceof RequestAuthError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
-  const message = error instanceof Error ? error.message : 'Richiesta di cancellazione non valida.';
-  return Response.json({ error: message }, { status: 400 });
+  if (error instanceof RequestInputError) {
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+  console.error('[account-deletion] backend failure', error);
+  return Response.json({ error: 'Servizio di cancellazione temporaneamente non disponibile. La copia locale è stata conservata.' }, { status: 500 });
 }
 
 async function requestBody(request: Request): Promise<Record<string, unknown>> {
@@ -34,7 +52,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const { uid } = await verifyDeletionRequester(request);
     const body = await requestBody(request);
-    const receiptToken = validateReceipt(body.receiptToken);
+    const receiptToken = validatedInput(() => validateReceipt(body.receiptToken));
 
     await createOrRefreshDeletionJob(uid, receiptToken);
     await processAccountDeletion(uid, Date.now() + POST_BUDGET_MS);
@@ -49,8 +67,8 @@ export async function POST(request: Request): Promise<Response> {
 export async function GET(request: Request): Promise<Response> {
   try {
     await verifyStatusAppCheck(request);
-    const uid = validateUid(request.headers.get('x-account-deletion-uid'));
-    const receiptToken = validateReceipt(request.headers.get('x-account-deletion-receipt'));
+    const uid = validatedInput(() => validateUid(request.headers.get('x-account-deletion-uid')));
+    const receiptToken = validatedInput(() => validateReceipt(request.headers.get('x-account-deletion-receipt')));
 
     const authorized = await readAuthorizedDeletionJob(uid, receiptToken);
     if (!authorized) return Response.json({ error: 'Cancellazione non trovata.' }, { status: 404 });
