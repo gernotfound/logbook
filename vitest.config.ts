@@ -25,6 +25,7 @@ export default defineConfig({
       '**/.agents/**',
       '**/tests/isolated/**',
       '**/tests/emulator/**',
+      '**/tests/fuzz/**',
       ...stressPatterns,
     ],
   },
