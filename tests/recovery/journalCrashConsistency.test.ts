@@ -147,6 +147,19 @@ describe('M3 journal crash consistency', () => {
         expect((await readLocal(owner))?.data.profile.height).toBe('171');
     });
 
+    it('keeps a post-commit acknowledgement error hard-failed when the local journal is no longer durable', async () => {
+        await commitLocal(owner, data(171), data(170));
+        installReplaySafeRemote(async () => {
+            await clear();
+        });
+
+        const result = await replicateJournal();
+
+        expect(result.status).toBe('failed');
+        expect(await readLocal(owner)).toBeUndefined();
+        expect(currentCloudData().profile.height).toBe('171');
+    });
+
     it('preserves a newer local edit created between remote commit and acknowledgement', async () => {
         await commitLocal(owner, data(171), data(170));
         let injected = false;
