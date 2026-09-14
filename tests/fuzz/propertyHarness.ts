@@ -67,7 +67,8 @@ export function runProperty(
     const cases = forcedSeed ? 1 : (requestedCases ?? defaultCases);
 
     for (let index = 0; index < cases; index++) {
-        const seed = forcedSeed ?? ((0x9e3779b9 + Math.imul(index + 1, 0x85ebca6b)) >>> 0) || 1;
+        const generatedSeed = ((0x9e3779b9 + Math.imul(index + 1, 0x85ebca6b)) >>> 0) || 1;
+        const seed = forcedSeed ?? generatedSeed;
         try {
             property(new SeededRandom(seed), seed);
         } catch (error) {
