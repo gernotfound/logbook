@@ -6,7 +6,7 @@ const remote = vi.hoisted(() => ({
     apply: vi.fn(),
     auth: { currentUser: { uid: 'a' } as { uid: string } | null },
 }));
-const catalog = { exercises: [], foods: [] };
+const catalog = vi.hoisted(() => ({ exercises: [], foods: [] }));
 
 vi.mock('../../src/lib/firebase', () => ({
     auth: remote.auth,
@@ -94,7 +94,7 @@ afterEach(async () => {
 });
 
 describe('M3 journal crash consistency', () => {
-    it('recovers a durable local commit after a process boundary before any remote delivery', async () => {
+    it('recovers a durable local commit after a new session epoch before any remote delivery', async () => {
         await commitLocal(owner, data(171), data(170));
         const beforeRestart = await readLocal(owner);
         expect(beforeRestart?.data.profile.height).toBe('171');
