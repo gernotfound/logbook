@@ -1,13 +1,26 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
-const files = [
+const fixedFiles = [
   'tests/logout_protection.test.ts',
   'tests/guest_bootstrap_lifecycle.test.tsx',
   'tests/guest_account_migration_v3.test.tsx',
   'tests/catalog_resolution_pipeline.test.ts',
-  'tests/hardening/nutrition_guest_flow.test.tsx',
 ];
+const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 
+function collectTests(directory) {
+  if (!fs.existsSync(directory)) return [];
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...collectTests(fullPath));
+    else if (testFilePattern.test(entry.name)) files.push(fullPath);
+  }
+  return files;
+}
+
+const files = [...new Set([...fixedFiles, ...collectTests('tests/hardening')])].sort();
 const forbidden = [
   { label: 'skipped/todo test', pattern: /\b(?:it|test|describe)\.(?:skip|todo)\s*\(/g },
   { label: 'focused test', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
