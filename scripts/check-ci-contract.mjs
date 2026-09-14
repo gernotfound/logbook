@@ -4,7 +4,7 @@ const workflowPath = '.github/workflows/verification.yml';
 const failures = [];
 
 if (!existsSync(workflowPath)) {
-  console.error(`M6 CI contract failed: missing ${workflowPath}`);
+  console.error(`M7 CI contract failed: missing ${workflowPath}`);
   process.exit(1);
 }
 
@@ -34,14 +34,17 @@ if (!pullRequestBlock) {
   failures.push('PR trigger: missing pull_request block under on');
 } else {
   requirePattern('PR trigger main target', pullRequestBlock, /^      - main\s*$/m);
-  requirePattern(
-    'PR trigger integration target',
-    pullRequestBlock,
-    /^      - feat\/ui-workout-guest-flow\s*$/m,
-  );
+  forbidPattern('PR trigger obsolete integration target', pullRequestBlock, /^      - feat\/ui-workout-guest-flow\s*$/m);
   forbidPattern('PR trigger event-type filter', pullRequestBlock, /^    types\s*:/m);
   forbidPattern('PR trigger path filter', pullRequestBlock, /^    paths\s*:/m);
   forbidPattern('PR trigger path-ignore filter', pullRequestBlock, /^    paths-ignore\s*:/m);
+}
+
+const pushBlock = workflow.match(/^  push:\s*\n([\s\S]*?)(?=^  (?:pull_request|workflow_dispatch):|^[^\s])/m)?.[1];
+if (!pushBlock) failures.push('push trigger: missing push block under on');
+else {
+  requirePattern('push main target', pushBlock, /^      - main\s*$/m);
+  requirePattern('push M7 branch target', pushBlock, /^      - feat\/m7-server-account-deletion\s*$/m);
 }
 
 forbidPattern('privileged PR trigger', workflow, /^\s*pull_request_target:\s*$/m);
@@ -59,6 +62,7 @@ requirePattern(
   /^permissions:\s*\n  contents: read\s*\n(?=\S)/m,
 );
 
+requirePattern('M7 job identity', workflow, /^    name: ["']M7 Exact-Head Verification["']\s*$/m);
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern(
   'expected SHA binding',
@@ -130,30 +134,33 @@ else {
   requirePattern('security audit command', auditStep, /^        run: npm audit --audit-level=high\s*$/m);
 }
 
-const verificationStep = stepBlock('Run canonical M6 verification');
-if (!verificationStep) failures.push('canonical M6 gate: named verification step is missing');
+const verificationStep = stepBlock('Run canonical M7 verification');
+if (!verificationStep) failures.push('canonical M7 gate: named verification step is missing');
 else {
-  forbidCriticalStepBypasses('canonical M6 gate', verificationStep);
+  forbidCriticalStepBypasses('canonical M7 gate', verificationStep);
   requirePattern(
-    'canonical M6 gate command',
+    'canonical M7 gate command',
     verificationStep,
-    /^          npm run verify:m6 2>&1 \| tee m6-verification\.log\s*$/m,
+    /^          npm run verify:m7 2>&1 \| tee m7-verification\.log\s*$/m,
   );
   requirePattern('pipeline failure propagation', verificationStep, /^          set -o pipefail\s*$/m);
 }
 
-for (const legacy of ['.github/workflows/test.yml', '.github/workflows/playwright.yml']) {
-  if (existsSync(legacy)) failures.push(`legacy divergent workflow still exists: ${legacy}`);
+for (const legacy of ['.github/workflows/test.yml', '.github/workflows/playwright.yml', '.github/workflows/m7-lockfile-generator.yml']) {
+  if (existsSync(legacy)) failures.push(`legacy/divergent workflow still exists: ${legacy}`);
 }
 
 if (packageJson.scripts?.['verify:m6'] !== 'npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5') {
-  failures.push('package.json verify:m6 must compose repo hygiene, CI contract, then verify:m5 exactly');
+  failures.push('package.json verify:m6 must preserve the validated M6 composition exactly');
+}
+if (packageJson.scripts?.['verify:m7'] !== 'npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7') {
+  failures.push('package.json verify:m7 must compose verify:m6, server typecheck, targeted M7 tests and PWA/Nitro contract exactly');
 }
 
 if (failures.length > 0) {
-  console.error('M6 CI contract check failed:');
+  console.error('M7 CI contract check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log('M6 CI contract OK: unfiltered PR targets, exact-head guard, canonical gate, runtime setup, failure propagation, read-only permissions and legacy-workflow removal verified.');
+console.log('M7 CI contract OK: main PRs, M7 branch pushes, exact-head guard, canonical M7 gate, failure propagation, read-only permissions and legacy workflow removal verified.');
