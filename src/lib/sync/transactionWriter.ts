@@ -6,6 +6,7 @@ import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolutio
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
 import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import { compactSyncMetas } from './causalCompaction';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
@@ -48,7 +49,8 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
             baseDocs.set(path, remote);
         });
 
-        const { documents: newDocs, syncMetas: newSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
+        const { documents: newDocs, syncMetas: mergedSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
+        const newSyncMetas = compactSyncMetas(mergedSyncMetas);
 
         for (const [path, docData] of newDocs.entries()) {
             let business = removeUndefinedValues(docData) as DocumentData;
