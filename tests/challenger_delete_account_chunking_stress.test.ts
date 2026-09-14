@@ -1,188 +1,177 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.unmock('../src/lib/db');
-
-const testUid = 'test-user-id';
 const boundary = vi.hoisted(() => ({
-    token: vi.fn(),
-    read: vi.fn(),
-    readRoot: vi.fn(),
-    commit: vi.fn(),
+    getIdTokenResult: vi.fn(),
+    signOut: vi.fn(),
+    ensureAppCheck: vi.fn(),
+    waitForPendingWrites: vi.fn(),
+    waitForJournalIdle: vi.fn(),
+    getAppCheckToken: vi.fn(),
+    cancelPendingSyncs: vi.fn(),
+    resetStore: vi.fn(),
 }));
-
-import { TestDB as DB } from './testUtils';
-import { auth, deleteUser } from '../src/lib/firebase';
 
 vi.mock('../src/lib/firebase', () => ({
     auth: {
         currentUser: {
             uid: 'test-user-id',
-            getIdTokenResult: () => boundary.token(),
+            getIdTokenResult: boundary.getIdTokenResult,
         },
-        signOut: vi.fn().mockResolvedValue(undefined),
+        signOut: boundary.signOut,
     },
-    db: {},
-    getDb: vi.fn().mockReturnValue({}),
-    ensureAppCheck: vi.fn().mockResolvedValue(undefined),
-    waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    deleteUser: vi.fn().mockResolvedValue(undefined),
+    getDb: vi.fn(() => ({})),
+    ensureAppCheck: boundary.ensureAppCheck,
+    waitForPendingWrites: boundary.waitForPendingWrites,
 }));
 
-vi.mock('../src/lib/sync/session', async () => {
-    const actual = await vi.importActual<typeof import('../src/lib/sync/session')>('../src/lib/sync/session');
+vi.mock('../src/lib/appCheck', () => ({
+    getAppCheckToken: boundary.getAppCheckToken,
+}));
+
+vi.mock('../src/lib/sync/replicateJournal', () => ({
+    waitForJournalIdle: boundary.waitForJournalIdle,
+}));
+
+vi.mock('../src/lib/sync/session', () => ({
+    storageOwner: () => 'user:test-user-id',
+    captureSession: () => ({ owner: 'user:test-user-id', epoch: 1 }),
+    isCurrentSession: (session: { owner: string }) => session.owner === 'user:test-user-id',
+}));
+
+vi.mock('../src/store/useAppStore', () => ({
+    useAppStore: {
+        getState: () => ({
+            cancelPendingSyncs: boundary.cancelPendingSyncs,
+            resetStore: boundary.resetStore,
+        }),
+    },
+}));
+
+import { auth } from '../src/lib/firebase';
+import { deleteAccount } from '../src/lib/db/db_account';
+import { isAccountDeletionPending, readAccountDeletionMarker } from '../src/lib/sync/accountGate';
+
+function response(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+    });
+}
+
+function context() {
     return {
-        ...actual,
-        storageOwner: () => auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest',
-        captureSession: () => ({ owner: auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest', epoch: 0 }),
-        isCurrentSession: (session: any) => session.owner === (auth.currentUser?.uid ? `user:${auth.currentUser.uid}` : 'guest'),
+        purgeAllLocalUserData: vi.fn().mockResolvedValue(undefined),
+        resetCache: vi.fn(),
     };
-});
+}
 
-const createdBatches: any[] = [];
-
-vi.mock('firebase/firestore', () => ({
-    collection: (_db: unknown, ...path: string[]) => path.join('/'),
-    doc: (_db: unknown, ...path: string[]) => path.join('/'),
-    limit: (count: number) => count,
-    query: (path: string, count: number) => ({ path, count }),
-    getDocsFromServer: boundary.read,
-    getDocFromServer: boundary.readRoot,
-    getDocs: vi.fn(),
-    writeBatch: () => {
-        const batch = {
-            deletedRefs: [] as any[],
-            delete: vi.fn((ref: any) => {
-                batch.deletedRefs.push(ref);
-            }),
-            commit: vi.fn().mockImplementation(async () => {
-                await boundary.commit(batch.deletedRefs);
-            }),
-        };
-        createdBatches.push(batch);
-        return batch as any;
-    },
-}));
-
-describe('Challenger 2: DB.deleteAccount Chunking Stress & Adversarial Verification', () => {
-    let documents: Set<string>;
-
+describe('M7 client boundary: durable server-coordinated account deletion', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        createdBatches.length = 0;
-        documents = new Set([`users/${testUid}`]);
-
-        boundary.token.mockResolvedValue({ authTime: new Date().toISOString() });
+        localStorage.clear();
+        boundary.getIdTokenResult.mockResolvedValue({
+            authTime: new Date().toISOString(),
+            token: 'firebase-id-token',
+        });
+        boundary.signOut.mockResolvedValue(undefined);
+        boundary.ensureAppCheck.mockResolvedValue(undefined);
+        boundary.waitForPendingWrites.mockResolvedValue(undefined);
+        boundary.waitForJournalIdle.mockResolvedValue(undefined);
+        boundary.getAppCheckToken.mockResolvedValue('app-check-token');
         auth.currentUser = {
-            uid: testUid,
-            getIdTokenResult: boundary.token,
-        } as any;
+            uid: 'test-user-id',
+            getIdTokenResult: boundary.getIdTokenResult,
+        } as typeof auth.currentUser;
+        vi.stubGlobal('fetch', vi.fn());
+    });
 
-        boundary.read.mockImplementation(async ({ path, count }: { path: string; count: number }) => {
-            const docs = [...documents].filter(key => key.startsWith(path + '/')).slice(0, count).map(ref => ({ ref }));
-            return { docs, empty: docs.length === 0 };
+    it('sends recent Firebase Auth + App Check, stores receipt before the request, and purges only after server complete', async () => {
+        const fetchMock = vi.mocked(fetch);
+        let markerSeenDuringRequest = false;
+        fetchMock.mockImplementationOnce(async (_input, init) => {
+            markerSeenDuringRequest = isAccountDeletionPending('user:test-user-id');
+            expect(init?.headers).toMatchObject({
+                authorization: 'Bearer firebase-id-token',
+                'x-firebase-appcheck': 'app-check-token',
+            });
+            const body = JSON.parse(String(init?.body)) as { receiptToken: string };
+            expect(body.receiptToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+            expect(readAccountDeletionMarker('user:test-user-id')?.receiptToken).toBe(body.receiptToken);
+            return response(202, { accepted: true, status: 'requested' });
         });
+        fetchMock.mockResolvedValueOnce(response(200, { uid: 'test-user-id', status: 'complete', attempts: 1 }));
 
-        boundary.readRoot.mockImplementation(async (ref: string) => ({
-            exists: () => documents.has(ref),
+        const ctx = context();
+        await expect(deleteAccount(ctx)).resolves.toEqual({ status: 'complete' });
+
+        expect(markerSeenDuringRequest).toBe(true);
+        expect(boundary.cancelPendingSyncs).toHaveBeenCalledTimes(1);
+        expect(boundary.signOut).toHaveBeenCalledTimes(1);
+        expect(ctx.purgeAllLocalUserData).toHaveBeenCalledWith('user:test-user-id');
+        expect(ctx.resetCache).toHaveBeenCalledTimes(1);
+        expect(boundary.resetStore).toHaveBeenCalledTimes(1);
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
+    });
+
+    it('retains the receipt after a lost acknowledgement so a reload can recover the server job', async () => {
+        vi.mocked(fetch).mockRejectedValueOnce(new TypeError('network lost after request'));
+        const ctx = context();
+
+        await expect(deleteAccount(ctx)).rejects.toThrow(/network lost after request/);
+
+        const marker = readAccountDeletionMarker('user:test-user-id');
+        expect(marker?.receiptToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(boundary.cancelPendingSyncs).toHaveBeenCalledTimes(1);
+        expect(ctx.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(boundary.signOut).not.toHaveBeenCalled();
+    });
+
+    it('clears a pre-request marker on definitive authentication/App Check rejection', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(response(401, { error: 'Sessione non valida.' }));
+        const ctx = context();
+
+        await expect(deleteAccount(ctx)).rejects.toThrow('Sessione non valida.');
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
+        expect(ctx.purgeAllLocalUserData).not.toHaveBeenCalled();
+    });
+
+    it('fails closed with the mandatory partial-cloud warning when the durable job reports failed', async () => {
+        const fetchMock = vi.mocked(fetch);
+        fetchMock.mockResolvedValueOnce(response(202, { accepted: true, status: 'requested' }));
+        fetchMock.mockResolvedValueOnce(response(200, {
+            uid: 'test-user-id',
+            status: 'failed',
+            attempts: 2,
+            error: 'Cancellazione cloud incompleta. Alcuni dati potrebbero essere già stati eliminati; riprova dalle impostazioni.',
         }));
+        const ctx = context();
 
-        boundary.commit.mockImplementation(async (refs: any[]) => {
-            refs.forEach(ref => documents.delete(typeof ref === 'string' ? ref : ref.path ?? ref));
+        await expect(deleteAccount(ctx)).rejects.toThrow(/Alcuni dati potrebbero essere già stati eliminati/);
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(true);
+        expect(ctx.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(boundary.signOut).not.toHaveBeenCalled();
+    });
+
+    it('rejects stale authentication before creating a deletion marker or calling the backend', async () => {
+        boundary.getIdTokenResult.mockResolvedValue({
+            authTime: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+            token: 'stale-token',
         });
+        const ctx = context();
+
+        await expect(deleteAccount(ctx)).rejects.toThrow('Per eliminare l’account devi effettuare di nuovo il login. Nessun dato è stato cancellato.');
+        expect(fetch).not.toHaveBeenCalled();
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
+        expect(boundary.cancelPendingSyncs).not.toHaveBeenCalled();
     });
 
-    it('Scenario 1: Small account (10 history + 10 nutrition = 21 total refs) -> bounded per-collection batches', async () => {
-        for (let i = 0; i < 10; i++) {
-            documents.add(`users/${testUid}/history_months/hist_${i}`);
-            documents.add(`users/${testUid}/nutrition_months/nut_${i}`);
-        }
+    it('requires App Check before freezing writers or creating the durable receipt marker', async () => {
+        boundary.getAppCheckToken.mockResolvedValue(null);
+        const ctx = context();
 
-        await DB.deleteAccount();
-
-        // 1 batch for history (10), 1 batch for nutrition (10), 1 batch for root doc (1)
-        expect(createdBatches).toHaveLength(3);
-        const totalDeleted = createdBatches.reduce((sum, b) => sum + b.deletedRefs.length, 0);
-        expect(totalDeleted).toBe(21); // 10 hist + 10 nut + 1 userDoc
-        createdBatches.forEach(b => expect(b.commit).toHaveBeenCalledTimes(1));
-        expect(deleteUser).toHaveBeenCalledTimes(1);
-    });
-
-    it('Scenario 2: Boundary test at exact 400 refs (199 history + 200 nutrition + 1 user doc = 400 total refs)', async () => {
-        for (let i = 0; i < 199; i++) documents.add(`users/${testUid}/history_months/hist_${i}`);
-        for (let i = 0; i < 200; i++) documents.add(`users/${testUid}/nutrition_months/nut_${i}`);
-
-        await DB.deleteAccount();
-
-        expect(createdBatches).toHaveLength(3);
-        const totalDeleted = createdBatches.reduce((sum, b) => sum + b.deletedRefs.length, 0);
-        expect(totalDeleted).toBe(400);
-        expect(createdBatches.map(b => b.deletedRefs.length)).toEqual([199, 200, 1]);
-        createdBatches.forEach(b => expect(b.commit).toHaveBeenCalledTimes(1));
-        expect(deleteUser).toHaveBeenCalledTimes(1);
-    });
-
-    it('Scenario 3: Exceeding chunk boundary (450 history + 50 nutrition + 1 user doc = 501 total refs) -> bounded 400-doc pages', async () => {
-        for (let i = 0; i < 450; i++) documents.add(`users/${testUid}/history_months/hist_${i}`);
-        for (let i = 0; i < 50; i++) documents.add(`users/${testUid}/nutrition_months/nut_${i}`);
-
-        await DB.deleteAccount();
-
-        expect(createdBatches).toHaveLength(4);
-        expect(createdBatches.map(b => b.deletedRefs.length)).toEqual([400, 50, 50, 1]);
-        createdBatches.forEach(b => expect(b.commit).toHaveBeenCalledTimes(1));
-        expect(deleteUser).toHaveBeenCalledTimes(1);
-    });
-
-    it('Scenario 4: Heavy legacy account with >1200 documents (600 hist + 600 nut + 1 user = 1201 refs) -> exactly 5 batches (400 + 200 + 400 + 200 + 1)', async () => {
-        for (let i = 0; i < 600; i++) documents.add(`users/${testUid}/history_months/hist_${i}`);
-        for (let i = 0; i < 600; i++) documents.add(`users/${testUid}/nutrition_months/nut_${i}`);
-
-        await DB.deleteAccount();
-
-        expect(createdBatches).toHaveLength(5);
-        expect(createdBatches.map(b => b.deletedRefs.length)).toEqual([400, 200, 400, 200, 1]);
-        createdBatches.forEach(b => expect(b.commit).toHaveBeenCalledTimes(1));
-        expect(deleteUser).toHaveBeenCalledTimes(1);
-    });
-
-    it('Scenario 5: Partial failure during chunk commits stops execution and does NOT delete Auth user', async () => {
-        for (let i = 0; i < 450; i++) documents.add(`users/${testUid}/history_months/hist_${i}`);
-        for (let i = 0; i < 50; i++) documents.add(`users/${testUid}/nutrition_months/nut_${i}`);
-
-        let batchIndex = 0;
-        boundary.commit.mockImplementation(async (refs: any[]) => {
-            batchIndex++;
-            if (batchIndex === 2) {
-                throw new Error('Network error on batch 2');
-            }
-            refs.forEach(ref => documents.delete(typeof ref === 'string' ? ref : ref.path ?? ref));
-        });
-
-        await expect(DB.deleteAccount()).rejects.toThrow('Network error on batch 2');
-        expect(deleteUser).not.toHaveBeenCalled();
-    });
-
-    it('Scenario 6: Permission denied on subcollection getDocs falls back safely without deleting user', async () => {
-        boundary.read.mockRejectedValue(new Error('Missing or insufficient permissions'));
-
-        await expect(DB.deleteAccount()).rejects.toThrow('Cancellazione non completata');
-        expect(deleteUser).not.toHaveBeenCalled();
-    });
-
-    it('Scenario 7: Unauthenticated call throws immediate Error', async () => {
-        auth.currentUser = null;
-        await expect(DB.deleteAccount()).rejects.toThrow('Nessun utente autenticato.');
-    });
-
-    it('Scenario 8: auth/requires-recent-login is caught and converted to informative security message', async () => {
-        vi.mocked(deleteUser).mockRejectedValue({ code: 'auth/requires-recent-login' });
-
-        await expect(DB.deleteAccount()).rejects.toThrow(/requires-recent-login|login/);
-    });
-
-    it('Scenario 9: Stale authentication token (>5 min) aborts deletion before any destructive operations', async () => {
-        boundary.token.mockResolvedValue({ authTime: new Date(Date.now() - 10 * 60 * 1000).toISOString() });
-        await expect(DB.deleteAccount()).rejects.toThrow('Per eliminare l’account devi effettuare di nuovo il login. Nessun dato è stato cancellato.');
-        expect(deleteUser).not.toHaveBeenCalled();
+        await expect(deleteAccount(ctx)).rejects.toThrow('Verifica App Check non disponibile. Cancellazione non avviata.');
+        expect(fetch).not.toHaveBeenCalled();
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
+        expect(boundary.cancelPendingSyncs).not.toHaveBeenCalled();
     });
 });
