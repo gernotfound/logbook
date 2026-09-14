@@ -120,6 +120,7 @@ vi.mock('../src/store/useDialogStore', () => {
     onCancel: vi.fn(),
     showAlert: vi.fn().mockResolvedValue(undefined),
     showConfirm: vi.fn().mockResolvedValue(true),
+    showUnsyncedDataLogout: vi.fn().mockResolvedValue('cancel'),
     closeDialog: vi.fn(),
   };
   const useDialogStore = Object.assign(
