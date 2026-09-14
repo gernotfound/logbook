@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { auth } from './lib/firebase'
 import { readLocal, preserveLegacyCache } from './lib/sync/localRepository'
 import { storageOwner } from './lib/sync/session'
+import { findPendingAccountDeletion } from './lib/sync/accountGate'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
+import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
@@ -42,6 +44,7 @@ export const initApp = async () => {
 
   const marker = getStorageMarker();
   const isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('logbook_is_guest') === 'true';
+  const pendingDeletion = isGuest ? null : findPendingAccountDeletion();
 
   let cached: UserData | undefined = undefined;
   let readError: unknown = null;
@@ -51,7 +54,10 @@ export const initApp = async () => {
     try {
       if (!isGuest && typeof auth.authStateReady === 'function') await auth.authStateReady();
       await preserveLegacyCache();
-      cached = (await readLocal(storageOwner()))?.data;
+      // Firebase Auth can already be gone while the durable deletion job still needs
+      // this device to preserve/reconcile its owner-scoped recovery envelope.
+      const bootstrapOwner = isGuest ? 'guest' : (pendingDeletion?.owner ?? storageOwner());
+      cached = (await readLocal(bootstrapOwner))?.data;
       useAppStore.setState({ localWorkout: getInitialLocalWorkout() });
     } catch (err) {
       readError = err;
@@ -132,6 +138,7 @@ export const initApp = async () => {
       <StrictMode>
         <ErrorBoundary>
           <AuthProvider>
+            <AccountDeletionRecovery />
             <App />
           </AuthProvider>
         </ErrorBoundary>
