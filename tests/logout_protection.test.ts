@@ -7,41 +7,24 @@ import { useAuth } from '../src/hooks/useAuth';
 import { auth, onAuthStateChanged } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { UserDataSchema } from '../src/lib/schema';
+import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 
-const dialogs = vi.hoisted(() => ({
-    showAlert: vi.fn(),
-    showConfirm: vi.fn(),
-    showUnsyncedDataLogout: vi.fn(),
-}));
 const exporter = vi.hoisted(() => ({
     exportEmergencyJSON: vi.fn(),
 }));
 
-vi.mock('../src/store/useDialogStore', () => {
-    const state = {
-        isOpen: false,
-        type: 'confirm' as const,
-        title: '',
-        message: '',
-        onConfirm: vi.fn(),
-        onCancel: vi.fn(),
-        closeDialog: vi.fn(),
-        showAlert: dialogs.showAlert,
-        showConfirm: dialogs.showConfirm,
-        showUnsyncedDataLogout: dialogs.showUnsyncedDataLogout,
-    };
-    const useDialogStore = Object.assign(
-        (selector?: (value: typeof state) => unknown) => selector ? selector(state) : state,
-        { getState: () => state }
-    );
-    return { useDialogStore };
-});
-
 vi.mock('../src/lib/export', () => ({
     Exporter: exporter,
 }));
+
+const dialogState = useDialogStore.getState();
+const dialogs = {
+    showAlert: vi.mocked(dialogState.showAlert),
+    showConfirm: vi.mocked(dialogState.showConfirm),
+    showUnsyncedDataLogout: vi.mocked(dialogState.showUnsyncedDataLogout),
+};
 
 const authenticatedUser = { uid: 'logout-user', email: 'logout@example.com', displayName: 'Logout User' } as any;
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
