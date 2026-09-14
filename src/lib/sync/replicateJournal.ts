@@ -7,12 +7,22 @@ import { applyDocumentChanges } from './transactionWriter';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
+import type { SemanticOperation } from './semanticProjection';
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
         super('Commit remoto confermato; acknowledgement locale ancora pendente', { cause });
         this.name = 'DurableAcknowledgementPendingError';
     }
+}
+
+function sameOperationIdentity(left: SemanticOperation, right: SemanticOperation): boolean {
+    return left.actorId === right.actorId
+        && left.seq === right.seq
+        && left.docPath === right.docPath
+        && left.isDelete === right.isDelete
+        && left.path.length === right.path.length
+        && left.path.every((segment, index) => segment === right.path[index]);
 }
 
 const running = new Map<string, Promise<void>>();
@@ -32,32 +42,34 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
 
-        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), envelope.pending, current);
+        const delivered = envelope.pending;
+        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current);
 
         if (!current()) throw new Error('Sessione cambiata');
 
         const remote: UserData = applyRemoteDocuments(envelope.data, outcome.documents, catalog);
-        const seq = envelope.pending[envelope.pending.length - 1].seq;
-        const changedPaths = [...new Set(envelope.pending.map(op => op.docPath))];
+        const seq = delivered[delivered.length - 1].seq;
+        const changedPaths = [...new Set(delivered.map(op => op.docPath))];
         const changedMonths = changedPaths.flatMap(path => path ? [path.split('/')[1]] : []);
 
         try {
             await acknowledgeThrough(session.owner, seq, remote, envelope.data, changedMonths, outcome.syncMeta);
         } catch (error) {
             // A remote transaction may already be committed when the local acknowledgement write fails.
-            // Only downgrade this to retryable when IndexedDB proves the affected journal entries are
-            // still durable. Missing/corrupt/incompatible local state remains a hard failure.
+            // Only downgrade this to retryable when IndexedDB proves the entire delivered batch is still
+            // durable. Missing/corrupt/incompatible/partial local state remains a hard failure.
             if (!current()) throw error;
-            let retained;
+            let retained: Awaited<ReturnType<typeof readLocal>>;
             try {
                 retained = await readLocal(session.owner);
             } catch {
                 throw error;
             }
             if (!current()) throw error;
-            if (retained?.pending.some(operation => operation.seq <= seq)) {
-                throw new DurableAcknowledgementPendingError(error);
-            }
+            const fullBatchRetained = Boolean(retained) && delivered.every(operation =>
+                retained.pending.some(candidate => sameOperationIdentity(operation, candidate))
+            );
+            if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
             throw error;
         }
     }
