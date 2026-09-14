@@ -7,6 +7,7 @@ import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isCurrentSession } from '../../lib/sync/session';
 import { readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
+import { findPendingAccountDeletion } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 
@@ -215,6 +216,14 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             set({ syncing: false, syncGeneration: get().syncGeneration + 1 });
         },
         resetStore: () => {
+            // A server-coordinated deletion may remove Firebase Auth before this device has
+            // verified completion and purged its local recovery copy. Auth callbacks must
+            // therefore fail closed while any durable deletion receipt remains.
+            if (findPendingAccountDeletion()) {
+                get().cancelPendingSyncs();
+                set({ syncing: false, saveError: 'Cancellazione account in verifica. Copia locale conservata fino alla conferma del server.' });
+                return;
+            }
             get().cancelPendingSyncs();
             set({
                 userData: null,
