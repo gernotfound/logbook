@@ -467,6 +467,10 @@ export function applySemanticOperations(
             if (stampWins(opList[i], winner)) winner = opList[i];
         }
 
+        // The winner decides the value, but every contender is causally observed.
+        // Without this join, the same operations delivered in one batch vs multiple
+        // batches produce different FieldStamp clocks and can diverge on later retries.
+        const observedGroupClock = mergeVectors(...opList.map(operation => operation.clock));
         const fk = fieldKey(winner.path);
         const meta = resultMetas[winner.docPath];
         const remoteStamp = meta.fields[fk];
@@ -478,7 +482,7 @@ export function applySemanticOperations(
             seq: winner.seq
         };
 
-        let jointClock = winner.clock;
+        let jointClock = observedGroupClock;
 
         if (remoteStamp) {
             const remoteStampLike: StampLike = {
@@ -488,14 +492,15 @@ export function applySemanticOperations(
                 seq: remoteStamp.seq
             };
             if (!stampWins(localStampLike, remoteStampLike)) {
+                const observedClock = mergeVectors(remoteStamp.clock, observedGroupClock);
                 meta.fields[fk] = {
                     ...remoteStamp,
-                    clock: mergeVectors(remoteStamp.clock, winner.clock)
+                    clock: observedClock
                 };
-                meta.clock = mergeVectors(meta.clock, winner.clock);
+                meta.clock = mergeVectors(meta.clock, observedClock);
                 continue;
             }
-            jointClock = mergeVectors(remoteStamp.clock, winner.clock);
+            jointClock = mergeVectors(remoteStamp.clock, observedGroupClock);
         }
 
         let blockedByAncestor = false;
