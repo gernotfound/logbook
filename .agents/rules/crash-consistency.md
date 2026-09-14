@@ -30,6 +30,8 @@ Firestore applica il batch semantico tramite transazione.
 
 **MUST:** in questo caso la pending operation resta durevole e può essere reinviata.
 
+**MUST:** `replicateJournal()` classifica il risultato come `local-pending` solo dopo aver riletto IndexedDB e verificato che almeno una operation interessata dall'ack fallito sia ancora presente nel journal. Se l'envelope è assente, corrotto, incompatibile o non conserva più la pending attesa, l'errore resta `failed`.
+
 **MUST:** il replay della stessa operation non deve modificare nuovamente il business winner né produrre causal metadata differenti.
 
 **MUST:** un successivo ack riuscito deve poter rimuovere la pending già applicata senza perdita di dati.
@@ -50,13 +52,15 @@ Un reload può avvenire con journal non vuoto anche quando il remote commit corr
 
 **MUST:** dopo hydration, il successivo journal replay converge allo stesso business + causal state del cloud già committato e può essere acknowledged.
 
-### Session epoch
+### Session/process boundary
 
 La memoria volatile (`running`, timeout, debounce) non è fonte di durabilità.
 
 **MUST:** un nuovo process/session epoch deve poter riprendere esclusivamente dall'envelope owner-scoped persistito.
 
 **MUST:** un risultato tardivo appartenente a un epoch precedente non deve mutare lo stato della sessione corrente.
+
+**MUST:** il gate M3 comprende anche una prova Playwright che distrugge il document/JS realm, riapre l'app offline e verifica che `UserData` persistito nell'envelope IndexedDB sia ancora disponibile. La semantic replay correctness del journal autenticato resta verificata deterministicamente dalla recovery suite isolata.
 
 ## Fault injection
 
@@ -80,6 +84,6 @@ Il gate normativo corrente è:
 npm run verify:m3
 ```
 
-Include integralmente i gate precedenti e aggiunge `npm run test:recovery`. Per M3 e milestone successive, questo requisito supersede le vecchie formulazioni del gate minimo presenti nella documentazione M0/M1.
+Include integralmente i gate precedenti e aggiunge `npm run test:recovery` e `npm run test:e2e`. Per M3 e milestone successive, questo requisito supersede le vecchie formulazioni del gate minimo presenti nella documentazione M0/M1.
 
 Un sottoinsieme verde non equivale al superamento di M3: il comando completo deve terminare con exit code 0.
