@@ -9,6 +9,7 @@ import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTeleme
 import { commitLocal, initializeLocal, clearNutritionConflict } from '../../lib/sync/localRepository';
 import { writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 
 export interface DataSlice {
     userData: UserData | null;
@@ -58,6 +59,8 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
 
     setUserData: (dataOrUpdater) => {
         set((state) => {
+            if (state.compatibilityStatus === 'update-required') return state;
+
             const rawNextData = typeof dataOrUpdater === 'function'
                 ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData)
                 : dataOrUpdater;
@@ -98,13 +101,19 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                 ...rawNextData,
                 activeWorkout: syncedLocalWorkout ?? null
             }) as unknown as UserData;
-            persistHydration(nextData, () => set({ saveError: 'Impossibile salvare i dati su questo dispositivo.', syncHealth: 'failed' }));
+            persistHydration(nextData, error => {
+                if (isUpdateRequiredError(error)) get().setUpdateRequired(error);
+                else set({ saveError: 'Impossibile salvare i dati su questo dispositivo.', syncHealth: 'failed' });
+            });
             return { userData: nextData, localWorkout: syncedLocalWorkout };
         });
     },
 
     resolveNutritionConflict: async ({ resolution, expectedUid, expectedConflictFingerprint }) => {
         const state = get();
+        if (state.compatibilityStatus === 'update-required') {
+            return { ok: false, status: 'failed', error: new Error(state.compatibilityError ?? 'Aggiornamento richiesto.') };
+        }
         const userData = state.userData;
 
         // 1. Check if conflict exists

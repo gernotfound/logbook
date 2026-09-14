@@ -2,6 +2,12 @@ import equal from 'fast-deep-equal';
 import { UserDataSchema } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
+import {
+    CURRENT_BACKUP_SCHEMA,
+    CURRENT_DATA_SCHEMA,
+    CURRENT_SYNC_PROTOCOL,
+    normalizeBackupRecord,
+} from './schemaEvolution';
 
 export type ImportMode = 'merge' | 'restore';
 export interface BackupCoverage {
@@ -12,7 +18,9 @@ export interface BackupCoverage {
 }
 export interface BackupPayload {
     format: 'logbook-backup';
-    version: 2;
+    version: typeof CURRENT_BACKUP_SCHEMA;
+    dataSchemaVersion: typeof CURRENT_DATA_SCHEMA;
+    syncProtocolVersion: typeof CURRENT_SYNC_PROTOCOL;
     type: 'backup';
     owner: string | null;
     exportedAt: string;
@@ -25,8 +33,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const arrays = ['library', 'routines', 'history', 'customFoods', 'trainingCycles', 'supplements'] as const;
 
-// The permissive runtime schemas repair old records. A file import must not silently
-// accept a malformed container or erase records whose identity cannot be recovered.
 export function validateImportData(value: unknown): asserts value is Record<string, unknown> {
     if (!isRecord(value)) throw new Error('Dati del backup non validi. Il file originale non è stato modificato.');
     const checkIds = (items: unknown, path: string) => {
@@ -54,30 +60,53 @@ export function validateImportData(value: unknown): asserts value is Record<stri
 }
 
 export function createBackup(userData: UserData, owner: string | null, coverage: BackupCoverage = { scope: 'device', months: [] }, recovery?: unknown): BackupPayload {
-    return { format: 'logbook-backup', version: 2, type: 'backup', owner,
-        exportedAt: new Date().toISOString(), coverage, userData: structuredClone(userData), recovery };
+    return {
+        format: 'logbook-backup',
+        version: CURRENT_BACKUP_SCHEMA,
+        dataSchemaVersion: CURRENT_DATA_SCHEMA,
+        syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+        type: 'backup',
+        owner,
+        exportedAt: new Date().toISOString(),
+        coverage,
+        userData: structuredClone(userData),
+        recovery,
+    };
 }
 
 export function decodeImport(payload: unknown, owner: string) {
-    if (!isRecord(payload)) throw new Error('Formato file non valido o non supportato.');
-    const modern = payload.format === 'logbook-backup' && payload.version === 2 && payload.type === 'backup';
-    const emergency = payload.format === 'logbook-backup' && payload.version === 1;
-    const legacy = payload.version === 1 && (payload.type === 'share' || payload.type === 'backup');
-    if (!modern && !emergency && !legacy) throw new Error('Formato file non valido o non supportato.');
-    const share = payload.type === 'share';
-    const sourceOwner = modern ? payload.owner : (typeof payload.userId === 'string' ? `user:${payload.userId}` : null);
+    if (!isRecord(payload) || payload.format !== 'logbook-backup') {
+        throw new Error('Formato file non valido o non supportato.');
+    }
+
+    // Container, data schema and sync protocol are normalized as independent dimensions.
+    const normalized = normalizeBackupRecord(payload);
+    if (normalized.format !== 'logbook-backup') throw new Error('Formato file non valido o non supportato.');
+
+    if (normalized.type !== 'backup' && normalized.type !== 'share') {
+        throw new Error('Tipo file non valido o non supportato.');
+    }
+
+    const share = normalized.type === 'share';
+    const sourceOwner = typeof normalized.owner === 'string' ? normalized.owner : null;
     if (!share && sourceOwner && sourceOwner !== owner) {
         throw new Error('Sicurezza: Non puoi importare il backup di un altro utente. Accedi con il proprietario del backup.');
     }
-    const data = modern || emergency ? payload.userData : Object.fromEntries(
-        Object.entries(payload).filter(([key]) => !['version', 'type', 'userId', 'exportedAt'].includes(key)));
+
+    const data = normalized.userData;
     validateImportData(data);
-    const selected = share ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]])) : data;
-    return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage: modern ? payload.coverage : undefined };
+    const selected = share
+        ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]]))
+        : data;
+
+    return {
+        data: selected,
+        share,
+        ownerUnknown: !share && !sourceOwner,
+        coverage: !share && isRecord(normalized.coverage) ? normalized.coverage : undefined,
+    };
 }
 
-// Missing fields are filled recursively; collision priority is explicitly local in
-// merge mode. Restore only replaces fields present in the file (legacy is partial).
 function mergeMissing(local: unknown, incoming: unknown): unknown {
     if (local === undefined || local === null || local === '') return structuredClone(incoming);
     if (Array.isArray(local) && Array.isArray(incoming)) {
@@ -104,7 +133,6 @@ export function prepareImport(current: UserData, incoming: Record<string, unknow
         if (current.nutrition?.[date] && !equal(current.nutrition[date], day)) collisions++;
     }
     const raw = mode === 'restore' ? { ...structuredClone(current), ...structuredClone(incoming) } : mergeMissing(current, incoming);
-    // A backup is evidence of previous consent, never acceptance by this session.
     const data = UserDataSchema.parse({ ...(raw as Record<string, unknown>), legalConsent: current.legalConsent }) as unknown as UserData;
     if (mode === 'merge') for (const [date, day] of Object.entries(data.nutrition ?? {})) {
         if (!isRecord(incoming.nutrition) || !incoming.nutrition[date] || equal(day.meals, current.nutrition?.[date]?.meals) || !day.meals?.length) continue;

@@ -5,6 +5,7 @@ import { readLocal } from '../sync/localRepository';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { applyRemoteDocuments, projectDocuments, type DocumentData } from '../sync/documentProjection';
 import { applySemanticOperations, parseSyncMeta, type SyncMeta } from '../sync/semanticProjection';
+import { normalizeCloudDocument } from '../schemaEvolution';
 import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
@@ -18,20 +19,16 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     const businessDocuments = new Map<string, DocumentData>();
     const syncMetaByDocument: Record<string, SyncMeta> = {};
 
-    const addRawDoc = (path: string, raw: any) => {
-        documents.set(path, raw);
-        if (raw && typeof raw === 'object') {
-            const { _sync, ...business } = raw;
-            businessDocuments.set(path, business);
-            if (_sync) {
-                try {
-                    syncMetaByDocument[path] = parseSyncMeta(_sync);
-                } catch (error) {
-                    throw new Error(`Metadati _sync non validi nel backup per ${path || 'root'}`, { cause: error });
-                }
+    const addRawDoc = (path: string, raw: unknown) => {
+        documents.set(path, structuredClone((raw ?? {}) as DocumentData));
+        const normalized = normalizeCloudDocument(raw ?? {}, `Backup ${path || 'root'} data schema`);
+        businessDocuments.set(path, normalized.business);
+        if (normalized.sync !== undefined) {
+            try {
+                syncMetaByDocument[path] = parseSyncMeta(normalized.sync);
+            } catch (error) {
+                throw new Error(`Metadati _sync non validi nel backup per ${path || 'root'}`, { cause: error });
             }
-        } else {
-            businessDocuments.set(path, raw);
         }
     };
 
