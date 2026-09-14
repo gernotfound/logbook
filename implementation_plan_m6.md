@@ -19,7 +19,7 @@ M6 non modifica comportamento applicativo, schema dati, protocollo sync, regole 
 - aggiungere `test:repo-hygiene`, `test:ci-contract` e `verify:m6` a `package.json`;
 - aggiungere `.agents/rules/ci-verification.md` con gli invarianti normativi M6.
 
-Nessun file sotto `src/` deve cambiare.
+Nessun comportamento sotto `src/` deve cambiare. Sono consentite esclusivamente bonifiche encoding puntuali rese necessarie dal nuovo hygiene gate, senza variazioni di token o semantica sorgente.
 
 ## Gate canonico
 
@@ -72,6 +72,17 @@ Il controllo statico deve garantire almeno:
 - `concurrency` con `cancel-in-progress: true`;
 - assenza dei due workflow legacy divergenti.
 
+## Finding prima run CI
+
+La prima run GitHub Actions (`34841537860`) ha superato checkout exact-head, setup runtime e `npm audit`, poi `test:repo-hygiene` ha rilevato quattro BOM UTF-8 già tracciati:
+
+- `src/components/analytics/index.ts`;
+- `src/store/slices/createSyncSlice.ts`;
+- `src/views/HomeView.tsx`;
+- `tests/use_wake_lock.test.ts`.
+
+I quattro file sono stati bonificati rimuovendo esclusivamente il BOM iniziale. Il diff del commit di remediation mostra una sola riga rimossa e una aggiunta per file, senza modifica del contenuto testuale.
+
 ## Acceptance criteria
 
 Prima di proporre M6 per merge:
@@ -81,7 +92,7 @@ Prima di proporre M6 per merge:
 3. `npm run verify:m6` deve terminare con exit code 0 in GitHub Actions;
 4. Antigravity deve ripetere `npm run verify:m6` da una working tree pulita sullo stesso HEAD;
 5. `test:repo-hygiene` e `test:ci-contract` devono passare separatamente;
-6. nessun file `src/` deve essere modificato;
+6. nessuna modifica semantica a `src/`; eventuali differenze sono limitate a bonifica encoding puntuale documentata;
 7. la regressione M0–M5 deve restare verde.
 
 ## Rischi
