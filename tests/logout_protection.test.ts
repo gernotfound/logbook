@@ -1,130 +1,215 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAppStore } from '../src/store/useAppStore';
-import { useDialogStore } from '../src/store/useDialogStore';
-import { DB } from '../src/lib/db';
+import React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { waitForPendingWrites } from 'firebase/firestore';
+import { AuthProvider } from '../src/contexts/AuthContext';
+import { useAuth } from '../src/hooks/useAuth';
+import { auth, onAuthStateChanged } from '../src/lib/firebase';
+import { DB } from '../src/lib/db';
+import { UserDataSchema } from '../src/lib/schema';
+import { useAppStore } from '../src/store/useAppStore';
+import type { UserData } from '../src/types';
 
-vi.mock('firebase/firestore', async (importOriginal) => {
-    const actual = await importOriginal();
-    return {
-        ...(actual as object),
-        waitForPendingWrites: vi.fn(),
+const dialogs = vi.hoisted(() => ({
+    showAlert: vi.fn(),
+    showConfirm: vi.fn(),
+    showUnsyncedDataLogout: vi.fn(),
+}));
+
+vi.mock('../src/store/useDialogStore', () => {
+    const state = {
+        isOpen: false,
+        type: 'confirm' as const,
+        title: '',
+        message: '',
+        onConfirm: vi.fn(),
+        onCancel: vi.fn(),
+        closeDialog: vi.fn(),
+        showAlert: dialogs.showAlert,
+        showConfirm: dialogs.showConfirm,
+        showUnsyncedDataLogout: dialogs.showUnsyncedDataLogout,
     };
+    const useDialogStore = Object.assign(
+        (selector?: (value: typeof state) => unknown) => selector ? selector(state) : state,
+        { getState: () => state }
+    );
+    return { useDialogStore };
 });
 
-vi.mock('../src/lib/firebase', () => ({
-    getDb: vi.fn(),
-    auth: { signOut: vi.fn() }
-}));
+const authenticatedUser = { uid: 'logout-user', email: 'logout@example.com', displayName: 'Logout User' } as any;
+const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+const userData = () => parse({
+    profile: { name: 'Logout fixture' },
+    routines: [{ id: 'routine-1', name: 'Persisted routine', exercises: [] }],
+});
 
-// Removed Exporter mock
+const wrapper = ({ children }: { children: React.ReactNode }) => React.createElement(AuthProvider, null, children);
 
-vi.mock('../src/lib/db', () => ({
-    DB: {
-        secureLogOut: vi.fn(),
-        resetCache: vi.fn(),
-    }
-}));
+function renderAuth() {
+    return renderHook(() => useAuth(), { wrapper });
+}
 
-// We'll test the logic that we will put in AuthContext
-// Since it's hard to test a React hook directly without @testing-library/react hooks (if not installed or setup),
-// we will just write the test logic here for TDD, but we can also use renderHook.
-import { renderHook, act } from '@testing-library/react';
-import { useAuth, AuthProvider } from '../src/hooks/useAuth';
+beforeEach(() => {
+    useAppStore.getState().resetStore();
+    localStorage.clear();
+    vi.clearAllMocks();
 
-// Mock the AuthContext itself? No, we want to test its implementation.
-// Wait, AuthContext is in `src/contexts/AuthContext.tsx`.
-// But it uses `auth.onAuthStateChanged`, which we need to mock so it renders.
-// Let's create a simpler test suite that imports the logout implementation directly if possible,
-// or just test the states.
-
-vi.mock('../src/store/useDialogStore', () => ({
-    useDialogStore: {
-        getState: () => ({
-            showUnsyncedDataLogout: vi.fn().mockResolvedValue('cancel'),
-            showConfirm: vi.fn().mockResolvedValue(true)
-        })
-    }
-}));
-
-describe('UX Logout Protection (TDD)', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        useAppStore.setState({ syncHealth: 'synced', userData: { pendingConflicts: undefined } } as any);
-        (waitForPendingWrites as any).mockResolvedValue(undefined);
+    useAppStore.setState({
+        userData: userData(),
+        localWorkout: null,
+        syncing: false,
+        saveError: null,
+        syncHealth: 'synced',
+        compatibilityStatus: 'ok',
+        compatibilityError: null,
     });
 
-    it('1. no-pending: waitForPendingWrites resolves immediately -> cache cleared, signOut called', async () => {
-        // Logic test structure: if state is synced, we expect DB.secureLogOut to be called.
-        // We will simulate the hook call directly or verify through the component if possible.
-        expect(true).toBe(true); // Placeholder for actual component test
+    (auth as any).currentUser = authenticatedUser;
+    vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+        callback(authenticatedUser);
+        return () => {};
+    });
+    vi.mocked(DB.loadCloudPayload).mockResolvedValue(null);
+    vi.mocked(DB.secureLogOut).mockResolvedValue(undefined);
+    vi.mocked(DB.purgeAllLocalUserData).mockResolvedValue(undefined);
+    vi.mocked(waitForPendingWrites).mockResolvedValue(undefined);
+    dialogs.showAlert.mockResolvedValue(undefined);
+    dialogs.showConfirm.mockResolvedValue(true);
+    dialogs.showUnsyncedDataLogout.mockResolvedValue('cancel');
+});
+
+describe('M5 logout protection through AuthProvider', () => {
+    it('keeps guest data when the destructive logout confirmation is cancelled, then purges it when confirmed', async () => {
+        localStorage.setItem('logbook_is_guest', 'true');
+        (auth as any).currentUser = null;
+        vi.mocked(onAuthStateChanged).mockImplementation((_auth, callback: any) => {
+            callback(null);
+            return () => {};
+        });
+        dialogs.showConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.isGuest).toBe(true));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(dialogs.showConfirm).toHaveBeenCalledTimes(1);
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(result.current.isGuest).toBe(false);
     });
 
-    it('2. pending offline -> dialog wait -> sync health changes to synced -> force exit', async () => {
-        // If syncHealth is local-pending, we show dialog.
-        // If it changes to synced, dialog UI updates.
-        // Clicking exit in safety triggers force exit.
-        expect(true).toBe(true);
+    it('executes the authenticated safe logout through DB and resets the in-memory session', async () => {
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(DB.secureLogOut).toHaveBeenCalledTimes(1);
+        expect(DB.resetCache).toHaveBeenCalledTimes(1);
+        expect(useAppStore.getState().userData).toBeNull();
+        expect(useAppStore.getState().syncing).toBe(false);
+        expect(dialogs.showUnsyncedDataLogout).not.toHaveBeenCalled();
     });
 
-    it('3. permission denied -> shows rejected state in dialog', async () => {
-        // syncHealth = 'rejected'
-        expect(true).toBe(true);
+    it.each([
+        ['local-pending', 'offline'],
+        ['rejected', 'rejected'],
+        ['failed', 'failed'],
+    ] as const)('maps sync health %s to the blocking %s logout reason and honors cancel', async (syncHealth, reason) => {
+        useAppStore.setState({ syncHealth });
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(dialogs.showUnsyncedDataLogout).toHaveBeenCalledWith(reason);
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData).not.toBeNull();
     });
 
-    it('4. export JSON emergency backup is called', async () => {
-        // Export logic
-        expect(true).toBe(true);
+    it('cancels the logout when the authenticated UID changes while pending writes are being checked', async () => {
+        useAppStore.setState({ syncHealth: 'local-pending' });
+        let releasePendingWrites!: () => void;
+        const pendingWrites = new Promise<void>(resolve => { releasePendingWrites = resolve; });
+        vi.mocked(waitForPendingWrites).mockReturnValueOnce(pendingWrites as any);
+
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        let logoutPromise!: Promise<void>;
+        act(() => {
+            logoutPromise = result.current.logout({ mode: 'normal' });
+        });
+        await waitFor(() => expect(waitForPendingWrites).toHaveBeenCalledTimes(1));
+
+        (auth as any).currentUser = { ...authenticatedUser, uid: 'other-user' };
+        releasePendingWrites();
+
+        await act(async () => {
+            await logoutPromise;
+        });
+
+        expect(dialogs.showUnsyncedDataLogout).not.toHaveBeenCalled();
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData).not.toBeNull();
+        expect(useAppStore.getState().syncing).toBe(false);
     });
 
-    it('5. failed state distinct from rejected', async () => {
-        // syncHealth = 'failed'
-        expect(true).toBe(true);
+    it('coalesces rapid authenticated logout requests while the first secure logout is in flight', async () => {
+        let releaseSecureLogout!: () => void;
+        const secureLogout = new Promise<void>(resolve => { releaseSecureLogout = resolve; });
+        vi.mocked(DB.secureLogOut).mockReturnValueOnce(secureLogout);
+
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        let first!: Promise<void>;
+        let second!: Promise<void>;
+        act(() => {
+            first = result.current.logout({ mode: 'force' });
+            second = result.current.logout({ mode: 'force' });
+        });
+
+        expect(DB.secureLogOut).toHaveBeenCalledTimes(1);
+        releaseSecureLogout();
+
+        await act(async () => {
+            await Promise.all([first, second]);
+        });
+
+        expect(DB.secureLogOut).toHaveBeenCalledTimes(1);
+        expect(useAppStore.getState().userData).toBeNull();
     });
 
-    it('6. new write during wait -> restarts wait or blocks exit', async () => {
-        // pendingConflicts set during wait
-        expect(true).toBe(true);
-    });
+    it('surfaces secure logout failures without purging the current in-memory data', async () => {
+        vi.mocked(DB.secureLogOut).mockRejectedValueOnce(new Error('Network offline'));
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
 
-    it('7. double click protection during logout', async () => {
-        // multiple clicks while dialog is open
-        expect(true).toBe(true);
-    });
+        await act(async () => {
+            await result.current.logout({ mode: 'force' });
+        });
 
-    it('8. user account change during wait cancels logout', async () => {
-        // UID changes
-        expect(true).toBe(true);
-    });
-
-    it('9. backup payload is sanitized and contains pendingConflicts', async () => {
-        const { Exporter } = await import('../src/lib/export');
-        const userDataMock = {
-            profile: { email: 'test@example.com' },
-            pendingConflicts: { nutritionPlanning: { strategy: 'cutting' } },
-            // Auth token should NOT be here
-            authToken: 'secret_token_123'
-        } as any;
-
-        // Mock URL and createElement
-        global.URL.createObjectURL = vi.fn().mockReturnValue('blob:test');
-        global.URL.revokeObjectURL = vi.fn();
-        const clickMock = vi.fn();
-        const createElementMock = vi.spyOn(document, 'createElement').mockReturnValue({
-            click: clickMock,
-            style: {},
-            href: '',
-            download: ''
-        } as any);
-        document.body.appendChild = vi.fn();
-        document.body.removeChild = vi.fn();
-
-        Exporter.exportEmergencyJSON(userDataMock);
-
-        expect(createElementMock).toHaveBeenCalledWith('a');
-        expect(clickMock).toHaveBeenCalled();
-        
-        // We can't easily intercept the Blob data in this minimal mock, but we know it gets called.
-        expect(true).toBe(true);
+        expect(dialogs.showAlert).toHaveBeenCalledWith('Errore durante il logout. Controlla la connessione.');
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+        expect(useAppStore.getState().syncing).toBe(false);
+        consoleError.mockRestore();
     });
 });
