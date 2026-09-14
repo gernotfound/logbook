@@ -1,4 +1,4 @@
-﻿import type { StateCreator } from 'zustand';
+import type { StateCreator } from 'zustand';
 import { DB } from '../../lib/db';
 import type { UserData, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_GLOBAL } from '../../constants';
