@@ -5,6 +5,7 @@ import { getLocalDateString } from '../utils/date';
 import { removeUndefinedValues } from '../utils/object';
 import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
+import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
 
 export async function loadHistoryMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
@@ -15,17 +16,14 @@ export async function loadHistoryMonths(user: any, targetMonths: string[], state
     );
     historyDocs.forEach(d => {
         if (d && typeof d.exists === 'function' && d.exists()) {
-            const monthData = d.data() as Record<string, any>;
-            if (monthData) {
-                if (monthData._sync && cloudDocuments) {
-                    cloudDocuments.set('history_months/' + d.id, monthData);
-                }
-                Object.entries(monthData).forEach(([key, h]: [string, any]) => {
-                    if (key !== '_sync') {
-                        state.history.push(h);
-                    }
-                });
+            const normalized = normalizeCloudDocument(d.data(), `History ${d.id} data schema`);
+            const monthData = normalized.business;
+            if (normalized.sync !== undefined && cloudDocuments) {
+                cloudDocuments.set('history_months/' + d.id, { ...monthData, _sync: normalized.sync });
             }
+            Object.values(monthData).forEach((h: any) => {
+                state.history.push(h);
+            });
         }
     });
 }

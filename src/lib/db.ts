@@ -1,17 +1,12 @@
 import { auth, getDb, ensureAppCheck } from './firebase';
 import { doc, getDoc, collection, getDocsFromServer, query, limit, orderBy, documentId, startAfter, type QueryDocumentSnapshot } from "firebase/firestore";
-// import deepEqual from "fast-deep-equal";
 import { DomainParsers } from './schema';
 import type { UserData, SyncResult } from '../types';
-// import { removeUndefinedValues } from './utils/object';
-// import { checkDocSize } from './checkDocSize';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
-// import { wrapInFirestoreDocument } from './firestore-rest';
+import { normalizeCloudDocument } from './schemaEvolution';
 import { set, get, del } from 'idb-keyval';
 import { useDialogStore } from '../store/useDialogStore';
-
-// Nuovi import per la parte splittata del DB
 import { withTimeout, setLastSavedStateStr } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
@@ -26,14 +21,13 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return null;
         try {
-            // App is open: clear SW pending sync payloads, Firestore SDK will handle its own offline queue
             Promise.all([
                 get('sync_failed').then(failed => {
                     if (failed) {
-                        console.warn("Precedente Background Sync fallito. Ci penserÃ  l'SDK di Firestore ora.");
+                        console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
                         useDialogStore.getState().showAlert(
                             "Sincronizzazione in background interrotta",
-                            "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token Ã¨ scaduto. Nessun problema: il salvataggio verrÃ  completato automaticamente adesso che sei online."
+                            "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token è scaduto. Nessun problema: il salvataggio verrà completato automaticamente adesso che sei online."
                         );
                     }
                     return set('sync_failed', false);
@@ -62,45 +56,38 @@ export const DB = {
             };
             await ensureAppCheck();
             const docRef = doc(getDb(), "users", user.uid);
-            // 1. Get cached/seed catalog (offline-resilient)
             const catalog = await getCachedCatalog();
-            // Background sync manifest if online (fire-and-forget)
             syncGlobalCatalog(getDb()).catch(() => {});
 
             const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
             if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
-                const data = docSnap.data() as Record<string, any>;
-                if (data._sync) {
-                    cloudDocuments.set('', data);
+                const normalizedRoot = normalizeCloudDocument(docSnap.data(), 'Firestore root data schema');
+                const data = normalizedRoot.business as Record<string, any>;
+                if (normalizedRoot.sync !== undefined) {
+                    cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
                 }
-                if(data.profile) state.profile = data.profile;
-
+                if (data.profile) state.profile = data.profile;
                 state.catalogOverrides = data.catalogOverrides || {};
 
-                // 2. Resolve Library and CustomFoods using deltaResolver!
                 const customExercises = data.library || [];
                 const customFoods = data.customFoods || [];
-
                 state.library = resolveEffectiveExercises(catalog.exercises, customExercises, state.catalogOverrides);
                 state.customFoods = resolveEffectiveFoods(catalog.foods, customFoods, state.catalogOverrides);
 
-                if(data.routines) state.routines = data.routines;
-                if(data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
-                if(data.trainingCycles) state.trainingCycles = data.trainingCycles;
-                if(data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
-                if(data.supplements) state.supplements = data.supplements;
-                if(data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
-                // Strict normalization: only accept known enum values, never trust raw Firestore data
+                if (data.routines) state.routines = data.routines;
+                if (data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
+                if (data.trainingCycles) state.trainingCycles = data.trainingCycles;
+                if (data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
+                if (data.supplements) state.supplements = data.supplements;
+                if (data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
                 state.nutritionPlanningOrigin = (data.nutritionPlanningOrigin === 'generated-default' || data.nutritionPlanningOrigin === 'user-edited')
                     ? data.nutritionPlanningOrigin
                     : undefined;
-                if(data.activePains) state.activePains = data.activePains;
-                if(data.legalConsent) state.legalConsent = data.legalConsent;
+                if (data.activePains) state.activePains = data.activePains;
+                if (data.legalConsent) state.legalConsent = data.legalConsent;
             } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
                 state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
                 state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
-                // Seleziona il branch corretto: se Ã¨ un nuovo utente, restituiamo lo stato di default invece di null,
-                // in modo che l'app possa avviarsi e le viste non rimangano bloccate su loading=true.
                 state.profile = DomainParsers.parseProfile(state.profile);
                 state.library = DomainParsers.parseLibrary(state.library);
                 state.routines = DomainParsers.parseRoutines(state.routines);
@@ -119,7 +106,6 @@ export const DB = {
             }
 
             if (options?.allMonths) {
-                // Complete paginated retrieval for guest-to-cloud linking / migration
                 const db = getDb();
                 for (const colName of ['history_months', 'nutrition_months']) {
                     let cursor: QueryDocumentSnapshot | undefined;
@@ -132,28 +118,22 @@ export const DB = {
                             `Timeout recupero ${colName} completo`
                         );
                         for (const d of page.docs) {
-                            const mData = d.data() as Record<string, any>;
-                            if (mData) {
-                                if (mData._sync) cloudDocuments.set(`${colName}/${d.id}`, mData);
-                                if (!completeMonths.includes(d.id)) completeMonths.push(d.id);
-                                if (colName === 'history_months') {
-                                    Object.entries(mData).forEach(([key, h]: [string, any]) => {
-                                        if (key !== '_sync') state.history.push(h);
-                                    });
-                                } else {
-                                    Object.keys(mData).forEach(dt => { 
-                                        if (dt !== '_sync') {
-                                            (state.nutrition as any)[dt] = mData[dt]; 
-                                        }
-                                    });
-                                }
+                            const normalized = normalizeCloudDocument(d.data(), `${colName}/${d.id} data schema`);
+                            const mData = normalized.business as Record<string, any>;
+                            if (normalized.sync !== undefined) cloudDocuments.set(`${colName}/${d.id}`, { ...mData, _sync: normalized.sync });
+                            if (!completeMonths.includes(d.id)) completeMonths.push(d.id);
+                            if (colName === 'history_months') {
+                                Object.values(mData).forEach((h: any) => state.history.push(h));
+                            } else {
+                                Object.entries(mData).forEach(([date, day]) => {
+                                    (state.nutrition as any)[date] = day;
+                                });
                             }
                         }
                         cursor = page.size === 400 ? page.docs[page.docs.length - 1] : undefined;
                     } while (cursor);
                 }
             } else {
-                // Windowed loading: target current month and previous 2 months (O(1) reads)
                 const now = new Date();
                 const targetMonths = [0, 1, 2].map(offset => {
                     const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
@@ -197,11 +177,8 @@ export const DB = {
         try {
             await ensureAppCheck();
             const { replicateJournal } = await import('./sync/replicateJournal');
-            
             const result = await replicateJournal();
-            if (result.ok) {
-                setLastSavedStateStr(JSON.stringify(state));
-            }
+            if (result.ok) setLastSavedStateStr(JSON.stringify(state));
             return result;
         } catch (error) {
             console.error('Errore durante il salvataggio:', error);
@@ -221,5 +198,3 @@ export const DB = {
         return deleteAccount(this);
     }
 };
-
-

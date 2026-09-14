@@ -13,10 +13,11 @@ vi.mock('firebase/firestore', () => ({
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
 import { initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
-const emptySync = { protocolVersion: 1, clock: {}, fields: {} };
+const emptySync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
 
 beforeEach(async () => {
     await clear(); vi.resetAllMocks(); invalidateSession(); sdk.auth.currentUser = { uid: 'a' };
@@ -58,8 +59,9 @@ it('uses root _sync metadata when replaying pending local operations', async () 
         exists: () => true,
         data: () => ({
             profile: { height: '180', gender: 'M' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
             _sync: {
-                protocolVersion: 1,
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
                 clock: { [actorId]: remoteSeq },
                 fields: {
                     'profile/height': {
@@ -76,7 +78,7 @@ it('uses root _sync metadata when replaying pending local operations', async () 
     expect(backup.data.profile.height).toBe('180');
 });
 
-it('keeps _sync out of history and nutrition business data', async () => {
+it('keeps schema/sync metadata out of history and nutrition business data while preserving raw recovery docs', async () => {
     const base = parse({});
     await initializeLocal('user:a', base);
     sdk.page.mockImplementation(async ({ path }) => {
@@ -85,6 +87,7 @@ it('keeps _sync out of history and nutrition business data', async () => {
                 size: 1,
                 docs: [{ id: '2026-09', data: () => ({
                     w1: { id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] },
+                    _schemaVersion: CURRENT_DATA_SCHEMA,
                     _sync: emptySync
                 }) }]
             };
@@ -93,6 +96,7 @@ it('keeps _sync out of history and nutrition business data', async () => {
             size: 1,
             docs: [{ id: '2026-09', data: () => ({
                 '2026-09-10': { date: '2026-09-10', weight: 80 },
+                _schemaVersion: CURRENT_DATA_SCHEMA,
                 _sync: emptySync
             }) }]
         };
@@ -102,6 +106,9 @@ it('keeps _sync out of history and nutrition business data', async () => {
     expect(backup.data.history.map(item => item.id)).toEqual(['w1']);
     expect(Object.keys(backup.data.nutrition ?? {})).toEqual(['2026-09-10']);
     expect((backup.data.nutrition as any)?._sync).toBeUndefined();
+    const rawHistory = (backup.recovery.cloudDocuments as any)['history_months/2026-09'];
+    expect(rawHistory._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(rawHistory._sync).toEqual(emptySync);
 });
 
 it('fails safe when cloud causal metadata is malformed', async () => {
@@ -109,10 +116,30 @@ it('fails safe when cloud causal metadata is malformed', async () => {
     await initializeLocal('user:a', base);
     sdk.root.mockResolvedValue({
         exists: () => true,
-        data: () => ({ profile: { height: '180' }, _sync: { protocolVersion: 1, clock: {} } })
+        data: () => ({ profile: { height: '180' }, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {} } })
     });
 
     await expect(collectBackupSnapshot(base, true)).rejects.toThrow('Metadati _sync non validi');
+});
+
+it('refuses future data or sync versions before producing a backup snapshot', async () => {
+    const base = parse({ profile: { height: '170' } });
+    await initializeLocal('user:a', base);
+
+    sdk.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ profile: { height: '180' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 })
+    });
+    await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
+
+    sdk.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+            profile: { height: '180' },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} }
+        })
+    });
+    await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
 });
 
 it('never labels a failed cloud scan complete; explicit device export still works', async () => {

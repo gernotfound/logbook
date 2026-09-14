@@ -8,9 +8,17 @@ import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments,
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
+import {
+    CURRENT_DATA_SCHEMA,
+    CURRENT_LOCAL_ENVELOPE,
+    CURRENT_SYNC_PROTOCOL,
+    normalizeLocalEnvelopeRecord,
+} from '../schemaEvolution';
 
-export interface LocalEnvelopeV3 {
-    version: 3;
+export interface LocalEnvelopeV4 {
+    version: typeof CURRENT_LOCAL_ENVELOPE;
+    dataSchemaVersion: typeof CURRENT_DATA_SCHEMA;
+    syncProtocolVersion: typeof CURRENT_SYNC_PROTOCOL;
     owner: string;
     actorId: string;
     actorSeq: number;
@@ -23,8 +31,14 @@ export interface LocalEnvelopeV3 {
     revision: number;
 }
 
-export type LocalEnvelope = LocalEnvelopeV3;
+export type LocalEnvelope = LocalEnvelopeV4;
 export type CloudCoverageMode = 'window' | 'all';
+
+const currentEnvelopeVersions = () => ({
+    version: CURRENT_LOCAL_ENVELOPE,
+    dataSchemaVersion: CURRENT_DATA_SCHEMA,
+    syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+});
 
 const keyFor = (owner: string) => {
     const canonicalOwner = normalizeStorageOwner(owner);
@@ -36,11 +50,14 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
     if (!value) return undefined;
 
     const canonicalOwner = normalizeStorageOwner(owner);
-    if (value.version !== 3 || value.owner !== canonicalOwner) {
+    if (value.owner !== canonicalOwner) {
         throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
     }
-    const v3 = value as LocalEnvelopeV3;
-    return { ...v3, data: parse(v3.data), baseline: parse(v3.baseline) };
+
+    // Container, data schema and sync protocol are normalized as independent dimensions.
+    const migrated = normalizeLocalEnvelopeRecord(value);
+    const v4 = migrated as unknown as LocalEnvelopeV4;
+    return { ...v4, data: parse(v4.data), baseline: parse(v4.baseline) };
 }
 
 function enforceMonthlyEntityTombstones(
@@ -104,7 +121,8 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         if (operations.length === 0) {
             return {
                 ...(current ?? { completeMonths: [] }),
-                version: 3, owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {},
+                ...currentEnvelopeVersions(),
+                owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {},
                 data: desired,
                 baseline: current?.baseline ?? fallback,
                 completeMonths: current?.completeMonths ?? [],
@@ -116,7 +134,8 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 
         return {
             ...(current ?? { completeMonths: [] }),
-            version: 3, owner, actorId, actorSeq: nextSeq, clock: testClock,
+            ...currentEnvelopeVersions(),
+            owner, actorId, actorSeq: nextSeq, clock: testClock,
             data: desired,
             baseline: current?.baseline ?? fallback,
             completeMonths: current?.completeMonths ?? [],
@@ -168,7 +187,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
         if (current?.pending.length) return current;
-        return { ...current, version: 3, owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: 0 };
+        return { ...current, ...currentEnvelopeVersions(), owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: 0 };
     });
 }
 
@@ -199,7 +218,7 @@ export async function hydrateLocal(
                     }
                 }
             }
-            saved = { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, revision: 0 };
+            saved = { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, revision: 0 };
         } else {
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
@@ -211,7 +230,6 @@ export async function hydrateLocal(
             }
 
             const updatedClock = { ...current.clock };
-            // hydrateLocal MUST NOT modify existing pending clocks
             if (cloudDocuments) {
                 for (const [path, doc] of cloudDocuments.entries()) {
                     if (doc._sync) {
@@ -245,8 +263,6 @@ export async function hydrateLocal(
                 }
             }
 
-            // A full cloud scan is authoritative for all monthly shards. Since applyRemoteDocuments
-            // preserves months absent from its document map, clear those collections in the apply base.
             const applicationBase = coverageMode === 'all'
                 ? ({ ...current.data, history: [], nutrition: {} } as UserData)
                 : current.data;
@@ -262,6 +278,7 @@ export async function hydrateLocal(
 
             saved = {
                 ...current,
+                ...currentEnvelopeVersions(),
                 clock: updatedClock,
                 data: parsedData,
                 baseline: parsedBaseline,
@@ -290,7 +307,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
         saved = parse(clear(data));
         return {
-            ...(current ?? { version: 3, owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, completeMonths: [], pending: [], syncMetaByDocument: {}, revision: 0 }),
+            ...(current ?? { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, completeMonths: [], pending: [], syncMetaByDocument: {}, revision: 0 }),
             data: saved, baseline: clear(current?.baseline ?? data),
         };
     });
