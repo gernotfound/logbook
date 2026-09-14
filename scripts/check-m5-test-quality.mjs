@@ -6,6 +6,7 @@ const fixedFiles = [
   'tests/guest_bootstrap_lifecycle.test.tsx',
   'tests/guest_account_migration_v3.test.tsx',
   'tests/catalog_resolution_pipeline.test.ts',
+  'tests/hardening/nutrition_guest_flow.test.tsx',
 ];
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 
