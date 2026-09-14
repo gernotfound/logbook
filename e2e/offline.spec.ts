@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Offline scenarios & Background suspension', () => {
-  test('Local workout survives offline mode and visibilitychange suspension', async ({ page, context }) => {
+  test('Local workout and durable UserData survive offline page loss', async ({ page, context }) => {
     // 1. Apri l'app
     await page.goto('/');
 
@@ -10,7 +10,7 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 3. Login as Guest
     await page.click('button:has-text("Continua senza account")');
-    
+
     // 3.5 Accetta Termini e Condizioni (Privacy Overlay)
     await page.waitForSelector('text=Aggiornamento Termini e Privacy');
     const checkboxes = await page.locator('input[type="checkbox"]').all();
@@ -25,26 +25,19 @@ test.describe('Offline scenarios & Background suspension', () => {
     // 4. Naviga alla tab Allenamento (tramite la Bottom Nav)
     await page.click('button[aria-label="Allenamento"]');
 
-    // 5. Crea una scheda vuota per poter avviare una sessione
+    // 5. Crea una scheda vuota: è UserData persistito nell'envelope IndexedDB.
     await page.click('button.sub-nav-btn:has-text("Schede")');
-    
-    // Apri il box di creazione
     await page.click('button:has-text("Crea scheda")');
-
-    // Compila il nome della scheda
     await page.fill('input[placeholder="Nome scheda"]', 'Scheda E2E Offline');
     await page.click('#routine-creation-form button:has-text("Crea scheda")');
+    await expect(page.getByText('Scheda E2E Offline', { exact: true })).toBeVisible();
 
     // 6. Torna alla vista Sessione
     await page.click('button.sub-nav-btn:has-text("Sessione")');
-
-    // Seleziona la scheda appena creata
     await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
 
     // 7. Inizia l'allenamento
     await page.click('button:has-text("Inizia allenamento")');
-    
-    // Assicurati di essere nella schermata allenamento attivo
     await expect(page.locator('button:has-text("Termina")')).toBeVisible();
 
     // 8. Vai offline
@@ -52,8 +45,7 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     await context.setOffline(true);
 
-    // 10. Simula la sospensione del thread o del tab
-    // Visibilitychange farà scattare il salvataggio immediato in localStorage bypassando il debounce
+    // 9. Simula la sospensione del thread/tab per il device-local snapshot.
     await page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', {
         value: 'hidden',
@@ -62,23 +54,24 @@ test.describe('Offline scenarios & Background suspension', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    // Reopen while still offline: prove cold startup from the installed service worker and local data.
+    // 10. Distruggi il JS realm e riapri offline: nessuna memoria di modulo può sopravvivere.
     await page.close();
     const newPage = await context.newPage();
     await newPage.goto('/');
-    
-    // Naviga di nuovo ad allenamento
+
     await newPage.click('button[aria-label="Allenamento"]');
 
-    // Assicurati che il workout sia ancora lì
+    // UserData deve provenire dalla copia IndexedDB, non dal vecchio heap JavaScript.
+    await newPage.click('button.sub-nav-btn:has-text("Schede")');
+    await expect(newPage.getByText('Scheda E2E Offline', { exact: true })).toBeVisible();
+
+    // Anche il workout device-local deve sopravvivere.
+    await newPage.click('button.sub-nav-btn:has-text("Sessione")');
     await expect(newPage.locator('button:has-text("Termina")')).toBeVisible();
 
-    // 12. Termina l'allenamento
+    // 11. Termina l'allenamento
     await newPage.click('button:has-text("Termina")');
-    // Conferma l'alert (GlobalDialog)
     await newPage.click('button:has-text("Conferma")');
-
-    // Verifica che l'allenamento sia finito
     await expect(newPage.locator('button:has-text("Inizia allenamento")')).toBeVisible();
   });
 });
