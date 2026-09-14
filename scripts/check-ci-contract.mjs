@@ -21,7 +21,7 @@ function forbidPattern(label, source, pattern) {
 
 function stepBlock(name) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return workflow.match(new RegExp(`^      - name: ${escaped}\\s*\\n([\\s\\S]*?)(?=^      - name:|^$|\\z)`, 'm'))?.[0] ?? '';
+  return workflow.match(new RegExp(`^      - name: ${escaped}\\s*\\n([\\s\\S]*?)(?=^      - name:|(?![\\s\\S]))`, 'm'))?.[0] ?? '';
 }
 
 const pullRequestBlock = workflow.match(/^  pull_request:\s*\n([\s\S]*?)(?=^  (?:push|workflow_dispatch):|^[^\s])/m)?.[1];
