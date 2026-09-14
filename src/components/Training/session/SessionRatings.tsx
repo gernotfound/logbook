@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { Zap, X, Check, Plus, ChevronUp, ChevronDown, Droplets } from 'lucide-react';
 import MuscleModel from '../MuscleModel';
 import { Logic } from '../../../lib/logic';
 import { BufferedInput } from '../../UI/BufferedInput';
@@ -71,8 +72,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
     return (
         <>
             <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
-                <label htmlFor="water-intake" style={{ fontSize: '0.85rem', color: 'var(--primary-color)', display: 'block', marginBottom: '8px' }}>
-                    💧 Acqua bevuta (litri)
+                <label htmlFor="water-intake" style={{ fontSize: '0.85rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                    <Droplets size={16} aria-hidden="true" /> Acqua bevuta (litri)
                 </label>
                 <BufferedInput 
                     id="water-intake" 
@@ -149,23 +150,10 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 <button
                     type="button"
                     onClick={() => setIsDomsOpen(prev => !prev)}
-                    style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        width: '100%',
-                        padding: '14px 16px',
-                        background: isDomsOpen ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                        border: 'none',
-                        color: 'var(--text-main)',
-                        fontSize: '0.95rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                    }}
+                    className={`accordion-btn ${isDomsOpen ? 'expanded' : ''}`}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>⚡</span>
+                        <Zap size={18} aria-hidden="true" style={{ color: '#eab308' }} />
                         <span>Dolori muscolari</span>
                         <span 
                             style={{
@@ -180,8 +168,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                             {pains.length > 0 ? `${pains.length} selezionati` : 'Opzionale'}
                         </span>
                     </div>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {isDomsOpen ? '▲' : '▼'}
+                    <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                        {isDomsOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
                     </span>
                 </button>
 
@@ -210,24 +198,21 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setSearchQuery('')}
+                                    className="btn-link"
                                     style={{
                                         position: 'absolute',
                                         right: '8px',
                                         top: '50%',
                                         transform: 'translateY(-50%)',
-                                        background: 'transparent',
-                                        border: 'none',
                                         color: 'var(--text-muted)',
-                                        fontSize: '1rem',
-                                        cursor: 'pointer',
-                                        padding: '6px',
+                                        padding: '4px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center'
                                     }}
                                     aria-label="Cancella ricerca"
                                 >
-                                    ✕
+                                    <X size={16} aria-hidden="true" />
                                 </button>
                             )}
                         </div>
@@ -277,8 +262,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                                 }}
                                             >
                                                 <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? '#ff4d6d' : 'var(--text-muted)' }}>
-                                                    {isPain ? '✓ Dolorante' : '+ Aggiungi'}
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? '#ff4d6d' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    {isPain ? <><Check size={14} aria-hidden="true" /> Dolorante</> : <><Plus size={14} aria-hidden="true" /> Aggiungi</>}
                                                 </span>
                                             </button>
                                         );
@@ -310,13 +295,9 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                         <button
                                             type="button"
                                             onClick={() => handleToggleMuscle(mId)}
+                                            className="btn-link"
                                             style={{
-                                                background: 'transparent',
-                                                border: 'none',
                                                 color: '#ff4d6d',
-                                                fontWeight: 'bold',
-                                                fontSize: '0.85rem',
-                                                cursor: 'pointer',
                                                 padding: '0 2px',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
@@ -324,7 +305,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                             }}
                                             aria-label={`Rimuovi dolore ${Logic.getMuscleName(mId)}`}
                                         >
-                                            ✕
+                                            <X size={14} aria-hidden="true" />
                                         </button>
                                     </span>
                                 ))}

@@ -11,11 +11,14 @@ vi.mock('firebase/firestore', () => ({
     query: (path: string, ...parts: object[]) => Object.assign({ path }, ...parts), getDocFromServer: sdk.root, getDocsFromServer: sdk.page,
 }));
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
-import { initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
+import { initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+const emptySync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
+
 beforeEach(async () => {
     await clear(); vi.resetAllMocks(); invalidateSession(); sdk.auth.currentUser = { uid: 'a' };
     vi.stubGlobal('localStorage', { length: 0, getItem: () => null });
@@ -23,6 +26,7 @@ beforeEach(async () => {
     sdk.page.mockResolvedValue({ size: 0, docs: [] });
 });
 afterEach(() => vi.unstubAllGlobals());
+
 it('collects every page of historical documents beyond the 3-month view and retains a concurrent local edit', async () => {
     const base = parse({ profile: { height: '170', gender: 'M' } });
     await initializeLocal('user:a', base);
@@ -40,6 +44,104 @@ it('collects every page of historical documents beyond the 3-month view and reta
     expect(sdk.page).toHaveBeenCalledTimes(4);
     expect(backup.recovery.envelope?.pending.length).toBeGreaterThan(0);
 });
+
+it('uses root _sync metadata when replaying pending local operations', async () => {
+    const base = parse({ profile: { height: '170', gender: 'M' } });
+    const local = parse({ profile: { height: '175', gender: 'M' } });
+    await initializeLocal('user:a', base);
+    await commitLocal('user:a', local, base);
+    const envelope = await readLocal('user:a');
+    expect(envelope?.pending.length).toBeGreaterThan(0);
+
+    const actorId = envelope!.actorId;
+    const remoteSeq = envelope!.actorSeq + 1;
+    sdk.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+            profile: { height: '180', gender: 'M' },
+            _schemaVersion: CURRENT_DATA_SCHEMA,
+            _sync: {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: { [actorId]: remoteSeq },
+                fields: {
+                    'profile/height': {
+                        clock: { [actorId]: remoteSeq },
+                        actorId,
+                        seq: remoteSeq
+                    }
+                }
+            }
+        })
+    });
+
+    const backup = await collectBackupSnapshot(base, true);
+    expect(backup.data.profile.height).toBe('180');
+});
+
+it('keeps schema/sync metadata out of history and nutrition business data while preserving raw recovery docs', async () => {
+    const base = parse({});
+    await initializeLocal('user:a', base);
+    sdk.page.mockImplementation(async ({ path }) => {
+        if (path.endsWith('history_months')) {
+            return {
+                size: 1,
+                docs: [{ id: '2026-09', data: () => ({
+                    w1: { id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] },
+                    _schemaVersion: CURRENT_DATA_SCHEMA,
+                    _sync: emptySync
+                }) }]
+            };
+        }
+        return {
+            size: 1,
+            docs: [{ id: '2026-09', data: () => ({
+                '2026-09-10': { date: '2026-09-10', weight: 80 },
+                _schemaVersion: CURRENT_DATA_SCHEMA,
+                _sync: emptySync
+            }) }]
+        };
+    });
+
+    const backup = await collectBackupSnapshot(base, true);
+    expect(backup.data.history.map(item => item.id)).toEqual(['w1']);
+    expect(Object.keys(backup.data.nutrition ?? {})).toEqual(['2026-09-10']);
+    expect((backup.data.nutrition as any)?._sync).toBeUndefined();
+    const rawHistory = (backup.recovery.cloudDocuments as any)['history_months/2026-09'];
+    expect(rawHistory._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(rawHistory._sync).toEqual(emptySync);
+});
+
+it('fails safe when cloud causal metadata is malformed', async () => {
+    const base = parse({ profile: { height: '170' } });
+    await initializeLocal('user:a', base);
+    sdk.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ profile: { height: '180' }, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {} } })
+    });
+
+    await expect(collectBackupSnapshot(base, true)).rejects.toThrow('Metadati _sync non validi');
+});
+
+it('refuses future data or sync versions before producing a backup snapshot', async () => {
+    const base = parse({ profile: { height: '170' } });
+    await initializeLocal('user:a', base);
+
+    sdk.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ profile: { height: '180' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 })
+    });
+    await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
+
+    sdk.root.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+            profile: { height: '180' },
+            _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} }
+        })
+    });
+    await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
+});
+
 it('never labels a failed cloud scan complete; explicit device export still works', async () => {
     const data = parse({ profile: { height: '171' } });
     await initializeLocal('user:a', data);
@@ -47,6 +149,7 @@ it('never labels a failed cloud scan complete; explicit device export still work
     await expect(collectBackupSnapshot(data, true)).rejects.toThrow('offline');
     expect((await collectBackupSnapshot(data, false)).coverage.scope).toBe('device');
 });
+
 it('aborts if the account changes between pages', async () => {
     sdk.page.mockImplementation(async () => { sdk.auth.currentUser = { uid: 'b' }; invalidateSession(); return { size: 0, docs: [] }; });
     await expect(collectBackupSnapshot(parse({}), true)).rejects.toThrow('Sessione cambiata');

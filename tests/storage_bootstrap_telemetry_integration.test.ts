@@ -9,6 +9,7 @@ import {
   isAnomalyAlreadyReported,
 } from '../src/lib/storageTelemetry';
 import * as storageTelemetryModule from '../src/lib/storageTelemetry';
+import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -33,7 +34,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     vi.restoreAllMocks();
   });
 
-  it('Flow 1: Valid cache in IndexedDB initializes store and updates marker', async () => {
+  it('Flow 1: Valid current cache in IndexedDB initializes store and updates marker', async () => {
     const validData = {
       profile: { name: 'Gym Athlete' },
       library: [],
@@ -43,51 +44,48 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
       customFoods: [],
       catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
     };
-
-    vi.spyOn(idbKeyval, 'get').mockImplementation(async key => key === 'logbook:v2:user:test-user-id' ? { version: 2, owner: 'user:test-user-id', revision: 0, data: validData, baseline: validData, pending: [], completeMonths: [] } : undefined);
+    vi.spyOn(idbKeyval, 'get').mockImplementation(async key => key === 'logbook:v2:user:test-user-id' ? {
+      version: CURRENT_LOCAL_ENVELOPE,
+      dataSchemaVersion: CURRENT_DATA_SCHEMA,
+      syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+      owner: 'user:test-user-id',
+      actorId: 'actor', actorSeq: 0, clock: {}, data: validData, baseline: validData,
+      pending: [], syncMetaByDocument: {}, completeMonths: [], revision: 0
+    } : undefined);
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();
 
-    // Verify initial user data was set and parsed
     expect(window.__INITIAL_USER_DATA__).not.toBeNull();
     expect(useAppStore.getState().userData?.profile?.name).toBe('Gym Athlete');
 
-    // Verify marker was updated
     const marker = getStorageMarker();
     expect(marker).not.toBeNull();
     expect(marker?.version).toBe(STORAGE_MARKER_VERSION);
     expect(typeof marker?.timestamp).toBe('number');
-
-    // No anomaly dispatched
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
   it('Flow 2: IndexedDB read_error does NOT update marker and does NOT dispatch anomaly', async () => {
-    // Set a previous marker
-updateStorageMarker(1000)!;
+    updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockRejectedValue(new Error('IndexedDB blocked'));
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
-    // Marker timestamp should remain unchanged from priorMarker, not updated to new time
     expect(getStorageMarker()?.timestamp).toBe(1000);
-    // Read error should NOT trigger anomaly dispatch
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
   it('Flow 3: Invalid cache does NOT update marker and does NOT dispatch anomaly', async () => {
-updateStorageMarker(1000)!;
-    // Return corrupted non-object data
+    updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockResolvedValue('corrupted string payload' as any);
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
 
     await initApp();
 
     expect(window.__INITIAL_USER_DATA__).toBeNull();
-    // Marker timestamp should remain unchanged
     expect(getStorageMarker()?.timestamp).toBe(1000);
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
@@ -106,7 +104,7 @@ updateStorageMarker(1000)!;
   it('Flow 5: Anomaly Detected when valid marker exists in localStorage but cache in IndexedDB is missing', async () => {
     vi.useFakeTimers();
     const markerTime = 1000000;
-    const bootTime = 1005000; // 5000ms later
+    const bootTime = 1005000;
 
     vi.setSystemTime(markerTime);
     const marker = updateStorageMarker(markerTime)!;
@@ -125,10 +123,7 @@ updateStorageMarker(1000)!;
     expect(payload.timestamp).toBe(bootTime);
     expect(payload.elapsedMs).toBe(5000);
 
-    // Verify deduplication flag was set
     expect(isAnomalyAlreadyReported(marker)).toBe(true);
-
-    // Subsequent boot with the same missing state does NOT dispatch duplicate event
     await initApp();
     expect(dispatchSpy).toHaveBeenCalledTimes(1);
   });

@@ -3,78 +3,187 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
-import { UserDataSchema } from '../../src/lib/schema';
-import { documentChanges, projectDocuments } from '../../src/lib/sync/documentProjection';
+
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
-import type { CachedGlobalCatalog, UserData } from '../../src/types';
-const catalog = { exercises: [], foods: [] } as unknown as CachedGlobalCatalog;
-const data = (input: Partial<UserData> = {}) => UserDataSchema.parse(input) as unknown as UserData;
+import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
+import { CURRENT_DATA_SCHEMA, FutureVersionError } from '../../src/lib/schemaEvolution';
+
 let env: RulesTestEnvironment;
+
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local emulator is allowed');
     env = await initializeTestEnvironment({ projectId: 'demo-logbook-audit', firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') } });
 });
+
 beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
 
-it('imports one day without replacing the other 30 remote days, including on retry', async () => {
+it('1. V3 API: writes business data, FieldStamp metadata and the current data schema marker', async () => {
     const db = env.authenticatedContext('a').firestore();
-    const nutrition = Object.fromEntries(Array.from({ length: 31 }, (_, i) => { const date = `2026-08-${String(i + 1).padStart(2, '0')}`; return [date, { date, weight: 70 + i / 10 }]; }));
-    const remote = projectDocuments(data({ nutrition }), catalog).get('nutrition_months/2026-08')!;
-    const ref = doc(db, 'users/a/nutrition_months/2026-08');
-    await setDoc(ref, remote);
-    const base = data();
-    const desired = data({ nutrition: { '2026-08-15': { date: '2026-08-15', weight: 71.4, notes: 'imported' } } });
-    // A new record overlapping a remote day changes only previously absent fields.
-    const changes = documentChanges(base, desired, catalog);
-    const first = await applyDocumentChanges(db, 'a', changes, () => true);
-    expect(first.conflicts).toEqual([]);
-    const saved = (await getDoc(ref)).data()!;
-    expect(Object.keys(saved)).toHaveLength(31);
-    expect(saved['2026-08-01']).toEqual(remote['2026-08-01']);
-    expect(saved['2026-08-15'].notes).toBe('imported');
-    expect((await applyDocumentChanges(db, 'a', changes, () => true)).conflicts).toEqual([]);
-    expect((await getDoc(ref)).data()).toEqual(saved);
+    const ops: SemanticOperation[] = [
+        { docPath: '', path: ['profile', 'height'], value: '185', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ];
+
+    await applyDocumentChanges(db, 'a', ops, () => true);
+
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    expect(saved.profile.height).toBe('185');
+    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(saved._sync.fields['profile/height']).toMatchObject({ actorId: 'A', seq: 1, clock: { A: 1 } });
 });
 
-it('converges two independent profile edits from separate clients', async () => {
-    const one = env.authenticatedContext('a').firestore();
-    const two = env.authenticatedContext('a', { device: 'second' }).firestore();
-    const base = data({ profile: { height: '170', gender: 'M' } });
-    await setDoc(doc(one, 'users/a'), projectDocuments(base, catalog).get('')!);
-    const first = documentChanges(base, data({ ...base, profile: { height: '171', gender: 'M' } }), catalog);
-    const second = documentChanges(base, data({ ...base, profile: { height: '170', gender: 'F' } }), catalog);
-    const results = await Promise.all([applyDocumentChanges(one, 'a', first, () => true), applyDocumentChanges(two, 'a', second, () => true)]);
-    expect(results.every(result => result.conflicts.length === 0)).toBe(true);
-    expect((await getDoc(doc(one, 'users/a'))).data()?.profile).toMatchObject({ height: '171', gender: 'F' });
+it('1b. accepts an unversioned schema-1 document and lazily marks it on the next legitimate write', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    await setDoc(doc(db, 'users/a'), { profile: { name: 'Baseline' } });
+
+    await applyDocumentChanges(db, 'a', [
+        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ], () => true);
+
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    expect(saved.profile).toMatchObject({ name: 'Baseline', height: '180' });
+    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
 });
 
-it('preserves both collision alternatives and writes none of the independent documents', async () => {
+it('1c. refuses a future remote schema before semantic merge or write', async () => {
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a'), { profile: { height: '999' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 });
+    });
     const db = env.authenticatedContext('a').firestore();
-    const base = data({ profile: { height: '170' } });
-    const remote = data({ profile: { height: '172' } });
-    await setDoc(doc(db, 'users/a'), projectDocuments(remote, catalog).get('')!);
-    const desired = data({ profile: { height: '171' }, nutrition: { '2026-09-01': { date: '2026-09-01', weight: 80 } } });
-    const result = await applyDocumentChanges(db, 'a', documentChanges(base, desired, catalog), () => true);
-    expect(result.conflicts).toContainEqual({ path: ['profile', 'height'], base: '170', local: '171', remote: '172' });
-    expect((await getDoc(doc(db, 'users/a'))).data()?.profile.height).toBe('172');
-    expect((await getDoc(doc(db, 'users/a/nutrition_months/2026-09'))).exists()).toBe(false);
+
+    await expect(applyDocumentChanges(db, 'a', [
+        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ], () => true)).rejects.toThrow(FutureVersionError);
+
+    await env.withSecurityRulesDisabled(async context => {
+        const saved = (await getDoc(doc(context.firestore(), 'users/a'))).data()!;
+        expect(saved).toEqual({ profile: { height: '999' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 });
+    });
 });
 
-it('deletes one known day while preserving a remotely added day in the same month', async () => {
+it('2. V3 API: replay is idempotent', async () => {
     const db = env.authenticatedContext('a').firestore();
-    const base = data({ nutrition: { '2026-09-01': { date: '2026-09-01', weight: 80 } } });
-    const remote = data({ nutrition: { ...base.nutrition, '2026-09-02': { date: '2026-09-02', weight: 81 } } });
+    const ops: SemanticOperation[] = [
+        { docPath: '', path: ['profile', 'name'], value: 'Test', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ];
+
+    await applyDocumentChanges(db, 'a', ops, () => true);
+    await applyDocumentChanges(db, 'a', ops, () => true);
+
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    expect(saved.profile.name).toBe('Test');
+    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(saved._sync.fields['profile/name'].seq).toBe(1);
+});
+
+it('2b. V3 API: contention smoke test converges to the semantic operation', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    await setDoc(doc(db, 'users/a'), { profile: { name: 'Initial' } });
+
+    const ops: SemanticOperation[] = [
+        { docPath: '', path: ['profile', 'name'], value: 'TestRetry', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ];
+
+    const promise = applyDocumentChanges(db, 'a', ops, () => true);
+    await setDoc(doc(db, 'users/a'), { profile: { name: 'Interfering' } });
+    await promise;
+
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    expect(saved.profile.name).toBe('TestRetry');
+    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+});
+
+it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causally later recreation', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const createOps: SemanticOperation[] = [
+        {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-13'],
+            value: { date: '2026-09-13', weight: 80, meals: [] },
+            isDelete: false,
+            actorId: 'A',
+            seq: 1,
+            clock: { A: 1 }
+        }
+    ];
+    await applyDocumentChanges(db, 'a', createOps, () => true);
+
+    const deleteOps: SemanticOperation[] = [
+        {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-13'],
+            isDelete: true,
+            actorId: 'A',
+            seq: 2,
+            clock: { A: 2 }
+        }
+    ];
+    await applyDocumentChanges(db, 'a', deleteOps, () => true);
+
     const ref = doc(db, 'users/a/nutrition_months/2026-09');
-    await setDoc(ref, projectDocuments(remote, catalog).get('nutrition_months/2026-09')!);
-    const result = await applyDocumentChanges(db, 'a', documentChanges(base, data(), catalog), () => true);
-    expect(result.conflicts).toEqual([]);
-    expect(Object.keys((await getDoc(ref)).data()!)).toEqual(['2026-09-02']);
+    const deleted = (await getDoc(ref)).data();
+    expect(deleted).toBeDefined();
+    expect(deleted!._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(deleted!['2026-09-13']).toBeUndefined();
+    expect(deleted!._sync.fields['2026-09-13']).toMatchObject({ deleted: true, actorId: 'A', seq: 2 });
+
+    const recreateOps: SemanticOperation[] = [
+        {
+            docPath: 'nutrition_months/2026-09',
+            path: ['2026-09-13'],
+            value: { date: '2026-09-13', weight: 82, meals: [] },
+            isDelete: false,
+            actorId: 'B',
+            seq: 1,
+            clock: { A: 2, B: 1 }
+        }
+    ];
+    await applyDocumentChanges(db, 'a', recreateOps, () => true);
+
+    const recreated = (await getDoc(ref)).data()!;
+    expect(recreated['2026-09-13'].weight).toBe(82);
+    expect(recreated._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(recreated._sync.fields['2026-09-13'].deleted).toBeUndefined();
+    expect(recreated._sync.fields['2026-09-13'].clock).toEqual({ A: 2, B: 1 });
 });
 
-it('refuses a session invalidated between transaction start and read completion', async () => {
+it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async () => {
     const db = env.authenticatedContext('a').firestore();
-    let checks = 0;
-    await expect(applyDocumentChanges(db, 'a', documentChanges(data(), data({ profile: { height: '171' } }), catalog), () => ++checks < 3)).rejects.toThrow('Sessione cambiata');
-    expect((await getDoc(doc(db, 'users/a'))).exists()).toBe(false);
+
+    await setDoc(doc(db, 'users/a'), {
+        profile: { height: '190' },
+        _sync: {
+            protocolVersion: 1,
+            clock: { B: 1 },
+            fields: {
+                'profile/height': { clock: { B: 1 }, actorId: 'B', seq: 1 }
+            }
+        }
+    });
+
+    const ops: SemanticOperation[] = [
+        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ];
+
+    await applyDocumentChanges(db, 'a', ops, () => true);
+
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    expect(saved.profile.height).toBe('190');
+    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(saved._sync.clock.A).toBe(1);
+});
+
+it('5. V3 API: checkDocSize receives a document that already contains schema and sync metadata', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const ops: SemanticOperation[] = [
+        { docPath: '', path: ['profile', 'name'], value: 'A'.repeat(500), isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+    ];
+
+    const result = await applyDocumentChanges(db, 'a', ops, () => true);
+    expect(result.syncMeta[''].fields['profile/name']).toBeDefined();
+
+    const saved = (await getDoc(doc(db, 'users/a'))).data()!;
+    expect(saved.profile.name).toHaveLength(500);
+    expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
+    expect(saved._sync.fields['profile/name']).toBeDefined();
 });

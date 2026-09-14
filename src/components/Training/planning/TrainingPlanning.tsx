@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Plus } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
@@ -172,7 +173,7 @@ export default function TrainingPlanning() {
                             onClick={handleCreateNew}
                             style={{ marginBottom: 0, padding: '8px 16px', fontSize: '0.95rem' }}
                         >
-                            <span aria-hidden="true">➕</span> Nuovo ciclo
+                            <Plus size={16} aria-hidden="true" /> Nuovo ciclo
                         </button>
                     )}
                 </div>

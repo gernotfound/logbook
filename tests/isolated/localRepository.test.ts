@@ -1,37 +1,107 @@
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clear, get, set } from 'idb-keyval';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { acknowledgeLocal, hydrateLocal, commitLocal, initializeLocal, preserveLegacyCache, readLocal } from '../../src/lib/sync/localRepository';
+import { hydrateLocal, commitLocal, initializeLocal, preserveLegacyCache, readLocal } from '../../src/lib/sync/localRepository';
+import {
+    CURRENT_DATA_SCHEMA,
+    CURRENT_LOCAL_ENVELOPE,
+    CURRENT_SYNC_PROTOCOL,
+    FutureVersionError,
+    LegacyVersionError,
+} from '../../src/lib/schemaEvolution';
 
-const data = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
+const data = (height: number) => UserDataSchema.parse({ profile: { height: String(height) } }) as unknown as UserData;
 beforeEach(() => clear());
 afterEach(() => vi.restoreAllMocks());
 
 describe('durable owner-scoped journal', () => {
-    it('does not resurrect a remote deletion in a complete month and preserves unloaded history', async () => {
-        const base = UserDataSchema.parse({ nutrition: { '2026-09-01': { date: '2026-09-01', weight: 80 }, '2025-01-01': { date: '2025-01-01', weight: 70 } } }) as unknown as UserData;
+    it('writes independent current envelope/data/sync versions', async () => {
+        await initializeLocal('a', data(170));
+        expect(await readLocal('a')).toMatchObject({
+            version: CURRENT_LOCAL_ENVELOPE,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+            owner: 'user:a',
+        });
+    });
+
+    it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
+        const legacy = { owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE - 1 };
+        await set('logbook:v2:user:a', legacy);
+        await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
+        expect(await get('logbook:v2:user:a')).toEqual(legacy);
+
+        const future = { owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE + 1 };
+        await set('logbook:v2:user:a', future);
+        await expect(readLocal('a')).rejects.toThrow(FutureVersionError);
+        expect(await get('logbook:v2:user:a')).toEqual(future);
+    });
+
+    it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
+        const base = UserDataSchema.parse({ nutrition: {
+            '2026-09-01': { date: '2026-09-01', weight: 80 },
+            '2025-01-01': { date: '2025-01-01', weight: 70 }
+        } }) as unknown as UserData;
         await initializeLocal('a', base);
-        const hydrated = await hydrateLocal('a', data(170), ['2026-09']);
+
+        const cloudWindow = { ...data(170) } as unknown as UserData;
+        const hydrated = await hydrateLocal('a', cloudWindow, ['2026-09']);
+
         expect(hydrated.data.nutrition?.['2026-09-01']).toBeUndefined();
         expect(hydrated.data.nutrition?.['2025-01-01']?.weight).toBe(70);
         expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
-    it('reapplies independent pending changes during hydration and preserves a real collision', async () => {
-        const base = data(170);
-        await initializeLocal('a', base);
-        await commitLocal('a', data(171), base);
-        const remote = UserDataSchema.parse({ profile: { height: 170, gender: 'F' } }) as unknown as UserData;
-        const merged = await hydrateLocal('a', remote, ['2026-09']);
-        expect(merged.data.profile).toMatchObject({ height: '171', gender: 'F' });
-        expect(merged.pending).toHaveLength(1);
-        expect(merged.conflicts).toEqual([]);
-        const collided = await hydrateLocal('a', data(172), ['2026-09']);
-        expect(collided.conflicts).toContainEqual({ path: ['profile', 'height'], base: '170', local: '171', remote: '172' });
-        expect(collided.pending).toHaveLength(1);
+
+    it('treats exhaustive hydration as authoritative for every monthly shard', async () => {
+        const base = UserDataSchema.parse({ nutrition: {
+            '2025-01-01': { date: '2025-01-01', weight: 70 },
+            '2026-09-01': { date: '2026-09-01', weight: 80 }
+        } }) as unknown as UserData;
+        await initializeLocal('a', base, ['2025-01', '2026-09']);
+
+        const cloud = UserDataSchema.parse({ nutrition: {
+            '2026-09-01': { date: '2026-09-01', weight: 81 }
+        } }) as unknown as UserData;
+        const hydrated = await hydrateLocal('a', cloud, ['2026-09'], undefined, 'all');
+
+        expect(hydrated.data.nutrition?.['2025-01-01']).toBeUndefined();
+        expect(hydrated.data.nutrition?.['2026-09-01']?.weight).toBe(81);
+        expect(hydrated.completeMonths).toEqual(['2026-09']);
     });
+
+    it('emits parent tombstones when a workout or nutrition day is deleted', async () => {
+        const base = UserDataSchema.parse({
+            history: [{ id: 'w1', date: '2026-09-10', routineName: 'A', duration: '20m', exercises: [] }],
+            nutrition: { '2026-09-10': { date: '2026-09-10', weight: 80 } }
+        }) as unknown as UserData;
+        const desired = UserDataSchema.parse({ history: [], nutrition: {} }) as unknown as UserData;
+
+        await initializeLocal('a', base);
+        const operations = await commitLocal('a', desired, base);
+
+        const workoutDeletes = operations.filter(op => op.docPath === 'history_months/2026-09');
+        const nutritionDeletes = operations.filter(op => op.docPath === 'nutrition_months/2026-09');
+        expect(workoutDeletes).toEqual([expect.objectContaining({ path: ['w1'], isDelete: true })]);
+        expect(nutritionDeletes).toEqual([expect.objectContaining({ path: ['2026-09-10'], isDelete: true })]);
+    });
+
+    it('does not advance actorSeq for a semantic no-op', async () => {
+        const initial = data(170);
+        await initializeLocal('a', initial);
+        const before = await readLocal('a');
+
+        const operations = await commitLocal('a', initial, initial);
+        const after = await readLocal('a');
+
+        expect(operations).toEqual([]);
+        expect(after?.actorSeq).toBe(before?.actorSeq);
+        expect(after?.clock).toEqual(before?.clock);
+        expect(after?.pending).toEqual(before?.pending);
+    });
+
     it('rejects a quota failure without changing the previous data or journal', async () => {
         await initializeLocal('a', data(170));
         const before = await readLocal('a');
@@ -39,41 +109,7 @@ describe('durable owner-scoped journal', () => {
         await expect(commitLocal('a', data(171), data(170))).rejects.toThrow('Quota exceeded');
         expect(await readLocal('a')).toEqual(before);
     });
-    it('atomically retains data and ordered operations across readers', async () => {
-        await initializeLocal('a', data(170));
-        const [one, two] = await Promise.all([commitLocal('a', data(171), data(170)), commitLocal('a', data(172), data(171))]);
-        const saved = await readLocal('a');
-        expect(saved?.pending.map(op => op.id)).toEqual([one.id, two.id]);
-        expect(saved?.data.profile.height).toBe('172');
-        expect(saved?.pending[1].base.profile.height).toBe('171');
-        await acknowledgeLocal('a', one.id, data(171));
-        expect((await readLocal('a'))?.data.profile.height).toBe('172');
-        await acknowledgeLocal('a', two.id, data(172));
-        expect((await readLocal('a'))?.pending).toEqual([]);
-    });
-    it('merges independent changes from stale tabs without erasing the first tab edit', async () => {
-        const base = data(170);
-        await initializeLocal('a', base);
-        await Promise.all([
-            commitLocal('a', { ...base, profile: { ...base.profile, height: '171' } }, base),
-            commitLocal('a', { ...base, profile: { ...base.profile, gender: 'M' } }, base),
-        ]);
-        expect((await readLocal('a'))?.data.profile).toMatchObject({ height: '171', gender: 'M' });
-        expect((await readLocal('a'))?.conflicts).toEqual([]);
-    });
-    it('preserves both alternatives when two stale tabs change the same field', async () => {
-        await initializeLocal('a', data(170));
-        await commitLocal('a', data(171), data(170));
-        await commitLocal('a', data(172), data(170));
-        expect((await readLocal('a'))?.conflicts).toEqual([{ path: ['profile', 'height'], base: '170', local: '172', remote: '171' }]);
-        expect((await readLocal('a'))?.pending).toHaveLength(2);
-    });
-    it('rejects out-of-order acknowledgements without dropping either edit', async () => {
-        await commitLocal('a', data(171), data(170));
-        const second = await commitLocal('a', data(172), data(170));
-        await expect(acknowledgeLocal('a', second.id, data(172))).rejects.toThrow('fuori ordine');
-        expect((await readLocal('a'))?.pending).toHaveLength(2);
-    });
+
     it('isolates accounts and guest, and protects pending changes from hydration', async () => {
         await commitLocal('a', data(171), data(170));
         await commitLocal('b', data(180), data(179));
@@ -83,16 +119,18 @@ describe('durable owner-scoped journal', () => {
         expect((await readLocal('b'))?.data.profile.height).toBe('180');
         expect((await readLocal('guest'))?.pending).toEqual([]);
     });
+
     it('preserves an unowned legacy cache without silently assigning it', async () => {
         await set('logbook_cached_user_data', data(175));
         expect(await preserveLegacyCache()).toBe(true);
         expect(await get('logbook:recovery:legacy')).toEqual(data(175));
         expect(await readLocal('a')).toBeUndefined();
     });
+
     it('rejects corrupt envelope ownership and preserves the original bytes', async () => {
-        const corrupt = { owner: 'b', version: 2, revision: 1, data: 'corrupt' };
-        await set('logbook:v2:a', corrupt);
+        const corrupt = { owner: 'user:b', version: 3, revision: 1, data: 'corrupt' };
+        await set('logbook:v2:user:a', corrupt);
         await expect(commitLocal('a', data(171), data(170))).rejects.toThrow('recupero');
-        expect(await get('logbook:v2:a')).toEqual(corrupt);
+        expect(await get('logbook:v2:user:a')).toEqual(corrupt);
     });
 });

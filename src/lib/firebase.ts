@@ -108,6 +108,7 @@ if (currentAnalyticsConsent) void enableConsentedAnalytics();
 let _db: any = null;
 export const getDb = () => {
     if (!_db) {
+        ensureAppCheck();
         _db = initializeFirestore(app, {
             localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
         });

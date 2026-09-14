@@ -285,8 +285,8 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             const input = container.querySelector('input') as HTMLInputElement;
             fireEvent.focus(input);
 
-            expect(container.textContent).toContain('🏃 Cardio');
-            expect(container.textContent).toContain('⏱️ Tempo');
+            expect(container.textContent).toContain('Cardio');
+            expect(container.textContent).toContain('Tempo');
             expect(container.textContent).toContain('Petto');
             expect(container.textContent).toContain('Dorso');
         });

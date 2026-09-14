@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDoc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 import {
     getSeedCatalog,
     clearCatalogCache,

@@ -1,11 +1,12 @@
 import { doc, runTransaction, type Firestore } from 'firebase/firestore';
-import equal from 'fast-deep-equal';
 import { UserDataSchema } from '../schema';
 import { checkDocSize } from '../checkDocSize';
 import { removeUndefinedValues } from '../utils/object';
-import { reconcile, type DataConflict } from './reconcile';
-import { rootDocument, type DocumentChange, type DocumentData } from './documentProjection';
+import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolution';
+import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
+import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import { compactSyncMetas } from './causalCompaction';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
@@ -17,37 +18,62 @@ function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     return parsed.nutrition as unknown as DocumentData;
 }
 
-export interface TransactionOutcome { documents: Map<string, DocumentData>; conflicts: DataConflict[] }
-/** Pure transaction callback: retries never mutate the store or the durable queue. */
-export async function applyDocumentChanges(db: Firestore, uid: string, changes: DocumentChange[], isCurrent: () => boolean): Promise<TransactionOutcome> {
+export interface TransactionOutcome { documents: Map<string, DocumentData>; syncMeta: Record<string, SyncMeta> }
+
+export async function applyDocumentChanges(db: Firestore, uid: string, ops: SemanticOperation[], isCurrent: () => boolean): Promise<TransactionOutcome> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
-    if (changes.length > 400) throw new Error('Importazione troppo estesa per una transazione: dati conservati nel registro locale');
     if (!isCurrent()) throw new Error('Sessione cambiata');
-    if (!changes.length) return { documents: new Map(), conflicts: [] };
+    if (!ops.length) return { documents: new Map(), syncMeta: {} };
+
     return runTransaction(db, async transaction => {
         if (!isCurrent()) throw new Error('Sessione cambiata');
-        const refs = changes.map(change => doc(db, `users/${uid}${change.path ? '/' + change.path : ''}`));
+
+        const pathsToRead = [...new Set(ops.map(op => op.docPath))];
+        const refs = pathsToRead.map(path => doc(db, `users/${uid}${path ? '/' + path : ''}`));
         const snapshots = await Promise.all(refs.map(ref => transaction.get(ref)));
+
         if (!isCurrent()) throw new Error('Sessione cambiata');
-        const documents = new Map<string, DocumentData>();
-        const conflicts: DataConflict[] = [];
-        const writes: Array<{ index: number; data: DocumentData }> = [];
-        changes.forEach((change, index) => {
+
+        const baseDocs = new Map<string, DocumentData>();
+        const remoteSyncMetas: Record<string, SyncMeta> = {};
+
+        pathsToRead.forEach((path, index) => {
             const raw = snapshots[index].exists() ? snapshots[index].data() : {};
-            const remote = removeUndefinedValues(normalizeRemote(change.path, raw));
-            const merged = reconcile(change.base, change.desired, remote, change.path ? change.path.split('/') : []);
-            conflicts.push(...merged.conflicts);
-            const data = removeUndefinedValues(merged.value) as DocumentData;
-            checkDocSize(data, change.path || 'User Profile');
-            documents.set(change.path, data);
-            if (!equal(raw, data)) writes.push({ index, data });
+            const normalized = normalizeCloudDocument(raw, `Firestore ${path || 'root'} data schema`);
+
+            if (normalized.sync !== undefined) {
+                remoteSyncMetas[path] = parseSyncMeta(normalized.sync);
+            }
+
+            const remote = removeUndefinedValues(normalizeRemote(path, normalized.business));
+            baseDocs.set(path, remote);
         });
-        // A collision blocks the whole operation; no independent sub-write is partially applied.
-        if (conflicts.length) return { documents, conflicts };
-        for (const { index, data } of writes) {
-            if (changes[index].path && Object.keys(data).length === 0) transaction.delete(refs[index]);
-            else transaction.set(refs[index], data);
+
+        const { documents: newDocs, syncMetas: mergedSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
+        const newSyncMetas = compactSyncMetas(mergedSyncMetas);
+
+        for (const [path, docData] of newDocs.entries()) {
+            let business = removeUndefinedValues(docData) as DocumentData;
+
+            // Migration/normalization always happens before semantic merge; Zod validates the current business schema afterwards.
+            business = removeUndefinedValues(normalizeRemote(path, business)) as DocumentData;
+
+            const meta = newSyncMetas[path];
+            const finalData = withCurrentDataSchema(business, meta) as DocumentData;
+
+            checkDocSize(finalData, path || 'User Profile');
+
+            const refIndex = pathsToRead.indexOf(path);
+            const hasBusinessData = Object.keys(business).length > 0;
+            const hasFields = Boolean(meta && Object.keys(meta.fields).length > 0);
+
+            if (!hasBusinessData && !hasFields) {
+                transaction.delete(refs[refIndex]);
+            } else {
+                transaction.set(refs[refIndex], finalData);
+            }
         }
-        return { documents, conflicts };
+
+        return { documents: newDocs, syncMeta: newSyncMetas };
     }, { maxAttempts: 5 });
 }

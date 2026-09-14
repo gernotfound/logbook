@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Trash2, Save } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
@@ -322,7 +323,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
             {activeWorkout.isEditingHistory ? (
                 <>
                     <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
-                        <span aria-hidden="true">💾</span> Salva modifiche
+                        <Save size={16} aria-hidden="true" /> Salva modifiche
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
                         Annulla modifica
@@ -334,7 +335,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
                         <span aria-hidden="true">🏁</span> Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
-                        <span aria-hidden="true">🗑️</span> Elimina sessione
+                        <Trash2 size={16} aria-hidden="true" /> Elimina sessione
                     </button>
                 </>
             )}

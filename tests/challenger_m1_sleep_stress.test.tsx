@@ -133,7 +133,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             // Form must update to yesterday's values
             expect(hoursInput.value).toBe('06:30');
             expect(deepInput.value).toBe('01:15');
-            expect(container.textContent).toContain('✏️ Modifica sonno (' + yesterday + ')');
+            expect(container.textContent).toContain('Modifica sonno (' + yesterday + ')');
 
             // Click Cancel button
             const cancelBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('Annulla'));
@@ -456,7 +456,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             });
 
             // Form should be in edit mode for date2
-            expect(container.textContent).toContain('✏️ Modifica sonno (' + date2 + ')');
+            expect(container.textContent).toContain('Modifica sonno (' + date2 + ')');
             expect((container.querySelector('#sleep-hours') as HTMLInputElement).value).toBe('07:15');
         });
     });

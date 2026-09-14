@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 
 vi.unmock('../src/lib/db');
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 import { DomainParsers, UserDataSchema } from '../src/lib/schema';
 import type {} from '../src/types';
 
@@ -253,21 +253,29 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(mockBatch.commit).not.toHaveBeenCalled();
         });
 
-        it('1.6: Enforces checkDocSize threshold (>950KB) and rejects write before Firestore batch without corrupting cache', async () => {
+        it('1.6: Enforces the real 950KB checkDocSize threshold and rejects before Firestore commit without poisoning the journal', async () => {
             const state = createBaseState();
             await DB.saveUserData(state);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
 
-            // Generate massive custom foods exceeding 950KB (>950,000 bytes)
-            const massiveFoods = Array.from({ length: 8000 }, (_, i) => ({
-                id: `giant_food_${i}`,
-                name: `Massive Food Description with Extensive Ingredients and Micronutrients Details ${i}`,
-                kcal: 500, pro: 30, carbs: 50, fat: 20, brand: 'Giant Brand Name', category: 'Long Category Name',
-                notes: 'Very long description text to ensure document exceeds 950KB limit reliably'
-            }));
-
-            const oversizedState = { ...state, customFoods: massiveFoods };
+            // FoodSchema is passthrough: this valid custom item reaches the V3 root doc with the large extension field intact.
+            const oversizedState = {
+                ...state,
+                customFoods: [
+                    ...state.customFoods,
+                    {
+                        id: 'giant_food',
+                        name: 'Oversized but schema-valid custom food',
+                        kcal: 500,
+                        pro: 30,
+                        carbs: 50,
+                        fat: 20,
+                        isCustom: true,
+                        extraNutritionNote: 'x'.repeat(960_000)
+                    }
+                ]
+            };
 
             const saveRes = await DB.saveUserData(oversizedState);
             expect(saveRes.ok).toBe(false);
@@ -275,10 +283,11 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(String(saveRes.error)).toMatch(/supera il limite di dimensione/);
             expect(mockBatch.commit).not.toHaveBeenCalled();
 
-            // Clean state can still be saved afterwards
+            // A later clean semantic update must supersede the oversized pending operation and sync successfully.
             const cleanState = { ...state, profile: { height: '190' } };
             mockBatch.commit.mockResolvedValueOnce(undefined);
-            await DB.saveUserData(cleanState);
+            const cleanRes = await DB.saveUserData(cleanState);
+            expect(cleanRes.ok).toBe(true);
             expect(mockBatch.set).toHaveBeenCalled();
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
         });
@@ -436,7 +445,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(monthDocsWritten.some(p => p.includes('2026-08'))).toBe(true);
         });
 
-        it('2.4: Deleting all entries from a specific month triggers batch.delete exclusively for that month', async () => {
+        it('2.4: Deleting the last entity in a month persists a V3 parent tombstone instead of physically deleting the shard', async () => {
             const stateWithTwoMonths = {
                 profile: {},
                 library: [],
@@ -467,14 +476,19 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 ]
             };
 
-            await DB.saveUserData(stateAugustOnly);
+            const result = await DB.saveUserData(stateAugustOnly);
+            expect(result.ok).toBe(true);
 
-            // Must delete 2026-07 doc
-            expect(mockBatch.delete).toHaveBeenCalledTimes(1);
-            const deletedPath = mockBatch.delete.mock.calls[0][0]?.path || '';
-            expect(deletedPath).toContain('2026-07');
-            // August is unchanged so no batch.set for August
-            expect(mockBatch.set).not.toHaveBeenCalled();
+            // V3 keeps a tombstone-only monthly doc until causal GC can prove physical deletion safe.
+            expect(mockBatch.delete).not.toHaveBeenCalled();
+            expect(mockBatch.set).toHaveBeenCalledTimes(1);
+            const [writtenRef, writtenData] = mockBatch.set.mock.calls[0];
+            expect(writtenRef?.path || '').toContain('history_months/2026-07');
+            expect(writtenData.h_jul_1).toBeUndefined();
+            expect(writtenData._sync?.fields?.['h_jul_1']).toMatchObject({ deleted: true });
+
+            // August is unchanged so it must not be rewritten.
+            expect(writtenRef?.path || '').not.toContain('2026-08');
         });
 
         it('2.5: Derives timezone-safe monthKey from date string or fallback timestamp seamlessly', async () => {

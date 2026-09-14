@@ -368,7 +368,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('➕ Nuova misurazione')).toBeDefined();
+                expect(screen.getByText(/Nuova misurazione/)).toBeDefined();
                 expect(screen.getByDisplayValue('75.5')).toBeDefined();
                 expect(screen.getByDisplayValue('82')).toBeDefined();
             });
@@ -396,7 +396,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect(state.userData?.nutrition?.[targetDate]?.weight).toBe(75.0);
             });
 
-            it('T1.3.4: switching to edit mode changes title to "✏️ Modifica misurazione"', () => {
+            it('T1.3.4: switching to edit mode changes title to Modifica misurazione', () => {
                 render(
                     <DataMeasurements 
                         profile={{ gender: 'M' }}

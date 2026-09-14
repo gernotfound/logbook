@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pencil, Trash2, Save } from 'lucide-react';
 
 interface EditMealItemModalProps {
     item: any;
@@ -53,7 +54,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
         >
             <div className="flex-between mb-15 pb-10 border-b">
                 <h2 style={{margin: 0, color: 'var(--text-main)'}}>
-                    ✏️ Modifica porzione
+                    <Pencil size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Modifica porzione
                 </h2>
                 <button 
                     type="button" 
@@ -144,7 +145,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
                     onClick={handleDelete}
                 >
-                    🗑️ Rimuovi
+                    <Trash2 size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Rimuovi
                 </button>
                 <button 
                     type="button" 
@@ -152,7 +153,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     style={{ flex: 2, marginBottom: 0 }}
                     onClick={handleSave}
                 >
-                    💾 Salva
+                    <Save size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Salva
                 </button>
             </div>
         </div>

@@ -1,0 +1,87 @@
+name: Milestone Verification
+
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/ui-workout-guest-flow
+  push:
+    branches:
+      - main
+      - feat/ui-workout-guest-flow
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verification:
+    name: "M6 Exact-Head Verification"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          echo "Actual SHA:   ${actual_sha}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Exact-head verification failed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Setup Java for Firebase Emulator
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run security audit
+        run: npm audit --audit-level=high
+
+      - name: Run canonical M6 verification
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run verify:m6 2>&1 | tee m6-verification.log
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: m6-verification-failure-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            m6-verification.log
+            playwright-report/
+            test-results/
+            firestore-debug.log
+            firebase-debug.log

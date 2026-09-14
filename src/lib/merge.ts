@@ -5,6 +5,7 @@ import {
     mergeCatalogOverrides
 } from './catalog/deltaResolver';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
+import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
 import type {
     UserData,
     UserProfile,
@@ -256,24 +257,11 @@ export function mergeNutrition(
             let fat = guestDay.fat || cloudDay.fat || 0;
 
             if (mergedMeals.length > 0) {
-                let mKcal = 0, mCarbs = 0, mPro = 0, mFat = 0;
-                for (const m of mergedMeals) {
-                    const base = (m as any).baseQty !== undefined && (m as any).baseQty !== null && (m as any).baseQty > 0
-                        ? (m as any).baseQty
-                        : ((m as any).unit === 'porzione' || (m as any).meal === 'quick' ? 1 : 100);
-                    const qty = (m as any).quantity !== undefined && (m as any).quantity !== null
-                        ? (m as any).quantity
-                        : base;
-                    const ratio = base > 0 ? qty / base : 1;
-                    mKcal += (parseFloat((m as any).kcal) || 0) * ratio;
-                    mCarbs += (parseFloat((m as any).carbs) || 0) * ratio;
-                    mPro += (parseFloat((m as any).pro) || 0) * ratio;
-                    mFat += (parseFloat((m as any).fat) || 0) * ratio;
-                }
-                kcal = Math.round(mKcal);
-                carbs = Math.round(mCarbs * 10) / 10;
-                pro = Math.round(mPro * 10) / 10;
-                fat = Math.round(mFat * 10) / 10;
+                const totals = calculateLoggedMealTotals(mergedMeals);
+                kcal = totals.kcal;
+                carbs = totals.carbs;
+                pro = totals.pro;
+                fat = totals.fat;
             }
 
             const pickVal = (gVal: any, cVal: any) =>

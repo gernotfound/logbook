@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 vi.unmock('../src/lib/db');
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 import { mergeUserData } from '../src/lib/merge';
 import { DomainParsers } from '../src/lib/schema';
 import { useAppStore } from '../src/store/useAppStore';
@@ -415,11 +415,13 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
         const rulesPath = path.resolve(__dirname, '../firestore.rules');
         const rulesContent = fs.readFileSync(rulesPath, 'utf-8');
 
-        it('verifies firestore.rules whitelists all 11 root document keys and disallows wildcards', () => {
+        it('verifies firestore.rules whitelists the complete root document schema and disallows wildcards', () => {
             // Check that recursive wildcard was removed from users doc
             expect(rulesContent).not.toMatch(/match\s+\/users\/\{userId\}\/\{document=\*\*\}/);
 
             const expectedKeys = [
+                '_schemaVersion',
+                '_sync',
                 'profile',
                 'library',
                 'routines',
@@ -450,7 +452,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(extractedKeys.sort()).toEqual(expectedKeys.sort());
         });
 
-        it('verifies DB.saveUserData writes strictly conforming userDocData with exactly the 11 whitelisted keys', async () => {
+        it('verifies DB.saveUserData writes strictly conforming userDocData with the complete whitelisted schema', async () => {
             const sampleUserData = {
                 profile: { name: 'Test' },
                 library: [],
@@ -475,6 +477,8 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             const writtenKeys = Object.keys(userDocCall[1]);
 
             const expectedKeys = [
+                '_schemaVersion',
+                '_sync',
                 'profile',
                 'library',
                 'routines',
