@@ -18,23 +18,33 @@ const tracked = execFileSync('git', ['ls-files', '-z'])
   .split('\0')
   .filter(Boolean);
 
+// Let Git identify non-binary tracked content, then union that set with known
+// repository text formats so explicitly-text files are still checked even if
+// their current bytes would make Git's binary heuristic conservative.
+const gitDetectedText = new Set(
+  execFileSync('git', ['grep', '-I', '-l', '-z', '-e', '', '--'])
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean),
+);
+
 const textExtensions = new Set([
-  '.cjs', '.css', '.html', '.ini', '.js', '.jsx', '.json', '.md', '.mjs',
-  '.properties', '.rules', '.scss', '.toml', '.ts', '.tsx', '.txt', '.xml',
+  '.cjs', '.css', '.csv', '.html', '.ini', '.js', '.jsx', '.json', '.md', '.mjs',
+  '.properties', '.rules', '.scss', '.svg', '.toml', '.ts', '.tsx', '.txt', '.xml',
   '.yaml', '.yml',
 ]);
 const textBasenames = new Set([
   '.firebaserc', '.gitattributes', '.gitignore', '.snyk', 'Dockerfile', 'LICENSE',
 ]);
 
-function isTrackedTextPath(path) {
+function isKnownTextPath(path) {
   const base = basename(path);
   return base.startsWith('.env') || textBasenames.has(base) || textExtensions.has(extname(base).toLowerCase());
 }
 
 const decoder = new TextDecoder('utf-8', { fatal: true });
 let checked = 0;
-for (const path of tracked.filter(isTrackedTextPath)) {
+for (const path of tracked.filter(path => gitDetectedText.has(path) || isKnownTextPath(path))) {
   const bytes = readFileSync(path);
   checked += 1;
 
