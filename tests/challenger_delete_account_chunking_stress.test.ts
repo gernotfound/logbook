@@ -10,7 +10,7 @@ const boundary = vi.hoisted(() => ({
     commit: vi.fn(),
 }));
 
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 import { auth, deleteUser } from '../src/lib/firebase';
 
 vi.mock('../src/lib/firebase', () => ({

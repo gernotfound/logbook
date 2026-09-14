@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 
 interface FoodArchiveSearchProps {
     searchQuery: string;
@@ -31,14 +32,11 @@ export const FoodArchiveSearch: React.FC<FoodArchiveSearchProps> = ({
                 <button
                     type="button"
                     onClick={() => setSearchQuery('')}
+                    className="btn-link"
                     style={{
                         position: 'absolute',
                         right: '8px',
-                        background: 'transparent',
-                        border: 'none',
                         color: 'var(--text-muted)',
-                        fontSize: '1rem',
-                        cursor: 'pointer',
                         padding: '4px',
                         display: 'flex',
                         alignItems: 'center',
@@ -46,7 +44,7 @@ export const FoodArchiveSearch: React.FC<FoodArchiveSearchProps> = ({
                     }}
                     aria-label="Cancella ricerca"
                 >
-                    ✕
+                    <X size={16} aria-hidden="true" />
                 </button>
             )}
         </div>

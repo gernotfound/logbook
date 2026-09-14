@@ -4,9 +4,10 @@ import deepEqual from 'fast-deep-equal';
 import { removeUndefinedValues } from '../utils/object';
 import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
+import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
 
-export async function loadNutritionMonths(user: any, targetMonths: string[], state: any) {
+export async function loadNutritionMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const nutritionDocs = await withTimeout(
         Promise.all(targetMonths.map(m => getDoc(doc(getDb(), "users", user.uid, "nutrition_months", m)))),
         6000,
@@ -14,12 +15,14 @@ export async function loadNutritionMonths(user: any, targetMonths: string[], sta
     );
     nutritionDocs.forEach(d => {
         if (d && typeof d.exists === 'function' && d.exists()) {
-            const monthData = d.data() as Record<string, any>;
-            if (monthData) {
-                Object.keys(monthData).forEach((date: string) => {
-                    (state.nutrition as any)[date] = monthData[date];
-                });
+            const normalized = normalizeCloudDocument(d.data(), `Nutrition ${d.id} data schema`);
+            const monthData = normalized.business;
+            if (normalized.sync !== undefined && cloudDocuments) {
+                cloudDocuments.set('nutrition_months/' + d.id, { ...monthData, _sync: normalized.sync });
             }
+            Object.entries(monthData).forEach(([date, day]) => {
+                (state.nutrition as any)[date] = day;
+            });
         }
     });
 }

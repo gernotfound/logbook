@@ -302,6 +302,13 @@ input:focus, select:focus, textarea:focus {
 .btn-small { padding: 8px 14px; font-size: 0.85rem; width: auto; margin-bottom: 0; white-space: nowrap; flex-shrink: 0; min-height: 44px; }
 .btn-icon { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; padding: 6px; border-radius: 50%; transition: background 0.2s; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .btn-icon:hover { background: rgba(255,255,255,0.1); }
+.btn-link { background: transparent; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; font-size: 0.95rem; padding: 0; transition: color 0.2s ease; display: inline; }
+.btn-link:hover { color: var(--primary-dark); }
+.btn-link:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; border-radius: 4px; }
+.accordion-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 14px 16px; background: transparent; border: none; color: var(--text-main); font-size: 0.95rem; font-weight: 600; cursor: pointer; text-align: left; transition: background 0.2s ease; min-height: 44px; }
+.accordion-btn:hover { background: rgba(255, 255, 255, 0.05); }
+.accordion-btn.expanded { background: rgba(255, 255, 255, 0.08); }
+.accordion-btn:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
 
 
 .btn:disabled {

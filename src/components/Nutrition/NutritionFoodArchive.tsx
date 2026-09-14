@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Plus } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Logic } from '../../lib/logic';
@@ -209,9 +210,9 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                             type="button" 
                             className="btn btn-primary btn-small"
                             onClick={openCreateModal}
-                            style={{ marginBottom: 0 }}
+                            style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
                         >
-                            ➕ Crea alimento
+                            <Plus size={16} aria-hidden="true" /> Crea alimento
                         </button>
                     )}
                 </div>

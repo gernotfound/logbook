@@ -120,6 +120,7 @@ vi.mock('../src/store/useDialogStore', () => {
     onCancel: vi.fn(),
     showAlert: vi.fn().mockResolvedValue(undefined),
     showConfirm: vi.fn().mockResolvedValue(true),
+    showUnsyncedDataLogout: vi.fn().mockResolvedValue('cancel'),
     closeDialog: vi.fn(),
   };
   const useDialogStore = Object.assign(
@@ -204,7 +205,7 @@ vi.mock('idb-keyval', () => ({
     idbStore[key] = value;
   }),
   update: vi.fn(async (key: string, updater: (value: any) => any) => {
-    idbStore[key] = updater(idbStore[key]);
+    idbStore[key] = await updater(idbStore[key]);
   }),
   del: vi.fn(async (key: string) => {
     delete idbStore[key];
@@ -281,6 +282,10 @@ vi.mock('firebase/firestore', () => {
 vi.mock('../src/lib/db', () => ({
   DB: {
     resetCache: vi.fn(),
+    loadCloudPayload: vi.fn().mockImplementation(() => {
+      const state = useAppStore.getState();
+      return state.userData ? { data: state.userData, completeMonths: [], cloudDocuments: new Map() } : null;
+    }),
     loadUserData: vi.fn().mockImplementation(() => {
       const state = useAppStore.getState();
       return state.userData;

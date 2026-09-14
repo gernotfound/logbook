@@ -5,8 +5,9 @@ vi.mock('../../src/store/useDialogStore', () => ({ useDialogStore: { getState: (
 vi.mock('../../src/lib/sync/session', () => ({ captureSession: () => ({ owner: 'user:a', epoch: 0 }), isCurrentSession: () => ui.current }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { Exporter } from '../../src/lib/export';
+import { createBackup } from '../../src/lib/backup';
 import { UserDataSchema } from '../../src/lib/schema';
-const payload = { version: 1, type: 'backup', userId: 'a', profile: { height: '180' } };
+const payload = createBackup(UserDataSchema.parse({ profile: { height: '180' } }) as any, 'user:a');
 const file = { content: JSON.stringify(payload) } as unknown as File;
 beforeEach(() => {
     vi.resetAllMocks(); ui.current = true; ui.state = { userData: UserDataSchema.parse({ profile: { height: '170' } }), syncHealth: 'synced' };

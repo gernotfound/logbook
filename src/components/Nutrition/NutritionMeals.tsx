@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pencil, Plus, X } from 'lucide-react';
 import { shiftDateString } from '../../lib/utils/date';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import CustomFoodForm from './CustomFoodForm';
@@ -245,7 +246,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                         }
                     }}
                 >
-                    {showCustomModal ? '✕ Chiudi' : (editingFoodId ? '✏️ Modifica alimento' : '+ Crea alimento')}
+                    {showCustomModal ? <><X size={16} aria-hidden="true" /> Chiudi</> : (editingFoodId ? <><Pencil size={16} aria-hidden="true" /> Modifica alimento</> : <><Plus size={16} aria-hidden="true" /> Crea alimento</>)}
                 </button>
                 
                 <CustomFoodForm 
@@ -322,7 +323,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                                         <div style={{ flex: 1 }}>
                                             <div className="font-bold flex items-center gap-6">
                                                 <span>{item.name}</span>
-                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>✏️</span>
+                                                <Pencil size={16} aria-hidden="true" />
                                             </div>
                                             <div className="text-muted text-sm mt-2">
                                                 {qty}{item.unit || 'g'} • {itemKcal} kcal

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Trash2, Save } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 
 import { useSettings } from '../hooks/useSettings';
@@ -169,7 +170,7 @@ const SettingsView = () => {
                             onClick={handleDeleteAccount}
                             disabled={deletingAccount}
                         >
-                            {deletingAccount ? <><span aria-hidden="true">⏳</span> Eliminazione...</> : (isGuest ? <><span aria-hidden="true">🗑️</span> Elimina dati locali</> : <><span aria-hidden="true">🗑️</span> {pendingAccountDeletion ? 'Riprendi cancellazione account' : 'Elimina account e dati'}</>)}
+                            {deletingAccount ? <><span aria-hidden="true">⏳</span> Eliminazione...</> : (isGuest ? <><Trash2 size={16} aria-hidden="true" /> Elimina dati locali</> : <><Trash2 size={16} aria-hidden="true" /> {pendingAccountDeletion ? 'Riprendi cancellazione account' : 'Elimina account e dati'}</>)}
                         </button>
                     </div>
                 </>
@@ -254,7 +255,7 @@ const SettingsView = () => {
                     <div className="section-divider">
                         <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">📊</span> Esportazione Legacy</h3>
                         <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleExportCSV}>
-                            <span aria-hidden="true">💾</span> Esporta dati (CSV)
+                            <Save size={16} aria-hidden="true" /> Esporta dati (CSV)
                         </button>
                     </div>
 

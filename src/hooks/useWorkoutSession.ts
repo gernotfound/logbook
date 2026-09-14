@@ -163,6 +163,37 @@ export function useWorkoutSession() {
         }
     }, [selectedRoutine, showAlert, setLocalWorkout]);
 
+    const startFreeWorkout = useCallback(async () => {
+        const currentLocal = useAppStore.getState().localWorkout;
+        if (currentLocal) {
+            await showAlert("Hai già un allenamento in corso!");
+            return;
+        }
+
+        resetGlobalWorkoutTimer();
+
+        const newActiveWorkout: WorkoutSession = {
+            id: Logic.generateId('w'),
+            routineName: 'Allenamento libero',
+            date: Logic.getLocalDateString(),
+            globalStartTime: new Date().getTime(),
+            exercises: []
+        };
+
+        setLocalWorkout(newActiveWorkout);
+
+        try {
+            const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
+            telemetryHub.trackEvent('workout_started', {
+                offline: isOffline,
+                routineId: 'free_workout',
+                routineName: 'Allenamento libero'
+            });
+        } catch {
+            // Fail-safe non-blocking telemetry
+        }
+    }, [showAlert, setLocalWorkout]);
+
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
         const currentLocal = useAppStore.getState().localWorkout;
         if (currentLocal && !currentLocal.isEditingHistory) {
@@ -417,6 +448,7 @@ export function useWorkoutSession() {
         manualDuration, setManualDuration,
         pains, setPains, togglePain,
         startWorkout,
+        startFreeWorkout,
         endWorkout,
         deleteWorkout,
         startEditHistoricalWorkout,

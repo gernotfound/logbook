@@ -16,7 +16,7 @@ import { getDoc, writeBatch } from 'firebase/firestore';
 
 // Unmock DB to test real persistence logic
 vi.unmock('../src/lib/db');
-import { DB } from '../src/lib/db';
+import { TestDB as DB } from './testUtils';
 
 import {
     getCachedCatalog,

@@ -82,28 +82,8 @@ export function buildShareExportData(userData: UserData, options: ExportShareOpt
 export const Exporter = {
     exportEmergencyJSON(userData: UserData): void {
         const payload = {
-            format: 'logbook-backup',
-            version: 1,
-            exportedAt: new Date().toISOString(),
+            ...createBackup(userData, captureSession().owner, { scope: 'device', months: [] }),
             reason: 'logout-with-unsynced-data',
-            userData: {
-                profile: userData.profile,
-                library: userData.library,
-                routines: userData.routines,
-                customFoods: userData.customFoods,
-                activeWorkout: userData.activeWorkout,
-                trainingCycles: userData.trainingCycles,
-                activeCycleId: userData.activeCycleId,
-                nutritionPlanning: userData.nutritionPlanning,
-                supplements: userData.supplements,
-                activePains: userData.activePains,
-                catalogOverrides: userData.catalogOverrides,
-                legalConsent: userData.legalConsent,
-                nutritionPlanningOrigin: userData.nutritionPlanningOrigin,
-                pendingConflicts: userData.pendingConflicts,
-                history: userData.history,
-                nutrition: userData.nutrition,
-            }
         };
 
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -286,11 +266,13 @@ export const Exporter = {
         options: ExportShareOptions = DEFAULT_SHARE_OPTIONS
     ): Promise<{ libraryCount: number; routinesCount: number; cyclesCount: number } | undefined> {
         const shareData = buildShareExportData(userData, options);
+        const base = createBackup(userData, null, { scope: 'device', months: [] });
         const payload = {
-            version: 1,
-            type: 'share',
-            exportedAt: new Date().toISOString(),
-            ...shareData,
+            ...base,
+            type: 'share' as const,
+            owner: null,
+            userData: shareData,
+            recovery: undefined,
         };
 
         const content = JSON.stringify(payload, null, 2);
@@ -336,7 +318,7 @@ export const Exporter = {
                 ': ' + (prepared.data.history?.length ?? 0) + ' allenamenti, ' + Object.keys(prepared.data.nutrition ?? {}).length +
                 ' giornate, ' + (prepared.data.library?.length ?? 0) + ' esercizi.\n' + prepared.collisions + ' collisioni su identificativi o giornate.\n' +
                 (selectedMode === 'restore' ? 'I campi presenti nel file sostituiranno i dati locali corrispondenti.' : 'In caso di collisione saranno conservati i valori locali.') +
-                (decoded.ownerUnknown ? '\nIl vecchio formato non identifica il proprietario. Conferma solo se questi dati sono tuoi.' : '') +
+                (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
             assertCurrent();

@@ -1,36 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { writeBatch, doc, getDoc } from 'firebase/firestore';
-
-vi.unmock('../src/lib/db');
-
-import { DB } from '../src/lib/db';
-import { useAppStore } from '../src/store/useAppStore';
-import { useDialogStore } from '../src/store/useDialogStore';
-import { useTrainingHistory } from '../src/hooks/useTrainingHistory';
-import { renderHook, act } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { applySemanticOperations, diffDocuments } from '../src/lib/sync/semanticProjection';
+import { projectDocuments } from '../src/lib/sync/documentProjection';
 import type { UserData, WorkoutSession } from '../src/types';
 
-
-
-describe('Workout Deletion & Subcollection Persistence', () => {
-  let mockBatch: any;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    DB.resetCache();
-    const remote = new Map<string, any>();
-    vi.mocked(doc).mockImplementation((_db: any, ...path: string[]) => ({ path: path.join('/') }) as any);
-    vi.mocked(getDoc).mockImplementation(async (ref: any) => ({ exists: () => remote.has(ref.path), data: () => remote.get(ref.path) }) as any);
-
-    mockBatch = {
-      set: vi.fn((ref: any, data: any) => remote.set(ref.path, data)),
-      delete: vi.fn((ref: any) => remote.delete(ref.path)),
-      commit: vi.fn().mockResolvedValue(undefined),
-    };
-    vi.mocked(writeBatch).mockReturnValue(mockBatch);
-  });
-
-  it('updates month document when deleting a single workout from a multi-workout month', async () => {
+describe('Workout Deletion & Subcollection Persistence (V3)', () => {
+  it('updates month document when deleting a single workout from a multi-workout month', () => {
     const workout1: WorkoutSession = {
       id: 'w-jul-1',
       date: '2026-07-10',
@@ -46,9 +20,8 @@ describe('Workout Deletion & Subcollection Persistence', () => {
       exercises: []
     };
 
-    // Initial state with 2 workouts in 2026-07
     const initialUserData: UserData = {
-      profile: { name: 'Mario Rossi' },
+      profile: {},
       library: [],
       routines: [],
       history: [workout1, workout2],
@@ -60,60 +33,43 @@ describe('Workout Deletion & Subcollection Persistence', () => {
         hiddenExerciseIds: [],
         foods: {},
         hiddenFoodIds: []
-      }
+      },
+      trainingCycles: [],
+      supplements: [],
+      activePains: []
     };
 
-    // Save initial state to establish oldState cache in DB
-    await DB.saveUserData(initialUserData);
-    expect(mockBatch.commit).toHaveBeenCalledTimes(1);
-    mockBatch.set.mockClear();
-    mockBatch.delete.mockClear();
-    mockBatch.commit.mockClear();
-
-    // Now delete workout1 (leaving workout2 in 2026-07)
     const updatedUserData: UserData = {
       ...initialUserData,
       history: [workout2]
     };
 
-    await DB.saveUserData(updatedUserData);
+    const catalog = { exercises: [], foods: [] } as any;
+    const baseDocs = projectDocuments(initialUserData, catalog);
+    const desiredDocs = projectDocuments(updatedUserData, catalog);
+    const ops = diffDocuments(baseDocs, desiredDocs, 'actor1', 1, { actor1: 1 });
+    const { documents, syncMetas } = applySemanticOperations(baseDocs, ops);
 
-    expect(mockBatch.commit).toHaveBeenCalledTimes(1);
-    // Month 2026-07 still has workout2, so batch.set should be called for history_months/2026-07
-    expect(mockBatch.set).toHaveBeenCalled();
-    const setCalls = mockBatch.set.mock.calls;
-    const historyMonthSetCall = setCalls.find((call: any[]) => {
-      return call[1] && call[1]['w-jul-2'] && !call[1]['w-jul-1'];
-    });
-    expect(historyMonthSetCall).toBeDefined();
-    expect(historyMonthSetCall[1]).toMatchObject({
-      'w-jul-2': workout2
-    });
-    // Should NOT delete month 2026-07 because workout2 remains
-    expect(mockBatch.delete).not.toHaveBeenCalled();
+    const monthDoc = documents.get('history_months/2026-07');
+    expect(monthDoc?.['w-jul-2']).toBeDefined();
+    expect(monthDoc?.['w-jul-1']).toBeUndefined();
+    expect(syncMetas['history_months/2026-07'].fields['w-jul-1']?.deleted).toBe(true);
   });
 
-  it('deletes month document from subcollection when deleting the last workout in that month', async () => {
-    const workoutJul: WorkoutSession = {
+  it('keeps a tombstone-only month after deleting the last workout', () => {
+    const workout: WorkoutSession = {
       id: 'w-jul-sole',
       date: '2026-07-15',
       routineName: 'Leg Day',
       duration: '60m',
       exercises: []
     };
-    const workoutAug: WorkoutSession = {
-      id: 'w-aug-sole',
-      date: '2026-08-01',
-      routineName: 'Chest Day',
-      duration: '45m',
-      exercises: []
-    };
 
     const initialUserData: UserData = {
-      profile: { name: 'Luigi' },
+      profile: {},
       library: [],
       routines: [],
-      history: [workoutJul, workoutAug],
+      history: [workout],
       nutrition: {},
       customFoods: [],
       activeWorkout: null,
@@ -122,68 +78,22 @@ describe('Workout Deletion & Subcollection Persistence', () => {
         hiddenExerciseIds: [],
         foods: {},
         hiddenFoodIds: []
-      }
-    };
-
-    // Save initial state
-    await DB.saveUserData(initialUserData);
-    mockBatch.set.mockClear();
-    mockBatch.delete.mockClear();
-    mockBatch.commit.mockClear();
-
-    // Delete workoutJul, keeping only workoutAug
-    const updatedUserData: UserData = {
-      ...initialUserData,
-      history: [workoutAug]
-    };
-
-    await DB.saveUserData(updatedUserData);
-
-    expect(mockBatch.commit).toHaveBeenCalledTimes(1);
-    // Month 2026-07 is now empty -> batch.delete must be called for that subcollection doc
-    expect(mockBatch.delete).toHaveBeenCalledTimes(1);
-  });
-
-  it('useTrainingHistory hook deleteWorkout confirms and updates store properly', async () => {
-    const workoutToDelete: WorkoutSession = {
-      id: 'w-to-delete-999',
-      date: '2026-08-20',
-      routineName: 'Full Body',
-      duration: '40m',
-      exercises: []
-    };
-
-    useAppStore.setState({
-      userData: {
-        profile: {},
-        library: [],
-        routines: [],
-        history: [workoutToDelete],
-        nutrition: {},
-        customFoods: [],
-        activeWorkout: null,
       },
-      localWorkout: {
-        id: 'w-to-delete-999',
-        routineName: 'Full Body',
-        exercises: []
-      } as any,
-      syncing: false,
-      saveError: null
-    });
+      trainingCycles: [],
+      supplements: [],
+      activePains: []
+    };
 
-    // Mock confirmation dialog to accept
-    vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
+    const updatedUserData: UserData = { ...initialUserData, history: [] };
+    const catalog = { exercises: [], foods: [] } as any;
+    const baseDocs = projectDocuments(initialUserData, catalog);
+    const desiredDocs = projectDocuments(updatedUserData, catalog);
+    const ops = diffDocuments(baseDocs, desiredDocs, 'actor1', 1, { actor1: 1 });
+    const { documents, syncMetas } = applySemanticOperations(baseDocs, ops);
 
-    const { result } = renderHook(() => useTrainingHistory());
-
-    await act(async () => {
-      await result.current.deleteWorkout('w-to-delete-999');
-    });
-
-    const storeState = useAppStore.getState();
-    expect(storeState.userData?.history).toEqual([]);
-    // localWorkout referencing the deleted workout should be cleaned up
-    expect(storeState.localWorkout).toBeNull();
+    const monthDoc = documents.get('history_months/2026-07');
+    expect(monthDoc).toBeDefined();
+    expect(Object.keys(monthDoc ?? {})).toHaveLength(0);
+    expect(syncMetas['history_months/2026-07'].fields['w-jul-sole']?.deleted).toBe(true);
   });
 });

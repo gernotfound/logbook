@@ -3,6 +3,7 @@
 // Effetti: puro componente visivo (memoizzato) che emette eventi.
 
 import React, { memo } from 'react';
+import { Trash2 } from 'lucide-react';
 import type { TrainingCycleRoutineItem, WorkoutRoutine } from '../../../types';
 
 interface CycleRoutinesListProps {
@@ -146,7 +147,8 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                         aria-label="Rimuovi scheda dalla sequenza"
                                         title="Rimuovi scheda dalla sequenza"
                                     >
-                                        🗑️
+                                        <Trash2 size={16} aria-hidden="true" />
+
                                     </button>
                                 </div>
                             </div>

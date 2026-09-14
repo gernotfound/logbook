@@ -8,15 +8,20 @@ import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isCurrentSession } from '../../lib/sync/session';
 import { readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
 import { UserDataSchema } from '../../lib/schema';
+import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 
 export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
+export type CompatibilityStatus = 'ok' | 'update-required';
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
     syncHealth: SyncHealth;
     syncGeneration: number;
+    compatibilityStatus: CompatibilityStatus;
+    compatibilityError: string | null;
     setSyncing: (value: boolean) => void;
     setSaveError: (value: string | null) => void;
+    setUpdateRequired: (error: unknown) => void;
     saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null)) => Promise<SyncResult>;
     updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
@@ -38,6 +43,10 @@ let pending: Job[] = [];
 let active: Job[] = [];
 let running: Promise<void> | null = null;
 const synced: SyncResult = { ok: true, status: 'synced' };
+const updateRequiredMessage = (error: unknown) => error instanceof Error
+    ? error.message
+    : 'Questi dati sono stati scritti da una versione più recente di LogBook. Aggiorna l’app prima di continuare.';
+const updateRequiredResult = (message: string): SyncResult => ({ ok: false, status: 'failed', error: new Error(message) });
 
 export function clearSyncTimers() {
     if (timer) clearTimeout(timer);
@@ -46,13 +55,33 @@ export function clearSyncTimers() {
 }
 
 export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
+    const enterUpdateRequired = (error: unknown) => {
+        const message = updateRequiredMessage(error);
+        invalidateSession();
+        clearWorkoutTimer();
+        if (timer) clearTimeout(timer);
+        timer = null;
+        const queued = pending;
+        pending = [];
+        const blocked = updateRequiredResult(message);
+        queued.forEach(job => job.resolve(blocked));
+        set({
+            compatibilityStatus: 'update-required',
+            compatibilityError: message,
+            syncing: false,
+            syncHealth: 'failed',
+            saveError: null,
+            syncGeneration: get().syncGeneration + 1,
+        });
+    };
+
     const run = async (): Promise<void> => {
         if (running) {
             await running;
             if (pending.length) await run();
             return;
         }
-        if (!pending.length) return;
+        if (!pending.length || get().compatibilityStatus === 'update-required') return;
         const jobs = pending;
         pending = [];
         active = jobs;
@@ -69,7 +98,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 const envelope = await readLocal(session.owner);
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
                 if (!envelope) throw new Error('Copia locale non disponibile');
-                if (envelope.conflicts?.length) throw new Error('Modifiche locali concorrenti: alternative conservate nel registro di recupero');
                 const result = await DB.saveUserData(envelope.data, envelope.revision);
                 if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
                 if (result.ok) {
@@ -89,22 +117,32 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 jobs.forEach(job => job.resolve(result));
             } catch (error) {
                 if (current() && get().syncGeneration === last.generation) {
-                    set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
+                    if (isUpdateRequiredError(error)) enterUpdateRequired(error);
+                    else set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
                 }
                 jobs.forEach(job => job.reject(error));
             } finally {
                 active = [];
-                if (current() && !pending.length) set({ syncing: false });
+                if (current() && !pending.length && get().compatibilityStatus !== 'update-required') set({ syncing: false });
             }
         })();
         try { await running; } finally { running = null; }
     };
 
     return {
-        saveError: null, syncing: false, syncHealth: 'synced', syncGeneration: 0,
+        saveError: null,
+        syncing: false,
+        syncHealth: 'synced',
+        syncGeneration: 0,
+        compatibilityStatus: 'ok',
+        compatibilityError: null,
         setSyncing: value => set({ syncing: value }),
         setSaveError: value => set({ saveError: value }),
+        setUpdateRequired: enterUpdateRequired,
         saveUserData: async dataOrUpdater => {
+            if (get().compatibilityStatus === 'update-required') {
+                return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
+            }
             const { userData, localWorkout } = get();
             const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
             if (!next) {
@@ -127,11 +165,15 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             });
         },
         updateUserData: updater => {
+            if (get().compatibilityStatus === 'update-required') {
+                return Promise.resolve(updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.'));
+            }
             const data = get().userData;
             if (!data) return Promise.reject(new Error('Dati utente non caricati'));
             return get().saveUserData(updater(data));
         },
         submitLegalConsent: async consent => {
+            if (get().compatibilityStatus === 'update-required') throw new Error(get().compatibilityError ?? 'Aggiornamento richiesto.');
             const session = captureSession();
             const previous = get().userData?.legalConsent;
             const result = get().updateUserData(data => ({ ...data, legalConsent: consent }));
@@ -147,6 +189,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (isCurrentSession(session)) set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: consent } : null }));
         },
         flushPendingSyncs: async () => {
+            if (get().compatibilityStatus === 'update-required') return;
             if (timer) clearTimeout(timer);
             timer = null;
             if (pending.length || running) {
@@ -173,7 +216,16 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
         resetStore: () => {
             get().cancelPendingSyncs();
-            set({ userData: null, localWorkout: null, saveError: null, syncing: false, syncHealth: 'synced' });
+            set({
+                userData: null,
+                localWorkout: null,
+                saveError: null,
+                syncing: false,
+                syncHealth: 'synced',
+                compatibilityStatus: 'ok',
+                compatibilityError: null,
+            });
         },
     };
 };
+

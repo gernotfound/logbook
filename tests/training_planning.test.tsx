@@ -208,7 +208,7 @@ describe('Training Planning & Volume Calculations', () => {
             const newBtn = screen.getByText(/Nuovo ciclo/i);
             fireEvent.click(newBtn);
 
-            expect(screen.getByText('➕ Nuovo ciclo di allenamento')).toBeDefined();
+            expect(screen.getByText(/Nuovo ciclo di allenamento/)).toBeDefined();
 
             const nameInput = screen.getByPlaceholderText('Es. Mesociclo ipertrofia 4 giorni');
             fireEvent.change(nameInput, { target: { value: 'Nuovo Ciclo Forza' } });
@@ -266,7 +266,7 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(editBtn);
 
             expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
-            expect(screen.getByText('✏️ Modifica ciclo')).toBeDefined();
+            expect(screen.getByText(/Modifica ciclo/)).toBeDefined();
             scrollToSpy.mockRestore();
         });
 

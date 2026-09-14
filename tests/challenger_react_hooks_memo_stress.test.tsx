@@ -4,9 +4,9 @@ import { renderHook, act, render, screen, fireEvent } from '@testing-library/rea
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useNutritionPlanning } from '../src/hooks/useNutritionPlanning';
-import TrainingSession from '../src/components/training/TrainingSession';
-import SessionExerciseCard from '../src/components/training/session/SessionExerciseCard';
-import SessionSetRow from '../src/components/training/session/SessionSetRow';
+import TrainingSession from '../src/components/Training/TrainingSession';
+import SessionExerciseCard from '../src/components/Training/session/SessionExerciseCard';
+import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 
 import { Logic } from '../src/lib/logic';
 import { DB } from '../src/lib/db';

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import { Trash2, Settings, AlertTriangle } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
@@ -176,7 +177,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     onClick={() => onRemoveExercise(exIndex)}
                     aria-label="Rimuovi esercizio dalla sessione"
                 >
-                    🗑️
+                    <Trash2 size={16} aria-hidden="true" />
+
                 </button>
                 <button
                     type="button"
@@ -192,7 +194,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
                     onClick={() => onToggleSetup(exIndex)}
                 >
-                    ⚙️ Setup
+                    <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup
                 </button>
             </div>
 
@@ -256,7 +258,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {lastNote && (
                 <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: '0.85rem', marginBottom: '15px', color: '#fca5a5' }}>
-                    ⚠️ <b>Note scorsa volta:</b> {lastNote}
+                    <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Note scorsa volta:</b> {lastNote}
                 </div>
             )}
 
