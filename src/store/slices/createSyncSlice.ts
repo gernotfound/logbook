@@ -7,7 +7,7 @@ import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isCurrentSession } from '../../lib/sync/session';
 import { readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
-import { findPendingAccountDeletion } from '../../lib/sync/accountGate';
+import { findPendingAccountDeletion, readAccountDeletionMarker } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 
@@ -48,6 +48,17 @@ const updateRequiredMessage = (error: unknown) => error instanceof Error
     ? error.message
     : 'Questi dati sono stati scritti da una versione più recente di LogBook. Aggiorna l’app prima di continuare.';
 const updateRequiredResult = (message: string): SyncResult => ({ ok: false, status: 'failed', error: new Error(message) });
+
+function relevantDeletionPending(): boolean {
+    let guestOptIn = false;
+    try { guestOptIn = localStorage.getItem('logbook_is_guest') === 'true'; }
+    catch { /* Fail closed below when the owner cannot be resolved as an authenticated user. */ }
+    if (guestOptIn) return false;
+
+    const owner = captureSession().owner;
+    if (owner.startsWith('user:')) return readAccountDeletionMarker(owner) !== null;
+    return findPendingAccountDeletion() !== null;
+}
 
 export function clearSyncTimers() {
     if (timer) clearTimeout(timer);
@@ -216,10 +227,10 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             set({ syncing: false, syncGeneration: get().syncGeneration + 1 });
         },
         resetStore: () => {
-            // A server-coordinated deletion may remove Firebase Auth before this device has
-            // verified completion and purged its local recovery copy. Auth callbacks must
-            // therefore fail closed while any durable deletion receipt remains.
-            if (findPendingAccountDeletion()) {
+            // Preserve the recovery view only for the deletion that belongs to the active
+            // authenticated owner, or for an auth-less post-deletion restart. A stale marker
+            // from account A must not block/reset account B or an explicitly active guest.
+            if (relevantDeletionPending()) {
                 get().cancelPendingSyncs();
                 set({ syncing: false, saveError: 'Cancellazione account in verifica. Copia locale conservata fino alla conferma del server.' });
                 return;
@@ -237,4 +248,3 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
     };
 };
-
