@@ -28,7 +28,7 @@ export interface SyncSlice {
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
-    resetStore: () => void;
+    resetStore: (options?: { force?: boolean }) => void;
 }
 
 type CacheResult = { ok: true } | { ok: false; error: unknown };
@@ -226,11 +226,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             clearSyncTimers();
             set({ syncing: false, syncGeneration: get().syncGeneration + 1 });
         },
-        resetStore: () => {
+        resetStore: options => {
             // Preserve the recovery view only for the deletion that belongs to the active
             // authenticated owner, or for an auth-less post-deletion restart. A stale marker
             // from account A must not block/reset account B or an explicitly active guest.
-            if (relevantDeletionPending()) {
+            if (!options?.force && relevantDeletionPending()) {
                 get().cancelPendingSyncs();
                 set({ syncing: false, saveError: 'Cancellazione account in verifica. Copia locale conservata fino alla conferma del server.' });
                 return;
