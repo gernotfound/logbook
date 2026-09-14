@@ -132,7 +132,7 @@ describe('M3 journal crash consistency', () => {
         });
 
         const first = await replicateJournal();
-        expect(first.status).toBe('failed');
+        expect(first).toMatchObject({ ok: false, status: 'local-pending' });
         await waitForJournalIdle(owner);
         expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
         const committedCloud = cloudSnapshot();
@@ -173,7 +173,7 @@ describe('M3 journal crash consistency', () => {
             throw new DOMException('Injected acknowledgement failure', 'UnknownError');
         });
         const first = await replicateJournal();
-        expect(first.status).toBe('failed');
+        expect(first).toMatchObject({ ok: false, status: 'local-pending' });
         await waitForJournalIdle(owner);
         put.mockRestore();
 
