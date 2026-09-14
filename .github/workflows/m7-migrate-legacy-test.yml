@@ -1,0 +1,35 @@
+name: M7 Legacy Challenger Migration
+
+on:
+  push:
+    branches:
+      - feat/m7-server-account-deletion
+    paths:
+      - .github/workflows/m7-migrate-legacy-test.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Apply deterministic challenger migration
+        run: node scripts/tmp-m7-migrate-challenger.mjs
+
+      - name: Commit migrated challenger and remove temporary files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/challenger_m4_adversarial.test.ts
+          git rm scripts/tmp-m7-migrate-challenger.mjs .github/workflows/m7-migrate-legacy-test.yml
+          git commit -m "test(m7): align M4 challenger with server deletion boundary"
+          git push origin HEAD:feat/m7-server-account-deletion
