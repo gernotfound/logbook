@@ -27,6 +27,7 @@ export default defineConfig({
       '**/tests/emulator/**',
       '**/tests/fuzz/**',
       '**/tests/recovery/**',
+      '**/tests/gc/**',
       ...stressPatterns,
     ],
   },
