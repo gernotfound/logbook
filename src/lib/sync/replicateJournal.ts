@@ -7,6 +7,23 @@ import { applyDocumentChanges } from './transactionWriter';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
+import type { SemanticOperation } from './semanticProjection';
+
+class DurableAcknowledgementPendingError extends Error {
+    constructor(cause: unknown) {
+        super('Commit remoto confermato; acknowledgement locale ancora pendente', { cause });
+        this.name = 'DurableAcknowledgementPendingError';
+    }
+}
+
+function sameOperationIdentity(left: SemanticOperation, right: SemanticOperation): boolean {
+    return left.actorId === right.actorId
+        && left.seq === right.seq
+        && left.docPath === right.docPath
+        && left.isDelete === right.isDelete
+        && left.path.length === right.path.length
+        && left.path.every((segment, index) => segment === right.path[index]);
+}
 
 const running = new Map<string, Promise<void>>();
 export async function waitForJournalIdle(owner: string): Promise<void> {
@@ -24,18 +41,37 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
-        
-        // Pass SemanticOperation[] directly instead of documentChanges
-        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), envelope.pending, current);
-        
+
+        const delivered = envelope.pending;
+        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current);
+
         if (!current()) throw new Error('Sessione cambiata');
-        
+
         const remote: UserData = applyRemoteDocuments(envelope.data, outcome.documents, catalog);
-        const seq = envelope.pending[envelope.pending.length - 1].seq;
-        const changedPaths = [...new Set(envelope.pending.map(op => op.docPath))];
+        const seq = delivered[delivered.length - 1].seq;
+        const changedPaths = [...new Set(delivered.map(op => op.docPath))];
         const changedMonths = changedPaths.flatMap(path => path ? [path.split('/')[1]] : []);
-        
-        await acknowledgeThrough(session.owner, seq, remote, envelope.data, changedMonths, outcome.syncMeta);
+
+        try {
+            await acknowledgeThrough(session.owner, seq, remote, envelope.data, changedMonths, outcome.syncMeta);
+        } catch (error) {
+            // A remote transaction may already be committed when the local acknowledgement write fails.
+            // Only downgrade this to retryable when IndexedDB proves the entire delivered batch is still
+            // durable. Missing/corrupt/incompatible/partial local state remains a hard failure.
+            if (!current()) throw error;
+            let retained: Awaited<ReturnType<typeof readLocal>>;
+            try {
+                retained = await readLocal(session.owner);
+            } catch {
+                throw error;
+            }
+            if (!current()) throw error;
+            const fullBatchRetained = retained !== undefined && delivered.every(operation =>
+                retained.pending.some(candidate => sameOperationIdentity(operation, candidate))
+            );
+            if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
+            throw error;
+        }
     }
     throw new Error('Sessione cambiata');
 }
@@ -61,10 +97,9 @@ export async function replicateJournal(): Promise<SyncResult> {
     } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
         if (code === 'permission-denied') return { ok: false, status: 'rejected', error };
-        if (error instanceof SyncTimeoutError || code === 'unavailable' || code === 'deadline-exceeded') return { ok: false, status: 'local-pending', error };
+        if (error instanceof DurableAcknowledgementPendingError || error instanceof SyncTimeoutError || code === 'unavailable' || code === 'deadline-exceeded') {
+            return { ok: false, status: 'local-pending', error };
+        }
         return { ok: false, status: 'failed', error };
     }
 }
-
-
-
