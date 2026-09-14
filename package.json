@@ -25,11 +25,14 @@
     "test:no-skips": "node scripts/check-test-skips.mjs",
     "test:typecheck:m5": "tsc --noEmit -p tsconfig.m5-tests.json",
     "test:quality:m5": "node scripts/check-m5-test-quality.mjs",
+    "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "test:ci-contract": "node scripts/check-ci-contract.mjs",
     "verify:m0": "npm run lint && npm run test && npm run test:isolated && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m2": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m4": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
-    "verify:m5": "npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build"
+    "verify:m5": "npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
+    "verify:m6": "npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
