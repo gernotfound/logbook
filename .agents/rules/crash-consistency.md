@@ -30,7 +30,7 @@ Firestore applica il batch semantico tramite transazione.
 
 **MUST:** in questo caso la pending operation resta durevole e può essere reinviata.
 
-**MUST:** `replicateJournal()` classifica il risultato come `local-pending` solo dopo aver riletto IndexedDB e verificato che almeno una operation interessata dall'ack fallito sia ancora presente nel journal. Se l'envelope è assente, corrotto, incompatibile o non conserva più la pending attesa, l'errore resta `failed`.
+**MUST:** `replicateJournal()` classifica il risultato come `local-pending` solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation appena consegnato al cloud sia ancora presente nel journal. Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'errore resta `failed`.
 
 **MUST:** il replay della stessa operation non deve modificare nuovamente il business winner né produrre causal metadata differenti.
 
