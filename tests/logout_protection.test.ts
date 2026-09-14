@@ -15,6 +15,9 @@ const dialogs = vi.hoisted(() => ({
     showConfirm: vi.fn(),
     showUnsyncedDataLogout: vi.fn(),
 }));
+const exporter = vi.hoisted(() => ({
+    exportEmergencyJSON: vi.fn(),
+}));
 
 vi.mock('../src/store/useDialogStore', () => {
     const state = {
@@ -36,10 +39,14 @@ vi.mock('../src/store/useDialogStore', () => {
     return { useDialogStore };
 });
 
+vi.mock('../src/lib/export', () => ({
+    Exporter: exporter,
+}));
+
 const authenticatedUser = { uid: 'logout-user', email: 'logout@example.com', displayName: 'Logout User' } as any;
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const userData = () => parse({
-    profile: { name: 'Logout fixture' },
+    profile: { height: '175' },
     routines: [{ id: 'routine-1', name: 'Persisted routine', exercises: [] }],
 });
 
@@ -141,6 +148,41 @@ describe('M5 logout protection through AuthProvider', () => {
         expect(dialogs.showUnsyncedDataLogout).toHaveBeenCalledWith(reason);
         expect(DB.secureLogOut).not.toHaveBeenCalled();
         expect(useAppStore.getState().userData).not.toBeNull();
+    });
+
+    it('exports the current unsafe state and aborts logout when the dialog selects export', async () => {
+        useAppStore.setState({ syncHealth: 'failed' });
+        dialogs.showUnsyncedDataLogout.mockResolvedValueOnce('export');
+        const expectedSnapshot = useAppStore.getState().userData;
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(dialogs.showUnsyncedDataLogout).toHaveBeenCalledWith('failed');
+        expect(exporter.exportEmergencyJSON).toHaveBeenCalledWith(expectedSnapshot);
+        expect(DB.secureLogOut).not.toHaveBeenCalled();
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+    });
+
+    it('rechecks state before safe-exit and proceeds only after the store becomes synced', async () => {
+        useAppStore.setState({ syncHealth: 'local-pending' });
+        dialogs.showUnsyncedDataLogout.mockImplementationOnce(async () => {
+            useAppStore.setState({ syncHealth: 'synced' });
+            return 'safe-exit';
+        });
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'normal' });
+        });
+
+        expect(dialogs.showUnsyncedDataLogout).toHaveBeenCalledWith('offline');
+        expect(DB.secureLogOut).toHaveBeenCalledTimes(1);
+        expect(useAppStore.getState().userData).toBeNull();
     });
 
     it('cancels the logout when the authenticated UID changes while pending writes are being checked', async () => {
