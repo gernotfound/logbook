@@ -10,6 +10,7 @@ const files = [
 
 const forbidden = [
   { label: 'skipped/todo test', pattern: /\b(?:it|test|describe)\.(?:skip|todo)\s*\(/g },
+  { label: 'focused test', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
   { label: 'tautology expect(true).toBe(true)', pattern: /expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)/g },
   { label: 'tautology expect(false).toBe(false)', pattern: /expect\s*\(\s*false\s*\)\s*\.\s*toBe\s*\(\s*false\s*\)/g },
   { label: 'placeholder marker', pattern: /\b(?:TODO|FIXME|placeholder)\b/gi },
