@@ -57,6 +57,8 @@ Le run obsolete della stessa PR/ref vengono cancellate tramite `concurrency`.
 
 Il gate deve fallire su modifiche o file non tracciati non ignorati prima della verifica. I file testuali tracciati vengono decodificati con UTF-8 fatal decoding e non possono contenere BOM UTF-8.
 
+La selezione dei file unisce i formati testuali noti del repository con i file non-binari rilevati da Git tramite `git grep -I`, evitando che formati testuali tracciati come SVG restino fuori dalla verifica solo perché non presenti in una whitelist iniziale.
+
 Il gate non modifica né normalizza automaticamente i file.
 
 ## CI contract
@@ -65,12 +67,16 @@ Il controllo statico deve garantire almeno:
 
 - trigger PR per `main` e `feat/ui-workout-guest-flow`;
 - assenza di `pull_request_target`;
+- assenza di riferimenti a `secrets.*` nel workflow M6;
 - `permissions: contents: read`;
 - checkout esplicito dell'HEAD PR;
 - guardia `git rev-parse HEAD` contro lo SHA atteso;
-- esecuzione di `npm run verify:m6`;
+- esecuzione di `npm run verify:m6` con propagazione del failure tramite `pipefail`;
 - `concurrency` con `cancel-in-progress: true`;
+- runtime Node 24, Temurin Java 21 e Chromium espliciti;
 - assenza dei due workflow legacy divergenti.
+
+Le verifiche sono legate ai blocchi e agli step attivi del workflow, non alla mera presenza globale di stringhe che potrebbero comparire in commenti o testo non eseguito.
 
 ## Finding prima run CI
 
@@ -82,6 +88,23 @@ La prima run GitHub Actions (`34841537860`) ha superato checkout exact-head, set
 - `tests/use_wake_lock.test.ts`.
 
 I quattro file sono stati bonificati rimuovendo esclusivamente il BOM iniziale. Il diff del commit di remediation mostra una sola riga rimossa e una aggiunta per file, senza modifica del contenuto testuale.
+
+## Finding Linux case sensitivity
+
+La run diagnostica `34843347725`, sull'HEAD `4d1dc7f2d15f0b9c760ae7dfffdc12a891cc1f09`, ha raggiunto la suite stress e ha esposto un import preesistente con casing errato in `tests/challenger_react_hooks_memo_stress.test.tsx`: il repository usa `src/components/Training`, mentre il test importava `src/components/training`.
+
+La remediation modifica esclusivamente i tre import del test verso `Training/...`, senza variazioni a `src/`. Il commit `b0f91b8ac82417a91d617c7e8ff1b91f5c9d942c` contiene soltanto queste tre differenze di casing.
+
+La successiva run `34849756154` sullo stesso commit ha completato con successo exact-head guard, setup, audit e l'intero `npm run verify:m6`.
+
+## Finding review statica finale
+
+Dopo la prima run completamente verde, la review statica indipendente del delta M6 ha individuato due possibilità di false-green nei nuovi gate:
+
+1. `check-ci-contract.mjs` usava inizialmente semplici `includes()`, quindi una stringa obbligatoria spostata in un commento YAML avrebbe potuto soddisfare il controllo. Il gate è stato irrigidito con pattern ancorati agli step/blocchi attivi e ai relativi comandi/azioni.
+2. `check-repo-hygiene.mjs` selezionava i file testuali con una whitelist di estensioni che escludeva almeno gli SVG tracciati. Il gate ora unisce i formati noti ai file testuali rilevati da Git.
+
+Questi hardening cambiano l'HEAD dopo la run verde `34849756154`; pertanto quella run non è sufficiente come evidenza finale M6. È obbligatoria una nuova run completa sul nuovo HEAD finale prima dell'handoff ad Antigravity.
 
 ## Acceptance criteria
 
