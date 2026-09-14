@@ -154,7 +154,7 @@ if (packageJson.scripts?.['verify:m6'] !== 'npm run test:repo-hygiene && npm run
   failures.push('package.json verify:m6 must preserve the validated M6 composition exactly');
 }
 if (packageJson.scripts?.['verify:m7'] !== 'npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7') {
-  failures.push('package.json verify:m7 must compose verify:m6, server typecheck, targeted M7 tests and PWA/Nitro contract exactly');
+  failures.push('package.json verify:m7 must compose verify:m6, server typecheck, targeted M7 tests and native Vercel/PWA contract exactly');
 }
 
 if (failures.length > 0) {
@@ -163,4 +163,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M7 CI contract OK: main PRs, M7 branch pushes, exact-head guard, canonical M7 gate, failure propagation, read-only permissions and legacy workflow removal verified.');
+console.log('M7 CI contract OK: main PRs, M7 branch pushes, exact-head guard, canonical M7 gate, native Vercel/PWA contract, failure propagation, read-only permissions and legacy workflow removal verified.');
