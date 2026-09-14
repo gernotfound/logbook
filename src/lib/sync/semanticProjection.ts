@@ -473,7 +473,6 @@ export function applySemanticOperations(
         const observedGroupClock = mergeVectors(...opList.map(operation => operation.clock));
         const fk = fieldKey(winner.path);
         const meta = resultMetas[winner.docPath];
-        const remoteStamp = meta.fields[fk];
 
         const localStampLike: StampLike = {
             clock: winner.clock,
@@ -483,7 +482,43 @@ export function applySemanticOperations(
         };
 
         let jointClock = observedGroupClock;
+        let blockedByAncestor = false;
 
+        // Ancestors are the canonical reconciliation boundary for hierarchical paths.
+        // Always observe every ancestor clock before consulting the same-field stamp.
+        // This makes a deleted ancestor a safe causal summary for descendants that it
+        // already covers, which is required for lossless subtree metadata compaction.
+        for (let i = 1; i < winner.path.length; i++) {
+            const ancKey = fieldKey(winner.path.slice(0, i));
+            const ancStamp = meta.fields[ancKey];
+            if (!ancStamp) continue;
+
+            jointClock = mergeVectors(jointClock, ancStamp.clock);
+            const ancLike: StampLike = {
+                clock: ancStamp.clock,
+                isDelete: ancStamp.deleted,
+                actorId: ancStamp.actorId,
+                seq: ancStamp.seq
+            };
+
+            if (stampWins(ancLike, localStampLike)) {
+                blockedByAncestor = true;
+                // The blocking ancestor has observed this contender. Keep its winner
+                // identity, but retain the joined causal context for future retries.
+                meta.fields[ancKey] = {
+                    ...ancStamp,
+                    clock: jointClock
+                };
+                break;
+            }
+        }
+
+        if (blockedByAncestor) {
+            meta.clock = mergeVectors(meta.clock, jointClock);
+            continue;
+        }
+
+        const remoteStamp = meta.fields[fk];
         if (remoteStamp) {
             const remoteStampLike: StampLike = {
                 clock: remoteStamp.clock,
@@ -492,7 +527,7 @@ export function applySemanticOperations(
                 seq: remoteStamp.seq
             };
             if (!stampWins(localStampLike, remoteStampLike)) {
-                const observedClock = mergeVectors(remoteStamp.clock, observedGroupClock);
+                const observedClock = mergeVectors(remoteStamp.clock, jointClock);
                 meta.fields[fk] = {
                     ...remoteStamp,
                     clock: observedClock
@@ -500,31 +535,7 @@ export function applySemanticOperations(
                 meta.clock = mergeVectors(meta.clock, observedClock);
                 continue;
             }
-            jointClock = mergeVectors(remoteStamp.clock, observedGroupClock);
-        }
-
-        let blockedByAncestor = false;
-        for (let i = 1; i < winner.path.length; i++) {
-            const ancKey = fieldKey(winner.path.slice(0, i));
-            const ancStamp = meta.fields[ancKey];
-            if (ancStamp) {
-                const ancLike: StampLike = {
-                    clock: ancStamp.clock,
-                    isDelete: ancStamp.deleted,
-                    actorId: ancStamp.actorId,
-                    seq: ancStamp.seq
-                };
-                if (stampWins(ancLike, localStampLike)) {
-                    blockedByAncestor = true;
-                    jointClock = mergeVectors(jointClock, ancStamp.clock);
-                    break;
-                }
-            }
-        }
-
-        if (blockedByAncestor) {
-            meta.clock = mergeVectors(meta.clock, jointClock);
-            continue;
+            jointClock = mergeVectors(remoteStamp.clock, jointClock);
         }
 
         const doc = resultDocs.get(winner.docPath) || {};

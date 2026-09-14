@@ -14,6 +14,7 @@
     "test:stress": "vitest run --config vitest.stress.config.ts",
     "test:fuzz": "vitest run --config vitest.fuzz.config.ts",
     "test:recovery": "vitest run --config vitest.recovery.config.ts",
+    "test:gc": "vitest run --config vitest.gc.config.ts",
     "test:unit": "vitest run src/",
     "test:integration": "vitest run tests/",
     "test:e2e": "node scripts/run-e2e.mjs",
@@ -23,7 +24,8 @@
     "test:no-skips": "node scripts/check-test-skips.mjs",
     "verify:m0": "npm run lint && npm run test && npm run test:isolated && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m2": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
-    "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build"
+    "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
+    "verify:m4": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
