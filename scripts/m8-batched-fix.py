@@ -49,7 +49,7 @@ replace_exact('src/lib/sync/domainOperations.ts', old_patch, new_patch)
 replace_exact(
     'src/lib/sync/domainOperations.ts',
     'const patched = applyPatch(day as unknown as Record<string, unknown>, operation.patch as Record<string, unknown>) as unknown as NutritionDay;',
-    'const patched = applyPatch(day, operation.patch);',
+    'const patched = applyPatch<NutritionDay>(day, operation.patch);',
 )
 
 test_path = Path('tests/m8_domain_operations.test.ts')
