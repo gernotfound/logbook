@@ -248,6 +248,7 @@ Documentazione di dettaglio in `.agents/rules/`:
 | Documento | Contenuto |
 |---|---|
 | [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Architettura storage, pipeline di salvataggio, merge, blindatura background |
+| [`.agents/rules/domain-operations.md`](.agents/rules/domain-operations.md) | Domain Operations V4, boundary di mutazione, compiler semantico, identità e ordering |
 | [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Variabili d'ambiente, App Check, Firestore Rules, CSP, domini |
 | [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | UserData, Zod gateway, ghost objects, invarianti di modifica |
 | [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding, seed vuoti, recovery |
