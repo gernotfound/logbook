@@ -23,11 +23,12 @@ Ogni regola in questo documento è classificata:
 ### Stack tecnologico
 
 - **Framework:** React 19 + Vite 8 + TypeScript 7
-- **Hosting:** Vercel (deploy automatico, radice `/`)
+- **Hosting:** Vercel (frontend Vite/PWA statico, radice `/`)
+- **Boundary server trusted:** Vercel Functions native in `/api/` per Server Account Deletion; Firebase Admin resta server-only
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`)
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`)
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono, Firestore cloud
-- **Backend:** Firebase Modular SDK v12 (`firebase/firestore`, `firebase/auth`, `firebase/analytics`, `firebase/app-check`)
+- **Backend client:** Firebase Modular SDK v12 (`firebase/firestore`, `firebase/auth`, `firebase/analytics`, `firebase/app-check`)
 - **Styling:** CSS nativo (variabili in `src/styles/global.css`). **MUST:** No Tailwind.
 - **Icone:** `lucide-react`
 - **PWA:** `vite-plugin-pwa`
@@ -41,17 +42,20 @@ Per ogni nuova chiave cloud-root, MUST verificare e aggiornare:
 
 | File | Responsabilità |
 |---|---|
-| `src/types.ts` | Definizione del tipo |
+| `src/types.ts` | Definizione del tipo applicativo |
 | `src/lib/schema.ts`, `src/lib/schemas/*.ts` | Schema Zod |
-| `src/contexts/AuthContext.tsx` | Gestione autenticazione e merge |
-| `src/lib/db.ts` | Persistenza e mapping Firestore |
+| `src/lib/sync/documentProjection.ts` | Allowlist/proiezione `UserData` → root Firestore e shard mensili |
+| `src/contexts/AuthContext.tsx` | Gestione autenticazione, hydration e merge |
+| `src/lib/db.ts` e moduli DB correlati | Lettura/scrittura Firestore e boundary DB |
 | `firestore.rules` | Regole di sicurezza |
 | `tests/firestore_security_rules.test.ts` | Test delle regole |
-| Logica di merge/import-export | `src/lib/merge.ts`, `src/lib/export.ts` |
+| Logica di merge/import-export | `src/lib/merge.ts`, `src/lib/export.ts` e boundary correlati |
 
-Violare questa invariante causa la **perdita silenziosa** dei dati al primo ciclo di salvataggio/caricamento.
+Violare questa invariante può causare **perdita silenziosa** o mancata replica dei dati al primo ciclo di proiezione/salvataggio/caricamento.
 
-Prima di modificare: classificare il dato come effimero, locale persistito, cloud-root oppure mensilizzato.
+Prima di modificare, classificare il dato come: effimero, application/local-only, cloud-root oppure mensilizzato. `UserData` applicativo non coincide automaticamente con il documento root Firestore.
+
+→ Mappa normativa completa: `.agents/rules/data-model-and-zod.md`
 
 ## Stato, storage e sincronizzazione
 
@@ -68,6 +72,7 @@ Ruoli dei livelli di storage:
 - **MUST:** Una write rifiutata non deve essere esposta come confermata. La sincronizzazione tramite `replicateJournal` e transazioni gestisce gli esiti e mantiene i dati se offline.
 - **MUST:** Le funzioni di aggiornamento devono rigettare la Promise se la persistenza fallisce. Vietato risolvere silenziosamente nel `catch`.
 - **MUST:** Il PWA reload barrier (`prepareForReload`) deve essere fail-safe: se `userData` esiste in memoria ma `envelope` è nullo o illeggibile, la sessione deve essere considerata *unsafe* (non salvata) per prevenire perdita di dati. Non autorizzare il reload alla cieca.
+- **MUST:** Le normali mutazioni business UI/hook attraversano il boundary Domain Operations. Snapshot-save resta riservato ai boundary bulk/compatibility documentati e allowlisted.
 
 ### `permission-denied` — gestione per contesto
 
@@ -78,11 +83,11 @@ Ruoli dei livelli di storage:
 | Telemetria | MAY: best-effort, può non propagare l'errore alla UI, ma deve registrare localmente il fallimento. |
 | `deleteAccount` | MUST: comunicare all'utente se la cancellazione cloud è parziale. |
 
-→ Dettagli completi: `.agents/rules/storage-and-sync.md`
+→ Dettagli completi: `.agents/rules/storage-and-sync.md` e `.agents/rules/domain-operations.md`
 
 ## Dati e validazione
 
-- **MUST:** Tutti i dati in ingresso (Firestore, IndexedDB) devono transitare attraverso `UserDataSchema.parse()`.
+- **MUST:** Tutti i dati in ingresso (Firestore, IndexedDB) devono transitare attraverso `UserDataSchema.parse()` al boundary applicabile.
 - **MUST:** Nessun `undefined` nei payload Firestore. Ogni campo opzionale usa `null` o chiave omessa, mai entrambi per lo stesso campo.
 - **SHOULD:** `.passthrough()` sui sub-schema Zod solo dove la compatibilità in avanti è intenzionale.
 - **NOTE:** I sub-schema sanitizzano gli elementi con `id` valido ma campi corrotti, preservando la referenza.
@@ -132,14 +137,16 @@ Ruoli dei livelli di storage:
 
 ### Variabili d'ambiente
 
-- **MUST:** Tutte le 8 variabili `VITE_FIREBASE_*` devono essere presenti e non vuote; il fail-fast in `src/lib/firebase.ts` lancia `Error` se mancano.
+- **MUST:** Tutte le 8 variabili `VITE_FIREBASE_*` lette da `src/lib/firebase.ts` devono essere presenti e non vuote; il fail-fast client lancia `Error` se mancano.
 - **MUST:** Accesso statico `import.meta.env.VITE_*`. Mai accesso dinamico con `import.meta.env[key]`.
 - **VERIFY:** `VITE_FIREBASE_DATABASE_URL` è nel fail-fast ma il progetto usa solo Firestore, non Realtime Database. Potrebbe essere rimossa.
+- **MUST:** Le credenziali Firebase Admin e `CRON_SECRET` sono server-only e non devono avere prefisso `VITE_`.
 
 ### App Check
 
 - Provider: `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`).
 - `isSupported` non esiste per `firebase/app-check`; check manuale su `window.crypto` e `window.fetch`.
+- La site key App Check non fa parte delle otto env client fail-fast: se manca, il modulo App Check entra nel proprio fallback invece di impedire `initializeApp`.
 
 ### Domini e CSP
 
@@ -150,6 +157,7 @@ Ruoli dei livelli di storage:
 
 - **MUST:** Dopo ogni modifica a `firestore.rules`, eseguire: `npx firebase-tools deploy --only firestore:rules`.
 - **MUST:** `service-account.json` è nel `.gitignore` e non va mai committato.
+- **NOTE:** Il gate repository corrente testa le Rules con emulator; non effettua il deploy Rules.
 
 → Dettagli completi: `.agents/rules/firebase-config.md`
 
@@ -209,20 +217,17 @@ Per modifiche strutturali, dati, sync, sicurezza, dipendenze o multi-file:
 
 ## Test e deploy
 
-### Checklist obbligatoria
+### Gate canonico corrente
 
-Per ogni modifica al codice, eseguire in sequenza:
-
-```bash
-npm run lint        # oxlint
-npm run test        # vitest run (unit + integration)
-npm run build       # tsc --noEmit && vite build
-npm run test:e2e    # playwright test (se cambiano UI, flussi, testo o routing)
-```
-
+- **MUST:** Il gate repository completo corrente è `npm run verify:m8`.
+- `verify:m8` include transitivamente M7 → M6 → M5 e quindi lint, typecheck/hardening, suite unit/integration/isolated/fuzz/recovery/GC/stress, Firestore Rules emulator, Playwright E2E, no-skips, build e i gate M7/M8.
+- `npm run lint`, `npm run test`, `npm run build` e `npm run test:e2e` restano comandi diagnostici o sotto-gate utili, ma **non sostituiscono** `npm run verify:m8` quando è richiesta la validazione canonica completa.
 - **MUST:** Non dichiarare test superati se non sono stati eseguiti.
-- **MUST:** Ogni modifica deve passare silenziosamente lint, test e build.
+- **MUST:** Warning inattesi, React `act(...)`, unhandled rejection o framework warning emersi nelle suite candidate sono regressioni da correggere o spiegare; non vanno soppressi per ottenere un log pulito.
+- **NOTE:** La pipeline GitHub unisce stdout/stderr nel log e fallisce sui codici di uscita; la semplice presenza di stderr non è un failure criterion autonomo.
 - **VERIFY:** Se si modificano testi, placeholder o selettori dell'interfaccia, cercare in `e2e/` se compaiono nei test Playwright e aggiornarli.
+
+→ Contratto completo: `.agents/rules/ci-verification.md`
 
 ### Bundle size
 
@@ -232,7 +237,7 @@ npm run test:e2e    # playwright test (se cambiano UI, flussi, testo o routing)
 
 - **VERIFY:** Deployment Checks è attivo nella dashboard Vercel.
 - **VERIFY:** Il workflow canonico `.github/workflows/verification.yml` esiste e il job stabile `Canonical Verification` riporta status su GitHub.
-- **MUST:** `Canonical Verification` è il contratto esterno stabile usato da Vercel Deployment Checks; non rinominarlo tra milestone senza aggiornare prima la configurazione Vercel.
+- **MUST:** Se Vercel Deployment Checks usa `Canonical Verification`, non rinominare quel job senza aggiornare prima la configurazione Vercel verificata.
 - **MUST:** Non assumere che ogni push sia bloccato dai check finché la configurazione non è stata controllata.
 - L'app gira sulla radice `/` del dominio (`base: '/'` in `vite.config.ts`).
 
@@ -248,10 +253,15 @@ Documentazione di dettaglio in `.agents/rules/`:
 
 | Documento | Contenuto |
 |---|---|
-| [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Architettura storage, pipeline di salvataggio, merge, blindatura background |
-| [`.agents/rules/domain-operations.md`](.agents/rules/domain-operations.md) | Domain Operations V4, boundary di mutazione, compiler semantico, identità e ordering |
-| [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Variabili d'ambiente, App Check, Firestore Rules, CSP, domini |
-| [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | UserData, Zod gateway, ghost objects, invarianti di modifica |
+| [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Storage, schema evolution, versioni, hydration, offline-first e sync |
+| [`.agents/rules/domain-operations.md`](.agents/rules/domain-operations.md) | Domain Operations V4 e boundary delle normali business mutation |
+| [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | `UserData`, Zod, cloud-root, shard mensili e local-only |
+| [`.agents/rules/account-lifecycle.md`](.agents/rules/account-lifecycle.md) | Backup/import, account deletion, logout, guest e PWA update |
+| [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Env client/server, App Check, Firestore Rules, CSP e domini |
+| [`.agents/rules/ci-verification.md`](.agents/rules/ci-verification.md) | Gate canonico, exact-head, workflow/job/check e CI contract |
+| [`.agents/rules/crash-consistency.md`](.agents/rules/crash-consistency.md) | Commit atomico, lost ack, replay e recovery process-boundary |
+| [`.agents/rules/causal-gc.md`](.agents/rules/causal-gc.md) | Tombstone/vector-clock GC e stable frontier |
+| [`.agents/rules/distributed-fuzz.md`](.agents/rules/distributed-fuzz.md) | Fuzz distribuito e convergenza causale |
+| [`.agents/rules/verification-hardening.md`](.agents/rules/verification-hardening.md) | Qualità dei test normativi e production boundaries |
 | [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding, seed vuoti, recovery |
-| [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema dark glassmorphism, variabili CSS, tipografia, sentence case |
-| [`.agents/rules/account-lifecycle.md`](.agents/rules/account-lifecycle.md) | Export CSV, eliminazione account, logout, modalità guest |
+| [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema, variabili CSS, tipografia e UX |

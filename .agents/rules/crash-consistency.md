@@ -78,12 +78,12 @@ I test che patchano primitive globali IndexedDB devono girare single-worker.
 
 ## Gate M3
 
-Il gate normativo corrente è:
+Il subgate introdotto da M3 è:
 
 ```bash
 npm run verify:m3
 ```
 
-Include integralmente i gate precedenti e aggiunge `npm run test:recovery` e `npm run test:e2e`. Per M3 e milestone successive, questo requisito supersede le vecchie formulazioni del gate minimo presenti nella documentazione M0/M1.
+Include integralmente i gate precedenti e aggiunge `npm run test:recovery` e `npm run test:e2e`. Per M3 questa formulazione supersedeva i vecchi gate minimi M0/M1.
 
-Un sottoinsieme verde non equivale al superamento di M3: il comando completo deve terminare con exit code 0.
+Nel repository corrente `verify:m3` resta una componente storica/transitiva; il gate umbrella canonico è `npm run verify:m8` come definito in `.agents/rules/ci-verification.md`. Un sottoinsieme verde non equivale al superamento del gate corrente completo.

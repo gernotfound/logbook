@@ -1,95 +1,96 @@
 # Modello Dati e Validazione Zod — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-09 | File verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`
+> Stato: normativo | Ultima verifica: 2026-09-15 | File verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`, `src/lib/sync/documentProjection.ts`, `firestore.rules`
 
-## UserData — struttura principale
+## Quattro piani distinti
 
-Il tipo `UserData` in `src/types.ts` è l'albero dati completo dell'utente. Contiene:
+`UserData` è il modello applicativo completo, ma non coincide con un singolo documento Firestore. Prima di aggiungere o spostare un campo, classificare esplicitamente dove vive.
 
-- `profile` — dati anagrafici e biometrici
-- `library` — esercizi personalizzati (array con ID)
-- `routines` — schede di allenamento (array con ID)
-- `trainingCycles` — cicli di allenamento (array con ID)
-- `history` — sessioni di allenamento completate (array con ID)
-- `nutrition` — `Record<string, NutritionDay>` indicizzato per data `YYYY-MM-DD`
-- `supplements` — integratori personalizzati (array con ID)
-- `customFoods` — alimenti personalizzati (array con ID)
-- `activeWorkout` — snapshot del workout attivo salvata su cloud (opzionale, può essere `null`)
-- `activeCycleId` — ID del ciclo attivo (opzionale, può essere `null`)
-- `bodyMeasurements` — misurazioni corporee (array con ID)
+| Piano | Fonte operativa | Contenuto corrente |
+|---|---|---|
+| **Application `UserData`** | `src/types.ts` + `UserDataSchema` | `profile`, `library`, `routines`, `history`, `nutrition`, `customFoods`, `activeWorkout`, `nutritionPlanning`, `trainingCycles`, `activeCycleId`, `supplements`, `activePains`, `catalogOverrides`, `legalConsent`, `nutritionPlanningOrigin`, `pendingConflicts` |
+| **Firestore root** | `src/lib/sync/documentProjection.ts` (`rootKeys`) + Rules | `profile`, `library`, `routines`, `customFoods`, `activeWorkout`, `trainingCycles`, `activeCycleId`, `nutritionPlanning`, `supplements`, `activePains`, `catalogOverrides`, `legalConsent`, `nutritionPlanningOrigin` |
+| **Shard mensili Firestore** | `documentProjection.ts` | `history_months/{YYYY-MM}` e `nutrition_months/{YYYY-MM}` |
+| **Application/local-only** | envelope/store | `pendingConflicts` è parte di `UserData` e del recovery locale/backup, ma non è una chiave del root Firestore |
+
+`library` e `customFoods` sono campi legacy del modello applicativo; la projection corrente li normalizza rispetto al catalogo globale prima della write root.
+
+Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`.
 
 ## Zod Gateway — difesa runtime
 
-Tutti i dati in ingresso (da Firestore o da IndexedDB) **DEVONO** transitare attraverso `UserDataSchema.parse()` in `src/lib/schema.ts`.
+Tutti i dati in ingresso dai boundary persistiti **DEVONO** essere normalizzati secondo la versione applicabile e poi transitare attraverso `UserDataSchema.parse()` prima di diventare stato business corrente.
 
 ### Perché è cruciale
 
-I tipi TypeScript svaniscono a runtime. Il Gateway Zod funge da barriera per impedire che dati malformati (`NaN`, stringhe al posto di numeri, `null` inattesi, array mancanti) causino crash nei componenti React.
+I tipi TypeScript svaniscono a runtime. Il Gateway Zod impedisce che dati malformati (`NaN`, stringhe al posto di numeri, `null` inattesi, array mancanti) entrino nel modello operativo senza sanitizzazione/validazione prevista.
 
 ### Helper difensivi
 
-Gli schema usano helper specifici con fallback:
+Gli schema usano helper specifici con fallback, fra cui:
 - `safeString`, `safeOptionalString`
 - `safeNumber`, `safeOptionalNumber`, `safeOptionalNullableNumber`
 - `safeBoolean`, `safeOptionalBoolean`
 
-Ogni helper ha `.catch(...)` e `.default(...)` per garantire un valore sicuro.
+Ogni helper applica il comportamento difensivo definito negli schema correnti; non duplicare questa logica nei consumer.
 
 ### `.passthrough()` — campi addizionali
 
-I sub-schema usano `.passthrough()` per non scartare campi addizionali legittimi. Questo garantisce compatibilità in avanti: se un aggiornamento aggiunge un campo, le versioni precedenti dello schema non lo eliminano.
+I sub-schema possono usare `.passthrough()` dove la compatibilità in avanti è intenzionale.
 
-**SHOULD:** Usare `.passthrough()` solo dove la compatibilità in avanti è intenzionale.
+**SHOULD:** Non aggiungere `.passthrough()` come scorciatoia per evitare di modellare un campo persistito. Un campo business nuovo deve avere classificazione storage e schema espliciti.
 
 ### Comportamento con oggetti fantasma (Ghost Objects)
 
-Il gateway Zod applica validazione severa:
-- Scarta a monte elementi nulli, primitivi o con `id` vuoto (`id === ''`).
-- Se un elemento ha un `id` valido ma altri campi sono corrotti, l'elemento viene **sanitizzato** con i valori di default (non scartato), preservando la referenza per logbook e cronologia.
+Il gateway applica validazione difensiva agli elementi collezione:
+- scarta elementi nulli/primitivi o privi dell'identità richiesta;
+- se un elemento mantiene un'identità valida ma contiene campi corrotti, gli schema possono sanitizzare i campi secondo i default previsti preservando la referenza.
 
 ### Cache corrotta vs dati cloud invalidi
 
-- **Cache corrotta:** Log minimale, ignorare la cache e usare default sicuro.
-- **Dati cloud critici invalidi:** Non sovrascrivere il cloud con default; segnalare errore.
-- **Nuovi campi:** Usare `schemaVersion` e migrazioni esplicite quando necessario.
+- **Cache corrotta:** non reinterpretare bytes/versioni incompatibili come dati correnti; preservare il dato recuperabile quando previsto dal boundary.
+- **Dati cloud critici invalidi:** non sovrascrivere il cloud con default inventati; propagare/classificare l'errore.
+- **Versioni future:** fail-closed / `update-required` secondo `storage-and-sync.md`.
 
 ## Valori opzionali Firestore — policy `undefined` vs `null`
 
-**MUST:** Nessun `undefined` nei payload Firestore. Firebase SDK rifiuta categoricamente `undefined`.
+**MUST:** Nessun `undefined` nei payload Firestore.
 
-Ogni campo opzionale deve usare una sola rappresentazione dell'assenza:
-- `null` — per campi esplicitamente vuoti (es. `activeWorkout: null`)
-- Chiave omessa — quando il campo non è pertinente
+Ogni boundary di projection deve produrre una rappresentazione coerente:
+- `null` quando il contratto root rappresenta esplicitamente l'assenza;
+- chiave omessa dove il contratto lo prevede;
+- mai affidarsi a `undefined` perché Firebase SDK lo rifiuta.
 
-**MUST:** Zod, mapper DB, merge, export e test devono usare la stessa rappresentazione.
+`documentProjection.ts` applica `removeUndefinedValues()` prima delle write.
 
-Gli schemi difensivi e i mapping di `db.ts` devono garantire la conformità:
-```typescript
-activeWorkout: state.activeWorkout || null,
-activeCycleId: state.activeCycleId || null,
-```
+## Invariante di modifica — nuova chiave cloud-root
 
-## Invariante di modifica — aggiunta nuovi campi cloud-root
+Per ogni nuova chiave del root Firestore verificare e aggiornare, dove applicabile:
 
-Per ogni nuova chiave cloud-root, verificare e aggiornare **tutti** questi file:
+1. `src/types.ts` — tipo applicativo;
+2. `src/lib/schema.ts` / `src/lib/schemas/*.ts` — Zod;
+3. `src/lib/sync/documentProjection.ts` — `rootKeys`, projection e hydration root;
+4. `src/contexts/AuthContext.tsx` — bootstrap/hydration/merge quando il campo partecipa a quei flussi;
+5. `src/lib/db.ts` e moduli DB correlati — boundary Firestore;
+6. `firestore.rules` — allowlist/validazione security;
+7. `tests/firestore_security_rules.test.ts` — coverage Rules;
+8. merge/import/export e backup (`src/lib/merge.ts`, `src/lib/export.ts` e moduli correlati);
+9. semantic projection/path ownership se il campo è mutabile tramite Domain Operations;
+10. controlli di dimensione del documento e test di regressione pertinenti.
 
-1. `src/types.ts` — definizione del tipo
-2. `src/lib/schema.ts` o `src/lib/schemas/*.ts` — schema Zod
-3. `src/contexts/AuthContext.tsx` — gestione autenticazione
-4. `src/lib/db.ts` — persistenza e mapping Firestore
-5. `firestore.rules` — regole di sicurezza
-6. `tests/firestore_security_rules.test.ts` — test delle regole
-7. Logica di merge/import-export (`src/lib/merge.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`)
-8. Controlli di dimensione del documento
+**MUST:** Non assumere che aggiungere un campo a `UserDataSchema` lo renda automaticamente cloud-root. Se manca da `rootKeys`, non verrà proiettato nel documento root dalle semantic write correnti.
 
-**MUST:** Violare questa invariante causa la perdita silenziosa dei dati al primo ciclo di salvataggio/caricamento a causa dello strip di Zod o del `fast-deep-equal`.
+**MUST:** Un campo local-only non va aggiunto a Rules/root projection soltanto perché è parte di `UserData`.
 
-L'aggiunta di stato UI temporaneo o solo locale non implica automaticamente una modifica alle Firestore Rules. Prima classificare il dato come: effimero, locale persistito, cloud-root oppure mensilizzato.
+## Shard mensili
 
-## Subcollection mensilizzate
+I dati ad alta cardinalità sono organizzati per mese:
 
-I dati di cronologia allenamento e nutrizione sono organizzati in subcollection per mese su Firestore:
-- `history_months/{YYYY-MM}` — sessioni di allenamento
-- `nutrition_months/{YYYY-MM}` — dati nutrizionali giornalieri
+- `history` → `history_months/{YYYY-MM}`;
+- `nutrition` → `nutrition_months/{YYYY-MM}`.
 
-Il mese Firestore è derivato dalla data locale della registrazione.
+Il mese deriva dalla data locale della registrazione. Hydration parziale/completa e merge dei mesi seguono gli invarianti di `.agents/rules/storage-and-sync.md`; non trattare un mese non caricato come mese vuoto.
+
+## Domain Operations
+
+La classificazione storage non cambia il mutation boundary M8. Le normali mutazioni business UI/hook devono usare Domain Operations; snapshot-save resta confinato ai boundary bulk/compatibility allowlisted in `.agents/rules/domain-operations.md`.

@@ -1,6 +1,6 @@
 # Storage e Sincronizzazione - LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-13 | File verificati: src/store/useAppStore.ts, src/lib/schemaEvolution.ts, src/lib/sync/transactionWriter.ts, src/lib/sync/replicateJournal.ts, src/lib/sync/semanticProjection.ts, src/lib/sync/documentProjection.ts, src/lib/sync/localRepository.ts, src/lib/sync/deviceStorage.ts, src/contexts/AuthContext.tsx, src/main.tsx
+> Stato: normativo | Ultima verifica: 2026-09-15 | File verificati: src/store/useAppStore.ts, src/lib/schemaEvolution.ts, src/lib/sync/transactionWriter.ts, src/lib/sync/replicateJournal.ts, src/lib/sync/semanticProjection.ts, src/lib/sync/documentProjection.ts, src/lib/sync/localRepository.ts, src/lib/sync/deviceStorage.ts, src/contexts/AuthContext.tsx, src/main.tsx
 
 ## Architettura di storage
 
@@ -17,7 +17,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 ## Versioni indipendenti e Schema Evolution
 
-`src/lib/schemaEvolution.ts` è l'unica fonte normativa per le versioni persistite:
+`src/lib/schemaEvolution.ts` è l'unica fonte eseguibile per le versioni persistite:
 
 ```ts
 CURRENT_DATA_SCHEMA = 1
@@ -80,7 +80,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 5. `replicateJournal.ts` drena lo stesso journal V4 verso Firestore. In assenza di rete o dopo timeout, le operation restano durevoli nel journal.
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
-I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente.
+I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente. L'allowlist canonica e il boundary checker sono documentati in `.agents/rules/domain-operations.md`.
 
 **MUST:** nuovi consumer business ordinari non possono introdurre bypass snapshot fuori dall'allowlist verificata dal gate M8.
 
@@ -149,15 +149,17 @@ Al collegamento di un account, se esistono dati guest locali:
 6. `replicateJournal()` tenta il flush;
 7. se l'esito è `local-pending`, il merged authenticated envelope resta la fonte locale.
 
-`pendingConflicts.nutritionPlanning` resta un conflitto di prodotto separato dal generic causal merge.
+`pendingConflicts.nutritionPlanning` resta un conflitto di prodotto separato dal generic causal merge e non è cloud-root.
 
 ## Backup / import
 
-Il formato corrente è `logbook-backup` V3 e contiene anche `dataSchemaVersion` e `syncProtocolVersion`.
+Il formato importabile corrente è `logbook-backup` V3 e contiene anche `dataSchemaVersion` e `syncProtocolVersion`.
 
-**MUST:** backup, share ed emergency export usano lo stesso header versionato prodotto dalla factory corrente.
+**MUST:** backup/share/emergency export prodotti dalla factory corrente usano l'header V3 corrente.
 
 **MUST:** backup V1/V2 e versioni future non vengono importati nella baseline clean-cut M1.
+
+**NOTE:** `handleExportRecovery()` costituisce un carve-out intenzionale: può serializzare il vecchio archivio locale non attribuito come `logbook-backup` `version: 1` per recupero manuale. Quel raw legacy recovery file non è un backup V1 supportato dall'importer corrente e non deve essere presentato come tale.
 
 Il recovery raw di un backup cloud può conservare i documenti originali con `_schemaVersion`/`_sync`, ma il business snapshot deve usare solo dati già normalizzati e deve escludere entrambi i metadati dal `UserData`.
 
@@ -167,4 +169,10 @@ In assenza di connessione, l'app opera dall'envelope IndexedDB e dai dati device
 
 ## Gate di regressione
 
-`npm run verify:m0` continua a essere il gate minimo obbligatorio durante M1: lint, suite base, isolated, stress, Firestore emulator/rules, controllo assenza skip e build TypeScript/Vite. I test M1 di schema evolution fanno parte delle suite esistenti; un conteggio parziale di test verdi non equivale al superamento del gate completo.
+`verify:m0`, `verify:m2`, `verify:m3`, `verify:m4` e `verify:m5` restano subgate/storici delle milestone che li hanno introdotti. Il gate repository umbrella corrente è:
+
+```bash
+npm run verify:m8
+```
+
+`verify:m8` include transitivamente M7 → M6 → M5 e i gate/suite precedenti. Un conteggio parziale di test verdi o il superamento del solo `verify:m0` non equivale alla validazione canonica corrente. Vedi `.agents/rules/ci-verification.md`.
