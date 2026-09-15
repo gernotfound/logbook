@@ -10,7 +10,7 @@ La lettura di tutti i documenti non costituisce uno snapshot atomico fra disposi
 
 La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento.
 
-Esiste una recovery escape hatch distinta: `handleExportRecovery()` può esportare il vecchio archivio locale non attribuito come JSON `logbook-backup` `version: 1`. Quel file preserva bytes/dati legacy per recupero manuale ed è intenzionalmente **non importabile** dall'importer V3 corrente. Non descriverlo come backup V1 supportato.
+Esiste una recovery escape hatch distinta: `handleExportRecovery()` può esportare il vecchio archivio locale non attribuito come JSON `logbook-backup` `version: 1`. Quel file preserva i dati legacy per recupero manuale ed è intenzionalmente **non importabile** dall'importer V3 corrente. Non descriverlo come backup V1 supportato.
 
 - **Importa JSON:** opera soltanto su formati supportati e applica l'unione prevista senza mutazioni in place. Le collisioni e i ricalcoli seguono il contratto corrente dell'importer.
 - **Ripristina:** sostituisce i campi presenti nel formato supportato rispetto allo stato locale disponibile; non autorizza a trattare dati cloud mai caricati come assenti.
