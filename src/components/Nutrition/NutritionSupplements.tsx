@@ -13,7 +13,7 @@ interface NutritionSupplementsProps {
 }
 
 export default function NutritionSupplements({ selectedDate, setSelectedDate }: NutritionSupplementsProps) {
-    const saveUserData = useAppStore(s => s.saveUserData);
+    const dispatchDomainOperation = useAppStore(s => s.dispatchDomainOperation);
     const { 
         targetDateStr, supplementsLibrary, supplementsIntake, 
         saveSupplementToLibrary, deleteSupplementFromLibrary, 
@@ -95,13 +95,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             name: newName
         };
         try {
-            await saveUserData((prev: any) => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    supplements: [...(prev.supplements || []), duplicated]
-                };
-            });
+            await dispatchDomainOperation({ type: 'supplement.upsert', supplement: duplicated });
             await showAlert('Integratore duplicato!');
         } catch {
             await showAlert('Errore durante la duplicazione.');

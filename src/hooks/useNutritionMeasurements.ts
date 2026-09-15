@@ -12,9 +12,9 @@ const EMPTY_PROFILE = {};
 export function useNutritionMeasurements(selectedDate?: string) {
     const profile: any = useAppStore(state => state.userData?.profile || EMPTY_PROFILE);
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
-    
+
     const [editingDate, setEditingDate] = useState<string | null>(null);
     const saving = useRef(false);
     const todayDateStr = useLocalToday();
@@ -61,22 +61,22 @@ export function useNutritionMeasurements(selectedDate?: string) {
         const confirmed = await useDialogStore.getState().showConfirm(`Sei sicuro di voler eliminare la misurazione del ${Logic.formatItalianDate ? Logic.formatItalianDate(dateStr) : dateStr}?`);
         if (!confirmed || !isCurrentSession(session)) return;
         try {
-            await saveUserData((prev) => {
-                if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
-                if (!prev || !prev.nutrition?.[dateStr]) return prev;
-                const day = { ...prev.nutrition[dateStr] };
-                delete day.weight;
-                delete day.bf;
-                delete day.waist;
-                delete day.neck;
-                delete day.hip;
-                delete day.chest;
-                delete day.shoulders;
-                delete day.biceps;
-                delete day.thighs;
-                delete day.calves;
-                delete day.measurementTime;
-                return { ...prev, nutrition: { ...prev.nutrition, [dateStr]: day } };
+            await dispatchDomainOperation({
+                type: 'nutrition-day.patch',
+                date: dateStr,
+                patch: {
+                    weight: undefined,
+                    bf: undefined,
+                    waist: undefined,
+                    neck: undefined,
+                    hip: undefined,
+                    chest: undefined,
+                    shoulders: undefined,
+                    biceps: undefined,
+                    thighs: undefined,
+                    calves: undefined,
+                    measurementTime: undefined,
+                },
             });
             if (isCurrentSession(session)) await showAlert('Misurazione eliminata.');
         } catch {
@@ -91,89 +91,76 @@ export function useNutritionMeasurements(selectedDate?: string) {
         const session = captureSession();
         const submitted = { ...draft.values };
         try {
-        if (!weight.trim() || !Number.isFinite(Number(weight)) || Number(weight) <= 0) {
-            await showAlert("Inserisci un valore valido per il peso.");
-            return;
-        }
-
-        const optional = [waist, neck, hip, chest, shoulders, biceps, thighs, calves];
-        if (optional.some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) ||
-            (manualBf !== '' && (!Number.isFinite(Number(manualBf)) || Number(manualBf) < 0 || Number(manualBf) > 100))) {
-            await showAlert('Inserisci misure numeriche valide e una percentuale di massa grassa tra 0 e 100.');
-            return false;
-        }
-        const height = Number(profile.height);
-        let bf: number | null = null;
-        
-        if (manualBf && !isNaN(Number(manualBf))) {
-            bf = Number(manualBf);
-        } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
-            if (Number.isFinite(height) && height > 0) {
-                bf = Logic.calculateBodyFatByMethod(profile.gender === 'F' ? 'navy_female' : 'navy_male', {
-                    gender: profile.gender || 'M',
-                    height,
-                    weight: Number(weight),
-                    waist: Number(waist),
-                    neck: Number(neck),
-                    hip: hip ? Number(hip) : undefined
-                });
-                
-                if (bf === null || !Number.isFinite(bf)) {
-                    await showAlert("Impossibile calcolare la massa grassa con i dati forniti. Verifica che vita > collo.");
-                    return;
-                }
-            } else {
-                await showAlert("Attenzione: imposta la tua altezza nelle Impostazioni per calcolare la massa grassa dai perimetri corporei.");
+            if (!weight.trim() || !Number.isFinite(Number(weight)) || Number(weight) <= 0) {
+                await showAlert("Inserisci un valore valido per il peso.");
                 return;
             }
-        }
 
-        const targetDate = targetDateStr;
-
-        try {
-            await saveUserData((prev) => {
-                if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
-                if (!prev) return prev;
-                const existingDay = prev.nutrition?.[targetDate] || { date: targetDate, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                const updatedDay = {
-                    ...existingDay,
-                    weight: Number(weight),
-                    ...(waist ? { waist: Number(waist) } : {}),
-                    ...(neck ? { neck: Number(neck) } : {}),
-                    ...(hip && profile.gender === 'F' ? { hip: Number(hip) } : {}),
-                    ...(chest ? { chest: Number(chest) } : {}),
-                    ...(shoulders ? { shoulders: Number(shoulders) } : {}),
-                    ...(biceps ? { biceps: Number(biceps) } : {}),
-                    ...(thighs ? { thighs: Number(thighs) } : {}),
-                    ...(calves ? { calves: Number(calves) } : {}),
-                    ...(bf !== null && !isNaN(bf) ? { bf: Math.round(bf * 10) / 10 } : {}),
-                    measurementTime: measureTime
-                };
-                for (const [field, value] of Object.entries({ waist, neck, hip, chest, shoulders, biceps, thighs, calves })) {
-                    if (!value || (field === 'hip' && profile.gender !== 'F')) delete (updatedDay as Record<string, unknown>)[field];
-                }
-                if (bf === null) delete updatedDay.bf;
-                return {
-                    ...prev,
-                    nutrition: {
-                        ...(prev.nutrition || {}),
-                        [targetDate]: updatedDay
-                    }
-                };
-            });
-            if (!isCurrentSession(session)) return false;
-            const cleared = draft.clear(submitted);
-            if (bf !== null && !isNaN(bf)) {
-                await showAlert(`Misurazione salvata! BF: ${Number(bf).toFixed(1)}%`);
-            } else {
-                await showAlert(`Peso salvato correttamente!`);
+            const optional = [waist, neck, hip, chest, shoulders, biceps, thighs, calves];
+            if (optional.some(value => value !== '' && (!Number.isFinite(Number(value)) || Number(value) <= 0)) ||
+                (manualBf !== '' && (!Number.isFinite(Number(manualBf)) || Number(manualBf) < 0 || Number(manualBf) > 100))) {
+                await showAlert('Inserisci misure numeriche valide e una percentuale di massa grassa tra 0 e 100.');
+                return false;
             }
-            if (cleared && isCurrentSession(session)) setEditingDate(null);
-            return cleared;
-        } catch {
-            if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio della misurazione.");
-            return false;
-        }
+            const height = Number(profile.height);
+            let bf: number | null = null;
+
+            if (manualBf && !isNaN(Number(manualBf))) {
+                bf = Number(manualBf);
+            } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
+                if (Number.isFinite(height) && height > 0) {
+                    bf = Logic.calculateBodyFatByMethod(profile.gender === 'F' ? 'navy_female' : 'navy_male', {
+                        gender: profile.gender || 'M',
+                        height,
+                        weight: Number(weight),
+                        waist: Number(waist),
+                        neck: Number(neck),
+                        hip: hip ? Number(hip) : undefined
+                    });
+
+                    if (bf === null || !Number.isFinite(bf)) {
+                        await showAlert("Impossibile calcolare la massa grassa con i dati forniti. Verifica che vita > collo.");
+                        return;
+                    }
+                } else {
+                    await showAlert("Attenzione: imposta la tua altezza nelle Impostazioni per calcolare la massa grassa dai perimetri corporei.");
+                    return;
+                }
+            }
+
+            const targetDate = targetDateStr;
+            try {
+                if (!isCurrentSession(session)) throw new Error('Sessione cambiata');
+                await dispatchDomainOperation({
+                    type: 'nutrition-day.patch',
+                    date: targetDate,
+                    patch: {
+                        weight: Number(weight),
+                        waist: waist ? Number(waist) : undefined,
+                        neck: neck ? Number(neck) : undefined,
+                        hip: hip && profile.gender === 'F' ? Number(hip) : undefined,
+                        chest: chest ? Number(chest) : undefined,
+                        shoulders: shoulders ? Number(shoulders) : undefined,
+                        biceps: biceps ? Number(biceps) : undefined,
+                        thighs: thighs ? Number(thighs) : undefined,
+                        calves: calves ? Number(calves) : undefined,
+                        bf: bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
+                        measurementTime: measureTime,
+                    },
+                });
+                if (!isCurrentSession(session)) return false;
+                const cleared = draft.clear(submitted);
+                if (bf !== null && !isNaN(bf)) {
+                    await showAlert(`Misurazione salvata! BF: ${Number(bf).toFixed(1)}%`);
+                } else {
+                    await showAlert(`Peso salvato correttamente!`);
+                }
+                if (cleared && isCurrentSession(session)) setEditingDate(null);
+                return cleared;
+            } catch {
+                if (isCurrentSession(session)) await showAlert("Errore durante il salvataggio della misurazione.");
+                return false;
+            }
         } finally { saving.current = false; }
     };
 
@@ -202,4 +189,3 @@ export function useNutritionMeasurements(selectedDate?: string) {
         handleDeleteMeasurement
     };
 }
-

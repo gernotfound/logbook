@@ -18,9 +18,10 @@ export function useWorkoutSession() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const localWorkout = useAppStore(state => state.localWorkout);
     const setLocalWorkout = useAppStore(state => state.setLocalWorkout);
+    const setSyncedLocalWorkout = useAppStore(state => state.setSyncedLocalWorkout);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
 
@@ -28,6 +29,18 @@ export function useWorkoutSession() {
 
     const [selectedRoutine, setSelectedRoutine] = useState('');
     const endingRef = useRef(false);
+
+    const mutateActiveWorkout = useCallback((
+        workoutOrUpdater: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)
+    ) => {
+        const current = useAppStore.getState().localWorkout;
+        if (current?.isEditingHistory) {
+            setLocalWorkout(workoutOrUpdater);
+            return;
+        }
+        // Input-level mutations remain non-blocking; syncHealth/saveError surface failures.
+        void setSyncedLocalWorkout(workoutOrUpdater).catch(() => {});
+    }, [setLocalWorkout, setSyncedLocalWorkout]);
     
     // Rating states derivati direttamente da activeWorkout per prevenire perdita di dati
     const mood = activeWorkout?.moodRating !== undefined && activeWorkout.moodRating !== null ? activeWorkout.moodRating.toString() : '';
@@ -38,32 +51,32 @@ export function useWorkoutSession() {
     const pains = (activeWorkout?.pains && Array.isArray(activeWorkout.pains)) ? activeWorkout.pains : [];
 
     const setMood = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, moodRating: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, moodRating: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setPump = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, pumpRating: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, pumpRating: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setFatigue = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, fatigueRating: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, fatigueRating: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setWater = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, waterLiters: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, waterLiters: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setManualDuration = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, manualDurationStr: val } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, manualDurationStr: val } : null);
+    }, [mutateActiveWorkout]);
 
     const setPains = useCallback((newPains: string[]) => {
-        setLocalWorkout(prev => prev ? { ...prev, pains: newPains } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, pains: newPains } : null);
+    }, [mutateActiveWorkout]);
 
     const togglePain = useCallback((muscleId: string) => {
         if (!muscleId || typeof muscleId !== 'string') return;
-        setLocalWorkout(prev => {
+        mutateActiveWorkout(prev => {
             if (!prev) return null;
             const currentPains = Array.isArray(prev.pains) ? prev.pains : [];
             const nextPains = currentPains.includes(muscleId)
@@ -71,7 +84,7 @@ export function useWorkoutSession() {
                 : [...currentPains, muscleId];
             return { ...prev, pains: nextPains };
         });
-    }, [setLocalWorkout]);
+    }, [mutateActiveWorkout]);
 
     // Sub-hook per la manipolazione granulare delle serie ed esercizi
     const {
@@ -87,7 +100,7 @@ export function useWorkoutSession() {
         updateSpecialSet,
         removeSpecialSet,
         updateSessionNote
-    } = useWorkoutSetMutations({ setLocalWorkout, showConfirm });
+    } = useWorkoutSetMutations({ setLocalWorkout: mutateActiveWorkout, showConfirm });
 
     const startWorkout = useCallback(async (routineIdToStart?: string, cycleInfo?: { cycleId?: string; cycleName?: string }) => {
         const currentLocal = useAppStore.getState().localWorkout;
@@ -148,7 +161,7 @@ export function useWorkoutSession() {
             })
         };
 
-        setLocalWorkout(newActiveWorkout);
+        mutateActiveWorkout(newActiveWorkout);
 
         // Telemetry: Non-blocking tracking of workout start
         try {
@@ -161,7 +174,7 @@ export function useWorkoutSession() {
         } catch {
             // Fail-safe non-blocking telemetry
         }
-    }, [selectedRoutine, showAlert, setLocalWorkout]);
+    }, [selectedRoutine, showAlert, mutateActiveWorkout]);
 
     const startFreeWorkout = useCallback(async () => {
         const currentLocal = useAppStore.getState().localWorkout;
@@ -180,7 +193,7 @@ export function useWorkoutSession() {
             exercises: []
         };
 
-        setLocalWorkout(newActiveWorkout);
+        mutateActiveWorkout(newActiveWorkout);
 
         try {
             const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
@@ -192,7 +205,7 @@ export function useWorkoutSession() {
         } catch {
             // Fail-safe non-blocking telemetry
         }
-    }, [showAlert, setLocalWorkout]);
+    }, [showAlert, mutateActiveWorkout]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
         const currentLocal = useAppStore.getState().localWorkout;
@@ -274,28 +287,22 @@ export function useWorkoutSession() {
         delete updatedWorkout.originalHistoryId;
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const isMostRecent = prev.history && prev.history.length > 0 && prev.history[0].id === targetId;
-                const updatedHistory = (prev.history || []).map(w => (w.id === targetId ? updatedWorkout : w));
-                
-                let finalActivePains = prev.activePains || [];
-                if (isMostRecent) {
-                    finalActivePains = Logic.autoHealPains(
-                        prev.activePains || [],
-                        updatedWorkout.exercises || [],
-                        prev.library || [],
-                        updatedWorkout.pains || []
-                    );
-                }
-
-                return { 
-                    ...prev, 
-                    history: updatedHistory, 
-                    activeWorkout: null,
-                    ...(isMostRecent && { activePains: finalActivePains })
-                };
-            });
+            const currentData = useAppStore.getState().userData;
+            if (!currentData) throw new Error('Dati utente non caricati');
+            const isMostRecent = Boolean(currentData.history?.length && currentData.history[0].id === targetId);
+            const finalActivePains = isMostRecent
+                ? Logic.autoHealPains(
+                    currentData.activePains || [],
+                    updatedWorkout.exercises || [],
+                    currentData.library || [],
+                    updatedWorkout.pains || []
+                )
+                : (currentData.activePains || []);
+            await dispatchDomainOperation([
+                { type: 'history.upsert', workout: updatedWorkout },
+                { type: 'active-workout.set', workout: null },
+                { type: 'active-pains.set', pains: finalActivePains },
+            ]);
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             await showAlert("Modifiche salvate con successo!");
@@ -312,7 +319,7 @@ export function useWorkoutSession() {
                 return false;
             }
         }
-    }, [mood, pump, fatigue, water, manualDuration, saveUserData, setLocalWorkout, showAlert]);
+    }, [mood, pump, fatigue, water, manualDuration, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const cancelHistoryEdit = useCallback(async () => {
         if (await showConfirm("Annullare le modifiche a questo allenamento?")) {
@@ -359,22 +366,18 @@ export function useWorkoutSession() {
         delete finishedWorkout.originalHistoryId;
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const currentActivePains = prev.activePains || [];
-                const finalActivePains = Logic.autoHealPains(
-                    currentActivePains,
-                    finishedWorkout.exercises || [],
-                    prev.library || [],
-                    sessionPains
-                );
-
-                return {
-                    ...prev,
-                    history: [finishedWorkout, ...(prev.history || []).filter(item => item.id !== finishedWorkout.id)],
-                    activeWorkout: null,
-                    activePains: finalActivePains
-                };
+            const currentData = useAppStore.getState().userData;
+            if (!currentData) throw new Error('Dati utente non caricati');
+            const finalActivePains = Logic.autoHealPains(
+                currentData.activePains || [],
+                finishedWorkout.exercises || [],
+                currentData.library || [],
+                sessionPains
+            );
+            await dispatchDomainOperation({
+                type: 'workout.complete',
+                workout: finishedWorkout,
+                activePains: finalActivePains,
             });
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             setLocalWorkout(null);
@@ -400,15 +403,12 @@ export function useWorkoutSession() {
         } finally {
             endingRef.current = false;
         }
-    }, [showConfirm, saveUserData, setLocalWorkout, showAlert]);
+    }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const deleteWorkout = useCallback(async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                return { ...prev, activeWorkout: null };
-            });
+            await dispatchDomainOperation({ type: 'active-workout.set', workout: null });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
         } catch (err: any) {
@@ -420,19 +420,17 @@ export function useWorkoutSession() {
                 showAlert("Errore durante l'eliminazione della sessione.");
             }
         }
-    }, [showConfirm, saveUserData, setLocalWorkout, showAlert]);
+    }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const updateSetupNote = useCallback(async (exId: string, note: string) => {
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const updatedLibrary = (prev.library || []).map((l: any) => l.id === exId ? { ...l, notes: note } : l);
-                return { ...prev, library: updatedLibrary };
-            });
+            const exercise = useAppStore.getState().userData?.library?.find(item => item.id === exId);
+            if (!exercise) throw new Error('Esercizio non trovato');
+            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...exercise, notes: note } });
         } catch {
             showAlert("Errore durante il salvataggio della nota.");
         }
-    }, [saveUserData, showAlert]);
+    }, [dispatchDomainOperation, showAlert]);
 
     return {
         activeWorkout,

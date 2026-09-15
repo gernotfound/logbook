@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import type { LoggedMealItem } from '../types';
 
 const EMPTY_FOODS: any[] = [];
 const DEFAULT_NUTRITION = { kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
@@ -11,12 +12,12 @@ export function useNutritionMeals(dateStr?: string) {
     const storeNutrition = useAppStore(state => state.userData?.nutrition?.[targetDateStr]);
     const todayNutrition = storeNutrition || { ...DEFAULT_NUTRITION, date: targetDateStr };
     const customFoods = useAppStore(state => state.userData?.customFoods || EMPTY_FOODS);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
-    
+
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
-    
+
     const [showCustomModal, setShowCustomModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
     const [cfData, setCfData] = useState({
@@ -26,8 +27,7 @@ export function useNutritionMeals(dateStr?: string) {
 
     const planning = useAppStore(state => state.userData?.nutritionPlanning);
     const nutritionMap = useAppStore(state => state.userData?.nutrition);
-    
-    // Local override per non sporcare il database quando la giornata è vuota
+
     const [localDayOnMap, setLocalDayOnMap] = useState<Record<string, boolean>>({});
     const dbIsDayOn = todayNutrition.isDayOn;
     const isDayOn = localDayOnMap[targetDateStr] !== undefined ? localDayOnMap[targetDateStr] : (dbIsDayOn ?? true);
@@ -58,42 +58,29 @@ export function useNutritionMeals(dateStr?: string) {
         }
     }
 
+    const persistDayType = async (value: boolean) => {
+        await dispatchDomainOperation({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
+    };
+
     const toggleDayType = async () => {
         const newIsOn = !isDayOn;
         setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: newIsOn }));
-        
-        // Se ci sono già dati, salviamo anche sul cloud, altrimenti manteniamo solo locale
         if ((todayNutrition.meals && todayNutrition.meals.length > 0) || dbIsDayOn !== undefined || todayNutrition.weight) {
-            try {
-                await saveUserData((prev) => {
-                    if (!prev) return prev;
-                    const todayData = prev.nutrition?.[targetDateStr] || { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                    return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: { ...todayData, isDayOn: newIsOn } } };
-                });
-            } catch {
-                showAlert("Errore durante il salvataggio.");
-            }
+            try { await persistDayType(newIsOn); }
+            catch { showAlert("Errore durante il salvataggio."); }
         }
     };
 
     const setDayType = async (isOn: boolean) => {
         if (isDayOn === isOn) return;
         setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: isOn }));
-        
         if ((todayNutrition.meals && todayNutrition.meals.length > 0) || dbIsDayOn !== undefined || todayNutrition.weight) {
-            try {
-                await saveUserData((prev) => {
-                    if (!prev) return prev;
-                    const todayData = prev.nutrition?.[targetDateStr] || { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                    return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: { ...todayData, isDayOn: isOn } } };
-                });
-            } catch {
-                showAlert("Errore durante il salvataggio.");
-            }
+            try { await persistDayType(isOn); }
+            catch { showAlert("Errore durante il salvataggio."); }
         }
     };
 
-    const meals = (todayNutrition.meals || []) as any[];
+    const meals = (todayNutrition.meals || []) as LoggedMealItem[];
 
     const startEditCustomFood = (food: any) => {
         setEditingFoodId(food.id);
@@ -116,8 +103,18 @@ export function useNutritionMeals(dateStr?: string) {
         setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
     };
 
+    const saveMeal = async (meal: LoggedMealItem) => {
+        const currentIsDayOn = localDayOnMap[targetDateStr] !== undefined
+            ? localDayOnMap[targetDateStr]
+            : (todayNutrition.isDayOn ?? true);
+        await dispatchDomainOperation([
+            { type: 'nutrition-meal.upsert', date: targetDateStr, meal },
+            { type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: currentIsDayOn } },
+        ]);
+    };
+
     const handleQuickAdd = async (quickData: any) => {
-        const addedItem = {
+        const addedItem: LoggedMealItem = {
             id: Logic.generateId('food'),
             name: quickData.name,
             meal: 'quick',
@@ -131,18 +128,8 @@ export function useNutritionMeals(dateStr?: string) {
             time: new Date().getTime()
         };
 
-        try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const todayData = prev.nutrition?.[targetDateStr] || { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                const currentIsDayOn = localDayOnMap[targetDateStr] !== undefined ? localDayOnMap[targetDateStr] : (todayData.isDayOn ?? true);
-                const updatedMeals = [...(todayData.meals || []), addedItem];
-                const totals = recalcTotals(updatedMeals);
-                return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: { ...todayData, meals: updatedMeals, ...totals, isDayOn: currentIsDayOn } } };
-            });
-        } catch {
-            showAlert("Errore durante il salvataggio dell'alimento.");
-        }
+        try { await saveMeal(addedItem); }
+        catch { showAlert("Errore durante il salvataggio dell'alimento."); }
     };
 
     const handleSearch = (query: string) => {
@@ -155,32 +142,8 @@ export function useNutritionMeals(dateStr?: string) {
         }
     };
 
-
-    const recalcTotals = (mealsList: any[]) => {
-        let kcal = 0, carbs = 0, pro = 0, fat = 0;
-        mealsList.forEach((m: any) => {
-            const base = m.baseQty !== undefined && m.baseQty !== null && m.baseQty > 0
-                ? m.baseQty
-                : (m.unit === 'porzione' || m.meal === 'quick' ? 1 : 100);
-            const qty = m.quantity !== undefined && m.quantity !== null
-                ? m.quantity
-                : base;
-            const ratio = base > 0 ? qty / base : 1;
-            kcal += (parseFloat(m.kcal) || 0) * ratio;
-            carbs += (parseFloat(m.carbs) || 0) * ratio;
-            pro += (parseFloat(m.pro) || 0) * ratio;
-            fat += (parseFloat(m.fat) || 0) * ratio;
-        });
-        return {
-            kcal: Math.round(kcal),
-            carbs: Math.round(carbs * 10) / 10,
-            pro: Math.round(pro * 10) / 10,
-            fat: Math.round(fat * 10) / 10
-        };
-    };
-
     const addFood = async (food: any, mealType: string) => {
-        const addedItem = {
+        const addedItem: LoggedMealItem = {
             id: Logic.generateId('meal'),
             foodId: food.id,
             name: food.name,
@@ -196,14 +159,7 @@ export function useNutritionMeals(dateStr?: string) {
         };
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const todayData = prev.nutrition?.[targetDateStr] || { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                const currentIsDayOn = localDayOnMap[targetDateStr] !== undefined ? localDayOnMap[targetDateStr] : (todayData.isDayOn ?? true);
-                const updatedMeals = [...(todayData.meals || []), addedItem];
-                const totals = recalcTotals(updatedMeals);
-                return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: { ...todayData, meals: updatedMeals, ...totals, isDayOn: currentIsDayOn } } };
-            });
+            await saveMeal(addedItem);
             setSearchQuery('');
         } catch {
             showAlert("Errore durante il salvataggio dell'alimento.");
@@ -217,17 +173,16 @@ export function useNutritionMeals(dateStr?: string) {
 
     const updateMealItem = async (updatedItem: any) => {
         const targetId = updatedItem.itemId || updatedItem.time || updatedItem.id;
-
+        const current = meals.find((meal: any) => (meal.itemId || meal.time || meal.id) === targetId);
+        if (!current?.id) {
+            await showAlert("Alimento non trovato o privo di identificativo.");
+            return;
+        }
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const todayData = prev.nutrition?.[targetDateStr] || { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                const updatedMeals = (todayData.meals || []).map((m: any) => {
-                    const mId = m.itemId || m.time || m.id;
-                    return mId === targetId ? { ...m, ...updatedItem } : m;
-                });
-                const totals = recalcTotals(updatedMeals);
-                return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: { ...todayData, meals: updatedMeals, ...totals } } };
+            await dispatchDomainOperation({
+                type: 'nutrition-meal.upsert',
+                date: targetDateStr,
+                meal: { ...current, ...updatedItem, id: current.id },
             });
         } catch {
             showAlert("Errore durante l'aggiornamento dell'alimento.");
@@ -235,30 +190,25 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const removeFood = async (itemTime: number | string) => {
+        const current = meals.find((meal: any) => (meal.itemId || meal.time || meal.id) === itemTime);
+        if (!current?.id) {
+            await showAlert("Alimento non trovato o privo di identificativo.");
+            return;
+        }
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const todayData = prev.nutrition?.[targetDateStr] || { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                const updatedMeals = (todayData.meals || []).filter((m: any) => (m.itemId || m.time || m.id) !== itemTime);
-                const totals = recalcTotals(updatedMeals);
-                return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: { ...todayData, meals: updatedMeals, ...totals } } };
-            });
+            await dispatchDomainOperation({ type: 'nutrition-meal.delete', date: targetDateStr, mealId: current.id });
         } catch {
             showAlert("Errore durante la rimozione dell'alimento.");
         }
     };
 
     const handleDeleteItem = async (itemTime: number) => {
-        removeFood(itemTime);
+        await removeFood(itemTime);
     };
 
     const clearDay = async () => {
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const emptyDay = { date: targetDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] };
-                return { ...prev, nutrition: { ...(prev.nutrition || {}), [targetDateStr]: emptyDay } };
-            });
+            await dispatchDomainOperation({ type: 'nutrition-day.delete', date: targetDateStr });
         } catch {
             showAlert("Errore durante la pulizia della giornata.");
         }
@@ -270,7 +220,7 @@ export function useNutritionMeals(dateStr?: string) {
             baseQty: 100,
             servingWeight: cfData.unit === 'pezzo' ? cfData.pieceWeight : null
         };
-        
+
         const validation = Logic.validateCustomFood(foodData);
         if (!validation.isValid) {
             await showAlert("Attenzione: errori nei dati dell'alimento:\n" + Object.values(validation.errors).join('\n'));
@@ -278,17 +228,10 @@ export function useNutritionMeals(dateStr?: string) {
         }
 
         if (validation.cleanData) {
-            const cleanData = validation.cleanData;
             const currentEditingId = editingFoodId;
+            const id = currentEditingId ?? Logic.generateId('food');
             try {
-                await saveUserData((prev) => {
-                    if (!prev) return prev;
-                    const foods = (prev.customFoods || []) as any[];
-                    const updatedFoods = currentEditingId
-                        ? foods.map((f: any) => f.id === currentEditingId ? { ...cleanData, id: currentEditingId } : f)
-                        : [...foods, { ...cleanData, id: Logic.generateId('food') }];
-                    return { ...prev, customFoods: updatedFoods };
-                });
+                await dispatchDomainOperation({ type: 'food.upsert', food: { ...validation.cleanData, id } as any });
                 setShowCustomModal(false);
                 setEditingFoodId(null);
                 setCfData({ name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' });
