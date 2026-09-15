@@ -45,7 +45,9 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
     it('Mantieni Cloud: should remove the local conflict from memory and the durable repository without a domain dispatch', async () => {
         const expectedUid = 'test-user-id';
-        const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
+        const expectedConflictFingerprint = getNutritionConflictFingerprint(
+            useAppStore.getState().userData?.pendingConflicts?.nutritionPlanning
+        );
 
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'cloud',
@@ -67,7 +69,9 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
     it('Mantieni Dispositivo: should persist the local plan through a domain operation before clearing the conflict CAS', async () => {
         const expectedUid = 'test-user-id';
-        const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
+        const expectedConflictFingerprint = getNutritionConflictFingerprint(
+            useAppStore.getState().userData?.pendingConflicts?.nutritionPlanning
+        );
 
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'local',
@@ -119,7 +123,9 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         });
 
         const expectedUid = 'test-user-id';
-        const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
+        const expectedConflictFingerprint = getNutritionConflictFingerprint(
+            useAppStore.getState().userData?.pendingConflicts?.nutritionPlanning
+        );
 
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'local',
