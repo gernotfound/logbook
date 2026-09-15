@@ -69,9 +69,9 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
     it('Mantieni Dispositivo: should persist the local plan through a domain operation before clearing the conflict CAS', async () => {
         const expectedUid = 'test-user-id';
-        const expectedConflictFingerprint = getNutritionConflictFingerprint(
-            useAppStore.getState().userData?.pendingConflicts?.nutritionPlanning
-        );
+        const expectedLocalPlan = useAppStore.getState().userData?.pendingConflicts?.nutritionPlanning;
+        if (!expectedLocalPlan) throw new Error('Expected normalized pending nutrition conflict');
+        const expectedConflictFingerprint = getNutritionConflictFingerprint(expectedLocalPlan);
 
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'local',
@@ -87,7 +87,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         expect(state.dispatchDomainOperation).toHaveBeenCalledTimes(1);
         expect(state.dispatchDomainOperation).toHaveBeenCalledWith({
             type: 'nutrition-planning.replace',
-            value: { totalKcal: 3000, onDaysCount: 4 },
+            value: expectedLocalPlan,
             origin: 'user-edited',
         });
 
