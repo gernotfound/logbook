@@ -30,13 +30,16 @@
     "test:typecheck:m7": "tsc --noEmit -p tsconfig.m7-server.json",
     "test:m7": "vitest run tests/m7_account_deletion_job_store.test.ts tests/m7_account_deletion_runner.test.ts tests/m7_account_deletion_api.test.ts tests/m7_account_deletion_cron.test.ts",
     "test:pwa:m7": "node scripts/check-m7-native-vercel.mjs",
+    "test:m8": "vitest run tests/m8_domain_operations.test.ts && vitest run --config vitest.isolated.config.ts tests/isolated/m8_domain_commit.test.ts",
+    "test:domain-boundary:m8": "node scripts/check-m8-domain-boundary.mjs",
     "verify:m0": "npm run lint && npm run test && npm run test:isolated && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m2": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m4": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m5": "npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m6": "npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5",
-    "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7"
+    "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7",
+    "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
