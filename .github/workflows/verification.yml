@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   verification:
-    name: "M8 Exact-Head Verification"
+    name: "Canonical Verification"
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
