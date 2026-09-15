@@ -1,6 +1,6 @@
 # LogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-09-09 | Progetto: app PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-09-15 | Progetto: app PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
@@ -231,7 +231,8 @@ npm run test:e2e    # playwright test (se cambiano UI, flussi, testo o routing)
 ### Vercel Deployment
 
 - **VERIFY:** Deployment Checks è attivo nella dashboard Vercel.
-- **VERIFY:** I workflow GitHub Actions (Unit/E2E tests) esistono e riportano status.
+- **VERIFY:** Il workflow canonico `.github/workflows/verification.yml` esiste e il job stabile `Canonical Verification` riporta status su GitHub.
+- **MUST:** `Canonical Verification` è il contratto esterno stabile usato da Vercel Deployment Checks; non rinominarlo tra milestone senza aggiornare prima la configurazione Vercel.
 - **MUST:** Non assumere che ogni push sia bloccato dai check finché la configurazione non è stata controllata.
 - L'app gira sulla radice `/` del dominio (`base: '/'` in `vite.config.ts`).
 
