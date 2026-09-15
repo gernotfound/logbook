@@ -9,6 +9,12 @@ import { projectDocuments, applyRemoteDocuments, type DocumentData } from './doc
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
 import {
+    applyDomainOperations,
+    compileDomainOperations,
+    normalizeDomainOperationBatch,
+    type DomainOperationBatch,
+} from './domainOperations';
+import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
@@ -145,6 +151,71 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         };
     });
     return operations;
+}
+
+export interface DomainCommitResult {
+    operations: SemanticOperation[];
+    data: UserData;
+}
+
+export async function commitDomainOperations(
+    owner: string,
+    batch: DomainOperationBatch,
+    initialBase: UserData,
+): Promise<DomainCommitResult> {
+    owner = normalizeStorageOwner(owner);
+    const domainOperations = normalizeDomainOperationBatch(batch);
+    const fallback = structuredClone(parse(initialBase));
+    const catalog = await getCachedCatalog();
+    let operations: SemanticOperation[] = [];
+    let savedData = fallback;
+
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
+        const base = current?.data ?? fallback;
+        const desired = applyDomainOperations(base, domainOperations);
+        const actorId = current?.actorId ?? generateId('actor');
+        const nextSeq = (current?.actorSeq ?? 0) + 1;
+        const nextClock = { ...(current?.clock ?? {}) };
+        nextClock[actorId] = nextSeq;
+
+        operations = compileDomainOperations(base, desired, domainOperations, catalog, actorId, nextSeq, nextClock);
+        savedData = desired;
+
+        if (operations.length === 0) {
+            return {
+                ...(current ?? { completeMonths: [] }),
+                ...currentEnvelopeVersions(),
+                owner,
+                actorId,
+                actorSeq: current?.actorSeq ?? 0,
+                clock: current?.clock ?? {},
+                data: desired,
+                baseline: current?.baseline ?? fallback,
+                completeMonths: current?.completeMonths ?? [],
+                pending: current?.pending ?? [],
+                syncMetaByDocument: current?.syncMetaByDocument ?? {},
+                revision: current?.revision ?? 0,
+            };
+        }
+
+        return {
+            ...(current ?? { completeMonths: [] }),
+            ...currentEnvelopeVersions(),
+            owner,
+            actorId,
+            actorSeq: nextSeq,
+            clock: nextClock,
+            data: desired,
+            baseline: current?.baseline ?? fallback,
+            completeMonths: current?.completeMonths ?? [],
+            pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations],
+            syncMetaByDocument: current?.syncMetaByDocument ?? {},
+            revision: nextSeq,
+        };
+    });
+
+    return { operations, data: savedData };
 }
 
 export async function acknowledgeLocal(owner: string, _id: string, remote: UserData): Promise<void> {
