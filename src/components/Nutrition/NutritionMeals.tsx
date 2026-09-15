@@ -270,10 +270,10 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                         ? m.quantity
                         : base;
                     const ratio = base > 0 ? qty / base : 1;
-                    subKcal += (parseFloat(m.kcal) || 0) * ratio;
-                    subC += (parseFloat(m.carbs) || 0) * ratio;
-                    subP += (parseFloat(m.pro) || 0) * ratio;
-                    subF += (parseFloat(m.fat) || 0) * ratio;
+                    subKcal += (Number(m.kcal) || 0) * ratio;
+                    subC += (Number(m.carbs) || 0) * ratio;
+                    subP += (Number(m.pro) || 0) * ratio;
+                    subF += (Number(m.fat) || 0) * ratio;
                 });
 
                 return (
@@ -296,7 +296,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                                     ? item.quantity
                                     : base;
                                 const ratio = base > 0 ? qty / base : 1;
-                                const itemKcal = Math.round((parseFloat(item.kcal) || 0) * ratio);
+                                const itemKcal = Math.round((Number(item.kcal) || 0) * ratio);
 
                                 const isEditing = editingMealItem && (editingMealItem.time === item.time || editingMealItem.id === item.id);
 
@@ -334,7 +334,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                                             className="btn-icon text-danger" 
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                removeFood(item.itemId || item.time || item.id);
+                                                removeFood(item.time ?? item.id);
                                             }}
                                             aria-label="Rimuovi alimento"
                                         >

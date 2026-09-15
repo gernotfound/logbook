@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { Logic } from '../../lib/logic';
 import { WorkoutSessionSchema } from '../../lib/schema';
-import type { WorkoutSession, SessionExercise, SessionExerciseSet } from '../../types';
+import type { WorkoutSession, SessionExercise, SessionExerciseSet, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_LOCAL } from '../../constants';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
@@ -10,6 +10,7 @@ import type { AppState } from '../useAppStore';
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
     setLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => void;
+    setSyncedLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => Promise<SyncResult>;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -73,7 +74,7 @@ export const getInitialLocalWorkout = (): WorkoutSession | null => {
     }
 };
 
-export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = (set) => ({
+export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = (set, get) => ({
     // Inizializza il workout in bozza dal localStorage, se presente (con ID univoci garantiti)
     localWorkout: getInitialLocalWorkout(),
 
@@ -86,5 +87,27 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
             const nextUserData = state.userData ? { ...state.userData, activeWorkout: nextWorkout || null } : null;
             return { localWorkout: nextWorkout, userData: nextUserData };
         });
+    },
+
+    setSyncedLocalWorkout: async (workoutOrUpdater) => {
+        const currentWorkout = get().localWorkout;
+        const nextWorkout = typeof workoutOrUpdater === 'function'
+            ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(currentWorkout)
+            : workoutOrUpdater;
+
+        if (nextWorkout === currentWorkout) return { ok: true, status: 'synced' };
+        if (!get().userData) throw new Error('Dati utente non caricati');
+        if (nextWorkout) {
+            const id = String(nextWorkout.id ?? '').trim();
+            if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
+                throw new Error('Allenamento attivo: identificativo non valido');
+            }
+        }
+
+        // Persist the device-local draft first, but leave userData untouched until the
+        // DomainOperation reducer runs. This preserves the old snapshot as compiler base.
+        debouncedSaveLocalStorage(nextWorkout);
+        set({ localWorkout: nextWorkout });
+        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: nextWorkout });
     },
 });

@@ -13,10 +13,12 @@ import { isAccountDeletionPending } from '../lib/sync/accountGate';
 export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
     const storeProfile = useAppStore(state => state.userData?.profile);
+    // Snapshot save is retained here only for the bulk import boundary.
     const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
-    
+
     const [localProfile, setLocalProfile] = useState<any>(null);
     const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
 
@@ -31,7 +33,7 @@ export function useSettings() {
     const dob = profile.dob || '';
     const height = profile.height || '';
     const gender = profile.gender || '';
-    
+
     const setDob = (val: string) => setLocalProfile({ ...profile, dob: val });
     const setHeight = (val: string) => setLocalProfile({ ...profile, height: val });
     const setGender = (val: string) => setLocalProfile({ ...profile, gender: val });
@@ -49,7 +51,7 @@ export function useSettings() {
         if (e) e.preventDefault();
         const newProfile = { dob, height, gender };
         try {
-            await saveUserData(prev => ({ ...prev, profile: { ...prev?.profile, ...newProfile } } as any));
+            await dispatchDomainOperation({ type: 'profile.patch', patch: newProfile });
             setLocalProfile(null);
             await showAlert("Profilo aggiornato!");
         } catch {
@@ -131,7 +133,7 @@ export function useSettings() {
             importBusy.current = false;
             setImportingData(false);
             if (e.target) {
-                e.target.value = ''; // Reset input
+                e.target.value = '';
             }
         }
     };
@@ -163,11 +165,9 @@ export function useSettings() {
                 await reauthenticateWithPopup(user, provider);
                 assertCurrent();
             }
-            // Other providers and recent-auth age are checked again by the trusted backend.
             const outcome = await DB.deleteAccount();
             if (outcome.status === 'pending') await showAlert(outcome.message);
         } catch (error) {
-            // DB intentionally invalidates the sync epoch when deletion starts.
             if (captureSession().owner === session.owner) void showAlert(error instanceof Error ? error.message : 'Cancellazione non riuscita.');
         } finally {
             deleteBusy.current = false;
@@ -183,7 +183,7 @@ export function useSettings() {
         pendingAccountDeletion,
         importingData,
         exportingData, handleExportRecovery,
-        handleSaveProfile, 
+        handleSaveProfile,
         handleExportCSV, handleExportShare, handleExportBackup, handleImportFile,
         handleDeleteAccount
     };
