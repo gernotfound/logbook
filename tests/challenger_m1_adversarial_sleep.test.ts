@@ -318,12 +318,13 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
         it('blocks invalid inputs with alert without corrupting state', async () => {
             const showAlertSpy = useDialogStore.getState().showAlert as any;
             showAlertSpy.mockClear();
+            const dispatchDomainOperation = vi.fn();
 
             useAppStore.setState({
                 userData: {
                     nutrition: {}
                 } as any,
-                saveUserData: vi.fn()
+                dispatchDomainOperation
             });
 
             const { result } = renderHook(() => useSleepMeasurements());
@@ -355,25 +356,38 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             });
             expect(showAlertSpy).toHaveBeenCalledWith(expect.stringContaining('sonno profondo non è valido'));
 
-            // Store save function should not have been called
-            expect(useAppStore.getState().saveUserData).not.toHaveBeenCalled();
+            // Domain operation should not have been dispatched
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
         });
 
         it('successfully saves valid sleep data in canonical HH:MM format', async () => {
             const showAlertSpy = useDialogStore.getState().showAlert as any;
             showAlertSpy.mockClear();
 
-            let savedState: any = null;
+            const dispatchDomainOperation = vi.fn(async (operation: any) => {
+                if (operation.type !== 'nutrition-day.patch') throw new Error('Unexpected domain operation');
+                const current = useAppStore.getState().userData;
+                useAppStore.setState({
+                    userData: {
+                        ...current,
+                        nutrition: {
+                            ...(current?.nutrition || {}),
+                            [operation.date]: {
+                                ...(current?.nutrition?.[operation.date] || {}),
+                                ...operation.patch,
+                            },
+                        },
+                    } as any,
+                });
+                return { ok: true, status: 'synced' } as const;
+            });
+
             useAppStore.setState({
                 userData: {
                     nutrition: {}
                 } as any,
-                saveUserData: async (updater: any) => {
-                    savedState = updater(useAppStore.getState().userData);
-                    useAppStore.setState({ userData: savedState });
-                }
+                dispatchDomainOperation
             });
-
 
             const { result } = renderHook(() => useSleepMeasurements());
 
@@ -390,12 +404,25 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
             });
 
             const today = Logic.getLocalDateString();
-            expect(savedState).toBeDefined();
-            expect(savedState.nutrition[today].sleepHours).toBe('07:45');
-            expect(savedState.nutrition[today].sleepDeep).toBe('01:30');
-            expect(savedState.nutrition[today].sleepLight).toBe('04:15');
-            expect(savedState.nutrition[today].sleepRem).toBe('01:15');
-            expect(savedState.nutrition[today].sleepAwake).toBe('00:45');
+            expect(dispatchDomainOperation).toHaveBeenCalledTimes(1);
+            expect(dispatchDomainOperation).toHaveBeenCalledWith({
+                type: 'nutrition-day.patch',
+                date: today,
+                patch: {
+                    sleepHours: '07:45',
+                    sleepDeep: '01:30',
+                    sleepLight: '04:15',
+                    sleepRem: '01:15',
+                    sleepAwake: '00:45',
+                },
+            });
+
+            const savedDay = useAppStore.getState().userData?.nutrition?.[today];
+            expect(savedDay?.sleepHours).toBe('07:45');
+            expect(savedDay?.sleepDeep).toBe('01:30');
+            expect(savedDay?.sleepLight).toBe('04:15');
+            expect(savedDay?.sleepRem).toBe('01:15');
+            expect(savedDay?.sleepAwake).toBe('00:45');
         });
     });
 
@@ -440,4 +467,3 @@ describe('Empirical Challenger: Sleep Format HH:MM Adversarial Stress Test Suite
         });
     });
 });
-
