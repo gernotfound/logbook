@@ -41,7 +41,9 @@ describe('useTrainingHistory deleteWorkout', () => {
     });
 
     afterEach(() => {
-        useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
+        act(() => {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
+        });
     });
 
     it('removes the workout, clears pains introduced by it, and clears matching localWorkout', async () => {
