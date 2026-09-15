@@ -17,7 +17,7 @@ interface WorkoutReportModalProps {
 
 const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, history, library, onClose, fromEndWorkout }) => {
     
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
     const isFreeWorkoutJustEnded = fromEndWorkout && !workout.routineId;
@@ -80,13 +80,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 exercises: routineExercises
             };
             
-            await saveUserData(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    routines: [...(prev.routines || []), newRoutine]
-                };
-            });
+            await dispatchDomainOperation({ type: 'routine.upsert', routine: newRoutine });
             
             setIsSavingAsRoutine(false);
             showAlert("Scheda salvata con successo!");

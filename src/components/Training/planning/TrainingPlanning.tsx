@@ -17,7 +17,7 @@ export default function TrainingPlanning() {
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
 
@@ -59,22 +59,11 @@ export default function TrainingPlanning() {
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                const currentCycles = prev.trainingCycles || [];
-                const isUpdate = currentCycles.some(c => c.id === savedCycle.id);
-                const updatedCycles = isUpdate
-                    ? currentCycles.map(c => c.id === savedCycle.id ? savedCycle : c)
-                    : [...currentCycles, savedCycle];
-                const newActiveId = prev.activeCycleId !== undefined && prev.activeCycleId !== null
-                    ? prev.activeCycleId
-                    : (updatedCycles.length === 1 ? savedCycle.id : null);
-                return {
-                    ...prev,
-                    trainingCycles: updatedCycles,
-                    activeCycleId: newActiveId
-                };
-            });
+            const isUpdate = trainingCycles.some(cycle => cycle.id === savedCycle.id);
+            const updatedCount = isUpdate ? trainingCycles.length : trainingCycles.length + 1;
+            const operations: any[] = [{ type: 'training-cycle.upsert', cycle: savedCycle }];
+            if (activeCycleId === null && updatedCount === 1) operations.push({ type: 'active-cycle.set', id: savedCycle.id });
+            await dispatchDomainOperation(operations);
             setIsEditing(false);
             setEditingCycle(null);
         } catch (e) {
@@ -84,13 +73,7 @@ export default function TrainingPlanning() {
 
     const handleSetActiveCycle = async (cycleId: string) => {
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    activeCycleId: cycleId
-                };
-            });
+            await dispatchDomainOperation({ type: 'active-cycle.set', id: cycleId });
         } catch (e) {
             console.error("Errore attivazione ciclo:", e);
         }
@@ -100,13 +83,7 @@ export default function TrainingPlanning() {
         const confirmed = await showConfirm("Sei sicuro di voler disattivare il ciclo corrente?");
         if (!confirmed) return;
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    activeCycleId: null
-                };
-            });
+            await dispatchDomainOperation({ type: 'active-cycle.set', id: null });
         } catch (e) {
             console.error("Errore disattivazione ciclo:", e);
         }
@@ -122,14 +99,7 @@ export default function TrainingPlanning() {
         };
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                const currentCycles = prev.trainingCycles || [];
-                return {
-                    ...prev,
-                    trainingCycles: [...currentCycles, duplicated]
-                };
-            });
+            await dispatchDomainOperation({ type: 'training-cycle.upsert', cycle: duplicated });
         } catch (e) {
             console.error("Errore duplicazione ciclo:", e);
         }
@@ -137,19 +107,10 @@ export default function TrainingPlanning() {
 
     const handleDeleteCycle = async (cycle: TrainingCycle) => {
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                const currentCycles = prev.trainingCycles || [];
-                const updatedCycles = currentCycles.filter(c => c.id !== cycle.id);
-                const nextActiveId = prev.activeCycleId === cycle.id 
-                    ? (updatedCycles.length > 0 ? updatedCycles[0].id : null) 
-                    : prev.activeCycleId;
-                return {
-                    ...prev,
-                    trainingCycles: updatedCycles,
-                    activeCycleId: nextActiveId
-                };
-            });
+            const remaining = trainingCycles.filter(item => item.id !== cycle.id);
+            const operations: any[] = [{ type: 'training-cycle.delete', id: cycle.id }];
+            if (activeCycleId === cycle.id) operations.push({ type: 'active-cycle.set', id: remaining[0]?.id ?? null });
+            await dispatchDomainOperation(operations);
         } catch (e) {
             console.error("Errore eliminazione ciclo:", e);
         }
