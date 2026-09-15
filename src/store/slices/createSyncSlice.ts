@@ -6,10 +6,11 @@ import { saveUserDataToCache } from './createDataSlice';
 import { clearWorkoutTimer } from './createWorkoutSlice';
 import type { AppState } from '../useAppStore';
 import { captureSession, invalidateSession, isCurrentSession } from '../../lib/sync/session';
-import { readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
+import { commitDomainOperations, readLocal, revertRejectedConsent } from '../../lib/sync/localRepository';
 import { findPendingAccountDeletion, readAccountDeletionMarker } from '../../lib/sync/accountGate';
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
+import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync/domainOperations';
 
 export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
 export type CompatibilityStatus = 'ok' | 'update-required';
@@ -25,6 +26,7 @@ export interface SyncSlice {
     setUpdateRequired: (error: unknown) => void;
     saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null)) => Promise<SyncResult>;
     updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
+    dispatchDomainOperation: (operation: DomainOperationBatch) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
     flushPendingSyncs: () => Promise<void>;
     cancelPendingSyncs: () => void;
@@ -141,6 +143,13 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         try { await running; } finally { running = null; }
     };
 
+    const enqueue = (session: ReturnType<typeof captureSession>, generation: number, cache: Promise<CacheResult>) =>
+        new Promise<SyncResult>((resolve, reject) => {
+            pending.push({ session, generation, cache, resolve, reject });
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => { timer = null; void run(); }, DEBOUNCE_DELAY_GLOBAL);
+        });
+
     return {
         saveError: null,
         syncing: false,
@@ -167,14 +176,10 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const generation = get().syncGeneration + 1;
             const session = captureSession();
             set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
-            // Start the durable write before the cloud debounce. Observe rejection immediately.
+            // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
             const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
                 .then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
-            return new Promise<SyncResult>((resolve, reject) => {
-                pending.push({ session, generation, cache, resolve, reject });
-                if (timer) clearTimeout(timer);
-                timer = setTimeout(() => { timer = null; void run(); }, DEBOUNCE_DELAY_GLOBAL);
-            });
+            return enqueue(session, generation, cache);
         },
         updateUserData: updater => {
             if (get().compatibilityStatus === 'update-required') {
@@ -184,11 +189,29 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (!data) return Promise.reject(new Error('Dati utente non caricati'));
             return get().saveUserData(updater(data));
         },
+        dispatchDomainOperation: async operation => {
+            if (get().compatibilityStatus === 'update-required') {
+                return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
+            }
+            const userData = get().userData;
+            if (!userData) throw new Error('Dati utente non caricati');
+
+            const data = applyDomainOperations(userData, operation);
+            const generation = get().syncGeneration + 1;
+            const session = captureSession();
+            set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
+
+            // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
+            const cache = commitDomainOperations(session.owner, operation, userData)
+                .then<CacheResult>(() => ({ ok: true }))
+                .catch<CacheResult>(error => ({ ok: false, error }));
+            return enqueue(session, generation, cache);
+        },
         submitLegalConsent: async consent => {
             if (get().compatibilityStatus === 'update-required') throw new Error(get().compatibilityError ?? 'Aggiornamento richiesto.');
             const session = captureSession();
             const previous = get().userData?.legalConsent;
-            const result = get().updateUserData(data => ({ ...data, legalConsent: consent }));
+            const result = get().dispatchDomainOperation({ type: 'legal-consent.set', consent });
             // Keep the form mounted until the durable operation has an explicit outcome.
             set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: previous } : null }));
             const observed = result.then(value => ({ value }), error => ({ error }));
