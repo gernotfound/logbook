@@ -204,7 +204,7 @@ Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi s
 
 Per modifiche strutturali, dati, sync, sicurezza, dipendenze o multi-file:
 
-1. Preparare un piano (`implementation_plan.md` o piano dedicato quando il file canonico esistente documenta un altro intervento) con obiettivo, file coinvolti, rischi, test e rollback.
+1. Preparare un piano (`implementation_plan.md`) con obiettivo, file coinvolti, rischi, test e rollback.
 2. Richiedere approvazione esplicita dell'utente.
 3. Modificare il repository solo dopo approvazione.
 
