@@ -1,28 +1,49 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
+import { UserDataSchema } from '../src/lib/schema';
+import { applyDomainOperations, type DomainOperationBatch } from '../src/lib/sync/domainOperations';
+import * as repo from '../src/lib/sync/localRepository';
 import { getNutritionConflictFingerprint } from '../src/lib/utils/object';
+import type { UserData } from '../src/types';
+
+const OWNER = 'user:test-user-id';
+const originalDispatchDomainOperation = useAppStore.getState().dispatchDomainOperation;
+const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+
+const initialConflictData = () => parse({
+    profile: { name: 'Test', height: '170', gender: 'M' },
+    nutritionPlanning: { totalKcal: 2500, onDaysCount: 3 },
+    pendingConflicts: {
+        nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 }
+    }
+});
 
 describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
-        useAppStore.setState({
-            userData: {
-                profile: { name: 'Test' },
-                nutritionPlanning: { totalKcal: 2500, onDaysCount: 3 },
-                pendingConflicts: {
-                    nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 }
-                }
-            } as any
-        });
+        const initial = initialConflictData();
+        useAppStore.setState({ userData: initial, dispatchDomainOperation: originalDispatchDomainOperation });
+        await repo.initializeLocal(OWNER, initial);
 
-        vi.spyOn(useAppStore.getState(), 'updateUserData').mockImplementation(async (updater: any) => {
-            const nextData = updater(useAppStore.getState().userData);
-            useAppStore.setState({ userData: nextData });
+        vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation').mockImplementation(async (operation: DomainOperationBatch) => {
+            const current = useAppStore.getState().userData;
+            if (!current) throw new Error('Dati utente non caricati');
+
+            // Mirror the M8 runtime boundary: optimistic Zustand state plus durable
+            // DomainOperation commit in the same repository used by the conflict CAS.
+            const next = applyDomainOperations(current, operation);
+            useAppStore.setState({ userData: next });
+            await repo.commitDomainOperations(OWNER, operation, current);
             return { ok: true, status: 'synced' };
         });
     });
 
-    it('Mantieni Cloud: should just remove the local conflict and not call updateUserData', async () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        useAppStore.setState({ dispatchDomainOperation: originalDispatchDomainOperation });
+    });
+
+    it('Mantieni Cloud: should remove the local conflict from memory and the durable repository without a domain dispatch', async () => {
         const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
 
@@ -37,11 +58,14 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts).toBeUndefined();
         expect(state.userData?.nutritionPlanning?.totalKcal).toBe(2500); // Cloud plan retained
+        expect(state.dispatchDomainOperation).not.toHaveBeenCalled();
 
-        expect(state.updateUserData).not.toHaveBeenCalled();
+        const stored = await repo.readLocal(OWNER);
+        expect(stored?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
+        expect(stored?.data.nutritionPlanning?.totalKcal).toBe(2500);
     });
 
-    it('Mantieni Dispositivo: should overwrite cloud plan and call updateUserData', async () => {
+    it('Mantieni Dispositivo: should persist the local plan through a domain operation before clearing the conflict CAS', async () => {
         const expectedUid = 'test-user-id';
         const expectedConflictFingerprint = getNutritionConflictFingerprint({ totalKcal: 3000, onDaysCount: 4 });
 
@@ -56,8 +80,16 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts).toBeUndefined();
         expect(state.userData?.nutritionPlanning?.totalKcal).toBe(3000); // Local plan applied
+        expect(state.dispatchDomainOperation).toHaveBeenCalledTimes(1);
+        expect(state.dispatchDomainOperation).toHaveBeenCalledWith({
+            type: 'nutrition-planning.replace',
+            value: { totalKcal: 3000, onDaysCount: 4 },
+            origin: 'user-edited',
+        });
 
-        expect(state.updateUserData).toHaveBeenCalledTimes(1);
+        const stored = await repo.readLocal(OWNER);
+        expect(stored?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
+        expect(stored?.data.nutritionPlanning?.totalKcal).toBe(3000);
     });
 
     it('Stale Conflict Prevention: should fail if fingerprint differs', async () => {
@@ -75,14 +107,15 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts?.nutritionPlanning).toBeDefined(); // Conflict still there
-        expect(state.updateUserData).not.toHaveBeenCalled();
+        expect(state.dispatchDomainOperation).not.toHaveBeenCalled();
+
+        const stored = await repo.readLocal(OWNER);
+        expect(getNutritionConflictFingerprint(stored?.data.pendingConflicts?.nutritionPlanning)).not.toBe(expectedConflictFingerprint);
     });
 
-    it('Preserve Local Backup: should not remove conflict if updateUserData fails', async () => {
-        vi.spyOn(useAppStore.getState(), 'updateUserData').mockImplementation(async (updater: any) => {
-            const nextData = updater(useAppStore.getState().userData);
-            useAppStore.setState({ userData: nextData });
-            return { ok: false, status: 'failed', error: new Error('Network Error') };
+    it('Preserve Local Backup: should not remove conflict if domain dispatch fails', async () => {
+        vi.mocked(useAppStore.getState().dispatchDomainOperation).mockResolvedValue({
+            ok: false, status: 'failed', error: new Error('Network Error')
         });
 
         const expectedUid = 'test-user-id';
@@ -98,16 +131,18 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
         if (!result.ok) expect(result.status).toBe('failed');
 
         const state = useAppStore.getState();
-        // Conflict must be preserved
         expect(state.userData?.pendingConflicts?.nutritionPlanning?.totalKcal).toBe(3000);
+
+        const stored = await repo.readLocal(OWNER);
+        expect(stored?.data.pendingConflicts?.nutritionPlanning?.totalKcal).toBe(3000);
     });
 
     it('Resolved elsewhere: should return failed with conflict-resolved-elsewhere if pending is absent', async () => {
         useAppStore.setState({
-            userData: {
-                profile: { name: 'Test' },
+            userData: parse({
+                profile: { name: 'Test', height: '170', gender: 'M' },
                 nutritionPlanning: { totalKcal: 2500 }
-            } as any
+            })
         });
         const result = await useAppStore.getState().resolveNutritionConflict({
             resolution: 'cloud',
@@ -138,7 +173,7 @@ describe('PR 4: Nutrition Conflict Resolution (Store Unit Tests)', () => {
 
         const state = useAppStore.getState();
         expect(state.userData?.pendingConflicts?.nutritionPlanning).toBeDefined(); // No destructive mutation
-        expect(state.updateUserData).not.toHaveBeenCalled();
+        expect(state.dispatchDomainOperation).not.toHaveBeenCalled();
     });
 });
 
