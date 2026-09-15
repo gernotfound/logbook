@@ -129,4 +129,25 @@ describe('M8 Domain Operations V4', () => {
         ] });
         expect(() => applyDomainOperations(before, { type: 'supplement.reorder', ids: ['s1'] })).toThrow(/esattamente/i);
     });
+
+    it('treats undefined in a patch as property deletion and emits a semantic tombstone', () => {
+        const before = base({ profile: { height: '170', waist: '80' } });
+        const { after, operations, replay } = compile(before, { type: 'profile.patch', patch: { waist: undefined } });
+
+        expect(Object.hasOwn(after.profile ?? {}, 'waist')).toBe(false);
+        expect(operations).toContainEqual(expect.objectContaining({ path: ['profile', 'waist'], isDelete: true }));
+        expect(Object.hasOwn((replay.get('')?.profile as Record<string, unknown>) ?? {}, 'waist')).toBe(false);
+    });
+
+    it('keeps the exercise archive deterministically sorted after an upsert', () => {
+        const before = base({ library: [
+            { id: 'e-z', name: 'Zeta', setsCount: 3, sets: [] },
+        ] });
+        const { after } = compile(before, {
+            type: 'exercise.upsert',
+            exercise: { id: 'e-a', name: 'Alfa', setsCount: 3, sets: [] },
+        });
+
+        expect(after.library?.map(item => item.id)).toEqual(['e-a', 'e-z']);
+    });
 });

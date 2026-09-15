@@ -101,11 +101,12 @@ function assertUnique<T>(items: readonly T[], identity: (item: T) => string, lab
     }
 }
 
-function applyPatch<T extends Record<string, unknown>>(target: T, patch: Partial<T>): T {
-    const result = { ...target };
-    for (const [key, value] of Object.entries(patch)) {
-        if (value === undefined) delete result[key];
-        else result[key] = value;
+function applyPatch<T extends object>(target: T, patch: Partial<T>): T {
+    const result = { ...target } as T;
+    for (const key of Object.keys(patch) as Array<keyof T>) {
+        const value = patch[key];
+        if (value === undefined) Reflect.deleteProperty(result, key);
+        else Object.assign(result, { [key]: value });
     }
     return result;
 }
@@ -190,7 +191,7 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
         case 'nutrition-day.patch': {
             const date = requireDate(operation.date);
             const day = ensureNutritionDay(data, date);
-            const patched = applyPatch(day as unknown as Record<string, unknown>, operation.patch as Record<string, unknown>) as unknown as NutritionDay;
+            const patched = applyPatch<NutritionDay>(day, operation.patch);
             data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...patched, date } };
             break;
         }
