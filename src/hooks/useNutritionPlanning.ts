@@ -9,12 +9,11 @@ export function useNutritionPlanning() {
     const storePlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const nutritionMap = useAppStore(state => state.userData?.nutrition);
     const profile = useAppStore(state => state.userData?.profile);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
-    
+
     const [localPlanning, setLocalPlanning] = useState<NutritionPlanning | null>(null);
 
-    // Trova l'ultimo peso inserito nello storico nutrizione/misurazioni
     let latestWeight = 80;
     if (nutritionMap) {
         const dates = Object.keys(nutritionMap).sort((a, b) => b.localeCompare(a));
@@ -35,8 +34,6 @@ export function useNutritionPlanning() {
     };
 
     const basePlanning = localPlanning ?? storePlanning ?? defaultPlanning;
-    
-    // Assicura l'esistenza degli oggetti senza mutare lo stato dello store in-place
     const planning: NutritionPlanning = {
         ...basePlanning,
         avgMacros: basePlanning.avgMacros ? { ...defaultPlanning.avgMacros, ...basePlanning.avgMacros } : defaultPlanning.avgMacros,
@@ -46,10 +43,9 @@ export function useNutritionPlanning() {
         normocalorica: basePlanning.normocalorica ? { ...defaultPlanning.normocalorica, ...basePlanning.normocalorica } : defaultPlanning.normocalorica,
     };
 
-    // Calcolo matematico dei macro ON e OFF
     const N = planning.onDaysCount || 0;
     const F = 7 - N;
-    
+
     const avgC = planning.avgMacros!.carbsPerKg;
     const bC = planning.onBoost!.carbsPercent / 100;
     const offC = (N > 0 && N < 7) ? (7 * avgC) / (N * (1 + bC) + F) : avgC;
@@ -65,7 +61,6 @@ export function useNutritionPlanning() {
     const offF = (N > 0 && N < 7) ? (7 * avgF) / (N * (1 + bF) + F) : avgF;
     const onF = (N > 0 && N < 7) ? offF * (1 + bF) : avgF;
 
-    // Aggiorniamo dinamicamente onMacros e offMacros
     const currentOnMacros = { carbsPerKg: onC, proPerKg: onP, fatPerKg: onF };
     const currentOffMacros = { carbsPerKg: offC, proPerKg: offP, fatPerKg: offF };
 
@@ -73,8 +68,7 @@ export function useNutritionPlanning() {
     const onMacrosCalc = Logic.calculateMacrosFromKg(w, onC, onP, onF);
     const offMacrosCalc = Logic.calculateMacrosFromKg(w, offC, offP, offF);
     const avgMacrosCalc = Logic.calculateMacrosFromKg(w, avgC, avgP, avgF);
-    
-    // Calcolo automatico in tempo reale
+
     const tdeeUserData = useMemo(() => ({
         nutritionPlanning: storePlanning,
         nutrition: nutritionMap,
@@ -109,12 +103,11 @@ export function useNutritionPlanning() {
             fat: parseFloat(planning.normocalorica?.fat as any) || 0
         };
 
-        const updatedPlanning = {
+        const updatedPlanning: NutritionPlanning = {
             ...planning,
             weight: parseFloat(planning.weight as any) || latestWeight,
             onDaysCount: normalizeOnDaysCount(planning.onDaysCount),
             normocalorica: sanitizedNormo,
-            // Convert to numbers safely
             avgMacros: {
                 carbsPerKg: parseFloat(planning.avgMacros!.carbsPerKg as any) || 0,
                 proPerKg: parseFloat(planning.avgMacros!.proPerKg as any) || 0,
@@ -125,18 +118,17 @@ export function useNutritionPlanning() {
                 proPercent: parseFloat(planning.onBoost!.proPercent as any) || 0,
                 fatPercent: parseFloat(planning.onBoost!.fatPercent as any) || 0
             },
-            // Salva i target on/off in modo che HomeView e Pasti li leggano come sempre
             onMacros: currentOnMacros,
             offMacros: currentOffMacros
         };
-        
+
         setLocalPlanning(updatedPlanning);
         try {
-            await saveUserData(prev => ({
-                ...prev,
-                nutritionPlanningOrigin: 'user-edited',
-                nutritionPlanning: updatedPlanning
-            }));
+            await dispatchDomainOperation({
+                type: 'nutrition-planning.replace',
+                value: updatedPlanning,
+                origin: 'user-edited',
+            });
             await showAlert("Pianificazione salvata.");
         } catch {
             await showAlert("Errore durante il salvataggio della pianificazione.");
@@ -144,7 +136,7 @@ export function useNutritionPlanning() {
     };
 
     return {
-        planning, 
+        planning,
         onMacrosCalc, offMacrosCalc, avgMacrosCalc, tdeeCalc,
         currentOnMacros, currentOffMacros,
         handleUpdate, handleUpdateAvgMacros, handleUpdateOnBoost, handleSave
