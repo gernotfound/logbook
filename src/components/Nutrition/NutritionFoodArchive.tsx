@@ -16,7 +16,7 @@ interface NutritionFoodArchiveProps {
 
 export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiveProps) {
     const customFoods = useAppStore(state => state.userData?.customFoods || EMPTY_FOODS);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
 
@@ -81,14 +81,8 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         const cleanData = validation.cleanData;
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const existing = (prev.customFoods || []) as any[];
-                const updatedCustomFoods = currentEditingId
-                    ? existing.map(f => f.id === currentEditingId ? { ...cleanData, id: currentEditingId } : f)
-                    : [...existing, { ...cleanData, id: Logic.generateId('food') }];
-                return { ...prev, customFoods: updatedCustomFoods };
-            });
+            const id = currentEditingId ?? Logic.generateId('food');
+            await dispatchDomainOperation({ type: 'food.upsert', food: { ...cleanData, id } as any });
             setShowModal(false);
             setEditingFoodId(null);
             await showAlert(currentEditingId ? "Alimento aggiornato con successo!" : "Alimento creato e salvato!");
@@ -105,13 +99,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
             name: newName
         };
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    customFoods: [...(prev.customFoods || []), duplicated]
-                };
-            });
+            await dispatchDomainOperation({ type: 'food.upsert', food: duplicated });
             await showAlert('Alimento duplicato con successo!');
         } catch {
             await showAlert('Errore durante la duplicazione.');
@@ -123,11 +111,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         if (!confirmed) return;
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const existing = (prev.customFoods || []) as any[];
-                return { ...prev, customFoods: existing.filter(f => f.id !== food.id) };
-            });
+            await dispatchDomainOperation({ type: 'food.delete', id: food.id });
         } catch {
             await showAlert("Errore durante l'eliminazione dell'alimento.");
         }
@@ -152,42 +136,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
         };
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const todayNutrition = prev.nutrition?.[todayDateStr] || { 
-                    date: todayDateStr, kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [] 
-                };
-                const mealsList = (todayNutrition.meals || []) as any[];
-                const updatedMeals = [...mealsList, addedItem];
-
-                let totalKcal = 0, totalCarbs = 0, totalPro = 0, totalFat = 0;
-                updatedMeals.forEach((m: any) => {
-                    const qty = m.quantity ?? m.baseQty ?? 100;
-                    const base = m.baseQty ?? 100;
-                    const ratio = base > 0 ? qty / base : 1;
-                    totalKcal += (parseFloat(m.kcal) || 0) * ratio;
-                    totalCarbs += (parseFloat(m.carbs) || 0) * ratio;
-                    totalPro += (parseFloat(m.pro) || 0) * ratio;
-                    totalFat += (parseFloat(m.fat) || 0) * ratio;
-                });
-
-                const newNutritionDay = {
-                    ...todayNutrition,
-                    meals: updatedMeals,
-                    kcal: Math.round(totalKcal),
-                    carbs: Math.round(totalCarbs * 10) / 10,
-                    pro: Math.round(totalPro * 10) / 10,
-                    fat: Math.round(totalFat * 10) / 10
-                };
-
-                return {
-                    ...prev,
-                    nutrition: {
-                        ...(prev.nutrition || {}),
-                        [todayDateStr]: newNutritionDay
-                    }
-                };
-            });
+            await dispatchDomainOperation({ type: 'nutrition-meal.upsert', date: todayDateStr, meal: addedItem });
             await showAlert(`"${food.name}" aggiunto a ${mealType}!`);
         } catch {
             await showAlert("Errore durante l'aggiunta dell'alimento.");

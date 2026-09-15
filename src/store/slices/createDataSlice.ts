@@ -139,9 +139,11 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
         // Keep the recoverable alternative visible and durable until both saves succeed.
         if (resolution === 'local') {
             const localPlan = userData.pendingConflicts.nutritionPlanning;
-            const result = await state.updateUserData(prev => ({
-                ...prev, nutritionPlanning: localPlan, nutritionPlanningOrigin: 'user-edited',
-            }));
+            const result = await state.dispatchDomainOperation({
+                type: 'nutrition-planning.replace',
+                value: localPlan,
+                origin: 'user-edited',
+            });
             if (!result.ok || !isCurrentSession(session)) return result;
         }
         if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante la risoluzione');
