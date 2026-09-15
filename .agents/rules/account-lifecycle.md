@@ -1,6 +1,6 @@
 # Ciclo di vita account — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-12
+> Stato: normativo | Ultima verifica: 2026-09-14
 
 ## Backup JSON e importazione
 
@@ -28,28 +28,35 @@ La vecchia cache senza owner viene copiata senza sovrascrivere un archivio recov
 
 ## Eliminazione account
 
-`useSettings` chiede due conferme e riautentica Google prima di invocare `DB.deleteAccount`. Il DB verifica autonomamente il tempo di autenticazione nel token aggiornato prima di ogni operazione distruttiva; per altri provider può essere necessario ripetere il login.
+`useSettings` chiede due conferme e riautentica Google prima di invocare `DB.deleteAccount`. Il client controlla il token aggiornato prima di congelare i writer; il backend trusted verifica nuovamente ID token, revoca e `auth_time` recente e richiede App Check prima di accettare il job.
 
-Il flusso client:
+La cancellazione autenticata è coordinata dal backend Vercel nativo e dal job amministrativo `account_deletions/{uid}`. La collection dei job è server-only: i client non possono leggerla o mutarla. La presenza del job è anche una barriera Firestore globale: le Rules negano accesso al root utente e alle raccolte private da qualunque client autenticato con quell'UID, impedendo ad altri dispositivi o client vecchi di ricreare dati mentre il server cancella.
 
-1. Scrive un marker persistente di cancellazione per owner, invalida l'epoch e arresta nuovi writer.
-2. Attende la conclusione della replica precedente e delle scritture SDK pendenti. Un timeout interrompe la procedura prima del passo successivo; non cancella la Promise SDK.
-3. Legge dal server ed elimina pagine da 400 delle cinque raccolte private: storico, nutrizione, errori, eventi, anomalie.
-4. Rilegge sempre la prima pagina dopo un batch confermato: un'interruzione è riprendibile senza cursor perso.
-5. Elimina il profilo e verifica sul server assenza del root e di residui nelle cinque raccolte.
-6. Solo dopo queste verifiche chiama `deleteUser`; soltanto dopo il successo Auth purga il locale e resetta lo store.
+Flusso normativo:
 
-**MUST:** Nessun `permission-denied` viene interpretato come raccolta vuota o successo. Query, batch o verifica falliti mantengono account e copia locale e mostrano un errore di cancellazione incompleta. I batch già riusciti non sono reversibili; riprendere la cancellazione dalle impostazioni.
+1. Il client attende journal e scritture Firestore già pendenti, ottiene App Check, crea una receipt casuale da 256 bit e la salva nel marker locale persistente prima della richiesta. La receipt in chiaro resta sul dispositivo; il server salva solo SHA-256.
+2. `POST /api/account-deletion` verifica Firebase ID token, UID derivato esclusivamente dal token, revoca, autenticazione recente e App Check; crea o aggiorna idempotentemente il job e avvia subito il cleanup nella stessa invocazione.
+3. Il job revoca i refresh token e acquisisce un lease breve. POST, polling GET e cron possono tentare recovery, ma un solo worker per UID esegue operazioni distruttive alla volta; un lease scaduto è riprendibile.
+4. Il server elimina pagine da massimo 400 documenti dalle cinque raccolte private note: `history_months`, `nutrition_months`, `telemetry_errors`, `telemetry_events`, `telemetry_anomalies`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
+5. Se il budget della Function si avvicina al limite, il job salva uno stato riprendibile e termina senza dichiarare successo. `GET /api/account-deletion` può far avanzare un job incompleto durante il polling. Il cron giornaliero `/api/account-deletion-cron` è soltanto una rete di sicurezza per job rimasti incompleti.
+6. Dopo le raccolte note il server elimina `/users/{uid}`, verifica root e raccolte note vuote e fallisce chiuso se trova dati privati inattesi. Solo dopo la verifica elimina Firebase Auth; `auth/user-not-found` in un retry è successo idempotente.
+7. Il client elimina la copia locale e la receipt solo dopo stato server `complete`. Se Auth è già sparita, bootstrap e `AccountDeletionRecovery` preservano l'envelope dell'owner e interrogano lo stato tramite UID + receipt + App Check senza richiedere un ID token ancora valido.
 
-Il marker sospende replica e telemetria del client e rimane dopo gli errori. Al riavvio la sospensione resta attiva. I backup restano disponibili.
+**MUST:** Firebase Auth è sempre l'ultima risorsa cloud eliminata. Un errore di query, batch, verifica, backend o stato non autorizza il purge locale né una dichiarazione di successo.
 
-**Limite da risolvere prima del rilascio:** marker e verifiche client non rendono atomiche Firestore e Firebase Auth e non fermano altri dispositivi o vecchi client. Le verifiche residuali riducono il rischio, ma serve coordinamento server per una garanzia globale. La UI chiede di chiudere gli altri dispositivi. Non presentare questo flusso come una cancellazione server atomica.
+**MUST:** Un job `failed` deve comunicare che la cancellazione cloud può essere parziale. I batch già riusciti non sono reversibili. Errori transient/retryable possono essere ripresi idempotentemente; residui inattesi o violazioni fail-closed non devono entrare in un retry distruttivo automatico senza nuova valutazione.
+
+**MUST:** Il marker locale sospende replica e reset distruttivi finché la receipt non è riconciliata. Offline o con endpoint non raggiungibile, la copia locale resta conservata e il marker continua a bloccare i writer.
+
+**MUST:** Le credenziali Firebase Admin e `CRON_SECRET` sono server-only, mai `VITE_*`, mai committate. `service-account.json` resta ignorato e non deve entrare nel repository.
+
+La produzione usa Vercel Functions native sul piano Hobby con un budget interno inferiore al limite della Function. Il cron giornaliero è recovery, non il percorso primario. Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una migrazione a Firebase Blaze senza un nuovo piano esplicito.
 
 ## Logout e pulizia locale
 
 `secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi v2 degli altri utenti restano separati.
 
-`purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Il registro di avanzamento tiene aperte le questioni di purge della telemetria e di attribuzione degli archivi legacy.
+`purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Durante una cancellazione server la receipt viene esclusa dal purge ordinario e rimossa solo dopo il successo di tutte le altre operazioni locali.
 
 **MUST:** Non eliminare la cache del service worker durante logout: contiene gli asset necessari all'avvio offline.
 

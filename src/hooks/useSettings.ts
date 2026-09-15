@@ -163,8 +163,9 @@ export function useSettings() {
                 await reauthenticateWithPopup(user, provider);
                 assertCurrent();
             }
-            // Other providers are checked by DB before any destructive operation.
-            await DB.deleteAccount();
+            // Other providers and recent-auth age are checked again by the trusted backend.
+            const outcome = await DB.deleteAccount();
+            if (outcome.status === 'pending') await showAlert(outcome.message);
         } catch (error) {
             // DB intentionally invalidates the sync epoch when deletion starts.
             if (captureSession().owner === session.owner) void showAlert(error instanceof Error ? error.message : 'Cancellazione non riuscita.');

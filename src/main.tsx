@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { auth } from './lib/firebase'
 import { readLocal, preserveLegacyCache } from './lib/sync/localRepository'
 import { storageOwner } from './lib/sync/session'
+import { findPendingAccountDeletion, readAccountDeletionMarker } from './lib/sync/accountGate'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
+import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
@@ -51,7 +53,17 @@ export const initApp = async () => {
     try {
       if (!isGuest && typeof auth.authStateReady === 'function') await auth.authStateReady();
       await preserveLegacyCache();
-      cached = (await readLocal(storageOwner()))?.data;
+      // A pending deletion marker can outlive Firebase Auth. Reuse it only when there is
+      // no authenticated user, or when it belongs to the currently authenticated UID.
+      // A stale marker from account A must never select A's envelope while account B is active.
+      const currentUid = isGuest ? null : auth.currentUser?.uid ?? null;
+      const pendingDeletion = isGuest
+        ? null
+        : currentUid
+          ? readAccountDeletionMarker('user:' + currentUid)
+          : findPendingAccountDeletion();
+      const bootstrapOwner = isGuest ? 'guest' : (pendingDeletion?.owner ?? storageOwner());
+      cached = (await readLocal(bootstrapOwner))?.data;
       useAppStore.setState({ localWorkout: getInitialLocalWorkout() });
     } catch (err) {
       readError = err;
@@ -132,6 +144,7 @@ export const initApp = async () => {
       <StrictMode>
         <ErrorBoundary>
           <AuthProvider>
+            <AccountDeletionRecovery />
             <App />
           </AuthProvider>
         </ErrorBoundary>
