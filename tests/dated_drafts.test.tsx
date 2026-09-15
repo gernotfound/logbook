@@ -8,6 +8,7 @@ import { invalidateSession, storageOwner } from '../src/lib/sync/session';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
 import { UserDataSchema } from '../src/lib/schema';
+import type { SyncResult } from '../src/types';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 const data = (nutrition = {}) => UserDataSchema.parse({ profile: { height: '180', gender: 'M' }, nutrition }) as any;
 const day = (date: string, fields = {}) => ({ date, kcal: 0, pro: 0, carbs: 0, fat: 0, meals: [], ...fields });
@@ -73,34 +74,35 @@ it('keeps the in-memory draft and blocks strict reload when storage writes fail'
     expect(() => draftRegistry.flushAll({ strict: true })).toThrow('bozze');
 });
 it('rejects invalid and nonfinite numbers without saving or deleting the draft', async () => {
-    const save = vi.spyOn(useAppStore.getState(), 'saveUserData');
+    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     for (const value of ['Infinity', '75kg', '-1']) {
         act(() => hook.result.current.setWeight(value));
         await act(async () => { await hook.result.current.calculateAndSave(); });
         expect(hook.result.current.weight).toBe(value);
     }
-    expect(save).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
 });
 it('does not execute deletion after the account changes while confirmation is open', async () => {
     let answer!: (value: boolean) => void;
     vi.spyOn(useDialogStore.getState(), 'showConfirm').mockReturnValue(new Promise(resolve => { answer = resolve; }));
-    const save = vi.spyOn(useAppStore.getState(), 'saveUserData');
+    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation');
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     const task = hook.result.current.handleDeleteMeasurement('2026-09-11');
     act(() => { invalidateSession(); answer(true); });
     await act(async () => { await task; });
-    expect(save).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
 });
 it('retains a newer edit and rejects double submission while a save is pending', async () => {
     let finish!: () => void;
-    const save = vi.spyOn(useAppStore.getState(), 'saveUserData').mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    const pending = new Promise<SyncResult>(resolve => { finish = () => resolve({ ok: true, status: 'synced' }); });
+    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation').mockReturnValue(pending);
     const hook = renderHook(() => useNutritionMeasurements('2026-09-11'));
     act(() => hook.result.current.setWeight('75'));
     const first = hook.result.current.calculateAndSave();
     await hook.result.current.calculateAndSave();
     act(() => hook.result.current.setWeight('76'));
     await act(async () => { finish(); await first; });
-    expect(save).toHaveBeenCalledTimes(1); expect(hook.result.current.weight).toBe('76');
+    expect(dispatch).toHaveBeenCalledTimes(1); expect(hook.result.current.weight).toBe('76');
     expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toContain('76');
 });

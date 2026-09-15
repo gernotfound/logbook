@@ -62,6 +62,37 @@ describe('M8 domain commit durability', () => {
         expect(new Set(stored?.pending.map(op => op.path.join('/')))).toEqual(new Set(['profile/height', 'profile/dob']));
     });
 
+    it('preserves a pending nutrition conflict and fingerprint through an unrelated domain commit until explicit CAS clear', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal, clearNutritionConflict } = await import('../../src/lib/sync/localRepository');
+        const { getNutritionConflictFingerprint } = await import('../../src/lib/utils/object');
+        const initial = UserDataSchema.parse({
+            profile: { height: '170', gender: 'M' },
+            nutritionPlanning: { totalKcal: 2500, onDaysCount: 3 },
+            pendingConflicts: {
+                nutritionPlanning: { totalKcal: 3000, onDaysCount: 4 },
+            },
+        }) as unknown as UserData;
+        const fingerprint = getNutritionConflictFingerprint(initial.pendingConflicts?.nutritionPlanning);
+        await initializeLocal('user:a', initial);
+
+        const result = await commitDomainOperations('user:a', {
+            type: 'profile.patch',
+            patch: { height: '171' },
+        }, initial);
+        const committed = await readLocal('user:a');
+
+        expect(result.data.profile?.height).toBe('171');
+        expect(result.data.nutritionPlanning?.totalKcal).toBe(2500);
+        expect(getNutritionConflictFingerprint(committed?.data.pendingConflicts?.nutritionPlanning)).toBe(fingerprint);
+
+        await clearNutritionConflict('user:a', fingerprint, result.data);
+        const cleared = await readLocal('user:a');
+
+        expect(cleared?.data.profile?.height).toBe('171');
+        expect(cleared?.data.nutritionPlanning?.totalKcal).toBe(2500);
+        expect(cleared?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
+    });
+
     it('does not enqueue cloud journal operations for guest ownership', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();
