@@ -1,0 +1,44 @@
+name: M8 Active Workout Migration Temporary
+
+on:
+  push:
+    branches:
+      - feat/m8-domain-operations-v4
+    paths:
+      - .github/workflows/m8-active-workout-migration.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/m8-domain-operations-v4
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply active-workout Domain Operations migration
+        run: python3 scripts/m8-active-workout-migration.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck migrated code
+        run: npm run test:typecheck:m5
+      - name: Run targeted M8 tests
+        run: npm run test:m8 && npm run test:domain-boundary:m8
+      - name: Commit migration and remove temporary machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/m8-active-workout-migration.yml scripts/m8-active-workout-migration.py
+          git add src/store/slices/createWorkoutSlice.ts src/hooks/useWorkoutSession.ts src/lib/sync/domainOperations.ts tests/m8_domain_operations.test.ts scripts/check-m8-domain-boundary.mjs
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "M8: route active workout through Domain Operations"
+          git push origin HEAD:feat/m8-domain-operations-v4
