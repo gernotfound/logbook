@@ -44,7 +44,7 @@ const pushBlock = workflow.match(/^  push:\s*\n([\s\S]*?)(?=^  (?:pull_request|w
 if (!pushBlock) failures.push('push trigger: missing push block under on');
 else {
   requirePattern('push main target', pushBlock, /^      - main\s*$/m);
-  requirePattern('push M8 branch target', pushBlock, /^      - feat\/m8-domain-operations-v4\s*$/m);
+  forbidPattern('push obsolete M8 branch target', pushBlock, /^      - feat\/m8-domain-operations-v4\s*$/m);
   forbidPattern('push obsolete M7 branch target', pushBlock, /^      - feat\/m7-server-account-deletion\s*$/m);
 }
 
@@ -174,4 +174,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: main PRs, M8 branch pushes, exact-head guard, stable Canonical Verification job, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');
+console.log('M8 CI contract OK: main PRs and pushes, exact-head guard, stable Canonical Verification job, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');

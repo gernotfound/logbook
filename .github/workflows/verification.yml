@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - feat/m8-domain-operations-v4
   workflow_dispatch:
 
 permissions:

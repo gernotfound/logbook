@@ -47,8 +47,8 @@ Un solo workflow di orchestrazione non significa che unit, integration, isolated
 
 - MUST: il workflow parte per PR verso `main`.
 - MUST: il workflow parte sui push a `main`.
+- MUST NOT: branch milestone ritirati, incluso `feat/m8-domain-operations-v4`, restano trigger push del workflow canonico.
 - SHOULD: run obsolete della stessa PR/ref vengono cancellate tramite `concurrency`.
-- NOTE: l'HEAD corrente conserva ancora un trigger push per `feat/m8-domain-operations-v4`, branch non più presente nel repository. È scaffolding milestone inattivo; la sua rimozione richiede una modifica tecnica coordinata di `.github/workflows/verification.yml` e `scripts/check-ci-contract.mjs` e non viene dichiarata completata da questo refresh documentale.
 
 ## Domain Operations contract
 
