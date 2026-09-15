@@ -18,7 +18,7 @@ export function useWorkoutSession() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const localWorkout = useAppStore(state => state.localWorkout);
     const setLocalWorkout = useAppStore(state => state.setLocalWorkout);
     const showAlert = useDialogStore(state => state.showAlert);
@@ -274,28 +274,22 @@ export function useWorkoutSession() {
         delete updatedWorkout.originalHistoryId;
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const isMostRecent = prev.history && prev.history.length > 0 && prev.history[0].id === targetId;
-                const updatedHistory = (prev.history || []).map(w => (w.id === targetId ? updatedWorkout : w));
-                
-                let finalActivePains = prev.activePains || [];
-                if (isMostRecent) {
-                    finalActivePains = Logic.autoHealPains(
-                        prev.activePains || [],
-                        updatedWorkout.exercises || [],
-                        prev.library || [],
-                        updatedWorkout.pains || []
-                    );
-                }
-
-                return { 
-                    ...prev, 
-                    history: updatedHistory, 
-                    activeWorkout: null,
-                    ...(isMostRecent && { activePains: finalActivePains })
-                };
-            });
+            const currentData = useAppStore.getState().userData;
+            if (!currentData) throw new Error('Dati utente non caricati');
+            const isMostRecent = Boolean(currentData.history?.length && currentData.history[0].id === targetId);
+            const finalActivePains = isMostRecent
+                ? Logic.autoHealPains(
+                    currentData.activePains || [],
+                    updatedWorkout.exercises || [],
+                    currentData.library || [],
+                    updatedWorkout.pains || []
+                )
+                : (currentData.activePains || []);
+            await dispatchDomainOperation([
+                { type: 'history.upsert', workout: updatedWorkout },
+                { type: 'active-workout.set', workout: null },
+                { type: 'active-pains.set', pains: finalActivePains },
+            ]);
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
             await showAlert("Modifiche salvate con successo!");
@@ -312,7 +306,7 @@ export function useWorkoutSession() {
                 return false;
             }
         }
-    }, [mood, pump, fatigue, water, manualDuration, saveUserData, setLocalWorkout, showAlert]);
+    }, [mood, pump, fatigue, water, manualDuration, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const cancelHistoryEdit = useCallback(async () => {
         if (await showConfirm("Annullare le modifiche a questo allenamento?")) {
@@ -359,22 +353,18 @@ export function useWorkoutSession() {
         delete finishedWorkout.originalHistoryId;
 
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const currentActivePains = prev.activePains || [];
-                const finalActivePains = Logic.autoHealPains(
-                    currentActivePains,
-                    finishedWorkout.exercises || [],
-                    prev.library || [],
-                    sessionPains
-                );
-
-                return {
-                    ...prev,
-                    history: [finishedWorkout, ...(prev.history || []).filter(item => item.id !== finishedWorkout.id)],
-                    activeWorkout: null,
-                    activePains: finalActivePains
-                };
+            const currentData = useAppStore.getState().userData;
+            if (!currentData) throw new Error('Dati utente non caricati');
+            const finalActivePains = Logic.autoHealPains(
+                currentData.activePains || [],
+                finishedWorkout.exercises || [],
+                currentData.library || [],
+                sessionPains
+            );
+            await dispatchDomainOperation({
+                type: 'workout.complete',
+                workout: finishedWorkout,
+                activePains: finalActivePains,
             });
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             setLocalWorkout(null);
@@ -400,15 +390,12 @@ export function useWorkoutSession() {
         } finally {
             endingRef.current = false;
         }
-    }, [showConfirm, saveUserData, setLocalWorkout, showAlert]);
+    }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const deleteWorkout = useCallback(async () => {
         if (!(await showConfirm("Sei sicuro di voler eliminare questa sessione in corso? Non verrà salvata."))) return;
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                return { ...prev, activeWorkout: null };
-            });
+            await dispatchDomainOperation({ type: 'active-workout.set', workout: null });
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
         } catch (err: any) {
@@ -420,19 +407,17 @@ export function useWorkoutSession() {
                 showAlert("Errore durante l'eliminazione della sessione.");
             }
         }
-    }, [showConfirm, saveUserData, setLocalWorkout, showAlert]);
+    }, [showConfirm, dispatchDomainOperation, setLocalWorkout, showAlert]);
 
     const updateSetupNote = useCallback(async (exId: string, note: string) => {
         try {
-            await saveUserData((prev) => {
-                if (!prev) return prev;
-                const updatedLibrary = (prev.library || []).map((l: any) => l.id === exId ? { ...l, notes: note } : l);
-                return { ...prev, library: updatedLibrary };
-            });
+            const exercise = useAppStore.getState().userData?.library?.find(item => item.id === exId);
+            if (!exercise) throw new Error('Esercizio non trovato');
+            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...exercise, notes: note } });
         } catch {
             showAlert("Errore durante il salvataggio della nota.");
         }
-    }, [saveUserData, showAlert]);
+    }, [dispatchDomainOperation, showAlert]);
 
     return {
         activeWorkout,

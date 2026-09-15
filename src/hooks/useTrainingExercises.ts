@@ -55,7 +55,7 @@ const EMPTY_ARRAY: any[] = [];
 export function useTrainingExercises() {
     const library = useAppStore(state => state.userData?.library || EMPTY_ARRAY);
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ARRAY);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const [editingExId, setEditingExId] = useState<string | null>(null);
@@ -284,13 +284,7 @@ export function useTrainingExercises() {
             isDefault: false
         };
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    library: [...(prev.library || []), duplicated]
-                };
-            });
+            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: duplicated });
         } catch (err) {
             console.error(err);
         }
@@ -404,7 +398,11 @@ export function useTrainingExercises() {
         }
 
         try {
-            await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
+            const savedExercise = editingExId
+                ? updatedLibrary.find(ex => ex.id === editingExId)
+                : updatedLibrary.find(ex => !library.some(current => current.id === ex.id));
+            if (!savedExercise) throw new Error('Esercizio non trovato dopo la modifica');
+            await dispatchDomainOperation({ type: 'exercise.upsert', exercise: savedExercise });
             handleCancelEdit(); // Reset form
             return true;
         } catch {
@@ -429,7 +427,7 @@ export function useTrainingExercises() {
         if(await showConfirm(confirmMsg)) {
             const updatedLibrary = library.filter(ex => ex.id !== id);
             try {
-                await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
+                await dispatchDomainOperation({ type: 'exercise.delete', id });
                 if (editingExId === id) handleCancelEdit();
             } catch {
                 showAlert("Errore durante l'eliminazione dell'esercizio.");
@@ -448,7 +446,7 @@ export function useTrainingExercises() {
         if(await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
             const updatedLibrary = library.map(ex => ex.id === id ? { ...originalEx } : ex);
             try {
-                await saveUserData(prev => ({ ...prev, library: updatedLibrary } as any));
+                await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...originalEx, setsCount: originalEx.setsCount ?? 3, sets: [] } as any });
                 // Aggiorna anche il form corrente se è aperto
                 if (editingExId === id) {
                     handleEditClick(originalEx);
