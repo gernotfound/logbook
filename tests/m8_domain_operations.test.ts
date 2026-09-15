@@ -150,4 +150,26 @@ describe('M8 Domain Operations V4', () => {
 
         expect(after.library?.map(item => item.id)).toEqual(['e-a', 'e-z']);
     });
+
+    it('guards child mutations of the same active workout by session id', () => {
+        const active: WorkoutSession = { id: 'live-1', date: '2026-09-15', moodRating: 1, exercises: [] };
+        const before = base({ activeWorkout: active });
+        const next = { ...active, moodRating: 4 };
+        const { operations } = compile(before, { type: 'active-workout.set', workout: next });
+
+        expect(operations).toContainEqual(expect.objectContaining({
+            path: ['activeWorkout', 'moodRating'],
+            guard: { path: ['activeWorkout', 'id'], equals: 'live-1' },
+        }));
+        expect(operations.filter(op => op.path[0] === 'activeWorkout' && op.path.length > 1)
+            .every(op => op.guard?.equals === 'live-1')).toBe(true);
+    });
+
+    it('rejects a non-null active workout without stable identity', () => {
+        const before = base({ activeWorkout: null });
+        expect(() => applyDomainOperations(before, {
+            type: 'active-workout.set',
+            workout: { date: '2026-09-15', exercises: [] },
+        })).toThrow(/identificativo non valido/i);
+    });
 });

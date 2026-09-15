@@ -342,7 +342,7 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             data.history = deleteById(data.history, requireId(operation.id, 'Allenamento'), item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
             break;
         case 'active-workout.set':
-            if (operation.workout?.id !== undefined) requireId(operation.workout.id, 'Allenamento attivo');
+            if (operation.workout) requireId(operation.workout.id, 'Allenamento attivo');
             data.activeWorkout = operation.workout ? structuredClone(operation.workout) : null;
             break;
         case 'workout.complete': {
