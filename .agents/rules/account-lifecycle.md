@@ -1,27 +1,29 @@
 # Ciclo di vita account — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-14
+> Stato: normativo | Ultima verifica: 2026-09-15
 
 ## Backup JSON e importazione
 
-`src/lib/backup.ts` definisce il formato `logbook-backup`, versione 2: owner, data di esportazione, copertura, intero `UserData` e recovery locale. `src/lib/db/backupSnapshot.ts` legge il profilo e tutte le pagine dello storico/nutrizione dal server (50 documenti per pagina), poi confronta cloud, baseline e ultima revisione locale. Gli originali cloud e il registro locale sono inclusi nella sezione recovery.
+`src/lib/backup.ts` usa il formato corrente `logbook-backup` **Backup Schema 3**, con owner, data di esportazione, copertura, `UserData`, versioni data/sync e recovery locale. `src/lib/db/backupSnapshot.ts` legge il profilo e tutte le pagine dello storico/nutrizione dal server, poi confronta cloud, baseline e ultima revisione locale. Gli originali cloud e il registro locale sono inclusi nella sezione recovery prevista dal formato corrente.
 
-La lettura di tutti i documenti non costituisce uno snapshot atomico fra dispositivi. Il file registra inizio/fine lettura; con modifiche concorrenti può essere necessario ripetere l'esportazione. Un errore di rete non produce un backup dichiarato completo: l'utente può scegliere esplicitamente la copia del solo dispositivo, marcata `device`.
+La lettura di tutti i documenti non costituisce uno snapshot atomico fra dispositivi. Il file registra la propria copertura; con modifiche concorrenti può essere necessario ripetere l'esportazione. Un errore di rete non deve produrre un backup dichiarato completo se la copertura richiesta non è stata acquisita.
 
-Il formato v1 ordinario e quello d'emergenza sono importabili. I formati senza owner richiedono conferma esplicita della provenienza; i backup di un altro account sono rifiutati anche in modalità guest.
+La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento.
 
-- **Importa JSON:** unione incrementale senza mutazioni in place. Le collisioni mantengono il valore locale; i campi mancanti vengono aggiunti. I totali delle giornate con nuovi pasti sono ricalcolati.
-- **Ripristina:** sostituisce i campi presenti nel file rispetto allo stato locale disponibile. Un vecchio backup parziale non azzera i campi che omette. Il writer cloud conserva comunque dati remoti mai caricati; non equivale a cancellare e ricreare l'intero account.
-- Un'anteprima espone dimensione del risultato e collisioni. Cambi di sessione o modifiche mentre l'anteprima è aperta annullano il commit.
-- La conferma segue la persistenza locale; offline il messaggio indica che il cloud è ancora in attesa.
+Esiste una recovery escape hatch distinta: `handleExportRecovery()` può esportare il vecchio archivio locale non attribuito come JSON `logbook-backup` `version: 1`. Quel file preserva bytes/dati legacy per recupero manuale ed è intenzionalmente **non importabile** dall'importer V3 corrente. Non descriverlo come backup V1 supportato.
+
+- **Importa JSON:** opera soltanto su formati supportati e applica l'unione prevista senza mutazioni in place. Le collisioni e i ricalcoli seguono il contratto corrente dell'importer.
+- **Ripristina:** sostituisce i campi presenti nel formato supportato rispetto allo stato locale disponibile; non autorizza a trattare dati cloud mai caricati come assenti.
+- L'anteprima/commit deve invalidarsi se cambia sessione o baseline rilevante durante l'operazione.
+- La conferma segue la persistenza locale; offline non va presentata come conferma cloud.
 - I consensi importati non sostituiscono l'accettazione corrente.
-- La recovery conserva anche bozze e alternative ai conflitti. Il ripristino guidato di questi dati aggiuntivi è ancora da completare; il file originale va conservato.
+- La recovery conserva il file originale quando non esiste una migrazione supportata; non inventare una conversione V1/V2 per aggirare la baseline clean-cut.
 
 La vecchia cache senza owner viene copiata senza sovrascrivere un archivio recovery già presente. “Esporta archivio precedente” rende disponibile il file per recupero esplicito. Le vecchie credenziali/code REST non vengono riprodotte o esportate.
 
 ## Esportazione CSV
 
-`Exporter.exportToCSV` genera `allenamenti.csv` (serie, dropset, isometrie) e `misurazioni.csv` (peso, macro, circonferenze e sonno) dal dataset disponibile in memoria. Il CSV non ha la completezza del nuovo percorso JSON cloud paginato.
+`Exporter.exportToCSV` genera `allenamenti.csv` (serie, dropset, isometrie) e `misurazioni.csv` (peso, macro, circonferenze e sonno) dal dataset disponibile in memoria. Il CSV non ha la completezza del percorso JSON cloud paginato.
 
 - **MUST:** I CSV includono il BOM UTF-8 per compatibilità Excel. Markdown, sorgenti e JSON restano UTF-8 senza BOM.
 - **MUST:** Nuove metriche da esportare devono essere mappate esplicitamente.
@@ -37,7 +39,7 @@ Flusso normativo:
 1. Il client attende journal e scritture Firestore già pendenti, ottiene App Check, crea una receipt casuale da 256 bit e la salva nel marker locale persistente prima della richiesta. La receipt in chiaro resta sul dispositivo; il server salva solo SHA-256.
 2. `POST /api/account-deletion` verifica Firebase ID token, UID derivato esclusivamente dal token, revoca, autenticazione recente e App Check; crea o aggiorna idempotentemente il job e avvia subito il cleanup nella stessa invocazione.
 3. Il job revoca i refresh token e acquisisce un lease breve. POST, polling GET e cron possono tentare recovery, ma un solo worker per UID esegue operazioni distruttive alla volta; un lease scaduto è riprendibile.
-4. Il server elimina pagine da massimo 400 documenti dalle cinque raccolte private note: `history_months`, `nutrition_months`, `telemetry_errors`, `telemetry_events`, `telemetry_anomalies`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
+4. Il server elimina pagine da massimo 400 documenti dalle cinque raccolte private correnti: `history_months`, `nutrition_months`, `telemetry_errors`, `telemetry_events`, `telemetry_anomalies`. Dopo ogni batch il retry riparte dalla prima pagina; il cursor è telemetria/progresso e non è una dipendenza di correttezza.
 5. Se il budget della Function si avvicina al limite, il job salva uno stato riprendibile e termina senza dichiarare successo. `GET /api/account-deletion` può far avanzare un job incompleto durante il polling. Il cron giornaliero `/api/account-deletion-cron` è soltanto una rete di sicurezza per job rimasti incompleti.
 6. Dopo le raccolte note il server elimina `/users/{uid}`, verifica root e raccolte note vuote e fallisce chiuso se trova dati privati inattesi. Solo dopo la verifica elimina Firebase Auth; `auth/user-not-found` in un retry è successo idempotente.
 7. Il client elimina la copia locale e la receipt solo dopo stato server `complete`. Se Auth è già sparita, bootstrap e `AccountDeletionRecovery` preservano l'envelope dell'owner e interrogano lo stato tramite UID + receipt + App Check senza richiedere un ID token ancora valido.
@@ -50,11 +52,11 @@ Flusso normativo:
 
 **MUST:** Le credenziali Firebase Admin e `CRON_SECRET` sono server-only, mai `VITE_*`, mai committate. `service-account.json` resta ignorato e non deve entrare nel repository.
 
-La produzione usa Vercel Functions native sul piano Hobby con un budget interno inferiore al limite della Function. Il cron giornaliero è recovery, non il percorso primario. Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una migrazione a Firebase Blaze senza un nuovo piano esplicito.
+Le Functions native account deletion hanno `maxDuration = 300`; il runner usa un budget interno inferiore. Il cron giornaliero è recovery, non il percorso primario. **VERIFY:** piano Vercel effettivo, limiti commerciali e configurazione runtime sono esterni al repository e non vanno assunti senza verifica. Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una migrazione di piattaforma/backend senza un nuovo piano esplicito.
 
 ## Logout e pulizia locale
 
-`secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi v2 degli altri utenti restano separati.
+`secureLogOut` propaga un errore di `auth.signOut` e conserva il locale. Dopo sign-out riuscito, purga l'archivio dell'owner catturato prima del logout. Gli archivi owner-scoped degli altri utenti restano separati.
 
 `purgeAllLocalUserData` tenta ogni rimozione e rigetta con un errore aggregato se alcune falliscono: la UI comunica la pulizia incompleta. Durante una cancellazione server la receipt viene esclusa dal purge ordinario e rimossa solo dopo il successo di tutte le altre operazioni locali.
 
