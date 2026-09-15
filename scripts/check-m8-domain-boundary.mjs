@@ -34,6 +34,17 @@ for (const [file, expected] of allowedSnapshotSelectors) {
   if (expected < 1) violations.push(`${file}: invalid allowlist count`);
 }
 
+const workoutSession = fs.readFileSync('src/hooks/useWorkoutSession.ts', 'utf8');
+const workoutSlice = fs.readFileSync('src/store/slices/createWorkoutSlice.ts', 'utf8');
+for (const [label, source, pattern] of [
+  ['active workout synced selector', workoutSession, /state => state\.setSyncedLocalWorkout/],
+  ['active workout mutation adapter', workoutSession, /setLocalWorkout:\s*mutateActiveWorkout/],
+  ['active workout start path', workoutSession, /mutateActiveWorkout\(newActiveWorkout\)/],
+  ['active workout domain dispatch', workoutSlice, /dispatchDomainOperation\(\{ type: 'active-workout\.set', workout: nextWorkout \}\)/],
+]) {
+  if (!pattern.test(source)) violations.push(`${label}: missing M8 active-workout DomainOperation boundary`);
+}
+
 if (violations.length) {
   console.error('M8 Domain Operation boundary violations:');
   for (const violation of violations) console.error(`- ${violation}`);

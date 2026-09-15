@@ -21,6 +21,7 @@ export function useWorkoutSession() {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const localWorkout = useAppStore(state => state.localWorkout);
     const setLocalWorkout = useAppStore(state => state.setLocalWorkout);
+    const setSyncedLocalWorkout = useAppStore(state => state.setSyncedLocalWorkout);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
 
@@ -28,6 +29,18 @@ export function useWorkoutSession() {
 
     const [selectedRoutine, setSelectedRoutine] = useState('');
     const endingRef = useRef(false);
+
+    const mutateActiveWorkout = useCallback((
+        workoutOrUpdater: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)
+    ) => {
+        const current = useAppStore.getState().localWorkout;
+        if (current?.isEditingHistory) {
+            setLocalWorkout(workoutOrUpdater);
+            return;
+        }
+        // Input-level mutations remain non-blocking; syncHealth/saveError surface failures.
+        void setSyncedLocalWorkout(workoutOrUpdater).catch(() => {});
+    }, [setLocalWorkout, setSyncedLocalWorkout]);
     
     // Rating states derivati direttamente da activeWorkout per prevenire perdita di dati
     const mood = activeWorkout?.moodRating !== undefined && activeWorkout.moodRating !== null ? activeWorkout.moodRating.toString() : '';
@@ -38,32 +51,32 @@ export function useWorkoutSession() {
     const pains = (activeWorkout?.pains && Array.isArray(activeWorkout.pains)) ? activeWorkout.pains : [];
 
     const setMood = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, moodRating: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, moodRating: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setPump = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, pumpRating: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, pumpRating: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setFatigue = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, fatigueRating: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, fatigueRating: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setWater = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, waterLiters: val as any } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, waterLiters: val as any } : null);
+    }, [mutateActiveWorkout]);
 
     const setManualDuration = useCallback((val: string) => {
-        setLocalWorkout(prev => prev ? { ...prev, manualDurationStr: val } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, manualDurationStr: val } : null);
+    }, [mutateActiveWorkout]);
 
     const setPains = useCallback((newPains: string[]) => {
-        setLocalWorkout(prev => prev ? { ...prev, pains: newPains } : null);
-    }, [setLocalWorkout]);
+        mutateActiveWorkout(prev => prev ? { ...prev, pains: newPains } : null);
+    }, [mutateActiveWorkout]);
 
     const togglePain = useCallback((muscleId: string) => {
         if (!muscleId || typeof muscleId !== 'string') return;
-        setLocalWorkout(prev => {
+        mutateActiveWorkout(prev => {
             if (!prev) return null;
             const currentPains = Array.isArray(prev.pains) ? prev.pains : [];
             const nextPains = currentPains.includes(muscleId)
@@ -71,7 +84,7 @@ export function useWorkoutSession() {
                 : [...currentPains, muscleId];
             return { ...prev, pains: nextPains };
         });
-    }, [setLocalWorkout]);
+    }, [mutateActiveWorkout]);
 
     // Sub-hook per la manipolazione granulare delle serie ed esercizi
     const {
@@ -87,7 +100,7 @@ export function useWorkoutSession() {
         updateSpecialSet,
         removeSpecialSet,
         updateSessionNote
-    } = useWorkoutSetMutations({ setLocalWorkout, showConfirm });
+    } = useWorkoutSetMutations({ setLocalWorkout: mutateActiveWorkout, showConfirm });
 
     const startWorkout = useCallback(async (routineIdToStart?: string, cycleInfo?: { cycleId?: string; cycleName?: string }) => {
         const currentLocal = useAppStore.getState().localWorkout;
@@ -148,7 +161,7 @@ export function useWorkoutSession() {
             })
         };
 
-        setLocalWorkout(newActiveWorkout);
+        mutateActiveWorkout(newActiveWorkout);
 
         // Telemetry: Non-blocking tracking of workout start
         try {
@@ -161,7 +174,7 @@ export function useWorkoutSession() {
         } catch {
             // Fail-safe non-blocking telemetry
         }
-    }, [selectedRoutine, showAlert, setLocalWorkout]);
+    }, [selectedRoutine, showAlert, mutateActiveWorkout]);
 
     const startFreeWorkout = useCallback(async () => {
         const currentLocal = useAppStore.getState().localWorkout;
@@ -180,7 +193,7 @@ export function useWorkoutSession() {
             exercises: []
         };
 
-        setLocalWorkout(newActiveWorkout);
+        mutateActiveWorkout(newActiveWorkout);
 
         try {
             const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
@@ -192,7 +205,7 @@ export function useWorkoutSession() {
         } catch {
             // Fail-safe non-blocking telemetry
         }
-    }, [showAlert, setLocalWorkout]);
+    }, [showAlert, mutateActiveWorkout]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
         const currentLocal = useAppStore.getState().localWorkout;
