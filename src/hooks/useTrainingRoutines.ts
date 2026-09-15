@@ -10,7 +10,7 @@ const EMPTY_LIBRARY: any[] = [];
 export function useTrainingRoutines() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const [routineName, setRoutineName] = useState('');
@@ -18,7 +18,6 @@ export function useTrainingRoutines() {
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
 
-    // Restore draft on mount
     useEffect(() => {
         const draft = localStorage.getItem('draft_routine');
         if (draft) {
@@ -32,7 +31,6 @@ export function useTrainingRoutines() {
         }
     }, []);
 
-    // Salva la bozza solo se non stiamo modificando una scheda esistente
     useEffect(() => {
         if (!editingRoutineId) {
             if (routineName.trim() !== '' || routineExercises.length > 0) {
@@ -55,13 +53,7 @@ export function useTrainingRoutines() {
             name: newName
         };
         try {
-            await saveUserData((prev) => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    routines: [...(prev.routines || []), duplicated]
-                };
-            });
+            await dispatchDomainOperation({ type: 'routine.upsert', routine: duplicated });
         } catch (err) {
             console.error(err);
         }
@@ -98,20 +90,27 @@ export function useTrainingRoutines() {
             });
 
             if (editingRoutineId) {
-                const updatedRoutines = routines.map(r => 
-                    r.id === editingRoutineId ? { ...r, name: routineName.trim(), exercises: sanitizedExercises } : r
-                );
-                await saveUserData(prev => ({ ...prev, routines: updatedRoutines } as any));
+                const existing = routines.find(r => r.id === editingRoutineId);
+                if (!existing) throw new Error('Routine non trovata');
+                await dispatchDomainOperation({
+                    type: 'routine.upsert',
+                    routine: { ...existing, name: routineName.trim(), exercises: sanitizedExercises },
+                });
             } else {
-                const newRoutine = {
+                const newRoutine: WorkoutRoutine = {
                     id: Logic.generateId('rtn'),
                     name: routineName.trim(),
                     exercises: sanitizedExercises
                 };
-                const updatedRoutines = [...routines, newRoutine].sort((a,b) => a.name.localeCompare(b.name));
-                await saveUserData(prev => ({ ...prev, routines: updatedRoutines } as any));
+                const orderIds = [...routines, newRoutine]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(routine => routine.id);
+                await dispatchDomainOperation([
+                    { type: 'routine.upsert', routine: newRoutine },
+                    { type: 'routine.reorder', ids: orderIds },
+                ]);
             }
-            
+
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
@@ -126,12 +125,9 @@ export function useTrainingRoutines() {
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation();
         if (!(await showConfirm("Sei sicuro di voler eliminare questa scheda?"))) return;
-        const updatedRoutines = routines.filter(r => r.id !== id);
         try {
-            await saveUserData(prev => ({ ...prev, routines: updatedRoutines } as any));
-            if (editingRoutineId === id) {
-                handleCancelEdit();
-            }
+            await dispatchDomainOperation({ type: 'routine.delete', id });
+            if (editingRoutineId === id) handleCancelEdit();
         } catch {
             showAlert("Errore durante l'eliminazione della scheda.");
         }
