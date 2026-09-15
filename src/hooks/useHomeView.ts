@@ -108,7 +108,7 @@ export function useHomeView(): HomeViewState {
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const activePains = useAppStore(state => state.userData?.activePains || EMPTY_PAINS);
-    const saveUserData = useAppStore(state => state.saveUserData);
+    const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const profile = useAppStore(state => state.userData?.profile);
 
@@ -130,18 +130,11 @@ export function useHomeView(): HomeViewState {
 
     const toggleActivePain = useCallback((muscleId: string) => {
         if (!muscleId || typeof muscleId !== 'string') return;
-        saveUserData(prev => {
-            if (!prev) return prev;
-            const currentPains = Array.isArray(prev.activePains) ? prev.activePains : [];
-            const nextPains = currentPains.includes(muscleId)
-                ? currentPains.filter(p => p !== muscleId)
-                : [...currentPains, muscleId];
-            return {
-                ...prev,
-                activePains: nextPains
-            };
-        });
-    }, [saveUserData]);
+        const nextPains = activePains.includes(muscleId)
+            ? activePains.filter(p => p !== muscleId)
+            : [...activePains, muscleId];
+        void dispatchDomainOperation({ type: 'active-pains.set', pains: nextPains });
+    }, [activePains, dispatchDomainOperation]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
     const streak = useMemo(() => calcStreak(history), [history]);
