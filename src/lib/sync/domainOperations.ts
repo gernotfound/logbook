@@ -101,6 +101,15 @@ function assertUnique<T>(items: readonly T[], identity: (item: T) => string, lab
     }
 }
 
+function applyPatch<T extends Record<string, unknown>>(target: T, patch: Partial<T>): T {
+    const result = { ...target };
+    for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) delete result[key];
+        else result[key] = value;
+    }
+    return result;
+}
+
 function upsertById<T>(items: readonly T[] | undefined, item: T, identity: (value: T) => string, label: string): T[] {
     const current = [...(items ?? [])];
     assertUnique(current, identity, label);
@@ -172,7 +181,7 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
 
     switch (operation.type) {
         case 'profile.patch':
-            data.profile = { ...(data.profile ?? {}), ...operation.patch };
+            data.profile = applyPatch(data.profile ?? {}, operation.patch);
             break;
         case 'nutrition-planning.replace':
             data.nutritionPlanning = structuredClone(operation.value);
@@ -181,7 +190,8 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
         case 'nutrition-day.patch': {
             const date = requireDate(operation.date);
             const day = ensureNutritionDay(data, date);
-            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, ...operation.patch, date } };
+            const patched = applyPatch(day as unknown as Record<string, unknown>, operation.patch as Record<string, unknown>) as unknown as NutritionDay;
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...patched, date } };
             break;
         }
         case 'nutrition-day.delete': {
@@ -349,7 +359,8 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             break;
         case 'exercise.upsert': {
             const exercise = { ...operation.exercise, id: requireId(operation.exercise.id, 'Esercizio') };
-            data.library = upsertById(data.library, exercise, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi');
+            data.library = upsertById(data.library, exercise, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi')
+                .sort((a, b) => a.name.localeCompare(b.name, 'it'));
             break;
         }
         case 'exercise.delete':

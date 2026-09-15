@@ -425,7 +425,6 @@ export function useTrainingExercises() {
         }
 
         if(await showConfirm(confirmMsg)) {
-            const updatedLibrary = library.filter(ex => ex.id !== id);
             try {
                 await dispatchDomainOperation({ type: 'exercise.delete', id });
                 if (editingExId === id) handleCancelEdit();
@@ -444,7 +443,6 @@ export function useTrainingExercises() {
         }
 
         if(await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
-            const updatedLibrary = library.map(ex => ex.id === id ? { ...originalEx } : ex);
             try {
                 await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...originalEx, setsCount: originalEx.setsCount ?? 3, sets: [] } as any });
                 // Aggiorna anche il form corrente se è aperto
