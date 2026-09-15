@@ -19,9 +19,18 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toMatch(/allow\s+read:\s*if\s+true;/);
   });
 
-  it('allows owner to delete on history_months and nutrition_months subcollections', () => {
+  it('makes account_deletions server-only and uses it as a cross-device access barrier', () => {
+    expect(rulesContent).toContain('function deletionJobExists(userId)');
+    expect(rulesContent).toContain('documents/account_deletions/$(userId)');
+    expect(rulesContent).toContain('function isActiveOwner(userId)');
+    expect(rulesContent).toContain('return isOwner(userId) && !deletionJobExists(userId);');
+    expect(rulesContent).toMatch(/match\s+\/account_deletions\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/);
+    expect(rulesContent.match(/isActiveOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('allows only an active owner to access private month and telemetry collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
-    expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isOwner\(userId\);/);
+    expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isActiveOwner\(userId\);/);
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });

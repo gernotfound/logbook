@@ -9,6 +9,14 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function deletionJobExists(userId) {
+      return exists(/databases/$(database)/documents/account_deletions/$(userId));
+    }
+
+    function isActiveOwner(userId) {
+      return isOwner(userId) && !deletionJobExists(userId);
+    }
+
     function isValidMonthId(monthId) {
       return monthId.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
     }
@@ -40,10 +48,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /users/{userId} {
-      allow read, delete: if isOwner(userId);
+    // Server-only administrative barrier. Clients cannot inspect or mutate deletion jobs;
+    // the trusted Admin SDK creates them and bypasses Firestore Security Rules.
+    match /account_deletions/{userId} {
+      allow read, write: if false;
+    }
 
-      allow create, update: if isOwner(userId)
+    match /users/{userId} {
+      allow read, delete: if isActiveOwner(userId);
+
+      allow create, update: if isActiveOwner(userId)
         && incomingData().keys().hasOnly([
           'profile',
           'library',
@@ -83,8 +97,8 @@ service cloud.firestore {
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
 
       match /history_months/{monthId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read, delete: if isActiveOwner(userId);
+        allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
@@ -94,8 +108,8 @@ service cloud.firestore {
       }
 
       match /nutrition_months/{monthId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read, delete: if isActiveOwner(userId);
+        allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
@@ -105,8 +119,8 @@ service cloud.firestore {
       }
 
       match /telemetry_errors/{errorId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read, delete: if isActiveOwner(userId);
+        allow create, update: if isActiveOwner(userId)
           && (!('userId' in incomingData()) || incomingData().userId == userId)
           && incomingData().keys().hasOnly([
             'timestamp',
@@ -125,8 +139,8 @@ service cloud.firestore {
       }
 
       match /telemetry_events/{eventId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read, delete: if isActiveOwner(userId);
+        allow create, update: if isActiveOwner(userId)
           && (!('userId' in incomingData()) || incomingData().userId == userId)
           && incomingData().keys().hasOnly([
             'timestamp',
@@ -139,8 +153,8 @@ service cloud.firestore {
       }
 
       match /telemetry_anomalies/{eventId} {
-        allow read, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId)
+        allow read, delete: if isActiveOwner(userId);
+        allow create, update: if isActiveOwner(userId)
           && incomingData().keys().hasOnly([
             'type',
             'reason',

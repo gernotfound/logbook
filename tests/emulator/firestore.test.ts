@@ -45,6 +45,44 @@ it.each(['anonymous', 'b'])('denies %s all operations on another user and their 
     }
 });
 
+it('makes account_deletions server-only and immediately blocks the owner on every private path', async () => {
+    const ownerDb = env.authenticatedContext('a').firestore();
+    const privatePaths = [
+        'users/a',
+        'users/a/history_months/2026-09',
+        'users/a/nutrition_months/2026-09',
+        'users/a/telemetry_events/e',
+        'users/a/telemetry_errors/e',
+        'users/a/telemetry_anomalies/e',
+    ];
+
+    await assertFails(getDoc(doc(ownerDb, 'account_deletions/a')));
+    await assertFails(setDoc(doc(ownerDb, 'account_deletions/a'), { status: 'requested' }));
+
+    await env.withSecurityRulesDisabled(async context => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, 'users/a'), { profile: { name: 'before barrier' } });
+        await setDoc(doc(adminDb, 'users/a/history_months/2026-09'), { value: true });
+        await setDoc(doc(adminDb, 'users/a/nutrition_months/2026-09'), { value: true });
+        await setDoc(doc(adminDb, 'users/a/telemetry_events/e'), { type: 'x' });
+        await setDoc(doc(adminDb, 'users/a/telemetry_errors/e'), { type: 'x' });
+        await setDoc(doc(adminDb, 'users/a/telemetry_anomalies/e'), { type: 'x' });
+        await setDoc(doc(adminDb, 'account_deletions/a'), { uid: 'a', status: 'requested', attempts: 0 });
+    });
+
+    for (const path of privatePaths) {
+        const ref = doc(ownerDb, path);
+        await assertFails(getDoc(ref));
+        await assertFails(setDoc(ref, path === 'users/a' ? { profile: { name: 'resurrected' } } : {}));
+        await assertFails(deleteDoc(ref));
+    }
+
+    await env.withSecurityRulesDisabled(async context => {
+        await deleteDoc(doc(context.firestore(), 'account_deletions/a'));
+    });
+    await assertSucceeds(getDoc(doc(ownerDb, 'users/a')));
+});
+
 it('rejects unknown root fields, invalid origin and malformed month paths', async () => {
     const db = env.authenticatedContext('a').firestore();
     await assertFails(setDoc(doc(db, 'users/a'), { unknown: true }));

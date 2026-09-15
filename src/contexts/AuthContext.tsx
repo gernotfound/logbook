@@ -430,7 +430,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.removeItem(GUEST_KEY);
                 isGuestRef.current = false;
                 setIsGuest(false);
-                useAppStore.getState().resetStore();
+                useAppStore.getState().resetStore({ force: true });
                 return;
             }
 
@@ -509,7 +509,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 useAppStore.getState().cancelPendingSyncs();
                 await DB.secureLogOut();
                 DB.resetCache();
-                useAppStore.getState().resetStore();
+                useAppStore.getState().resetStore({ force: true });
             } catch (error: any) {
                 console.error("Errore durante il logout:", error);
                 await useDialogStore.getState().showAlert("Errore durante il logout. Controlla la connessione.");

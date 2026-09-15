@@ -27,12 +27,16 @@
     "test:quality:m5": "node scripts/check-m5-test-quality.mjs",
     "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "test:ci-contract": "node scripts/check-ci-contract.mjs",
+    "test:typecheck:m7": "tsc --noEmit -p tsconfig.m7-server.json",
+    "test:m7": "vitest run tests/m7_account_deletion_job_store.test.ts tests/m7_account_deletion_runner.test.ts tests/m7_account_deletion_api.test.ts tests/m7_account_deletion_cron.test.ts",
+    "test:pwa:m7": "node scripts/check-m7-native-vercel.mjs",
     "verify:m0": "npm run lint && npm run test && npm run test:isolated && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m2": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:stress && npm run test:rules && npm run test:no-skips && npm run build",
     "verify:m3": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m4": "npm run lint && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
     "verify:m5": "npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc && npm run test:hardening && npm run test:stress && npm run test:rules && npm run test:e2e && npm run test:no-skips && npm run build",
-    "verify:m6": "npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5"
+    "verify:m6": "npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5",
+    "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
@@ -41,6 +45,7 @@
     "date-fns": "^4.4.0",
     "fast-deep-equal": "^3.1.3",
     "firebase": "^12.18.0",
+    "firebase-admin": "^14.3.0",
     "fuse.js": "^7.5.0",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.40.0",
@@ -66,7 +71,6 @@
     "@vitest/coverage-v8": "^4.1.11",
     "@vitest/ui": "^4.1.10",
     "fake-indexeddb": "6.2.5",
-    "firebase-admin": "^14.3.0",
     "firebase-tools": "15.30.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.81.0",

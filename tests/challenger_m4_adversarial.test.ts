@@ -610,45 +610,25 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             expect(getDoc).toHaveBeenCalledTimes(8);
         });
 
-        it('DB.deleteAccount breaks large reference sets into chunks of <= 400', async () => {
-            const mockRefs: any[] = [];
-            for (let i = 0; i < 950; i++) {
-                mockRefs.push({ id: `doc_${i}` });
-            }
+        it('server deletion preserves <=400 batches and verifies residues before deleting Auth', () => {
+            const jobStore = fs.readFileSync(
+                path.resolve(__dirname, '../server/accountDeletion/jobStore.ts'),
+                'utf-8'
+            );
+            const runner = fs.readFileSync(
+                path.resolve(__dirname, '../server/accountDeletion/runner.ts'),
+                'utf-8'
+            );
 
-            const firestore = await import('firebase/firestore');
-            (firestore as any).query = vi.fn((path: any, ..._rest: any[]) => path);
-            (firestore as any).limit = vi.fn((count: number) => count);
-            let queryCount = 0;
-            const mockedGetDocsFromServer = vi.fn().mockImplementation(async () => {
-                queryCount++;
-                if (queryCount === 1) {
-                    // Chunk 1 of history_months: 400 docs
-                    return { empty: false, docs: mockRefs.slice(0, 400).map(r => ({ ref: r })) };
-                } else if (queryCount === 2) {
-                    // Chunk 2 of history_months: 400 docs
-                    return { empty: false, docs: mockRefs.slice(400, 800).map(r => ({ ref: r })) };
-                } else if (queryCount === 3) {
-                    // Chunk 3 of history_months: 150 docs
-                    return { empty: false, docs: mockRefs.slice(800, 950).map(r => ({ ref: r })) };
-                } else {
-                    // Empty: collection drained or residual check empty
-                    return { empty: true, docs: [] };
-                }
-            });
-            (firestore as any).getDocsFromServer = mockedGetDocsFromServer;
-            (firestore as any).getDocFromServer = vi.fn().mockResolvedValue({ exists: () => false });
+            expect(jobStore).toContain('const PAGE_SIZE = 400;');
+            expect(jobStore).toMatch(/\.limit\(PAGE_SIZE\)/);
 
-            await DB.deleteAccount();
-
-            // Total refs = 400 + 400 + 150 (history) + 1 (user doc) = 951 refs.
-            // Sliced into chunks of <= 400:
-            // Chunk 1: 400
-            // Chunk 2: 400
-            // Chunk 3: 150
-            // Chunk 4: 1 (root user doc)
-            // Total batches committed = 4 batches
-            expect(mockBatch.commit).toHaveBeenCalledTimes(4);
+            const verificationIndex = runner.indexOf('await verifyNoAccountResidue(uid);');
+            const authIndex = runner.indexOf('await deleteAuthUserLast(uid);');
+            const completeIndex = runner.indexOf('await markDeletionComplete(uid);');
+            expect(verificationIndex).toBeGreaterThan(-1);
+            expect(authIndex).toBeGreaterThan(verificationIndex);
+            expect(completeIndex).toBeGreaterThan(authIndex);
         });
     });
 });
