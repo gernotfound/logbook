@@ -63,7 +63,7 @@ requirePattern(
   /^permissions:\s*\n  contents: read\s*\n(?=\S)/m,
 );
 
-requirePattern('M8 job identity', workflow, /^    name: ["']M8 Exact-Head Verification["']\s*$/m);
+requirePattern('stable canonical job identity', workflow, /^    name: ["']Canonical Verification["']\s*$/m);
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern(
   'expected SHA binding',
@@ -174,4 +174,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: main PRs, M8 branch pushes, exact-head guard, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');
+console.log('M8 CI contract OK: main PRs, M8 branch pushes, exact-head guard, stable Canonical Verification job, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');
