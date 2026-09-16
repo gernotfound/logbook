@@ -40,6 +40,30 @@ const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'))
 const DataView = lazy(() => import('./components/Data/DataView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
+const GUEST_LOGIN_OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
+
+function readGuestLoginOverlayState(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(GUEST_LOGIN_OVERLAY_SESSION_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistGuestLoginOverlayState(visible: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (visible) {
+      window.sessionStorage.setItem(GUEST_LOGIN_OVERLAY_SESSION_KEY, 'true');
+    } else {
+      window.sessionStorage.removeItem(GUEST_LOGIN_OVERLAY_SESSION_KEY);
+    }
+  } catch {
+    // sessionStorage may be unavailable in restricted browser contexts; React state remains authoritative.
+  }
+}
+
 function App() {
   const { currentUser, loading, isGuest } = useAuth();
   const syncing = useAppStore(state => state.syncing);
@@ -54,15 +78,35 @@ function App() {
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
 
-  const [showGuestLogin, setShowGuestLogin] = useState(false);
+  const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
+  const guestLoginOverlayVisible = showGuestLogin && (!currentUser || isGuest);
+  const guestLoginMigrationPending = showGuestLogin && !!currentUser && !isGuest && syncing;
+  const hideBottomNav = guestLoginOverlayVisible || guestLoginMigrationPending;
+
+  const openGuestLogin = () => {
+    persistGuestLoginOverlayState(true);
+    setShowGuestLogin(true);
+  };
+
+  const closeGuestLogin = () => {
+    persistGuestLoginOverlayState(false);
+    setShowGuestLogin(false);
+  };
 
   useEffect(() => {
     const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
     window.addEventListener('analytics_consent_changed', handler);
     return () => window.removeEventListener('analytics_consent_changed', handler);
   }, []);
+
+  useEffect(() => {
+    if (showGuestLogin && currentUser && !isGuest && !syncing) {
+      persistGuestLoginOverlayState(false);
+      setShowGuestLogin(false);
+    }
+  }, [showGuestLogin, currentUser, isGuest, syncing]);
 
   // Handle URL parameters for PWA shortcuts
   useEffect(() => {
@@ -224,9 +268,18 @@ function App() {
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
-      {showGuestLogin && (
-        <div id="auth-overlay" style={{ zIndex: 9999 }}>
-          <LoginBox onCancel={() => setShowGuestLogin(false)} />
+      {guestLoginOverlayVisible && (
+        <div id="auth-overlay" style={{ zIndex: 10001 }}>
+          <LoginBox onCancel={closeGuestLogin} />
+        </div>
+      )}
+      {guestLoginMigrationPending && (
+        <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
+          <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
+            <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
+            <div className="spinner" style={{margin: '20px auto'}}></div>
+            <p>Preparazione account...</p>
+          </div>
         </div>
       )}
       {isGuest && (
@@ -248,7 +301,7 @@ function App() {
         }}>
           <span style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>⚠️ Modalità locale · I dati sono solo su questo dispositivo</span>
           <button
-            onClick={() => setShowGuestLogin(true)}
+            onClick={openGuestLogin}
             style={{
               background: '#fff',
               color: '#92400e',
@@ -266,7 +319,7 @@ function App() {
           </button>
         </div>
       )}
-      {syncing && (
+      {syncing && !guestLoginMigrationPending && (
         <div 
           className="sync-indicator" 
           role="status" 
@@ -324,7 +377,7 @@ function App() {
         </ErrorBoundary>
       </main>
 
-      <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
+      {!hideBottomNav && <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />}
       {analyticsEnabled && <Analytics />}
       {analyticsEnabled && <SpeedInsights />}
     </>
