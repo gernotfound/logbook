@@ -584,7 +584,10 @@ render(
 
         it('6.2: .section-divider is actively used in all refactored views', () => {
             const filesToCheck = [
-                'src/components/SettingsView.tsx',
+                'src/components/Settings/AccountSettingsTab.tsx',
+                'src/components/Settings/PrivacySettingsTab.tsx',
+                'src/components/Settings/ExportSettingsTab.tsx',
+                'src/components/Settings/StorageDiagnostics.tsx',
                 'src/components/Training/planning/TrainingPlanning.tsx',
                 'src/components/Training/TrainingSessionSetup.tsx',
                 'src/components/Nutrition/NutritionMeals.tsx',
