@@ -5,48 +5,16 @@ import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
-import { mergeUserData, hasUserData } from '../lib/merge';
 import { AuthContext } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog/deltaResolver';
-import { createDefaultNutritionPlanning } from '../lib/nutritionDefaults';
 import { draftRegistry } from '../lib/utils/draftRegistry';
-import { replicateJournal } from '../lib/sync/replicateJournal';
-
-// Imports for default data removed
+import { getResolvedDefaultUserData } from './auth/defaultUserData';
+import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
+import { migrateGuestAccount } from './auth/migrateGuestAccount';
 
 const GUEST_KEY = 'logbook_is_guest';
-
-const defaultUserData: UserData = {
-    profile: {},
-    library: [],
-    routines: [],
-    history: [],
-    nutrition: {},
-    customFoods: [],
-    catalogOverrides: {},
-    activeWorkout: null,
-    trainingCycles: [],
-    activeCycleId: null,
-    nutritionPlanning: createDefaultNutritionPlanning(),
-    nutritionPlanningOrigin: 'generated-default',
-    supplements: [],
-    activePains: [],
-    legalConsent: undefined
-};
-
-const getResolvedDefaultUserData = (catalog = getInMemoryCatalog()): UserData => ({
-    ...defaultUserData,
-    library: resolveEffectiveExercises(catalog.exercises, [], {}),
-    customFoods: resolveEffectiveFoods(catalog.foods, [], {}),
-    catalogOverrides: {
-        exercises: {},
-        foods: {},
-        hiddenExerciseIds: [],
-        hiddenFoodIds: []
-    }
-});
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -64,49 +32,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const setSaveError = useAppStore(state => state.setSaveError);
 
     const loadData = useCallback(async (user: User) => {
-        if (!user) return;
-        const currentData = useAppStore.getState().userData;
-        if (!currentData) {
-            setSyncing(true);
-        }
-        try {
-            const payload = await DB.loadCloudPayload();
-
-            // Protezione semantica: scarta l'hydration se nel frattempo l'utente è cambiato
-            // o se l'app è passata in modalità Guest (previene race condition tra loadData e loginAsGuest)
-            const isNowGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
-            if (auth.currentUser?.uid !== user.uid || isNowGuest) {
-                return;
-            }
-
-            if (payload) {
-                const cloudData = payload.data;
-                try {
-                    const { hydrateLocal } = await import('../lib/sync/localRepository');
-                    const owner = user.uid;
-                    const hydratedEnv = await hydrateLocal(owner, cloudData, payload.completeMonths, payload.cloudDocuments);
-                    setUserData(hydratedEnv.data); // Aggiorna IndexedDB ma NON innesca DB.saveUserData
-                } catch (mergeError) {
-                    console.error("Zod parse failed during hydration merge, preserving local valid state:", mergeError);
-                    // Fallback Zod: NON chiamiamo setUserData, mantenendo lo stato locale valido
-                }
-            }
-        } catch (error: any) {
-            console.warn("Errore caricamento dati in AuthContext (uso dati locali/offline):", error);
-            if (error?.code === 'unavailable' || !navigator.onLine) {
-                setSaveError("📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.");
-            }
-            // Prevenzione loop di caricamento: se non c'è alcuno stato locale e il cloud fallisce,
-            // carichiamo i dati di default per permettere l'avvio dell'app.
-            const latestData = useAppStore.getState().userData;
-            if (!latestData) {
-                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                const fallbackData = getResolvedDefaultUserData(catalog);
-                setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
-            }
-        } finally {
-            setSyncing(false);
-        }
+        await loadAuthenticatedData({
+            user,
+            isGuestActive: () => isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true',
+            setUserData,
+            setSyncing,
+            setSaveError,
+        });
     }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
@@ -151,93 +83,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         useAppStore.getState().setLocalWorkout(null);
                     }
 
-                    try {
-                        setSyncing(true);
-                        // Carica i dati esistenti sul cloud (completi di tutto lo storico pluriennale)
-                        const cloudPayload = await DB.loadCloudPayload({ allMonths: true });
-                        const cloudData = cloudPayload?.data || null;
-
-                        const cloudHasData = hasUserData(cloudData);
-                        const guestHasData = hasUserData(guestData);
-
-                        if (policy === 'skip') {
-                            if (cloudHasData) {
-                                const { hydrateLocal } = await import('../lib/sync/localRepository');
-                                const owner = user.uid;
-                                const hydratedEnv = await hydrateLocal(owner, cloudData!, cloudPayload!.completeMonths, cloudPayload!.cloudDocuments, 'all');
-                                setUserData(hydratedEnv.data);
-                                useAppStore.getState().setLocalWorkout(hydratedEnv.data.activeWorkout || null);
-                            } else {
-                                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                                const fallbackData = getResolvedDefaultUserData(catalog);
-                                const parsedFallback = UserDataSchema.parse(fallbackData) as unknown as UserData;
-                                const { hydrateLocal } = await import('../lib/sync/localRepository');
-                                const hydratedEnv = await hydrateLocal(user.uid, cloudData || parsedFallback, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all');
-                                setUserData(hydratedEnv.data);
-                                useAppStore.getState().setLocalWorkout(null);
-                            }
-                        } else {
-                            if (cloudHasData && !guestHasData) {
-                                const { hydrateLocal } = await import('../lib/sync/localRepository');
-                                const hydratedEnv = await hydrateLocal(user.uid, cloudData!, cloudPayload!.completeMonths, cloudPayload!.cloudDocuments, 'all');
-                                setUserData(hydratedEnv.data);
-                                useAppStore.getState().setLocalWorkout(hydratedEnv.data.activeWorkout || null);
-                            } else if (guestHasData) {
-                                const { hydrateLocal, commitLocal, readLocal } = await import('../lib/sync/localRepository');
-                                const hydratedEnv = await hydrateLocal(user.uid, cloudData!, cloudPayload!.completeMonths, cloudPayload!.cloudDocuments, 'all');
-                                const mergedData = mergeUserData(hydratedEnv.data, guestData);
-                                await commitLocal(user.uid, mergedData, hydratedEnv.data);
-
-                                const syncResult = await replicateJournal();
-                                if (syncResult.status === 'rejected' || syncResult.status === 'failed') {
-                                    throw syncResult.error instanceof Error
-                                        ? syncResult.error
-                                        : new Error('Sincronizzazione della migrazione guest non riuscita', { cause: syncResult.error });
-                                }
-
-                                if (syncResult.status === 'local-pending') {
-                                    const pendingEnv = await readLocal(user.uid);
-                                    const pendingData = pendingEnv?.data ?? mergedData;
-                                    setUserData(pendingData);
-                                    useAppStore.getState().setLocalWorkout(pendingData.activeWorkout || null);
-                                } else {
-                                    const resolvedPayload = await DB.loadCloudPayload();
-                                    const resolvedData = resolvedPayload?.data || mergedData;
-                                    const hydratedFinal = await hydrateLocal(user.uid, resolvedData, resolvedPayload?.completeMonths || [], resolvedPayload?.cloudDocuments);
-                                    setUserData(hydratedFinal.data);
-                                    useAppStore.getState().setLocalWorkout(hydratedFinal.data.activeWorkout || null);
-                                }
-                            } else {
-                                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                                const fallbackData = getResolvedDefaultUserData(catalog);
-                                const parsedFallback = UserDataSchema.parse(fallbackData) as unknown as UserData;
-                                const { hydrateLocal } = await import('../lib/sync/localRepository');
-                                const hydratedEnv = await hydrateLocal(user.uid, cloudData || parsedFallback, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all');
-                                setUserData(hydratedEnv.data);
-                                useAppStore.getState().setLocalWorkout(hydratedEnv.data.activeWorkout || null);
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Errore sincronizzazione iniziale post-link:", e);
-                        try {
-                            const { readLocal } = await import('../lib/sync/localRepository');
-                            const preserved = await readLocal(user.uid);
-                            if (preserved) {
-                                setUserData(preserved.data);
-                                useAppStore.getState().setLocalWorkout(preserved.data.activeWorkout || null);
-                            } else if (guestData) {
-                                setUserData(guestData);
-                                useAppStore.getState().setLocalWorkout(guestData.activeWorkout || null);
-                            }
-                        } catch {
-                            if (guestData) {
-                                setUserData(guestData);
-                                useAppStore.getState().setLocalWorkout(guestData.activeWorkout || null);
-                            }
-                        }
-                    } finally {
-                        setSyncing(false);
-                    }
+                    await migrateGuestAccount({
+                        user,
+                        guestData,
+                        policy,
+                        setUserData,
+                        setSyncing,
+                    });
                 } else {
                     // Login normale con Google
                     loadData(user);
