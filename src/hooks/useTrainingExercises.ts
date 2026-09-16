@@ -1,54 +1,19 @@
 import { useState, useMemo, useEffect } from 'react';
-import Fuse from 'fuse.js';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { getInMemoryCatalog } from '../lib/catalog/catalogService';
-
-const normalizeStem = (str: string) => {
-    return str
-        .replace(/\bdeltoidi\b/g, 'deltoid')
-        .replace(/\bdeltoide\b/g, 'deltoid')
-        .replace(/\bfrontali\b/g, 'anterior')
-        .replace(/\bfrontale\b/g, 'anterior')
-        .replace(/\banteriori\b/g, 'anterior')
-        .replace(/\banteriore\b/g, 'anterior')
-        .replace(/\blaterali\b/g, 'lateral')
-        .replace(/\blaterale\b/g, 'lateral')
-        .replace(/\bposteriori\b/g, 'posterior')
-        .replace(/\bposteriore\b/g, 'posterior')
-        .replace(/\btrapezi\b/g, 'trapez')
-        .replace(/\btrapezio\b/g, 'trapez')
-        .replace(/\bpettorali\b/g, 'petto')
-        .replace(/\bpettorale\b/g, 'petto')
-        .replace(/\bbicipiti\b/g, 'bicipit')
-        .replace(/\bbicipite\b/g, 'bicipit')
-        .replace(/\btricipiti\b/g, 'tricipit')
-        .replace(/\btricipite\b/g, 'tricipit')
-        .replace(/\bquadricipiti\b/g, 'quadricipit')
-        .replace(/\bquadricipite\b/g, 'quadricipit')
-        .replace(/\bfemorali\b/g, 'femoral')
-        .replace(/\bfemorale\b/g, 'femoral')
-        .replace(/\bpolpacci\b/g, 'polpacc')
-        .replace(/\bpolpaccio\b/g, 'polpacc')
-        .replace(/\baddominali\b/g, 'addom')
-        .replace(/\baddominale\b/g, 'addom');
-};
-
-const PREPARED_MUSCLES = Logic.MUSCLES.map(m => ({
-    ...m,
-    _stemmedName: normalizeStem(m.name.toLowerCase())
-}));
-
-const STATIC_MUSCLE_FUSE = new Fuse(PREPARED_MUSCLES, {
-    keys: [
-        { name: 'name', weight: 0.6 },
-        { name: '_stemmedName', weight: 0.4 }
-    ],
-    threshold: 0.38,
-    ignoreLocation: true,
-    minMatchCharLength: 2
-});
+import {
+    filterMuscles,
+    getExpandedMuscleIds,
+    toggleSmartMuscleSelection
+} from './trainingExercises/muscleSelection';
+import {
+    clearExerciseDraft,
+    persistExerciseDraft,
+    readExerciseDraft,
+    type ExerciseTrackingType
+} from './trainingExercises/exerciseDraft';
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -65,25 +30,22 @@ export function useTrainingExercises() {
     const [selectedMuscles, setSelectedMuscles] = useState<any[]>([]);
     const [secondaryMuscles, setSecondaryMuscles] = useState<any[]>([]);
     const [selectionMode, setSelectionMode] = useState<'primary' | 'secondary'>('primary');
-    const [trackingType, setTrackingType] = useState<'weight_reps' | 'time' | 'cardio'>('weight_reps');
+    const [trackingType, setTrackingType] = useState<ExerciseTrackingType>('weight_reps');
     const [isBodyweight, setIsBodyweight] = useState(false);
     const [equipmentWeight, setEquipmentWeight] = useState('');
 
     // Restore draft on mount
     useEffect(() => {
-        const draft = localStorage.getItem('draft_exercise');
-        if (draft) {
-            try {
-                const parsed = JSON.parse(draft);
-                if (parsed.name) setExName(parsed.name);
-                if (parsed.notes) setExNotes(parsed.notes);
-                if (parsed.trackingType) setTrackingType(parsed.trackingType);
-                if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
-                if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
-                if (parsed.isBodyweight !== undefined) setIsBodyweight(Boolean(parsed.isBodyweight));
-                if (parsed.equipmentWeight !== undefined && parsed.equipmentWeight !== null) setEquipmentWeight(String(parsed.equipmentWeight));
-            } catch {
-                // Ignore parse errors on invalid draft
+        const parsed = readExerciseDraft();
+        if (parsed) {
+            if (parsed.name) setExName(parsed.name);
+            if (parsed.notes) setExNotes(parsed.notes);
+            if (parsed.trackingType) setTrackingType(parsed.trackingType);
+            if (parsed.selectedMuscles) setSelectedMuscles(parsed.selectedMuscles);
+            if (parsed.secondaryMuscles) setSecondaryMuscles(parsed.secondaryMuscles);
+            if (parsed.isBodyweight !== undefined) setIsBodyweight(Boolean(parsed.isBodyweight));
+            if (parsed.equipmentWeight !== undefined && parsed.equipmentWeight !== null) {
+                setEquipmentWeight(String(parsed.equipmentWeight));
             }
         }
     }, []);
@@ -91,164 +53,26 @@ export function useTrainingExercises() {
     // Save draft on change
     useEffect(() => {
         if (!editingExId) {
-            const hasContent = Boolean(
-                exName.trim() || 
-                exNotes.trim() || 
-                selectedMuscles.length > 0 || 
-                secondaryMuscles.length > 0 || 
-                isBodyweight || 
+            persistExerciseDraft({
+                name: exName,
+                notes: exNotes,
+                trackingType,
+                selectedMuscles,
+                secondaryMuscles,
+                isBodyweight,
                 equipmentWeight
-            );
-            if (hasContent) {
-                try {
-                    localStorage.setItem('draft_exercise', JSON.stringify({ 
-                        name: exName, 
-                        notes: exNotes, 
-                        trackingType, 
-                        selectedMuscles,
-                        secondaryMuscles,
-                        isBodyweight,
-                        equipmentWeight
-                    }));
-                } catch (e) {
-                    console.warn("Quota exceeded or error saving draft", e);
-                }
-            } else {
-                localStorage.removeItem('draft_exercise');
-            }
+            });
         }
     }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId]);
 
-    const filteredMuscles = useMemo(() => {
-        const rawQuery = muscleSearch.trim().toLowerCase();
-        if (!rawQuery) return [];
-
-        const stemmedQuery = normalizeStem(rawQuery);
-        const queryTokens = stemmedQuery.split(/\s+/).filter(Boolean);
-
-        // 1. Direct matches
-        const directMatches = Logic.MUSCLES.filter(m => {
-            const mNameLower = m.name.toLowerCase();
-            if (mNameLower.includes(rawQuery)) return true;
-            const mNameNorm = normalizeStem(mNameLower);
-            return queryTokens.every(tok => mNameNorm.includes(tok));
-        });
-
-        // 2. Fuzzy matches with precomputed static Fuse.js
-        const fuzzyMatches = STATIC_MUSCLE_FUSE.search(stemmedQuery).map(res => {
-            const { _stemmedName, ...original } = res.item;
-            return original;
-        });
-
-        const seen = new Set<string>();
-        const merged: any[] = [];
-        for (const m of [...directMatches, ...fuzzyMatches]) {
-            if (!seen.has(m.id)) {
-                seen.add(m.id);
-                merged.push(m);
-            }
-        }
-
-        merged.sort((a, b) => {
-            const aName = a.name.toLowerCase();
-            const bName = b.name.toLowerCase();
-            if (aName === rawQuery) return -1;
-            if (bName === rawQuery) return 1;
-            const aStarts = aName.startsWith(rawQuery);
-            const bStarts = bName.startsWith(rawQuery);
-            if (aStarts && !bStarts) return -1;
-            if (!aStarts && bStarts) return 1;
-            const aIsBase = !a.id.endsWith('_left') && !a.id.endsWith('_right');
-            const bIsBase = !b.id.endsWith('_left') && !b.id.endsWith('_right');
-            if (aIsBase && !bIsBase) return -1;
-            if (!aIsBase && bIsBase) return 1;
-            return a.name.localeCompare(b.name, 'it');
-        });
-
-        return merged.slice(0, 10);
-    }, [muscleSearch]);
-
-    const toggleSmartMuscleSelection = (currentSelection: any[], toggledMuscle?: any) => {
-        const expanded = new Set<string>();
-        for (const m of currentSelection || []) {
-            if (!m || !m.id) continue;
-            const leftId = m.id + '_left';
-            const rightId = m.id + '_right';
-            if (Logic.MUSCLES.find(x => x.id === leftId) && Logic.MUSCLES.find(x => x.id === rightId)) {
-                expanded.add(leftId);
-                expanded.add(rightId);
-            } else {
-                expanded.add(m.id);
-            }
-        }
-        
-        if (toggledMuscle && toggledMuscle.id) {
-            const toggledIds: string[] = [];
-            const tLeftId = toggledMuscle.id + '_left';
-            const tRightId = toggledMuscle.id + '_right';
-            if (Logic.MUSCLES.find(x => x.id === tLeftId) && Logic.MUSCLES.find(x => x.id === tRightId)) {
-                toggledIds.push(tLeftId, tRightId);
-            } else {
-                toggledIds.push(toggledMuscle.id);
-            }
-
-            const allSelected = toggledIds.every(id => expanded.has(id));
-            if (allSelected) {
-                toggledIds.forEach(id => expanded.delete(id));
-            } else {
-                toggledIds.forEach(id => expanded.add(id));
-            }
-        }
-
-        const finalIds = Array.from(expanded).filter((id): id is string => typeof id === 'string' && Boolean(id));
-        let changed = true;
-        let maxIter = 100;
-        while (changed && maxIter-- > 0) {
-            changed = false;
-            for (let i = 0; i < finalIds.length; i++) {
-                const id = finalIds[i];
-                if (id && (id.endsWith('_left') || id.endsWith('_right'))) {
-                    const baseId = id.replace(/_(left|right)$/, '');
-                    const counterpart = id.endsWith('_left') ? `${baseId}_right` : `${baseId}_left`;
-                    const cIndex = finalIds.indexOf(counterpart);
-                    if (cIndex !== -1 && Logic.MUSCLES.find(x => x.id === baseId)) {
-                        finalIds.splice(Math.max(i, cIndex), 1);
-                        finalIds.splice(Math.min(i, cIndex), 1);
-                        if (!finalIds.includes(baseId)) {
-                            finalIds.push(baseId);
-                        }
-                        changed = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return finalIds.map(id => Logic.MUSCLES.find(m => m.id === id)).filter(Boolean);
-    };
-
-    const getExpandedMuscleIds = (musclesList: any[]): Set<string> => {
-        const set = new Set<string>();
-        for (const m of musclesList || []) {
-            if (!m || !m.id) continue;
-            const leftId = m.id + '_left';
-            const rightId = m.id + '_right';
-            if (Logic.MUSCLES.find(x => x.id === leftId) && Logic.MUSCLES.find(x => x.id === rightId)) {
-                set.add(leftId);
-                set.add(rightId);
-            } else {
-                set.add(m.id);
-            }
-        }
-        return set;
-    };
+    const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
     const toggleMuscle = (muscle: any) => {
         if (!muscle || !muscle.id) return;
         if (selectionMode === 'primary') {
             const newSelection = toggleSmartMuscleSelection(selectedMuscles, muscle);
             setSelectedMuscles(newSelection);
-            
+
             // Remove toggled muscle from secondary if present
             const toggledIds = getExpandedMuscleIds([muscle]);
             const secExpanded = getExpandedMuscleIds(secondaryMuscles);
@@ -258,7 +82,7 @@ export function useTrainingExercises() {
         } else {
             const newSelection = toggleSmartMuscleSelection(secondaryMuscles, muscle);
             setSecondaryMuscles(newSelection);
-            
+
             // Remove toggled muscle from primary if present
             const toggledIds = getExpandedMuscleIds([muscle]);
             const primExpanded = getExpandedMuscleIds(selectedMuscles);
@@ -294,12 +118,12 @@ export function useTrainingExercises() {
         setEditingExId(ex.id);
         setExName(ex.name || '');
         setExNotes(ex.notes || '');
-        
+
         // Populate selected muscles
         const exMuscles: any[] = [];
         (ex.muscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
-            if(m) exMuscles.push(m);
+            if (m) exMuscles.push(m);
         });
         setSelectedMuscles(exMuscles);
 
@@ -307,15 +131,19 @@ export function useTrainingExercises() {
         const exSecMuscles: any[] = [];
         (ex.secondaryMuscles || []).forEach((mId: string) => {
             const m = Logic.MUSCLES.find(mu => mu.id === mId);
-            if(m) exSecMuscles.push(m);
+            if (m) exSecMuscles.push(m);
         });
         setSecondaryMuscles(exSecMuscles);
 
         setTrackingType(ex.trackingType || 'weight_reps');
         setIsBodyweight(Boolean(ex.isBodyweight));
-        setEquipmentWeight(ex.equipmentWeight !== undefined && ex.equipmentWeight !== null ? String(ex.equipmentWeight) : '');
+        setEquipmentWeight(
+            ex.equipmentWeight !== undefined && ex.equipmentWeight !== null
+                ? String(ex.equipmentWeight)
+                : ''
+        );
         setSelectionMode('primary');
-        
+
         // Scroll to top to see the form
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -331,7 +159,7 @@ export function useTrainingExercises() {
         setTrackingType('weight_reps');
         setIsBodyweight(false);
         setEquipmentWeight('');
-        localStorage.removeItem('draft_exercise');
+        clearExerciseDraft();
     };
 
     const isDuplicateName = useMemo(() => {
@@ -347,8 +175,8 @@ export function useTrainingExercises() {
             return false;
         }
 
-        const isDuplicate = library.some(ex => 
-            ex.id !== editingExId && 
+        const isDuplicate = library.some(ex =>
+            ex.id !== editingExId &&
             ex.name.trim().toLowerCase() === trimmedName.toLowerCase()
         );
 
@@ -357,8 +185,14 @@ export function useTrainingExercises() {
             return false;
         }
 
-        const parsedEqWeight = equipmentWeight ? parseFloat(String(equipmentWeight).replace(',', '.')) : undefined;
-        const validEqWeight = (parsedEqWeight !== undefined && !isNaN(parsedEqWeight) && parsedEqWeight > 0) ? parsedEqWeight : undefined;
+        const parsedEqWeight = equipmentWeight
+            ? parseFloat(String(equipmentWeight).replace(',', '.'))
+            : undefined;
+        const validEqWeight = (
+            parsedEqWeight !== undefined &&
+            !isNaN(parsedEqWeight) &&
+            parsedEqWeight > 0
+        ) ? parsedEqWeight : undefined;
 
         let updatedLibrary;
 
@@ -379,7 +213,7 @@ export function useTrainingExercises() {
                 }
                 return ex;
             });
-            updatedLibrary.sort((a,b) => a.name.localeCompare(b.name));
+            updatedLibrary.sort((a, b) => a.name.localeCompare(b.name));
         } else {
             // Create new
             const newEx = {
@@ -394,7 +228,7 @@ export function useTrainingExercises() {
                 isBodyweight: isBodyweight || undefined,
                 equipmentWeight: validEqWeight
             };
-            updatedLibrary = [...library, newEx].sort((a,b) => a.name.localeCompare(b.name));
+            updatedLibrary = [...library, newEx].sort((a, b) => a.name.localeCompare(b.name));
         }
 
         try {
@@ -413,18 +247,18 @@ export function useTrainingExercises() {
 
     const handleDelete = async (id: string, e: any) => {
         e.stopPropagation(); // prevent triggering edit when clicking delete
-        
+
         // Check if exercise is used in routines
-        const usedInRoutines = routines.filter(rtn => 
+        const usedInRoutines = routines.filter(rtn =>
             (rtn.exercises || []).some((ex: any) => ex.exId === id)
         );
-        
+
         let confirmMsg = "Sei sicuro di voler eliminare questo esercizio dall'archivio?";
         if (usedInRoutines.length > 0) {
             confirmMsg = `Attenzione: questo esercizio è usato in ${usedInRoutines.length} scheda/e. Se lo elimini scomparirà da quelle schede. Procedere comunque?`;
         }
 
-        if(await showConfirm(confirmMsg)) {
+        if (await showConfirm(confirmMsg)) {
             try {
                 await dispatchDomainOperation({ type: 'exercise.delete', id });
                 if (editingExId === id) handleCancelEdit();
@@ -442,9 +276,16 @@ export function useTrainingExercises() {
             return;
         }
 
-        if(await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
+        if (await showConfirm("Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.")) {
             try {
-                await dispatchDomainOperation({ type: 'exercise.upsert', exercise: { ...originalEx, setsCount: originalEx.setsCount ?? 3, sets: [] } as any });
+                await dispatchDomainOperation({
+                    type: 'exercise.upsert',
+                    exercise: {
+                        ...originalEx,
+                        setsCount: originalEx.setsCount ?? 3,
+                        sets: []
+                    } as any
+                });
                 // Aggiorna anche il form corrente se è aperto
                 if (editingExId === id) {
                     handleEditClick(originalEx);
