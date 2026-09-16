@@ -1,0 +1,240 @@
+* { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+}
+
+body { 
+    background-color: var(--bg-color); 
+    color: var(--text-main); 
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); 
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    -webkit-tap-highlight-color: transparent; 
+    touch-action: manipulation;
+    overscroll-behavior-y: contain;
+}
+
+input, select, textarea, button {
+    font-family: inherit;
+    color: inherit;
+    box-sizing: border-box;
+}
+
+button {
+    color: var(--text-main);
+}
+
+select option {
+    background-color: var(--surface-light);
+    color: var(--text-main);
+}
+
+input, select, textarea {
+    font-size: 16px !important;
+    touch-action: manipulation;
+}
+
+#app-container { 
+    max-width: 600px; 
+    margin: 0 auto; 
+    position: relative; 
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: block;
+    overflow-x: clip;
+}
+
+/* Prevenzione selezione testo accidentale su controlli interattivi */
+.btn,
+.btn-small,
+.btn-icon,
+.nav-item,
+.sub-nav-btn,
+.tab-btn,
+.toggle-btn,
+.timer-btn,
+.sync-error-close {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1.1rem; }
+h4, h5 { font-size: 1rem; }
+
+h1, h2, h3, h4, h5 { 
+    color: var(--text-main); 
+    margin-bottom: 12px; 
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+p { 
+    color: var(--text-muted); 
+    font-size: 0.95rem; 
+    line-height: 1.5; 
+    margin-bottom: 12px;
+}
+
+
+#auth-overlay, #startup-overlay {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background: var(--bg-color); 
+    z-index: 9999; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center; 
+    padding: var(--spacing); 
+}
+
+
+.card { 
+    background: var(--glass-bg); 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--border-radius); 
+    padding: var(--spacing); 
+    margin-bottom: var(--spacing); 
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2); 
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Divided Section Layout */
+.section-divider {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.section-divider-last {
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+}
+
+
+.view-section { 
+    display: none; 
+    padding: var(--spacing); 
+    animation: fadeSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+}
+.view-section.active { display: block; }
+
+@keyframes fadeSlideUp { 
+    from { opacity: 0; transform: translateY(15px); } 
+    to { opacity: 1; transform: translateY(0); } 
+}
+
+
+.sub-nav { 
+    display: flex; 
+    gap: 12px; 
+    margin-bottom: 24px; 
+    overflow-x: auto; 
+    padding-bottom: 8px; 
+    scrollbar-width: none;
+}
+.sub-nav::-webkit-scrollbar { display: none; }
+
+@media (pointer: fine) {
+    .sub-nav {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.2) transparent;
+        padding-bottom: 12px;
+    }
+    .sub-nav::-webkit-scrollbar { 
+        display: block; 
+        height: 6px; 
+    }
+    .sub-nav::-webkit-scrollbar-track { 
+        background: transparent; 
+    }
+    .sub-nav::-webkit-scrollbar-thumb { 
+        background: rgba(255,255,255,0.2);
+        border-radius: 4px; 
+    }
+    .sub-nav::-webkit-scrollbar-thumb:hover { 
+        background: rgba(255,255,255,0.4); 
+    }
+}
+.sub-nav-btn { 
+    flex: 1 0 auto; 
+    min-width: 110px; 
+    background: var(--surface-color); 
+    border: 1px solid var(--glass-border); 
+    color: var(--text-muted); 
+    padding: 10px 16px; 
+    border-radius: 24px; 
+    text-align: center; 
+    cursor: pointer; 
+    font-size: 0.9rem; 
+    font-weight: 600; 
+    transition: all 0.3s ease; 
+    white-space: nowrap;
+    min-height: 44px;
+}
+.sub-nav-btn.active { 
+    background: var(--primary-color); 
+    color: #000; 
+    border-color: var(--primary-color); 
+    box-shadow: 0 4px 15px var(--primary-glow);
+}
+.sub-nav-btn:focus-visible {
+    outline: none;
+    border-color: var(--primary-color); 
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.training-sub-view { display: none; }
+.training-sub-view.active { display: block; animation: fadeSlideUp 0.3s ease; }
+
+
+input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="password"], input[type="email"], select, textarea {
+    width: 100%; 
+    max-width: 100%;
+    padding: 14px; 
+    margin-bottom: 12px; 
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--glass-border); 
+    color: var(--text-main); 
+    border-radius: 12px; 
+    font-size: 16px !important;
+    min-height: 48px;
+    box-sizing: border-box;
+    display: block;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+    -webkit-appearance: none;
+    appearance: none;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+    text-align: center;
+    min-height: 1.5em;
+    width: 100%;
+}
+input:focus, select:focus, textarea:focus { 
+    outline: none; 
+    border-color: var(--primary-color); 
+    background: rgba(0,0,0,0.4);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.input-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;}
