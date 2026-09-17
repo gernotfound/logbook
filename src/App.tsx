@@ -4,23 +4,23 @@ import { useAppStore } from './store/useAppStore';
 import { analytics, getAnalyticsConsent } from './lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { 
-  LOCAL_STORAGE_ACTIVE_TAB, 
-  LOCAL_STORAGE_TRAINING_TAB, 
-  LOCAL_STORAGE_NUTRITION_TAB, 
-  LOCAL_STORAGE_DATA_TAB 
+import {
+  LOCAL_STORAGE_ACTIVE_TAB,
+  LOCAL_STORAGE_TRAINING_TAB,
+  LOCAL_STORAGE_NUTRITION_TAB,
+  LOCAL_STORAGE_DATA_TAB
 } from './constants';
-import { 
-  AppTabSchema, 
-  TrainingSubTabSchema, 
-  NutritionSubTabSchema, 
-  DataSubTabSchema 
+import {
+  AppTabSchema,
+  TrainingSubTabSchema,
+  NutritionSubTabSchema,
+  DataSubTabSchema
 } from './lib/schema';
-import type { 
-  AppTab, 
-  TrainingSubTab, 
-  NutritionSubTab, 
-  DataSubTab 
+import type {
+  AppTab,
+  TrainingSubTab,
+  NutritionSubTab,
+  DataSubTab
 } from './types';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -84,7 +84,7 @@ function App() {
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
-  const hideBottomNav = guestLoginOverlayVisible || guestLoginMigrationPending || guestLoginMigrationFailed;
+  const hideBottomNav = guestLoginOverlayVisible;
 
   const openGuestLogin = () => {
     persistGuestLoginOverlayState(true);
@@ -182,7 +182,7 @@ function App() {
       if (validTab === 'training') setTrainingSubTab('session');
       if (validTab === 'nutrition') setNutritionSubTab('meals');
       if (validTab === 'data') setDataSubTab('measurements');
-      
+
       tabScrollPositions[activeTab] = 0;
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -263,6 +263,41 @@ function App() {
     );
   }
 
+  if (guestLoginMigrationPending) {
+    return (
+      <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
+        <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
+          <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
+          <div className="spinner" style={{margin: '20px auto'}}></div>
+          <p>Preparazione account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (guestLoginMigrationFailed) {
+    return (
+      <div id="auth-overlay" style={{ zIndex: 10001 }} role="alert" aria-live="assertive">
+        <div style={{ textAlign: 'center', maxWidth: '460px', padding: '30px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+          <h1 style={{ color: 'var(--primary-color)', marginBottom: '10px' }}>Accesso non completato</h1>
+          <p style={{ lineHeight: 1.5 }}>
+            I dati salvati su questo dispositivo sono stati conservati.
+          </p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Riprova per completare in sicurezza la preparazione dell’account.
+          </p>
+          <button
+            type="button"
+            onClick={() => void retryGuestMigration()}
+            style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+          >
+            Riprova
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <GlobalDialog />
@@ -272,35 +307,6 @@ function App() {
       {guestLoginOverlayVisible && (
         <div id="auth-overlay" style={{ zIndex: 10001 }}>
           <LoginBox onCancel={closeGuestLogin} />
-        </div>
-      )}
-      {guestLoginMigrationPending && (
-        <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
-          <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
-            <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
-            <div className="spinner" style={{margin: '20px auto'}}></div>
-            <p>Preparazione account...</p>
-          </div>
-        </div>
-      )}
-      {guestLoginMigrationFailed && (
-        <div id="auth-overlay" style={{ zIndex: 10001 }} role="alert" aria-live="assertive">
-          <div style={{ textAlign: 'center', maxWidth: '460px', padding: '30px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-            <h1 style={{ color: 'var(--primary-color)', marginBottom: '10px' }}>Accesso non completato</h1>
-            <p style={{ lineHeight: 1.5 }}>
-              I dati salvati su questo dispositivo sono stati conservati.
-            </p>
-            <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Riprova per completare in sicurezza la preparazione dell’account.
-            </p>
-            <button
-              type="button"
-              onClick={() => void retryGuestMigration()}
-              style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
-            >
-              Riprova
-            </button>
-          </div>
         </div>
       )}
       {isGuest && (
@@ -340,10 +346,10 @@ function App() {
           </button>
         </div>
       )}
-      {syncing && !guestLoginMigrationPending && !guestLoginMigrationFailed && (
-        <div 
-          className="sync-indicator" 
-          role="status" 
+      {syncing && (
+        <div
+          className="sync-indicator"
+          role="status"
           aria-live="polite"
           aria-label="Salvataggio in corso"
         >
@@ -353,16 +359,16 @@ function App() {
       )}
 
       {saveError && (
-        <div 
-          className="sync-error-toast" 
-          role="alert" 
+        <div
+          className="sync-error-toast"
+          role="alert"
           aria-live="assertive"
         >
           <span className="sync-error-icon" aria-hidden="true">⚠️</span>
           <span className="sync-error-text">{saveError}</span>
-          <button 
-            type="button" 
-            className="sync-error-close" 
+          <button
+            type="button"
+            className="sync-error-close"
             aria-label="Chiudi avviso"
             onClick={() => setSaveError(null)}
           >
