@@ -3,6 +3,7 @@ import type { UserData } from '../../types';
 import { auth } from '../../lib/firebase';
 import { DB } from '../../lib/db';
 import { UserDataSchema } from '../../lib/schema';
+import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
@@ -10,7 +11,6 @@ import { getResolvedDefaultUserData } from './defaultUserData';
 type LoadAuthenticatedDataOptions = {
     user: User;
     isGuestActive: () => boolean;
-    isCurrent: () => boolean;
     setUserData: (data: UserData) => void;
     setSyncing: (value: boolean) => void;
     setSaveError: (value: string | null) => void;
@@ -19,12 +19,21 @@ type LoadAuthenticatedDataOptions = {
 export async function loadAuthenticatedData({
     user,
     isGuestActive,
-    isCurrent,
     setUserData,
     setSyncing,
     setSaveError,
 }: LoadAuthenticatedDataOptions): Promise<void> {
-    if (!user || !isCurrent()) return;
+    if (!user) return;
+
+    const session = captureSession();
+    const expectedOwner = userOwner(user.uid);
+    const isCurrent = () => session.owner === expectedOwner
+        && isCurrentSession(session)
+        && auth.currentUser?.uid === user.uid
+        && !isGuestActive();
+
+    if (!isCurrent()) return;
+
     const currentData = useAppStore.getState().userData;
     if (!currentData) {
         setSyncing(true);
@@ -32,18 +41,14 @@ export async function loadAuthenticatedData({
     try {
         const payload = await DB.loadCloudPayload();
 
-        // Discard a stale hydration after an auth/guest mode transition.
-        if (!isCurrent() || auth.currentUser?.uid !== user.uid || isGuestActive()) {
-            return;
-        }
+        if (!isCurrent()) return;
 
         if (payload) {
             const cloudData = payload.data;
             try {
                 const { hydrateLocal } = await import('../../lib/sync/localRepository');
                 if (!isCurrent()) return;
-                const owner = user.uid;
-                const hydratedEnv = await hydrateLocal(owner, cloudData, payload.completeMonths, payload.cloudDocuments);
+                const hydratedEnv = await hydrateLocal(user.uid, cloudData, payload.completeMonths, payload.cloudDocuments);
                 if (!isCurrent()) return;
                 setUserData(hydratedEnv.data);
             } catch (mergeError) {
