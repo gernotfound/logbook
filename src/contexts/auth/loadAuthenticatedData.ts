@@ -10,6 +10,7 @@ import { getResolvedDefaultUserData } from './defaultUserData';
 type LoadAuthenticatedDataOptions = {
     user: User;
     isGuestActive: () => boolean;
+    isCurrent: () => boolean;
     setUserData: (data: UserData) => void;
     setSyncing: (value: boolean) => void;
     setSaveError: (value: string | null) => void;
@@ -18,11 +19,12 @@ type LoadAuthenticatedDataOptions = {
 export async function loadAuthenticatedData({
     user,
     isGuestActive,
+    isCurrent,
     setUserData,
     setSyncing,
     setSaveError,
 }: LoadAuthenticatedDataOptions): Promise<void> {
-    if (!user) return;
+    if (!user || !isCurrent()) return;
     const currentData = useAppStore.getState().userData;
     if (!currentData) {
         setSyncing(true);
@@ -31,7 +33,7 @@ export async function loadAuthenticatedData({
         const payload = await DB.loadCloudPayload();
 
         // Discard a stale hydration after an auth/guest mode transition.
-        if (auth.currentUser?.uid !== user.uid || isGuestActive()) {
+        if (!isCurrent() || auth.currentUser?.uid !== user.uid || isGuestActive()) {
             return;
         }
 
@@ -39,14 +41,18 @@ export async function loadAuthenticatedData({
             const cloudData = payload.data;
             try {
                 const { hydrateLocal } = await import('../../lib/sync/localRepository');
+                if (!isCurrent()) return;
                 const owner = user.uid;
                 const hydratedEnv = await hydrateLocal(owner, cloudData, payload.completeMonths, payload.cloudDocuments);
+                if (!isCurrent()) return;
                 setUserData(hydratedEnv.data);
             } catch (mergeError) {
+                if (!isCurrent()) return;
                 console.error('Zod parse failed during hydration merge, preserving local valid state:', mergeError);
             }
         }
     } catch (error: any) {
+        if (!isCurrent()) return;
         console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
         if (error?.code === 'unavailable' || !navigator.onLine) {
             setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
@@ -54,10 +60,12 @@ export async function loadAuthenticatedData({
         const latestData = useAppStore.getState().userData;
         if (!latestData) {
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+            if (!isCurrent()) return;
             const fallbackData = getResolvedDefaultUserData(catalog);
+            if (!isCurrent()) return;
             setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
         }
     } finally {
-        setSyncing(false);
+        if (isCurrent()) setSyncing(false);
     }
 }
