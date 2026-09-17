@@ -17,6 +17,29 @@ import { replicateJournal } from '../lib/sync/replicateJournal';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
+const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
+
+function readGuestMigrationSyncRecovery(): string | null {
+    try {
+        return localStorage.getItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function markGuestMigrationSyncRecovery(uid: string): void {
+    localStorage.setItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY, uid);
+}
+
+function clearGuestMigrationSyncRecovery(uid: string): void {
+    try {
+        if (localStorage.getItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY) === uid) {
+            localStorage.removeItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
+        }
+    } catch {
+        // A stale recovery marker is safe: the next startup will retry the journal.
+    }
+}
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -60,6 +83,86 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             console.warn("getRedirectResult error (non critico):", err);
         });
 
+        const resumePersistedGuestMigration = async (user: User): Promise<boolean> => {
+            setGuestMigrationStatus('pending');
+
+            let authenticatedEnvelope: Awaited<ReturnType<typeof import('../lib/sync/localRepository')['readLocal']>>;
+            try {
+                const { readLocal } = await import('../lib/sync/localRepository');
+                authenticatedEnvelope = await readLocal(user.uid);
+            } catch (error) {
+                console.error('Recovery migrazione account non riuscita durante la lettura locale:', error);
+                if (isMounted) {
+                    setGuestMigrationStatus('failed');
+                    setSaveError('Recovery account non completata. I dati locali sono stati lasciati intatti. Riprova.');
+                }
+                return true;
+            }
+
+            if (!isMounted) return true;
+
+            const guestStillActive = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+            if (!authenticatedEnvelope) {
+                if (guestStillActive) {
+                    // Il marker recovery non è sufficiente senza l'envelope autenticato.
+                    // Manteniamo il guest come fonte autorevole e rifacciamo la migrazione completa.
+                    clearGuestMigrationSyncRecovery(user.uid);
+                    return false;
+                }
+
+                setGuestMigrationStatus('failed');
+                setSaveError('Recovery account non completata: copia locale autenticata non disponibile. I dati non sono stati dichiarati sincronizzati.');
+                return true;
+            }
+
+            setUserData(authenticatedEnvelope.data);
+
+            if (guestStillActive) {
+                // Possibile crash dopo il commit locale e prima del ritiro del marker guest.
+                // L'envelope UID è stato riletto con successo, quindi possiamo completare il cambio owner.
+                useAppStore.getState().setLocalWorkout(authenticatedEnvelope.data.activeWorkout || null);
+                try {
+                    localStorage.removeItem(GUEST_KEY);
+                    isGuestRef.current = false;
+                    if (isMounted) setIsGuest(false);
+                    localStorage.removeItem(GUEST_MIGRATION_POLICY_KEY);
+                    migrationDataRef.current = null;
+                } catch (error) {
+                    console.error('Recovery migrazione account non riuscita durante il cambio owner:', error);
+                    setGuestMigrationStatus('failed');
+                    setSaveError('Recovery account non completata. La copia locale autenticata è conservata; riprova.');
+                    return true;
+                }
+            }
+
+            setSyncing(true);
+            try {
+                const result = await replicateJournal();
+                if (!isMounted) return true;
+
+                if (result.status === 'synced' || result.status === 'local-pending') {
+                    clearGuestMigrationSyncRecovery(user.uid);
+                    setGuestMigrationStatus('idle');
+                    if (result.status === 'local-pending') {
+                        setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
+                    }
+                } else {
+                    setGuestMigrationStatus('failed');
+                    setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
+                }
+            } catch (error) {
+                console.error('Recovery sincronizzazione account non riuscita:', error);
+                if (isMounted) {
+                    setGuestMigrationStatus('failed');
+                    setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
+                }
+            } finally {
+                setSyncing(false);
+            }
+
+            return true;
+        };
+
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
             if (user) localStorage.removeItem('logbook_awaiting_redirect');
             if (!isMounted) return;
@@ -68,6 +171,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 const wasGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+                const recoveryUid = readGuestMigrationSyncRecovery();
+
+                if (recoveryUid === user.uid) {
+                    const handled = await resumePersistedGuestMigration(user);
+                    if (handled) return;
+                }
+
                 if (wasGuest) {
                     // Firebase ha autenticato l'utente, ma restiamo semanticamente guest finché
                     // l'envelope autenticato non è stato scritto con successo in IndexedDB.
@@ -86,8 +196,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             setUserData,
                             setSyncing,
                             onLocalReady: () => {
-                                // Questo callback viene invocato solo dopo una persistenza locale
-                                // autenticata riuscita. Da qui un reload può ripartire dall'owner UID.
+                                // Il marker post-commit deve essere durevole prima del cambio owner:
+                                // se il processo si interrompe dopo questo punto, il reload riprende il journal UID.
+                                markGuestMigrationSyncRecovery(user.uid);
                                 localStorage.removeItem(GUEST_KEY);
                                 isGuestRef.current = false;
                                 if (isMounted) setIsGuest(false);
@@ -102,6 +213,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             setGuestMigrationStatus('failed');
                             setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
                         } else {
+                            clearGuestMigrationSyncRecovery(user.uid);
                             setGuestMigrationStatus('idle');
                             if (migrationResult.status === 'local-pending') {
                                 setSaveError('📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
@@ -294,6 +406,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
             const result = await replicateJournal();
             if (result.status === 'synced' || result.status === 'local-pending') {
+                const currentUid = auth.currentUser?.uid;
+                if (currentUid) clearGuestMigrationSyncRecovery(currentUid);
                 setGuestMigrationStatus('idle');
                 if (result.status === 'local-pending') {
                     setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
@@ -339,6 +453,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 await DB.purgeAllLocalUserData(); // [SEC-02]
 
                 localStorage.removeItem(GUEST_KEY);
+                if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
                 isGuestRef.current = false;
                 setIsGuest(false);
                 setGuestMigrationStatus('idle');
@@ -422,6 +537,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 await DB.secureLogOut();
                 DB.resetCache();
                 useAppStore.getState().resetStore({ force: true });
+                if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
                 setGuestMigrationStatus('idle');
             } catch (error: any) {
                 console.error("Errore durante il logout:", error);
