@@ -68,7 +68,7 @@ afterEach(() => {
 });
 
 describe('guest migration crash recovery boundary', () => {
-    it('keeps the guest marker and policy when the authenticated local commit fails', async () => {
+    it('keeps the guest marker, policy and guest mode when the authenticated local commit fails', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
         localStorage.setItem('guest_migration_policy', 'merge');
@@ -93,6 +93,7 @@ describe('guest migration crash recovery boundary', () => {
         expect(localStorage.getItem('logbook_is_guest')).toBe('true');
         expect(localStorage.getItem('guest_migration_policy')).toBe('merge');
         expect(storageOwner()).toBe('guest');
+        expect(screen.getByTestId('guest-state').textContent).toBe('guest');
         expect(replication.run).not.toHaveBeenCalled();
 
         const guestEnvelope = await localRepository.readLocal('guest');
@@ -141,6 +142,38 @@ describe('guest migration crash recovery boundary', () => {
         expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
         expect(authenticatedEnvelope?.data.routines?.map(routine => routine.id))
             .toEqual(expect.arrayContaining(['cloud-routine', 'guest-routine']));
+        expect(screen.getByTestId('guest-state').textContent).toBe('account');
+    });
+
+    it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
+        const { guest } = fixtures();
+        localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem('guest_migration_policy', 'merge');
+        useAppStore.getState().setUserData(guest);
+
+        vi.mocked(DB.loadCloudPayload)
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(null);
+
+        render(
+            <AuthProvider>
+                <MigrationProbe />
+            </AuthProvider>
+        );
+
+        await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
+
+        const authenticatedEnvelope = await localRepository.readLocal(user.uid);
+        const guestEnvelope = await localRepository.readLocal('guest');
+
+        expect(authenticatedEnvelope).toBeDefined();
+        expect(authenticatedEnvelope?.data.profile).toMatchObject({ height: '175' });
+        expect(authenticatedEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(guestEnvelope?.data.routines?.map(routine => routine.id)).toContain('guest-routine');
+        expect(localStorage.getItem('logbook_is_guest')).toBeNull();
+        expect(localStorage.getItem('guest_migration_policy')).toBeNull();
+        expect(storageOwner()).toBe(`user:${user.uid}`);
+        expect(replication.run).toHaveBeenCalledTimes(1);
         expect(screen.getByTestId('guest-state').textContent).toBe('account');
     });
 });

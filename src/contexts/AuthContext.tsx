@@ -69,9 +69,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 const wasGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
                 if (wasGuest) {
-                    // Firebase ha autenticato l'utente, ma il marker guest resta finché
+                    // Firebase ha autenticato l'utente, ma restiamo semanticamente guest finché
                     // l'envelope autenticato non è stato scritto con successo in IndexedDB.
-                    setIsGuest(false);
                     setGuestMigrationStatus('pending');
 
                     draftRegistry.flushAll();
@@ -91,6 +90,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                                 // autenticata riuscita. Da qui un reload può ripartire dall'owner UID.
                                 localStorage.removeItem(GUEST_KEY);
                                 isGuestRef.current = false;
+                                if (isMounted) setIsGuest(false);
                                 localStorage.removeItem(GUEST_MIGRATION_POLICY_KEY);
                                 migrationDataRef.current = null;
                             },

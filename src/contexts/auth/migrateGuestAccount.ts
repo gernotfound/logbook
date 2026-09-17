@@ -69,33 +69,25 @@ export async function migrateGuestAccount({
         const cloudHasData = hasUserData(cloudData);
         const guestHasData = hasUserData(guestData);
 
+        const resolveAuthenticatedBase = async (): Promise<UserData> => {
+            if (cloudData) return cloudData;
+            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+            const fallbackData = getResolvedDefaultUserData(catalog);
+            return UserDataSchema.parse(fallbackData) as unknown as UserData;
+        };
+
         if (policy === 'skip') {
-            if (cloudHasData) {
-                const { hydrateLocal } = await import('../../lib/sync/localRepository');
-                const hydratedEnv = await hydrateLocal(
-                    user.uid,
-                    cloudData!,
-                    cloudPayload!.completeMonths,
-                    cloudPayload!.cloudDocuments,
-                    'all'
-                );
-                markLocalReady();
-                applyLocalData(hydratedEnv.data);
-            } else {
-                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                const fallbackData = getResolvedDefaultUserData(catalog);
-                const parsedFallback = UserDataSchema.parse(fallbackData) as unknown as UserData;
-                const { hydrateLocal } = await import('../../lib/sync/localRepository');
-                const hydratedEnv = await hydrateLocal(
-                    user.uid,
-                    cloudData || parsedFallback,
-                    cloudPayload?.completeMonths || [],
-                    cloudPayload?.cloudDocuments,
-                    'all'
-                );
-                markLocalReady();
-                applyLocalData(hydratedEnv.data);
-            }
+            const { hydrateLocal } = await import('../../lib/sync/localRepository');
+            const authenticatedBase = await resolveAuthenticatedBase();
+            const hydratedEnv = await hydrateLocal(
+                user.uid,
+                authenticatedBase,
+                cloudPayload?.completeMonths || [],
+                cloudPayload?.cloudDocuments,
+                'all'
+            );
+            markLocalReady();
+            applyLocalData(hydratedEnv.data);
             return { ok: true, status: 'synced' };
         }
 
@@ -104,8 +96,8 @@ export async function migrateGuestAccount({
             const hydratedEnv = await hydrateLocal(
                 user.uid,
                 cloudData!,
-                cloudPayload!.completeMonths,
-                cloudPayload!.cloudDocuments,
+                cloudPayload?.completeMonths || [],
+                cloudPayload?.cloudDocuments,
                 'all'
             );
             markLocalReady();
@@ -115,11 +107,12 @@ export async function migrateGuestAccount({
 
         if (guestHasData) {
             const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
+            const authenticatedBase = await resolveAuthenticatedBase();
             const hydratedEnv = await hydrateLocal(
                 user.uid,
-                cloudData!,
-                cloudPayload!.completeMonths,
-                cloudPayload!.cloudDocuments,
+                authenticatedBase,
+                cloudPayload?.completeMonths || [],
+                cloudPayload?.cloudDocuments,
                 'all'
             );
             const mergedData = mergeUserData(hydratedEnv.data, guestData);
@@ -155,13 +148,11 @@ export async function migrateGuestAccount({
             return syncResult;
         }
 
-        const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-        const fallbackData = getResolvedDefaultUserData(catalog);
-        const parsedFallback = UserDataSchema.parse(fallbackData) as unknown as UserData;
         const { hydrateLocal } = await import('../../lib/sync/localRepository');
+        const authenticatedBase = await resolveAuthenticatedBase();
         const hydratedEnv = await hydrateLocal(
             user.uid,
-            cloudData || parsedFallback,
+            authenticatedBase,
             cloudPayload?.completeMonths || [],
             cloudPayload?.cloudDocuments,
             'all'

@@ -114,7 +114,7 @@ describe('guest login overlay lifecycle', () => {
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
 
         authState.currentUser = { uid: 'user-a' };
-        authState.isGuest = false;
+        authState.isGuest = true;
         authState.guestMigrationStatus = 'pending';
         act(() => {
             useAppStore.getState().setSyncing(true);
@@ -124,6 +124,7 @@ describe('guest login overlay lifecycle', () => {
         expect(screen.getByText('Preparazione account...')).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
 
+        authState.isGuest = false;
         authState.guestMigrationStatus = 'idle';
         act(() => {
             useAppStore.getState().setSyncing(false);
@@ -156,7 +157,7 @@ describe('guest login overlay lifecycle', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Accedi' }));
 
         authState.currentUser = { uid: 'user-a' };
-        authState.isGuest = false;
+        authState.isGuest = true;
         authState.guestMigrationStatus = 'failed';
         act(() => {
             useAppStore.getState().setSyncing(true);
