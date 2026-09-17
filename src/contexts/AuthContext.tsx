@@ -54,6 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Dati da migrare da guest a Google al momento del link
     const migrationDataRef = useRef<UserData | null>(null);
     const authRunRef = useRef(0);
+    const authUidRef = useRef(auth.currentUser?.uid ?? null);
 
     const setUserData = useAppStore(state => state.setUserData);
     const setSyncing = useAppStore(state => state.setSyncing);
@@ -193,10 +194,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
             if (!isMounted) return;
 
+            const nextUid = user?.uid ?? null;
+            const previousUid = authUidRef.current;
+            authUidRef.current = nextUid;
             const authRun = ++authRunRef.current;
-            invalidateSession();
+            if (previousUid !== nextUid) invalidateSession();
             setSyncing(false);
-            const expectedUid = user?.uid ?? null;
+            const expectedUid = nextUid;
             const isCurrentRun = () => isMounted
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
