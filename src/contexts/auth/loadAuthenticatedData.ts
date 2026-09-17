@@ -16,6 +16,8 @@ type LoadAuthenticatedDataOptions = {
     setSaveError: (value: string | null) => void;
 };
 
+const loadGenerationByOwner = new Map<string, number>();
+
 export async function loadAuthenticatedData({
     user,
     isGuestActive,
@@ -27,20 +29,21 @@ export async function loadAuthenticatedData({
 
     const session = captureSession();
     const expectedOwner = userOwner(user.uid);
+    const generation = (loadGenerationByOwner.get(expectedOwner) ?? 0) + 1;
+    loadGenerationByOwner.set(expectedOwner, generation);
     const isCurrent = () => session.owner === expectedOwner
         && isCurrentSession(session)
+        && loadGenerationByOwner.get(expectedOwner) === generation
         && auth.currentUser?.uid === user.uid
         && !isGuestActive();
 
     if (!isCurrent()) return;
 
     const currentData = useAppStore.getState().userData;
-    if (!currentData) {
-        setSyncing(true);
-    }
+    if (!currentData) setSyncing(true);
+
     try {
         const payload = await DB.loadCloudPayload();
-
         if (!isCurrent()) return;
 
         if (payload) {
@@ -48,7 +51,14 @@ export async function loadAuthenticatedData({
             try {
                 const { hydrateLocal } = await import('../../lib/sync/localRepository');
                 if (!isCurrent()) return;
-                const hydratedEnv = await hydrateLocal(user.uid, cloudData, payload.completeMonths, payload.cloudDocuments);
+                const hydratedEnv = await hydrateLocal(
+                    user.uid,
+                    cloudData,
+                    payload.completeMonths,
+                    payload.cloudDocuments,
+                    'window',
+                    isCurrent
+                );
                 if (!isCurrent()) return;
                 setUserData(hydratedEnv.data);
             } catch (mergeError) {
