@@ -130,6 +130,7 @@ describe('guest migration crash recovery boundary', () => {
             </AuthProvider>
         );
 
+        await waitFor(() => expect(replication.run).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
 
         expect(markerDuringReplication).toBeNull();
@@ -161,6 +162,7 @@ describe('guest migration crash recovery boundary', () => {
             </AuthProvider>
         );
 
+        await waitFor(() => expect(replication.run).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(screen.getByTestId('migration-status').textContent).toBe('idle'));
 
         const authenticatedEnvelope = await localRepository.readLocal(user.uid);
