@@ -82,8 +82,8 @@ function App() {
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
   const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
-  const guestLoginMigrationPending = showGuestLogin && !!currentUser && guestMigrationStatus === 'pending';
-  const guestLoginMigrationFailed = showGuestLogin && !!currentUser && guestMigrationStatus === 'failed';
+  const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
+  const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
   const hideBottomNav = guestLoginOverlayVisible || guestLoginMigrationPending || guestLoginMigrationFailed;
 
   const openGuestLogin = () => {
