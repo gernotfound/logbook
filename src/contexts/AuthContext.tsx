@@ -13,8 +13,10 @@ import { draftRegistry } from '../lib/utils/draftRegistry';
 import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
+import { replicateJournal } from '../lib/sync/replicateJournal';
 
 const GUEST_KEY = 'logbook_is_guest';
+const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -23,6 +25,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // isGuest è gestito con un ref (per uso nei callback) + state (per re-render)
     const isGuestRef = useRef(localStorage.getItem(GUEST_KEY) === 'true');
     const [isGuest, setIsGuest] = useState(isGuestRef.current);
+    const [guestMigrationStatus, setGuestMigrationStatus] = useState<'idle' | 'pending' | 'failed'>('idle');
 
     // Dati da migrare da guest a Google al momento del link
     const migrationDataRef = useRef<UserData | null>(null);
@@ -66,35 +69,57 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 const wasGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
                 if (wasGuest) {
-                    // Rimuove subito il flag guest
-                    localStorage.removeItem(GUEST_KEY);
-                    isGuestRef.current = false;
+                    // Firebase ha autenticato l'utente, ma il marker guest resta finché
+                    // l'envelope autenticato non è stato scritto con successo in IndexedDB.
                     setIsGuest(false);
+                    setGuestMigrationStatus('pending');
 
                     draftRegistry.flushAll();
 
                     const guestData = migrationDataRef.current || useAppStore.getState().userData;
-                    migrationDataRef.current = null;
+                    const policy = localStorage.getItem(GUEST_MIGRATION_POLICY_KEY) === 'skip' ? 'skip' : 'merge';
 
-                    const policy = localStorage.getItem('guest_migration_policy') || 'merge';
-                    localStorage.removeItem('guest_migration_policy');
+                    try {
+                        const migrationResult = await migrateGuestAccount({
+                            user,
+                            guestData,
+                            policy,
+                            setUserData,
+                            setSyncing,
+                            onLocalReady: () => {
+                                // Questo callback viene invocato solo dopo una persistenza locale
+                                // autenticata riuscita. Da qui un reload può ripartire dall'owner UID.
+                                localStorage.removeItem(GUEST_KEY);
+                                isGuestRef.current = false;
+                                localStorage.removeItem(GUEST_MIGRATION_POLICY_KEY);
+                                migrationDataRef.current = null;
+                            },
+                        });
 
-                    if (policy === 'skip') {
-                        useAppStore.getState().setLocalWorkout(null);
+                        if (!isMounted) return;
+
+                        if (migrationResult.status === 'rejected' || migrationResult.status === 'failed') {
+                            setGuestMigrationStatus('failed');
+                            setSaveError('I dati sono salvati su questo dispositivo, ma la sincronizzazione dell’account non è stata completata. Riprova.');
+                        } else {
+                            setGuestMigrationStatus('idle');
+                            if (migrationResult.status === 'local-pending') {
+                                setSaveError('📶 Offline: account preparato sul dispositivo. La sincronizzazione riprenderà quando torni online.');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Preparazione account da modalità locale non completata:', error);
+                        if (!isMounted) return;
+                        setGuestMigrationStatus('failed');
+                        setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
                     }
-
-                    await migrateGuestAccount({
-                        user,
-                        guestData,
-                        policy,
-                        setUserData,
-                        setSyncing,
-                    });
                 } else {
                     // Login normale con Google
+                    setGuestMigrationStatus('idle');
                     loadData(user);
                 }
             } else {
+                setGuestMigrationStatus('idle');
                 // Nessun utente Firebase: resetta solo se NON siamo in modalità guest
                 const isGuestActive = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
                 if (!isGuestActive) {
@@ -139,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [loadData, setSyncing, setUserData]);
+    }, [loadData, setSyncing, setUserData, setSaveError]);
 
     // Login con Google (dalla schermata di login, nessun guest precedente)
     const login = useCallback(async () => {
@@ -203,6 +228,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem(GUEST_KEY, 'true');
         isGuestRef.current = true;
         setIsGuest(true);
+        setGuestMigrationStatus('idle');
         // Se non ci sono dati precedenti in store/cache, inizializza con il catalogo globale risolto
         const currentData = useAppStore.getState().userData;
         if (!currentData) {
@@ -252,6 +278,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [setSaveError]);
 
+    const retryGuestMigration = useCallback(async () => {
+        setSaveError(null);
+
+        // Se il marker guest esiste ancora, il fallimento è avvenuto prima del
+        // passaggio durevole di owner. Il reload rientra nel bootstrap guest e
+        // ripete l'intera migrazione conservando policy e dati.
+        if (localStorage.getItem(GUEST_KEY) === 'true') {
+            window.location.reload();
+            return;
+        }
+
+        setGuestMigrationStatus('pending');
+        setSyncing(true);
+        try {
+            const result = await replicateJournal();
+            if (result.status === 'synced' || result.status === 'local-pending') {
+                setGuestMigrationStatus('idle');
+                if (result.status === 'local-pending') {
+                    setSaveError('📶 Offline: i dati sono salvati sul dispositivo e verranno sincronizzati quando torni online.');
+                }
+            } else {
+                setGuestMigrationStatus('failed');
+                setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
+            }
+        } catch (error) {
+            console.error('Retry sincronizzazione account non riuscito:', error);
+            setGuestMigrationStatus('failed');
+            setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
+        } finally {
+            setSyncing(false);
+        }
+    }, [setSaveError, setSyncing]);
+
     const logoutInFlightRef = useRef(false);
 
     // Costante per il timeout
@@ -282,6 +341,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.removeItem(GUEST_KEY);
                 isGuestRef.current = false;
                 setIsGuest(false);
+                setGuestMigrationStatus('idle');
                 useAppStore.getState().resetStore({ force: true });
                 return;
             }
@@ -362,6 +422,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 await DB.secureLogOut();
                 DB.resetCache();
                 useAppStore.getState().resetStore({ force: true });
+                setGuestMigrationStatus('idle');
             } catch (error: any) {
                 console.error("Errore durante il logout:", error);
                 await useDialogStore.getState().showAlert("Errore durante il logout. Controlla la connessione.");
@@ -377,13 +438,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentUser,
         loading,
         isGuest,
+        guestMigrationStatus,
         login,
         loginAsGuest,
         linkGoogleAccount,
+        retryGuestMigration,
         logout,
         loginWithEmail,
         registerWithEmail
-    }), [currentUser, loading, isGuest, login, loginAsGuest, linkGoogleAccount, logout, loginWithEmail, registerWithEmail]);
+    }), [currentUser, loading, isGuest, guestMigrationStatus, login, loginAsGuest, linkGoogleAccount, retryGuestMigration, logout, loginWithEmail, registerWithEmail]);
 
     return (
         <AuthContext.Provider value={value}>

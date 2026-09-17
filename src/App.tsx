@@ -65,7 +65,7 @@ function persistGuestLoginOverlayState(visible: boolean): void {
 }
 
 function App() {
-  const { currentUser, loading, isGuest } = useAuth();
+  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -81,9 +81,10 @@ function App() {
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
-  const guestLoginOverlayVisible = showGuestLogin && (!currentUser || isGuest);
-  const guestLoginMigrationPending = showGuestLogin && !!currentUser && !isGuest && syncing;
-  const hideBottomNav = guestLoginOverlayVisible || guestLoginMigrationPending;
+  const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
+  const guestLoginMigrationPending = showGuestLogin && !!currentUser && guestMigrationStatus === 'pending';
+  const guestLoginMigrationFailed = showGuestLogin && !!currentUser && guestMigrationStatus === 'failed';
+  const hideBottomNav = guestLoginOverlayVisible || guestLoginMigrationPending || guestLoginMigrationFailed;
 
   const openGuestLogin = () => {
     persistGuestLoginOverlayState(true);
@@ -102,11 +103,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (showGuestLogin && currentUser && !isGuest && !syncing) {
+    if (showGuestLogin && currentUser && !isGuest && guestMigrationStatus === 'idle' && !syncing) {
       persistGuestLoginOverlayState(false);
       setShowGuestLogin(false);
     }
-  }, [showGuestLogin, currentUser, isGuest, syncing]);
+  }, [showGuestLogin, currentUser, isGuest, guestMigrationStatus, syncing]);
 
   // Handle URL parameters for PWA shortcuts
   useEffect(() => {
@@ -282,6 +283,26 @@ function App() {
           </div>
         </div>
       )}
+      {guestLoginMigrationFailed && (
+        <div id="auth-overlay" style={{ zIndex: 10001 }} role="alert" aria-live="assertive">
+          <div style={{ textAlign: 'center', maxWidth: '460px', padding: '30px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+            <h1 style={{ color: 'var(--primary-color)', marginBottom: '10px' }}>Accesso non completato</h1>
+            <p style={{ lineHeight: 1.5 }}>
+              I dati salvati su questo dispositivo sono stati conservati.
+            </p>
+            <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Riprova per completare in sicurezza la preparazione dell’account.
+            </p>
+            <button
+              type="button"
+              onClick={() => void retryGuestMigration()}
+              style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+            >
+              Riprova
+            </button>
+          </div>
+        </div>
+      )}
       {isGuest && (
         <div style={{
           position: 'fixed',
@@ -319,7 +340,7 @@ function App() {
           </button>
         </div>
       )}
-      {syncing && !guestLoginMigrationPending && (
+      {syncing && !guestLoginMigrationPending && !guestLoginMigrationFailed && (
         <div 
           className="sync-indicator" 
           role="status" 

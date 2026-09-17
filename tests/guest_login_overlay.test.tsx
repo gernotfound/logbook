@@ -6,9 +6,11 @@ const authState = vi.hoisted(() => ({
     currentUser: null as { uid: string } | null,
     loading: false,
     isGuest: true,
+    guestMigrationStatus: 'idle' as 'idle' | 'pending' | 'failed',
     login: async () => {},
     loginAsGuest: async () => {},
     linkGoogleAccount: async () => {},
+    retryGuestMigration: vi.fn(async () => {}),
     logout: async () => {},
     loginWithEmail: async () => {},
     registerWithEmail: async () => {},
@@ -95,6 +97,8 @@ describe('guest login overlay lifecycle', () => {
         authState.currentUser = null;
         authState.loading = false;
         authState.isGuest = true;
+        authState.guestMigrationStatus = 'idle';
+        authState.retryGuestMigration.mockClear();
         useAppStore.getState().resetStore({ force: true });
         useAppStore.getState().setSyncing(false);
     });
@@ -111,6 +115,7 @@ describe('guest login overlay lifecycle', () => {
 
         authState.currentUser = { uid: 'user-a' };
         authState.isGuest = false;
+        authState.guestMigrationStatus = 'pending';
         act(() => {
             useAppStore.getState().setSyncing(true);
         });
@@ -119,6 +124,7 @@ describe('guest login overlay lifecycle', () => {
         expect(screen.getByText('Preparazione account...')).toBeTruthy();
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
 
+        authState.guestMigrationStatus = 'idle';
         act(() => {
             useAppStore.getState().setSyncing(false);
         });
@@ -128,5 +134,44 @@ describe('guest login overlay lifecycle', () => {
         });
         expect(screen.queryByTestId('guest-login-box')).toBeNull();
         expect(screen.getByTestId('bottom-nav')).toBeTruthy();
+    });
+
+    it('restores the guest login overlay from sessionStorage after a remount', () => {
+        sessionStorage.setItem(OVERLAY_SESSION_KEY, 'true');
+
+        const firstRender = render(<App />);
+        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+
+        firstRender.unmount();
+        render(<App />);
+
+        expect(screen.getByTestId('guest-login-box')).toBeTruthy();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
+    });
+
+    it('keeps the overlay blocking after a migration failure and retries explicitly', async () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole('button', { name: 'Accedi' }));
+
+        authState.currentUser = { uid: 'user-a' };
+        authState.isGuest = false;
+        authState.guestMigrationStatus = 'failed';
+        act(() => {
+            useAppStore.getState().setSyncing(true);
+        });
+        act(() => {
+            useAppStore.getState().setSyncing(false);
+        });
+
+        expect(screen.getByText('Accesso non completato')).toBeTruthy();
+        expect(screen.queryByTestId('bottom-nav')).toBeNull();
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Riprova' }));
+        await waitFor(() => expect(authState.retryGuestMigration).toHaveBeenCalledTimes(1));
+
+        expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
     });
 });
