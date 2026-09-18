@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { update } from 'idb-keyval';
 import { emptyUserData } from './setup';
 import type { UserData } from '../src/types';
 
@@ -77,17 +76,11 @@ describe('authenticated hydration session fencing', () => {
         sessionState.owner = 'user:user-a';
         sessionState.epoch += 1;
         dbState.loadCloudPayload.mockReset();
-        vi.mocked(update).mockClear();
     });
 
-    it('does not publish or persist A after the session switches to B while the local write is pending', async () => {
-        dbState.loadCloudPayload.mockResolvedValueOnce(payload('171'));
-        const originalUpdate = vi.mocked(update).getMockImplementation()!;
-        const releaseWrite = deferred<void>();
-        vi.mocked(update).mockImplementationOnce(async (key: any, updater: any) => {
-            await releaseWrite.promise;
-            return originalUpdate(key, updater);
-        });
+    it('does not publish or persist A when the session changes before cloud data arrives', async () => {
+        const firstPayload = deferred<ReturnType<typeof payload>>();
+        dbState.loadCloudPayload.mockReturnValueOnce(firstPayload.promise);
         const setUserData = vi.fn();
         const setSyncing = vi.fn();
         const setSaveError = vi.fn();
@@ -100,9 +93,9 @@ describe('authenticated hydration session fencing', () => {
             setSaveError,
         });
 
-        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(dbState.loadCloudPayload).toHaveBeenCalledTimes(1));
         switchSession('user-b');
-        releaseWrite.resolve();
+        firstPayload.resolve(payload('171'));
         await loadPromise;
 
         expect(await readLocal('user-a')).toBeUndefined();
@@ -111,16 +104,11 @@ describe('authenticated hydration session fencing', () => {
         expect(setSyncing).not.toHaveBeenCalledWith(false);
     });
 
-    it('does not let a stale A load overwrite the durable result after A to B to A', async () => {
+    it('does not resurrect an older A load after A to B to A', async () => {
+        const firstPayload = deferred<ReturnType<typeof payload>>();
         dbState.loadCloudPayload
-            .mockResolvedValueOnce(payload('171'))
+            .mockReturnValueOnce(firstPayload.promise)
             .mockResolvedValueOnce(payload('182'));
-        const originalUpdate = vi.mocked(update).getMockImplementation()!;
-        const releaseFirstWrite = deferred<void>();
-        vi.mocked(update).mockImplementationOnce(async (key: any, updater: any) => {
-            await releaseFirstWrite.promise;
-            return originalUpdate(key, updater);
-        });
         const firstSetUserData = vi.fn();
         const secondSetUserData = vi.fn();
 
@@ -131,7 +119,7 @@ describe('authenticated hydration session fencing', () => {
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
-        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(dbState.loadCloudPayload).toHaveBeenCalledTimes(1));
 
         switchSession('user-b');
         switchSession('user-a');
@@ -149,23 +137,18 @@ describe('authenticated hydration session fencing', () => {
             profile: expect.objectContaining({ height: '182' }),
         }));
 
-        releaseFirstWrite.resolve();
+        firstPayload.resolve(payload('171'));
         await firstLoad;
 
         expect((await readLocal('user-a'))?.data.profile.height).toBe('182');
         expect(firstSetUserData).not.toHaveBeenCalled();
     });
 
-    it('lets the newest same-account load supersede an older overlapping load at the IndexedDB boundary', async () => {
+    it('lets the newest same-account load supersede an older overlapping load', async () => {
+        const firstPayload = deferred<ReturnType<typeof payload>>();
         dbState.loadCloudPayload
-            .mockResolvedValueOnce(payload('171'))
+            .mockReturnValueOnce(firstPayload.promise)
             .mockResolvedValueOnce(payload('183'));
-        const originalUpdate = vi.mocked(update).getMockImplementation()!;
-        const releaseFirstWrite = deferred<void>();
-        vi.mocked(update).mockImplementationOnce(async (key: any, updater: any) => {
-            await releaseFirstWrite.promise;
-            return originalUpdate(key, updater);
-        });
         const firstSetUserData = vi.fn();
         const secondSetUserData = vi.fn();
 
@@ -176,7 +159,7 @@ describe('authenticated hydration session fencing', () => {
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
-        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(dbState.loadCloudPayload).toHaveBeenCalledTimes(1));
 
         const secondLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
@@ -192,7 +175,7 @@ describe('authenticated hydration session fencing', () => {
             profile: expect.objectContaining({ height: '183' }),
         }));
 
-        releaseFirstWrite.resolve();
+        firstPayload.resolve(payload('171'));
         await firstLoad;
 
         expect((await readLocal('user-a'))?.data.profile.height).toBe('183');
