@@ -1,10 +1,10 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported, setAnalyticsCollectionEnabled, type Analytics } from "firebase/analytics";
-import { 
-    getAuth, 
-    GoogleAuthProvider, 
+import {
+    getAuth,
+    GoogleAuthProvider,
     EmailAuthProvider,
-    signInWithPopup, 
+    signInWithPopup,
     signInWithRedirect,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -16,18 +16,19 @@ import {
     reauthenticateWithCredential,
     reauthenticateWithPopup,
     getRedirectResult,
-    signOut, 
+    signOut,
     onAuthStateChanged,
     setPersistence,
     browserLocalPersistence,
     deleteUser
 } from "firebase/auth";
-import { 
+import {
     initializeFirestore,
     persistentLocalCache,
     persistentMultipleTabManager,
     waitForPendingWrites
 } from "firebase/firestore";
+import { ensureAppCheckProvider, initAppCheck, type AppCheckResult } from './appCheck';
 
 const envVars: Record<string, string | undefined> = {
     'VITE_FIREBASE_API_KEY': import.meta.env.VITE_FIREBASE_API_KEY,
@@ -61,21 +62,22 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// App Check (ReCaptchaEnterpriseProvider) - On Demand Init
-export let appCheckPromise: Promise<void> | null = null;
-export const ensureAppCheck = () => {
-    if (typeof window === 'undefined') return Promise.resolve();
+// App Check provider bootstrap is synchronous so protected Firebase services can
+// never be initialized before the provider. Token acquisition remains async and
+// is exposed separately through ensureAppCheck().
+ensureAppCheckProvider(app);
+
+export let appCheckPromise: Promise<AppCheckResult> | null = null;
+export const ensureAppCheck = (): Promise<AppCheckResult> => {
     if (!appCheckPromise) {
-        appCheckPromise = import('./appCheck').then(({ initAppCheck }) => {
-            return initAppCheck(app).then((res) => {
-                if (!res.success && !res.disabled) {
-                    console.warn("Inizializzazione App Check non riuscita:", res.reason);
-                }
-            }).catch((err) => {
-                console.warn("Errore durante l'inizializzazione di App Check:", err);
-            });
-        }).catch(err => {
-            console.warn("Errore caricamento modulo App Check:", err);
+        appCheckPromise = initAppCheck(app).then((result) => {
+            if (!result.success && !result.disabled) {
+                console.warn("App Check non pronto per il cloud:", result.reason ?? result.phase);
+            }
+            return result;
+        }).catch((error: unknown) => {
+            console.warn("Errore durante l'inizializzazione di App Check:", error);
+            throw error;
         });
     }
     return appCheckPromise;
@@ -105,10 +107,12 @@ const enableConsentedAnalytics = async () => {
 };
 if (currentAnalyticsConsent) void enableConsentedAnalytics();
 
-let _db: any = null;
+let _db: ReturnType<typeof initializeFirestore> | null = null;
 export const getDb = () => {
     if (!_db) {
-        ensureAppCheck();
+        // Idempotent guard: keeps ordering explicit even if tests reset App Check
+        // state or a future caller constructs Firestore before ensureAppCheck().
+        ensureAppCheckProvider(app);
         _db = initializeFirestore(app, {
             localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
         });
@@ -121,7 +125,6 @@ const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 setPersistence(auth, browserLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
-
 
 export const getAnalyticsConsent = () => currentAnalyticsConsent;
 
@@ -140,12 +143,12 @@ export const setAnalyticsConsent = (consent: boolean) => {
     }
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('analytics_consent_changed'));
 };
-export { 
-    auth, 
-    provider, 
+export {
+    auth,
+    provider,
     EmailAuthProvider,
-    signInWithPopup, 
-    signInWithRedirect, 
+    signInWithPopup,
+    signInWithRedirect,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     sendPasswordResetEmail,
@@ -155,10 +158,10 @@ export {
     linkWithPopup,
     reauthenticateWithCredential,
     reauthenticateWithPopup,
-    getRedirectResult, 
-    signOut, 
-    onAuthStateChanged, 
-    waitForPendingWrites, 
-    deleteUser, 
-    analytics 
+    getRedirectResult,
+    signOut,
+    onAuthStateChanged,
+    waitForPendingWrites,
+    deleteUser,
+    analytics
 };
