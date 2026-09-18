@@ -12,6 +12,7 @@ import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
 import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
 import { storageOwner } from './sync/session';
+import { classifySyncFailure } from './sync/syncFailure';
 
 export const DB = {
     resetCache() {
@@ -182,7 +183,7 @@ export const DB = {
             return result;
         } catch (error) {
             console.error('Errore durante il salvataggio:', error);
-            return { ok: false, status: 'local-pending', error };
+            return classifySyncFailure(error);
         }
     },
     async purgeAllLocalUserData(owner?: string) {
