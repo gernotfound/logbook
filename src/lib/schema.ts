@@ -169,7 +169,7 @@ export const DomainParsers = {
                 quarantineCorruptedRecord({ collection: 'routines', raw: item, error: e });
                 return { name: '', exercises: [] };
             }
-        });
+        }).filter(item => isValidParsedId(item.id));
     },
     parseTrainingCycles: (data: unknown) => {
         if (!Array.isArray(data)) {
@@ -185,7 +185,7 @@ export const DomainParsers = {
             }
             return [];
         }
-        return data.map((item) => TrainingCycleSchema.parse(item));
+        return data.map((item) => TrainingCycleSchema.parse(item)).filter(item => isValidParsedId(item.id));
     },
     parseSupplements: (data: unknown) => {
         if (!Array.isArray(data)) {
@@ -201,7 +201,7 @@ export const DomainParsers = {
             }
             return [];
         }
-        return data.map((item) => SupplementSchema.parse(item));
+        return data.map((item) => SupplementSchema.parse(item)).filter(item => isValidParsedId(item.id));
     },
     parseActivePains: (data: unknown) => {
         if (!Array.isArray(data)) {
