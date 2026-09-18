@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import {
     readWorkoutTimerSnapshot,
@@ -12,6 +12,9 @@ const OWNER = 'user:timer-test';
 describe('atomic workout timer storage', () => {
     beforeEach(() => {
         localStorage.clear();
+    });
+
+    afterEach(() => {
         vi.restoreAllMocks();
     });
 
