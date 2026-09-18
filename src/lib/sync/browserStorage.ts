@@ -12,16 +12,16 @@ export class BrowserStorageError extends Error {
     }
 }
 
-function storage(): Storage {
+function storage(operation: BrowserStorageError['operation'], key: string): Storage {
     if (typeof localStorage === 'undefined') {
-        throw new BrowserStorageError('read', '<storage>', new Error('localStorage unavailable'));
+        throw new BrowserStorageError(operation, key, new Error('localStorage unavailable'));
     }
     return localStorage;
 }
 
 export function readBrowserValueStrict(key: string): string | null {
     try {
-        return storage().getItem(key);
+        return storage('read', key).getItem(key);
     } catch (error) {
         if (error instanceof BrowserStorageError) throw error;
         throw new BrowserStorageError('read', key, error);
@@ -42,7 +42,7 @@ export function readBrowserValue(key: string): string | null {
 
 export function writeBrowserValue(key: string, value: string): void {
     try {
-        storage().setItem(key, value);
+        storage('write', key).setItem(key, value);
     } catch (error) {
         if (error instanceof BrowserStorageError) throw error;
         throw new BrowserStorageError('write', key, error);
@@ -61,7 +61,7 @@ export function writeBrowserJson(key: string, value: unknown): void {
 
 export function removeBrowserValue(key: string): void {
     try {
-        storage().removeItem(key);
+        storage('remove', key).removeItem(key);
     } catch (error) {
         if (error instanceof BrowserStorageError) throw error;
         throw new BrowserStorageError('remove', key, error);
