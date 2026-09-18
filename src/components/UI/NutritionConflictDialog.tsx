@@ -29,9 +29,12 @@ export const NutritionConflictDialog: React.FC<Props> = ({
   const onCloseRef = useRef(onClose);
   const syncingRef = useRef(!!isSyncing);
   const showAlert = useDialogStore(state => state.showAlert);
+  const globalDialogOpen = useDialogStore(state => state.isOpen);
+  const globalDialogOpenRef = useRef(globalDialogOpen);
 
   onCloseRef.current = onClose;
   syncingRef.current = !!isSyncing;
+  globalDialogOpenRef.current = globalDialogOpen;
   useScrollLock(isOpen);
 
   useEffect(() => {
@@ -58,6 +61,10 @@ export const NutritionConflictDialog: React.FC<Props> = ({
     (safeActionRef.current ?? focusable()[0] ?? box).focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // GlobalDialog may be opened on top for an export/resolve error. In that
+      // case its own focus trap and Escape handling become authoritative.
+      if (globalDialogOpenRef.current) return;
+
       if (event.key === 'Escape') {
         if (syncingRef.current) return;
         event.preventDefault();
@@ -89,8 +96,8 @@ export const NutritionConflictDialog: React.FC<Props> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) safeActionRef.current?.focus();
-  }, [isOpen, view]);
+    if (isOpen && !globalDialogOpen) safeActionRef.current?.focus();
+  }, [globalDialogOpen, isOpen, view]);
 
   const handleClose = () => {
     if (isSyncing) return;
