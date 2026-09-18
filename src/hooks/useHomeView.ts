@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
+import { useLocalToday } from './useLocalToday';
+import { useRuntimeClock } from './useRuntimeClock';
 
 function getWorkoutTimestamp(w: any): number | null {
     if (!w) return null;
@@ -34,7 +36,7 @@ function getMuscleCategory(mId: string): { key: string; label: string } {
     return { key: 'other', label: 'Altro' };
 }
 
-function calcStreak(history: any[]): number {
+function calcStreak(history: any[], todayDate: string): number {
     if (!history || history.length === 0) return 0;
     const workoutDates = new Set<string>(
         history
@@ -43,17 +45,16 @@ function calcStreak(history: any[]): number {
     );
 
     let streak = 0;
-    const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
+    const today = new Date(`${todayDate}T12:00:00`);
     const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
-    
+
     // Check if worked out today or yesterday to begin streak count
-    let cur = workoutDates.has(todayStr) 
-        ? today 
+    let cur = workoutDates.has(todayDate)
+        ? today
         : (workoutDates.has(yesterdayStr) ? subDays(today, 1) : null);
-    
+
     if (!cur) return 0;
-    
+
     while (true) {
         const dateStr = format(cur, 'yyyy-MM-dd');
         if (workoutDates.has(dateStr)) {
@@ -66,7 +67,7 @@ function calcStreak(history: any[]): number {
     return streak;
 }
 
-export type HomeViewState = 
+export type HomeViewState =
     | { loading: true }
     | {
         loading: false;
@@ -111,6 +112,8 @@ export function useHomeView(): HomeViewState {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const profile = useAppStore(state => state.userData?.profile);
+    const localToday = useLocalToday();
+    const runtimeNow = useRuntimeClock();
 
     const painColors = useMemo(() => {
         const colors: Record<string, string> = {};
@@ -137,7 +140,7 @@ export function useHomeView(): HomeViewState {
     }, [activePains, dispatchDomainOperation]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
-    const streak = useMemo(() => calcStreak(history), [history]);
+    const streak = useMemo(() => calcStreak(history, localToday), [history, localToday]);
     const totalWorkouts = history.length;
 
     // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
@@ -146,9 +149,8 @@ export function useHomeView(): HomeViewState {
     // Calculate Heatmap & Volume
     const { muscleColors, volumeChartData } = useMemo(() => {
         const MAX_HOURS = 72;
-        const now = Date.now();
         const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-        
+
         const fatigue = new Map<string, number>();
         const volume = new Map<string, number>();
 
@@ -156,12 +158,12 @@ export function useHomeView(): HomeViewState {
             const workoutTime = getWorkoutTimestamp(w);
             if (!workoutTime) return;
 
-            const msPassed = now - workoutTime;
+            const msPassed = runtimeNow - workoutTime;
             const hoursPassed = msPassed / (1000 * 60 * 60);
-            
+
             const isRecent72h = hoursPassed >= 0 && hoursPassed <= MAX_HOURS;
             const isRecent7d = msPassed >= 0 && msPassed <= SEVEN_DAYS;
-            
+
             if (!isRecent72h && !isRecent7d) return;
 
             const baseFatigue = Math.max(0, 1 - (hoursPassed / MAX_HOURS));
@@ -236,7 +238,7 @@ export function useHomeView(): HomeViewState {
         };
 
         return { muscleColors: colors, volumeChartData: vChartData };
-    }, [history, libraryMap]);
+    }, [history, libraryMap, runtimeNow]);
 
     // Chronological array for charts and TDEE calc
     const { sortedDates, tdeeCalc } = useMemo(() => {
@@ -258,7 +260,7 @@ export function useHomeView(): HomeViewState {
             '365d': 365
         };
         const numDays = daysMap[weightPeriod] || 7;
-        const today = new Date();
+        const today = new Date(`${localToday}T12:00:00`);
 
         const dateRange: string[] = [];
         for (let i = numDays - 1; i >= 0; i--) {
@@ -332,15 +334,15 @@ export function useHomeView(): HomeViewState {
                 maxWeight
             }
         };
-    }, [nutrition, weightPeriod]);
+    }, [localToday, nutrition, weightPeriod]);
 
     // Early return AFTER all hooks
     if (!hasUserData) {
         return { loading: true };
     }
 
-    const todayStr = Logic.getLocalDateString();
-    
+    const todayStr = localToday;
+
     // Calculate today's workout
     const todaysWorkout = history.find((s: any) => {
         return getWorkoutDateStr(s) === todayStr;
@@ -356,10 +358,10 @@ export function useHomeView(): HomeViewState {
 
     // Get Targets from planning
     let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 2500;
-    
+
     if (nutritionPlanning) {
         const isDayOn = todayNutrition.isDayOn ?? true;
-        
+
         // Find latest weight
         const sortedDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
         let latestWeight = 80;
@@ -369,24 +371,24 @@ export function useHomeView(): HomeViewState {
                 break;
             }
         }
-        
+
         const w = nutritionPlanning.weight || latestWeight;
         const targetMacros = isDayOn ? nutritionPlanning.onMacros : nutritionPlanning.offMacros;
-        
+
         if (targetMacros) {
             const calc = Logic.calculateMacrosFromKg(w, targetMacros.carbsPerKg, targetMacros.proPerKg, targetMacros.fatPerKg);
             kcalTarget = Math.round(calc.totalKcal);
         }
     }
-    
+
     // Get BF % — use today's or most recent measurement
     const sortedNutritionDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
     const recentWeight = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.weight)?.weight;
-    const currentWeight = todayNutrition.weight || 
-                          recentWeight || 
+    const currentWeight = todayNutrition.weight ||
+                          recentWeight ||
                           nutritionPlanning?.weight || 80;
     const resolvedUserWeight = typeof currentWeight === 'number' ? currentWeight : (parseFloat(String(currentWeight)) || 80);
-    
+
     let bf = "--";
     const recentNutritionWithBf = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
     const directBf = (todayNutrition.bf !== undefined && todayNutrition.bf !== null && todayNutrition.bf !== '')
