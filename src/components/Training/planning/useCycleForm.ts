@@ -35,7 +35,7 @@ function computeWeeksFromDates(startIso: string, endIso: string): number {
 export interface UseCycleFormProps {
     initialCycle?: TrainingCycle | null;
     routines: WorkoutRoutine[];
-    onSave: (cycleData: TrainingCycle) => void;
+    onSave: (cycleData: TrainingCycle) => void | Promise<void>;
     showAlert: (msg: string) => Promise<void>;
 }
 
@@ -260,7 +260,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             isActive: initialCycle?.isActive ?? false
         };
 
-        onSave(cycle);
+        await onSave(cycle);
     };
 
     const tempWeeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
