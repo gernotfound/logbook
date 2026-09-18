@@ -6,11 +6,6 @@ const authState = vi.hoisted(() => ({
     currentUser: { uid: 'user-a' } as { uid: string } | null,
 }));
 
-const sessionState = vi.hoisted(() => ({
-    owner: 'user:user-a',
-    epoch: 0,
-}));
-
 const dbState = vi.hoisted(() => ({
     loadCloudPayload: vi.fn(),
 }));
@@ -25,14 +20,6 @@ vi.mock('../src/lib/db', () => ({
     },
 }));
 
-vi.mock('../src/lib/sync/session', () => ({
-    captureSession: () => ({ owner: sessionState.owner, epoch: sessionState.epoch }),
-    isCurrentSession: (session: { owner: string; epoch: number }) => (
-        session.owner === sessionState.owner && session.epoch === sessionState.epoch
-    ),
-    userOwner: (uid: string) => `user:${uid}`,
-}));
-
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: {
         getState: () => ({ userData: { profile: { height: '170' } } }),
@@ -41,6 +28,7 @@ vi.mock('../src/store/useAppStore', () => ({
 
 import { loadAuthenticatedData } from '../src/contexts/auth/loadAuthenticatedData';
 import { readLocal } from '../src/lib/sync/localRepository';
+import { invalidateSession } from '../src/lib/sync/session';
 
 function data(height: string): UserData {
     return {
@@ -57,8 +45,7 @@ function deferred<T>() {
 
 function switchSession(uid: string): void {
     authState.currentUser = { uid };
-    sessionState.owner = `user:${uid}`;
-    sessionState.epoch += 1;
+    invalidateSession();
 }
 
 function payload(height: string) {
@@ -73,8 +60,7 @@ describe('authenticated hydration session fencing', () => {
     beforeEach(() => {
         localStorage.clear();
         authState.currentUser = { uid: 'user-a' };
-        sessionState.owner = 'user:user-a';
-        sessionState.epoch += 1;
+        invalidateSession();
         dbState.loadCloudPayload.mockReset();
     });
 
