@@ -1,28 +1,40 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.unmock('../src/lib/db');
+import { TestDB as DB } from './testUtils';
+import { writeBatch } from 'firebase/firestore';
 
-const firebase = vi.hoisted(() => ({
-    auth: { currentUser: { uid: 'sync-user' } as { uid: string } | null },
-    ensureAppCheck: vi.fn(),
-}));
+let mockBatch: {
+    set: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    commit: ReturnType<typeof vi.fn>;
+};
 
-vi.mock('../src/lib/firebase', () => ({
-    auth: firebase.auth,
-    getDb: vi.fn(() => ({})),
-    ensureAppCheck: firebase.ensureAppCheck,
-}));
-
-import { DB } from '../src/lib/db';
-
-const state = { profile: {}, history: [], nutrition: {}, library: [], routines: [], customFoods: [], trainingCycles: [], supplements: [], activePains: [] };
+const state = {
+    profile: {},
+    history: [],
+    nutrition: {},
+    library: [],
+    routines: [],
+    customFoods: [],
+    trainingCycles: [],
+    supplements: [],
+    activePains: [],
+};
 
 describe('DB.saveUserData cloud failure semantics', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        firebase.auth.currentUser = { uid: 'sync-user' };
+        DB.resetCache();
+        mockBatch = {
+            set: vi.fn(),
+            delete: vi.fn(),
+            commit: vi.fn().mockResolvedValue(undefined),
+        };
+        vi.mocked(writeBatch).mockReturnValue(mockBatch as never);
     });
 
     it('classifies permission-denied as rejected instead of offline pending', async () => {
-        firebase.ensureAppCheck.mockRejectedValueOnce({ code: 'permission-denied' });
+        mockBatch.commit.mockRejectedValueOnce({ code: 'permission-denied' });
 
         const result = await DB.saveUserData(state);
 
@@ -31,7 +43,7 @@ describe('DB.saveUserData cloud failure semantics', () => {
     });
 
     it('keeps known transport failures retryable as local-pending', async () => {
-        firebase.ensureAppCheck.mockRejectedValueOnce({ code: 'unavailable' });
+        mockBatch.commit.mockRejectedValueOnce({ code: 'unavailable' });
 
         const result = await DB.saveUserData(state);
 
@@ -39,8 +51,8 @@ describe('DB.saveUserData cloud failure semantics', () => {
         expect(result.status).toBe('local-pending');
     });
 
-    it('classifies unknown App Check/import/runtime failures as failed', async () => {
-        firebase.ensureAppCheck.mockRejectedValueOnce(new Error('App Check bootstrap failed'));
+    it('classifies unknown cloud/runtime failures as failed', async () => {
+        mockBatch.commit.mockRejectedValueOnce(new Error('unexpected cloud runtime failure'));
 
         const result = await DB.saveUserData(state);
 
