@@ -12,6 +12,7 @@ import {
     ReCaptchaEnterpriseProvider,
     getToken,
     type AppCheck,
+    type AppCheckTokenResult,
 } from 'firebase/app-check';
 import type { FirebaseApp } from 'firebase/app';
 
@@ -50,7 +51,6 @@ export interface AppCheckStatusDetails {
     hasToken: boolean;
     tokenAvailable: boolean;
     tokenError: string | null;
-    tokenExpireTimestamp?: number;
     provider: 'ReCaptchaEnterpriseProvider' | 'none';
     phase: AppCheckPhase;
 }
@@ -66,7 +66,7 @@ export const APP_CHECK_STRINGS = {
 let appCheckInstance: AppCheck | null = null;
 let isSupportedCached: boolean | null = null;
 let isFallbackOfflineMode = false;
-let lastToken: { token: string; expireTimeMillis: number } | null = null;
+let lastToken: AppCheckTokenResult | null = null;
 let lastTokenError: string | null = null;
 let appCheckPhase: AppCheckPhase = 'uninitialized';
 
@@ -244,7 +244,6 @@ export function getAppCheckStatus(): AppCheckStatusDetails {
         hasToken: Boolean(lastToken?.token),
         tokenAvailable: Boolean(lastToken?.token),
         tokenError: lastTokenError,
-        tokenExpireTimestamp: lastToken?.expireTimeMillis,
         provider: appCheckInstance ? 'ReCaptchaEnterpriseProvider' : 'none',
         phase: appCheckPhase,
     };
