@@ -23,6 +23,7 @@ vi.mock('../src/hooks/useAuth', () => ({
 vi.mock('../src/lib/firebase', () => ({
     analytics: null,
     getAnalyticsConsent: () => false,
+    getConsentedAnalytics: async () => null,
 }));
 
 vi.mock('firebase/analytics', () => ({
