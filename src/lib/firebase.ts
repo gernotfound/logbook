@@ -67,10 +67,13 @@ const app = initializeApp(firebaseConfig);
 // is exposed separately through ensureAppCheck().
 ensureAppCheckProvider(app);
 
+// Share only the in-flight token bootstrap. A failed initial token acquisition
+// must be retryable on a later foreground/sync attempt instead of being cached
+// for the lifetime of the page.
 export let appCheckPromise: Promise<AppCheckResult> | null = null;
 export const ensureAppCheck = (): Promise<AppCheckResult> => {
     if (!appCheckPromise) {
-        appCheckPromise = initAppCheck(app).then((result) => {
+        const inFlight = initAppCheck(app).then((result) => {
             if (!result.success && !result.disabled) {
                 console.warn("App Check non pronto per il cloud:", result.reason ?? result.phase);
             }
@@ -78,6 +81,13 @@ export const ensureAppCheck = (): Promise<AppCheckResult> => {
         }).catch((error: unknown) => {
             console.warn("Errore durante l'inizializzazione di App Check:", error);
             throw error;
+        });
+        appCheckPromise = inFlight;
+        void inFlight.finally(() => {
+            if (appCheckPromise === inFlight) appCheckPromise = null;
+        }).catch(() => {
+            // The original promise carries the rejection to the caller; this
+            // observer exists only to clear the in-flight singleton safely.
         });
     }
     return appCheckPromise;
