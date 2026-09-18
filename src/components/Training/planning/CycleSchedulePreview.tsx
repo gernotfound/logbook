@@ -23,7 +23,7 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
         <div
             style={{
                 padding: '12px',
-                background: 'rgba(255, 255, 255, 0.02)',
+                background: 'var(--surface-light)',
                 border: '1px solid var(--glass-border)',
                 borderRadius: '8px',
                 marginBottom: '15px'
@@ -38,14 +38,14 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                     <span className="text-xs text-primary font-bold uppercase tracking-wider block">
                         Programmazione rotazione
                     </span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#fff' }}>
+                    <span style={{  fontWeight: 'bold', color: 'var(--text-main)' }} className="text-base">
                         🔄 Calendario rotazione schede ({schedule.totalSessions} sedute)
                     </span>
                 </div>
                 <button
                     type="button"
-                    className="btn btn-secondary btn-small"
-                    style={{ padding: '2px 8px', fontSize: '0.75rem', marginBottom: 0 }}
+                    className="btn btn-secondary btn-small text-sm"
+                    style={{ padding: '2px 8px',  marginBottom: 0 }}
                     onClick={(e) => {
                         e.stopPropagation();
                         onTogglePreview();
@@ -66,16 +66,16 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                             key={week.weekNumber}
                             style={{
                                 padding: '8px 10px',
-                                background: 'rgba(255, 255, 255, 0.04)',
+                                background: 'var(--surface-light)',
                                 borderRadius: '6px',
-                                border: '1px solid rgba(255, 255, 255, 0.05)'
+                                border: '1px solid var(--glass-border)'
                             }}
                         >
                             <div className="flex-between items-center mb-6">
-                                <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: 'var(--primary-color)' }}>
+                                <span style={{ fontWeight: 'bold',  color: 'var(--primary-color)' }} className="text-sm">
                                     Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
                                 </span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <span style={{  color: 'var(--text-muted)' }} className="text-sm">
                                     {week.sessions.length} {week.sessions.length === 1 ? 'seduta' : 'sedute'}
                                 </span>
                             </div>
@@ -86,16 +86,16 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                                         key={sess.globalSessionIndex}
                                         style={{
                                             padding: '4px 8px',
-                                            background: 'rgba(14, 165, 233, 0.1)',
-                                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                                            background: 'var(--primary-soft)',
+                                            border: '1px solid var(--primary-color)',
                                             borderRadius: '4px',
-                                            fontSize: '0.75rem',
-                                            color: '#fff',
+
+                                            color: 'var(--text-main)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '5px'
                                         }}
-                                    >
+                                     className="text-sm">
                                         <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
                                             #{sess.globalSessionIndex}
                                         </span>

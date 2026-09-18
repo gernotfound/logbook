@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { DayNavigator } from './DayNavigator';
+import './TrackingViews.css';
 import { shiftDateString } from '../../lib/utils/date';
 import { useAppStore } from '../../store/useAppStore';
 import { useSupplements } from '../../hooks/useSupplements';
@@ -14,15 +16,15 @@ interface NutritionSupplementsProps {
 
 export default function NutritionSupplements({ selectedDate, setSelectedDate }: NutritionSupplementsProps) {
     const dispatchDomainOperation = useAppStore(s => s.dispatchDomainOperation);
-    const { 
-        targetDateStr, supplementsLibrary, supplementsIntake, 
-        saveSupplementToLibrary, deleteSupplementFromLibrary, 
-        addIntake, removeIntake 
+    const {
+        targetDateStr, supplementsLibrary, supplementsIntake,
+        saveSupplementToLibrary, deleteSupplementFromLibrary,
+        addIntake, removeIntake
     } = useSupplements(selectedDate);
-    
+
     const showConfirm = useDialogStore(s => s.showConfirm);
     const showAlert = useDialogStore(s => s.showAlert);
-    
+
     // Stato per la modale di creazione/modifica integratore
     const [showSuppModal, setShowSuppModal] = useState(false);
     const [editingSuppId, setEditingSuppId] = useState<string | null>(null);
@@ -52,12 +54,12 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
             await showAlert("Inserisci il nome dell'integratore.");
             return;
         }
-        
+
         const payload: any = {
             name: suppForm.name.trim(),
             unit: suppForm.unit
         };
-        
+
         if (suppForm.target) {
             payload.target = parseFloat(suppForm.target);
         } else {
@@ -68,9 +70,9 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
         } else {
             payload.portion = null;
         }
-        
+
         await saveSupplementToLibrary(payload, editingSuppId || undefined);
-        
+
         setShowSuppModal(false);
         setEditingSuppId(null);
         setSuppForm({ name: '', unit: 'g', target: '', portion: '' });
@@ -111,28 +113,13 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
 
 
-    const renderDateNavigator = () => (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <button className="btn btn-small" onClick={handlePrevDay} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}>◀ Prec.</button>
-            <div style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} onClick={handleToday} title="Torna a oggi">
-                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                    {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr || '') : targetDateStr}
-                </div>
-                {targetDateStr === Logic.getLocalDateString() && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
-                )}
-            </div>
-            <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
-        </div>
-    );
-
     return (
         <div>
-            {setSelectedDate && renderDateNavigator()}
+            {setSelectedDate && <DayNavigator date={targetDateStr || ''} today={Logic.getLocalDateString()} onPrevious={handlePrevDay} onNext={handleNextDay} onToday={handleToday} />}
 
             {!showSuppModal ? (
-                <button 
-                    className="btn btn-primary" 
+                <button
+                    className="btn btn-primary"
                     style={{ width: '100%', marginBottom: '15px' }}
                     onClick={() => {
                         setEditingSuppId(null);
@@ -143,51 +130,51 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     + Nuovo integratore
                 </button>
             ) : (
-                <div className="card mb-15" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--primary-color)' }}>
+                <div className="card mb-15" style={{ background: 'var(--surface-color)', border: '1px solid var(--primary-color)' }}>
                     <h2 className="mb-15" style={{color: 'var(--text-main)'}}>
                         {editingSuppId ? 'Modifica integratore' : 'Crea nuovo integratore'}
                     </h2>
-                    
+
                     <div className="form-group">
-                        <label>Nome integratore</label>
-                        <input 
-                            type="text" 
-                            placeholder="es. Creatina, EAA, Caffeina" 
-                            value={suppForm.name} 
+                        <label htmlFor="supp-name">Nome integratore</label>
+                        <input
+                            id="supp-name" type="text"
+                            placeholder="es. Creatina, EAA, Caffeina"
+                            value={suppForm.name}
                             onChange={e => setSuppForm({...suppForm, name: e.target.value})}
                             style={{ width: '100%', boxSizing: 'border-box' }}
                         />
                     </div>
-                    
-                    <div style={{ display: 'flex', gap: '15px' }}>
+
+                    <div className="tracking-fields">
                         <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label>Dose target giornaliera</label>
-                            <input 
-                                type="number" 
+                            <label htmlFor="supp-target">Dose target giornaliera</label>
+                            <input
+                                id="supp-target" type="number"
                                 inputMode="decimal"
-                                placeholder="Opzionale (es. 5)" 
-                                value={suppForm.target} 
+                                placeholder="Opzionale (es. 5)"
+                                value={suppForm.target}
                                 onChange={e => setSuppForm({...suppForm, target: e.target.value})}
                                 style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
                             />
                         </div>
                         <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label>Dose singola (opzionale)</label>
-                            <input 
-                                type="number" 
+                            <label htmlFor="supp-portion">Dose singola (opzionale)</label>
+                            <input
+                                id="supp-portion" type="number"
                                 inputMode="decimal"
-                                placeholder="es. 20" 
-                                value={suppForm.portion} 
+                                placeholder="es. 20"
+                                value={suppForm.portion}
                                 onChange={e => setSuppForm({...suppForm, portion: e.target.value})}
                                 style={{ width: '100%', boxSizing: 'border-box', appearance: 'none' }}
                             />
                         </div>
                         <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-                            <label>Unità di misura</label>
-                            <input 
-                                type="text" 
-                                placeholder="es. g, mg, cp" 
-                                value={suppForm.unit} 
+                            <label htmlFor="supp-unit">Unità di misura</label>
+                            <input
+                                id="supp-unit" type="text"
+                                placeholder="es. g, mg, cp"
+                                value={suppForm.unit}
                                 onChange={e => setSuppForm({...suppForm, unit: e.target.value})}
                                 style={{ width: '100%', boxSizing: 'border-box' }}
                             />
@@ -213,14 +200,14 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     const suppIntakes = supplementsIntake.filter(i => i.supplementId === supp.id);
                     const totalAssunto = suppIntakes.reduce((acc, curr) => acc + curr.amount, 0);
                     const progressPercent = supp.target ? Math.min((totalAssunto / supp.target) * 100, 100) : 0;
-                    
+
                     return (
                         <div key={supp.id} className="card mb-15">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                                 <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-main)' }}>{supp.name}</div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                        Assunto: <strong style={{ color: 'var(--text-main)' }}>{Math.round(totalAssunto * 10) / 10}</strong> {supp.unit} 
+                                    <div style={{ fontWeight: 'bold',  color: 'var(--text-main)' }} className="text-lg">{supp.name}</div>
+                                    <div style={{  color: 'var(--text-muted)' }} className="text-sm">
+                                        Assunto: <strong style={{ color: 'var(--text-main)' }}>{Math.round(totalAssunto * 10) / 10}</strong> {supp.unit}
                                         {supp.target ? ` / ${supp.target} ${supp.unit}` : ''}
                                     </div>
                                 </div>
@@ -250,28 +237,28 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
                             {supp.target && (
                                 <div className="progress-bg" style={{ height: '6px', marginBottom: '15px' }}>
-                                    <div 
-                                        className="progress-fill" 
-                                        style={{ 
-                                            width: `${progressPercent}%`, 
-                                            background: progressPercent >= 100 ? 'var(--success-color)' : 'var(--primary-color)' 
+                                    <div
+                                        className="progress-fill"
+                                        style={{
+                                            width: `${progressPercent}%`,
+                                            background: progressPercent >= 100 ? 'var(--success-color)' : 'var(--primary-color)'
                                         }}
                                     />
                                 </div>
                             )}
 
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     inputMode="decimal"
-                                    placeholder={`Quantità (${supp.unit})`}
+                                    aria-label={`Quantità di ${supp.name} (${supp.unit})`} placeholder={`Quantità (${supp.unit})`}
                                     value={quickInputs[supp.id] !== undefined ? quickInputs[supp.id] : (supp.portion ? String(supp.portion) : '')}
                                     onChange={e => setQuickInputs({ ...quickInputs, [supp.id]: e.target.value })}
                                     onFocus={e => e.target.select()}
                                     style={{ margin: 0, flex: 1, appearance: 'none', WebkitAppearance: 'none' }}
                                 />
-                                <button 
-                                    className="btn btn-primary" 
+                                <button
+                                    className="btn btn-primary"
                                     style={{ margin: 0, whiteSpace: 'nowrap', flex: 1 }}
                                     onClick={async () => {
                                         try {
@@ -280,14 +267,14 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                                                 valStr = supp.portion ? String(supp.portion) : '';
                                             }
                                             const valNum = parseFloat(valStr.replace(',', '.'));
-                                            
+
                                             if (!valStr || isNaN(valNum) || valNum <= 0) {
                                                 await showAlert("Inserisci una quantità valida da assumere.");
                                                 return;
                                             }
-                                            
+
                                             await addIntake(supp.id, valNum);
-                                            
+
                                             setQuickInputs(prev => {
                                                 const next = { ...prev };
                                                 delete next[supp.id];
@@ -304,17 +291,17 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                             </div>
 
                             {suppIntakes.length > 0 && (
-                                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '10px' }}>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Storico odierno:</div>
+                                <div style={{ background: 'var(--surface-light)', borderRadius: '8px', padding: '10px' }}>
+                                    <div style={{  color: 'var(--text-muted)', marginBottom: '8px' }} className="text-sm">Storico odierno:</div>
                                     {suppIntakes.map(intake => {
                                         const timeStr = new Date(intake.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                                         return (
-                                            <div key={intake.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed rgba(255,255,255,0.1)' }}>
-                                                <div style={{ fontSize: '0.95rem' }}>
+                                            <div key={intake.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid var(--glass-border)' }}>
+                                                <div className="text-base">
                                                     <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>{timeStr}</span>
                                                     <strong>{intake.amount}</strong> {supp.unit}
                                                 </div>
-                                                <button className="btn-icon text-danger" onClick={() => removeIntake(intake.id)}>✕</button>
+                                                <button className="btn-icon text-danger" aria-label={`Rimuovi assunzione di ${supp.name} delle ${timeStr}`} onClick={() => removeIntake(intake.id)}>✕</button>
                                             </div>
                                         );
                                     })}

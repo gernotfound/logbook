@@ -59,7 +59,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
             className="card mb-15"
             style={{
                 border: isActive ? '1px solid var(--primary-color)' : '1px solid var(--glass-border)',
-                background: isActive ? 'rgba(14, 165, 233, 0.05)' : 'var(--glass-bg)'
+                background: isActive ? 'var(--primary-soft)' : 'var(--glass-bg)'
             }}
         >
             <div className="flex-between items-start mb-8 gap-10">
@@ -71,19 +71,19 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         {isActive && (
                             <span
                                 style={{
-                                    fontSize: '0.75rem',
+
                                     fontWeight: 'bold',
                                     padding: '2px 8px',
                                     borderRadius: '12px',
                                     background: 'var(--primary-color)',
-                                    color: '#000'
+                                    color: 'var(--on-primary)'
                                 }}
-                            >
+                             className="text-sm">
                                 Attivo
                             </span>
                         )}
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    <div style={{  color: 'var(--text-muted)', marginTop: '4px' }} className="text-sm">
                         {cycle.startDate ? (
                             <>
                                 <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
@@ -114,17 +114,17 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         <span
                             key={`${item.routineId}-${idx}`}
                             style={{
-                                fontSize: '0.75rem',
+
                                 padding: '3px 8px',
                                 borderRadius: '6px',
-                                background: 'rgba(255,255,255,0.06)',
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 color: 'var(--text-main)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '5px'
                             }}
-                        >
+                         className="text-sm">
                             <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{letterIndex}.</span>
                             <span>{routine?.name || 'Scheda'}</span>
                         </span>
@@ -137,12 +137,12 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 <div style={{ marginBottom: '10px' }}>
                     <button
                         type="button"
-                        className="btn btn-secondary btn-small"
+                        className="btn btn-secondary btn-small text-sm"
                         style={{
                             width: '100%',
-                            fontSize: '0.75rem',
+
                             padding: '4px 8px',
-                            background: 'rgba(255, 255, 255, 0.03)',
+                            background: 'var(--surface-light)',
                             border: '1px dashed var(--glass-border)',
                             color: 'var(--text-muted)',
                             marginBottom: 0
@@ -159,11 +159,10 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                     key={week.weekNumber}
                                     style={{
                                         padding: '6px 8px',
-                                        background: 'rgba(255, 255, 255, 0.03)',
-                                        borderRadius: '6px',
-                                        fontSize: '0.75rem'
+                                        background: 'var(--surface-light)',
+                                        borderRadius: '6px'
                                     }}
-                                >
+                                 className="text-sm">
                                     <div className="flex-between mb-4">
                                         <strong style={{ color: 'var(--primary-color)' }}>
                                             Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
@@ -175,13 +174,12 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                                 key={sess.globalSessionIndex}
                                                 style={{
                                                     padding: '2px 6px',
-                                                    background: 'rgba(14, 165, 233, 0.1)',
-                                                    border: '1px solid rgba(14, 165, 233, 0.25)',
+                                                    background: 'var(--primary-soft)',
+                                                    border: '1px solid var(--primary-color)',
                                                     borderRadius: '4px',
-                                                    color: '#fff',
-                                                    fontSize: '0.75rem'
+                                                    color: 'var(--text-main)'
                                                 }}
-                                            >
+                                             className="text-sm">
                                                 #{sess.globalSessionIndex} {sess.routineName}
                                             </span>
                                         ))}
@@ -203,7 +201,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                             {timeline.progressPercent}% completato
                         </span>
                     </div>
-                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '5px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
                         <div
                             style={{
                                 height: '100%',
@@ -220,8 +218,8 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 {isActive ? (
                     <button
                         type="button"
-                        className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}
+                        className="btn btn-secondary btn-small text-sm"
+                        style={{ width: '100%', marginBottom: 0,  color: 'var(--text-muted)' }}
                         onClick={() => onDeactivate(cycle.id)}
                     >
                         <span aria-hidden="true">⏸️</span> Disattiva ciclo
@@ -229,8 +227,8 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 ) : (
                     <button
                         type="button"
-                        className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: '0.85rem' }}
+                        className="btn btn-secondary btn-small text-sm"
+                        style={{ width: '100%', marginBottom: 0 }}
                         onClick={() => onSetActive(cycle.id)}
                     >
                         <span aria-hidden="true">⭐</span> Imposta come ciclo attivo

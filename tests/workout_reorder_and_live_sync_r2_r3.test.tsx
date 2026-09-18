@@ -350,7 +350,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
     describe('3. SessionExerciseCard UI Controls & Dynamic Muscle Badges', () => {
         const dummyPast = [{ date: '2026-08-15', sets: [{ kg: '90', reps: '6' }], note: 'Buone sensazioni' }];
 
-        it('3.1: Position dropdown renders #N label, opens on click, and calls onMoveToPosition when a target is selected', () => {
+        it('3.1: Position dropdown opens from the exercise options, and calls onMoveToPosition when a target is selected', () => {
             const onMove = vi.fn();
             const onMoveToPosition = vi.fn();
             const exItem = { id: 'se_1', exId: 'ex_bench', sets: [{ id: 's1', kg: '80', reps: '8' }], sessionNote: '' };
@@ -384,13 +384,9 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 />
             );
 
-            // Position dropdown button shows current index
-            const posBtn = screen.getByRole('button', { name: 'Cambia posizione esercizio' }) as HTMLButtonElement;
-            expect(posBtn).not.toBeNull();
-            expect(posBtn.textContent?.trim()).toMatch(/#\s*1/);
-
-            // Open dropdown
-            fireEvent.click(posBtn);
+            expect(screen.getByText('1° esercizio')).toBeDefined();
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni Panca piana con bilanciere' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Cambia posizione esercizio' }));
 
             // Should show position options for 3 exercises
             const posOptions = screen.getAllByRole('button', { name: /posizione/i });
@@ -515,8 +511,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(headings[1].textContent).toBe('Squat con bilanciere');
 
             // Click position dropdown of first exercise and move to position 2
-            const posBtns = screen.getAllByRole('button', { name: 'Cambia posizione esercizio' });
-            fireEvent.click(posBtns[0]); // open dropdown for exercise #1
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni Panca piana con bilanciere' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Cambia posizione esercizio' }));
             const posOption2 = screen.getAllByRole('button', { name: /2ª posizione/i })[0];
             fireEvent.click(posOption2);
 
@@ -548,8 +544,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             });
 
             // Open Setup on first exercise (Bench at index 0)
-            const setupBtns = screen.getAllByRole('button', { name: /Setup/i });
-            fireEvent.click(setupBtns[0]);
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni Panca piana con bilanciere' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Setup', exact: true }));
 
             // Setup input should be visible for ex_bench
             const setupInput = container.querySelector('#setup-ex_bench') as HTMLInputElement;
@@ -557,8 +553,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(setupInput.defaultValue).toBe('Gomiti a 45 gradi');
 
             // Now move index 0 to position 2 via dropdown
-            const posBtns2 = screen.getAllByRole('button', { name: 'Cambia posizione esercizio' });
-            fireEvent.click(posBtns2[0]); // open dropdown for exercise #1
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni Panca piana con bilanciere' }));
+            fireEvent.click(screen.getByRole('menuitem', { name: 'Cambia posizione esercizio' }));
             const posOption2b = screen.getAllByRole('button', { name: /2ª posizione/i })[0];
             fireEvent.click(posOption2b);
 

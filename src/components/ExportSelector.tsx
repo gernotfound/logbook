@@ -35,8 +35,8 @@ export const ExportSelector = memo(function ExportSelector({
             <legend style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
                 {title}
             </legend>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', minWidth: 0 }}>{title}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <span style={{  color: 'var(--text-main)', minWidth: 0 }} className="text-base">{title}</span>
                 <select
                     aria-label={`Modalità selezione ${title}`}
                     value={selection === 'all' ? 'all' : selection === 'none' ? 'none' : 'custom'}
@@ -45,8 +45,8 @@ export const ExportSelector = memo(function ExportSelector({
                         else if (event.target.value === 'none') onChange('none');
                         else onChange([]);
                     }}
-                    style={{ background: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '8px', fontSize: '16px', minHeight: '44px' }}
-                >
+                    style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '8px',  minHeight: '44px' }}
+                 className="text-base">
                     <option value="all">Tutti ({items.length})</option>
                     <option value="custom">Seleziona...</option>
                     <option value="none">Nessuno</option>
@@ -54,9 +54,9 @@ export const ExportSelector = memo(function ExportSelector({
             </div>
 
             {isCustom && (
-                <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px' }}>
+                <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--surface-light)', padding: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <span style={{  color: 'var(--text-muted)' }} className="text-sm">
                             {selectedIds.length} selezionati su {items.length}
                         </span>
                         {items.length > 5 && (
@@ -66,16 +66,16 @@ export const ExportSelector = memo(function ExportSelector({
                                 placeholder="Cerca..."
                                 value={searchQuery}
                                 onChange={event => setSearchQuery(event.target.value)}
-                                style={{ width: '150px', maxWidth: '100%', padding: '8px', fontSize: '16px', minHeight: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-main)' }}
-                            />
+                                style={{ width: '150px', maxWidth: '100%', padding: '8px',  minHeight: '44px', background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-main)' }}
+                             className="text-base"/>
                         )}
                     </div>
 
                     <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {filteredItems.length === 0 ? (
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', padding: '8px 0' }}>Nessun elemento</span>
+                            <span style={{  color: 'var(--text-muted)', padding: '8px 0' }} className="text-sm">Nessun elemento</span>
                         ) : filteredItems.map(item => (
-                            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '44px', fontSize: '0.9rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+                            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '44px',  color: 'var(--text-main)', cursor: 'pointer' }} className="text-sm">
                                 <input
                                     type="checkbox"
                                     aria-label={item.name}

@@ -44,17 +44,17 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                     }}
                     style={{
                         width: '100%',
-                        fontSize: '16px',
+
                         boxSizing: 'border-box',
                         maxWidth: '100%',
                         display: 'block',
                         padding: '10px 12px',
-                        background: 'rgba(255, 255, 255, 0.06)',
+                        background: 'var(--surface-light)',
                         border: '1px solid var(--glass-border)',
                         borderRadius: '8px',
-                        color: '#fff'
+                        color: 'var(--text-main)'
                     }}
-                >
+                 className="text-base">
                     <option value="">+ Aggiungi scheda alla sequenza</option>
                     {routines.map(r => (
                         <option key={r.id} value={r.id}>
@@ -65,7 +65,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
             </div>
 
             {cycleRoutines.length === 0 ? (
-                <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ padding: '15px', background: 'var(--surface-light)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     <p className="m-0 text-xs">Nessuna scheda aggiunta al ciclo. Seleziona una scheda dal menu in alto per iniziare la sequenza.</p>
                 </div>
             ) : (
@@ -78,7 +78,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                 key={`${item.routineId}-${idx}`}
                                 style={{
                                     padding: '10px 12px',
-                                    background: 'rgba(255,255,255,0.04)',
+                                    background: 'var(--surface-light)',
                                     border: '1px solid var(--glass-border)',
                                     borderRadius: '8px',
                                     display: 'flex',
@@ -93,24 +93,24 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '50%',
-                                            background: 'rgba(14, 165, 233, 0.15)',
+                                            background: 'var(--primary-soft)',
                                             border: '1px solid var(--primary-color)',
                                             color: 'var(--primary-color)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             fontWeight: 'bold',
-                                            fontSize: '0.85rem',
+
                                             flexShrink: 0
                                         }}
-                                    >
+                                     className="text-sm">
                                         {letterIndex}
                                     </div>
                                     <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontWeight: 'bold',  color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} className="text-base">
                                             {routine?.name || 'Scheda'}
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        <div style={{  color: 'var(--text-muted)' }} className="text-sm">
                                             Posizione {idx + 1} di {cycleRoutines.length} • {routine?.exercises?.length || 0} esercizi
                                         </div>
                                     </div>
@@ -119,8 +119,8 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                                     <button
                                         type="button"
-                                        className="btn btn-secondary btn-small"
-                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: '0.85rem' }}
+                                        className="btn btn-secondary btn-small text-sm"
+                                        style={{ padding: '4px 8px', marginBottom: 0 }}
                                         onClick={() => onMove(idx, -1)}
                                         disabled={idx === 0}
                                         aria-label="Sposta su nella sequenza"
@@ -130,8 +130,8 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn btn-secondary btn-small"
-                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: '0.85rem' }}
+                                        className="btn btn-secondary btn-small text-sm"
+                                        style={{ padding: '4px 8px', marginBottom: 0 }}
                                         onClick={() => onMove(idx, 1)}
                                         disabled={idx === cycleRoutines.length - 1}
                                         aria-label="Sposta giù nella sequenza"
@@ -141,8 +141,8 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn-icon"
-                                        style={{ color: 'var(--danger-color)', fontSize: '1rem', padding: '4px', marginLeft: '4px' }}
+                                        className="btn-icon text-base"
+                                        style={{ color: 'var(--danger-color)',  padding: '4px', marginLeft: '4px' }}
                                         onClick={() => onRemove(idx)}
                                         aria-label="Rimuovi scheda dalla sequenza"
                                         title="Rimuovi scheda dalla sequenza"

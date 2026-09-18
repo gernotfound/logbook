@@ -95,7 +95,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 expect(container.querySelector('#sleep-light')).not.toBeNull();
                 expect(container.querySelector('#sleep-rem')).not.toBeNull();
                 expect(container.querySelector('#sleep-awake')).not.toBeNull();
-                expect(container.textContent).toContain('🌙 Dati sonno (' + Logic.getLocalDateString() + ')');
+                expect(container.textContent).toContain('Dati sonno (' + Logic.getLocalDateString() + ')');
             });
 
             it('T1.1.3: DataSleep user interaction triggers setter callbacks and saves', () => {
@@ -141,18 +141,18 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(container.textContent).toContain('🌙 Sonno: 07:30');
-                expect(container.textContent).toContain('🌙 Sonno: 08:00');
+                expect(container.textContent).toContain('Sonno: 07:30');
+                expect(container.textContent).toContain('Sonno: 08:00');
 
                 // Clicking 'Modifica' from ContextMenu invokes onSelectEdit
                 const optionsTriggers = screen.getAllByRole('button', { name: 'Opzioni' });
                 expect(optionsTriggers.length).toBeGreaterThan(0);
                 fireEvent.click(optionsTriggers[0]);
-                
+
                 const editItem = screen.getByRole('menuitem', { name: 'Modifica' });
                 expect(editItem).not.toBeNull();
                 fireEvent.click(editItem);
-                
+
                 expect(onSelectEdit).toHaveBeenCalledWith(historyDays[0]);
             });
 
@@ -1726,7 +1726,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 />
             );
 
-            expect(container.textContent).toContain('🌙 Sonno: 08:00');
+            expect(container.textContent).toContain('Sonno: 08:00');
             expect(container.textContent).toContain('78.5 kg');
 
             // Export to CSV

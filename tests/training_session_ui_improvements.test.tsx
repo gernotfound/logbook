@@ -72,7 +72,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             expect(exerciseContainer?.classList.contains('card')).toBe(false);
         });
 
-        it('R1.2: SessionSetRow has border styled with fluo blue variable (var(--primary-color))', () => {
+        it('R1.2: SessionSetRow exposes labeled weight and repetition fields', () => {
             const setObj = { id: 's1', kg: '80', reps: '10' };
 
             const { container } = render(
@@ -93,9 +93,8 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
 
             const row = container.querySelector('.set-row');
             expect(row).not.toBeNull();
-            // Style contains border with var(--primary-color)
-            const styleAttr = row?.getAttribute('style') || '';
-            expect(styleAttr).toContain('var(--primary-color)');
+            expect((screen.getByRole('spinbutton', { name: 'Serie 1, chilogrammi', exact: true }) as HTMLInputElement).value).toBe('80');
+            expect((screen.getByRole('spinbutton', { name: 'Serie 1, ripetizioni', exact: true }) as HTMLInputElement).value).toBe('10');
         });
     });
 

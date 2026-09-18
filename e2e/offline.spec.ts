@@ -37,7 +37,7 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
 
     // 7. Inizia l'allenamento
-    await page.click('button:has-text("Inizia allenamento")');
+    await page.getByRole('button', { name: 'Inizia allenamento', exact: true }).click();
     await expect(page.locator('button:has-text("Termina")')).toBeVisible();
 
     // 8. Vai offline
@@ -72,6 +72,10 @@ test.describe('Offline scenarios & Background suspension', () => {
     // 11. Termina l'allenamento
     await newPage.click('button:has-text("Termina")');
     await newPage.click('button:has-text("Conferma")');
-    await expect(newPage.locator('button:has-text("Inizia allenamento")')).toBeVisible();
+    await expect(newPage.getByRole('button', { name: 'Chiudi e torna alla Home' })).toBeVisible();
+    await newPage.getByRole('button', { name: 'Chiudi e torna alla Home' }).click();
+    await expect(newPage.getByRole('heading', { name: 'LogBook', exact: true })).toBeVisible();
+    await newPage.getByRole('button', { name: 'Allenamento', exact: true }).click();
+    await expect(newPage.getByRole('button', { name: 'Inizia allenamento', exact: true })).toBeVisible();
   });
 });

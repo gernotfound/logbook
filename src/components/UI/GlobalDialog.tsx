@@ -58,59 +58,38 @@ export const GlobalDialog: React.FC = () => {
   if (!isOpen) return null;
 
   return createPortal(
-    <div ref={overlayRef} className="dialog-overlay" style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(5px)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 99999
-    }}>
+    <div ref={overlayRef} className="dialog-overlay ui-global-dialog-1" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, display: "flex", justifyContent: "center", alignItems: "center", zIndex: 99999 }}>
       <div
         ref={boxRef}
         tabIndex={-1}
-        className="dialog-box card safe-top safe-bottom"
+        className="dialog-box card safe-top safe-bottom ui-global-dialog-2"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="global-dialog-title"
         aria-describedby="global-dialog-message"
-        style={{
-          width: '90%',
-          maxWidth: '400px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          background: 'var(--surface-color)',
-          border: '1px solid var(--glass-border)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
-          borderRadius: '16px',
-          padding: '25px',
-          textAlign: 'center',
-          animation: 'fadeIn 0.2s ease-out'
-        }}
+        style={{ width: "90%", maxWidth: "25rem", maxHeight: "90vh", overflowY: "auto", padding: "1.5625rem", textAlign: "center", animation: "fadeIn 0.2s ease-out" }}
       >
-        <h2 id="global-dialog-title" style={{color: 'var(--text-main)', margin: '0 0 15px 0'}}>{title}</h2>
+        <h2 id="global-dialog-title" className="ui-global-dialog-3" style={{ margin: "0 0 0.9375rem 0" }}>{title}</h2>
 
         {type === 'unsynced-data-logout' ? (() => {
           const isSafeNow = syncHealth === 'synced' && !syncing && !hasConflicts && !hasWorkout;
 
           if (isSafeNow) {
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <p id="global-dialog-message" style={{ color: 'var(--success-color)', marginBottom: '15px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textAlign: 'center', fontWeight: 'bold' }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
+                <p id="global-dialog-message" className="ui-global-dialog-4" style={{ marginBottom: "0.9375rem", lineHeight: "1.5", whiteSpace: "pre-wrap", textAlign: "center", fontWeight: "bold" }}>
                   Sincronizzazione completata con successo!
                 </p>
                 <button
-                  className="btn btn-primary"
-                  style={{ background: 'var(--success-color)', color: '#000' }}
+                  className="btn btn-primary ui-global-dialog-5"
+
                   onClick={() => onAction?.('safe-exit')}
                 >
                   Esci in sicurezza
                 </button>
                 <button
-                  className="btn"
-                  style={{ background: 'transparent', color: 'var(--text-main)' }}
+                  className="btn ui-global-dialog-6"
+
                   onClick={() => onAction?.('cancel')}
                 >
                   Annulla
@@ -120,8 +99,8 @@ export const GlobalDialog: React.FC = () => {
           }
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <p id="global-dialog-message" style={{ color: 'var(--text-muted)', marginBottom: '15px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textAlign: 'left' }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
+              <p id="global-dialog-message" className="ui-global-dialog-7" style={{ marginBottom: "0.9375rem", lineHeight: "1.5", whiteSpace: "pre-wrap", textAlign: "left" }}>
                 {unsyncedReason === 'offline' && "Ci sono modifiche salvate localmente ma non ancora sincronizzate con il server (sei offline o la connessione è lenta)."}
                 {unsyncedReason === 'rejected' && "Alcune modifiche sono state rifiutate dal server. Controlla i permessi o riprova l'accesso."}
                 {unsyncedReason === 'failed' && "Errore imprevisto durante la sincronizzazione. I dati locali non sono salvati sul cloud."}
@@ -130,22 +109,22 @@ export const GlobalDialog: React.FC = () => {
               </p>
 
               <button
-                className="btn"
-                style={{ background: 'var(--surface-light)', color: 'var(--text-main)' }}
+                className="btn ui-global-dialog-8"
+
                 onClick={() => onAction?.('export')}
               >
                 Esporta backup locale (JSON)
               </button>
               <button
-                className="btn btn-secondary"
-                style={{ color: 'var(--danger-color)', borderColor: 'var(--danger-color)' }}
+                className="btn btn-secondary ui-global-dialog-9"
+
                 onClick={() => onAction?.('force-exit')}
               >
                 Esci comunque (Perdi modifiche)
               </button>
               <button
-                className="btn"
-                style={{ background: 'transparent', color: 'var(--text-main)' }}
+                className="btn ui-global-dialog-10"
+
                 onClick={() => onAction?.('cancel')}
               >
                 Annulla e attendi
@@ -154,16 +133,16 @@ export const GlobalDialog: React.FC = () => {
           );
         })() : (
           <>
-            <p id="global-dialog-message" style={{ color: 'var(--text-muted)', marginBottom: '25px', lineHeight: '1.5', whiteSpace: 'pre-wrap', textAlign: 'left' }}>
+            <p id="global-dialog-message" className="ui-global-dialog-11" style={{ marginBottom: "1.5625rem", lineHeight: "1.5", whiteSpace: "pre-wrap", textAlign: "left" }}>
               {message}
             </p>
 
-            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+            <div style={{ display: "flex", gap: "0.9375rem", justifyContent: "center" }}>
               {type === 'confirm' && (
                 <button
-                  className="btn btn-secondary"
+                  className="btn btn-secondary ui-global-dialog-12"
                   onClick={onCancel}
-                  style={{ flex: 1, padding: '12px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
+                  style={{ flex: 1, padding: "0.75rem" }}
                 >
                   Annulla
                 </button>
@@ -171,7 +150,7 @@ export const GlobalDialog: React.FC = () => {
               <button
                 className="btn btn-primary"
                 onClick={onConfirm}
-                style={{ flex: 1, padding: '12px' }}
+                style={{ flex: 1, padding: "0.75rem" }}
               >
                 {type === 'confirm' ? 'Conferma' : 'OK'}
               </button>

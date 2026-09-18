@@ -1,3 +1,5 @@
+import SubNav from '../UI/SubNav';
+import '../Nutrition/TrackingViews.css';
 import { useState } from 'react';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
 import NutritionPlanning from './NutritionPlanning';
@@ -14,6 +16,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
 import { useDialogStore } from '../../store/useDialogStore';
 import type { NutritionSubTab } from '../../types';
+
+const SUB_TABS = [{ id: 'meals', label: 'Pasti' }, { id: 'planning', label: 'Pianificazione' }, { id: 'supplements', label: 'Integratori' }, { id: 'archive', label: 'Alimenti' }, { id: 'history', label: 'Storico' }] as const;
 
 interface NutritionViewProps {
     subTab?: NutritionSubTab;
@@ -81,68 +85,16 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
         }
     };
 
-    const handleWheel = (e: any) => {
-        if (e.deltaY !== 0) {
-            e.currentTarget.scrollLeft += e.deltaY;
-        }
-    };
-
     return (
-        <div id="view-nutrition" className="view-section active">
+        <div id="view-nutrition" className="view-section active tracking-view">
             {pendingConflict && (
                 <NutritionConflictBanner onResolveClick={() => setConflictDialogOpen(true)} />
             )}
 
-            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Nutrizione" onWheel={handleWheel}>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'meals'}
-                    className={`sub-nav-btn ${activeSubTab === 'meals' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('meals')}
-                >
-                    Pasti
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'planning'}
-                    className={`sub-nav-btn ${activeSubTab === 'planning' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('planning')}
-                >
-                    Pianificazione
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'supplements'}
-                    className={`sub-nav-btn ${activeSubTab === 'supplements' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('supplements')}
-                >
-                    Integratori
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'archive'}
-                    className={`sub-nav-btn ${activeSubTab === 'archive' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('archive')}
-                >
-                    Alimenti
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={activeSubTab === 'history'}
-                    className={`sub-nav-btn ${activeSubTab === 'history' ? 'active' : ''}`}
-                    onClick={() => setSubTab && setSubTab('history')}
-                >
-                    Storico
-                </button>
-            </div>
+            <SubNav id="nutrition" label="Sotto-menu Nutrizione" items={SUB_TABS} value={activeSubTab} onChange={tab => setSubTab?.(tab)} />
 
             {activeSubTab === 'meals' && (
-                <div className="nutrition-sub-view active">
+                <div className="nutrition-sub-view active" role="tabpanel" id="nutrition-panel-meals" aria-labelledby="nutrition-tab-meals" tabIndex={0}>
                     <NutritionMeals
                         mealsHook={{
                             ...mealsHook,
@@ -164,19 +116,19 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             )}
 
             {activeSubTab === 'planning' && (
-                <div className="nutrition-sub-view active">
+                <div className="nutrition-sub-view active" role="tabpanel" id="nutrition-panel-planning" aria-labelledby="nutrition-tab-planning" tabIndex={0}>
                     <NutritionPlanning />
                 </div>
             )}
 
             {activeSubTab === 'archive' && (
-                <div className="nutrition-sub-view active">
+                <div className="nutrition-sub-view active" role="tabpanel" id="nutrition-panel-archive" aria-labelledby="nutrition-tab-archive" tabIndex={0}>
                     <NutritionFoodArchive onEditFood={handleEditFoodFromArchive} />
                 </div>
             )}
 
             {activeSubTab === 'history' && (
-                <div className="nutrition-sub-view active">
+                <div className="nutrition-sub-view active" role="tabpanel" id="nutrition-panel-history" aria-labelledby="nutrition-tab-history" tabIndex={0}>
                     <NutritionHistory
                         nutritionHistory={historyHook.nutritionHistory}
                         onDayClick={handleHistoryDayClick}
@@ -185,7 +137,7 @@ const NutritionView = ({ subTab = 'meals', setSubTab }: NutritionViewProps) => {
             )}
 
             {activeSubTab === 'supplements' && (
-                <div className="nutrition-sub-view active">
+                <div className="nutrition-sub-view active" role="tabpanel" id="nutrition-panel-supplements" aria-labelledby="nutrition-tab-supplements" tabIndex={0}>
                     <NutritionSupplements
                         selectedDate={selectedDate}
                         setSelectedDate={setSelectedDate}

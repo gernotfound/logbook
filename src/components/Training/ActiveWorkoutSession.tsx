@@ -7,7 +7,6 @@ import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
-import WorkoutReportModal from './WorkoutReportModal';
 import type { WorkoutSession } from '../../types';
 
 // Responsabilità: renderizzare la UI di un allenamento in corso (lista esercizi, timer).
@@ -18,7 +17,7 @@ const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: any[]; note: string }> = 
 
 const GlobalTimer = ({ startTime }: { startTime?: number }) => {
     const [display, setDisplay] = useState('00:00:00');
-    
+
     useEffect(() => {
         if (!startTime) return;
         const updateDisplay = () => {
@@ -41,14 +40,15 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [startTime]);
-    return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
+    return <div className="workout-total-duration"><span>Durata totale</span><output>{display}</output></div>;
 };
 
 export interface ActiveWorkoutSessionProps {
     onNavigateToHistory?: () => void;
+    onWorkoutCompleted?: (workout: WorkoutSession) => void;
 }
 
-export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessionProps) => {
+export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }: ActiveWorkoutSessionProps) => {
     const {
         activeWorkout, library, history,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
@@ -68,7 +68,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
-    const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
 
     const handleMoveExercise = useCallback((fromIndex: number, direction: 'up' | 'down') => {
         const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
@@ -197,28 +196,14 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
     const handleEndWorkout = async () => {
         const finishedWorkout = await endWorkout();
         if (finishedWorkout) {
-            setReportWorkout(finishedWorkout);
+            onWorkoutCompleted?.(finishedWorkout);
         }
     };
 
-    const handleCloseReport = () => {
-        setReportWorkout(null);
-        window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
-    };
-
     return (
-        <div className="training-sub-view active">
-            {reportWorkout && (
-                <WorkoutReportModal 
-                    workout={reportWorkout}
-                    history={history}
-                    library={library}
-                    onClose={handleCloseReport}
-                    fromEndWorkout={true}
-                />
-            )}
+        <div className="training-sub-view active workout-session">
 
-            <SessionHeader 
+            <SessionHeader
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
@@ -289,32 +274,32 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
             />
 
             {activeWorkout.isEditingHistory ? (
-                <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
-                    <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
+                <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
+                    <label htmlFor="workout-manual-duration" style={{  color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }} className="text-sm">
                         ⏱️ Durata della sessione
                     </label>
-                    <input 
+                    <input
                         id="workout-manual-duration"
-                        type="text" 
-                        value={manualDuration} 
-                        onChange={e => setManualDuration(e.target.value)} 
+                        type="text"
+                        value={manualDuration}
+                        onChange={e => setManualDuration(e.target.value)}
                         onBlur={() => setManualDuration(Logic.normalizeDuration(manualDuration))}
                         onFocus={e => e.target.select()}
                         placeholder="00:00:00"
-                        style={{ 
-                            fontSize: '1.8rem', 
-                            fontFamily: 'monospace', 
-                            fontWeight: 'bold', 
-                            color: 'var(--primary-color)', 
-                            textAlign: 'center', 
-                            maxWidth: '240px', 
+                        style={{
+
+                            fontFamily: 'monospace',
+                            fontWeight: 'bold',
+                            color: 'var(--primary-color)',
+                            textAlign: 'center',
+                            maxWidth: '240px',
                             width: '100%',
-                            margin: '0 auto', 
+                            margin: '0 auto',
                             padding: '8px 12px',
                             display: 'block',
                             boxSizing: 'border-box'
-                        }} 
-                    />
+                        }}
+                     className="text-2xl"/>
                 </div>
             ) : (
                 <GlobalTimer startTime={activeWorkout.globalStartTime} />
@@ -322,19 +307,19 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
 
             {activeWorkout.isEditingHistory ? (
                 <>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
+                    <button className="btn btn-primary text-lg" style={{ width: '100%',  padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
                         <Save size={16} aria-hidden="true" /> Salva modifiche
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
+                    <button className="btn btn-danger text-base" style={{ width: '100%',  padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
                         Annulla modifica
                     </button>
                 </>
             ) : (
                 <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
+                    <button className="btn btn-success text-lg" style={{ width: '100%',  padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
                         <span aria-hidden="true">🏁</span> Termina sessione
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
+                    <button className="btn btn-danger text-base" style={{ width: '100%',  padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
                         <Trash2 size={16} aria-hidden="true" /> Elimina sessione
                     </button>
                 </>

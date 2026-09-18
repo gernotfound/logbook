@@ -22,7 +22,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
     return (
         <React.Fragment>
             {/* Sticky Timer */}
-            <div style={{ position: 'sticky', top: 'env(safe-area-inset-top, 0px)', zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
+            <div className="workout-sticky-timer">
                 <WorkoutTimer />
             </div>
 
@@ -31,30 +31,30 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    background: 'rgba(234, 179, 8, 0.15)',
+                    background: 'var(--warning-soft)',
                     border: '1px solid var(--warning-color, #eab308)',
                     padding: '12px 16px',
                     borderRadius: '12px',
                     marginBottom: '15px'
                 }}>
                     <div>
-                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
+                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)' }} className="text-base">
                             <Pencil size={16} aria-hidden="true" style={{marginRight: '8px'}} /> Modifica allenamento dello storico
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <div style={{  color: 'var(--text-muted)' }} className="text-sm">
                             {routineName || 'Sessione'} • {date || ''}
                         </div>
                     </div>
-                    <button 
-                        className="btn btn-small" 
-                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.1)' }}
+                    <button
+                        className="btn btn-small text-sm"
+                        style={{ width: 'auto', padding: '5px 12px',  background: 'var(--surface-light)' }}
                         onClick={onCancelHistory}
                     >
                         Annulla
                     </button>
                 </div>
             )}
-            
+
             {routineName && <h1 style={{marginTop: 0}}>{routineName}</h1>}
         </React.Fragment>
     );

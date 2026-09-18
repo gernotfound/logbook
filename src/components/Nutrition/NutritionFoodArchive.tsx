@@ -21,7 +21,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
     const showConfirm = useDialogStore(state => state.showConfirm);
 
     const [searchQuery, setSearchQuery] = useState('');
-    
+
     // Modal states (used if onEditFood not provided)
     const [showModal, setShowModal] = useState(false);
     const [editingFoodId, setEditingFoodId] = useState<string | number | null>(null);
@@ -155,8 +155,8 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                         </p>
                     </div>
                     {!showModal && (
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="btn btn-primary btn-small"
                             onClick={openCreateModal}
                             style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -167,7 +167,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 </div>
 
                 {/* Modal for create/edit */}
-                <CustomFoodForm 
+                <CustomFoodForm
                     cfData={cfData}
                     setCfData={setCfData}
                     saveCustomFood={handleSaveFood}
@@ -181,7 +181,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 />
 
                 {/* Search Bar */}
-                <FoodArchiveSearch 
+                <FoodArchiveSearch
                     searchQuery={searchQuery}
                     setSearchQuery={setSearchQuery}
                 />
@@ -197,7 +197,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
                 {customFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🥗</div>
+                        <div style={{  marginBottom: '8px' }} className="text-2xl">🥗</div>
                         <p className="m-0 text-sm font-semibold text-white">Nessun alimento presente.</p>
                         <p className="m-0 text-xs text-muted mt-4">
                             Clicca su <strong>+ Crea alimento</strong> in alto per iniziare a inserire i tuoi alimenti.
@@ -205,7 +205,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     </div>
                 ) : filteredFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔍</div>
+                        <div style={{  marginBottom: '8px' }} className="text-2xl">🔍</div>
                         <p className="m-0 text-sm">Nessun alimento trovato per "{searchQuery}".</p>
                     </div>
                 ) : (

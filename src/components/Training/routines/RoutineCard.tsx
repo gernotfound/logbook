@@ -63,11 +63,11 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
     ];
 
     return (
-        <div 
+        <div
             className="card p-15 mb-0"
             style={{ marginBottom: 0 }}
         >
-            <div 
+            <div
                 className="flex-between cursor-pointer"
                 onClick={() => onToggleExpand(routine.id)}
             >
@@ -85,12 +85,12 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
             {isExpanded && (
                 <div className="mt-15 pt-15 border-t">
                     <div className="mb-15 flex-center w-full">
-                        <MuscleModel 
-                            selectedMuscles={Array.from(new Set(muscles)) as string[]} 
-                            secondaryMuscles={Array.from(new Set(secMuscles)) as string[]} 
+                        <MuscleModel
+                            selectedMuscles={Array.from(new Set(muscles)) as string[]}
+                            secondaryMuscles={Array.from(new Set(secMuscles)) as string[]}
                         />
                     </div>
-                    
+
                     {(routine.exercises || []).length === 0 ? (
                         <p className="text-muted text-md">Nessun esercizio presente.</p>
                     ) : (
@@ -112,10 +112,10 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                                                 <span>Rep min: {ex.minReps || '-'} | Rep max: {ex.maxReps || '-'}</span>
                                             )}
                                             {ex.defaultTechnique === 'dropset' && (
-                                                <span className="badge" style={{ background: 'var(--warning-color)', color: '#000', fontWeight: 600 }}><span aria-hidden="true">🔻</span> Dropset</span>
+                                                <span className="badge" style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', fontWeight: 600 }}><span aria-hidden="true">🔻</span> Dropset</span>
                                             )}
                                             {ex.defaultTechnique === 'isometrics' && (
-                                                <span className="badge" style={{ background: 'var(--accent-color)', color: '#fff', fontWeight: 600 }}><span aria-hidden="true">⏱️</span> Isometria</span>
+                                                <span className="badge" style={{ background: 'var(--accent-color)', color: 'var(--on-accent)', fontWeight: 600 }}><span aria-hidden="true">⏱️</span> Isometria</span>
                                             )}
                                         </div>
                                     </div>

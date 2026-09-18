@@ -19,8 +19,8 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
     expect(navBlock).toMatch(/bottom:\s*0\s*!important/);
     expect(navBlock).toMatch(/position:\s*fixed\s*!important/);
 
-    // Must have padding-bottom using calc(env(...) - 4px) to lower nav flush on iPhone (commit f407e3c)
-    expect(navBlock).toMatch(/padding-bottom:\s*max\(calc\(env\(safe-area-inset-bottom,\s*0px\)\s*-\s*4px\),\s*8px\)\s*!important/);
+    // The entire home-indicator inset remains outside the navigation controls.
+    expect(navBlock).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom,\s*0px\)\s*!important/);
   });
 
   it('verifies body reserves sufficient padding-bottom for the fixed nav bar', () => {
@@ -28,7 +28,8 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
     expect(bodyMatch).not.toBeNull();
     const bodyBlock = bodyMatch![1];
 
-    expect(bodyBlock).toMatch(/padding-bottom:\s*calc\(80px\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\)/);
+    // Reserve the same scalable bar height plus the inset and breathing room.
+    expect(bodyBlock).toMatch(/calc\(var\(--nav-height\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*1rem\)/);
   });
 
   it('renders BottomNav with correct accessibility and tab switching', () => {

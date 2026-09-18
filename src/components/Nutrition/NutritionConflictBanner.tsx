@@ -21,8 +21,8 @@ export const NutritionConflictBanner: React.FC<Props> = ({ onResolveClick }) => 
         </div>
       </div>
       <button
-        className="btn btn-small"
-        style={{ background: 'var(--warning-color)', color: '#000', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+        className="btn btn-small text-sm"
+        style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', padding: '0.4rem 0.8rem' }}
         onClick={onResolveClick}
       >
         Risolvi

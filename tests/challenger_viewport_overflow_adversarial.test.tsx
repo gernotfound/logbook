@@ -67,7 +67,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             // Find #app-container block in global.css
             const appContainerMatch = globalCss.match(/#app-container\s*\{([^}]+)\}/);
             expect(appContainerMatch, 'Must define #app-container block in global.css').not.toBeNull();
-            
+
             const content = appContainerMatch![1];
             expect(content).toMatch(/max-width:\s*600px/);
             expect(content).toMatch(/margin:\s*0\s+auto/);
@@ -79,7 +79,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
         it('1.2: .grid-2 has display: grid, grid-template-columns: 1fr 1fr, min-width: 0 and responsive media query at <= 360px', () => {
             const grid2Match = globalCss.match(/\.grid-2\s*\{([^}]+)\}/);
             expect(grid2Match, 'Must define .grid-2 utility class').not.toBeNull();
-            
+
             const grid2Props = grid2Match![1];
             expect(grid2Props).toMatch(/display:\s*grid/);
             expect(grid2Props).toMatch(/grid-template-columns:\s*1fr\s+1fr/);
@@ -195,28 +195,17 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(unitCol.style.flex).toMatch(/^1/);
         });
 
-        it('2.3: HomeNutritionWidget macro section has flex: 1', () => {
-            render(
-                <HomeNutritionWidget
-                    kcalEaten={1800}
-                    kcalTarget={2400}
-                    carbs={200}
-                    pro={150}
-                    fat={60}
-                    onNavigate={vi.fn()}
-                />
-            );
-
-            const carboLabel = screen.getByText('CARBO');
-            const proLabel = screen.getByText('PRO');
-            const grassiLabel = screen.getByText('GRASSI');
-
-            const macroContainer = carboLabel.closest('div[style*="flex: 1"]') as HTMLElement;
-            expect(macroContainer).not.toBeNull();
-            expect(macroContainer.style.flex).toMatch(/^1/);
-            expect(carboLabel).toBeDefined();
-            expect(proLabel).toBeDefined();
-            expect(grassiLabel).toBeDefined();
+        it('2.3: HomeNutritionWidget keeps amounts paired with readable macro labels', () => {
+            const { container } = render(<HomeNutritionWidget kcalEaten={1800} kcalTarget={2400} carbs={200} pro={150} fat={60} onNavigate={vi.fn()} />);
+            const entries = Array.from(container.querySelectorAll('dl > div')).map(entry => ({
+                label: entry.querySelector('dt')?.textContent,
+                amount: entry.querySelector('dd')?.textContent,
+            }));
+            expect(entries).toEqual([
+                { label: 'Carboidrati', amount: '200 g' },
+                { label: 'Proteine', amount: '150 g' },
+                { label: 'Grassi', amount: '60 g' },
+            ]);
         });
 
         it('2.4: HomeView stats cards (Massa grassa, Streak, Sessioni) render correctly without overflow', () => {
@@ -448,7 +437,7 @@ render(
 
             const buttons = container.querySelectorAll('button');
             expect(buttons.length).toBeGreaterThanOrEqual(5); // 1 ContextMenu trigger button + 4 quick-add buttons
-            
+
             // Cleanup attached DOM node
             document.body.removeChild(rootWrapper);
         });

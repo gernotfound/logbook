@@ -22,7 +22,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
     onQuickAddToMeal
 }) => {
     return (
-        <div 
+        <div
             style={{
                 padding: '14px 0',
                 borderBottom: isLast ? 'none' : '1px solid var(--glass-border)',
@@ -31,13 +31,13 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
                 gap: '8px'
             }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+            <div className="tracking-row">
                 <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 'bold',  color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} className="text-base">
                         <span>{food.name}</span>
                     </div>
                     {food.brand && (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        <div style={{  color: 'var(--text-muted)', marginTop: '2px' }} className="text-sm">
                             {food.brand}
                         </div>
                     )}
@@ -68,7 +68,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
             </div>
 
             {/* Macro details */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px',  color: 'var(--text-muted)', flexWrap: 'wrap' }} className="text-sm">
                 <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>
                     {food.kcal} kcal
                 </span>
@@ -80,14 +80,12 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
             </div>
 
             {/* Quick Add buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>+ Aggiungi a:</span>
+            <div className="tracking-quick-meals">
                 {mealTypes.map(mt => (
-                    <button 
+                    <button
                         key={mt}
                         type="button"
-                        className="btn-link"
-                        style={{ fontSize: '0.85rem' }}
+                        className="btn btn-secondary" aria-label={`Aggiungi ${food.name} a ${mt}`}
                         onClick={() => onQuickAddToMeal(food, mt)}
                     >
                         {mt}

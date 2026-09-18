@@ -7,12 +7,12 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.75)',
+      backgroundColor: 'var(--bg-color)',
       zIndex: 100000,
       display: 'flex',
       alignItems: 'flex-start',
       justifyContent: 'center',
-      padding: '16px',
+      padding: 'max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))',
       overflowY: 'auto',
     }}>
       <div style={{
@@ -42,7 +42,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <h2 style={{margin: 0,color: 'var(--text-main)'}}>
               Informativa sulla privacy
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '4px 0 0',  color: 'var(--text-muted)' }} className="text-sm">
               Aggiornata al 22 agosto 2026
             </p>
           </div>
@@ -62,8 +62,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           padding: '24px',
           color: 'var(--text-muted)',
           lineHeight: '1.7',
-          fontSize: '0.95rem',
-        }}>
+
+        }} className="text-base">
           <Section title="Titolare del trattamento">
             <p>
               Il titolare del trattamento è il developer indipendente dell'applicazione <strong style={{ color: 'var(--text-main)' }}>LogBook PWA</strong>.

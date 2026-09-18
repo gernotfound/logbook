@@ -7,12 +7,12 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.75)',
+      backgroundColor: 'var(--bg-color)',
       zIndex: 100000,
       display: 'flex',
       alignItems: 'flex-start',
       justifyContent: 'center',
-      padding: '16px',
+      padding: 'max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))',
       overflowY: 'auto',
     }}>
       <div style={{
@@ -42,7 +42,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
             <h2 style={{margin: 0,color: 'var(--text-main)'}}>
               Termini e Condizioni
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '4px 0 0',  color: 'var(--text-muted)' }} className="text-sm">
               Aggiornati al 28 agosto 2026
             </p>
           </div>
@@ -62,8 +62,8 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           padding: '24px',
           color: 'var(--text-muted)',
           lineHeight: '1.7',
-          fontSize: '0.95rem',
-        }}>
+
+        }} className="text-base">
           <Section title="1. Accettazione dei Termini">
             <p>
               Scaricando, accedendo o utilizzando l'app LogBook ("l'Applicazione"), l'utente accetta di essere vincolato dai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'Applicazione.
@@ -71,7 +71,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           </Section>
 
           <Section title="2. Disclaimer Medico (Importante)">
-            <div style={{ padding: '16px', backgroundColor: 'rgba(255, 77, 109, 0.1)', border: '1px solid var(--danger-color)', borderRadius: '8px', color: 'var(--text-main)' }}>
+            <div style={{ padding: 'max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))', backgroundColor: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '8px', color: 'var(--text-main)' }}>
               <strong>LogBook non fornisce consulenza medica.</strong>
               <p style={{ marginTop: '8px', marginBottom: 0 }}>
                 L'Applicazione è progettata unicamente per tracciare e monitorare l'allenamento fisico e l'alimentazione a scopo informativo e personale. Nessuna informazione fornita dall'Applicazione costituisce parere medico, diagnosi o trattamento.

@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { DayNavigator } from './DayNavigator';
+import './TrackingViews.css';
 import { Pencil, Plus, X } from 'lucide-react';
 import { shiftDateString } from '../../lib/utils/date';
 import { useNutritionMeals } from '../../hooks/useNutritionMeals';
@@ -18,6 +20,7 @@ interface NutritionMealsProps {
 }
 
 export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDate }: NutritionMealsProps) {
+    const searchId = useId();
     const internalHook = useNutritionMeals(selectedDate);
     const hook = mealsHook || internalHook;
     const {
@@ -28,7 +31,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
         cfData, setCfData, saveCustomFood,
         meals, addFood, removeFood, updateMealItem, targetDateStr
     } = hook;
-    
+
     const { removeIntake, supplementsLibrary } = useSupplements(selectedDate);
 
     const showConfirm = useDialogStore(s => s.showConfirm);
@@ -53,210 +56,53 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
 
     return (
         <div>
-            {/* Date Navigator */}
-            {setSelectedDate && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <button className="btn btn-small" onClick={handlePrevDay} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}>◀ Prec.</button>
-                    <div style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} onClick={handleToday} title="Torna a oggi">
-                        <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                            {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr || '') : targetDateStr}
+            {setSelectedDate && <DayNavigator date={targetDateStr || ''} today={Logic.getLocalDateString()} onPrevious={handlePrevDay} onNext={handleNextDay} onToday={handleToday} />}
+
+            <section className="tracking-panel" aria-label="Riepilogo alimentazione">
+                <div className="tracking-row tracking-row--wrap mb-15">
+                    <h2 className="tracking-heading">{isDayOn ? 'Giorno ON' : 'Giorno OFF'}</h2>
+                    <button type="button" className="btn btn-secondary" onClick={async () => {
+                        const confirmed = await showConfirm(`Sei sicuro di voler cambiare il giorno in ${isDayOn ? 'OFF' : 'ON'}?`);
+                        if (confirmed) setDayType(!isDayOn);
+                    }}>Cambia giorno</button>
+                </div>
+                <div className="tracking-row mb-15">
+                    <div><strong className="nutrition-calorie-value">{Math.round(todayNutrition.kcal)}</strong><span className="tracking-muted text-sm block">kcal assunte</span></div>
+                    <div className="text-right"><strong>{dailyTarget.kcal || 0}</strong><span className="tracking-muted text-sm block">Obiettivo kcal</span></div>
+                </div>
+                <div className="progress-bg mb-15" aria-hidden="true"><div className="progress-fill" style={{ width: `${dailyTarget.kcal > 0 ? Math.min((todayNutrition.kcal / dailyTarget.kcal) * 100, 100) : 0}%` }} /></div>
+                <dl className="tracking-metrics tracking-metrics--three">
+                    <div><dt>Proteine</dt><dd>{Math.round(todayNutrition.pro)}<span className="text-sm tracking-muted"> / {dailyTarget.pro} g</span></dd></div>
+                    <div><dt>Carboidrati</dt><dd>{Math.round(todayNutrition.carbs)}<span className="text-sm tracking-muted"> / {dailyTarget.carbs} g</span></dd></div>
+                    <div><dt>Grassi</dt><dd>{Math.round(todayNutrition.fat)}<span className="text-sm tracking-muted"> / {dailyTarget.fat} g</span></dd></div>
+                </dl>
+            </section>
+
+            <section className="tracking-panel" aria-labelledby={`${searchId}-heading`}>
+                <h2 id={`${searchId}-heading`} className="tracking-heading">Cerca alimento</h2>
+                <label htmlFor={searchId} className="sr-only">Cerca alimento</label>
+                <div className="tracking-search">
+                    <input id={searchId} type="search" placeholder="Cerca alimento (es. Pollo, Riso, Avena...)" value={searchQuery} onChange={e => handleSearch(e.target.value)} onFocus={e => e.target.select()} />
+                    {searchQuery && <button type="button" className="btn-icon" onClick={clearSearch} aria-label="Cancella ricerca"><X size={20} aria-hidden="true" /></button>}
+                </div>
+                {searchResults.length > 0 && <div id="active-search-results" className="tracking-search-results" aria-label="Alimenti trovati">
+                    {searchResults.map((f: any, idx: number) => <div key={f.id || idx} className="tracking-food-result">
+                        <div className="tracking-row tracking-row--wrap"><strong>{f.name}</strong>{f.isCustom && <span className="tracking-badge">Personalizzato</span>}</div>
+                        <p className="tracking-muted text-sm mt-4">{f.kcal} kcal / {f.baseQty || 100}{f.unit || 'g'} • P:{f.pro || 0}g C:{f.carbs || 0}g G:{f.fat || 0}g</p>
+                        <div className="tracking-quick-meals">
+                            {MEAL_TYPES.map(mt => <button key={mt} type="button" className="btn btn-secondary" onClick={() => addFood(f, mt)} title={`Aggiungi a ${mt}`} aria-label={`Aggiungi ${f.name} a ${mt}`}>{mt}</button>)}
                         </div>
-                        {targetDateStr === Logic.getLocalDateString() && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
-                        )}
-                    </div>
-                    <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
-                </div>
-            )}
-
-            {/* Daily Target Progress Header */}
-            <div className="section-divider">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', background: 'rgba(255,255,255,0.05)', padding: '10px 15px', borderRadius: '10px' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: isDayOn ? 'var(--primary-color)' : 'var(--text-main)' }}>
-                        {isDayOn ? '🔥 Giorno ON' : '🛋️ Giorno OFF'}
-                    </div>
-                    <button 
-                        className="btn btn-small"
-                        onClick={async () => {
-                            const confirmed = await showConfirm(`Sei sicuro di voler cambiare il giorno in ${isDayOn ? 'OFF' : 'ON'}?`);
-                            if (confirmed) {
-                                setDayType(!isDayOn);
-                            }
-                        }}
-                        style={{ margin: 0 }}
-                    >
-                        Cambia giorno
-                    </button>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
-                    <div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)' }}>{Math.round(todayNutrition.kcal)}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>kcal assunte</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{dailyTarget.kcal || 0}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>TDEE target</div>
-                    </div>
-                </div>
-
-                <div className="progress-bg" style={{ marginBottom: '20px' }}>
-                    <div className="progress-fill" style={{ width: `${dailyTarget.kcal > 0 ? Math.min((todayNutrition.kcal / dailyTarget.kcal) * 100, 100) : 0}%`, background: 'linear-gradient(90deg, var(--warning-color), #fcd34d)' }}></div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                    <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.pro)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.pro}</span></div>
-                        <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--success-color)', width: `${dailyTarget.pro > 0 ? Math.min((todayNutrition.pro / dailyTarget.pro) * 100, 100) : 0}%` }}></div></div>
-                    </div>
-                    <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>CAR</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.carbs)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.carbs}</span></div>
-                        <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--primary-color)', width: `${dailyTarget.carbs > 0 ? Math.min((todayNutrition.carbs / dailyTarget.carbs) * 100, 100) : 0}%` }}></div></div>
-                    </div>
-                    <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>GRA</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.fat)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.fat}</span></div>
-                        <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--danger-color)', width: `${dailyTarget.fat > 0 ? Math.min((todayNutrition.fat / dailyTarget.fat) * 100, 100) : 0}%` }}></div></div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Search Box */}
-            <div className="section-divider">
-                <h2 className="mb-10" style={{color: 'var(--text-main)'}}>🔍 Cerca alimento</h2>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input 
-                        type="text" 
-                        placeholder="Cerca alimento (es. Pollo, Riso, Avena...)" 
-                        value={searchQuery}
-                        onChange={e => handleSearch(e.target.value)}
-                        onFocus={e => e.target.select()}
-                        style={{ 
-                            width: '100%', 
-                            margin: 0, 
-                            height: '44px',
-                            paddingLeft: '14px', 
-                            paddingRight: searchQuery ? '36px' : '14px',
-                            fontSize: '16px',
-                            borderRadius: '10px'
-                        }}
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            onClick={clearSearch}
-                            style={{
-                                position: 'absolute',
-                                right: '8px',
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'var(--text-muted)',
-                                fontSize: '1rem',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                            aria-label="Cancella ricerca"
-                        >
-                            ✕
-                        </button>
-                    )}
-                </div>
-                
-                {/* Search Results List */}
-                {searchResults.length > 0 && (
-                    <div 
-                        id="active-search-results"
-                        style={{
-                            display: 'block',
-                            maxHeight: '280px',
-                            overflowY: 'auto',
-                            background: 'var(--surface-light)',
-                            border: '1px solid var(--glass-border)',
-                            borderRadius: '12px',
-                            marginTop: '12px',
-                            marginBottom: '12px',
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
-                        }}
-                    >
-                        {searchResults.map((f: any, idx: number) => (
-                            <div 
-                                key={f.id || idx} 
-                                style={{
-                                    padding: '12px',
-                                    borderBottom: idx === searchResults.length - 1 ? 'none' : '1px solid var(--glass-border)',
-                                    background: 'rgba(255, 255, 255, 0.02)'
-                                }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                                            <span>{f.name}</span>
-                                            {f.isCustom && <span style={{ background: 'var(--warning-color)', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600 }}>Custom</span>}
-                                        </div>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '3px' }}>
-                                            {f.kcal} kcal / {f.baseQty || 100}{f.unit || 'g'} • P:{f.pro || 0}g C:{f.carbs || 0}g G:{f.fat || 0}g
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                                        {MEAL_TYPES.map(mt => (
-                                            <button 
-                                                key={mt}
-                                                className="btn btn-small"
-                                                style={{
-                                                    padding: '6px 8px',
-                                                    fontSize: '0.75rem',
-                                                    marginBottom: 0,
-                                                    background: 'rgba(255, 255, 255, 0.08)',
-                                                    border: '1px solid var(--glass-border)',
-                                                    color: 'var(--text-main)'
-                                                }}
-                                                onClick={() => addFood(f, mt)}
-                                                title={`Aggiungi a ${mt}`}
-                                            >
-                                                {mt.substring(0, 3)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-                    <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '10px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed var(--glass-border)' }}>
-                        Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea alimento</b>.
-                    </div>
-                )}
-
-                <button 
-                    type="button"
-                    className="btn btn-primary" 
-                    style={{ width: '100%', marginTop: '10px', marginBottom: 0 }}
-                    onClick={() => {
-                        if (showCustomModal) {
-                            cancelCustomFood();
-                        } else {
-                            setShowCustomModal(true);
-                        }
-                    }}
-                >
-                    {showCustomModal ? <><X size={16} aria-hidden="true" /> Chiudi</> : (editingFoodId ? <><Pencil size={16} aria-hidden="true" /> Modifica alimento</> : <><Plus size={16} aria-hidden="true" /> Crea alimento</>)}
+                    </div>)}
+                </div>}
+                {searchQuery.trim().length >= 2 && searchResults.length === 0 && <p className="tracking-empty" role="status">Nessun alimento trovato. Puoi crearlo subito con <b>+ Crea alimento</b>.</p>}
+                <button type="button" className="btn btn-primary tracking-full-button" onClick={() => {
+                    if (showCustomModal) cancelCustomFood();
+                    else setShowCustomModal(true);
+                }}>
+                    {showCustomModal ? <><X size={20} aria-hidden="true" /> Chiudi</> : (editingFoodId ? <><Pencil size={20} aria-hidden="true" /> Modifica alimento</> : <><Plus size={20} aria-hidden="true" /> Crea alimento</>)}
                 </button>
-                
-                <CustomFoodForm 
-                    cfData={cfData} setCfData={setCfData} 
-                    saveCustomFood={saveCustomFood} 
-                    showCustomModal={showCustomModal} setShowCustomModal={setShowCustomModal} 
-                    isEditing={!!editingFoodId}
-                    onCancel={cancelCustomFood}
-                />
-            </div>
+                <CustomFoodForm cfData={cfData} setCfData={setCfData} saveCustomFood={saveCustomFood} showCustomModal={showCustomModal} setShowCustomModal={setShowCustomModal} isEditing={!!editingFoodId} onCancel={cancelCustomFood} />
+            </section>
 
             {/* Meals List */}
             {MEAL_TYPES.map(mt => {
@@ -284,7 +130,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                                 {Math.round(subKcal)} kcal • P:{Math.round(subP)} C:{Math.round(subC)} G:{Math.round(subF)}
                             </span>
                         </div>
-                        
+
                         {mealItems.length === 0 ? (
                             <p className="text-muted text-center my-10 text-sm">Nessun alimento aggiunto.</p>
                         ) : (
@@ -302,7 +148,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
 
                                 if (isEditing) {
                                     return (
-                                        <InlineEditMealItem 
+                                        <InlineEditMealItem
                                             key={`edit-${item.time || item.id}`}
                                             item={editingMealItem}
                                             onClose={() => setEditingMealItem(null)}
@@ -313,32 +159,29 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                                 }
 
                                 return (
-                                    <div 
-                                        key={item.time || item.id} 
-                                        className="flex-between py-10 border-b-dashed"
-                                        style={{ cursor: 'pointer', transition: 'background 0.2s', padding: '10px 6px', borderRadius: '8px' }}
-                                        onClick={() => setEditingMealItem(item)}
-                                        title="Clicca per modificare la porzione"
+                                    <div
+                                        key={item.time || item.id}
+                                        className="tracking-meal-row"
                                     >
-                                        <div style={{ flex: 1 }}>
-                                            <div className="font-bold flex items-center gap-6">
+                                        <button type="button" className="tracking-meal-open" onClick={() => setEditingMealItem(item)} aria-label={`Modifica porzione di ${item.name}`}>
+                                            <span className="font-bold flex items-center gap-6">
                                                 <span>{item.name}</span>
                                                 <Pencil size={16} aria-hidden="true" />
-                                            </div>
-                                            <div className="text-muted text-sm mt-2">
+                                            </span>
+                                            <span className="text-muted text-sm mt-2">
                                                 {qty}{item.unit || 'g'} • {itemKcal} kcal
-                                            </div>
-                                        </div>
-                                        <button 
+                                            </span>
+                                        </button>
+                                        <button
                                             type="button"
-                                            className="btn-icon text-danger" 
+                                            className="btn-icon text-danger"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 removeFood(item.time ?? item.id);
                                             }}
-                                            aria-label="Rimuovi alimento"
+                                            aria-label={`Rimuovi ${item.name}`}
                                         >
-                                            ✕
+                                            <X size={20} aria-hidden="true" />
                                         </button>
                                     </div>
                                 );
@@ -357,32 +200,32 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                             {todayNutrition.supplementsIntake.length} assunzioni
                         </span>
                     </div>
-                    
+
                     {todayNutrition.supplementsIntake.map((intake: any) => {
                         const supp = supplementsLibrary.find(s => s.id === intake.supplementId);
                         const timeStr = new Date(intake.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                         return (
-                            <div 
-                                key={intake.id} 
+                            <div
+                                key={intake.id}
                                 className="flex-between py-10 border-b-dashed"
                                 style={{ padding: '10px 6px', borderRadius: '8px' }}
                             >
                                 <div style={{ flex: 1 }}>
                                     <div className="font-bold flex items-center gap-6">
                                         <span style={{ color: 'var(--text-main)' }}>{supp ? supp.name : 'Integratore eliminato'}</span>
-                                        <span style={{ fontSize: '0.75rem' }}>💊</span>
+
                                     </div>
                                     <div className="text-muted text-sm mt-2">
                                         {intake.amount} {supp ? supp.unit : 'g'} • {timeStr}
                                     </div>
                                 </div>
-                                <button 
+                                <button
                                     type="button"
-                                    className="btn-icon text-danger" 
+                                    className="btn-icon text-danger"
                                     onClick={() => removeIntake(intake.id)}
                                     aria-label="Rimuovi integratore"
                                 >
-                                    ✕
+                                    <X size={20} aria-hidden="true" />
                                 </button>
                             </div>
                         );

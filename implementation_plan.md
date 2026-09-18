@@ -1,3 +1,7 @@
+# Piano corrente: rinnovo grafico LogBook
+
+16 settembre 2026: il piano del nuovo intervento è in [implementation_plan_redesign_ios.md](implementation_plan_redesign_ios.md), sul branch `codex/redesign-ios`. Stato: approvato dall'utente con "Procedi", implementazione in corso. I piani precedenti sono conservati integralmente qui sotto come contesto storico.
+
 # Piano di correzione dell'audit LogBook
 
 Data: 10 settembre 2026. Baseline: `5a04e97a367dc2245f239addacb2f475b1231452`.
@@ -13,7 +17,7 @@ Il repository Ã¨ ancora alla baseline, con il solo audit non tracciato. Prima 
 
 ## Decisioni di progetto proposte
 
-### 1. Persistenza e identitÃ 
+### 1. Persistenza e identitÃ
 
 - Distinguere modifica in memoria, commit locale e conferma remota; il feedback ottimistico non equivale a un salvataggio durabile.
 - Serializzare le operazioni locali per utente. Cache e operazioni pendenti vengono scritte atomicamente in IndexedDB, con versione del formato, owner, revisione locale e baseline necessaria alla riconciliazione.

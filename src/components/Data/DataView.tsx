@@ -1,3 +1,5 @@
+import SubNav from '../UI/SubNav';
+import '../Nutrition/TrackingViews.css';
 import React, { useState } from 'react';
 import { useNutritionMeasurements } from '../../hooks/useNutritionMeasurements';
 import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
@@ -7,6 +9,8 @@ import DataSleep from './DataSleep';
 import DataHistory from './DataHistory';
 import type { DataSubTab } from '../../types';
 import { useLocalToday } from '../../hooks/useLocalToday';
+
+const SUB_TABS = [{ id: 'measurements', label: 'Misurazioni' }, { id: 'sleep', label: 'Sonno' }, { id: 'biometry', label: 'Biometria' }, { id: 'history', label: 'Storico' }] as const;
 
 interface DataViewProps {
     subTab?: DataSubTab;
@@ -35,55 +39,12 @@ const DataView: React.FC<DataViewProps> = ({
         changeSubTab('measurements');
     };
 
-    const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-        if (e.deltaY !== 0) {
-            e.currentTarget.scrollLeft += e.deltaY;
-        }
-    };
-
     return (
-        <div id="view-data" className="view-section active">
-            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Dati" onWheel={handleWheel}>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={currentSubTab === 'measurements'}
-                    className={`sub-nav-btn ${currentSubTab === 'measurements' ? 'active' : ''}`}
-                    onClick={() => changeSubTab('measurements')}
-                >
-                    Misurazioni
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={currentSubTab === 'sleep'}
-                    className={`sub-nav-btn ${currentSubTab === 'sleep' ? 'active' : ''}`}
-                    onClick={() => changeSubTab('sleep')}
-                >
-                    Sonno
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={currentSubTab === 'biometry'}
-                    className={`sub-nav-btn ${currentSubTab === 'biometry' ? 'active' : ''}`}
-                    onClick={() => changeSubTab('biometry')}
-                >
-                    Biometria
-                </button>
-                <button
-                    type="button"
-                    role="tab"
-                    aria-selected={currentSubTab === 'history'}
-                    className={`sub-nav-btn ${currentSubTab === 'history' ? 'active' : ''}`}
-                    onClick={() => changeSubTab('history')}
-                >
-                    Storico
-                </button>
-            </div>
+        <div id="view-data" className="view-section active tracking-view">
+            <SubNav id="data" label="Sotto-menu Dati" items={SUB_TABS} value={currentSubTab} onChange={changeSubTab} />
 
             {currentSubTab === 'measurements' && (
-                <div className="data-sub-view active">
+                <div className="data-sub-view active" role="tabpanel" id="data-panel-measurements" aria-labelledby="data-tab-measurements" tabIndex={0}>
                     <DataMeasurements
                         profile={measurementsHook.profile}
                         selectedDate={selectedDate}
@@ -128,13 +89,13 @@ const DataView: React.FC<DataViewProps> = ({
             )}
 
             {currentSubTab === 'biometry' && (
-                <div className="data-sub-view active">
+                <div className="data-sub-view active" role="tabpanel" id="data-panel-biometry" aria-labelledby="data-tab-biometry" tabIndex={0}>
                     <DataBiometry />
                 </div>
             )}
 
             {currentSubTab === 'sleep' && (
-                <div className="data-sub-view active">
+                <div className="data-sub-view active" role="tabpanel" id="data-panel-sleep" aria-labelledby="data-tab-sleep" tabIndex={0}>
                     <DataSleep
                         sleepHook={sleepHook}
                         selectedDate={sleepHook.selectedDate}
@@ -145,7 +106,7 @@ const DataView: React.FC<DataViewProps> = ({
             )}
 
             {currentSubTab === 'history' && (
-                <div className="data-sub-view active">
+                <div className="data-sub-view active" role="tabpanel" id="data-panel-history" aria-labelledby="data-tab-history" tabIndex={0}>
                     <DataHistory
                         measurementsHistory={measurementsHook.measurementsHistory}
                         editingDate={measurementsHook.editingDate}

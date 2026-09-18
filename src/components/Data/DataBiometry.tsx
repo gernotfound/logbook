@@ -1,5 +1,6 @@
 import { useSettings } from '../../hooks/useSettings';
 import { Save } from 'lucide-react';
+import '../Nutrition/TrackingViews.css';
 
 const DataBiometry = () => {
     const {
@@ -10,63 +11,27 @@ const DataBiometry = () => {
     } = useSettings();
 
     return (
-        <div className="section-divider-last">
-            <h1 style={{marginTop: 0}}>Dati biometrici</h1>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
-            </p>
-            
-            <div className="mb-15" style={{ width: '100%', boxSizing: 'border-box' }}>
-                <label className="text-muted text-xs block mb-4" style={{ textAlign: 'center' }}>Data di nascita</label>
-                <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                    <input 
-                        id="biometry-dob" 
-                        type="date" 
-                        value={dob} 
-                        onChange={e => setDob(e.target.value)} 
-                        style={{
-                            width: '100%',
-                            maxWidth: '100%',
-                            boxSizing: 'border-box',
-                            textAlign: 'center',
-                            margin: '0 auto',
-                            display: 'block'
-                        }}
-                    />
+        <section className="tracking-panel tracking-view">
+            <h1 className="tracking-heading">Dati biometrici</h1>
+            <p className="tracking-description">I dati biometrici vengono utilizzati per calcolare la percentuale di massa grassa (formula US Navy).</p>
+            <div className="tracking-fields">
+                <div className="tracking-field tracking-field--wide">
+                    <label htmlFor="biometry-dob">Data di nascita</label>
+                    <input id="biometry-dob" type="date" value={dob} onChange={event => setDob(event.target.value)} />
                 </div>
-            </div>
-            
-            <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Altezza (cm)</label>
-                    <input 
-                        id="biometry-height" 
-                        type="number" 
-                        placeholder="es. 180" 
-                        value={height} 
-                        onChange={e => setHeight(e.target.value)} 
-                        onFocus={e => e.target.select()}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
-                    />
+                <div className="tracking-field">
+                    <label htmlFor="biometry-height">Altezza (cm)</label>
+                    <input id="biometry-height" type="number" inputMode="decimal" placeholder="es. 180" value={height} onChange={event => setHeight(event.target.value)} onFocus={event => event.target.select()} />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sesso</label>
-                    <select 
-                        value={gender} 
-                        onChange={e => setGender(e.target.value)}
-                        style={{ width: '100%', boxSizing: 'border-box', textAlign: 'center', margin: '0 auto' }}
-                    >
-                        <option value="">Non specificato</option>
-                        <option value="M">Uomo</option>
-                        <option value="F">Donna</option>
+                <div className="tracking-field">
+                    <label htmlFor="biometry-gender">Sesso</label>
+                    <select id="biometry-gender" value={gender} onChange={event => setGender(event.target.value)}>
+                        <option value="">Non specificato</option><option value="M">Uomo</option><option value="F">Donna</option>
                     </select>
                 </div>
             </div>
-
-            <button className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }} onClick={handleSaveProfile}>
-                <Save size={16} aria-hidden="true" /> Salva profilo biometrico
-            </button>
-        </div>
+            <button type="button" className="btn btn-primary tracking-full-button" onClick={handleSaveProfile}><Save size={20} aria-hidden="true" /> Salva profilo biometrico</button>
+        </section>
     );
 };
 

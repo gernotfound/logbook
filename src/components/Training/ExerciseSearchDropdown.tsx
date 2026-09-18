@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, useId } from 'react';
 import { X, Plus, Search, Activity, Timer } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../types';
 import { Logic, getDetailedMuscleCategory } from '../../lib/logic';
@@ -25,6 +25,8 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const listId = useId();
+    const keyboardNavigation = useRef(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -62,13 +64,15 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
 
     // Ensure highlighted item stays visible during keyboard scrolling
     useEffect(() => {
-        if (isOpen && highlightedIndex >= 0 && dropdownRef.current) {
+        if (keyboardNavigation.current && isOpen && highlightedIndex >= 0 && dropdownRef.current) {
             const items = dropdownRef.current.querySelectorAll('.exercise-dropdown-item');
-            if (items[highlightedIndex] && typeof (items[highlightedIndex] as any).scrollIntoView === 'function') {
-                (items[highlightedIndex] as HTMLElement).scrollIntoView({
-                    block: 'nearest',
-                    behavior: 'smooth'
-                });
+            const item = items[highlightedIndex] as HTMLElement | undefined;
+            const list = dropdownRef.current;
+            if (item) {
+                const top = item.offsetTop;
+                const bottom = top + item.offsetHeight;
+                if (top < list.scrollTop) list.scrollTop = top;
+                else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
             }
         }
     }, [highlightedIndex, isOpen]);
@@ -82,6 +86,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     }, [onSelectExercise]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        keyboardNavigation.current = true;
         if (!isOpen) {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
                 setIsOpen(true);
@@ -124,44 +129,44 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
         return (
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '3px' }}>
                 {muscleCategory && (
-                    <span 
-                        style={{ 
-                            fontSize: '0.75rem', 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            background: 'rgba(0, 229, 255, 0.15)', 
+                    <span
+                        style={{
+
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--primary-soft)',
                             color: 'var(--primary-color)',
                             fontWeight: 500
                         }}
-                    >
+                     className="text-sm">
                         {muscleCategory}
                     </span>
                 )}
                 {ex.trackingType === 'cardio' && (
-                    <span 
-                        style={{ 
-                            fontSize: '0.75rem', 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            background: 'rgba(46, 204, 113, 0.15)', 
+                    <span
+                        style={{
+
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--success-soft)',
                             color: 'var(--success-color, #2ecc71)',
                             fontWeight: 500
                         }}
-                    >
+                     className="text-sm">
                         <Activity size={12} aria-hidden="true" style={{ marginRight: '2px', display: 'inline-block', verticalAlign: 'middle' }} /> Cardio
                     </span>
                 )}
                 {ex.trackingType === 'time' && (
-                    <span 
-                        style={{ 
-                            fontSize: '0.75rem', 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            background: 'rgba(255, 183, 3, 0.15)', 
+                    <span
+                        style={{
+
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: 'var(--warning-soft)',
                             color: 'var(--warning-color, #ffb703)',
                             fontWeight: 500
                         }}
-                    >
+                     className="text-sm">
                         <Timer size={12} aria-hidden="true" style={{ marginRight: '2px', display: 'inline-block', verticalAlign: 'middle' }} /> Tempo
                     </span>
                 )}
@@ -170,7 +175,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
     };
 
     return (
-        <div 
+        <div
             ref={containerRef}
             className={`exercise-search-container ${containerClassName}`}
             style={{ position: 'relative', width: '100%', ...style }}
@@ -182,7 +187,8 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     role="combobox"
                     aria-expanded={isOpen}
                     aria-autocomplete="list"
-                    aria-controls="exercise-dropdown-list"
+                    aria-controls={listId}
+                    aria-activedescendant={isOpen && highlightedIndex >= 0 ? `${listId}-${highlightedIndex}` : undefined}
                     value={searchTerm}
                     placeholder={placeholder}
                     autoFocus={autoFocus}
@@ -197,14 +203,14 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                     style={{
                         width: '100%',
                         padding: '10px 38px 10px 14px',
-                        fontSize: '16px',
+
                         borderRadius: '8px',
                         background: 'var(--surface-color, #0d0d0d)',
                         color: 'var(--text-main, #f0f0f0)',
-                        border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.1))',
+                        border: '1px solid var(--glass-border, var(--surface-light))',
                         boxSizing: 'border-box'
                     }}
-                />
+                 className="text-base"/>
 
                 {searchTerm ? (
                     <button
@@ -250,7 +256,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
             {isOpen && (
                 <div
                     ref={dropdownRef}
-                    id="exercise-dropdown-list"
+                    id={listId}
                     role="listbox"
                     style={{
                         position: 'absolute',
@@ -261,25 +267,24 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                         maxHeight: '260px',
                         overflowY: 'auto',
                         background: 'var(--surface-color, #0d0d0d)',
-                        backdropFilter: 'blur(12px)',
-                        WebkitBackdropFilter: 'blur(12px)',
-                        border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.15))',
+                        backdropFilter: 'none',
+                        WebkitBackdropFilter: 'none',
+                        border: '1px solid var(--glass-border, var(--surface-light))',
                         borderRadius: '12px',
-                        boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)',
+                        boxShadow: 'none',
                         zIndex: 100,
                         boxSizing: 'border-box',
                         touchAction: 'manipulation'
                     }}
                 >
                     {filteredExercises.length === 0 ? (
-                        <div 
-                            style={{ 
-                                padding: '16px', 
-                                textAlign: 'center', 
-                                color: 'var(--text-muted, #9ba3af)', 
-                                fontSize: '0.85rem' 
+                        <div
+                            style={{
+                                padding: '16px',
+                                textAlign: 'center',
+                                color: 'var(--text-muted, #9ba3af)'
                             }}
-                        >
+                         className="text-sm">
                             Nessun esercizio trovato
                         </div>
                     ) : (
@@ -289,47 +294,53 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                 <div
                                     key={ex.id || idx}
                                     role="option"
+                                    id={`${listId}-${idx}`}
                                     aria-selected={isHighlighted}
                                     className="exercise-dropdown-item"
                                     onClick={() => handleSelect(ex.id)}
-                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                    onPointerMove={event => {
+                                        // Touch must select immediately without a synthetic hover layout change.
+                                        if (event.pointerType !== 'mouse') return;
+                                        keyboardNavigation.current = false;
+                                        setHighlightedIndex(idx);
+                                    }}
                                     style={{
                                         padding: '10px 14px',
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                        borderBottom: '1px solid var(--glass-border)',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
-                                        background: isHighlighted ? 'rgba(0, 229, 255, 0.12)' : 'transparent',
+                                        background: isHighlighted ? 'var(--primary-soft)' : 'transparent',
                                         borderLeft: isHighlighted ? '3px solid var(--primary-color)' : '3px solid transparent',
                                         transition: 'background 0.15s ease, border-left 0.15s ease'
                                     }}
                                 >
                                     <div style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
-                                        <div 
-                                            style={{ 
-                                                fontWeight: 600, 
-                                                color: 'var(--text-main, #f0f0f0)', 
-                                                fontSize: '0.95rem',
+                                        <div
+                                            style={{
+                                                fontWeight: 600,
+                                                color: 'var(--text-main, #f0f0f0)',
+
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap'
                                             }}
-                                        >
+                                         className="text-base">
                                             {ex.name}
                                         </div>
                                         {renderBadges(ex)}
                                     </div>
-                                    <div 
-                                        style={{ 
-                                            display: 'flex', 
-                                            alignItems: 'center', 
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
                                             justifyContent: 'center',
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '6px',
-                                            background: isHighlighted ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.08)',
-                                            color: isHighlighted ? '#000000' : 'var(--text-main, #f0f0f0)',
+                                            background: isHighlighted ? 'var(--primary-color)' : 'var(--surface-light)',
+                                            color: isHighlighted ? 'var(--on-primary)' : 'var(--text-main, #f0f0f0)',
                                             flexShrink: 0
                                         }}
                                     >

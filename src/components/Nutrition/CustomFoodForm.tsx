@@ -10,11 +10,11 @@ interface CustomFoodFormProps {
     onCancel?: () => void;
 }
 
-export default function CustomFoodForm({ 
-    cfData, 
-    setCfData, 
-    saveCustomFood, 
-    showCustomModal, 
+export default function CustomFoodForm({
+    cfData,
+    setCfData,
+    saveCustomFood,
+    showCustomModal,
     setShowCustomModal,
     isEditing = false,
     onCancel
@@ -55,38 +55,38 @@ export default function CustomFoodForm({
             <h3 style={{color: 'var(--text-main)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px'}}>
                 {isEditing ? <><Pencil size={20} aria-hidden="true" /> Modifica alimento</> : <><Plus size={20} aria-hidden="true" /> Nuovo alimento personalizzato</>}
             </h3>
-            
+
             <div style={{ marginBottom: '10px' }}>
                 <label className="text-muted text-xs block mb-4" htmlFor="cf-name">Nome alimento *</label>
-                <input 
-                    id="cf-name" 
-                    type="text" 
-                    placeholder="es. Petto di pollo, Fiocchi di latte..." 
-                    value={cfData.name || ''} 
-                    onChange={e => setCfData({...cfData, name: e.target.value})} 
+                <input
+                    id="cf-name"
+                    type="text"
+                    placeholder="es. Petto di pollo, Fiocchi di latte..."
+                    value={cfData.name || ''}
+                    onChange={e => setCfData({...cfData, name: e.target.value})}
                     onFocus={e => e.target.select()}
-                    style={{ marginBottom: '8px', fontSize: '16px' }} 
-                />
+                    style={{ marginBottom: '8px' }}
+                 className="text-base"/>
                 <label className="text-muted text-xs block mb-4" htmlFor="cf-brand">Marca (opzionale)</label>
-                <input 
-                    id="cf-brand" 
-                    type="text" 
-                    placeholder="es. MyProtein, AIA, Coop..." 
-                    value={cfData.brand || ''} 
-                    onChange={e => setCfData({...cfData, brand: e.target.value})} 
+                <input
+                    id="cf-brand"
+                    type="text"
+                    placeholder="es. MyProtein, AIA, Coop..."
+                    value={cfData.brand || ''}
+                    onChange={e => setCfData({...cfData, brand: e.target.value})}
                     onFocus={e => e.target.select()}
-                    style={{ marginBottom: '8px', fontSize: '16px' }} 
-                />
+                    style={{ marginBottom: '8px' }}
+                 className="text-base"/>
             </div>
-            
-            <div className="input-row" style={{ marginBottom: '10px' }}>
+
+            <div className="tracking-fields">
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label className="text-muted text-xs block mb-4">Unità di misura</label>
-                    <select 
-                        value={cfData.unit || 'g'} 
-                        onChange={e => setCfData({...cfData, unit: e.target.value})} 
-                        style={{ width: '100%', marginBottom: 0, fontSize: '16px' }}
-                    >
+                    <label className="text-muted text-xs block mb-4" htmlFor="cf-unit">Unità di misura</label>
+                    <select id="cf-unit"
+                        value={cfData.unit || 'g'}
+                        onChange={e => setCfData({...cfData, unit: e.target.value})}
+                        style={{ width: '100%', marginBottom: 0 }}
+                     className="text-base">
                         <option value="g">Grammi (g)</option>
                         <option value="ml">Millilitri (ml)</option>
                         <option value="pezzo">A pezzo / unità</option>
@@ -95,94 +95,94 @@ export default function CustomFoodForm({
                 {cfData.unit === 'pezzo' && (
                     <div style={{ flex: 1, minWidth: 0 }}>
                         <label className="text-muted text-xs block mb-4" htmlFor="cf-piece-weight">Peso 1 pezzo (g)</label>
-                        <input 
-                            id="cf-piece-weight" 
-                            type="number" 
+                        <input
+                            id="cf-piece-weight"
+                            type="number"
                             inputMode="decimal"
-                            placeholder="es. 60" 
-                            value={cfData.pieceWeight || ''} 
-                            onChange={e => setCfData({...cfData, pieceWeight: e.target.value})} 
+                            placeholder="es. 60"
+                            value={cfData.pieceWeight || ''}
+                            onChange={e => setCfData({...cfData, pieceWeight: e.target.value})}
                             onFocus={e => e.target.select()}
-                            style={{ marginBottom: 0, fontSize: '16px' }} 
-                        />
+                            style={{ marginBottom: 0 }}
+                         className="text-base"/>
                     </div>
                 )}
             </div>
 
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            <div style={{  color: 'var(--text-muted)', marginBottom: '8px' }} className="text-sm">
                 Valori per 100 {cfData.unit !== 'pezzo' ? (cfData.unit || 'g') : 'g'}:
             </div>
-            
-            <div className="input-row" style={{ marginBottom: '15px' }}>
+
+            <div className="tracking-fields tracking-fields--four">
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-kcal">Kcal</label>
-                    <input 
-                        id="cf-kcal" 
-                        type="number" 
+                    <input
+                        id="cf-kcal"
+                        type="number"
                         inputMode="decimal"
-                        placeholder="0" 
-                        value={cfData.kcal ?? ''} 
-                        onChange={e => setCfData({...cfData, kcal: e.target.value})} 
+                        placeholder="0"
+                        value={cfData.kcal ?? ''}
+                        onChange={e => setCfData({...cfData, kcal: e.target.value})}
                         onFocus={e => e.target.select()}
-                        style={{ marginBottom: 0, fontSize: '16px' }} 
-                    />
+                        style={{ marginBottom: 0 }}
+                     className="text-base"/>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-pro">Pro (g)</label>
-                    <input 
-                        id="cf-pro" 
-                        type="number" 
+                    <input
+                        id="cf-pro"
+                        type="number"
                         inputMode="decimal"
                         step="0.1"
-                        placeholder="0" 
-                        value={cfData.pro ?? ''} 
-                        onChange={e => handleMacroChange('pro', e.target.value)} 
+                        placeholder="0"
+                        value={cfData.pro ?? ''}
+                        onChange={e => handleMacroChange('pro', e.target.value)}
                         onFocus={e => e.target.select()}
-                        style={{ marginBottom: 0, fontSize: '16px' }} 
-                    />
+                        style={{ marginBottom: 0 }}
+                     className="text-base"/>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-carbs">Carbo (g)</label>
-                    <input 
-                        id="cf-carbs" 
-                        type="number" 
+                    <input
+                        id="cf-carbs"
+                        type="number"
                         inputMode="decimal"
                         step="0.1"
-                        placeholder="0" 
-                        value={cfData.carbs ?? ''} 
-                        onChange={e => handleMacroChange('carbs', e.target.value)} 
+                        placeholder="0"
+                        value={cfData.carbs ?? ''}
+                        onChange={e => handleMacroChange('carbs', e.target.value)}
                         onFocus={e => e.target.select()}
-                        style={{ marginBottom: 0, fontSize: '16px' }} 
-                    />
+                        style={{ marginBottom: 0 }}
+                     className="text-base"/>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                     <label className="text-muted text-xs block mb-4" htmlFor="cf-fat">Grassi (g)</label>
-                    <input 
-                        id="cf-fat" 
-                        type="number" 
+                    <input
+                        id="cf-fat"
+                        type="number"
                         inputMode="decimal"
                         step="0.1"
-                        placeholder="0" 
-                        value={cfData.fat ?? ''} 
-                        onChange={e => handleMacroChange('fat', e.target.value)} 
+                        placeholder="0"
+                        value={cfData.fat ?? ''}
+                        onChange={e => handleMacroChange('fat', e.target.value)}
                         onFocus={e => e.target.select()}
-                        style={{ marginBottom: 0, fontSize: '16px' }} 
-                    />
+                        style={{ marginBottom: 0 }}
+                     className="text-base"/>
                 </div>
             </div>
 
-            <div className="flex gap-10">
-                <button 
+            <div className="tracking-actions">
+                <button
                     type="button"
-                    className="btn-link flex-1" 
+                    className="btn-link flex-1"
                     onClick={handleCancel}
                 >
                     Annulla
                 </button>
-                <button 
+                <button
                     type="button"
-                    className="btn btn-primary flex-2" 
-                    style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} 
+                    className="btn btn-primary flex-2"
+                    style={{ marginBottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                     onClick={saveCustomFood}
                 >
                     <Save size={18} aria-hidden="true" /> {isEditing ? 'Salva modifiche' : 'Salva alimento'}

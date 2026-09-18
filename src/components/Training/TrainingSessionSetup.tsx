@@ -25,7 +25,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
     const activeCycle = activeCycleId ? trainingCycles.find(c => c.id === activeCycleId) : null;
-    
+
     const { routines, history, startWorkout, startFreeWorkout, selectedRoutine, setSelectedRoutine } = useWorkoutSession();
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
@@ -76,14 +76,14 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                     {activeCycle && (
                         <span
                             style={{
-                                fontSize: '0.75rem',
+
                                 fontWeight: 'bold',
                                 padding: '3px 10px',
                                 borderRadius: '12px',
                                 background: 'var(--primary-color)',
-                                color: '#000'
+                                color: 'var(--on-primary)'
                             }}
-                        >
+                         className="text-sm">
                             {activeCycle.name}
                         </span>
                     )}
@@ -91,13 +91,13 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
 
                 {activeCycle ? (
                     plannedRoutines.length === 0 ? (
-                        <div style={{ padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        <div style={{ padding: '8px 0', color: 'var(--text-muted)' }} className="text-sm">
                             <p className="m-0 mb-8">Nessuna scheda valida trovata nel ciclo attivo "{activeCycle.name}".</p>
                             {onNavigateToPlanning && (
                                 <button
                                     type="button"
-                                    className="btn btn-secondary btn-small"
-                                    style={{ fontSize: '0.85rem', marginBottom: 0 }}
+                                    className="btn btn-secondary btn-small text-sm"
+                                    style={{  marginBottom: 0 }}
                                     onClick={onNavigateToPlanning}
                                 >
                                     Modifica ciclo in Pianificazione
@@ -110,27 +110,27 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                                 <div
                                     style={{
                                         padding: '12px',
-                                        background: 'rgba(14, 165, 233, 0.1)',
-                                        border: '1px solid rgba(14, 165, 233, 0.3)',
+                                        background: 'var(--primary-soft)',
+                                        border: '1px solid var(--primary-color)',
                                         borderRadius: '8px',
                                         marginBottom: '15px'
                                     }}
                                 >
                                     <div className="flex-between items-center mb-6">
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        <span style={{  color: 'var(--primary-color)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }} className="text-sm">
                                             Prossima in programma
                                         </span>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        <span style={{  color: 'var(--text-muted)' }} className="text-sm">
                                             Seduta #{nextScheduled.nextSessionIndex} di {nextScheduled.totalSessions}
                                         </span>
                                     </div>
 
                                     <div className="flex-between items-center mb-10">
                                         <div>
-                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
+                                            <div style={{  fontWeight: 'bold', color: 'var(--text-main)' }} className="text-lg">
                                                 {nextScheduled.nextRoutine.name}
                                             </div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                            <div style={{  color: 'var(--text-muted)' }} className="text-sm">
                                                 Rotazione {nextScheduled.rotationNumber} • Scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle} • {(nextScheduled.nextRoutine.exercises || []).length} esercizi
                                             </div>
                                         </div>
@@ -157,8 +157,8 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                                         aria-label="Seleziona scheda della rotazione"
                                         value={selectedPlannedRoutine}
                                         onChange={e => setSelectedPlannedRoutine(e.target.value)}
-                                        className="w-full p-10 bg-surface text-white border-b rounded-8"
-                                        style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                                        className="w-full p-10 bg-surface text-white border-b rounded-8 text-base"
+                                        style={{  boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
                                     >
                                         <option value="">+ Seleziona scheda della rotazione</option>
                                         {plannedRoutines.map(({ routine, letter, position }) => (
@@ -190,8 +190,8 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                         {onNavigateToPlanning && (
                             <button
                                 type="button"
-                                className="btn btn-secondary btn-small"
-                                style={{ fontSize: '0.85rem', marginBottom: 0 }}
+                                className="btn btn-secondary btn-small text-sm"
+                                style={{  marginBottom: 0 }}
                                 onClick={onNavigateToPlanning}
                             >
                                 <span aria-hidden="true">🎯</span> Vai a Pianificazione
@@ -226,19 +226,19 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </div>
 
                 {routines.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <p style={{ color: 'var(--text-muted)' }} className="text-sm">
                         Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.
                     </p>
                 ) : (
                     <div>
                         <div className="form-group mb-12">
-                            <select 
+                            <select
                                 id="archive-routine-select"
                                 aria-label="Seleziona scheda dall'archivio"
-                                value={selectedRoutine} 
+                                value={selectedRoutine}
                                 onChange={e => setSelectedRoutine(e.target.value)}
-                                className="w-full p-10 bg-surface text-white border-b rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                                className="w-full p-10 bg-surface text-white border-b rounded-8 text-base"
+                                style={{  boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
                             >
                                 <option value="">+ Seleziona scheda</option>
                                 {routines.map(r => (

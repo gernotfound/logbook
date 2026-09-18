@@ -47,14 +47,14 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
             <h2 style={{marginTop: 0}}>{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
 
             <div className="mb-15">
-                <input 
-                    type="text" 
-                    placeholder="Nome scheda" 
-                    value={routineName} 
+                <input
+                    type="text"
+                    placeholder="Nome scheda"
+                    value={routineName}
                     onChange={e => setRoutineName(e.target.value)}
                     onFocus={e => e.target.select()}
-                    style={{ fontSize: '16px' }}
-                />
+
+                 className="text-base"/>
             </div>
 
             <div className="mb-15">
@@ -71,9 +71,9 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
 
             {/* MuscleModel rimane sempre visibile anche con lista esercizi vuota */}
             <div className="mb-15 flex-center w-full">
-                <MuscleModel 
-                    selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
-                    secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
+                <MuscleModel
+                    selectedMuscles={Array.from(new Set(editMuscles)) as string[]}
+                    secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]}
                 />
             </div>
 
@@ -104,19 +104,19 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
             </div>
 
             <div className="flex gap-10 mt-10" style={{ width: '100%', minWidth: 0 }}>
-                <button 
-                    type="button" 
-                    className="btn flex-1 mb-0" 
-                    style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                <button
+                    type="button"
+                    className="btn flex-1 mb-0"
+                    style={{ background: 'var(--surface-light)', whiteSpace: 'nowrap', margin: 0 }}
                     onClick={onCancel}
                     disabled={isSaving}
                 >
                     Annulla
                 </button>
-                <button 
-                    type="button" 
-                    className="btn btn-primary flex-1 mb-0" 
-                    style={{ whiteSpace: 'nowrap', margin: 0 }} 
+                <button
+                    type="button"
+                    className="btn btn-primary flex-1 mb-0"
+                    style={{ whiteSpace: 'nowrap', margin: 0 }}
                     onClick={onSave}
                     disabled={isSaving}
                 >

@@ -50,7 +50,7 @@ describe('UI Alignments - R3 & R4', () => {
             const todayStr = Logic.getLocalDateString();
 
             render(
-                <DataMeasurements 
+                <DataMeasurements
                     profile={{ gender: 'M' }}
                     selectedDate={todayStr}
                     setSelectedDate={mockSetSelectedDate}
@@ -84,7 +84,7 @@ describe('UI Alignments - R3 & R4', () => {
 
             expect(screen.getByText('◀ Prec.')).toBeDefined();
             expect(screen.getByText('Succ. ▶')).toBeDefined();
-            expect(screen.getByText('OGGI')).toBeDefined();
+            expect(screen.getByText('Oggi')).toBeDefined();
 
             // Next button is disabled when date is today
             const nextBtn = screen.getByText('Succ. ▶') as HTMLButtonElement;
@@ -101,7 +101,7 @@ describe('UI Alignments - R3 & R4', () => {
             const pastDate = '2026-08-10';
 
             render(
-                <DataMeasurements 
+                <DataMeasurements
                     profile={{ gender: 'M' }}
                     selectedDate={pastDate}
                     setSelectedDate={mockSetSelectedDate}
@@ -158,7 +158,7 @@ describe('UI Alignments - R3 & R4', () => {
 
         it('useNutritionMeasurements hook loads past day values when selectedDate is provided', () => {
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-10'));
-            
+
             expect(result.current.targetDateStr).toBe('2026-08-10');
             expect(result.current.weight).toBe('80.5');
             expect(result.current.waist).toBe('85');
@@ -169,7 +169,7 @@ describe('UI Alignments - R3 & R4', () => {
 
         it('useNutritionMeasurements saves to selectedDate in userData.nutrition', async () => {
             const { result } = renderHook(() => useNutritionMeasurements('2026-08-05'));
-            
+
             act(() => {
                 result.current.setWeight('75.2');
                 result.current.setWaist('80');
@@ -189,7 +189,7 @@ describe('UI Alignments - R3 & R4', () => {
     });
 
     describe('R4: SessionSetRow Vertical Centering', () => {
-        it('renders input flex container with alignItems: center and circular + button with inline-flex alignment styles', () => {
+        it('keeps labeled set fields and special sets visible with an accessible options menu', () => {
             const mockSet = {
                 id: 'set_1',
                 kg: 50,
@@ -203,7 +203,7 @@ describe('UI Alignments - R3 & R4', () => {
             };
 
             render(
-                <SessionSetRow 
+                <SessionSetRow
                     set={mockSet}
                     sIndex={0}
                     exIndex={0}
@@ -217,31 +217,16 @@ describe('UI Alignments - R3 & R4', () => {
                 />
             );
 
-            const plusButton = screen.getByLabelText('Aggiungi dropset o isometria');
-            expect(plusButton).toBeDefined();
-            expect(plusButton.style.display).toBe('inline-flex');
-            expect(plusButton.style.alignItems).toBe('center');
-            expect(plusButton.style.justifyContent).toBe('center');
-            expect(plusButton.style.alignSelf).toBe('center');
-            expect(plusButton.style.borderRadius).toBe('50%');
+            expect((screen.getByRole('spinbutton', { name: 'Serie 1, chilogrammi', exact: true }) as HTMLInputElement).value).toBe('50');
+            expect((screen.getByRole('spinbutton', { name: 'Serie 1, ripetizioni', exact: true }) as HTMLInputElement).value).toBe('10');
+            expect(screen.getByText('Dropset 1')).toBeDefined();
+            expect(screen.getByText('Isometria 1')).toBeDefined();
+            const options = screen.getByRole('button', { name: 'Opzioni serie 1' });
+            fireEvent.click(options);
+            expect(options.getAttribute('aria-expanded')).toBe('true');
+            expect(screen.getByRole('menuitem', { name: '+ Dropset' })).toBeDefined();
+            expect(screen.getByRole('menuitem', { name: '+ Isometria' })).toBeDefined();
 
-            // Find input container
-            const inputContainer = plusButton.parentElement;
-            expect(inputContainer).toBeDefined();
-            expect(inputContainer?.style.alignItems).toBe('center');
-            expect(inputContainer?.style.display).toBe('flex');
-
-            // Verify dropset row
-            const dropsetText = screen.getByText('↳ Dropset');
-            const dropsetContainer = dropsetText.parentElement;
-            expect(dropsetContainer).toBeDefined();
-            expect(dropsetContainer?.style.alignItems).toBe('center');
-
-            // Verify isometric row
-            const isoText = screen.getByText('↳ Isometria');
-            const isoContainer = isoText.parentElement;
-            expect(isoContainer).toBeDefined();
-            expect(isoContainer?.style.alignItems).toBe('center');
         });
     });
 });

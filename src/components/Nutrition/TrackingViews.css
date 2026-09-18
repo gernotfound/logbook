@@ -1,0 +1,87 @@
+.tracking-view, .tracking-stack { min-width: 0; }
+.tracking-stack { display: flex; flex-direction: column; gap: 1rem; }
+.tracking-view .section-divider,
+.tracking-view .section-divider-last,
+.tracking-panel {
+    padding: 1rem;
+    margin: 0 0 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card, 1.25rem);
+    background: var(--surface-color);
+    min-width: 0;
+}
+.tracking-stack > .tracking-panel, .tracking-stack > .card { margin-bottom: 0; }
+.tracking-heading { margin: 0 0 .5rem; color: var(--text-main); display: flex; align-items: center; gap: .5rem; }
+.tracking-description { color: var(--text-muted); font-size: .875rem; line-height: 1.5; margin: 0 0 1rem; }
+.tracking-muted { color: var(--text-muted); }
+.tracking-accent { color: var(--primary-color); }
+.tracking-warning { color: var(--warning-color); }
+.tracking-danger { color: var(--danger-color); }
+.tracking-day { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+.tracking-day-current { border: 0; background: var(--surface-color); color: var(--text-main); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .125rem; padding: .5rem; min-height: 3.25rem; border-radius: var(--radius-control, .875rem); cursor: pointer; }
+.tracking-day .tracking-day-arrow { margin: 0; padding: .5rem; min-height: 2.75rem; min-width: 2.75rem; font-size: .875rem; }
+.tracking-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem .75rem; margin-bottom: 1rem; }
+.tracking-field { min-width: 0; }
+.tracking-field > label { display: block; margin: 0 0 .5rem; color: var(--text-muted); font-size: .875rem; line-height: 1.4; }
+.tracking-field :is(input, select, textarea) { width: 100%; min-width: 0; margin: 0; box-sizing: border-box; }
+.tracking-field--wide { grid-column: 1 / -1; }
+.tracking-field--time { max-width: 18rem; margin-bottom: 1.5rem; }
+.tracking-fieldset { margin: 0 0 1.5rem; padding: 0; border: 0; min-width: 0; }
+.tracking-fieldset > legend { color: var(--text-main); font-size: 1rem; font-weight: 600; margin-bottom: 1rem; padding: 0; }
+.tracking-time-input { display: flex; align-items: center; gap: .25rem; }
+.tracking-time-input > input { flex: 1; min-width: 0; }
+.tracking-time-input > button { flex: 0 0 2.75rem; }
+.tracking-actions { display: flex; align-items: stretch; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+.tracking-actions > :is(button, label) { flex: 1 1 8rem; margin: 0; }
+.tracking-full-button { width: 100%; margin: 0; }
+.tracking-inline-editor { border: 1px solid var(--primary-color); background: var(--surface-color); padding: 1rem; border-radius: var(--radius-card, 1.25rem); margin: 1rem 0; }
+.tracking-panel--editing { border-color: var(--primary-color); }
+.tracking-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; min-width: 0; }
+.tracking-row > :first-child { min-width: 0; }
+.tracking-row--wrap { flex-wrap: wrap; }
+.tracking-compact-input { flex: 0 0 6rem; width: 6rem; min-width: 0; margin: 0; text-align: right; }
+.tracking-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; border-radius: .875rem; background: var(--surface-light); padding: .75rem; font-variant-numeric: tabular-nums; }
+.tracking-metrics > div { min-width: 0; text-align: center; overflow-wrap: anywhere; }
+.tracking-metrics dt, .tracking-metrics .tracking-metric-label { display: block; font-size: .875rem; color: var(--text-muted); margin-bottom: .25rem; }
+.tracking-metrics dd { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-main); }
+.tracking-metrics--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tracking-metric-value { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-main); }
+.tracking-empty { padding: 1.5rem 1rem; text-align: center; color: var(--text-muted); }
+.tracking-list { display: flex; flex-direction: column; gap: .75rem; }
+.tracking-history-card { display: flex; align-items: center; gap: .5rem; padding: .75rem; margin: 0; }
+.tracking-history-open, .tracking-meal-open { display: block; flex: 1; width: 100%; min-width: 0; background: none; border: 0; padding: .5rem; margin: 0; color: var(--text-main); text-align: left; border-radius: .75rem; cursor: pointer; }
+.tracking-history-open { min-height: 3.25rem; }
+.tracking-history-open > span, .tracking-meal-open > span { display: block; }
+.tracking-history-detail { display: flex; flex-wrap: wrap; gap: .375rem .75rem; margin-top: .5rem; font-size: .875rem; color: var(--text-muted); }
+.tracking-search { display: flex; position: relative; align-items: center; margin: .75rem 0; }
+.tracking-search input { margin: 0; padding-right: 3.25rem; width: 100%; }
+.tracking-search > button { position: absolute; right: .25rem; margin: 0; min-width: 2.75rem; min-height: 2.75rem; }
+.tracking-search-results { border: 1px solid var(--glass-border); border-radius: .875rem; background: var(--surface-light); max-height: 24rem; overflow-y: auto; margin: .75rem 0; }
+.tracking-food-result { padding: .875rem; border-bottom: 1px solid var(--glass-border); }
+.tracking-food-result:last-child { border-bottom: 0; }
+.tracking-quick-meals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-top: .75rem; }
+.tracking-quick-meals button { min-height: 2.75rem; padding: .5rem; margin: 0; font-size: .875rem; }
+.tracking-meal-row { display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid var(--glass-border); padding: .5rem 0; }
+.tracking-meal-row:last-child { border-bottom: 0; }
+.tracking-badge { font-size: .875rem; color: var(--warning-color); background: var(--warning-soft); padding: .125rem .375rem; border-radius: .375rem; }
+.tracking-callout { padding: 1rem; border-radius: .875rem; background: var(--warning-soft); border: 1px solid var(--warning-color); color: var(--text-main); }
+.tracking-view :is(.text-xs, .text-xxs) { font-size: .875rem; }
+.tracking-view .input-row { flex-wrap: wrap; }
+.tracking-view .input-row > div { min-width: 7rem; }
+.tracking-view .btn-link { min-width: 2.75rem; min-height: 2.75rem; }
+.tracking-view :is(h1, h2, h3, p, label, button) { overflow-wrap: anywhere; }
+.tracking-view .flex-between { gap: .75rem; flex-wrap: wrap; }
+@media (min-width: 36rem) {
+    .tracking-quick-meals { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .tracking-fields--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .tracking-panel, .tracking-view .section-divider, .tracking-view .section-divider-last { padding: 1.25rem; }
+}
+@media (max-width: 22rem) {
+    .tracking-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tracking-metrics--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tracking-day { gap: .25rem; }
+}
+
+.nutrition-calorie-value { font-size: 2rem; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.tracking-metrics--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nutrition-history-button { width: 100%; color: var(--text-main); text-align: left; font: inherit; }

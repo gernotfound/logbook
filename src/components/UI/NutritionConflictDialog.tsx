@@ -72,7 +72,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
   const renderPlanPreview = (title: string, plan: NutritionPlanning | null, isCloud: boolean) => {
     if (!plan) return <div className="text-muted p-3 text-sm">Nessun piano</div>;
     return (
-      <div className="card p-3 mb-2" style={{ borderLeft: isCloud ? '4px solid var(--primary-color)' : '4px solid var(--warning-color)' }}>
+      <div className="card p-3 mb-2" style={{ borderLeft: isCloud ? "0.25rem solid var(--primary-color)" : "0.25rem solid var(--warning-color)" }}>
         <h4 className="text-sm font-bold mb-2">{title}</h4>
         <div className="text-xs mb-1">
           <strong>Kcal medie totali:</strong> {plan.totalKcal || 'N/D'} kcal
@@ -94,23 +94,14 @@ export const NutritionConflictDialog: React.FC<Props> = ({
       aria-modal="true"
       aria-labelledby="conflict-dialog-title"
       aria-describedby="conflict-dialog-desc"
-      className="card p-0 overflow-hidden"
-      style={{
-        maxWidth: '500px',
-        width: '90%',
-        margin: 'auto',
-        background: 'var(--surface-color)',
-        color: 'var(--text-main)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '16px',
-        backdropFilter: 'blur(10px)'
-      }}
+      className="card p-0 overflow-hidden ui-nutrition-conflict-dialog-1"
+      style={{ maxWidth: "31.25rem", width: "90%", margin: "auto" }}
     >
-      <div className="p-4 border-b" style={{ borderColor: 'var(--glass-border)' }}>
+      <div className="p-4 border-b ui-nutrition-conflict-dialog-2" >
         <h2 id="conflict-dialog-title" className="text-lg font-bold">Risoluzione conflitto</h2>
       </div>
 
-      <div className="p-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+      <div className="p-4" style={{ maxHeight: "60vh", overflowY: "auto" }}>
         {view === 'compare' ? (
           <>
             <p id="conflict-dialog-desc" className="text-sm text-muted mb-4">
@@ -124,20 +115,20 @@ export const NutritionConflictDialog: React.FC<Props> = ({
           <>
             <p id="conflict-dialog-desc" className="text-sm mb-4">
               <strong>Vuoi eliminare la bozza nutrizionale salvata su questo dispositivo?</strong><br/><br/>
-              Questa operazione <span style={{ color: 'var(--danger-color)' }}>non può essere annullata</span>, a meno che tu non abbia esportato un backup.
+              Questa operazione <span className="ui-nutrition-conflict-dialog-3" >non può essere annullata</span>, a meno che tu non abbia esportato un backup.
             </p>
           </>
         )}
       </div>
 
-      <div className="p-4 border-t flex flex-col gap-2" style={{ borderColor: 'var(--glass-border)' }}>
+      <div className="p-4 border-t flex flex-col gap-2 ui-nutrition-conflict-dialog-4" >
         {view === 'compare' ? (
           <>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary ui-nutrition-conflict-dialog-5"
               onClick={() => onResolve('local')}
               disabled={isSyncing}
-              style={{ background: 'var(--warning-color)', color: '#000' }}
+
             >
               Mantieni Dispositivo
             </button>
@@ -156,10 +147,10 @@ export const NutritionConflictDialog: React.FC<Props> = ({
             </button>
             <button
               autoFocus
-              className="btn"
+              className="btn ui-nutrition-conflict-dialog-6"
               onClick={onClose}
               disabled={isSyncing}
-              style={{ marginTop: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)' }}
+              style={{ marginTop: "0.5rem" }}
             >
               Decidi più tardi
             </button>
@@ -167,8 +158,8 @@ export const NutritionConflictDialog: React.FC<Props> = ({
         ) : (
           <>
             <button
-              className="btn btn-primary"
-              style={{ background: 'var(--danger-color)', color: '#fff' }}
+              className="btn btn-primary ui-nutrition-conflict-dialog-7"
+
               onClick={() => onResolve('cloud')}
               disabled={isSyncing}
             >

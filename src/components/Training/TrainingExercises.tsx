@@ -34,8 +34,8 @@ const TrainingExercises = () => {
         <div className="training-sub-view active">
             {!editingExId && (
                 <div className="mb-20">
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className="btn btn-primary w-full flex-center"
                         style={{ gap: '8px' }}
                         onClick={() => {
@@ -63,51 +63,51 @@ const TrainingExercises = () => {
                     </h2>
                     <div className="flex-col gap-10 mt-15 mb-20">
                     <div>
-                        <input 
-                            type="text" 
-                            placeholder="Nome esercizio (es. Panca piana con bilanciere)" 
+                        <input
+                            type="text"
+                            placeholder="Nome esercizio (es. Panca piana con bilanciere)"
                             value={exName}
                             style={isDuplicateName ? { borderColor: 'var(--danger-color)' } : undefined}
                             onChange={e => setExName(e.target.value)}
                         />
                         {isDuplicateName && (
-                            <div style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginTop: '6px' }}>
+                            <div style={{ color: 'var(--danger-color)',  marginTop: '6px' }} className="text-sm">
                                 ⚠️ Esiste già un esercizio con questo nome nell'archivio.
                             </div>
                         )}
                     </div>
-                    <input 
-                        type="text" 
-                        placeholder="Note di setup (opzionale, es. Inclinazione 30°)" 
+                    <input
+                        type="text"
+                        placeholder="Note di setup (opzionale, es. Inclinazione 30°)"
                         value={exNotes}
                         onChange={e => setExNotes(e.target.value)}
                     />
                 </div>
-                
+
                 <div className="mb-20">
                     <label className="text-muted text-sm mb-8 block font-medium">Tipo di tracciamento</label>
                     <div className="tracking-type-group" style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap' }}>
-                        <button 
+                        <button
                             type="button"
-                            className={`tracking-card-option ${trackingType === 'weight_reps' ? 'active' : ''}`}
+                            className={(`tracking-card-option ${trackingType === 'weight_reps' ? 'active' : ''}`) + " text-sm"}
                             onClick={() => setTrackingType('weight_reps')}
-                            style={{ padding: '10px 4px', fontSize: '0.85rem' }}
+                            style={{ padding: '10px 4px' }}
                         >
                             <span>Peso e rip.</span>
                         </button>
-                        <button 
+                        <button
                             type="button"
-                            className={`tracking-card-option ${trackingType === 'time' ? 'active' : ''}`}
+                            className={(`tracking-card-option ${trackingType === 'time' ? 'active' : ''}`) + " text-sm"}
                             onClick={() => setTrackingType('time')}
-                            style={{ padding: '10px 4px', fontSize: '0.85rem' }}
+                            style={{ padding: '10px 4px' }}
                         >
                             <span>Tempo</span>
                         </button>
-                        <button 
+                        <button
                             type="button"
-                            className={`tracking-card-option ${trackingType === 'cardio' ? 'active' : ''}`}
+                            className={(`tracking-card-option ${trackingType === 'cardio' ? 'active' : ''}`) + " text-sm"}
                             onClick={() => setTrackingType('cardio' as any)}
-                            style={{ padding: '10px 4px', fontSize: '0.85rem' }}
+                            style={{ padding: '10px 4px' }}
                         >
                             <span>Cardio</span>
                         </button>
@@ -116,11 +116,11 @@ const TrainingExercises = () => {
 
                 {trackingType === 'weight_reps' && (
                     <div className="mb-20" style={{ marginTop: '30px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '1px solid var(--glass-border)', borderBottom: '1px solid var(--glass-border)' }}>
                             <label className="text-white text-sm font-medium m-0 cursor-pointer" htmlFor="ex-bodyweight">
                                 Esercizio a corpo libero
                             </label>
-                            <input 
+                            <input
                                 id="ex-bodyweight"
                                 type="checkbox"
                                 checked={isBodyweight}
@@ -128,11 +128,11 @@ const TrainingExercises = () => {
                                 style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: 'var(--primary-color)', margin: 0 }}
                             />
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--glass-border)' }}>
                             <label className="text-white text-sm font-medium m-0" htmlFor="ex-equipment-weight">
                                 Peso attrezzo
                             </label>
-                            <input 
+                            <input
                                 id="ex-equipment-weight"
                                 type="number"
                                 inputMode="decimal"
@@ -142,26 +142,26 @@ const TrainingExercises = () => {
                                 value={equipmentWeight}
                                 onChange={e => setEquipmentWeight(e.target.value)}
                                 onFocus={e => e.target.select()}
-                                style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-main)' }}
-                            />
+                                style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0,  borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}
+                             className="text-base"/>
                         </div>
                     </div>
                 )}
-                
+
                 <div className="bg-black-10 border-glass rounded-12 p-15 mb-20" style={{ marginTop: '30px' }}>
                     <div className="flex-between mb-10">
                         <label className="text-white text-sm font-bold">Muscoli coinvolti</label>
                         <div className="flex gap-5 bg-black-20 p-4 rounded-8">
-                            <button 
-                                className={`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`} 
-                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent', color: selectionMode === 'primary' ? '#000' : 'rgba(255, 255, 255, 0.7)' }}
+                            <button
+                                className={(`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`) + " text-sm"}
+                                style={{ padding: '4px 12px',  borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent', color: selectionMode === 'primary' ? 'var(--on-primary)' : 'var(--text-muted)' }}
                                 onClick={() => setSelectionMode('primary')}
                             >
                                 Primari
                             </button>
-                            <button 
-                                className={`btn-icon ${selectionMode === 'secondary' ? 'active' : ''}`} 
-                                style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--secondary-color, #4db6ac)' : 'transparent', color: selectionMode === 'secondary' ? '#000' : 'rgba(255, 255, 255, 0.7)' }}
+                            <button
+                                className={(`btn-icon ${selectionMode === 'secondary' ? 'active' : ''}`) + " text-sm"}
+                                style={{ padding: '4px 12px',  borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--secondary-color, #4db6ac)' : 'transparent', color: selectionMode === 'secondary' ? 'var(--on-accent)' : 'var(--text-muted)' }}
                                 onClick={() => setSelectionMode('secondary')}
                             >
                                 Secondari
@@ -169,18 +169,17 @@ const TrainingExercises = () => {
                         </div>
                     </div>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} className="mb-10">
-                        <input 
-                            type="text" 
-                            placeholder="🔍 Cerca muscolo (es. Petto, Bicipiti)..." 
-                            value={muscleSearch} 
+                        <input
+                            type="text"
+                            placeholder="🔍 Cerca muscolo (es. Petto, Bicipiti)..."
+                            value={muscleSearch}
                             onChange={e => setMuscleSearch(e.target.value)}
-                            style={{ 
-                                width: '100%', 
-                                margin: 0, 
-                                paddingRight: muscleSearch ? '36px' : '14px',
-                                fontSize: '16px'
+                            style={{
+                                width: '100%',
+                                margin: 0,
+                                paddingRight: muscleSearch ? '36px' : '14px'
                             }}
-                        />
+                         className="text-base"/>
                         {muscleSearch && (
                             <button
                                 type="button"
@@ -191,7 +190,7 @@ const TrainingExercises = () => {
                                     background: 'transparent',
                                     border: 'none',
                                     color: 'var(--text-muted)',
-                                    fontSize: '1rem',
+
                                     cursor: 'pointer',
                                     padding: '6px',
                                     display: 'flex',
@@ -199,17 +198,17 @@ const TrainingExercises = () => {
                                     justifyContent: 'center'
                                 }}
                                 aria-label="Cancella ricerca"
-                            >
+                             className="text-base">
                                 ✕
                             </button>
                         )}
                     </div>
 
                     {muscleSearch && (
-                        <div 
-                            className="flex-col gap-6 mb-12 overflow-y-auto p-6 rounded-8" 
-                            style={{ 
-                                background: 'rgba(0, 0, 0, 0.35)', 
+                        <div
+                            className="flex-col gap-6 mb-12 overflow-y-auto p-6 rounded-8"
+                            style={{
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 maxHeight: '220px'
                             }}
@@ -222,28 +221,28 @@ const TrainingExercises = () => {
                                     const isSecondary = secondaryMuscles.some(sm => sm.id === m.id);
 
                                     let btnBackground = 'var(--surface-light, #1a1a1a)';
-                                    let btnColor = '#ffffff';
-                                    let btnBorder = '1px solid rgba(255, 255, 255, 0.08)';
-                                    let badgeColor = 'rgba(255, 255, 255, 0.7)';
+                                    let btnColor = 'var(--text-main)';
+                                    let btnBorder = '1px solid var(--glass-border)';
+                                    let badgeColor = 'var(--text-muted)';
 
                                     if (isPrimary) {
                                         btnBackground = 'linear-gradient(135deg, var(--primary-color), var(--primary-dark))';
-                                        btnColor = '#000000';
+                                        btnColor = 'var(--on-primary)';
                                         btnBorder = '1px solid var(--primary-color)';
-                                        badgeColor = '#000000';
+                                        badgeColor = 'var(--on-primary)';
                                     } else if (isSecondary) {
-                                        btnBackground = 'rgba(0, 229, 255, 0.15)';
-                                        btnColor = '#ffffff';
+                                        btnBackground = 'var(--primary-soft)';
+                                        btnColor = 'var(--text-main)';
                                         btnBorder = '1px solid var(--secondary-color, #4db6ac)';
                                         badgeColor = 'var(--secondary-color, #4db6ac)';
                                     }
 
                                     return (
-                                        <button 
-                                            key={m.id} 
-                                            type="button" 
+                                        <button
+                                            key={m.id}
+                                            type="button"
                                             className="flex-between items-center w-full rounded-8 text-sm transition"
-                                            style={{ 
+                                            style={{
                                                 background: btnBackground,
                                                 color: btnColor,
                                                 border: btnBorder,
@@ -255,7 +254,7 @@ const TrainingExercises = () => {
                                             onClick={() => toggleMuscle(m)}
                                         >
                                             <span style={{ fontWeight: 600, color: btnColor }}>{m.name}</span>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: badgeColor }}>
+                                            <span style={{  fontWeight: 600, color: badgeColor }} className="text-sm">
                                                 {isPrimary ? '✓ Primario' : isSecondary ? '✓ Secondario' : '+ Aggiungi'}
                                             </span>
                                         </button>
@@ -273,16 +272,16 @@ const TrainingExercises = () => {
                             </span>
                         ))}
                         {secondaryMuscles.map(m => (
-                            <span key={m.id} className="badge flex items-center gap-5" style={{ background: 'var(--secondary-color, rgba(0, 229, 255, 0.3))', color: '#fff', border: '1px solid var(--secondary-color, #4db6ac)' }}>
+                            <span key={m.id} className="badge flex items-center gap-5" style={{ background: 'var(--secondary-color)', color: 'var(--on-accent)', border: '1px solid var(--secondary-color, #4db6ac)' }}>
                                 {m.name}
                                 <span className="cursor-pointer font-bold" onClick={() => toggleMuscle(m)}>✕</span>
                             </span>
                         ))}
                     </div>
 
-                    <div className="rounded-8 overflow-hidden" style={{ background: 'rgba(0,0,0,0.1)' }}>
-                        <MuscleModel 
-                            selectedMuscles={selectedMuscleIds as any} 
+                    <div className="rounded-8 overflow-hidden" style={{ background: 'var(--surface-light)' }}>
+                        <MuscleModel
+                            selectedMuscles={selectedMuscleIds as any}
                             secondaryMuscles={secondaryMuscles.map((m: any) => m.id)}
                             interactive={true}
                             onToggleMuscle={handleToggleMuscleById}
@@ -291,10 +290,10 @@ const TrainingExercises = () => {
                 </div>
 
                 <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>
-                    <button 
-                        type="button" 
-                        className="btn flex-1 mb-0" 
-                        style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                    <button
+                        type="button"
+                        className="btn flex-1 mb-0"
+                        style={{ background: 'var(--surface-light)', whiteSpace: 'nowrap', margin: 0 }}
                         onClick={() => {
                             handleCancelEdit();
                             setIsCreating(false);
@@ -303,10 +302,10 @@ const TrainingExercises = () => {
                     >
                         Annulla
                     </button>
-                    <button 
-                        type="button" 
-                        className="btn btn-primary flex-1 mb-0" 
-                        style={{ whiteSpace: 'nowrap', margin: 0 }} 
+                    <button
+                        type="button"
+                        className="btn btn-primary flex-1 mb-0"
+                        style={{ whiteSpace: 'nowrap', margin: 0 }}
                         disabled={isSaving}
                         onClick={async () => {
                             if (isSaving) return;
@@ -324,13 +323,13 @@ const TrainingExercises = () => {
                         {isSaving ? 'Salvataggio...' : (editingExId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Crea esercizio')}
                     </button>
                 </div>
-                
+
                 {editingExId && editingExercise?.isDefault && (
                     <div className="mt-10">
                         <button
                             type="button"
                             className="btn w-full mb-0"
-                            style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ff4d6d', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                            style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)' }}
                             onClick={() => handleRestoreExercise(editingExId)}
                         >
                             <span aria-hidden="true">🔄</span> Ripristina all'originale
@@ -357,12 +356,12 @@ const TrainingExercises = () => {
                             if (!ex) return null;
                             const routineCount = routines.filter(r => r.exercises?.some((re: any) => re.exId === ex.id)).length;
                         return (
-                        <div 
-                            key={ex.id} 
+                        <div
+                            key={ex.id}
                             className="card p-15"
                             style={{ marginBottom: '15px' }}
                         >
-                            <div 
+                            <div
                                 className="flex-between cursor-pointer"
                                 style={{ borderLeft: editingExId === ex.id ? '3px solid var(--primary-color)' : 'none', paddingLeft: editingExId === ex.id ? '10px' : '0' }}
                                 onClick={() => setExpandedExId(expandedExId === ex.id ? null : ex.id)}
@@ -371,21 +370,21 @@ const TrainingExercises = () => {
                                     <div className="flex items-center gap-6" style={{ flexWrap: 'wrap' }}>
                                         <div className={`font-bold ${(expandedExId === ex.id || editingExId === ex.id) ? 'text-primary' : 'text-white'}`}>{ex.name}</div>
                                         {routineCount > 0 && (
-                                            <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                            <span style={{  padding: '2px 6px', borderRadius: '4px', background: 'var(--surface-light)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }} className="text-sm">
                                                 {routineCount === 1 ? 'In 1 scheda' : `In ${routineCount} schede`}
                                             </span>
                                         )}
                                     </div>
-                                    {ex.notes && <div className="text-muted" style={{ fontSize: '0.75rem' }}>{ex.notes}</div>}
+                                    {ex.notes && <div className="text-muted text-sm">{ex.notes}</div>}
                                     {(ex.isBodyweight || (ex.equipmentWeight !== undefined && ex.equipmentWeight > 0)) && (
                                         <div className="flex flex-wrap gap-5 mt-4">
                                             {ex.isBodyweight && (
-                                                <span className="badge badge-primary" style={{ fontSize: '0.75rem', padding: '2px 6px' }}>
+                                                <span className="badge badge-primary text-sm" style={{  padding: '2px 6px' }}>
                                                     Corpo libero
                                                 </span>
                                             )}
                                             {ex.equipmentWeight !== undefined && ex.equipmentWeight > 0 && (
-                                                <span className="badge" style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                                <span className="badge text-sm" style={{  padding: '2px 6px', background: 'var(--surface-light)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}>
                                                     Attrezzo: {ex.equipmentWeight} kg
                                                 </span>
                                             )}
@@ -440,9 +439,9 @@ const TrainingExercises = () => {
                                     )}
                                     {(ex.muscles || []).length > 0 || (ex.secondaryMuscles || []).length > 0 ? (
                                         <div className="flex-center w-full">
-                                            <MuscleModel 
-                                                selectedMuscles={ex.muscles as any} 
-                                                secondaryMuscles={ex.secondaryMuscles as any} 
+                                            <MuscleModel
+                                                selectedMuscles={ex.muscles as any}
+                                                secondaryMuscles={ex.secondaryMuscles as any}
                                             />
                                         </div>
                                     ) : (

@@ -299,7 +299,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const cfData = { name: 'Riso basmati', carbs: 78, pro: 8.5, fat: 0.9, kcal: 354, unit: 'g' };
 
                 render(
-                    <CustomFoodForm 
+                    <CustomFoodForm
                         cfData={cfData}
                         setCfData={mockSetCfData}
                         saveCustomFood={mockSave}
@@ -338,7 +338,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T1.3.1: DataMeasurements renders main measurement card with weight and circumference inputs', () => {
                 const mockSave = vi.fn().mockResolvedValue(undefined);
                 render(
-                    <DataMeasurements 
+                    <DataMeasurements
                         profile={{ gender: 'M' }}
                         editingDate={null}
                         measureTime="08:00"
@@ -398,7 +398,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T1.3.4: switching to edit mode changes title to Modifica misurazione', () => {
                 render(
-                    <DataMeasurements 
+                    <DataMeasurements
                         profile={{ gender: 'M' }}
                         editingDate="2026-08-15"
                         measureTime="07:30"
@@ -435,7 +435,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T1.3.5: female profile conditionally displays hip measurement input', () => {
                 const { rerender } = render(
-                    <DataMeasurements 
+                    <DataMeasurements
                         profile={{ gender: 'M' }}
                         editingDate={null}
                         measureTime="08:00"
@@ -467,7 +467,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 expect(screen.queryByText('Fianchi (cm)')).toBeNull();
 
                 rerender(
-                    <DataMeasurements 
+                    <DataMeasurements
                         profile={{ gender: 'F' }}
                         editingDate={null}
                         measureTime="08:00"
@@ -528,10 +528,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
         // Requirement R4: Session Set Dot Vertical Centering
         // ---------------------------------------------------------------------
         describe('R4: Session Set Dot Vertical Centering', () => {
-            it('T1.4.1: SessionSetRow renders S1 set index and circular "+" button with centered flex alignment', () => {
+            it('T1.4.1: SessionSetRow renders S1 and an accessible options button', () => {
                 const set = { id: 's1', kg: '80', reps: '10' };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -546,15 +546,15 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 );
 
                 expect(screen.getByText('S1')).toBeDefined();
-                const plusBtn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
+                const plusBtn = screen.getByRole('button', { name: 'Opzioni serie 1' });
                 expect(plusBtn).toBeDefined();
-                expect(plusBtn.textContent).toBe('+');
+                expect(plusBtn.getAttribute('aria-haspopup')).toBe('menu');
             });
 
-            it('T1.4.2: clicking circular "+" button triggers onToggleMenu to open menu', () => {
+            it('T1.4.2: clicking options opens the set menu', () => {
                 const mockToggle = vi.fn();
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={{ id: 's1', kg: '80', reps: '10' }}
                         sIndex={0}
                         exIndex={0}
@@ -568,15 +568,15 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const plusBtn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
+                const plusBtn = screen.getByRole('button', { name: 'Opzioni serie 1' });
                 fireEvent.click(plusBtn);
-                expect(mockToggle).toHaveBeenCalledTimes(1);
+                expect(plusBtn.getAttribute('aria-expanded')).toBe('true');
             });
 
-            it('T1.4.3: when isOpenMenu is true, special menu shows "+ Dropset" and "+ Isometria" options', () => {
+            it('T1.4.3: the opened set menu shows "+ Dropset" and "+ Isometria" options', () => {
                 const mockAdd = vi.fn();
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={{ id: 's1', kg: '80', reps: '10' }}
                         sIndex={0}
                         exIndex={0}
@@ -590,7 +590,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const dropsetBtn = screen.getByText('+ Dropset');
+                fireEvent.click(screen.getByRole('button', { name: 'Opzioni serie 1' }));
+                const dropsetBtn = screen.getByRole('menuitem', { name: '+ Dropset' });
                 const isometryBtn = screen.getByText('+ Isometria');
                 expect(dropsetBtn).toBeDefined();
                 expect(isometryBtn).toBeDefined();
@@ -607,7 +608,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     dropsets: [{ id: 'ds1', kg: '80', reps: '6' }]
                 };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -621,7 +622,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('↳ Dropset')).toBeDefined();
+                expect(screen.getByText('Dropset 1')).toBeDefined();
                 expect(screen.getByDisplayValue('80')).toBeDefined();
             });
 
@@ -633,7 +634,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     isometrics: [{ id: 'iso1', kg: '40', time: '30' }]
                 };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -647,7 +648,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('↳ Isometria')).toBeDefined();
+                expect(screen.getByText('Isometria 1')).toBeDefined();
                 expect(screen.getByDisplayValue('40')).toBeDefined();
                 expect(screen.getByDisplayValue('30')).toBeDefined();
             });
@@ -655,7 +656,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T1.4.6: supports time trackingType rendering time input placeholder', () => {
                 const set = { id: 's1', kg: '', time: '60s' };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -676,7 +677,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T1.4.7: typing into weight input invokes onUpdateSet with "kg" field and value', () => {
                 const mockUpdate = vi.fn();
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={{ id: 's1', kg: '70', reps: '10' }}
                         sIndex={0}
                         exIndex={0}
@@ -712,10 +713,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T1.5.2: MuscleModel renders SVG mannequin with muscle paths', () => {
                 const { container } = render(
-                    <MuscleModel 
-                        selectedMuscles={['chest']} 
-                        interactive={true} 
-                        onToggleMuscle={vi.fn()} 
+                    <MuscleModel
+                        selectedMuscles={['chest']}
+                        interactive={true}
+                        onToggleMuscle={vi.fn()}
                     />
                 );
 
@@ -726,9 +727,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T1.5.3: MuscleModel applies custom muscleColors for DOMS danger coloring', () => {
                 const customColors = { 'chest-upper-left': '#ff4d6d' };
                 const { container } = render(
-                    <MuscleModel 
-                        muscleColors={customColors} 
-                        interactive={false} 
+                    <MuscleModel
+                        muscleColors={customColors}
+                        interactive={false}
                     />
                 );
 
@@ -741,9 +742,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T1.5.4: clicking muscle path in interactive mode invokes onToggleMuscle callback', () => {
                 const mockToggle = vi.fn();
                 const { container } = render(
-                    <MuscleModel 
-                        interactive={true} 
-                        onToggleMuscle={mockToggle} 
+                    <MuscleModel
+                        interactive={true}
+                        onToggleMuscle={mockToggle}
                     />
                 );
 
@@ -756,7 +757,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T1.5.5: SessionRatings renders post-workout rating fields (mood, pump, fatigue, water)', () => {
                 render(
-                    <SessionRatings 
+                    <SessionRatings
                         water="1.5"
                         setWater={vi.fn()}
                         mood="8"
@@ -1063,7 +1064,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T2.4.1: rapid menu toggles in SessionSetRow do not throw or lose component state', () => {
                 const mockToggle = vi.fn();
                 const { rerender } = render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={{ id: 's1', kg: '80', reps: '10' }}
                         sIndex={0}
                         exIndex={0}
@@ -1078,7 +1079,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 );
 
                 rerender(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={{ id: 's1', kg: '80', reps: '10' }}
                         sIndex={0}
                         exIndex={0}
@@ -1092,10 +1093,13 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('+ Dropset')).toBeDefined();
+                const options = screen.getByRole('button', { name: 'Opzioni serie 1' });
+                for (let i = 0; i < 5; i++) fireEvent.click(options);
+                expect(screen.getByRole('menuitem', { name: '+ Dropset' })).toBeDefined();
+                expect((screen.getByRole('spinbutton', { name: 'Serie 1, chilogrammi', exact: true }) as HTMLInputElement).value).toBe('80');
             });
 
-            it('T2.4.2: multiple dropsets display sequential labels "↳ Dropset 1", "↳ Dropset 2"', () => {
+            it('T2.4.2: multiple dropsets display sequential labels "Dropset 1", "Dropset 2"', () => {
                 const set = {
                     id: 's1',
                     kg: '100',
@@ -1106,7 +1110,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     ]
                 };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -1120,11 +1124,11 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('↳ Dropset 1')).toBeDefined();
-                expect(screen.getByText('↳ Dropset 2')).toBeDefined();
+                expect(screen.getByText('Dropset 1')).toBeDefined();
+                expect(screen.getByText('Dropset 2')).toBeDefined();
             });
 
-            it('T2.4.3: multiple isometrics display sequential labels "↳ Isometria 1", "↳ Isometria 2"', () => {
+            it('T2.4.3: multiple isometrics display sequential labels "Isometria 1", "Isometria 2"', () => {
                 const set = {
                     id: 's1',
                     kg: '50',
@@ -1135,7 +1139,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     ]
                 };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -1149,8 +1153,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('↳ Isometria 1')).toBeDefined();
-                expect(screen.getByText('↳ Isometria 2')).toBeDefined();
+                expect(screen.getByText('Isometria 1')).toBeDefined();
+                expect(screen.getByText('Isometria 2')).toBeDefined();
             });
 
             it('T2.4.4: combining both dropset and isometry on the same set', () => {
@@ -1162,7 +1166,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     isometrics: [{ id: 'iso1', kg: '40', time: '15' }]
                 };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -1176,8 +1180,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText('↳ Dropset')).toBeDefined();
-                expect(screen.getByText('↳ Isometria')).toBeDefined();
+                expect(screen.getByText('Dropset 1')).toBeDefined();
+                expect(screen.getByText('Isometria 1')).toBeDefined();
             });
 
             it('T2.4.5: clicking remove button on dropset invokes onRemoveSpecialSet', () => {
@@ -1189,7 +1193,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     dropsets: [{ id: 'ds1', kg: '60', reps: '6' }]
                 };
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -1203,7 +1207,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const removeBtns = screen.getAllByRole('button', { name: '✕' });
+                const removeBtns = screen.getAllByRole('button', { name: 'Rimuovi dropset 1 della serie 1' });
                 fireEvent.click(removeBtns[0]);
                 expect(mockRemove).toHaveBeenCalledWith('s1', 'dropsets', 0);
             });
@@ -1211,7 +1215,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             it('T2.4.6: SessionSetRow handles empty string kg and reps without throwing', () => {
                 const set = { id: 's1', kg: '', reps: '' };
                 expect(() => render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={set}
                         sIndex={0}
                         exIndex={0}
@@ -1228,7 +1232,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T2.4.7: delete set button aria-label includes set number for accessibility', () => {
                 render(
-                    <SessionSetRow 
+                    <SessionSetRow
                         set={{ id: 's3', kg: '50', reps: '10' }}
                         sIndex={2}
                         exIndex={0}
@@ -1242,7 +1246,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByRole('button', { name: 'Rimuovi serie 3' })).toBeDefined();
+                fireEvent.click(screen.getByRole('button', { name: 'Opzioni serie 3' }));
+                expect(screen.getByRole('menuitem', { name: 'Rimuovi serie 3' })).toBeDefined();
             });
         });
 
@@ -1262,9 +1267,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             it('T2.5.3: MuscleModel handles non-existent or unknown muscle IDs without throwing', () => {
                 expect(() => render(
-                    <MuscleModel 
-                        selectedMuscles={['unknown_alien_muscle', 'fake_quad']} 
-                        interactive={false} 
+                    <MuscleModel
+                        selectedMuscles={['unknown_alien_muscle', 'fake_quad']}
+                        interactive={false}
                     />
                 )).not.toThrow();
             });
@@ -1280,9 +1285,9 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const colorMap = Object.fromEntries(allMuscles.map(m => [m, '#ff4d6d']));
 
                 expect(() => render(
-                    <MuscleModel 
-                        muscleColors={colorMap} 
-                        interactive={false} 
+                    <MuscleModel
+                        muscleColors={colorMap}
+                        interactive={false}
                     />
                 )).not.toThrow();
             });

@@ -19,7 +19,7 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
         it('renders title with var(--text-main)', () => {
             const cfData = { name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' };
             render(
-                <CustomFoodForm 
+                <CustomFoodForm
                     cfData={cfData}
                     setCfData={vi.fn()}
                     saveCustomFood={vi.fn()}
@@ -115,7 +115,7 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
 
         it('renders macro labels in var(--text-muted) and numeric values in var(--text-main)', () => {
 render(
-                <NutritionHistory 
+                <NutritionHistory
                     nutritionHistory={historyData}
                     onDayClick={vi.fn()}
                 />
@@ -143,7 +143,7 @@ render(
     });
 
     describe('R1 & R2: NutritionMeals', () => {
-        it('renders TDEE target, search title, and macro header labels without bright text colors', () => {
+        it('renders calorie targets, readable macro names and labeled food search', () => {
             const mockHook: any = {
                 todayNutrition: { kcal: 1800, pro: 140, carbs: 200, fat: 50 },
                 dailyTarget: { kcal: 2400, pro: 160, carbs: 280, fat: 65 },
@@ -173,59 +173,30 @@ renderWithProviders(
                 <NutritionMeals mealsHook={mockHook} selectedDate="2026-08-16" />
             );
 
-            // Target kcal text
-            const targetKcal = screen.getByText('2400');
-            expect(targetKcal.style.color).toBe('var(--text-main)');
+            const summary = screen.getByRole('region', { name: 'Riepilogo alimentazione' });
+            expect(summary.textContent).toContain('1800');
+            expect(summary.textContent).toContain('2400');
+            expect(summary.textContent).toContain('Proteine');
+            expect(summary.textContent).toContain('Carboidrati');
+            expect(summary.textContent).toContain('Grassi');
+            expect(screen.getByRole('searchbox', { name: 'Cerca alimento' })).toBeDefined();
+            expect(screen.getByRole('heading', { level: 2, name: 'Colazione' })).toBeDefined();
 
-            // PRO, CAR, GRA labels in header
-            expect(screen.getByText('PRO').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('CAR').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('GRA').style.color).toBe('var(--text-muted)');
-
-            // Search heading
-            const searchHeading = screen.getByRole('heading', { level: 2, name: /Cerca alimento/i });
-            expect(searchHeading.style.color).toBe('var(--text-main)');
-
-            // Meal category headers (Colazione, Pranzo, Cena, Spuntini) should be var(--text-main) and not text-primary
-            const colazioneHeader = screen.getByRole('heading', { level: 2, name: /Colazione/i });
-            expect(colazioneHeader.classList.contains('text-primary')).toBe(false);
-            expect(colazioneHeader.style.color).toBe('var(--text-main)');
         });
     });
 
     describe('R1 & R2: NutritionPlanning', () => {
-        it('renders titles and macro labels in Dark Glassmorphism text hierarchy', () => {
+        it('renders planning headings and associates each macro label with its input', () => {
             renderWithProviders(<NutritionPlanning />);
 
-            // Main Title
-            const h1 = screen.getByRole('heading', { level: 1 });
-            expect(h1.style.color).toBe('var(--text-main)');
+            expect(screen.getByRole('heading', { level: 1, name: 'Pianificazione macro' })).toBeDefined();
+            expect(screen.getByRole('heading', { level: 2, name: 'Media settimanale desiderata' })).toBeDefined();
+            expect(screen.getByText('TDEE (normo stimato)').tagName).toBe('DT');
+            for (const label of ['Pro (g/kg)', 'Carbo (g/kg)', 'Grassi (g/kg)', 'Variazione pro (%)', 'Variazione carbo (%)', 'Variazione grassi (%)']) {
+                expect(screen.getByRole('spinbutton', { name: label })).toBeDefined();
+            }
+            expect(screen.getByRole('button', { name: 'Salva pianificazione' })).toBeDefined();
 
-            // Sub-sections titles
-            const h2Elements = screen.getAllByRole('heading', { level: 2 });
-            h2Elements.forEach(h2 => {
-                expect(h2.style.color).toBe('var(--text-main)');
-            });
-
-            // Italian Sentence Case check for TDEE normo stimato
-            const normoLabel = screen.getByText('TDEE (normo stimato)');
-            expect(normoLabel).toBeDefined();
-            expect(normoLabel.style.color).toBe('var(--text-muted)');
-
-            // Macro input labels (Pro, Carbo, Grassi g/kg and variations)
-            const proLabel = screen.getByText('Pro (g/kg)');
-            const carboLabel = screen.getByText('Carbo (g/kg)');
-            const grassiLabel = screen.getByText('Grassi (g/kg)');
-            expect(proLabel.style.color).toBe('var(--text-muted)');
-            expect(carboLabel.style.color).toBe('var(--text-muted)');
-            expect(grassiLabel.style.color).toBe('var(--text-muted)');
-
-            const varProLabel = screen.getByText('Variazione pro (%)');
-            const varCarLabel = screen.getByText('Variazione carbo (%)');
-            const varFatLabel = screen.getByText('Variazione grassi (%)');
-            expect(varProLabel.style.color).toBe('var(--text-muted)');
-            expect(varCarLabel.style.color).toBe('var(--text-muted)');
-            expect(varFatLabel.style.color).toBe('var(--text-muted)');
         });
     });
 
@@ -278,27 +249,12 @@ renderWithProviders(
     });
 
     describe('HomeNutritionWidget alignment', () => {
-        it('renders heading and macro labels in var(--text-muted) and target in var(--text-main)', () => {
-            render(
-                <HomeNutritionWidget
-                    kcalEaten={1500}
-                    kcalTarget={2200}
-                    carbs={180}
-                    pro={130}
-                    fat={45}
-                    onNavigate={vi.fn()}
-                />
-            );
-
-            const heading = screen.getByRole('heading', { level: 2, name: /Nutrizione/i });
-            expect(heading.style.color).toBe('var(--text-main)');
-
-            const targetKcal = screen.getByText(/2200/i);
-            expect(targetKcal.style.color).toBe('var(--text-muted)');
-
-            expect(screen.getByText('CARBO').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('PRO').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('GRASSI').style.color).toBe('var(--text-muted)');
+        it('renders a named diary action and explicit macro amounts with the calorie target', () => {
+            render(<HomeNutritionWidget kcalEaten={1500} kcalTarget={2200} carbs={180} pro={130} fat={45} onNavigate={vi.fn()} />);
+            expect(screen.getByRole('button', { name: 'Apri diario alimentare' })).toBeDefined();
+            expect(screen.getByText('Obiettivo: 2200 kcal')).toBeDefined();
+            for (const label of ['Carboidrati', 'Proteine', 'Grassi']) expect(screen.getByText(label).tagName).toBe('DT');
+            expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('68');
         });
     });
 });

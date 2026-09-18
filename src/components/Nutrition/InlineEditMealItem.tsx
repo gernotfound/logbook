@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Pencil, Trash2, Save } from 'lucide-react';
 
 interface EditMealItemModalProps {
@@ -11,6 +11,7 @@ interface EditMealItemModalProps {
 const MEAL_TYPES = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
 export default function EditMealItemModal({ item, onClose, onSave, onDelete }: EditMealItemModalProps) {
+    const fieldId = useId();
     const [quantity, setQuantity] = useState<number | string>(item.quantity ?? item.baseQty ?? 100);
     const [meal, setMeal] = useState<string>(item.meal || 'Colazione');
 
@@ -38,49 +39,39 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
     };
 
     return (
-        <div 
-            className="card"
-            style={{
-                background: 'var(--surface-color)',
-                border: '1px solid var(--primary-color)',
-                borderRadius: '12px',
-                padding: '15px',
-                marginTop: '5px',
-                marginBottom: '15px',
-                animation: 'fadeSlideUp 0.2s ease',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-            }}
+        <div
+            className="tracking-inline-editor"
             onClick={e => e.stopPropagation()}
         >
             <div className="flex-between mb-15 pb-10 border-b">
                 <h2 style={{margin: 0, color: 'var(--text-main)'}}>
                     <Pencil size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Modifica porzione
                 </h2>
-                <button 
-                    type="button" 
-                    className="btn-icon" 
-                    onClick={onClose}
-                    style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}
+                <button
+                    type="button"
+                    className="btn-icon text-lg"
+                    onClick={onClose} aria-label="Chiudi modifica porzione"
+                    style={{ color: 'var(--text-muted)' }}
                 >
                     ✕
                 </button>
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 'bold',  color: 'var(--text-main)', marginBottom: '4px' }} className="text-base">
                     {item.name}
                 </div>
                 {item.brand && (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <div style={{  color: 'var(--text-muted)' }} className="text-sm">
                         {item.brand}
                     </div>
                 )}
             </div>
 
             <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">Pasto</label>
-                <select 
-                    value={meal} 
+                <label htmlFor={`${fieldId}-meal`} className="text-muted text-xs block mb-4">Pasto</label>
+                <select id={`${fieldId}-meal`}
+                    value={meal}
                     onChange={e => setMeal(e.target.value)}
                     style={{ marginBottom: 0 }}
                 >
@@ -91,25 +82,25 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             </div>
 
             <div className="mb-15">
-                <label className="text-muted text-xs block mb-4">
+                <label htmlFor={`${fieldId}-quantity`} className="text-muted text-xs block mb-4">
                     Quantità ({item.unit || 'g'})
                 </label>
-                <input 
-                    type="number" 
+                <input id={`${fieldId}-quantity`}
+                    type="number"
                     step="1"
                     min="0"
-                    value={quantity} 
+                    value={quantity}
                     onChange={e => setQuantity(e.target.value)}
                     onFocus={e => e.target.select()}
-                    style={{ marginBottom: 0, fontSize: '1.1rem', fontWeight: 'bold' }}
+                    style={{ marginBottom: 0,  fontWeight: 'bold' }}
                     autoFocus
-                />
+                 className="text-lg"/>
             </div>
 
             {/* Macro Summary Preview */}
-            <div 
+            <div
                 style={{
-                    background: 'rgba(255, 255, 255, 0.04)',
+                    background: 'var(--surface-light)',
                     border: '1px solid var(--glass-border)',
                     borderRadius: '10px',
                     padding: '12px',
@@ -121,35 +112,35 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                 }}
             >
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KCAL</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentKcal}</div>
+                    <div style={{  color: 'var(--text-muted)' }} className="text-sm">KCAL</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }} className="text-base">{currentKcal}</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentPro}g</div>
+                    <div style={{  color: 'var(--text-muted)' }} className="text-sm">PRO</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }} className="text-base">{currentPro}g</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CARBO</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentCarbs}g</div>
+                    <div style={{  color: 'var(--text-muted)' }} className="text-sm">CARBO</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }} className="text-base">{currentCarbs}g</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GRASSI</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentFat}g</div>
+                    <div style={{  color: 'var(--text-muted)' }} className="text-sm">GRASSI</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }} className="text-base">{currentFat}g</div>
                 </div>
             </div>
 
-            <div className="flex gap-10">
-                <button 
-                    type="button" 
-                    className="btn" 
-                    style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
+            <div className="tracking-actions">
+                <button
+                    type="button"
+                    className="btn"
+                    style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
                     onClick={handleDelete}
                 >
                     <Trash2 size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Rimuovi
                 </button>
-                <button 
-                    type="button" 
-                    className="btn btn-primary" 
+                <button
+                    type="button"
+                    className="btn btn-primary"
                     style={{ flex: 2, marginBottom: 0 }}
                     onClick={handleSave}
                 >

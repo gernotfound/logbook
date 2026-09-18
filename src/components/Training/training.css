@@ -1,0 +1,82 @@
+.workout-sticky-timer { position: sticky; top: var(--sticky-top, env(safe-area-inset-top, 0px)); z-index: 100; background: var(--bg-color); padding: .75rem 0; margin-bottom: 1.25rem; border-bottom: 1px solid var(--glass-border); }
+.workout-timer { display: flex; align-items: center; justify-content: space-between; gap: .75rem; width: 100%; }
+.workout-timer .timer-display { display: block; color: var(--primary-color); font: 500 2rem/1.2 var(--font-family, -apple-system, BlinkMacSystemFont, sans-serif); font-variant-numeric: tabular-nums; letter-spacing: -.04em; text-shadow: none; }
+.workout-timer .timer-controls { display: flex; gap: .5rem; }
+.workout-timer .timer-btn { min-width: 2.75rem; width: 2.75rem; height: 2.75rem; border-radius: var(--radius-control, .875rem); background: var(--surface-light); color: var(--text-main); border: 0; padding: .5rem; }
+.workout-timer .timer-btn.play, .workout-timer .timer-btn.pause { background: var(--primary-color); color: var(--on-primary); }
+.workout-timer .timer-btn svg { fill: none; width: 1.25rem; height: 1.25rem; }
+.workout-timer .timer-btn:active { transform: none; box-shadow: none; }
+.workout-total-duration { display: flex; justify-content: space-between; gap: 1rem; margin: 1.5rem 0; color: var(--text-muted); }
+.workout-total-duration output { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-main); }
+.workout-session .section-divider { background: var(--surface-color); border: 0; border-radius: var(--radius-card, 1.25rem); padding: 1rem; margin: 0 0 1rem; }
+.workout-exercise-header { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; margin-bottom: 1rem; }
+.workout-exercise-header > div:first-child { min-width: 0; flex: 1; }
+.workout-exercise-header h2 { margin: 0; font-size: 1.125rem; overflow-wrap: anywhere; }
+.workout-exercise-header p { margin: .25rem 0 0; color: var(--text-muted); }
+.workout-position-list { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.workout-inline-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+.workout-inline-actions > .btn { flex: 1; min-width: 8rem; }
+.workout-report { position: fixed; inset: 0; z-index: 20000; overflow-y: auto; overscroll-behavior: contain; background: var(--bg-color); color: var(--text-main); padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.workout-report-page { width: 100%; max-width: 40rem; margin: 0 auto; padding: 1.25rem; }
+.workout-report-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; }
+.workout-report-header > div { min-width: 0; }
+.workout-report-header h1 { overflow-wrap: anywhere; margin: .5rem 0; }
+.workout-report-content { display: grid; gap: 1.5rem; }
+.workout-report-summary, .workout-report-card { background: var(--surface-color); border-radius: var(--radius-card, 1.25rem); padding: 1.25rem; }
+.workout-report-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.workout-report-summary > div > span { display: flex; gap: .375rem; align-items: center; font-size: .875rem; color: var(--text-muted); }
+.workout-report-summary > div > strong { display: block; margin-top: .5rem; font-size: 1.5rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.workout-report-summary > p { grid-column: 1 / -1; display: flex; gap: .5rem; align-items: center; margin: 0; font-size: .875rem; }
+.workout-report-card > * + * { margin-top: 1rem; }
+.workout-report-card h2 { display: flex; align-items: center; gap: .5rem; font-size: 1.125rem; }
+.workout-report-improvements { list-style: none; margin: 1rem 0 0; padding: 0; }
+.workout-report-improvements li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; padding: .5rem 0; }
+.workout-report-improvements strong { color: var(--success-color); }
+.workout-report-comparisons { display: grid; gap: 1rem; }
+.workout-report-comparisons > h2 { font-size: 1.125rem; margin: 0; }
+.workout-report-bar-row { display: grid; grid-template-columns: 3.5rem minmax(1rem, 1fr) auto; gap: .5rem; align-items: center; font-size: .875rem; font-variant-numeric: tabular-nums; }
+.workout-report-bar { height: .5rem; border-radius: .25rem; overflow: hidden; background: var(--surface-light); }
+.workout-report-bar > span { display: block; height: 100%; background: var(--text-muted); }
+.workout-report-bar-row.current .workout-report-bar > span { background: var(--primary-color); }
+.workout-report-details { display: flex; flex-wrap: wrap; gap: 1rem; border-top: 1px solid var(--glass-border); padding-top: 1rem; margin-bottom: 0; font-size: .875rem; }
+.workout-report-details dt { color: var(--text-muted); }
+.workout-report-details dd { margin: .25rem 0 0; font-variant-numeric: tabular-nums; }
+.workout-report-close { margin-bottom: 1rem; }
+.muscle-map-container .muscle-legend { color: var(--text-muted); font-size: .875rem; text-align: left; margin-top: .75rem; }
+.muscle-text-selection { text-align: left; margin-top: 1rem; }
+.muscle-text-selection summary { min-height: 2.75rem; display: flex; align-items: center; color: var(--primary-color); cursor: pointer; }
+.muscle-text-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.muscle-text-options button { min-height: 2.75rem; padding: .75rem; text-align: left; background: var(--surface-light); color: var(--text-main); border: 1px solid var(--glass-border); border-radius: .75rem; overflow-wrap: anywhere; }
+.muscle-text-options button[aria-pressed="true"] { border-color: var(--primary-color); background: var(--primary-soft); color: var(--primary-color); }
+@media (max-width: 360px) {
+  .workout-session .section-divider { padding: .75rem; }
+  .workout-timer .timer-controls { gap: .25rem; }
+  .workout-report-page { padding: .75rem; }
+  .workout-report-summary, .workout-report-card { padding: 1rem; }
+}
+
+.workout-set-group { margin-bottom: 1rem; }
+.workout-set-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) 2.75rem; align-items: end; gap: .5rem; border-top: 1px solid var(--glass-border); padding-top: .75rem; }
+.workout-set-number { align-self: center; font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 600; }
+.workout-set-field { display: flex; flex-direction: column; gap: .375rem; min-width: 0; margin: 0; }
+.workout-set-field > span { color: var(--text-muted); font-size: .875rem; overflow-wrap: anywhere; }
+.workout-set-field input { min-width: 0; margin: 0; width: 100%; padding: .625rem .5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.workout-special-set { background: var(--surface-light); padding: .75rem; border-radius: .75rem; margin-top: .5rem; }
+.workout-special-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .875rem; font-weight: 600; }
+.workout-special-set.dropsets .workout-special-heading { color: var(--warning-color); }
+.workout-special-set.isometrics .workout-special-heading { color: var(--accent-color); }
+.workout-special-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.training-sub-view .flex-between, #train-session .flex-between { gap: .75rem; flex-wrap: wrap; }
+.training-sub-view .flex-between > div, #train-session .flex-between > div { min-width: 0; }
+.training-card-header { display: flex; align-items: center; gap: .75rem; }
+.training-card-toggle { flex: 1; min-width: 0; text-align: left; color: var(--text-main); border: none; background: transparent; padding: .25rem 0; overflow-wrap: anywhere; }
+.training-row-wrap { flex-wrap: wrap; }
+.training-row-wrap > div:first-child { flex-basis: 10rem; }
+.training-sub-view .tracking-type-group { flex-wrap: wrap !important; }
+.training-sub-view .tracking-card-option { min-width: 5rem; }
+.training-sub-view .btn-icon.active { background: var(--primary-soft); color: var(--primary-color); }
+.training-sub-view .btn { white-space: normal; }
+@media (max-width: 360px) {
+  .workout-set-row { grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr); }
+  .workout-set-menu { grid-column: 3; justify-self: end; }
+}

@@ -1,69 +1,33 @@
-import React from 'react';
-import { Play, CheckCircle2 } from 'lucide-react';
+import { Play, CheckCircle2, Dumbbell } from 'lucide-react';
+import type { WorkoutSession } from '../../../types';
 
 interface HomeWorkoutWidgetProps {
     isRestDay?: boolean;
-    todaysWorkout?: any;
+    todaysWorkout?: WorkoutSession | null;
+    activeWorkout?: WorkoutSession | null;
     onNavigate: (view: string) => void;
 }
 
-export const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
-    isRestDay = false,
-    todaysWorkout,
-    onNavigate
-}) => {
-    if (isRestDay) {
-        return (
-            <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(0, 229, 255, 0.02))',
-                border: '1px solid rgba(0, 229, 255, 0.2)',
-                borderRadius: '16px',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                textAlign: 'center',
-                gap: '15px'
-            }}>
-                <div>
-                    <h2 style={{margin: '0 0 8px 0',color: 'var(--text-main)'}}>Pronto ad allenarti?</h2>
-                    <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-muted)' }}>Nessun allenamento registrato oggi.</p>
-                </div>
-                <button 
-                    className="btn btn-primary" 
-                    style={{ width: '100%', maxWidth: '280px', padding: '16px', fontSize: '1.1rem', borderRadius: '12px' }}
-                    onClick={() => onNavigate('training')}
-                    aria-label="Inizia allenamento di oggi"
-                >
-                    <Play fill="currentColor" size={20} />
-                    Inizia allenamento
-                </button>
-            </div>
-        );
-    }
-
+export function HomeWorkoutWidget({ isRestDay = false, todaysWorkout, activeWorkout, onNavigate }: HomeWorkoutWidgetProps) {
+    const inProgress = !!activeWorkout;
+    const completed = !isRestDay && !!todaysWorkout && !inProgress;
     return (
-        <div style={{
-            background: 'linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(46, 204, 113, 0.02))',
-            border: '1px solid rgba(46, 204, 113, 0.2)',
-            borderRadius: '16px',
-            padding: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '20px'
-        }}>
-            <div style={{ flexShrink: 0, color: 'var(--success-color)' }}>
-                <CheckCircle2 size={48} />
+        <section className="home-workout">
+            <div className="home-section-heading">
+                <h2>Allenamento</h2>
+                {completed ? <CheckCircle2 className="home-success" size={24} aria-hidden="true" /> : <Dumbbell size={24} aria-hidden="true" />}
             </div>
             <div>
-                <h2 style={{margin: '0 0 4px 0',color: 'var(--text-main)'}}>Allenamento completato</h2>
-                <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-muted)' }}>
-                    {todaysWorkout?.routineName || 'Sessione'} <br/> 
-                    <span style={{ opacity: 0.8 }}>{todaysWorkout?.exercises?.length || 0} esercizi</span>
+                <h3>{inProgress ? activeWorkout.routineName || 'Allenamento libero' : completed ? 'Allenamento completato' : 'Pronto ad allenarti?'}</h3>
+                <p className="text-sm home-muted">
+                    {inProgress ? `Sessione in corso · ${activeWorkout.exercises.length} esercizi` : completed ? `${todaysWorkout.routineName || 'Sessione'} · ${todaysWorkout.exercises.length} esercizi` : 'Nessun allenamento registrato oggi.'}
                 </p>
             </div>
-        </div>
+            <button className={completed ? 'btn btn-secondary' : 'btn btn-primary'} type="button" onClick={() => onNavigate('training')}
+                aria-label={inProgress ? 'Riprendi allenamento' : completed ? 'Apri allenamento' : 'Inizia allenamento di oggi'}>
+                <Play size={20} aria-hidden="true" />{inProgress ? 'Riprendi allenamento' : completed ? 'Apri allenamento' : 'Inizia allenamento'}
+            </button>
+        </section>
     );
-};
-
+}
 export default HomeWorkoutWidget;

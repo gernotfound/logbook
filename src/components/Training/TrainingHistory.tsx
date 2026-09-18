@@ -25,7 +25,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
     return (
         <div className="training-sub-view active">
             {selectedReportWorkout && (
-                <WorkoutReportModal 
+                <WorkoutReportModal
                     workout={selectedReportWorkout}
                     history={history}
                     library={library}
@@ -33,7 +33,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                     fromEndWorkout={false}
                 />
             )}
-            
+
             <h2 style={{marginBottom: '20px'}}>Storico allenamenti ({history.length})</h2>
 
             {history.length === 0 ? (
@@ -59,27 +59,27 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                         } else {
                             dateObj = new Date();
                         }
-                        const date = dateObj.toLocaleDateString('it-IT', { 
-                            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' 
+                        const date = dateObj.toLocaleDateString('it-IT', {
+                            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
                         });
-                        const rawDuration = wo.manualDurationStr 
-                            || wo.globalDurationStr 
-                            || ((wo.globalEndTime && wo.globalStartTime) 
+                        const rawDuration = wo.manualDurationStr
+                            || wo.globalDurationStr
+                            || ((wo.globalEndTime && wo.globalStartTime)
                                 ? Logic.formatDuration(Math.max(0, Math.floor((wo.globalEndTime - wo.globalStartTime) / 1000)))
                                 : '00:00:00');
                         const durationDisplay = Logic.normalizeDuration(rawDuration);
-                        
+
                         const moodVal = wo.moodRating ?? (wo as any).mood;
                         const pumpVal = wo.pumpRating ?? (wo as any).pump;
                         const fatigueVal = wo.fatigueRating ?? (wo as any).fatigue;
                         const hasRatings = moodVal || pumpVal || fatigueVal;
-                        
+
                         return (
                             <div key={wo.id} className="card" style={{ marginBottom: '15px', borderLeft: '4px solid var(--primary-dark)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                     <div>
                                         <h3 style={{margin: 0}}>{wo.routineName || 'Sessione personalizzata'}</h3>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{date}</div>
+                                        <div style={{  color: 'var(--text-muted)' }} className="text-sm">{date}</div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <div className="badge badge-primary" style={{ marginRight: '5px' }}>{durationDisplay}</div>
@@ -107,7 +107,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                     </div>
                                 </div>
 
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
+                                <div style={{  color: 'var(--text-muted)', marginBottom: '10px' }} className="text-sm">
                                     <div>
                                         {wo.exercises?.length || 0} esercizi completati
                                         {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
@@ -119,10 +119,10 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                         {(wo.exercises || []).map((ex: any, exIdx: number) => {
                                             const libDef = libraryMap.get(ex.exId);
                                             const exName = libDef ? libDef.name : (ex.name || 'Esercizio rimosso');
-                                            
+
                                             const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time || s.distance || s.speed || s.kcal);
                                             return (
-                                                <div key={exIdx} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                                                <div key={exIdx} style={{  color: 'var(--text-muted)', marginBottom: '2px' }} className="text-sm">
                                                     <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{exName}</span>
                                                     {validSets.length > 0 && (
                                                         <span> — {validSets.map((s: any) => {
@@ -149,9 +149,9 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                         })}
                                     </div>
                                 )}
-                                
+
                                 {hasRatings && (
-                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--glass-border)', fontSize: '0.85rem' }}>
+                                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--glass-border)' }} className="text-sm">
                                         {moodVal && <span className="badge badge-primary">Umore: {moodVal}/10</span>}
                                         {pumpVal && <span className="badge badge-primary">Pump: {pumpVal}/10</span>}
                                         {fatigueVal && <span className="badge badge-primary">Stanchezza: {fatigueVal}/10</span>}

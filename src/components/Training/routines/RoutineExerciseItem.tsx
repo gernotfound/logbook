@@ -73,12 +73,12 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     gap: '8px',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    background: 'rgba(0, 229, 255, 0.06)',
-                    border: '1px solid rgba(0, 229, 255, 0.2)',
+                    background: 'var(--primary-soft)',
+                    border: '1px solid var(--primary-color)',
                     marginTop: '4px'
                 }}>
-                    <Activity size={18} aria-hidden="true" style={{ color: '#00e5ff' }} />
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <Activity size={18} aria-hidden="true" style={{ color: 'var(--primary-color)' }} />
+                    <span style={{  color: 'var(--text-muted)' }} className="text-sm">
                         Esercizio cardio — le metriche verranno registrate durante la sessione.
                     </span>
                 </div>
@@ -86,7 +86,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                 <>
                     {/* Riga 1: Serie */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                        <label style={{  color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }} className="text-sm">
                             Serie:
                         </label>
                         <input
@@ -101,22 +101,22 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 minHeight: '42px',
                                 margin: 0,
                                 padding: '8px 12px',
-                                fontSize: '16px',
+
                                 textAlign: 'center',
                                 borderRadius: '8px',
-                                background: 'rgba(0,0,0,0.3)',
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 color: 'var(--text-main)',
                                 boxSizing: 'border-box'
                             }}
                             onClick={e => e.stopPropagation()}
-                        />
+                         className="text-base"/>
                     </div>
 
                     {/* Riga 2: Rep min e Rep max */}
                     {libDef?.trackingType !== 'time' ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                            <label style={{  color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }} className="text-sm">
                                 Ripetizioni:
                             </label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
@@ -133,16 +133,16 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                         minHeight: '42px',
                                         margin: 0,
                                         padding: '8px 8px',
-                                        fontSize: '16px',
+
                                         textAlign: 'center',
                                         borderRadius: '8px',
-                                        background: 'rgba(0,0,0,0.3)',
+                                        background: 'var(--surface-light)',
                                         border: '1px solid var(--glass-border)',
                                         color: 'var(--text-main)',
                                         boxSizing: 'border-box'
                                     }}
-                                />
-                                <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: '1rem' }}>-</span>
+                                 className="text-base"/>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: 'bold' }} className="text-base">-</span>
                                 <input
                                     type="number"
                                     placeholder="Max (es. 12)"
@@ -156,20 +156,20 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                         minHeight: '42px',
                                         margin: 0,
                                         padding: '8px 8px',
-                                        fontSize: '16px',
+
                                         textAlign: 'center',
                                         borderRadius: '8px',
-                                        background: 'rgba(0,0,0,0.3)',
+                                        background: 'var(--surface-light)',
                                         border: '1px solid var(--glass-border)',
                                         color: 'var(--text-main)',
                                         boxSizing: 'border-box'
                                     }}
-                                />
+                                 className="text-base"/>
                             </div>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                            <label style={{  color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }} className="text-sm">
                                 Tipo:
                             </label>
                             <span className="text-muted text-xs italic">Tracciamento a tempo</span>
@@ -177,22 +177,22 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     )}
 
                     {/* Riga 3: Tecniche speciali pre-attivate */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
+                        <span style={{  color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }} className="text-sm">
                             Tecnica:
                         </span>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
                             <button
                                 type="button"
-                                className={`btn btn-small ${exercise.defaultTechnique === 'dropset' ? 'btn-primary' : ''}`}
+                                className={(`btn btn-small ${exercise.defaultTechnique === 'dropset' ? 'btn-primary' : ''}`) + " text-sm"}
                                 style={{
                                     margin: 0,
                                     padding: '6px 12px',
-                                    fontSize: '0.85rem',
-                                    background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
-                                    color: exercise.defaultTechnique === 'dropset' ? '#000' : 'var(--text-main)',
+
+                                    background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'var(--surface-light)',
+                                    color: exercise.defaultTechnique === 'dropset' ? 'var(--on-warning)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'dropset' ? 700 : 500,
-                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    border: '1px solid var(--glass-border)',
                                     borderRadius: '8px'
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'dropset')}
@@ -201,15 +201,15 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                             </button>
                             <button
                                 type="button"
-                                className={`btn btn-small ${exercise.defaultTechnique === 'isometrics' ? 'btn-primary' : ''}`}
+                                className={(`btn btn-small ${exercise.defaultTechnique === 'isometrics' ? 'btn-primary' : ''}`) + " text-sm"}
                                 style={{
                                     margin: 0,
                                     padding: '6px 12px',
-                                    fontSize: '0.85rem',
-                                    background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
-                                    color: exercise.defaultTechnique === 'isometrics' ? '#fff' : 'var(--text-main)',
+
+                                    background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'var(--surface-light)',
+                                    color: exercise.defaultTechnique === 'isometrics' ? 'var(--on-accent)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'isometrics' ? 700 : 500,
-                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    border: '1px solid var(--glass-border)',
                                     borderRadius: '8px'
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'isometrics')}

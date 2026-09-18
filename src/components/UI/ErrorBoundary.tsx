@@ -38,39 +38,29 @@ class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       const isNetworkError = this.state.error?.message?.includes('Failed to fetch dynamically imported module');
-      
+
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          padding: '20px',
-          background: 'var(--bg-color)',
-          color: 'var(--text-main)',
-          textAlign: 'center'
-        }}>
+        <div className="ui-error-boundary-1" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", padding: "1.25rem", textAlign: "center" }}>
           <GlobalDialog />
-          <h1 style={{ color: 'var(--danger-color)', marginBottom: '10px' }}>
+          <h1 className="ui-error-boundary-2" style={{ marginBottom: "0.625rem" }}>
             {isNetworkError ? 'Sei offline' : 'Ops, qualcosa è andato storto!'}
           </h1>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '20px', maxWidth: '300px' }}>
-            {isNetworkError 
+          <p className="ui-error-boundary-3" style={{ marginBottom: "1.25rem", maxWidth: "18.75rem" }}>
+            {isNetworkError
               ? 'Connettiti a internet per accedere a questa sezione. Se sei già connesso, la versione dell\'app potrebbe essere stata aggiornata.'
               : 'Si è verificato un errore imprevisto. Prova a ricaricare la pagina.'}
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center' }}>
-            <button 
-              className="btn btn-primary" 
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem", alignItems: "center" }}>
+            <button
+              className="btn btn-primary"
               onClick={() => window.location.reload()}
             >
               <span aria-hidden="true">🔄</span> Ricarica pagina
             </button>
-            <button 
-              className="btn" 
-              style={{ background: 'transparent', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', fontSize: '0.85rem' }}
+            <button
+              className="btn ui-error-boundary-4"
+
               onClick={this.handleHardReset}
             >
               <span aria-hidden="true">⚠️</span> Hard reset (dati corrotti)

@@ -130,9 +130,9 @@ export default function TrainingPlanning() {
                     {!isEditing && (
                         <button
                             type="button"
-                            className="btn btn-primary"
+                            className="btn btn-primary text-base"
                             onClick={handleCreateNew}
-                            style={{ marginBottom: 0, padding: '8px 16px', fontSize: '0.95rem' }}
+                            style={{ marginBottom: 0, padding: '8px 16px' }}
                         >
                             <Plus size={16} aria-hidden="true" /> Nuovo ciclo
                         </button>
@@ -162,10 +162,10 @@ export default function TrainingPlanning() {
                         </h2>
                         {activeCycle && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
-                                <span style={{ fontSize: '0.95rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                                <span style={{  color: 'var(--primary-color)', fontWeight: 'bold' }} className="text-base">
                                     {activeCycle.durationWeeks} settimane
                                 </span>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                <div style={{  color: 'var(--text-muted)' }} className="text-sm">
                                     {cycleVolumeData.totalWorkoutsPerWeek} sessioni • {cycleVolumeData.totalSetsPerWeek} serie / sett.
                                 </div>
                             </div>
@@ -178,8 +178,8 @@ export default function TrainingPlanning() {
                             </span>
                             <button
                                 type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: '0.85rem', marginBottom: 0, color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
+                                className="btn btn-secondary text-sm"
+                                style={{ padding: '6px 12px',  marginBottom: 0, color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                                 onClick={handleDeactivateCycle}
                                 title="Disattiva ciclo attivo"
                             >
@@ -190,7 +190,7 @@ export default function TrainingPlanning() {
                 </div>
 
                 {activeCycle?.startDate && (
-                    <div style={{ marginBottom: '15px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                    <div style={{ marginBottom: '15px', padding: '10px 12px', background: 'var(--surface-light)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                         <div className="flex-between text-xs mb-6">
                             <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
                                 📅 {activeCycleTimeline.formattedRange}
@@ -199,7 +199,7 @@ export default function TrainingPlanning() {
                                 {activeCycleTimeline.statusLabel} ({activeCycleTimeline.progressPercent}%)
                             </span>
                         </div>
-                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
                             <div
                                 style={{
                                     height: '100%',
@@ -220,7 +220,7 @@ export default function TrainingPlanning() {
 
                 {/* Manichino Muscolare Vettoriale (Sempre visibile come da Regola 5) */}
                 <div className="mb-15 flex-center w-full flex-col">
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 'bold' }}>
+                    <div style={{  color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 'bold' }} className="text-sm">
                         Mappa muscolare del ciclo settimanale
                     </div>
                     <div style={{ width: '100%', maxWidth: '400px', display: 'flex', justifyContent: 'center' }}>
@@ -243,7 +243,7 @@ export default function TrainingPlanning() {
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 padding: '10px 12px',
-                                background: 'rgba(255,255,255,0.04)',
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 borderRadius: isVolumeOpen ? '8px 8px 0 0' : '8px',
                                 cursor: 'pointer',
@@ -254,17 +254,17 @@ export default function TrainingPlanning() {
                             aria-expanded={isVolumeOpen}
                         >
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>📊 Volume settimanale per muscolo</span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(serie a settimana)</span>
+                                <span style={{ fontWeight: 'bold' }} className="text-base">📊 Volume settimanale per muscolo</span>
+                                <span style={{  color: 'var(--text-muted)', fontWeight: 'normal' }} className="text-sm">(serie a settimana)</span>
                             </span>
                             <span style={{
                                 display: 'inline-block',
                                 transform: isVolumeOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                                 transition: 'transform 0.25s ease',
                                 color: 'var(--text-muted)',
-                                fontSize: '0.85rem',
+
                                 lineHeight: 1
-                            }}>▼</span>
+                            }} className="text-sm">▼</span>
                         </button>
 
                         {isVolumeOpen && (
@@ -288,16 +288,16 @@ export default function TrainingPlanning() {
                                             key={item.key || idx}
                                             style={{
                                                 padding: '8px 12px',
-                                                background: 'rgba(255,255,255,0.04)',
+                                                background: 'var(--surface-light)',
                                                 borderRadius: '8px',
                                                 border: '1px solid var(--glass-border)'
                                             }}
                                         >
                                             <div className="flex-between items-center mb-4">
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                                                <span style={{ fontWeight: 'bold',  color: 'var(--text-main)' }} className="text-base">
                                                     {item.label}
                                                 </span>
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
+                                                <span style={{ fontWeight: 'bold',  color: 'var(--primary-color)' }} className="text-base">
                                                     {item.sets} {item.sets === 1 ? 'serie' : 'serie'} / sett.
                                                 </span>
                                             </div>
@@ -306,7 +306,7 @@ export default function TrainingPlanning() {
                                                 style={{
                                                     width: '100%',
                                                     height: '6px',
-                                                    background: 'rgba(255,255,255,0.1)',
+                                                    background: 'var(--surface-light)',
                                                     borderRadius: '3px',
                                                     overflow: 'hidden'
                                                 }}
@@ -315,7 +315,7 @@ export default function TrainingPlanning() {
                                                     style={{
                                                         width: `${Math.min(100, Math.max(8, item.percentage * 2.5))}%`,
                                                         height: '100%',
-                                                        background: 'linear-gradient(90deg, var(--primary-color), #38bdf8)',
+                                                        background: 'var(--primary-color)',
                                                         borderRadius: '3px'
                                                     }}
                                                 />
@@ -341,14 +341,14 @@ export default function TrainingPlanning() {
                                             style={{
                                                 padding: '6px 10px',
                                                 borderRadius: '8px',
-                                                background: 'rgba(255,255,255,0.05)',
+                                                background: 'var(--surface-light)',
                                                 border: '1px solid var(--glass-border)',
-                                                fontSize: '0.85rem',
+
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '6px'
                                             }}
-                                        >
+                                         className="text-sm">
                                             <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{letterIndex}.</span>
                                             <span style={{ fontWeight: 'bold' }}>{routine?.name || 'Scheda'}</span>
                                         </div>

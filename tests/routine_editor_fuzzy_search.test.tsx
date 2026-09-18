@@ -220,7 +220,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
     // SECTION 2: ExerciseSearchDropdown Component Interaction & UX Tests
     // =========================================================================
     describe('2. ExerciseSearchDropdown Component Interactions', () => {
-        it('2.1: Renders input with 16px font-size and Italian sentence case placeholder', () => {
+        it('2.1: Renders an accessible combobox with Italian sentence case placeholder', () => {
             const onSelect = vi.fn();
             const { container } = render(
                 <ExerciseSearchDropdown
@@ -233,7 +233,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             const input = container.querySelector('input') as HTMLInputElement;
             expect(input).not.toBeNull();
             expect(input.placeholder).toBe('🔍 Cerca esercizio da aggiungere...');
-            expect(input.style.fontSize).toBe('16px');
+            expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false');
             // Dropdown list is not open initially
             expect(container.querySelector('[role="listbox"]')).toBeNull();
         });

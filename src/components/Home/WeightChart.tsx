@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { useChartAppearance } from '../../hooks/useChartAppearance';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -13,11 +15,11 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-const CHART_OPTIONS = {
+function makeOptions(colors: ReturnType<typeof useChartAppearance>['colors'], reducedMotion: boolean) { return {
     responsive: true,
     maintainAspectRatio: false,
     animation: {
-        duration: 400,
+        duration: reducedMotion ? 0 : 400,
         easing: 'easeOutQuart'
     },
     interaction: {
@@ -27,10 +29,10 @@ const CHART_OPTIONS = {
     plugins: {
         legend: { display: false },
         tooltip: {
-            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-            titleColor: '#e2e8f0',
-            bodyColor: '#38bdf8',
-            borderColor: 'rgba(255, 255, 255, 0.15)',
+            backgroundColor: colors.surface,
+            titleColor: colors.text,
+            bodyColor: colors.primary,
+            borderColor: colors.grid,
             borderWidth: 1,
             padding: 10,
             cornerRadius: 8,
@@ -45,19 +47,19 @@ const CHART_OPTIONS = {
         }
     },
     scales: {
-        y: { 
+        y: {
             beginAtZero: false,
-            grid: { color: 'rgba(255,255,255,0.06)' },
-            ticks: { 
-                color: '#94a3b8',
+            grid: { color: colors.grid },
+            ticks: {
+                color: colors.muted,
                 callback: (val: any) => `${val} kg`,
                 font: { size: 11 }
             }
         },
         x: {
             grid: { display: false },
-            ticks: { 
-                color: '#94a3b8', 
+            ticks: {
+                color: colors.muted,
                 maxTicksLimit: 7,
                 maxRotation: 0,
                 autoSkip: true,
@@ -65,8 +67,14 @@ const CHART_OPTIONS = {
             }
         }
     }
-};
+}; }
 
 export default function WeightChart({ chartData }: { chartData: any }) {
-    return <Line data={chartData} options={CHART_OPTIONS as any} />;
+    const { colors, reducedMotion } = useChartAppearance();
+    const options = useMemo(() => makeOptions(colors, reducedMotion), [colors, reducedMotion]);
+    const data = useMemo(() => ({ ...chartData, datasets: (chartData?.datasets || []).map((dataset: any) => ({
+        ...dataset, borderColor: colors.primary, backgroundColor: colors.primary,
+        pointBackgroundColor: colors.primary, pointBorderColor: colors.surface, fill: false,
+    })) }), [chartData, colors]);
+    return <Line data={data} options={options as any} role="img" aria-label="Andamento del peso corporeo in chilogrammi" />;
 }

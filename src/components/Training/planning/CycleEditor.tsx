@@ -101,8 +101,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     onChange={e => setName(e.target.value)}
                     onFocus={e => e.target.select()}
                     required
-                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                />
+                    style={{ width: '100%',  boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                 className="text-base"/>
             </div>
 
             <div className="grid-2 gap-15 mb-15">
@@ -123,16 +123,16 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                             style={{
                                 flex: 1,
                                 minWidth: 0,
-                                fontSize: '16px',
+
                                 boxSizing: 'border-box',
                                 maxWidth: '100%',
                                 display: 'block'
                             }}
-                        />
+                         className="text-base"/>
                         <div style={{ position: 'relative', flexShrink: 0, width: '46px' }}>
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="btn btn-secondary text-lg"
                                 onClick={handleOpenStartCalendar}
                                 title="Scegli data di inizio dal calendario"
                                 aria-label="Scegli data di inizio dal calendario"
@@ -140,14 +140,14 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     width: '100%',
                                     height: '100%',
                                     padding: 0,
-                                    fontSize: '1.2rem',
+
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginBottom: 0,
                                     borderRadius: '8px',
                                     border: '1px solid var(--glass-border)',
-                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    background: 'var(--surface-light)',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -168,10 +168,9 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     height: '100%',
                                     opacity: 0,
                                     pointerEvents: 'auto',
-                                    cursor: 'pointer',
-                                    fontSize: '16px'
+                                    cursor: 'pointer'
                                 }}
-                            />
+                             className="text-base"/>
                         </div>
                     </div>
                 </div>
@@ -193,16 +192,16 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                             style={{
                                 flex: 1,
                                 minWidth: 0,
-                                fontSize: '16px',
+
                                 boxSizing: 'border-box',
                                 maxWidth: '100%',
                                 display: 'block'
                             }}
-                        />
+                         className="text-base"/>
                         <div style={{ position: 'relative', flexShrink: 0, width: '46px' }}>
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="btn btn-secondary text-lg"
                                 onClick={handleOpenEndCalendar}
                                 title="Scegli data di fine dal calendario"
                                 aria-label="Scegli data di fine dal calendario"
@@ -210,14 +209,14 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     width: '100%',
                                     height: '100%',
                                     padding: 0,
-                                    fontSize: '1.2rem',
+
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     marginBottom: 0,
                                     borderRadius: '8px',
                                     border: '1px solid var(--glass-border)',
-                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    background: 'var(--surface-light)',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -238,10 +237,9 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     height: '100%',
                                     opacity: 0,
                                     pointerEvents: 'auto',
-                                    cursor: 'pointer',
-                                    fontSize: '16px'
+                                    cursor: 'pointer'
                                 }}
-                            />
+                             className="text-base"/>
                         </div>
                     </div>
                 </div>
@@ -261,8 +259,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         onChange={e => handleDurationWeeksChange(e.target.value)}
                         onFocus={e => e.target.select()}
                         required
-                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                    />
+                        style={{ width: '100%',  boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                     className="text-base"/>
                 </div>
 
                 <div>
@@ -284,8 +282,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         onFocus={e => e.target.select()}
                         placeholder="Es. 4"
                         required
-                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                    />
+                        style={{ width: '100%',  boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                     className="text-base"/>
                     <p className="text-xs text-muted mt-4 mb-0">
                         Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
                     </p>
@@ -297,16 +295,16 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     style={{
                         padding: '8px 12px',
                         borderRadius: '6px',
-                        background: 'rgba(14, 165, 233, 0.08)',
-                        border: '1px solid rgba(14, 165, 233, 0.2)',
-                        fontSize: '0.85rem',
+                        background: 'var(--primary-soft)',
+                        border: '1px solid var(--primary-color)',
+
                         color: 'var(--primary-color)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
                         marginBottom: '15px'
                     }}
-                >
+                 className="text-sm">
                     <span>📅</span>
                     <span>
                         Periodo programmato: <strong>{timeline.formattedRange}</strong> ({tempWeeks} {tempWeeks === 1 ? 'settimana' : 'settimane'})
@@ -323,8 +321,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     rows={2}
-                    style={{ width: '100%', fontSize: '16px', borderRadius: '8px', padding: '10px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                />
+                    style={{ width: '100%',  borderRadius: '8px', padding: '10px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                 className="text-base"/>
             </div>
 
             {/* Schede nel ciclo con ordine sequenziale */}
@@ -350,7 +348,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 <button
                     type="button"
                     className="btn flex-1"
-                    style={{ background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
+                    style={{ background: 'var(--surface-light)', marginBottom: 0 }}
                     onClick={onCancel}
                 >
                     Annulla

@@ -124,57 +124,33 @@ export const ReloadPrompt: React.FC = () => {
       aria-live="polite"
       aria-atomic="true"
       className="reload-prompt-toast"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        alignItems: 'center',
-        textAlign: 'center'
-      }}
+      style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "center", textAlign: "center" }}
     >
       <div
-        style={{
-          fontWeight: 700,
-          fontSize: '1rem',
-          color: 'var(--text-main)',
-        }}
+        className="ui-reload-prompt-1" style={{ fontWeight: 700 }}
       >
         {chunkFailed ? 'Aggiornamento richiesto per caricare questa schermata' : 'Nuova versione disponibile'}
       </div>
-      {updateError && <p role="alert" style={{ color: 'var(--danger-color)', margin: 0 }}>{updateError}</p>}
+      {updateError && <p role="alert" className="ui-reload-prompt-2" style={{ margin: 0 }}>{updateError}</p>}
 
-      <div className="reload-prompt-actions" style={{ display: 'flex', gap: '10px', width: '100%', justifyContent: 'center' }}>
+      <div className="reload-prompt-actions" style={{ display: "flex", gap: "0.625rem", width: "100%", justifyContent: "center" }}>
         <button
           type="button"
           aria-label="Aggiorna applicazione"
-          className="btn btn-primary btn-small"
+          className="btn btn-primary btn-small ui-reload-prompt-3"
           onClick={handleUpdate}
           disabled={updating}
-          style={{
-            flex: 1,
-            padding: '10px',
-            fontSize: '0.95rem',
-            margin: 0,
-            minHeight: '44px',
-            cursor: 'pointer',
-          }}
+          style={{ flex: 1, padding: "0.625rem", margin: 0, minHeight: "2.75rem", cursor: "pointer" }}
         >
           {updating ? 'Salvataggio…' : 'Aggiorna'}
         </button>
         <button
           type="button"
           aria-label="Chiudi notifica"
-          className="btn btn-secondary btn-small"
+          className="btn btn-secondary btn-small ui-reload-prompt-4"
           onClick={handleClose}
           disabled={updating}
-          style={{
-            flex: 1,
-            padding: '10px',
-            fontSize: '0.95rem',
-            margin: 0,
-            minHeight: '44px',
-            cursor: 'pointer',
-          }}
+          style={{ flex: 1, padding: "0.625rem", margin: 0, minHeight: "2.75rem", cursor: "pointer" }}
         >
           Chiudi
         </button>

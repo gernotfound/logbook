@@ -57,7 +57,7 @@ export const AccountCard = () => {
     const submitReauth = async () => {
         if (!currentUser) return;
         setLoadingAction('reauth');
-        
+
         const isReauthSuccess = await handleReauthenticate();
         if (!isReauthSuccess) {
             setLoadingAction(null);
@@ -80,7 +80,7 @@ export const AccountCard = () => {
                     setLoadingAction(null);
                     return;
                 }
-                
+
                 if (showReauthModal === 'password') {
                     await updatePassword(currentUser, newPasswordInput);
                     await showAlert("Password aggiornata con successo.");
@@ -156,39 +156,39 @@ export const AccountCard = () => {
     if (isGuest) {
         return (
             <div className="card">
-                <h2 style={{color: 'var(--warning-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
-                <p style={{ fontSize: '0.85rem', marginBottom: '15px' }}>
+                <h2 className="ui-account-card-1" style={{ marginTop: 0 }}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
+                <p className="ui-account-card-2" style={{ marginBottom: "0.9375rem" }}>
                     Stai usando LogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                     <button className="btn btn-primary" onClick={linkGoogleAccount}>
                         Crea account con Google
                     </button>
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => setShowReauthModal('guestRegister')}>
+                    <button className="btn ui-account-card-3"  onClick={() => setShowReauthModal('guestRegister')}>
                         Crea account con Email e Password
                     </button>
-                    <hr style={{ border: 'none', borderTop: '1px solid var(--glass-border)', margin: '10px 0' }} />
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={handleLogout}>Esci dalla modalità locale</button>
+                    <hr className="ui-account-card-4" style={{ margin: "0.625rem 0" }} />
+                    <button className="btn ui-account-card-5"  onClick={handleLogout}>Esci dalla modalità locale</button>
                 </div>
-                
+
                 {showReauthModal === 'guestRegister' && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ background: 'var(--surface-color)', padding: '20px', borderRadius: '12px', width: '90%', maxWidth: '350px', border: '1px solid var(--glass-border)' }}>
+                    <div className="ui-account-card-6" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <div className="ui-account-card-7" style={{ padding: "1.25rem", width: "90%", maxWidth: "21.875rem" }}>
                             <h3 style={{ marginTop: 0 }}>Crea Account</h3>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>I tuoi dati locali verranno salvati sul cloud.</p>
-                            
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
-                                <input type="email" placeholder="La tua Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
-                                
-                                <div style={{ position: 'relative' }}>
-                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
-                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <p className="ui-account-card-8" >I tuoi dati locali verranno salvati sul cloud.</p>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem", marginTop: "0.9375rem" }}>
+                                <input type="email" placeholder="La tua Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" className="ui-account-card-9" style={{ padding: "0.625rem" }} />
+
+                                <div style={{ position: "relative" }}>
+                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" className="ui-account-card-10" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
+                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-11" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
                                         {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
-                                
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                    <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => { setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
+
+                                <div style={{ display: "flex", gap: "0.625rem", marginTop: "0.625rem" }}>
+                                    <button className="btn ui-account-card-12" style={{ flex: 1 }} onClick={() => { setShowReauthModal(null); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
                                     <button className="btn btn-primary" style={{ flex: 1 }} onClick={onGuestRegister} disabled={loadingAction === 'guestRegister'}>
                                         {loadingAction === 'guestRegister' ? 'Attendere...' : 'Registrati'}
                                     </button>
@@ -203,88 +203,88 @@ export const AccountCard = () => {
 
     return (
         <div className="card">
-            <h2 style={{color: 'var(--primary-color)',marginTop: 0}}>Il tuo Account</h2>
-            
+            <h2 className="ui-account-card-13" style={{ marginTop: 0 }}>Il tuo Account</h2>
+
             {currentUser && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "1.25rem" }}>
                     {currentUser.photoURL ? (
-                        <img src={currentUser.photoURL} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />
+                        <img src={currentUser.photoURL} alt="Avatar" className="ui-account-card-14" style={{ width: "2.5rem", height: "2.5rem" }} />
                     ) : (
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-color)', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                        <div className="ui-account-card-15" style={{ width: "2.5rem", height: "2.5rem", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>
                             {currentUser.email?.charAt(0).toUpperCase()}
                         </div>
                     )}
                     <div>
-                        <div style={{ fontWeight: 'bold' }}>{currentUser.displayName || 'Utente LogBook'}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
+                        <div style={{ fontWeight: "bold" }}>{currentUser.displayName || 'Utente LogBook'}</div>
+                        <div className="ui-account-card-16" >{currentUser.email}</div>
                     </div>
                 </div>
             )}
 
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '10px', marginBottom: '15px' }}>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Metodi di accesso collegati:</div>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    {hasGoogle && <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Google</span>}
-                    {hasPassword && <span style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Email / Password</span>}
+            <div className="ui-account-card-17" style={{ padding: "0.625rem", marginBottom: "0.9375rem" }}>
+                <div className="ui-account-card-18" style={{ marginBottom: "0.625rem" }}>Metodi di accesso collegati:</div>
+                <div style={{ display: "flex", gap: "0.625rem", flexWrap: "wrap" }}>
+                    {hasGoogle && <span className="ui-account-card-19" style={{ padding: "0.25rem 0.5rem" }}>Google</span>}
+                    {hasPassword && <span className="ui-account-card-20" style={{ padding: "0.25rem 0.5rem" }}>Email / Password</span>}
                 </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                 {hasPassword && (
                     <>
-                        <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Indirizzo Email</button>
-                        <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => { setShowReauthModal('password'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Password</button>
+                        <button className="btn ui-account-card-21"  onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Indirizzo Email</button>
+                        <button className="btn ui-account-card-22"  onClick={() => { setShowReauthModal('password'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Password</button>
                     </>
                 )}
 
                 {!hasGoogle && (
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={onLinkGoogle} disabled={loadingAction === 'linkGoogle'}>
+                    <button className="btn ui-account-card-23"  onClick={onLinkGoogle} disabled={loadingAction === 'linkGoogle'}>
                         {loadingAction === 'linkGoogle' ? 'Collegamento...' : 'Collega Account Google'}
                     </button>
                 )}
 
                 {!hasPassword && (
-                    <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => { setShowReauthModal('linkEmail'); setShowCurrentPassword(false); setShowNewPassword(false); }}>
+                    <button className="btn ui-account-card-24"  onClick={() => { setShowReauthModal('linkEmail'); setShowCurrentPassword(false); setShowNewPassword(false); }}>
                         Crea Password per accedere con Email
                     </button>
                 )}
 
-                <hr style={{ border: 'none', borderTop: '1px solid var(--glass-border)', margin: '10px 0' }} />
-                <button className="btn" style={{ background: 'rgba(255,255,255,0.05)' }} onClick={() => handleLogout()}>Esci dall'account</button>
+                <hr className="ui-account-card-25" style={{ margin: "0.625rem 0" }} />
+                <button className="btn ui-account-card-26"  onClick={() => handleLogout()}>Esci dall'account</button>
             </div>
 
             {showReauthModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ background: 'var(--surface-color)', padding: '20px', borderRadius: '12px', width: '90%', maxWidth: '350px', border: '1px solid var(--glass-border)' }}>
+                <div className="ui-account-card-27" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 10001, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div className="ui-account-card-28" style={{ padding: "1.25rem", width: "90%", maxWidth: "21.875rem" }}>
                         <h3 style={{ marginTop: 0 }}>
                             {showReauthModal === 'email' ? 'Cambia Email' : showReauthModal === 'password' ? 'Cambia Password' : 'Crea Password'}
                         </h3>
-                        
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '15px' }}>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem", marginTop: "0.9375rem" }}>
                             {showReauthModal === 'email' && (
-                                <input type="email" placeholder="Nuova Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" style={{ padding: '10px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white' }} />
+                                <input type="email" placeholder="Nuova Email" value={newEmailInput} onChange={e => setNewEmailInput(e.target.value)} autoComplete="email" className="ui-account-card-29" style={{ padding: "0.625rem" }} />
                             )}
-                            
+
                             {(showReauthModal === 'password' || showReauthModal === 'linkEmail') && (
-                                <div style={{ position: 'relative' }}>
-                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
-                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                <div style={{ position: "relative" }}>
+                                    <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" className="ui-account-card-30" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
+                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-31" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
                                         {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
                             )}
-                            
+
                             {hasPassword && (
-                                <div style={{ position: 'relative' }}>
-                                    <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} autoComplete="current-password" style={{ padding: '10px', paddingRight: '40px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'black', color: 'white', width: '100%', boxSizing: 'border-box' }} />
-                                    <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                <div style={{ position: "relative" }}>
+                                    <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} autoComplete="current-password" className="ui-account-card-32" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
+                                    <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="ui-account-card-33" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
                                         {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
                             )}
-                            
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => { setShowReauthModal(null); setCurrentPasswordInput(''); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
+
+                            <div style={{ display: "flex", gap: "0.625rem", marginTop: "0.625rem" }}>
+                                <button className="btn ui-account-card-34" style={{ flex: 1 }} onClick={() => { setShowReauthModal(null); setCurrentPasswordInput(''); setNewEmailInput(''); setNewPasswordInput(''); }}>Annulla</button>
                                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={submitReauth} disabled={!!loadingAction}>
                                     {loadingAction === 'reauth' ? 'Attendere...' : 'Conferma'}
                                 </button>

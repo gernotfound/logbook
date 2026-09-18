@@ -10,6 +10,8 @@ import ErrorBoundary from './components/UI/ErrorBoundary'
 import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
+import './styles/ui-surfaces.css'
+import { initializeAppearance } from './store/useAppearanceStore'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
 import type { UserData } from './types'
 
@@ -30,6 +32,7 @@ import {
 import { telemetryHub } from './lib/telemetryHub';
 
 export const initApp = async () => {
+  initializeAppearance();
   try {
     telemetryHub.init();
   } catch (err) {
@@ -84,11 +87,11 @@ export const initApp = async () => {
         customFoods: resolveEffectiveFoods(catalog.foods, cached.customFoods || [], cached.catalogOverrides),
       };
       window.__INITIAL_USER_DATA__ = cached;
-      
+
       // Yield al main thread per garantire che il browser disegni lo spinner HTML
       // prima che Zod congeli il thread con la validazione sincrona massiva
       await new Promise(resolve => setTimeout(resolve, 0));
-      
+
       const initialData = getInitialUserData();
       if (initialData) {
         if (!useAppStore.getState().userData) {

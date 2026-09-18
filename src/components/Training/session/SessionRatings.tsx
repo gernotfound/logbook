@@ -43,7 +43,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
     const painColors = useMemo(() => {
         const colors: Record<string, string> = {};
-        const DANGER_COLOR = '#ef4444';
+        const DANGER_COLOR = 'var(--danger-color)';
         (pains || []).forEach(mId => {
             if (!mId || typeof mId !== 'string') return;
             colors[mId] = DANGER_COLOR;
@@ -71,100 +71,100 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
     return (
         <>
-            <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
-                <label htmlFor="water-intake" style={{ fontSize: '0.85rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <div style={{ margin: '20px 0', padding: '15px', background: 'var(--primary-soft)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
+                <label htmlFor="water-intake" style={{  color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }} className="text-sm">
                     <Droplets size={16} aria-hidden="true" /> Acqua bevuta (litri)
                 </label>
-                <BufferedInput 
-                    id="water-intake" 
-                    type="number" 
+                <BufferedInput
+                    id="water-intake"
+                    type="number"
                     inputMode="decimal"
-                    step="0.1" 
-                    placeholder="es. 1.5" 
-                    value={water} 
-                    onChange={setWater} 
+                    step="0.1"
+                    placeholder="es. 1.5"
+                    value={water}
+                    onChange={setWater}
                     onFocus={e => e.target.select()}
-                    style={{ margin: 0, width: '100%', borderColor: 'var(--primary-color)', fontSize: '16px' }} 
-                />
+                    style={{ margin: 0, width: '100%', borderColor: 'var(--primary-color)' }}
+                 className="text-base"/>
             </div>
 
-            <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
                 <h3 style={{marginTop: 0, marginBottom: '12px'}}>Valuta sessione (1-10)</h3>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label htmlFor="mood-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                        <label htmlFor="mood-rating" style={{  color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }} className="text-sm">
                             Umore
                         </label>
-                        <BufferedInput 
-                            id="mood-rating" 
-                            type="number" 
+                        <BufferedInput
+                            id="mood-rating"
+                            type="number"
                             inputMode="decimal"
                             step="0.1"
-                            min="1" 
-                            max="10" 
-                            value={mood} 
-                            onChange={setMood} 
+                            min="1"
+                            max="10"
+                            value={mood}
+                            onChange={setMood}
                             onFocus={e => e.target.select()}
-                            style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
-                        />
+                            style={{ margin: 0, textAlign: 'center' }}
+                         className="text-base"/>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label htmlFor="pump-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                        <label htmlFor="pump-rating" style={{  color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }} className="text-sm">
                             Pump
                         </label>
-                        <BufferedInput 
-                            id="pump-rating" 
-                            type="number" 
+                        <BufferedInput
+                            id="pump-rating"
+                            type="number"
                             inputMode="decimal"
                             step="0.1"
-                            min="1" 
-                            max="10" 
-                            value={pump} 
-                            onChange={setPump} 
+                            min="1"
+                            max="10"
+                            value={pump}
+                            onChange={setPump}
                             onFocus={e => e.target.select()}
-                            style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
-                        />
+                            style={{ margin: 0, textAlign: 'center' }}
+                         className="text-base"/>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <label htmlFor="fatigue-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                        <label htmlFor="fatigue-rating" style={{  color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }} className="text-sm">
                             Stanchezza
                         </label>
-                        <BufferedInput 
-                            id="fatigue-rating" 
-                            type="number" 
+                        <BufferedInput
+                            id="fatigue-rating"
+                            type="number"
                             inputMode="decimal"
                             step="0.1"
-                            min="1" 
-                            max="10" 
-                            value={fatigue} 
-                            onChange={setFatigue} 
+                            min="1"
+                            max="10"
+                            value={fatigue}
+                            onChange={setFatigue}
                             onFocus={e => e.target.select()}
-                            style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
-                        />
+                            style={{ margin: 0, textAlign: 'center' }}
+                         className="text-base"/>
                     </div>
                 </div>
             </div>
 
             {/* DOMS Muscle Pain Tracking Accordion */}
-            <div style={{ margin: '20px 0', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
+            <div style={{ margin: '20px 0', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
                 <button
                     type="button"
                     onClick={() => setIsDomsOpen(prev => !prev)}
                     className={`accordion-btn ${isDomsOpen ? 'expanded' : ''}`}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Zap size={18} aria-hidden="true" style={{ color: '#eab308' }} />
+                        <Zap size={18} aria-hidden="true" style={{ color: 'var(--warning-color)' }} />
                         <span>Dolori muscolari</span>
-                        <span 
+                        <span
                             style={{
-                                fontSize: '0.75rem',
+
                                 padding: '2px 8px',
                                 borderRadius: '6px',
-                                background: pains.length > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.08)',
-                                color: pains.length > 0 ? '#ff4d6d' : 'var(--text-muted)',
-                                border: pains.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : 'none'
+                                background: pains.length > 0 ? 'var(--danger-soft)' : 'var(--surface-light)',
+                                color: pains.length > 0 ? 'var(--danger-color)' : 'var(--text-muted)',
+                                border: pains.length > 0 ? '1px solid var(--danger-color)' : 'none'
                             }}
-                        >
+                         className="text-sm">
                             {pains.length > 0 ? `${pains.length} selezionati` : 'Opzionale'}
                         </span>
                     </div>
@@ -175,7 +175,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
                 {isDomsOpen && (
                     <div style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <p style={{ margin: '0 0 12px 0',  color: 'var(--text-muted)' }} className="text-sm">
                             Seleziona i muscoli doloranti dopo l&apos;allenamento. I muscoli primari allenati non selezionati guariranno automaticamente.
                         </p>
 
@@ -190,10 +190,10 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                     width: '100%',
                                     margin: 0,
                                     paddingRight: searchQuery ? '36px' : '14px',
-                                    fontSize: '16px',
+
                                     boxSizing: 'border-box'
                                 }}
-                            />
+                             className="text-base"/>
                             {searchQuery && (
                                 <button
                                     type="button"
@@ -219,9 +219,9 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
                         {/* Search Suggestions */}
                         {searchQuery.trim() && (
-                            <div 
-                                style={{ 
-                                    background: 'rgba(0, 0, 0, 0.45)', 
+                            <div
+                                style={{
+                                    background: 'var(--surface-light)',
                                     border: '1px solid var(--glass-border)',
                                     borderRadius: '8px',
                                     padding: '6px',
@@ -234,7 +234,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                 }}
                             >
                                 {searchResults.length === 0 ? (
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', textAlign: 'center' }}>
+                                    <div style={{ color: 'var(--text-muted)',  padding: '10px', textAlign: 'center' }} className="text-sm">
                                         Nessun muscolo trovato
                                     </div>
                                 ) : (
@@ -252,17 +252,17 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                                     width: '100%',
                                                     padding: '8px 12px',
                                                     borderRadius: '6px',
-                                                    fontSize: '0.85rem',
+
                                                     cursor: 'pointer',
                                                     textAlign: 'left',
-                                                    background: isPain ? 'rgba(239, 68, 68, 0.25)' : 'var(--surface-light, #1a1a1a)',
-                                                    color: isPain ? '#ff6b81' : '#ffffff',
-                                                    border: isPain ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.08)',
+                                                    background: isPain ? 'var(--danger-soft)' : 'var(--surface-light, #1a1a1a)',
+                                                    color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
+                                                    border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--glass-border)',
                                                     transition: 'all 0.2s ease'
                                                 }}
-                                            >
+                                             className="text-sm">
                                                 <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? '#ff4d6d' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span style={{  fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }} className="text-sm">
                                                     {isPain ? <><Check size={14} aria-hidden="true" /> Dolorante</> : <><Plus size={14} aria-hidden="true" /> Aggiungi</>}
                                                 </span>
                                             </button>
@@ -276,28 +276,28 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                         {pains.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
                                 {pains.map(mId => (
-                                    <span 
-                                        key={mId} 
+                                    <span
+                                        key={mId}
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '6px',
-                                            background: 'rgba(239, 68, 68, 0.15)',
-                                            border: '1px solid rgba(239, 68, 68, 0.5)',
-                                            color: '#ff6b81',
+                                            background: 'var(--danger-soft)',
+                                            border: '1px solid var(--danger-color)',
+                                            color: 'var(--danger-color)',
                                             padding: '4px 10px',
                                             borderRadius: '8px',
-                                            fontSize: '0.85rem',
+
                                             fontWeight: 600
                                         }}
-                                    >
+                                     className="text-sm">
                                         {Logic.getMuscleName(mId)}
                                         <button
                                             type="button"
                                             onClick={() => handleToggleMuscle(mId)}
                                             className="btn-link"
                                             style={{
-                                                color: '#ff4d6d',
+                                                color: 'var(--danger-color)',
                                                 padding: '0 2px',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
@@ -314,10 +314,10 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
                         {/* Interactive SVG Mannequin */}
                         <div style={{ maxWidth: '280px', margin: '0 auto' }}>
-                            <MuscleModel 
-                                muscleColors={painColors} 
-                                interactive={true} 
-                                onToggleMuscle={handleToggleMuscle} 
+                            <MuscleModel
+                                muscleColors={painColors}
+                                interactive={true}
+                                onToggleMuscle={handleToggleMuscle}
                             />
                         </div>
                     </div>

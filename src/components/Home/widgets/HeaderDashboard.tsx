@@ -1,58 +1,20 @@
-import React from 'react';
-import { Logic } from '../../../lib/logic';
 import { Flame, Dumbbell } from 'lucide-react';
+import { Logic } from '../../../lib/logic';
 
-interface HeaderDashboardProps {
-    streak: number;
-    totalWorkouts: number;
-}
+interface HeaderDashboardProps { streak: number; totalWorkouts: number; }
 
-const HeaderDashboard: React.FC<HeaderDashboardProps> = ({ streak, totalWorkouts }) => {
+export default function HeaderDashboard({ streak, totalWorkouts }: HeaderDashboardProps) {
     const today = Logic.getLocalDateString();
-    const formattedDate = Logic.formatItalianDate ? Logic.formatItalianDate(today) : today;
-
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <header className="home-header">
             <div>
-                <h1 style={{margin: 0,color: 'var(--text-main)'}}>LogBook</h1>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formattedDate}</p>
+                <p className="text-sm home-muted">{Logic.formatItalianDate ? Logic.formatItalianDate(today) : today}</p>
+                <h1>LogBook</h1>
             </div>
-            
-            <div style={{ display: 'flex', gap: '10px' }}>
-                <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px', 
-                    background: 'rgba(255, 255, 255, 0.05)', 
-                    padding: '6px 10px', 
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                }}>
-                    <Flame size={16} color={streak > 0 ? 'var(--warning-color)' : 'var(--text-muted)'} />
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: streak > 0 ? 'var(--warning-color)' : 'var(--text-muted)' }}>
-                        {streak || 0}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '2px' }}>Streak</span>
-                </div>
-                
-                <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px', 
-                    background: 'rgba(255, 255, 255, 0.05)', 
-                    padding: '6px 10px', 
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)'
-                }}>
-                    <Dumbbell size={16} color="var(--primary-color)" />
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                        {totalWorkouts}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '2px' }}>Sessioni</span>
-                </div>
+            <div className="home-header-stats">
+                <span className="home-badge"><Flame size={18} aria-hidden="true" /><strong>{streak || 0}</strong> Streak</span>
+                <span className="home-badge"><Dumbbell size={18} aria-hidden="true" /><strong>{totalWorkouts}</strong> Sessioni</span>
             </div>
-        </div>
+        </header>
     );
-};
-
-export default HeaderDashboard;
+}

@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { Trash2, Settings, AlertTriangle } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { Trash2, Settings, AlertTriangle, History, ArrowUpDown } from 'lucide-react';
+import { ContextMenu } from '../../UI/ContextMenu';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
@@ -60,18 +61,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
 
     const [showPositionMenu, setShowPositionMenu] = React.useState(false);
-    const positionMenuRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!showPositionMenu) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            if (positionMenuRef.current && !positionMenuRef.current.contains(e.target as Node)) {
-                setShowPositionMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showPositionMenu]);
 
 
 
@@ -119,16 +108,16 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const handleCardioChange = (field: 'time' | 'distance', value: string) => {
         const setId = exItem.sets[0]?.id;
         if (!setId) return;
-        
+
         onUpdateSet(exIndex, setId, field, value);
 
         const currentSet = exItem.sets[0];
         const newTimeStr = field === 'time' ? value : (currentSet?.time || '');
         const newDistStr = field === 'distance' ? value : (currentSet?.distance || '');
-        
+
         const timeVal = parseFloat(newTimeStr.replace(',', '.'));
         const distVal = parseFloat(newDistStr.replace(',', '.'));
-        
+
         if (!isNaN(timeVal) && !isNaN(distVal) && timeVal > 0) {
             const speed = distVal / (timeVal / 60);
             onUpdateSet(exIndex, setId, 'speed', speed.toFixed(2));
@@ -139,81 +128,32 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
     return (
         <div className="section-divider">
-            <div style={{ marginBottom: '10px' }}>
-                <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
-            </div>
-            <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
-                {/* Position dropdown */}
-                <div style={{ position: 'relative' }} ref={positionMenuRef}>
-                    <button
-                        type="button"
-                        className="btn-small"
-                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '36px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em', color: '#000' }}
-                        onClick={() => setShowPositionMenu(v => !v)}
-                        aria-label="Cambia posizione esercizio"
-                    >#{exIndex + 1}</button>
-                    {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
-                            {Array.from({ length: totalExercises }, (_, i) => i).map(targetIdx => (
-                                <button
-                                    key={targetIdx}
-                                    type="button"
-                                    onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
-                                    style={{
-                                        display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
-                                        background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
-                                        border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
-                                        cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: '0.85rem', borderRadius: '6px'
-                                    }}
-                                >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <button
-                    type="button"
-                    className="btn-small"
-                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
-                    onClick={() => onRemoveExercise(exIndex)}
-                    aria-label="Rimuovi esercizio dalla sessione"
-                >
-                    <Trash2 size={16} aria-hidden="true" />
-
-                </button>
-                <button
-                    type="button"
-                    className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
-                    style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
-                    onClick={() => onToggleHistory(exIndex)}
-                >
-                    🕒 Storico
-                </button>
-                <button
-                    type="button"
-                    className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
-                    style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
-                    onClick={() => onToggleSetup(exIndex)}
-                >
-                    <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup
-                </button>
-            </div>
-
+            <header className="workout-exercise-header">
+                <div><h2>{exName}</h2><p className="text-sm">{exIndex + 1}° esercizio</p></div>
+                <ContextMenu ariaLabel={`Opzioni ${exName}`} items={[
+                    { label: isHistoryOpen ? 'Chiudi storico' : 'Storico', icon: History, onClick: () => onToggleHistory(exIndex) },
+                    { label: isSetupOpen ? 'Chiudi setup' : 'Setup', icon: Settings, onClick: () => onToggleSetup(exIndex) },
+                    { label: 'Cambia posizione esercizio', icon: ArrowUpDown, onClick: () => setShowPositionMenu(value => !value), disabled: !totalExercises || totalExercises < 2 },
+                    { label: 'Rimuovi esercizio dalla sessione', icon: Trash2, variant: 'danger', onClick: () => onRemoveExercise(exIndex) }
+                ]} />
+            </header>
+            {showPositionMenu && totalExercises !== undefined && <div className="workout-position-list" role="group" aria-label="Posizione esercizio">{Array.from({ length: totalExercises }, (_, targetIdx) => <button type="button" className="btn btn-small btn-secondary" aria-pressed={targetIdx === exIndex} key={targetIdx} onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}>{targetIdx === exIndex ? '✓ ' : ''}{targetIdx + 1}ª posizione</button>)}</div>}
             {(exItem.minReps || exItem.maxReps) && (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                <div style={{  color: 'var(--text-muted)', marginBottom: '15px' }} className="text-sm">
                     Rep min: {exItem.minReps || '-'} | Rep max: {exItem.maxReps || '-'}
                 </div>
             )}
             {!(exItem.minReps || exItem.maxReps) && <div style={{ marginBottom: '15px' }}></div>}
 
             {isHistoryOpen && (
-                <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <h3 style={{marginBottom: '8px', marginTop: 0}}>Ultimi 2 allenamenti:</h3>
                     {pastWorkouts.length === 0 ? (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
+                        <div style={{  color: 'var(--text-muted)' }} className="text-sm">Nessun dato precedente trovato.</div>
                     ) : (
                         pastWorkouts.map((pw, idx) => (
                             <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed var(--glass-border)' }}>
-                                <strong style={{ fontSize: '0.85rem', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
+                                <strong style={{  color: 'var(--primary-color)' }} className="text-sm">{pw.date}</strong><br />
                                 {pw.sets.map((s: any, sIdx: number) => {
                                     // Salta la serie se entrambi i campi sono assenti (weight_reps)
                                     if (libDef?.trackingType !== 'time' && libDef?.trackingType !== 'cardio') {
@@ -221,13 +161,13 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                         const hasReps = s.reps !== null && s.reps !== undefined && s.reps !== '';
                                         if (!hasKg && !hasReps) return null;
                                     }
-                                    
+
                                     const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
                                     const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
                                     const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
 
                                     return (
-                                        <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
+                                        <span key={sIdx} style={{  marginRight: '15px', display: 'inline-block' }} className="text-sm">
                                             S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
                                                 <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{displayTime}</b></>
                                             ) : (
@@ -243,7 +183,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {isSetupOpen && (
-                <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Modifica setup (globale):</h3>
                     <input
                         id={`setup-${exItem.exId}`}
@@ -257,73 +197,73 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {lastNote && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: '0.85rem', marginBottom: '15px', color: '#fca5a5' }}>
+                <div style={{ background: 'var(--danger-soft)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)',  marginBottom: '15px', color: 'var(--danger-color)' }} className="text-sm">
                     <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Note scorsa volta:</b> {lastNote}
                 </div>
             )}
 
             {libDef?.trackingType === 'cardio' ? (
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
+                <div style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Durata (min)</label>
-                            <BufferedInput 
-                                type="text" 
+                            <BufferedInput
+                                type="text"
                                 inputMode="decimal"
-                                value={exItem.sets[0]?.time || ''} 
+                                value={exItem.sets[0]?.time || ''}
                                 onChange={val => handleCardioChange('time', val)}
                                 placeholder="es. 30"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8 text-base"
+                                style={{  boxSizing: 'border-box' }}
                             />
                         </div>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Distanza (km)</label>
-                            <BufferedInput 
-                                type="text" 
+                            <BufferedInput
+                                type="text"
                                 inputMode="decimal"
-                                value={exItem.sets[0]?.distance || ''} 
+                                value={exItem.sets[0]?.distance || ''}
                                 onChange={val => handleCardioChange('distance', val)}
                                 placeholder="es. 5.2"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8 text-base"
+                                style={{  boxSizing: 'border-box' }}
                             />
                         </div>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Velocità media</label>
-                            <BufferedInput 
-                                type="text" 
+                            <BufferedInput
+                                type="text"
                                 inputMode="decimal"
-                                value={exItem.sets[0]?.speed || ''} 
+                                value={exItem.sets[0]?.speed || ''}
                                 onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'speed', val)}
                                 placeholder="es. 10.5"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8 text-base"
+                                style={{  boxSizing: 'border-box' }}
                             />
                         </div>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Inclinazione (%)</label>
-                            <BufferedInput 
-                                type="text" 
+                            <BufferedInput
+                                type="text"
                                 inputMode="decimal"
-                                value={exItem.sets[0]?.incline || ''} 
+                                value={exItem.sets[0]?.incline || ''}
                                 onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'incline', val)}
                                 placeholder="es. 2.0"
-                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                                className="w-full bg-black-20 border-glass text-white p-8 rounded-8 text-base"
+                                style={{  boxSizing: 'border-box' }}
                             />
                         </div>
                     </div>
                     <div>
                         <label className="text-muted text-xs mb-4 block">Kcal stimate</label>
-                        <BufferedInput 
-                            type="text" 
+                        <BufferedInput
+                            type="text"
                             inputMode="decimal"
-                            value={exItem.sets[0]?.kcal || ''} 
+                            value={exItem.sets[0]?.kcal || ''}
                             onChange={val => onUpdateSet(exIndex, exItem.sets[0]?.id, 'kcal', val)}
                             placeholder="es. 350"
-                            className="w-full bg-black-20 border-glass text-white p-8 rounded-8"
-                            style={{ fontSize: '16px', boxSizing: 'border-box' }}
+                            className="w-full bg-black-20 border-glass text-white p-8 rounded-8 text-base"
+                            style={{  boxSizing: 'border-box' }}
                         />
                     </div>
                 </div>
@@ -350,7 +290,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <button
                             type="button"
                             className="btn btn-secondary btn-small"
-                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', marginBottom: 0 }}
+                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'var(--surface-light)', color: 'var(--text-muted)', marginBottom: 0 }}
                             onClick={handleRemoveLastSet}
                             disabled={(exItem.sets || []).length === 0}
                             aria-label="Rimuovi serie"
@@ -360,7 +300,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <button
                             type="button"
                             className="btn btn-small"
-                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginBottom: 0 }}
+                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'var(--surface-light)', marginBottom: 0 }}
                             onClick={() => onAddSet(exIndex)}
                             aria-label="Aggiungi serie"
                         >
@@ -374,8 +314,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={val => onUpdateSessionNote(exIndex, val)}
-                style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
-            />
+                style={{ width: '100%', padding: '12px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px',  resize: 'vertical', boxSizing: 'border-box' }}
+             className="text-base"/>
         </div>
     );
 };

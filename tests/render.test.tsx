@@ -91,10 +91,10 @@ describe('Render Test Suite - Zero Crash Verification', () => {
     };
     const { container } = renderWithProviders(<TrainingSession />, {
       localWorkout: activeWorkout,
-      userData: { 
-        ...emptyUserData, 
+      userData: {
+        ...emptyUserData,
         activeWorkout,
-        library: [{ id: 'ex1', name: 'Panca Piana' }] 
+        library: [{ id: 'ex1', name: 'Panca Piana' }]
       } as any
     });
     expect(container.textContent).toContain('Scheda A - Upper');
@@ -130,7 +130,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders NutritionMeals without crashing', () => {
     const { container } = renderWithProviders(<NutritionMeals />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Cerca Alimento/i)).toBeDefined();
+    expect(screen.getByRole('searchbox', { name: 'Cerca alimento' })).toBeDefined();
   });
 
   test('renders NutritionPlanning without crashing', () => {
