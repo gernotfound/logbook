@@ -1,7 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
+
+const HOME_CLOCK_REFRESH_MS = 60 * 1000;
 
 function getWorkoutTimestamp(w: any): number | null {
     if (!w) return null;
@@ -34,7 +36,7 @@ function getMuscleCategory(mId: string): { key: string; label: string } {
     return { key: 'other', label: 'Altro' };
 }
 
-function calcStreak(history: any[]): number {
+function calcStreak(history: any[], nowMs: number): number {
     if (!history || history.length === 0) return 0;
     const workoutDates = new Set<string>(
         history
@@ -43,7 +45,7 @@ function calcStreak(history: any[]): number {
     );
 
     let streak = 0;
-    const today = new Date();
+    const today = new Date(nowMs);
     const todayStr = format(today, 'yyyy-MM-dd');
     const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd');
     
@@ -111,6 +113,32 @@ export function useHomeView(): HomeViewState {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
     const profile = useAppStore(state => state.userData?.profile);
+    const [homeClockNow, setHomeClockNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let active = true;
+
+        const scheduleNextRefresh = () => {
+            timeoutId = setTimeout(() => {
+                if (!active) return;
+                setHomeClockNow(Date.now());
+                scheduleNextRefresh();
+            }, HOME_CLOCK_REFRESH_MS);
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') setHomeClockNow(Date.now());
+        };
+
+        scheduleNextRefresh();
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            active = false;
+            if (timeoutId) clearTimeout(timeoutId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
 
     const painColors = useMemo(() => {
         const colors: Record<string, string> = {};
@@ -137,7 +165,7 @@ export function useHomeView(): HomeViewState {
     }, [activePains, dispatchDomainOperation]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)
-    const streak = useMemo(() => calcStreak(history), [history]);
+    const streak = useMemo(() => calcStreak(history, homeClockNow), [history, homeClockNow]);
     const totalWorkouts = history.length;
 
     // Pre-calcola una Map per cercare gli esercizi in O(1) invece di O(n) ad ogni iterazione dello storico
@@ -146,7 +174,7 @@ export function useHomeView(): HomeViewState {
     // Calculate Heatmap & Volume
     const { muscleColors, volumeChartData } = useMemo(() => {
         const MAX_HOURS = 72;
-        const now = Date.now();
+        const now = homeClockNow;
         const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
         
         const fatigue = new Map<string, number>();
@@ -236,7 +264,7 @@ export function useHomeView(): HomeViewState {
         };
 
         return { muscleColors: colors, volumeChartData: vChartData };
-    }, [history, libraryMap]);
+    }, [history, libraryMap, homeClockNow]);
 
     // Chronological array for charts and TDEE calc
     const { sortedDates, tdeeCalc } = useMemo(() => {
@@ -258,7 +286,7 @@ export function useHomeView(): HomeViewState {
             '365d': 365
         };
         const numDays = daysMap[weightPeriod] || 7;
-        const today = new Date();
+        const today = new Date(homeClockNow);
 
         const dateRange: string[] = [];
         for (let i = numDays - 1; i >= 0; i--) {
@@ -332,14 +360,14 @@ export function useHomeView(): HomeViewState {
                 maxWeight
             }
         };
-    }, [nutrition, weightPeriod]);
+    }, [nutrition, weightPeriod, homeClockNow]);
 
     // Early return AFTER all hooks
     if (!hasUserData) {
         return { loading: true };
     }
 
-    const todayStr = Logic.getLocalDateString();
+    const todayStr = Logic.getLocalDateString(homeClockNow);
     
     // Calculate today's workout
     const todaysWorkout = history.find((s: any) => {
