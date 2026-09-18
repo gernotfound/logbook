@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { NutritionPlanning } from '../../types';
-import { Exporter } from '../../lib/export';
+import { useScrollLock } from '../../hooks/useScrollLock';
 import { useAppStore } from '../../store/useAppStore';
+import { useDialogStore } from '../../store/useDialogStore';
 
 interface Props {
   isOpen: boolean;
@@ -21,51 +23,90 @@ export const NutritionConflictDialog: React.FC<Props> = ({
   isSyncing
 }) => {
   const [view, setView] = useState<'compare' | 'confirm-cloud'>('compare');
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const safeActionRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  const syncingRef = useRef(!!isSyncing);
+  const showAlert = useDialogStore(state => state.showAlert);
 
-  // A11y Focus management
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  onCloseRef.current = onClose;
+  syncingRef.current = !!isSyncing;
+  useScrollLock(isOpen);
 
   useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-
-    if (isOpen) {
-      if (!dialog.open) {
-        previousFocusRef.current = document.activeElement as HTMLElement;
-        dialog.showModal();
-      }
-    } else {
-      if (dialog.open) {
-        dialog.close();
-        setView('compare');
-        if (previousFocusRef.current) {
-          previousFocusRef.current.focus();
-          previousFocusRef.current = null;
-        }
-      }
+    if (!isOpen) {
+      setView('compare');
+      return;
     }
-  }, [isOpen]);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
+    const overlay = overlayRef.current;
+    const box = boxRef.current;
+    if (!overlay || !box) return;
 
-    const handleCancel = (e: Event) => {
-      e.preventDefault(); // Prevent native close to manage state properly
-      if (!isSyncing) {
-        onClose();
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const siblings = Array.from(document.body.children).filter(
+      (element): element is HTMLElement => element instanceof HTMLElement && element !== overlay
+    );
+    const previousInert = siblings.map(element => element.inert);
+    siblings.forEach(element => { element.inert = true; });
+
+    const focusable = () => Array.from(box.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]'
+    ));
+
+    (safeActionRef.current ?? focusable()[0] ?? box).focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (syncingRef.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setView('compare');
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      const first = elements[0] ?? box;
+      const last = elements[elements.length - 1] ?? box;
+      if (event.shiftKey && (document.activeElement === first || !box.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !box.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
-    dialog.addEventListener('cancel', handleCancel);
-    return () => dialog.removeEventListener('cancel', handleCancel);
-  }, [onClose, isSyncing]);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      siblings.forEach((element, index) => { element.inert = previousInert[index]; });
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isOpen]);
 
-  const handleExport = () => {
+  useEffect(() => {
+    if (isOpen) safeActionRef.current?.focus();
+  }, [isOpen, view]);
+
+  const handleClose = () => {
+    if (isSyncing) return;
+    setView('compare');
+    onClose();
+  };
+
+  const handleExport = async () => {
     const userData = useAppStore.getState().userData;
-    if (userData) {
+    if (!userData) return;
+    try {
+      const { Exporter } = await import('../../lib/export');
       Exporter.exportEmergencyJSON(userData);
+    } catch (error) {
+      console.error('Errore esportazione backup conflitto nutrizionale:', error);
+      await showAlert('Esportazione non riuscita. Riprova.');
     }
   };
 
@@ -87,110 +128,131 @@ export const NutritionConflictDialog: React.FC<Props> = ({
     );
   };
 
-  return (
-    <dialog
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="conflict-dialog-title"
-      aria-describedby="conflict-dialog-desc"
-      className="card p-0 overflow-hidden"
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div
+      ref={overlayRef}
+      className="dialog-overlay"
       style={{
-        maxWidth: '500px',
-        width: '90%',
-        margin: 'auto',
-        background: 'var(--surface-color)',
-        color: 'var(--text-main)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '16px',
-        backdropFilter: 'blur(10px)'
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99998,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))',
+        background: 'rgba(0, 0, 0, 0.72)',
+        backdropFilter: 'blur(5px)',
+        overflow: 'hidden'
       }}
     >
-      <div className="p-4 border-b" style={{ borderColor: 'var(--glass-border)' }}>
-        <h2 id="conflict-dialog-title" className="text-lg font-bold">Risoluzione conflitto</h2>
-      </div>
+      <div
+        ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conflict-dialog-title"
+        aria-describedby="conflict-dialog-desc"
+        tabIndex={-1}
+        className="card p-0 overflow-hidden safe-top safe-bottom"
+        style={{
+          maxWidth: '500px',
+          width: '100%',
+          maxHeight: 'calc(100dvh - 2rem)',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--surface-color)',
+          color: 'var(--text-main)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '16px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.8)'
+        }}
+      >
+        <div className="p-4 border-b" style={{ borderColor: 'var(--glass-border)', flexShrink: 0 }}>
+          <h2 id="conflict-dialog-title" className="text-lg font-bold">Risoluzione conflitto</h2>
+        </div>
 
-      <div className="p-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-        {view === 'compare' ? (
-          <>
-            <p id="conflict-dialog-desc" className="text-sm text-muted mb-4">
-              È stata rilevata una bozza locale del tuo piano nutrizionale. Confrontala con il piano salvato nell'account e decidi quale mantenere.
-            </p>
+        <div className="p-4" style={{ overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          {view === 'compare' ? (
+            <>
+              <p id="conflict-dialog-desc" className="text-sm text-muted mb-4">
+                È stata rilevata una bozza locale del tuo piano nutrizionale. Confrontala con il piano salvato nell'account e decidi quale mantenere.
+              </p>
 
-            {renderPlanPreview("Piano Account (Cloud)", cloudPlan, true)}
-            {renderPlanPreview("Bozza Locale (Dispositivo)", localPlan, false)}
-          </>
-        ) : (
-          <>
+              {renderPlanPreview('Piano account (cloud)', cloudPlan, true)}
+              {renderPlanPreview('Bozza locale (dispositivo)', localPlan, false)}
+            </>
+          ) : (
             <p id="conflict-dialog-desc" className="text-sm mb-4">
               <strong>Vuoi eliminare la bozza nutrizionale salvata su questo dispositivo?</strong><br/><br/>
               Questa operazione <span style={{ color: 'var(--danger-color)' }}>non può essere annullata</span>, a meno che tu non abbia esportato un backup.
             </p>
-          </>
-        )}
-      </div>
+          )}
+        </div>
 
-      <div className="p-4 border-t flex flex-col gap-2" style={{ borderColor: 'var(--glass-border)' }}>
-        {view === 'compare' ? (
-          <>
-            <button
-              className="btn btn-primary"
-              onClick={() => onResolve('local')}
-              disabled={isSyncing}
-              style={{ background: 'var(--warning-color)', color: '#000' }}
-            >
-              Mantieni Dispositivo
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setView('confirm-cloud')}
-              disabled={isSyncing}
-            >
-              Mantieni Cloud (Elimina Bozza)
-            </button>
-            <button
-              className="btn btn-secondary text-sm"
-              onClick={handleExport}
-            >
-              Esporta backup JSON
-            </button>
-            <button
-              autoFocus
-              className="btn"
-              onClick={onClose}
-              disabled={isSyncing}
-              style={{ marginTop: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)' }}
-            >
-              Decidi più tardi
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              className="btn btn-primary"
-              style={{ background: 'var(--danger-color)', color: '#fff' }}
-              onClick={() => onResolve('cloud')}
-              disabled={isSyncing}
-            >
-              Elimina bozza e mantieni account
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={handleExport}
-            >
-              Esporta backup JSON
-            </button>
-            <button
-              autoFocus
-              className="btn"
-              onClick={() => setView('compare')}
-              disabled={isSyncing}
-            >
-              Torna al confronto
-            </button>
-          </>
-        )}
+        <div className="p-4 border-t flex flex-col gap-2" style={{ borderColor: 'var(--glass-border)', flexShrink: 0 }}>
+          {view === 'compare' ? (
+            <>
+              <button
+                className="btn btn-primary"
+                onClick={() => onResolve('local')}
+                disabled={isSyncing}
+                style={{ background: 'var(--warning-color)', color: '#000' }}
+              >
+                Mantieni dispositivo
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setView('confirm-cloud')}
+                disabled={isSyncing}
+              >
+                Mantieni account (elimina bozza)
+              </button>
+              <button
+                className="btn btn-secondary text-sm"
+                onClick={() => void handleExport()}
+              >
+                Esporta backup JSON
+              </button>
+              <button
+                ref={safeActionRef}
+                className="btn"
+                onClick={handleClose}
+                disabled={isSyncing}
+                style={{ marginTop: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)' }}
+              >
+                Decidi più tardi
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="btn btn-primary"
+                style={{ background: 'var(--danger-color)', color: '#fff' }}
+                onClick={() => onResolve('cloud')}
+                disabled={isSyncing}
+              >
+                Elimina bozza e mantieni account
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => void handleExport()}
+              >
+                Esporta backup JSON
+              </button>
+              <button
+                ref={safeActionRef}
+                className="btn"
+                onClick={() => setView('compare')}
+                disabled={isSyncing}
+              >
+                Torna al confronto
+              </button>
+            </>
+          )}
+        </div>
       </div>
-    </dialog>
+    </div>,
+    document.body
   );
 };
