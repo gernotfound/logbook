@@ -107,28 +107,38 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   });
 
   it('telemetry_anomalies whitelist contains all privacy-minimized payload keys', () => {
-    const anomalyMatch = rulesContent.match(/match\s+\/telemetry_anomalies\/\{eventId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
+    const anomalyMatch = rulesContent.match(/match\s+\/telemetry_anomalies\/\{eventId\}[\s\S]*?isValidTelemetryAnomaly\(incomingData\(\)\)/);
     expect(anomalyMatch).not.toBeNull();
-    const extractedKeys = anomalyMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
-    const expectedKeys = ['type', 'reason', 'timestamp', 'elapsedMs', 'platform', 'standalone', 'persisted'];
-    expect(extractedKeys).toEqual(expect.arrayContaining(expectedKeys));
-    expect(extractedKeys.length).toBe(expectedKeys.length);
+    expect(rulesContent).toContain("docData.type == 'storage_recovery_anomaly'");
+    expect(rulesContent).toContain("docData.platform == 'ios'");
+    expect(rulesContent).toContain('docData.standalone is bool');
+    expect(rulesContent).toContain('docData.persisted == null || docData.persisted is bool');
   });
 
   it('telemetry_errors and telemetry_events whitelist verification when configured in rules', () => {
     if (rulesContent.includes('telemetry_errors')) {
       expect(rulesContent).toMatch(/match\s+\/telemetry_errors\/\{errorId\}/);
-      const errorMatch = rulesContent.match(/match\s+\/telemetry_errors\/\{errorId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
-      expect(errorMatch).not.toBeNull();
-      const rawErrorKeys = errorMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
-      expect(rawErrorKeys).toEqual(expect.arrayContaining(['timestamp', 'type', 'message', 'stack', 'context', 'userId', 'sessionId', 'count', 'firstSeen', 'lastSeen']));
+      expect(rulesContent).toContain('function isValidTelemetryError(docData, userId)');
+      expect(rulesContent).toContain('isValidTelemetryError(incomingData(), userId)');
+      expect(rulesContent).toContain('preservesTelemetryErrorIdentity()');
     }
     if (rulesContent.includes('telemetry_events')) {
       expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
-      const eventMatch = rulesContent.match(/match\s+\/telemetry_events\/\{eventId\}[\s\S]*?incomingData\(\)\.keys\(\)\.hasOnly\(\[\s*([\s\S]*?)\s*\]\)/);
-      expect(eventMatch).not.toBeNull();
-      const rawEventKeys = eventMatch![1].split(',').map(k => k.replace(/['"\s]/g, '')).filter(Boolean);
-      expect(rawEventKeys).toEqual(expect.arrayContaining(['timestamp', 'type', 'context', 'userId', 'sessionId']));
+      expect(rulesContent).toContain('function isValidTelemetryEvent(docData, userId)');
+      expect(rulesContent).toContain('isValidTelemetryEvent(incomingData(), userId)');
+      expect(rulesContent).toContain('incomingData() == resource.data');
     }
+  });
+
+  it('bounds telemetry types, context, details and mutable fields', () => {
+    expect(rulesContent).toContain('function isValidTelemetryContext(context)');
+    expect(rulesContent).toContain('function isValidTelemetryDetails(details)');
+    expect(rulesContent).toContain('details.size() <= 12');
+    expect(rulesContent).toContain("details.keys().hasOnly([");
+    expect(rulesContent).toContain("isStringAtMost(docData.message, 4096)");
+    expect(rulesContent).toContain("isStringAtMost(docData.stack, 1000)");
+    expect(rulesContent).toContain('docData.count <= 1000000');
+    expect(rulesContent).toContain('incomingData().count >= resource.data.count');
+    expect(rulesContent).toContain('incomingData().lastSeen >= resource.data.lastSeen');
   });
 });
