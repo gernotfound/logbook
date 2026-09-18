@@ -1,12 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TrainingPlanning from '../src/components/Training/planning/TrainingPlanning';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import type { UserData } from '../src/types';
 
-const originalShowAlert = useDialogStore.getState().showAlert;
 const originalDispatch = useAppStore.getState().dispatchDomainOperation;
 
 const userData: UserData = {
@@ -26,13 +25,14 @@ const userData: UserData = {
 };
 
 describe('audit regression: TrainingPlanning persistence failures', () => {
-    const showAlert = vi.fn().mockResolvedValue(undefined);
+    const showAlert = vi.mocked(useDialogStore.getState().showAlert);
     const dispatchDomainOperation = vi.fn().mockRejectedValue(new Error('write failed'));
 
     beforeEach(() => {
-        showAlert.mockClear();
-        dispatchDomainOperation.mockClear();
-        useDialogStore.setState({ showAlert });
+        showAlert.mockReset();
+        showAlert.mockResolvedValue(undefined);
+        dispatchDomainOperation.mockReset();
+        dispatchDomainOperation.mockRejectedValue(new Error('write failed'));
         useAppStore.setState({
             userData: structuredClone(userData),
             dispatchDomainOperation
@@ -41,8 +41,9 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
     });
 
     afterEach(() => {
-        useDialogStore.setState({ showAlert: originalShowAlert });
-        useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        act(() => {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        });
         vi.restoreAllMocks();
     });
 
@@ -54,7 +55,9 @@ describe('audit regression: TrainingPlanning persistence failures', () => {
         expect(screen.getByText(/Modifica ciclo/i)).toBeDefined();
         expect(screen.getByDisplayValue('Ciclo persistente')).toBeDefined();
 
-        fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+        });
 
         await waitFor(() => expect(dispatchDomainOperation).toHaveBeenCalledTimes(1));
         await waitFor(() => expect(showAlert).toHaveBeenCalledWith(
