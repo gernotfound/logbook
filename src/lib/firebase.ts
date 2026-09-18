@@ -109,9 +109,12 @@ export const ensureAppCheck = (): Promise<AppCheckResult> => {
     return appCheckPromise;
 };
 
-// Inizializza Analytics solo se supportato (evita crash su vecchi browser/ambienti)
-let analytics: Analytics | null = null;
+// Analytics is initialized lazily and only while consent is active. Consumers
+// await getConsentedAnalytics() instead of treating a mutable module binding as a
+// readiness signal; this preserves the first SPA event even when isSupported()
+// resolves after React has already processed the consent change.
 let analyticsInstance: Analytics | null = null;
+let analyticsInitPromise: Promise<Analytics | null> | null = null;
 let currentAnalyticsConsent = false;
 try {
     currentAnalyticsConsent = typeof localStorage !== 'undefined' && localStorage.getItem('logbook_analytics_consent') === 'true';
@@ -119,18 +122,49 @@ try {
     // Unreadable consent defaults to disabled collection.
 }
 
-const enableConsentedAnalytics = async () => {
-    try {
-        const supported = await isSupported();
-        // Consent can change while the asynchronous capability check is in flight.
-        if (!supported || !currentAnalyticsConsent) return;
-        analyticsInstance ??= getAnalytics(app);
-        setAnalyticsCollectionEnabled(analyticsInstance, true);
-        analytics = analyticsInstance;
-    } catch (err) {
-        console.warn('Firebase Analytics non supportato o disabilitato:', err);
+const enableConsentedAnalytics = (): Promise<Analytics | null> => {
+    if (!currentAnalyticsConsent) return Promise.resolve(null);
+
+    if (analyticsInstance) {
+        try {
+            setAnalyticsCollectionEnabled(analyticsInstance, true);
+            return Promise.resolve(analyticsInstance);
+        } catch (err) {
+            console.warn('Firebase Analytics non supportato o disabilitato:', err);
+            return Promise.resolve(null);
+        }
     }
+
+    if (!analyticsInitPromise) {
+        const inFlight = (async (): Promise<Analytics | null> => {
+            try {
+                const supported = await isSupported();
+                // Consent can change while the asynchronous capability check is in flight.
+                if (!supported || !currentAnalyticsConsent) return null;
+                analyticsInstance ??= getAnalytics(app);
+                if (!currentAnalyticsConsent) return null;
+                setAnalyticsCollectionEnabled(analyticsInstance, true);
+                return analyticsInstance;
+            } catch (err) {
+                console.warn('Firebase Analytics non supportato o disabilitato:', err);
+                return null;
+            }
+        })();
+        analyticsInitPromise = inFlight;
+        void inFlight.finally(() => {
+            if (analyticsInitPromise === inFlight) analyticsInitPromise = null;
+        });
+    }
+
+    return analyticsInitPromise;
 };
+
+export const getConsentedAnalytics = async (): Promise<Analytics | null> => {
+    if (!currentAnalyticsConsent) return null;
+    const instance = await enableConsentedAnalytics();
+    return currentAnalyticsConsent ? instance : null;
+};
+
 if (currentAnalyticsConsent) void enableConsentedAnalytics();
 
 let _db: ReturnType<typeof initializeFirestore> | null = null;
@@ -158,7 +192,6 @@ export const setAnalyticsConsent = (consent: boolean) => {
     currentAnalyticsConsent = consent;
     if (!consent) {
         if (analyticsInstance) setAnalyticsCollectionEnabled(analyticsInstance, false);
-        analytics = null;
     } else {
         void enableConsentedAnalytics();
     }
@@ -188,6 +221,5 @@ export {
     signOut,
     onAuthStateChanged,
     waitForPendingWrites,
-    deleteUser,
-    analytics
+    deleteUser
 };
