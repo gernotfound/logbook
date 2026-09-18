@@ -3,6 +3,7 @@ import { screen, fireEvent } from '@testing-library/react';
 import WeeklyVolumeChart from '../src/components/analytics/WeeklyVolumeChart';
 import VolumeCaloriesCorrelationChart from '../src/components/analytics/VolumeCaloriesCorrelationChart';
 import { renderWithProviders } from './setup';
+import { getLocalDateString } from '../src/lib/utils/date';
 import type { WorkoutSession, NutritionDay, Exercise } from '../src/types';
 
 describe('Challenger 1: UI & Chart Component Stress Testing', () => {
@@ -14,10 +15,10 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
 
     it('renders WeeklyVolumeChart with 500 workouts across 24 weeks seamlessly without lag or crash', async () => {
         const history: WorkoutSession[] = [];
-        const baseDate = new Date('2026-08-20T12:00:00Z').getTime();
+        const baseDate = new Date(2026, 7, 20, 12).getTime();
 
         for (let i = 0; i < 500; i++) {
-            const dateStr = new Date(baseDate - (i * 12 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+            const dateStr = getLocalDateString(baseDate - (i * 12 * 60 * 60 * 1000));
             history.push({
                 id: 'w_' + i,
                 date: dateStr,
