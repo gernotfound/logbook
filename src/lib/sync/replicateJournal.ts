@@ -5,9 +5,10 @@ import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
 import { getCachedCatalog } from '../catalog/catalogService';
-import { SyncTimeoutError, withTimeout } from '../db/db_core';
+import { withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
 import type { SemanticOperation } from './semanticProjection';
+import { classifySyncFailure } from './syncFailure';
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -97,11 +98,6 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         await withTimeout(work, 7000, 'Sincronizzazione in attesa; copia locale conservata');
         return { ok: true, status: 'synced' };
     } catch (error) {
-        const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-        if (code === 'permission-denied') return { ok: false, status: 'rejected', error };
-        if (error instanceof DurableAcknowledgementPendingError || error instanceof SyncTimeoutError || code === 'unavailable' || code === 'deadline-exceeded') {
-            return { ok: false, status: 'local-pending', error };
-        }
-        return { ok: false, status: 'failed', error };
+        return classifySyncFailure(error, { retryable: error instanceof DurableAcknowledgementPendingError });
     }
 }
