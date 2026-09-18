@@ -26,10 +26,6 @@ vi.mock('../src/store/useAppStore', () => ({
     },
 }));
 
-import { loadAuthenticatedData } from '../src/contexts/auth/loadAuthenticatedData';
-import { readLocal } from '../src/lib/sync/localRepository';
-import { invalidateSession } from '../src/lib/sync/session';
-
 function data(height: string): UserData {
     return {
         ...structuredClone(emptyUserData),
@@ -43,11 +39,6 @@ function deferred<T>() {
     return { promise, resolve };
 }
 
-function switchSession(uid: string): void {
-    authState.currentUser = { uid };
-    invalidateSession();
-}
-
 function payload(height: string) {
     return {
         data: data(height),
@@ -56,15 +47,26 @@ function payload(height: string) {
     };
 }
 
+async function loadModules() {
+    vi.resetModules();
+    const [{ loadAuthenticatedData }, { readLocal }, { invalidateSession }] = await Promise.all([
+        import('../src/contexts/auth/loadAuthenticatedData'),
+        import('../src/lib/sync/localRepository'),
+        import('../src/lib/sync/session'),
+    ]);
+    return { loadAuthenticatedData, readLocal, invalidateSession };
+}
+
 describe('authenticated hydration session fencing', () => {
     beforeEach(() => {
         localStorage.clear();
         authState.currentUser = { uid: 'user-a' };
-        invalidateSession();
         dbState.loadCloudPayload.mockReset();
     });
 
     it('does not publish or persist A when the session changes before cloud data arrives', async () => {
+        const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
+        invalidateSession();
         const firstPayload = deferred<ReturnType<typeof payload>>();
         dbState.loadCloudPayload.mockReturnValueOnce(firstPayload.promise);
         const setUserData = vi.fn();
@@ -80,7 +82,8 @@ describe('authenticated hydration session fencing', () => {
         });
 
         await vi.waitFor(() => expect(dbState.loadCloudPayload).toHaveBeenCalledTimes(1));
-        switchSession('user-b');
+        authState.currentUser = { uid: 'user-b' };
+        invalidateSession();
         firstPayload.resolve(payload('171'));
         await loadPromise;
 
@@ -91,6 +94,8 @@ describe('authenticated hydration session fencing', () => {
     });
 
     it('does not resurrect an older A load after A to B to A', async () => {
+        const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
+        invalidateSession();
         const firstPayload = deferred<ReturnType<typeof payload>>();
         dbState.loadCloudPayload
             .mockReturnValueOnce(firstPayload.promise)
@@ -107,8 +112,11 @@ describe('authenticated hydration session fencing', () => {
         });
         await vi.waitFor(() => expect(dbState.loadCloudPayload).toHaveBeenCalledTimes(1));
 
-        switchSession('user-b');
-        switchSession('user-a');
+        authState.currentUser = { uid: 'user-b' };
+        invalidateSession();
+        authState.currentUser = { uid: 'user-a' };
+        invalidateSession();
+
         const secondLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
@@ -131,6 +139,8 @@ describe('authenticated hydration session fencing', () => {
     });
 
     it('lets the newest same-account load supersede an older overlapping load', async () => {
+        const { loadAuthenticatedData, readLocal, invalidateSession } = await loadModules();
+        invalidateSession();
         const firstPayload = deferred<ReturnType<typeof payload>>();
         dbState.loadCloudPayload
             .mockReturnValueOnce(firstPayload.promise)
