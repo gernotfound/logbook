@@ -6,6 +6,7 @@ vi.mock('../../src/store/useAppStore', () => ({ useAppStore: { getState: () => (
 vi.mock('../../src/lib/firebase', () => ({ auth: app.auth }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { prepareForReload } from '../../src/lib/sync/reloadBarrier';
+import { safeHardReload } from '../../src/lib/sync/safeReload';
 import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
@@ -49,4 +50,17 @@ it('propagates a failed input flush and does not proceed to reload', async () =>
         await expect(prepareForReload()).rejects.toThrow('bozze');
         expect(app.flush).not.toHaveBeenCalled();
     } finally { draftRegistry.unregister(badDraft); }
+});
+it('hard reloads only after the durable reload barrier succeeds', async () => {
+    app.flush.mockRejectedValue(new Error('offline'));
+    const reload = vi.fn();
+    await safeHardReload(reload);
+    expect(reload).toHaveBeenCalledTimes(1);
+});
+it('never hard reloads when the durable reload barrier rejects', async () => {
+    app.state.userData = parse(171);
+    app.flush.mockRejectedValue(new Error('offline'));
+    const reload = vi.fn();
+    await expect(safeHardReload(reload)).rejects.toThrow('non sono ancora salvate');
+    expect(reload).not.toHaveBeenCalled();
 });
