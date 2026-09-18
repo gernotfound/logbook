@@ -14,7 +14,7 @@ import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
-import { invalidateSession, userOwner } from '../lib/sync/session';
+import { captureSession, invalidateSession, isCurrentSession, userOwner } from '../lib/sync/session';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -452,11 +452,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return;
         }
 
+        const session = captureSession();
+        const expectedOwner = userOwner(initialUid);
+        const isCurrentRetry = () => session.owner === expectedOwner
+            && isCurrentSession(session)
+            && auth.currentUser?.uid === initialUid
+            && localStorage.getItem(GUEST_KEY) !== 'true';
+
+        if (!isCurrentRetry()) return;
+
         setGuestMigrationStatus('pending');
         setSyncing(true);
         try {
-            const result = await replicateJournal(userOwner(initialUid));
-            if (auth.currentUser?.uid !== initialUid) return;
+            const result = await replicateJournal(expectedOwner);
+            if (!isCurrentRetry()) return;
 
             if (result.status === 'synced' || result.status === 'local-pending') {
                 clearGuestMigrationSyncRecovery(initialUid);
@@ -469,12 +478,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
             }
         } catch (error) {
-            if (auth.currentUser?.uid !== initialUid) return;
+            if (!isCurrentRetry()) return;
             console.error('Retry sincronizzazione account non riuscito:', error);
             setGuestMigrationStatus('failed');
             setSaveError('Sincronizzazione account non completata. I dati locali restano conservati. Riprova.');
         } finally {
-            if (auth.currentUser?.uid === initialUid) setSyncing(false);
+            if (isCurrentRetry()) setSyncing(false);
         }
     }, [setSaveError, setSyncing]);
 
