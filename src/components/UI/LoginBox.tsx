@@ -19,7 +19,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [loading, setLoading] = useState(false);
     const [resetSent, setResetSent] = useState(false);
     const [migrationPolicy, setMigrationPolicy] = useState<'merge' | 'skip'>('merge');
-
+    
     const { showAlert } = useDialogStore();
 
     const checkPasswordStrength = (pass: string) => {
@@ -28,15 +28,12 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         if (!/[a-z]/.test(pass)) return "La password deve contenere almeno 1 lettera minuscola.";
         if (!/[A-Z]/.test(pass)) return "La password deve contenere almeno 1 lettera maiuscola.";
         if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
-        return null;
+        return null; // OK
     };
 
     const handleAuthAction = async (action: () => Promise<void>) => {
         if (isGuest) {
             try {
-                // The selected migration policy is part of the guest→account
-                // transaction. Authentication must not start if it cannot be
-                // persisted synchronously for a redirect/reload recovery path.
                 writeBrowserValue('guest_migration_policy', migrationPolicy);
             } catch {
                 await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
@@ -74,7 +71,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 await sendPasswordResetEmail(auth, email);
                 setResetSent(true);
                 await showAlert("Se l'email è registrata, riceverai un link per reimpostare la password. Controlla anche la cartella spam.");
-                setTimeout(() => setResetSent(false), 60000);
+                setTimeout(() => setResetSent(false), 60000); // 60s timeout
                 setMode('login');
             }
         } catch (error: any) {
@@ -100,17 +97,17 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             </p>
 
             <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-                <button
+                <button 
                     type="button"
-                    className={`btn ${mode === 'login' || mode === 'forgot' ? 'btn-primary' : ''}`}
+                    className={`btn ${mode === 'login' || mode === 'forgot' ? 'btn-primary' : ''}`} 
                     style={{ flex: 1, margin: 0, padding: '10px', background: (mode === 'login' || mode === 'forgot') ? '' : 'rgba(255,255,255,0.05)', color: (mode === 'login' || mode === 'forgot') ? '' : 'var(--text-muted)', border: (mode === 'login' || mode === 'forgot') ? '' : '1px solid var(--glass-border)' }}
                     onClick={() => { setMode('login'); setPassword(''); setConfirmPassword(''); }}
                 >
                     Accedi
                 </button>
-                <button
+                <button 
                     type="button"
-                    className={`btn ${mode === 'register' ? 'btn-primary' : ''}`}
+                    className={`btn ${mode === 'register' ? 'btn-primary' : ''}`} 
                     style={{ flex: 1, margin: 0, padding: '10px', background: mode === 'register' ? '' : 'rgba(255,255,255,0.05)', color: mode === 'register' ? '' : 'var(--text-muted)', border: mode === 'register' ? '' : '1px solid var(--glass-border)' }}
                     onClick={() => { setMode('register'); setPassword(''); setConfirmPassword(''); }}
                 >
@@ -133,29 +130,29 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             )}
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <input
-                    type="email"
-                    placeholder="La tua email"
+                <input 
+                    type="email" 
+                    placeholder="La tua email" 
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
                     autoComplete="email"
                     style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '16px' }}
                 />
-
+                
                 {mode !== 'forgot' && (
                     <div style={{ position: 'relative' }}>
-                        <input
-                            type={showPassword ? "text" : "password"}
-                            placeholder={mode === 'register' ? 'Password (min 8 car, A-a, num, spec)' : 'Password'}
+                        <input 
+                            type={showPassword ? "text" : "password"} 
+                            placeholder={mode === 'register' ? 'Password (min 8 car, A-a, num, spec)' : 'Password'} 
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
                             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                             style={{ padding: '12px', paddingRight: '40px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
                         />
-                        <button
-                            type="button"
+                        <button 
+                            type="button" 
                             onClick={() => setShowPassword(!showPassword)}
                             style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                         >
@@ -165,9 +162,9 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 )}
 
                 {mode === 'register' && (
-                    <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Conferma Password"
+                    <input 
+                        type={showPassword ? "text" : "password"} 
+                        placeholder="Conferma Password" 
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
                         required
@@ -175,10 +172,10 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
                     />
                 )}
-
-                <button
-                    type="submit"
-                    className="btn btn-primary"
+                
+                <button 
+                    type="submit" 
+                    className="btn btn-primary" 
                     style={{ padding: '15px', fontSize: '1rem', marginTop: '5px' }}
                     disabled={loading || (mode === 'forgot' && resetSent)}
                 >
@@ -208,7 +205,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 0 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
                 Accedi con Google
             </button>
@@ -233,7 +230,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     Continua senza account
                 </button>
             )}
-
+            
             {!onCancel && (
                 <p style={{ marginTop: '5px', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                     I dati saranno salvati solo sul dispositivo.
