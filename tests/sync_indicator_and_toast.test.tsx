@@ -721,9 +721,9 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
       expect(container.querySelector('#sync-overlay')).toBeNull();
 
-      // Advance past 1000ms debounce
+      // Advance only the debounce window; the mounted app owns legitimate recurring clocks.
       await act(async () => {
-        await vi.runAllTimersAsync();
+        await vi.advanceTimersByTimeAsync(1100);
       });
 
       await Promise.all([p1, p2, p3]);
