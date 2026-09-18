@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
 import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, reauthenticateWithPopup } from '../../lib/firebase';
+import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
 
 export const AccountCard = () => {
@@ -33,6 +34,15 @@ export const AccountCard = () => {
         if (!/[A-Z]/.test(pass)) return "La password deve contenere almeno 1 lettera maiuscola.";
         if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
         return null;
+    };
+
+    const reloadAfterAccountChange = async () => {
+        try {
+            await safeHardReload();
+        } catch (error) {
+            console.error('Reload account bloccato dalla barriera di persistenza:', error);
+            await showAlert('Operazione completata, ma LogBook non verrà ricaricato finché le modifiche locali non sono state salvate in sicurezza. Riprova tra poco.');
+        }
     };
 
     const handleReauthenticate = async () => {
@@ -104,7 +114,7 @@ export const AccountCard = () => {
             setNewPasswordInput('');
             setShowCurrentPassword(false);
             setShowNewPassword(false);
-            window.location.reload(); // Ricarica per aggiornare stato utente pulito
+            await reloadAfterAccountChange();
         } catch (error: any) {
             console.error("Action error", error);
             await showAlert("Errore durante l'operazione: " + error.message);
@@ -119,7 +129,7 @@ export const AccountCard = () => {
             setLoadingAction('linkGoogle');
             await linkWithPopup(currentUser, provider);
             await showAlert("Account Google collegato con successo!");
-            window.location.reload();
+            await reloadAfterAccountChange();
         } catch (error: any) {
             if (error.code === 'auth/credential-already-in-use') {
                 await showAlert("Questo account Google è già collegato a un altro utente.");
@@ -144,12 +154,14 @@ export const AccountCard = () => {
         setLoadingAction('guestRegister');
         try {
             await registerWithEmail(newEmailInput, newPasswordInput);
-            // La migrazione avviene automaticamente in onAuthStateChanged
-            window.location.reload();
+            // La migrazione avviene automaticamente in onAuthStateChanged. Un hard
+            // reload è consentito solo dopo che la barriera ha verificato la copia locale.
+            await reloadAfterAccountChange();
         } catch (error: any) {
-            setLoadingAction(null);
             // Errori gestiti da AuthContext (handleAuthError)
             console.error("Registrazione guest fallita", error);
+        } finally {
+            setLoadingAction(null);
         }
     };
 
