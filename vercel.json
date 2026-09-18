@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "fix/guest-login-overlay": false
+    }
+  },
   "functions": {
     "api/account-deletion.ts": {
       "maxDuration": 300

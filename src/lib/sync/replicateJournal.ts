@@ -76,11 +76,13 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
     throw new Error('Sessione cambiata');
 }
 
-export async function replicateJournal(): Promise<SyncResult> {
+export async function replicateJournal(expectedOwner?: string): Promise<SyncResult> {
     const session = captureSession();
     try {
+        if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (isAccountDeletionPending(session.owner)) throw new Error('Cancellazione account in sospeso. Riprendila dalle impostazioni; copia locale conservata.');
         const envelope = await readLocal(session.owner);
+        if (expectedOwner && session.owner !== expectedOwner) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Copia locale non disponibile');
         if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
         if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, status: 'local-pending', error: new Error('Connessione assente') };
