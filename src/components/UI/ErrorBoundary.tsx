@@ -24,14 +24,23 @@ class ErrorBoundary extends Component<Props, State> {
     console.error('Uncaught error:', error, errorInfo);
   }
 
-  private handleHardReset = async () => {
-    const confirmed = await useDialogStore.getState().showConfirm(
-      'Questo cancellerà tutti i dati non sincronizzati con il cloud. Procedere?',
-      'Attenzione'
+  private handleLocalReset = async () => {
+    const dialogs = useDialogStore.getState();
+    const confirmed = await dialogs.showConfirm(
+      'Questa operazione elimina i dati locali della sessione corrente, inclusi quelli non ancora sincronizzati. I dati già presenti nel cloud non vengono cancellati. Procedere?',
+      'Azzera dati locali'
     );
-    if (confirmed) {
-      window.localStorage.clear();
+    if (!confirmed) return;
+
+    try {
+      const { DB } = await import('../../lib/db');
+      await DB.purgeAllLocalUserData();
       window.location.reload();
+    } catch (error) {
+      console.error('Pulizia locale di recovery non completata:', error);
+      await useDialogStore.getState().showAlert(
+        'Pulizia locale non completata. I dati rimasti sul dispositivo non sono stati dichiarati eliminati. Riprova o ricarica la pagina.'
+      );
     }
   };
 
@@ -71,9 +80,9 @@ class ErrorBoundary extends Component<Props, State> {
             <button 
               className="btn" 
               style={{ background: 'transparent', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', fontSize: '0.85rem' }}
-              onClick={this.handleHardReset}
+              onClick={this.handleLocalReset}
             >
-              <span aria-hidden="true">⚠️</span> Hard reset (dati corrotti)
+              <span aria-hidden="true">⚠️</span> Azzera dati locali
             </button>
           </div>
         </div>
@@ -85,4 +94,3 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
-

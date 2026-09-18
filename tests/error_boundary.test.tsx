@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import ErrorBoundary from '../src/components/UI/ErrorBoundary';
+import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { idbStore, localStorageMock } from './setup';
 
-// Component that throws on demand
 const ProblemChild = ({ shouldThrow }: { shouldThrow: boolean }) => {
     if (shouldThrow) {
         throw new Error('Test error boundary explosion');
@@ -18,7 +19,6 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         vi.clearAllMocks();
         window.localStorage.clear();
 
-        // Mock window.location.reload
         Object.defineProperty(window, 'location', {
             configurable: true,
             value: {
@@ -57,7 +57,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
 
         expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
         expect(screen.getByText(/Ricarica pagina/i)).toBeDefined();
-        expect(screen.getByText(/Hard reset \(dati corrotti\)/i)).toBeDefined();
+        expect(screen.getByText(/Azzera dati locali/i)).toBeDefined();
 
         consoleErrorSpy.mockRestore();
     });
@@ -77,9 +77,9 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         consoleErrorSpy.mockRestore();
     });
 
-    it('triggers useDialogStore.getState().showConfirm when "Hard reset" button is clicked', async () => {
+    it('asks for explicit confirmation before deleting local data', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(false);
 
         render(
             <ErrorBoundary>
@@ -87,24 +87,27 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             </ErrorBoundary>
         );
 
-        // Click Hard Reset button
         await act(async () => {
-            fireEvent.click(screen.getByText(/Hard reset \(dati corrotti\)/i));
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
         });
 
-        // showConfirm should have been called with proper message and title
         expect(useDialogStore.getState().showConfirm).toHaveBeenCalledWith(
-            'Questo cancellerà tutti i dati non sincronizzati con il cloud. Procedere?',
-            'Attenzione'
+            'Questa operazione elimina i dati locali della sessione corrente, inclusi quelli non ancora sincronizzati. I dati già presenti nel cloud non vengono cancellati. Procedere?',
+            'Azzera dati locali'
         );
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
+        expect(window.location.reload).not.toHaveBeenCalled();
 
         consoleErrorSpy.mockRestore();
     });
 
-    it('clears localStorage and reloads when user confirms hard reset dialog', async () => {
+    it('purges the current owner envelope without clearing unrelated localStorage, then reloads', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
-        vi.mocked(window.localStorage.clear).mockClear();
+        idbStore['logbook:v2:user:test-user-id'] = { data: { profile: { name: 'Luigi' } } };
+        localStorage.setItem('logbook:v2:user:test-user-id:workout', '{"id":"w1"}');
+        localStorage.setItem('unrelated-app-key', 'keep-me');
+        vi.mocked(localStorageMock.clear).mockClear();
         vi.mocked(window.location.reload).mockClear();
 
         render(
@@ -114,20 +117,23 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         );
 
         await act(async () => {
-            fireEvent.click(screen.getByText(/Hard reset \(dati corrotti\)/i));
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
         });
 
-        expect(useDialogStore.getState().showConfirm).toHaveBeenCalled();
-        expect(window.localStorage.clear).toHaveBeenCalledTimes(1);
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
+        expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
+        expect(localStorage.getItem('logbook:v2:user:test-user-id:workout')).toBeNull();
+        expect(localStorage.getItem('unrelated-app-key')).toBe('keep-me');
+        expect(localStorageMock.clear).not.toHaveBeenCalled();
         expect(window.location.reload).toHaveBeenCalledTimes(1);
 
         consoleErrorSpy.mockRestore();
     });
 
-    it('does NOT clear localStorage or reload when user cancels hard reset dialog', async () => {
+    it('does not reload and reports the failure when local purge is incomplete', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(false);
-        vi.mocked(window.localStorage.clear).mockClear();
+        vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
+        vi.mocked(DB.purgeAllLocalUserData).mockRejectedValueOnce(new Error('IndexedDB delete failed'));
         vi.mocked(window.location.reload).mockClear();
 
         render(
@@ -137,12 +143,14 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         );
 
         await act(async () => {
-            fireEvent.click(screen.getByText(/Hard reset \(dati corrotti\)/i));
+            fireEvent.click(screen.getByText(/Azzera dati locali/i));
         });
 
-        expect(useDialogStore.getState().showConfirm).toHaveBeenCalled();
-        expect(window.localStorage.clear).not.toHaveBeenCalled();
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
         expect(window.location.reload).not.toHaveBeenCalled();
+        expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
+            'Pulizia locale non completata. I dati rimasti sul dispositivo non sono stati dichiarati eliminati. Riprova o ricarica la pagina.'
+        );
 
         consoleErrorSpy.mockRestore();
     });
