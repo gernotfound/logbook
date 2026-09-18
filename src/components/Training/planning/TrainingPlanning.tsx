@@ -68,6 +68,7 @@ export default function TrainingPlanning() {
             setEditingCycle(null);
         } catch (e) {
             console.error("Errore salvataggio ciclo:", e);
+            await showAlert('Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
         }
     };
 
@@ -76,6 +77,7 @@ export default function TrainingPlanning() {
             await dispatchDomainOperation({ type: 'active-cycle.set', id: cycleId });
         } catch (e) {
             console.error("Errore attivazione ciclo:", e);
+            await showAlert('Impossibile attivare il ciclo. Riprova.');
         }
     };
 
@@ -86,6 +88,7 @@ export default function TrainingPlanning() {
             await dispatchDomainOperation({ type: 'active-cycle.set', id: null });
         } catch (e) {
             console.error("Errore disattivazione ciclo:", e);
+            await showAlert('Impossibile disattivare il ciclo. Riprova.');
         }
     };
 
@@ -102,6 +105,7 @@ export default function TrainingPlanning() {
             await dispatchDomainOperation({ type: 'training-cycle.upsert', cycle: duplicated });
         } catch (e) {
             console.error("Errore duplicazione ciclo:", e);
+            await showAlert('Impossibile duplicare il ciclo. Riprova.');
         }
     };
 
@@ -113,6 +117,7 @@ export default function TrainingPlanning() {
             await dispatchDomainOperation(operations);
         } catch (e) {
             console.error("Errore eliminazione ciclo:", e);
+            await showAlert('Impossibile eliminare il ciclo. Riprova.');
         }
     };
 
