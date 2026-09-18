@@ -11,6 +11,13 @@ beforeAll(async () => {
 beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
 
+const telemetryContext = {
+    appVersion: '1.0.0',
+    platform: 'other',
+    displayMode: 'browser',
+    online: true,
+};
+
 it('allows the owner to create, read and update their profile but denies direct root deletion', async () => {
     const ref = doc(env.authenticatedContext('a').firestore(), 'users/a');
     await assertSucceeds(setDoc(ref, { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited', _schemaVersion: 1 }));
@@ -119,4 +126,103 @@ it('permits public catalog reads but denies client writes', async () => {
 it('rejects untyped root fields', async () => {
     const db = env.authenticatedContext('a').firestore();
     await assertFails(setDoc(doc(db, 'users/a'), { profile: 'invalid-profile', _schemaVersion: 1 }));
+});
+
+it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const eventRef = doc(db, 'users/a/telemetry_events/e1');
+    const errorRef = doc(db, 'users/a/telemetry_errors/err1');
+    const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
+
+    const event = {
+        timestamp: 1000,
+        type: 'workout_started',
+        context: telemetryContext,
+        userId: 'a',
+        sessionId: 'session-a',
+        details: { offline: false, routineId: 'routine-1', routineName: 'Upper A' },
+    };
+    const error = {
+        timestamp: 1000,
+        type: 'TypeError',
+        message: 'safe message',
+        source: 'window_error',
+        context: telemetryContext,
+        userId: 'a',
+        sessionId: 'session-a',
+        count: 1,
+        firstSeen: 1000,
+        lastSeen: 1000,
+    };
+    const anomaly = {
+        type: 'storage_recovery_anomaly',
+        reason: 'indexeddb_cache_missing_with_valid_marker',
+        timestamp: 1000,
+        elapsedMs: 50,
+        platform: 'other',
+        standalone: false,
+        persisted: null,
+    };
+
+    await assertSucceeds(setDoc(eventRef, event));
+    await assertSucceeds(setDoc(errorRef, error));
+    await assertSucceeds(setDoc(anomalyRef, anomaly));
+
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-user'), { ...event, userId: 'b' }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-context'), { ...event, context: { ...telemetryContext, platform: 'android' } }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-details'), { ...event, details: { secret: 'not-allowed' } }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-type'), { ...event, type: 42 }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_errors/bad-count'), { ...error, count: 0 }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_errors/bad-stack'), { ...error, stack: 'x'.repeat(1001) }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_anomalies/bad-anomaly'), { ...anomaly, platform: 'android' }));
+});
+
+it('makes telemetry events/anomalies immutable and error aggregation monotonic', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const eventRef = doc(db, 'users/a/telemetry_events/e1');
+    const errorRef = doc(db, 'users/a/telemetry_errors/err1');
+    const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
+
+    const event = {
+        timestamp: 1000,
+        type: 'pwa_install_click',
+        context: telemetryContext,
+        userId: 'a',
+        sessionId: 'session-a',
+        details: { source: 'settings' },
+    };
+    const error = {
+        timestamp: 1000,
+        type: 'TypeError',
+        message: 'safe message',
+        source: 'window_error',
+        context: telemetryContext,
+        userId: 'a',
+        sessionId: 'session-a',
+        count: 1,
+        firstSeen: 1000,
+        lastSeen: 1000,
+    };
+    const anomaly = {
+        type: 'storage_recovery_anomaly',
+        reason: 'indexeddb_cache_missing_with_valid_marker',
+        timestamp: 1000,
+        elapsedMs: 50,
+        platform: 'other',
+        standalone: false,
+        persisted: false,
+    };
+
+    await assertSucceeds(setDoc(eventRef, event));
+    await assertSucceeds(setDoc(eventRef, event));
+    await assertFails(setDoc(eventRef, { ...event, type: 'pwa_appinstalled' }));
+
+    await assertSucceeds(setDoc(anomalyRef, anomaly));
+    await assertSucceeds(setDoc(anomalyRef, anomaly));
+    await assertFails(setDoc(anomalyRef, { ...anomaly, reason: 'tampered' }));
+
+    await assertSucceeds(setDoc(errorRef, error));
+    await assertSucceeds(setDoc(errorRef, { ...error, count: 2, lastSeen: 1100 }));
+    await assertFails(setDoc(errorRef, { ...error, count: 1, lastSeen: 900 }));
+    await assertFails(setDoc(errorRef, { ...error, count: 3, lastSeen: 1200, message: 'tampered' }));
 });
