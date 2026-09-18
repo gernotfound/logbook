@@ -17,7 +17,7 @@ Branch: `improve/audit-2026-09-18`.
 - `src/components/UI/ErrorBoundary.tsx`: sostituire `localStorage.clear()` con il purge owner-scoped già esistente, usare messaggi coerenti con il comportamento reale e non ricaricare se la pulizia fallisce.
 - `tests/error_boundary.test.tsx`: regressioni su conferma, cancellazione annullata e failure della pulizia.
 - `package.json` e `package-lock.json`: aggiornamento Firebase 12.19.x solo se il lockfile può essere rigenerato coerentemente; nessuna modifica manifest-only.
-- `vercel.json`: già blindato sulla baseline per consentire deploy automatici solo da `main` e ignorare tutti gli altri branch.
+- `vercel.json`: il primo pattern `*` non copriva i branch con `/`; è stato corretto in `**`, mantenendo `main: true`, e dopo la correzione non risultano nuovi Preview deployment del branch.
 
 ## Invarianti
 
@@ -35,7 +35,7 @@ Branch: `improve/audit-2026-09-18`.
 - Gate canonico completo `npm run verify:m8` sull'esatto HEAD tramite `Milestone Verification / Canonical Verification`.
 - `npm audit --audit-level=high` tramite workflow.
 - Dopo merge: gate sul commit effettivo di `main` verde e deployment Vercel production dello stesso commit in stato READY.
-- Verifica che il branch di sviluppo non abbia generato Preview Vercel.
+- Verifica che il branch di sviluppo non generi ulteriori Preview Vercel dopo il pattern `**`.
 
 ## Rollback
 
