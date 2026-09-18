@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { useAppStore } from '../../store/useAppStore';
-import { formatTimerMs } from '../../lib/utils/timer';
+import {
+    formatTimerMs,
+    readWorkoutTimerSnapshot,
+    stoppedWorkoutTimer,
+    writeWorkoutTimerSnapshot,
+    type WorkoutTimerSnapshot,
+} from '../../lib/utils/timer';
 
 export default function WorkoutTimer() {
     const { currentUser, isGuest } = useAuth();
@@ -11,39 +16,19 @@ export default function WorkoutTimer() {
 }
 
 function OwnerWorkoutTimer({ owner }: { owner: string }) {
-    // Rest Timer State
-    const [restState, setRestState] = useState<'stopped' | 'running' | 'paused'>(() => {
-        const saved = readDeviceValue('timer_state', owner);
-        return saved === 'running' || saved === 'paused' ? saved : 'stopped';
-    });
-    const [restStartTime, setRestStartTime] = useState<number>(() => {
-        const saved = readDeviceValue('timer_start', owner);
-        return saved ? (parseInt(saved, 10) || 0) : 0;
-    });
-    const [restAccumulated, setRestAccumulated] = useState<number>(() => {
-        const saved = readDeviceValue('timer_accumulated', owner);
-        return saved ? (parseInt(saved, 10) || 0) : 0;
-    });
+    const [restTimer, setRestTimer] = useState<WorkoutTimerSnapshot>(() => readWorkoutTimerSnapshot(owner));
     const [restDisplay, setRestDisplay] = useState<string>(() => {
-        const savedState = readDeviceValue('timer_state', owner);
-        const savedStart = readDeviceValue('timer_start', owner);
-        const savedAcc = readDeviceValue('timer_accumulated', owner);
-        const start = savedStart ? (parseInt(savedStart, 10) || 0) : 0;
-        const acc = savedAcc ? (parseInt(savedAcc, 10) || 0) : 0;
-        
-        if (savedState === 'running' && start > 0) {
-            return formatTimerMs(Date.now() - start + acc);
-        } else if (savedState === 'paused' && acc > 0) {
-            return formatTimerMs(acc);
+        const initial = readWorkoutTimerSnapshot(owner);
+        if (initial.state === 'running') {
+            return formatTimerMs(Date.now() - initial.startTime + initial.accumulated);
         }
+        if (initial.state === 'paused') return formatTimerMs(initial.accumulated);
         return '00:00';
     });
 
     useEffect(() => {
         const handleReset = () => {
-            setRestState('stopped');
-            setRestStartTime(0);
-            setRestAccumulated(0);
+            setRestTimer(stoppedWorkoutTimer());
             setRestDisplay('00:00');
         };
         window.addEventListener('logbook_reset_timer', handleReset);
@@ -51,34 +36,23 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     }, []);
 
     useEffect(() => {
-      try {
-        if (restState === 'stopped' && restStartTime === 0 && restAccumulated === 0) {
-            writeDeviceValue('timer_state', null, owner);
-            writeDeviceValue('timer_start', null, owner);
-            writeDeviceValue('timer_accumulated', null, owner);
-            return;
+        try {
+            writeWorkoutTimerSnapshot(restTimer, owner);
+        } catch {
+            useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
         }
-        writeDeviceValue('timer_state', restState, owner);
-        writeDeviceValue('timer_start', restStartTime.toString(), owner);
-        writeDeviceValue('timer_accumulated', restAccumulated.toString(), owner);
-      } catch {
-        useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
-      }
-    }, [restState, restStartTime, restAccumulated, owner]);
+    }, [restTimer, owner]);
 
-    // Rest Timer Ticker con aggiornamento istantaneo al ripristino da background
+    // The interval is only a repaint trigger. Elapsed time always derives from
+    // Date.now(), so mobile background throttling cannot make the timer drift.
     useEffect(() => {
-        if (restState !== 'running') {
-            if (restState === 'paused') {
-                setRestDisplay(formatTimerMs(restAccumulated));
-            } else if (restState === 'stopped') {
-                setRestDisplay('00:00');
-            }
+        if (restTimer.state !== 'running') {
+            setRestDisplay(restTimer.state === 'paused' ? formatTimerMs(restTimer.accumulated) : '00:00');
             return;
         }
 
         const tick = () => {
-            const ms = Date.now() - restStartTime + restAccumulated;
+            const ms = Date.now() - restTimer.startTime + restTimer.accumulated;
             setRestDisplay(formatTimerMs(ms));
         };
 
@@ -86,9 +60,7 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
         const interval = setInterval(tick, 500);
 
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                tick();
-            }
+            if (document.visibilityState === 'visible') tick();
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -96,43 +68,52 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
             clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [restState, restStartTime, restAccumulated]);
+    }, [restTimer]);
 
     const startRest = () => {
-        if (restState !== 'running') {
-            setRestStartTime(Date.now());
-            setRestState('running');
-        }
+        setRestTimer(previous => previous.state === 'running'
+            ? previous
+            : {
+                version: 1,
+                state: 'running',
+                startTime: Date.now(),
+                accumulated: previous.accumulated,
+            });
     };
 
     const pauseRest = () => {
-        if (restState === 'running') {
-            setRestAccumulated(prev => prev + (Date.now() - restStartTime));
-            setRestState('paused');
-        }
+        setRestTimer(previous => previous.state !== 'running'
+            ? previous
+            : {
+                version: 1,
+                state: 'paused',
+                startTime: 0,
+                accumulated: previous.accumulated + (Date.now() - previous.startTime),
+            });
     };
 
     const resetRest = () => {
-        setRestAccumulated(0);
-        setRestStartTime(Date.now());
+        setRestTimer({
+            version: 1,
+            state: 'running',
+            startTime: Date.now(),
+            accumulated: 0,
+        });
         setRestDisplay('00:00');
-        setRestState('running');
     };
 
     const stopRest = () => {
-        setRestState('stopped');
-        setRestAccumulated(0);
-        setRestStartTime(0);
+        setRestTimer(stoppedWorkoutTimer());
         setRestDisplay('00:00');
     };
 
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 10px' }}>
-            <span className="timer-display" style={{ fontSize: '1.6rem', fontFamily: 'monospace', fontWeight: 'bold', color: restState === 'running' ? 'var(--warning-color)' : '#fff', letterSpacing: '2px' }}>
+            <span className="timer-display" style={{ fontSize: '1.6rem', fontFamily: 'monospace', fontWeight: 'bold', color: restTimer.state === 'running' ? 'var(--warning-color)' : '#fff', letterSpacing: '2px' }}>
                 {restDisplay}
             </span>
             <div className="timer-controls" style={{ display: 'flex', gap: '8px' }}>
-                {restState !== 'running' ? (
+                {restTimer.state !== 'running' ? (
                     <button type="button" className="timer-btn play" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={startRest} aria-label="Avvia recupero" title="Avvia recupero">▶</button>
                 ) : (
                     <button type="button" className="timer-btn pause" style={{ fontSize: '1.2rem', padding: '10px 14px' }} onClick={pauseRest} aria-label="Pausa recupero" title="Pausa recupero">⏸</button>
