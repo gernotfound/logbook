@@ -10,7 +10,7 @@ let mockBatch: {
 };
 
 const state = {
-    profile: {},
+    profile: { height: '180' },
     history: [],
     nutrition: {},
     library: [],
