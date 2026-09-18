@@ -1,7 +1,7 @@
-import { useState, useEffect, Suspense, lazy } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { analytics, getAnalyticsConsent } from './lib/firebase';
+import { getAnalyticsConsent, getConsentedAnalytics } from './lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
@@ -146,32 +146,39 @@ function App() {
 
   // Tracciamento dei tab su Google Analytics (SPA tab tracking)
   useEffect(() => {
-    if (analytics && analyticsEnabled) {
-      (logEvent as any)(analytics, 'screen_view', {
+    if (!analyticsEnabled) return;
+    let cancelled = false;
+    void getConsentedAnalytics().then(instance => {
+      if (cancelled || !instance || !getAnalyticsConsent()) return;
+      (logEvent as any)(instance, 'screen_view', {
         screen_name: activeTab,
         screen_class: 'App'
       });
-    }
+    });
+    return () => { cancelled = true; };
   }, [activeTab, analyticsEnabled]);
 
   useEffect(() => {
-    if (analytics && analyticsEnabled) {
-      const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
-      if (subTab) {
-        (logEvent as any)(analytics, 'sub_tab_view', {
-          tab: activeTab,
-          sub_tab: subTab
-        });
-      }
-    }
+    if (!analyticsEnabled) return;
+    const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
+    if (!subTab) return;
+
+    let cancelled = false;
+    void getConsentedAnalytics().then(instance => {
+      if (cancelled || !instance || !getAnalyticsConsent()) return;
+      (logEvent as any)(instance, 'sub_tab_view', {
+        tab: activeTab,
+        sub_tab: subTab
+      });
+    });
+    return () => { cancelled = true; };
   }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab, analyticsEnabled]);
 
   // Track visited tabs for lazy Keep-Alive rendering
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));
 
-  // Preserve and restore scroll position across tabs
-  const tabScrollPositions = useState<Record<string, number>>(() => ({}))[0];
-  const currentTabRef = useState<{ current: string }>({ current: activeTab })[0];
+  // Preserve and restore scroll position across tabs without scheduling renders.
+  const tabScrollPositions = useRef<Record<string, number>>({});
 
   const handleTabChange = (newTab: string) => {
     const parsed = AppTabSchema.safeParse(newTab);
@@ -183,32 +190,30 @@ function App() {
       if (validTab === 'nutrition') setNutritionSubTab('meals');
       if (validTab === 'data') setDataSubTab('measurements');
 
-      tabScrollPositions[activeTab] = 0;
+      tabScrollPositions.current[activeTab] = 0;
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    tabScrollPositions[activeTab] = window.scrollY;
+    tabScrollPositions.current[activeTab] = window.scrollY;
     setVisitedTabs(prev => prev[validTab] ? prev : { ...prev, [validTab]: true });
     setActiveTab(validTab);
-    currentTabRef.current = validTab;
     requestAnimationFrame(() => {
-      const savedPos = tabScrollPositions[validTab] || 0;
+      const savedPos = tabScrollPositions.current[validTab] || 0;
       window.scrollTo({ top: savedPos, behavior: 'instant' });
     });
   };
 
+  const handleNavigateEvent = useEffectEvent((detail: unknown) => {
+    const parsed = AppTabSchema.safeParse(detail);
+    if (parsed.success) handleTabChange(parsed.data);
+  });
+
   useEffect(() => {
-    const handleNavEvent = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      const parsed = AppTabSchema.safeParse(detail);
-      if (parsed.success) {
-        handleTabChange(parsed.data);
-      }
-    };
+    const handleNavEvent = (e: Event) => handleNavigateEvent((e as CustomEvent).detail);
     window.addEventListener('app:navigate', handleNavEvent);
     return () => window.removeEventListener('app:navigate', handleNavEvent);
-  }, [activeTab]);
+  }, []);
 
   // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
   useEffect(() => {
