@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { del } from 'idb-keyval';
 import ErrorBoundary from '../src/components/UI/ErrorBoundary';
+import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { idbStore, localStorageMock } from './setup';
 
@@ -18,9 +18,6 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         window.localStorage.clear();
-        vi.mocked(del).mockImplementation(async (key) => {
-            delete idbStore[String(key)];
-        });
 
         Object.defineProperty(window, 'location', {
             configurable: true,
@@ -98,7 +95,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             'Questa operazione elimina i dati locali della sessione corrente, inclusi quelli non ancora sincronizzati. I dati già presenti nel cloud non vengono cancellati. Procedere?',
             'Azzera dati locali'
         );
-        expect(del).not.toHaveBeenCalled();
+        expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
         expect(window.location.reload).not.toHaveBeenCalled();
 
         consoleErrorSpy.mockRestore();
@@ -123,6 +120,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             fireEvent.click(screen.getByText(/Azzera dati locali/i));
         });
 
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
         expect(idbStore['logbook:v2:user:test-user-id']).toBeUndefined();
         expect(localStorage.getItem('logbook:v2:user:test-user-id:workout')).toBeNull();
         expect(localStorage.getItem('unrelated-app-key')).toBe('keep-me');
@@ -135,7 +133,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
     it('does not reload and reports the failure when local purge is incomplete', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.mocked(useDialogStore.getState().showConfirm).mockResolvedValue(true);
-        vi.mocked(del).mockRejectedValueOnce(new Error('IndexedDB delete failed'));
+        vi.mocked(DB.purgeAllLocalUserData).mockRejectedValueOnce(new Error('IndexedDB delete failed'));
         vi.mocked(window.location.reload).mockClear();
 
         render(
@@ -148,6 +146,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             fireEvent.click(screen.getByText(/Azzera dati locali/i));
         });
 
+        expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
         expect(window.location.reload).not.toHaveBeenCalled();
         expect(useDialogStore.getState().showAlert).toHaveBeenCalledWith(
             'Pulizia locale non completata. I dati rimasti sul dispositivo non sono stati dichiarati eliminati. Riprova o ricarica la pagina.'
