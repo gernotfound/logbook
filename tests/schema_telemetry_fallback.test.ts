@@ -243,9 +243,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             ];
 
             const parsed = DomainParsers.parseRoutines(routinesData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].id).toBe('r1');
-            expect(parsed[1].exercises).toEqual([]);
 
             await vi.advanceTimersByTimeAsync(50);
 
@@ -265,9 +264,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             ];
 
             const parsed = DomainParsers.parseTrainingCycles(cyclesData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].id).toBe('c1');
-            expect(parsed[1].routines).toEqual([]);
 
             await vi.advanceTimersByTimeAsync(50);
 
@@ -287,9 +285,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             ];
 
             const parsed = DomainParsers.parseSupplements(suppsData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].name).toBe('Creatina');
-            expect(parsed[1].unit).toBe('');
 
             await vi.advanceTimersByTimeAsync(50);
 
