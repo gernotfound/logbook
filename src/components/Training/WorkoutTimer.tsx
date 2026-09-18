@@ -9,6 +9,8 @@ import {
     type WorkoutTimerSnapshot,
 } from '../../lib/utils/timer';
 
+const TIMER_REPAINT_MS = 500;
+
 export default function WorkoutTimer() {
     const { currentUser, isGuest } = useAuth();
     const owner = !isGuest && currentUser ? `user:${currentUser.uid}` : 'guest';
@@ -17,13 +19,11 @@ export default function WorkoutTimer() {
 
 function OwnerWorkoutTimer({ owner }: { owner: string }) {
     const [restTimer, setRestTimer] = useState<WorkoutTimerSnapshot>(() => readWorkoutTimerSnapshot(owner));
-    const [restDisplay, setRestDisplay] = useState<string>(() => {
-        if (restTimer.state === 'running') {
-            return formatTimerMs(Date.now() - restTimer.startTime + restTimer.accumulated);
-        }
-        if (restTimer.state === 'paused') return formatTimerMs(restTimer.accumulated);
-        return '00:00';
-    });
+    const [displayNow, setDisplayNow] = useState(() => Date.now());
+
+    const restDisplay = restTimer.state === 'running'
+        ? formatTimerMs(displayNow - restTimer.startTime + restTimer.accumulated)
+        : (restTimer.state === 'paused' ? formatTimerMs(restTimer.accumulated) : '00:00');
 
     const commitTimer = (next: WorkoutTimerSnapshot): boolean => {
         try {
@@ -31,6 +31,7 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
             // the UI confirms them. A failed write therefore cannot look saved.
             writeWorkoutTimerSnapshot(next, owner);
             setRestTimer(next);
+            if (next.state === 'running') setDisplayNow(Date.now());
             return true;
         } catch {
             useAppStore.getState().setSaveError('Impossibile salvare il timer su questo dispositivo.');
@@ -43,38 +44,41 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
             // resetGlobalWorkoutTimer dispatches only after its stopped snapshot has
             // been written successfully, so this event is safe to reflect in memory.
             setRestTimer(stoppedWorkoutTimer());
-            setRestDisplay('00:00');
         };
         window.addEventListener('logbook_reset_timer', handleReset);
         return () => window.removeEventListener('logbook_reset_timer', handleReset);
     }, []);
 
-    // The interval is only a repaint trigger. Elapsed time always derives from
-    // Date.now(), so mobile background throttling cannot make the timer drift.
+    // The timeout chain is only a repaint trigger. Elapsed time always derives
+    // from absolute timestamps, so mobile background throttling cannot make the
+    // timer drift and no interval cadence becomes a second source of truth.
     useEffect(() => {
-        if (restTimer.state !== 'running') {
-            setRestDisplay(restTimer.state === 'paused' ? formatTimerMs(restTimer.accumulated) : '00:00');
-            return;
-        }
+        if (restTimer.state !== 'running') return;
 
-        const tick = () => {
-            const ms = Date.now() - restTimer.startTime + restTimer.accumulated;
-            setRestDisplay(formatTimerMs(ms));
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let active = true;
+
+        const scheduleNextTick = () => {
+            timeoutId = setTimeout(() => {
+                if (!active) return;
+                setDisplayNow(Date.now());
+                scheduleNextTick();
+            }, TIMER_REPAINT_MS);
         };
-
-        tick();
-        const interval = setInterval(tick, 500);
 
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') tick();
+            if (document.visibilityState === 'visible') setDisplayNow(Date.now());
         };
+
+        scheduleNextTick();
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            clearInterval(interval);
+            active = false;
+            if (timeoutId) clearTimeout(timeoutId);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [restTimer]);
+    }, [restTimer.state]);
 
     const startRest = () => {
         if (restTimer.state === 'running') return;
@@ -97,18 +101,16 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     };
 
     const resetRest = () => {
-        if (commitTimer({
+        commitTimer({
             version: 1,
             state: 'running',
             startTime: Date.now(),
             accumulated: 0,
-        })) {
-            setRestDisplay('00:00');
-        }
+        });
     };
 
     const stopRest = () => {
-        if (commitTimer(stoppedWorkoutTimer())) setRestDisplay('00:00');
+        commitTimer(stoppedWorkoutTimer());
     };
 
     return (
