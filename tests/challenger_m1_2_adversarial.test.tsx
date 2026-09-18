@@ -4,6 +4,7 @@ import React from 'react';
 import { z } from 'zod';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
 import ErrorBoundary from '../src/components/UI/ErrorBoundary';
+import { DB } from '../src/lib/db';
 import { useDialogStore } from '../src/store/useDialogStore';
 
 describe('Empirical Challenger M1-2: useLocalStorage, ErrorBoundary & PWA Architecture Suite', () => {
@@ -330,7 +331,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             expect(screen.getByText('Ops, qualcosa è andato storto!')).toBeDefined();
             expect(screen.getByText('Si è verificato un errore imprevisto. Prova a ricaricare la pagina.')).toBeDefined();
             expect(screen.getByText(/Ricarica pagina/i)).toBeDefined();
-            expect(screen.getByText(/Hard reset \(dati corrotti\)/i)).toBeDefined();
+            expect(screen.getByText(/Azzera dati locali/i)).toBeDefined();
 
             errorSpy.mockRestore();
         });
@@ -355,7 +356,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             errorSpy.mockRestore();
         });
 
-        it('triggers useDialogStore showConfirm and performs Hard Reset when confirmed', async () => {
+        it('confirms and purges through the local-data boundary before reloading', async () => {
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const reloadMock = vi.fn();
             Object.defineProperty(window, 'location', {
@@ -372,23 +373,23 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
                 </ErrorBoundary>
             );
 
-            // Click the Hard Reset button
-            const hardResetBtn = screen.getByText(/Hard reset \(dati corrotti\)/i);
+            const resetBtn = screen.getByText(/Azzera dati locali/i);
             await act(async () => {
-                fireEvent.click(hardResetBtn);
+                fireEvent.click(resetBtn);
             });
 
             expect(useDialogStore.getState().showConfirm).toHaveBeenCalledWith(
-                'Questo cancellerà tutti i dati non sincronizzati con il cloud. Procedere?',
-                'Attenzione'
+                'Questa operazione elimina i dati locali della sessione corrente, inclusi quelli non ancora sincronizzati. I dati già presenti nel cloud non vengono cancellati. Procedere?',
+                'Azzera dati locali'
             );
-            expect(window.localStorage.clear).toHaveBeenCalledTimes(1);
+            expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
+            expect(window.localStorage.clear).not.toHaveBeenCalled();
             expect(reloadMock).toHaveBeenCalledTimes(1);
 
             errorSpy.mockRestore();
         });
 
-        it('triggers useDialogStore showConfirm and aborts Hard Reset when cancelled', async () => {
+        it('aborts local-data purge when confirmation is cancelled', async () => {
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const reloadMock = vi.fn();
             Object.defineProperty(window, 'location', {
@@ -405,13 +406,13 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
                 </ErrorBoundary>
             );
 
-            // Click the Hard Reset button
-            const hardResetBtn = screen.getByText(/Hard reset \(dati corrotti\)/i);
+            const resetBtn = screen.getByText(/Azzera dati locali/i);
             await act(async () => {
-                fireEvent.click(hardResetBtn);
+                fireEvent.click(resetBtn);
             });
 
             expect(useDialogStore.getState().showConfirm).toHaveBeenCalled();
+            expect(DB.purgeAllLocalUserData).not.toHaveBeenCalled();
             expect(window.localStorage.clear).not.toHaveBeenCalled();
             expect(reloadMock).not.toHaveBeenCalled();
 
