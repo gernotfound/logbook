@@ -1,6 +1,6 @@
 # Configurazione Firebase — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-15 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+> Stato: normativo | Ultima verifica: 2026-09-18 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti
 
@@ -28,11 +28,13 @@ Le chiavi Firebase Web sono pubbliche nel bundle client; la protezione dei dati 
 ## App Check — reCAPTCHA Enterprise
 
 - **Provider:** `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`).
-- **Inizializzazione:** lazy/on-demand in `src/lib/appCheck.ts`.
+- **Bootstrap provider:** `src/lib/firebase.ts` inizializza il provider App Check prima di inizializzare Firestore. L'acquisizione del token resta asincrona e distinta dal bootstrap del provider.
+- **Stato:** `src/lib/appCheck.ts` distingue provider non inizializzato, disabled, unsupported, provider-ready, token-ready, token-error ed errore di inizializzazione. Un provider senza token non è considerato App Check attivo.
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`); `firebase/app-check` non espone l'`isSupported` usato da Analytics.
-- **Site key:** il codice accetta prima `VITE_RECAPTCHA_V3_SITE_KEY` e poi il fallback storico `VITE_RECAPTCHA_SITE_KEY`.
-- **Semantica se manca la site key:** App Check ritorna `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle otto env Firebase client e non impedisce `initializeApp`.
-- **Token iniziale:** un failure di acquisizione viene loggato e il provider può riprovare; non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
+- **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
+- **Compatibilità transitoria:** `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` restano fallback runtime temporanei per evitare un cutover configurazione distruttivo; non usare questi nomi in nuova configurazione o documentazione.
+- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle otto env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
+- **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
 **VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
 
@@ -75,6 +77,16 @@ npx firebase-tools deploy --only firestore:rules
 L'autenticazione/credential path usato per il deploy dipende dall'ambiente operativo; non documentare un particolare ruolo IAM o service account come requisito corrente senza evidenza verificata.
 
 I file `firebase.json` e `.firebaserc` definiscono la configurazione repository usata dagli strumenti Firebase; leggere entrambi prima di cambiare target o Rules.
+
+### Account deletion
+
+- **MUST:** il client non può eliminare direttamente `/users/{uid}`. Il root utente viene eliminato dal backend trusted del job account-deletion dopo la bonifica delle raccolte private e prima della cancellazione finale di Firebase Auth.
+- Le sottocollezioni private mantengono `delete` owner-scoped per le normali operazioni di dominio dove previste; questa capacità non autorizza il client a bypassare il workflow di cancellazione account.
+- `account_deletions/{uid}` resta server-only e costituisce la barriera cross-device durante una cancellazione in corso.
+
+### Metadati `_sync`
+
+Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione: chiavi ammesse (`protocolVersion`, `clock`, `fields`), versione corrente e tipo map per clock/fields. La validazione completa di Vector Clock e `FieldStamp` resta nel parser TypeScript; non duplicare l'intero parser nelle Security Rules.
 
 ### Sintomo di Rules/Auth/App Check
 

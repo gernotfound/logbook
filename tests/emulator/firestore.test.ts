@@ -11,11 +11,13 @@ beforeAll(async () => {
 beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
 
-it('allows the owner to create, read and delete their own profile', async () => {
+it('allows the owner to create, read and update their profile but denies direct root deletion', async () => {
     const ref = doc(env.authenticatedContext('a').firestore(), 'users/a');
     await assertSucceeds(setDoc(ref, { profile: { height: '175' }, nutritionPlanningOrigin: 'user-edited', _schemaVersion: 1 }));
     expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('175');
-    await assertSucceeds(deleteDoc(ref));
+    await assertSucceeds(setDoc(ref, { profile: { height: '176' }, nutritionPlanningOrigin: 'user-edited', _schemaVersion: 1 }));
+    expect((await assertSucceeds(getDoc(ref))).data()?.profile.height).toBe('176');
+    await assertFails(deleteDoc(ref));
 });
 
 it('allows the clean-cut unversioned schema-1 baseline, marks it lazily, and prevents marker downgrade', async () => {
@@ -91,6 +93,19 @@ it('rejects unknown root fields, invalid origin and malformed month paths', asyn
         await assertFails(setDoc(doc(db, `users/a/${name}/2026-13`), {}));
         await assertSucceeds(setDoc(doc(db, `users/a/${name}/2026-09`), { _schemaVersion: 1 }));
     }
+});
+
+it('rejects malformed sync envelopes while allowing the current structural contract', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const root = doc(db, 'users/a');
+    const validSync = { protocolVersion: 1, clock: {}, fields: {} };
+
+    await assertSucceeds(setDoc(root, { profile: { name: 'valid' }, _schemaVersion: 1, _sync: validSync }));
+    await assertFails(setDoc(root, { profile: { name: 'wrong protocol' }, _schemaVersion: 1, _sync: { ...validSync, protocolVersion: 2 } }));
+    await assertFails(setDoc(root, { profile: { name: 'missing clock' }, _schemaVersion: 1, _sync: { protocolVersion: 1, fields: {} } }));
+    await assertFails(setDoc(root, { profile: { name: 'bad clock' }, _schemaVersion: 1, _sync: { protocolVersion: 1, clock: [], fields: {} } }));
+    await assertFails(setDoc(root, { profile: { name: 'bad fields' }, _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: [] } }));
+    await assertFails(setDoc(root, { profile: { name: 'extra sync key' }, _schemaVersion: 1, _sync: { ...validSync, unexpected: true } }));
 });
 
 it('permits public catalog reads but denies client writes', async () => {
