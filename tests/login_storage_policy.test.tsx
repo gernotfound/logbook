@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { localStorageMock } from './setup';
 
 const authActions = vi.hoisted(() => ({
     login: vi.fn(),
@@ -39,16 +40,20 @@ describe('LoginBox guest migration storage boundary', () => {
     });
 
     it('does not start authentication when the selected migration policy cannot be persisted', async () => {
-        vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string) => {
+        localStorageMock.setItem.mockImplementationOnce((key: string) => {
             if (key === 'guest_migration_policy') {
                 throw new DOMException('full', 'QuotaExceededError');
             }
         });
 
         render(<LoginBox />);
-        fireEvent.change(screen.getByPlaceholderText('La tua email'), { target: { value: 'user@example.com' } });
+        const emailInput = screen.getByPlaceholderText('La tua email');
+        fireEvent.change(emailInput, { target: { value: 'user@example.com' } });
         fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'Password1!' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Accedi' }));
+
+        const form = emailInput.closest('form');
+        expect(form).not.toBeNull();
+        fireEvent.submit(form!);
 
         await waitFor(() => expect(ui.alert).toHaveBeenCalled());
         expect(authActions.loginWithEmail).not.toHaveBeenCalled();
