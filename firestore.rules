@@ -48,6 +48,184 @@ service cloud.firestore {
       );
     }
 
+    function isStringAtMost(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    function isNonEmptyStringAtMost(value, maxLength) {
+      return isStringAtMost(value, maxLength) && value.size() > 0;
+    }
+
+    function isNonNegativeInt(value) {
+      return value is int && value >= 0;
+    }
+
+    function isValidTelemetryContext(context) {
+      return context is map
+        && context.keys().hasOnly(['appVersion', 'platform', 'displayMode', 'online'])
+        && 'appVersion' in context
+        && 'platform' in context
+        && 'displayMode' in context
+        && 'online' in context
+        && isNonEmptyStringAtMost(context.appVersion, 32)
+        && (context.platform == 'ios' || context.platform == 'ipados' || context.platform == 'other')
+        && (context.displayMode == 'standalone' || context.displayMode == 'browser')
+        && context.online is bool;
+    }
+
+    function isValidTelemetryDetails(details) {
+      return details is map
+        && details.size() <= 12
+        && details.keys().hasOnly([
+          'offline',
+          'routineId',
+          'routineName',
+          'duration',
+          'durationMinutes',
+          'exerciseCount',
+          'exercisesCount',
+          'outcome',
+          'schema',
+          'field',
+          'issueCode',
+          'expectedType',
+          'receivedType',
+          'fallbackUsed',
+          'platform',
+          'source',
+          'promptAvailable',
+          'durationSec',
+          'promptUsed'
+        ])
+        && (!('offline' in details) || details.offline is bool)
+        && (!('routineId' in details) || details.routineId == null || isStringAtMost(details.routineId, 128))
+        && (!('routineName' in details) || details.routineName == null || isStringAtMost(details.routineName, 128))
+        && (!('duration' in details) || isStringAtMost(details.duration, 32) || details.duration is int || details.duration is float)
+        && (!('durationMinutes' in details) || isNonNegativeInt(details.durationMinutes))
+        && (!('exerciseCount' in details) || isNonNegativeInt(details.exerciseCount))
+        && (!('exercisesCount' in details) || isNonNegativeInt(details.exercisesCount))
+        && (!('outcome' in details) || details.outcome == 'accepted' || details.outcome == 'dismissed')
+        && (!('schema' in details) || isStringAtMost(details.schema, 128))
+        && (!('field' in details) || isStringAtMost(details.field, 256))
+        && (!('issueCode' in details) || isStringAtMost(details.issueCode, 128))
+        && (!('expectedType' in details) || isStringAtMost(details.expectedType, 64))
+        && (!('receivedType' in details) || isStringAtMost(details.receivedType, 64))
+        && (!('fallbackUsed' in details) || isStringAtMost(details.fallbackUsed, 128))
+        && (!('platform' in details) || isStringAtMost(details.platform, 32))
+        && (!('source' in details) || isStringAtMost(details.source, 64))
+        && (!('promptAvailable' in details) || details.promptAvailable is bool)
+        && (!('durationSec' in details) || details.durationSec is int || details.durationSec is float)
+        && (!('promptUsed' in details) || details.promptUsed is bool);
+    }
+
+    function hasValidTelemetryUser(docData, userId) {
+      return !('userId' in docData)
+        || (isNonEmptyStringAtMost(docData.userId, 128) && docData.userId == userId);
+    }
+
+    function isValidTelemetryError(docData, userId) {
+      return docData.keys().hasOnly([
+          'timestamp',
+          'type',
+          'message',
+          'stack',
+          'componentStack',
+          'source',
+          'context',
+          'userId',
+          'sessionId',
+          'count',
+          'firstSeen',
+          'lastSeen'
+        ])
+        && 'timestamp' in docData
+        && 'type' in docData
+        && 'message' in docData
+        && 'source' in docData
+        && 'context' in docData
+        && 'sessionId' in docData
+        && 'count' in docData
+        && 'firstSeen' in docData
+        && 'lastSeen' in docData
+        && isNonNegativeInt(docData.timestamp)
+        && isNonEmptyStringAtMost(docData.type, 128)
+        && isStringAtMost(docData.message, 4096)
+        && (!('stack' in docData) || isStringAtMost(docData.stack, 1000))
+        && (!('componentStack' in docData) || isStringAtMost(docData.componentStack, 1000))
+        && isNonEmptyStringAtMost(docData.source, 64)
+        && isValidTelemetryContext(docData.context)
+        && hasValidTelemetryUser(docData, userId)
+        && isNonEmptyStringAtMost(docData.sessionId, 128)
+        && docData.count is int
+        && docData.count >= 1
+        && docData.count <= 1000000
+        && isNonNegativeInt(docData.firstSeen)
+        && isNonNegativeInt(docData.lastSeen)
+        && docData.lastSeen >= docData.firstSeen;
+    }
+
+    function preservesTelemetryErrorIdentity() {
+      return (!('timestamp' in resource.data) || incomingData().timestamp == resource.data.timestamp)
+        && (!('type' in resource.data) || incomingData().type == resource.data.type)
+        && (!('message' in resource.data) || incomingData().message == resource.data.message)
+        && (!('stack' in resource.data) || incomingData().stack == resource.data.stack)
+        && (!('componentStack' in resource.data) || incomingData().componentStack == resource.data.componentStack)
+        && (!('source' in resource.data) || incomingData().source == resource.data.source)
+        && (!('context' in resource.data) || incomingData().context == resource.data.context)
+        && (!('userId' in resource.data) || incomingData().userId == resource.data.userId)
+        && (!('sessionId' in resource.data) || incomingData().sessionId == resource.data.sessionId)
+        && (!('firstSeen' in resource.data) || incomingData().firstSeen == resource.data.firstSeen)
+        && (!('count' in resource.data) || incomingData().count >= resource.data.count)
+        && (!('lastSeen' in resource.data) || incomingData().lastSeen >= resource.data.lastSeen);
+    }
+
+    function isValidTelemetryEvent(docData, userId) {
+      return docData.keys().hasOnly([
+          'timestamp',
+          'type',
+          'context',
+          'userId',
+          'sessionId',
+          'details'
+        ])
+        && 'timestamp' in docData
+        && 'type' in docData
+        && 'context' in docData
+        && 'sessionId' in docData
+        && isNonNegativeInt(docData.timestamp)
+        && isNonEmptyStringAtMost(docData.type, 128)
+        && isValidTelemetryContext(docData.context)
+        && hasValidTelemetryUser(docData, userId)
+        && isNonEmptyStringAtMost(docData.sessionId, 128)
+        && (!('details' in docData) || isValidTelemetryDetails(docData.details));
+    }
+
+    function isValidTelemetryAnomaly(docData) {
+      return docData.keys().hasOnly([
+          'type',
+          'reason',
+          'timestamp',
+          'elapsedMs',
+          'platform',
+          'standalone',
+          'persisted'
+        ])
+        && 'type' in docData
+        && 'reason' in docData
+        && 'timestamp' in docData
+        && 'elapsedMs' in docData
+        && 'platform' in docData
+        && 'standalone' in docData
+        && 'persisted' in docData
+        && docData.type == 'storage_recovery_anomaly'
+        && isNonEmptyStringAtMost(docData.reason, 128)
+        && isNonNegativeInt(docData.timestamp)
+        && isNonNegativeInt(docData.elapsedMs)
+        && (docData.platform == 'ios' || docData.platform == 'ipados' || docData.platform == 'other')
+        && docData.standalone is bool
+        && (docData.persisted == null || docData.persisted is bool);
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
@@ -132,50 +310,32 @@ service cloud.firestore {
 
       match /telemetry_errors/{errorId} {
         allow read, delete: if isActiveOwner(userId);
-        allow create, update: if isActiveOwner(userId)
-          && (!('userId' in incomingData()) || incomingData().userId == userId)
-          && incomingData().keys().hasOnly([
-            'timestamp',
-            'type',
-            'message',
-            'stack',
-            'componentStack',
-            'source',
-            'context',
-            'userId',
-            'sessionId',
-            'count',
-            'firstSeen',
-            'lastSeen'
-          ]);
+        allow create: if isActiveOwner(userId)
+          && isValidTelemetryError(incomingData(), userId);
+        allow update: if isActiveOwner(userId)
+          && isValidTelemetryError(incomingData(), userId)
+          && preservesTelemetryErrorIdentity();
       }
 
       match /telemetry_events/{eventId} {
         allow read, delete: if isActiveOwner(userId);
-        allow create, update: if isActiveOwner(userId)
-          && (!('userId' in incomingData()) || incomingData().userId == userId)
-          && incomingData().keys().hasOnly([
-            'timestamp',
-            'type',
-            'context',
-            'userId',
-            'sessionId',
-            'details'
-          ]);
+        allow create: if isActiveOwner(userId)
+          && isValidTelemetryEvent(incomingData(), userId);
+        // Events are append-only. An identical retry is allowed so a client can
+        // safely recover from an ambiguous network timeout without mutating history.
+        allow update: if isActiveOwner(userId)
+          && isValidTelemetryEvent(incomingData(), userId)
+          && incomingData() == resource.data;
       }
 
       match /telemetry_anomalies/{eventId} {
         allow read, delete: if isActiveOwner(userId);
-        allow create, update: if isActiveOwner(userId)
-          && incomingData().keys().hasOnly([
-            'type',
-            'reason',
-            'timestamp',
-            'elapsedMs',
-            'platform',
-            'standalone',
-            'persisted'
-          ]);
+        allow create: if isActiveOwner(userId)
+          && isValidTelemetryAnomaly(incomingData());
+        // Storage anomalies are immutable after creation; only an identical retry is valid.
+        allow update: if isActiveOwner(userId)
+          && isValidTelemetryAnomaly(incomingData())
+          && incomingData() == resource.data;
       }
     }
   }
