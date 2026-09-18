@@ -4,23 +4,23 @@ import { useAppStore } from './store/useAppStore';
 import { analytics, getAnalyticsConsent } from './lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { 
-  LOCAL_STORAGE_ACTIVE_TAB, 
-  LOCAL_STORAGE_TRAINING_TAB, 
-  LOCAL_STORAGE_NUTRITION_TAB, 
-  LOCAL_STORAGE_DATA_TAB 
+import {
+  LOCAL_STORAGE_ACTIVE_TAB,
+  LOCAL_STORAGE_TRAINING_TAB,
+  LOCAL_STORAGE_NUTRITION_TAB,
+  LOCAL_STORAGE_DATA_TAB
 } from './constants';
-import { 
-  AppTabSchema, 
-  TrainingSubTabSchema, 
-  NutritionSubTabSchema, 
-  DataSubTabSchema 
+import {
+  AppTabSchema,
+  TrainingSubTabSchema,
+  NutritionSubTabSchema,
+  DataSubTabSchema
 } from './lib/schema';
-import type { 
-  AppTab, 
-  TrainingSubTab, 
-  NutritionSubTab, 
-  DataSubTab 
+import type {
+  AppTab,
+  TrainingSubTab,
+  NutritionSubTab,
+  DataSubTab
 } from './types';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -40,8 +40,32 @@ const NutritionView = lazy(() => import('./components/Nutrition/NutritionView'))
 const DataView = lazy(() => import('./components/Data/DataView'));
 const SettingsView = lazy(() => import('./components/SettingsView'));
 
+const GUEST_LOGIN_OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
+
+function readGuestLoginOverlayState(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(GUEST_LOGIN_OVERLAY_SESSION_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function persistGuestLoginOverlayState(visible: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (visible) {
+      window.sessionStorage.setItem(GUEST_LOGIN_OVERLAY_SESSION_KEY, 'true');
+    } else {
+      window.sessionStorage.removeItem(GUEST_LOGIN_OVERLAY_SESSION_KEY);
+    }
+  } catch {
+    // sessionStorage may be unavailable in restricted browser contexts; React state remains authoritative.
+  }
+}
+
 function App() {
-  const { currentUser, loading, isGuest } = useAuth();
+  const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
@@ -54,15 +78,36 @@ function App() {
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
 
-  const [showGuestLogin, setShowGuestLogin] = useState(false);
+  const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
   const showConsentOverlay = userData && needsLegalUpdate(userData.legalConsent);
+  const guestLoginOverlayVisible = showGuestLogin && (!currentUser || (isGuest && guestMigrationStatus === 'idle'));
+  const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
+  const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
+  const hideBottomNav = guestLoginOverlayVisible;
+
+  const openGuestLogin = () => {
+    persistGuestLoginOverlayState(true);
+    setShowGuestLogin(true);
+  };
+
+  const closeGuestLogin = () => {
+    persistGuestLoginOverlayState(false);
+    setShowGuestLogin(false);
+  };
 
   useEffect(() => {
     const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
     window.addEventListener('analytics_consent_changed', handler);
     return () => window.removeEventListener('analytics_consent_changed', handler);
   }, []);
+
+  useEffect(() => {
+    if (showGuestLogin && currentUser && !isGuest && guestMigrationStatus === 'idle' && !syncing) {
+      persistGuestLoginOverlayState(false);
+      setShowGuestLogin(false);
+    }
+  }, [showGuestLogin, currentUser, isGuest, guestMigrationStatus, syncing]);
 
   // Handle URL parameters for PWA shortcuts
   useEffect(() => {
@@ -137,7 +182,7 @@ function App() {
       if (validTab === 'training') setTrainingSubTab('session');
       if (validTab === 'nutrition') setNutritionSubTab('meals');
       if (validTab === 'data') setDataSubTab('measurements');
-      
+
       tabScrollPositions[activeTab] = 0;
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
@@ -218,15 +263,50 @@ function App() {
     );
   }
 
+  if (guestLoginMigrationPending) {
+    return (
+      <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
+        <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
+          <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
+          <div className="spinner" style={{margin: '20px auto'}}></div>
+          <p>Preparazione account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (guestLoginMigrationFailed) {
+    return (
+      <div id="auth-overlay" style={{ zIndex: 10001 }} role="alert" aria-live="assertive">
+        <div style={{ textAlign: 'center', maxWidth: '460px', padding: '30px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
+          <h1 style={{ color: 'var(--primary-color)', marginBottom: '10px' }}>Accesso non completato</h1>
+          <p style={{ lineHeight: 1.5 }}>
+            I dati salvati su questo dispositivo sono stati conservati.
+          </p>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Riprova per completare in sicurezza la preparazione dell’account.
+          </p>
+          <button
+            type="button"
+            onClick={() => void retryGuestMigration()}
+            style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+          >
+            Riprova
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <GlobalDialog />
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
       <InstallPrompt />
-      {showGuestLogin && (
-        <div id="auth-overlay" style={{ zIndex: 9999 }}>
-          <LoginBox onCancel={() => setShowGuestLogin(false)} />
+      {guestLoginOverlayVisible && (
+        <div id="auth-overlay" style={{ zIndex: 10001 }}>
+          <LoginBox onCancel={closeGuestLogin} />
         </div>
       )}
       {isGuest && (
@@ -248,7 +328,7 @@ function App() {
         }}>
           <span style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>⚠️ Modalità locale · I dati sono solo su questo dispositivo</span>
           <button
-            onClick={() => setShowGuestLogin(true)}
+            onClick={openGuestLogin}
             style={{
               background: '#fff',
               color: '#92400e',
@@ -267,9 +347,9 @@ function App() {
         </div>
       )}
       {syncing && (
-        <div 
-          className="sync-indicator" 
-          role="status" 
+        <div
+          className="sync-indicator"
+          role="status"
           aria-live="polite"
           aria-label="Salvataggio in corso"
         >
@@ -279,16 +359,16 @@ function App() {
       )}
 
       {saveError && (
-        <div 
-          className="sync-error-toast" 
-          role="alert" 
+        <div
+          className="sync-error-toast"
+          role="alert"
           aria-live="assertive"
         >
           <span className="sync-error-icon" aria-hidden="true">⚠️</span>
           <span className="sync-error-text">{saveError}</span>
-          <button 
-            type="button" 
-            className="sync-error-close" 
+          <button
+            type="button"
+            className="sync-error-close"
             aria-label="Chiudi avviso"
             onClick={() => setSaveError(null)}
           >
@@ -324,7 +404,7 @@ function App() {
         </ErrorBoundary>
       </main>
 
-      <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />
+      {!hideBottomNav && <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />}
       {analyticsEnabled && <Analytics />}
       {analyticsEnabled && <SpeedInsights />}
     </>
