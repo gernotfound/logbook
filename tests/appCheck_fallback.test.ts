@@ -113,6 +113,25 @@ describe('AppCheck Initialization & Fallback Behavior', () => {
     expect(status.phase).toBe('token-error');
   });
 
+  it('retries token acquisition without reinitializing the provider after a transient failure', async () => {
+    const mockAppCheckInstance = { app: dummyApp };
+    vi.spyOn(appCheckSdk, 'initializeAppCheck').mockReturnValue(mockAppCheckInstance as any);
+    vi.spyOn(appCheckSdk, 'getToken')
+      .mockRejectedValueOnce(new Error('temporary token failure'))
+      .mockResolvedValueOnce({ token: 'recovered-token', expireTimeMillis: Date.now() + 3600000 });
+
+    const first = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+    const second = await initAppCheck(dummyApp, { siteKey: 'enterprise-site-key' });
+
+    expect(first.phase).toBe('token-error');
+    expect(second.phase).toBe('token-ready');
+    expect(second.success).toBe(true);
+    expect(second.tokenAvailable).toBe(true);
+    expect(appCheckSdk.initializeAppCheck).toHaveBeenCalledOnce();
+    expect(appCheckSdk.getToken).toHaveBeenCalledTimes(2);
+    expect(isAppCheckActive()).toBe(true);
+  });
+
   it('activates fallback offline mode when site key is provided but environment is unsupported', async () => {
     const originalCrypto = window.crypto;
     Object.defineProperty(window, 'crypto', { value: undefined, configurable: true });
