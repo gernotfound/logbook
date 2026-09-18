@@ -18,8 +18,8 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         window.localStorage.clear();
-        vi.mocked(del).mockImplementation(async (key: string) => {
-            delete idbStore[key];
+        vi.mocked(del).mockImplementation(async (key) => {
+            delete idbStore[String(key)];
         });
 
         Object.defineProperty(window, 'location', {
