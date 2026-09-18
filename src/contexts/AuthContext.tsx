@@ -15,30 +15,36 @@ import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
 import { captureSession, invalidateSession, isCurrentSession, userOwner } from '../lib/sync/session';
+import { classifySyncFailure } from '../lib/sync/syncFailure';
+import { SyncTimeoutError } from '../lib/db/db_core';
+import {
+    readBrowserValue,
+    removeBrowserValue,
+    tryRemoveBrowserValue,
+    writeBrowserValue,
+} from '../lib/sync/browserStorage';
+import { safeHardReload } from '../lib/sync/safeReload';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
 const GUEST_MIGRATION_SYNC_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
+const AWAITING_REDIRECT_KEY = 'logbook_awaiting_redirect';
+
+function isStoredGuest(): boolean {
+    return readBrowserValue(GUEST_KEY) === 'true';
+}
 
 function readGuestMigrationSyncRecovery(): string | null {
-    try {
-        return localStorage.getItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
-    } catch {
-        return null;
-    }
+    return readBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
 }
 
 function markGuestMigrationSyncRecovery(uid: string): void {
-    localStorage.setItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY, uid);
+    writeBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY, uid);
 }
 
 function clearGuestMigrationSyncRecovery(uid: string): void {
-    try {
-        if (localStorage.getItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY) === uid) {
-            localStorage.removeItem(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
-        }
-    } catch {
-        // A stale recovery marker is safe: the next startup will retry the journal.
+    if (readBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY) === uid) {
+        tryRemoveBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
     }
 }
 
@@ -47,7 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     // isGuest è gestito con un ref (per uso nei callback) + state (per re-render)
-    const isGuestRef = useRef(localStorage.getItem(GUEST_KEY) === 'true');
+    const isGuestRef = useRef(isStoredGuest());
     const [isGuest, setIsGuest] = useState(isGuestRef.current);
     const [guestMigrationStatus, setGuestMigrationStatus] = useState<'idle' | 'pending' | 'failed'>('idle');
 
@@ -63,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadData = useCallback(async (user: User) => {
         await loadAuthenticatedData({
             user,
-            isGuestActive: () => isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true',
+            isGuestActive: () => isGuestRef.current || isStoredGuest(),
             setUserData,
             setSyncing,
             setSaveError,
@@ -94,17 +100,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     useEffect(() => {
         let isMounted = true;
-        const handleAuthVisibilityChange = () => {
-            if (document.visibilityState === 'visible' && localStorage.getItem('logbook_awaiting_redirect') === 'true') {
-                console.log('Rilevato ritorno da redirect auth, forzo reload per sincronizzare lo stato.');
-                localStorage.removeItem('logbook_awaiting_redirect');
-                window.location.reload();
+        const handleAuthVisibilityChange = async () => {
+            if (document.visibilityState !== 'visible' || readBrowserValue(AWAITING_REDIRECT_KEY) !== 'true') return;
+            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
+                setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
+                return;
+            }
+            try {
+                await safeHardReload();
+            } catch (error) {
+                console.warn('Reload post-auth bloccato dalla barriera di persistenza:', error);
+                setSaveError(error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.');
             }
         };
         document.addEventListener('visibilitychange', handleAuthVisibilityChange);
 
-
-        getRedirectResult(auth).then(() => localStorage.removeItem('logbook_awaiting_redirect')).catch(err => {
+        getRedirectResult(auth).then(() => {
+            tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+        }).catch(err => {
             console.warn("getRedirectResult error (non critico):", err);
         });
 
@@ -127,11 +140,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (!isCurrentRun()) return true;
 
-            const guestStillActive = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+            const guestStillActive = isGuestRef.current || isStoredGuest();
             if (!authenticatedEnvelope) {
                 if (guestStillActive) {
-                    // Il marker recovery non è sufficiente senza l'envelope autenticato.
-                    // Manteniamo il guest come fonte autorevole e rifacciamo la migrazione completa.
                     clearGuestMigrationSyncRecovery(user.uid);
                     return false;
                 }
@@ -144,15 +155,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserData(authenticatedEnvelope.data);
 
             if (guestStillActive) {
-                // Possibile crash dopo il commit locale e prima del ritiro del marker guest.
-                // L'envelope UID è stato riletto con successo, quindi possiamo completare il cambio owner.
                 useAppStore.getState().setLocalWorkout(authenticatedEnvelope.data.activeWorkout || null);
                 try {
                     if (!isCurrentRun()) return true;
-                    localStorage.removeItem(GUEST_KEY);
+                    removeBrowserValue(GUEST_KEY);
+                    tryRemoveBrowserValue(GUEST_MIGRATION_POLICY_KEY);
                     isGuestRef.current = false;
                     setIsGuest(false);
-                    localStorage.removeItem(GUEST_MIGRATION_POLICY_KEY);
                     migrationDataRef.current = null;
                 } catch (error) {
                     if (!isCurrentRun()) return true;
@@ -205,12 +214,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
-            if (user) localStorage.removeItem('logbook_awaiting_redirect');
+            if (user) tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
             setCurrentUser(user);
             setLoading(false);
 
             if (user) {
-                const wasGuest = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+                const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
 
                 if (recoveryUid === user.uid) {
@@ -220,14 +229,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 if (wasGuest) {
-                    // Firebase ha autenticato l'utente, ma restiamo semanticamente guest finché
-                    // l'envelope autenticato non è stato scritto con successo in IndexedDB.
                     setGuestMigrationStatus('pending');
-
                     draftRegistry.flushAll();
 
                     const guestData = migrationDataRef.current || useAppStore.getState().userData;
-                    const policy = localStorage.getItem(GUEST_MIGRATION_POLICY_KEY) === 'skip' ? 'skip' : 'merge';
+                    const policy = readBrowserValue(GUEST_MIGRATION_POLICY_KEY) === 'skip' ? 'skip' : 'merge';
 
                     try {
                         const migrationResult = await migrateGuestAccount({
@@ -238,13 +244,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             setSyncing,
                             isCurrent: isCurrentRun,
                             onLocalReady: () => {
-                                // Il marker post-commit deve essere durevole prima del cambio owner:
-                                // se il processo si interrompe dopo questo punto, il reload riprende il journal UID.
+                                // Persist recovery before changing owner. If any critical
+                                // storage transition fails, migration remains recoverable.
                                 markGuestMigrationSyncRecovery(user.uid);
-                                localStorage.removeItem(GUEST_KEY);
+                                removeBrowserValue(GUEST_KEY);
+                                tryRemoveBrowserValue(GUEST_MIGRATION_POLICY_KEY);
                                 isGuestRef.current = false;
                                 setIsGuest(false);
-                                localStorage.removeItem(GUEST_MIGRATION_POLICY_KEY);
                                 migrationDataRef.current = null;
                             },
                         });
@@ -268,19 +274,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         setSaveError('Preparazione account non completata. I dati locali sono conservati e possono essere recuperati. Riprova.');
                     }
                 } else {
-                    // Login normale con Google
                     setGuestMigrationStatus('idle');
                     void loadData(user);
                 }
             } else {
                 setGuestMigrationStatus('idle');
-                // Nessun utente Firebase: resetta solo se NON siamo in modalità guest
-                const isGuestActive = isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true';
+                const isGuestActive = isGuestRef.current || isStoredGuest();
                 if (!isGuestActive) {
                     DB.resetCache();
                     useAppStore.getState().resetStore();
                 }
-                // Se guest: i dati rimangono nel localStorage/IndexedDB, non tocchiamo nulla
             }
         });
 
@@ -290,8 +293,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         let isReloading = false;
         const handleVisibilityChange = async () => {
-            // Guest: niente re-sync dal cloud
-            if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') return;
+            if (isGuestRef.current || isStoredGuest()) return;
             if (document.visibilityState === 'visible' && auth.currentUser) {
                 if (useAppStore.getState().userData !== null && !useAppStore.getState().syncing && !isReloading) {
                     try {
@@ -330,7 +332,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (error: any) {
             if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed' || /popup/i.test(error.message)) {
                 try {
-                    localStorage.setItem('logbook_awaiting_redirect', 'true');
+                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError) {
                     console.error("Errore login redirect", redirectError);
@@ -381,11 +383,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Accesso guest: solo localStorage, zero Firebase
     const loginAsGuest = useCallback(async () => {
-        localStorage.setItem(GUEST_KEY, 'true');
+        try {
+            writeBrowserValue(GUEST_KEY, 'true');
+        } catch {
+            setSaveError('Impossibile avviare la modalità locale: archivio del dispositivo non disponibile.');
+            return;
+        }
         isGuestRef.current = true;
         setIsGuest(true);
         setGuestMigrationStatus('idle');
-        // Se non ci sono dati precedenti in store/cache, inizializza con il catalogo globale risolto
         const currentData = useAppStore.getState().userData;
         if (!currentData) {
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
@@ -409,19 +415,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 });
             }
         }
-    }, [setUserData]);
+    }, [setSaveError, setUserData]);
 
     // Collega account Google: migra i dati locali su Firestore
     const linkGoogleAccount = useCallback(async () => {
         setSaveError(null);
-        // Cattura i dati guest prima del login (il popup/redirect potrebbe ricaricare la pagina)
         migrationDataRef.current = useAppStore.getState().userData;
         try {
             await signInWithPopup(auth, provider);
         } catch (error: any) {
             if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed' || /popup/i.test(error.message)) {
                 try {
-                    localStorage.setItem('logbook_awaiting_redirect', 'true');
+                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
                     await signInWithRedirect(auth, provider);
                 } catch (redirectError) {
                     console.error("Errore collegamento redirect:", redirectError);
@@ -437,11 +442,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const retryGuestMigration = useCallback(async () => {
         setSaveError(null);
 
-        // Se il marker guest esiste ancora, il fallimento è avvenuto prima del
-        // passaggio durevole di owner. Il reload rientra nel bootstrap guest e
-        // ripete l'intera migrazione conservando policy e dati.
-        if (localStorage.getItem(GUEST_KEY) === 'true') {
-            window.location.reload();
+        if (isStoredGuest()) {
+            try {
+                await safeHardReload();
+            } catch (error) {
+                setSaveError(error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.');
+            }
             return;
         }
 
@@ -457,7 +463,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const isCurrentRetry = () => session.owner === expectedOwner
             && isCurrentSession(session)
             && auth.currentUser?.uid === initialUid
-            && localStorage.getItem(GUEST_KEY) !== 'true';
+            && !isStoredGuest();
 
         if (!isCurrentRetry()) return;
 
@@ -488,11 +494,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [setSaveError, setSyncing]);
 
     const logoutInFlightRef = useRef(false);
-
-    // Costante per il timeout
     const LOGOUT_SYNC_CHECK_TIMEOUT_MS = 5000;
 
-    // Logout
     const logout = useCallback(async (options?: { mode?: 'normal' | 'force', skipConfirm?: boolean }) => {
         if (logoutInFlightRef.current) return;
         logoutInFlightRef.current = true;
@@ -502,8 +505,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const mode = options?.mode || 'normal';
             const initialUid = auth.currentUser?.uid;
 
-            // Logout guest: avvisa e poi pulisce il localStorage
-            if (isGuestRef.current || localStorage.getItem(GUEST_KEY) === 'true') {
+            if (isGuestRef.current || isStoredGuest()) {
                 if (!skipConfirm) {
                     const confirmed = await useDialogStore.getState().showConfirm(
                         "Sei in modalità locale. Se esci, i tuoi dati su questo dispositivo andranno persi definitivamente e non potranno essere recuperati.\n\nSei sicuro di voler continuare?"
@@ -512,9 +514,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 useAppStore.getState().cancelPendingSyncs();
-                await DB.purgeAllLocalUserData(); // [SEC-02]
+                await DB.purgeAllLocalUserData();
 
-                localStorage.removeItem(GUEST_KEY);
+                try {
+                    removeBrowserValue(GUEST_KEY);
+                } catch {
+                    await useDialogStore.getState().showAlert('Dati locali eliminati, ma non riesco ad aggiornare lo stato del dispositivo. Ricarica LogBook e riprova.');
+                    return;
+                }
                 if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
                 isGuestRef.current = false;
                 setIsGuest(false);
@@ -527,26 +534,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSyncing(true);
                 const state = useAppStore.getState();
                 let isSafe = state.syncHealth === 'synced' && !state.userData?.pendingConflicts;
+                let pendingWriteStatus: 'local-pending' | 'rejected' | 'failed' | null = null;
 
                 if (!isSafe) {
                     try {
                         const { waitForPendingWrites } = await import('firebase/firestore');
                         const { getDb } = await import('../lib/firebase');
 
-                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), LOGOUT_SYNC_CHECK_TIMEOUT_MS));
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(
+                            () => reject(new SyncTimeoutError('Controllo sincronizzazione logout scaduto')),
+                            LOGOUT_SYNC_CHECK_TIMEOUT_MS
+                        ));
                         await Promise.race([waitForPendingWrites(getDb()), timeoutPromise]);
-                    } catch (e) {
-                        // Timeout o rete disconnessa
+                    } catch (error) {
+                        const failure = classifySyncFailure(error);
+                        pendingWriteStatus = failure.status;
+                        if (failure.status !== 'local-pending') {
+                            console.warn('Controllo scritture pendenti durante logout fallito:', error);
+                        }
                     }
 
-                    // Verifica se l'utente è cambiato nel frattempo
                     if (auth.currentUser?.uid !== initialUid) {
                         setSyncing(false);
                         return;
                     }
 
                     const finalState = useAppStore.getState();
-                    isSafe = finalState.syncHealth === 'synced' && !finalState.userData?.pendingConflicts;
+                    isSafe = finalState.syncHealth === 'synced' && !finalState.userData?.pendingConflicts && pendingWriteStatus === null;
                 }
                 setSyncing(false);
 
@@ -556,16 +570,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                     if (finalState.userData?.pendingConflicts) {
                         reason = 'conflict';
-                    } else if (finalState.syncHealth === 'rejected') {
+                    } else if (finalState.syncHealth === 'rejected' || pendingWriteStatus === 'rejected') {
                         reason = 'rejected';
-                    } else if (finalState.syncHealth === 'failed') {
+                    } else if (finalState.syncHealth === 'failed' || pendingWriteStatus === 'failed') {
                         reason = 'failed';
                     }
 
-                    // Mostra il dialog bloccante (resta aperto finché l'utente non sceglie Cancel o Force-Exit)
                     const action = await useDialogStore.getState().showUnsyncedDataLogout(reason);
 
-                    // Verifica di nuovo utente
                     if (auth.currentUser?.uid !== initialUid) {
                         return;
                     }
@@ -576,23 +588,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         if (currentState) {
                             Exporter.exportEmergencyJSON(currentState);
                         }
-                        return; // Annulla il logout per permettere all'utente di verificare il file
+                        return;
                     }
 
                     if (action === 'cancel' || action === 'wait') {
-                        return; // Annulla o attende e interrompe il flusso qui (la logica vive in GlobalDialog per 'force-exit')
+                        return;
                     } else if (action === 'safe-exit') {
-                        // Ulteriore doppio controllo di sicurezza
                         const finalCheck = useAppStore.getState();
                         if (finalCheck.syncHealth !== 'synced' || finalCheck.userData?.pendingConflicts) {
-                            return; // Se in realtà non era sicuro, interrompi
+                            return;
                         }
                     }
-                    // Se action === 'force-exit', o superato il safe-exit, prosegui
                 }
             }
 
-            // Esecuzione force o normal-safe
             setSyncing(true);
             try {
                 useAppStore.getState().cancelPendingSyncs();
