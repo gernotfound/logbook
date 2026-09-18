@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { update } from 'idb-keyval';
+import { emptyUserData } from './setup';
+import type { UserData } from '../src/types';
 
 const authState = vi.hoisted(() => ({
     currentUser: { uid: 'user-a' } as { uid: string } | null,
@@ -7,10 +10,6 @@ const authState = vi.hoisted(() => ({
 const sessionState = vi.hoisted(() => ({
     owner: 'user:user-a',
     epoch: 0,
-}));
-
-const hydrateState = vi.hoisted(() => ({
-    hydrateLocal: vi.fn(),
 }));
 
 const dbState = vi.hoisted(() => ({
@@ -35,31 +34,21 @@ vi.mock('../src/lib/sync/session', () => ({
     userOwner: (uid: string) => `user:${uid}`,
 }));
 
-vi.mock('../src/lib/sync/localRepository', () => ({
-    hydrateLocal: hydrateState.hydrateLocal,
-}));
-
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: {
-        getState: () => ({ userData: { profile: { name: 'existing' } } }),
+        getState: () => ({ userData: { profile: { height: '170' } } }),
     },
 }));
 
-vi.mock('../src/lib/catalog/catalogService', () => ({
-    getCachedCatalog: vi.fn(),
-    getInMemoryCatalog: vi.fn(),
-    isCatalogInMemory: () => true,
-}));
-
-vi.mock('../src/contexts/auth/defaultUserData', () => ({
-    getResolvedDefaultUserData: vi.fn(),
-}));
-
-vi.mock('../src/lib/schema', () => ({
-    UserDataSchema: { parse: (value: unknown) => value },
-}));
-
 import { loadAuthenticatedData } from '../src/contexts/auth/loadAuthenticatedData';
+import { readLocal } from '../src/lib/sync/localRepository';
+
+function data(height: string): UserData {
+    return {
+        ...structuredClone(emptyUserData),
+        profile: { ...emptyUserData.profile, height },
+    };
+}
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -73,6 +62,14 @@ function switchSession(uid: string): void {
     sessionState.epoch += 1;
 }
 
+function payload(height: string) {
+    return {
+        data: data(height),
+        completeMonths: [],
+        cloudDocuments: new Map(),
+    };
+}
+
 describe('authenticated hydration session fencing', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -80,17 +77,17 @@ describe('authenticated hydration session fencing', () => {
         sessionState.owner = 'user:user-a';
         sessionState.epoch += 1;
         dbState.loadCloudPayload.mockReset();
-        hydrateState.hydrateLocal.mockReset();
-        dbState.loadCloudPayload.mockResolvedValue({
-            data: { profile: { name: 'cloud-a' } },
-            completeMonths: [],
-            cloudDocuments: new Map(),
-        });
+        vi.mocked(update).mockClear();
     });
 
-    it('does not publish A after the session switches to B while hydrateLocal(A) is pending', async () => {
-        const hydration = deferred<{ data: { profile: { name: string } } }>();
-        hydrateState.hydrateLocal.mockReturnValueOnce(hydration.promise);
+    it('does not publish or persist A after the session switches to B while the local write is pending', async () => {
+        dbState.loadCloudPayload.mockResolvedValueOnce(payload('171'));
+        const originalUpdate = vi.mocked(update).getMockImplementation()!;
+        const releaseWrite = deferred<void>();
+        vi.mocked(update).mockImplementationOnce(async (key: any, updater: any) => {
+            await releaseWrite.promise;
+            return originalUpdate(key, updater);
+        });
         const setUserData = vi.fn();
         const setSyncing = vi.fn();
         const setSaveError = vi.fn();
@@ -103,50 +100,27 @@ describe('authenticated hydration session fencing', () => {
             setSaveError,
         });
 
-        await vi.waitFor(() => expect(hydrateState.hydrateLocal).toHaveBeenCalledTimes(1));
-        const writeGuard = hydrateState.hydrateLocal.mock.calls[0]?.[5] as (() => boolean) | undefined;
-        expect(writeGuard?.()).toBe(true);
-
+        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
         switchSession('user-b');
-        expect(writeGuard?.()).toBe(false);
-        hydration.resolve({ data: { profile: { name: 'hydrated-a' } } });
+        releaseWrite.resolve();
         await loadPromise;
 
+        expect(await readLocal('user-a')).toBeUndefined();
         expect(setUserData).not.toHaveBeenCalled();
         expect(setSaveError).not.toHaveBeenCalled();
-        expect(setSyncing).not.toHaveBeenCalled();
+        expect(setSyncing).not.toHaveBeenCalledWith(false);
     });
 
-    it('does not resurrect the stale A load after A to B to A', async () => {
-        const hydration = deferred<{ data: { profile: { name: string } } }>();
-        hydrateState.hydrateLocal.mockReturnValueOnce(hydration.promise);
-        const setUserData = vi.fn();
-
-        const loadPromise = loadAuthenticatedData({
-            user: { uid: 'user-a' } as any,
-            isGuestActive: () => false,
-            setUserData,
-            setSyncing: vi.fn(),
-            setSaveError: vi.fn(),
+    it('does not let a stale A load overwrite the durable result after A to B to A', async () => {
+        dbState.loadCloudPayload
+            .mockResolvedValueOnce(payload('171'))
+            .mockResolvedValueOnce(payload('182'));
+        const originalUpdate = vi.mocked(update).getMockImplementation()!;
+        const releaseFirstWrite = deferred<void>();
+        vi.mocked(update).mockImplementationOnce(async (key: any, updater: any) => {
+            await releaseFirstWrite.promise;
+            return originalUpdate(key, updater);
         });
-
-        await vi.waitFor(() => expect(hydrateState.hydrateLocal).toHaveBeenCalledTimes(1));
-        const writeGuard = hydrateState.hydrateLocal.mock.calls[0]?.[5] as (() => boolean) | undefined;
-
-        switchSession('user-b');
-        switchSession('user-a');
-        expect(writeGuard?.()).toBe(false);
-        hydration.resolve({ data: { profile: { name: 'hydrated-a' } } });
-        await loadPromise;
-
-        expect(setUserData).not.toHaveBeenCalled();
-    });
-
-    it('lets the newest same-account load supersede an older overlapping load', async () => {
-        const firstHydration = deferred<{ data: { profile: { name: string } } }>();
-        hydrateState.hydrateLocal
-            .mockReturnValueOnce(firstHydration.promise)
-            .mockResolvedValueOnce({ data: { profile: { name: 'newer-a' } } });
         const firstSetUserData = vi.fn();
         const secondSetUserData = vi.fn();
 
@@ -157,9 +131,52 @@ describe('authenticated hydration session fencing', () => {
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
-        await vi.waitFor(() => expect(hydrateState.hydrateLocal).toHaveBeenCalledTimes(1));
-        const firstWriteGuard = hydrateState.hydrateLocal.mock.calls[0]?.[5] as (() => boolean) | undefined;
-        expect(firstWriteGuard?.()).toBe(true);
+        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+
+        switchSession('user-b');
+        switchSession('user-a');
+        const secondLoad = loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData: secondSetUserData,
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+        await secondLoad;
+
+        expect((await readLocal('user-a'))?.data.profile.height).toBe('182');
+        expect(secondSetUserData).toHaveBeenCalledWith(expect.objectContaining({
+            profile: expect.objectContaining({ height: '182' }),
+        }));
+
+        releaseFirstWrite.resolve();
+        await firstLoad;
+
+        expect((await readLocal('user-a'))?.data.profile.height).toBe('182');
+        expect(firstSetUserData).not.toHaveBeenCalled();
+    });
+
+    it('lets the newest same-account load supersede an older overlapping load at the IndexedDB boundary', async () => {
+        dbState.loadCloudPayload
+            .mockResolvedValueOnce(payload('171'))
+            .mockResolvedValueOnce(payload('183'));
+        const originalUpdate = vi.mocked(update).getMockImplementation()!;
+        const releaseFirstWrite = deferred<void>();
+        vi.mocked(update).mockImplementationOnce(async (key: any, updater: any) => {
+            await releaseFirstWrite.promise;
+            return originalUpdate(key, updater);
+        });
+        const firstSetUserData = vi.fn();
+        const secondSetUserData = vi.fn();
+
+        const firstLoad = loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData: firstSetUserData,
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+        await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
 
         const secondLoad = loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
@@ -168,14 +185,17 @@ describe('authenticated hydration session fencing', () => {
             setSyncing: vi.fn(),
             setSaveError: vi.fn(),
         });
-
-        await vi.waitFor(() => expect(hydrateState.hydrateLocal).toHaveBeenCalledTimes(2));
-        expect(firstWriteGuard?.()).toBe(false);
         await secondLoad;
-        expect(secondSetUserData).toHaveBeenCalledWith({ profile: { name: 'newer-a' } });
 
-        firstHydration.resolve({ data: { profile: { name: 'older-a' } } });
+        expect((await readLocal('user-a'))?.data.profile.height).toBe('183');
+        expect(secondSetUserData).toHaveBeenCalledWith(expect.objectContaining({
+            profile: expect.objectContaining({ height: '183' }),
+        }));
+
+        releaseFirstWrite.resolve();
         await firstLoad;
+
+        expect((await readLocal('user-a'))?.data.profile.height).toBe('183');
         expect(firstSetUserData).not.toHaveBeenCalled();
     });
 });
