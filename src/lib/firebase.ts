@@ -67,15 +67,29 @@ const app = initializeApp(firebaseConfig);
 // is exposed separately through ensureAppCheck().
 ensureAppCheckProvider(app);
 
+export class AppCheckUnavailableError extends Error {
+    readonly code = 'app-check-unavailable';
+    readonly phase: AppCheckResult['phase'];
+
+    constructor(result: AppCheckResult) {
+        super(result.reason ?? result.tokenError ?? `App Check non disponibile (${result.phase})`);
+        this.name = 'AppCheckUnavailableError';
+        this.phase = result.phase;
+    }
+}
+
 // Share only the in-flight token bootstrap. A failed initial token acquisition
 // must be retryable on a later foreground/sync attempt instead of being cached
-// for the lifetime of the page.
+// for the lifetime of the page. Cloud callers fail closed when no token is ready;
+// the durable local journal remains authoritative and can retry later.
 export let appCheckPromise: Promise<AppCheckResult> | null = null;
 export const ensureAppCheck = (): Promise<AppCheckResult> => {
     if (!appCheckPromise) {
         const inFlight = initAppCheck(app).then((result) => {
-            if (!result.success && !result.disabled) {
-                console.warn("App Check non pronto per il cloud:", result.reason ?? result.phase);
+            if (!result.success) {
+                const error = new AppCheckUnavailableError(result);
+                console.warn("App Check non pronto per il cloud:", result.reason ?? result.tokenError ?? result.phase);
+                throw error;
             }
             return result;
         }).catch((error: unknown) => {
