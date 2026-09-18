@@ -1,3 +1,9 @@
+import {
+    readBrowserValueStrict,
+    removeBrowserValue,
+    writeBrowserJson,
+} from './browserStorage';
+
 const suffix = ':account-deletion';
 const key = (owner: string) => 'logbook:v2:' + owner + suffix;
 
@@ -29,18 +35,29 @@ function parse(owner: string, raw: string | null): AccountDeletionMarker | null 
 
 export function readAccountDeletionMarker(owner: string): AccountDeletionMarker | null {
     if (typeof localStorage === 'undefined') return null;
-    return parse(owner, localStorage.getItem(key(owner)));
+    return parse(owner, readBrowserValueStrict(key(owner)));
 }
 
 export function isAccountDeletionPending(owner: string): boolean {
     if (typeof localStorage === 'undefined') return false;
-    // An unreadable marker remains a hard gate. The writer must fail closed.
-    return localStorage.getItem(key(owner)) !== null;
+    try {
+        // An unreadable marker remains a hard gate: storage failure cannot be
+        // interpreted as proof that account deletion is not in progress.
+        return readBrowserValueStrict(key(owner)) !== null;
+    } catch {
+        return true;
+    }
 }
 
 export function markAccountDeletion(owner: string, values?: Partial<Pick<AccountDeletionMarker, 'receiptToken' | 'serverAcceptedAt'>>): AccountDeletionMarker {
     if (!owner.startsWith('user:')) throw new Error('La cancellazione server richiede un account autenticato.');
-    const existing = readAccountDeletionMarker(owner);
+    let existing: AccountDeletionMarker | null = null;
+    try {
+        existing = readAccountDeletionMarker(owner);
+    } catch {
+        // We can still attempt to persist a fresh marker. The strict write below
+        // is the authority: if storage is unavailable the deletion flow stops.
+    }
     const marker: AccountDeletionMarker = {
         owner,
         uid: owner.slice(5),
@@ -48,28 +65,24 @@ export function markAccountDeletion(owner: string, values?: Partial<Pick<Account
         receiptToken: values?.receiptToken ?? existing?.receiptToken,
         serverAcceptedAt: values?.serverAcceptedAt ?? existing?.serverAcceptedAt,
     };
-    localStorage.setItem(key(owner), JSON.stringify(marker));
+    writeBrowserJson(key(owner), marker);
     return marker;
 }
 
 export function clearAccountDeletion(owner: string): void {
     if (typeof localStorage === 'undefined') return;
-    localStorage.removeItem(key(owner));
+    removeBrowserValue(key(owner));
 }
 
 export function findPendingAccountDeletion(): AccountDeletionMarker | null {
     if (typeof localStorage === 'undefined') return null;
     let newest: AccountDeletionMarker | null = null;
-    try {
-        for (let index = 0; index < localStorage.length; index++) {
-            const storageKey = localStorage.key(index);
-            if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
-            const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
-            const marker = parse(owner, localStorage.getItem(storageKey));
-            if (marker && (!newest || marker.startedAt > newest.startedAt)) newest = marker;
-        }
-    } catch {
-        return null;
+    for (let index = 0; index < localStorage.length; index++) {
+        const storageKey = localStorage.key(index);
+        if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
+        const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
+        const marker = parse(owner, readBrowserValueStrict(storageKey));
+        if (marker && (!newest || marker.startedAt > newest.startedAt)) newest = marker;
     }
     return newest;
 }
