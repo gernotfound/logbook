@@ -6,7 +6,7 @@ on:
       - improve/audit-2026-09-18
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lockfile:
@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout branch
         uses: actions/checkout@v7
+        with:
+          ref: improve/audit-2026-09-18
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -28,6 +30,18 @@ jobs:
       - name: Verify resolved Firebase
         run: |
           node -e "const p=require('./package.json'); const l=require('./package-lock.json'); if (p.dependencies.firebase !== '^12.19.0') process.exit(1); if (l.packages['node_modules/firebase'].version !== '12.19.0') process.exit(1); console.log('firebase', l.packages['node_modules/firebase'].version)"
+
+      - name: Commit regenerated manifests when changed
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "Manifests already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore(deps): update Firebase to 12.19.0"
+          git push origin HEAD:improve/audit-2026-09-18
 
       - name: Upload regenerated manifests
         uses: actions/upload-artifact@v7
