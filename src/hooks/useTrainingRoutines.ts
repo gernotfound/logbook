@@ -2,15 +2,18 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { readBrowserValue, tryRemoveBrowserValue, writeBrowserJson } from '../lib/sync/browserStorage';
 import { RoutineExercise, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: any[] = [];
+const ROUTINE_DRAFT_KEY = 'draft_routine';
 
 export function useTrainingRoutines() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
+    const setSaveError = useAppStore(state => state.setSaveError);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const [routineName, setRoutineName] = useState('');
@@ -19,27 +22,36 @@ export function useTrainingRoutines() {
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
 
     useEffect(() => {
-        const draft = localStorage.getItem('draft_routine');
+        const draft = readBrowserValue(ROUTINE_DRAFT_KEY);
         if (draft) {
             try {
                 const parsed = JSON.parse(draft);
                 if (parsed.name) setRoutineName(parsed.name);
                 if (parsed.exercises && Array.isArray(parsed.exercises)) setRoutineExercises(parsed.exercises);
             } catch {
-                // Ignore parse error on invalid draft
+                // Invalid drafts remain non-authoritative and are ignored.
             }
         }
     }, []);
 
     useEffect(() => {
-        if (!editingRoutineId) {
-            if (routineName.trim() !== '' || routineExercises.length > 0) {
-                localStorage.setItem('draft_routine', JSON.stringify({ name: routineName, exercises: routineExercises }));
-            } else {
-                localStorage.removeItem('draft_routine');
+        if (editingRoutineId) return;
+        if (routineName.trim() !== '' || routineExercises.length > 0) {
+            try {
+                writeBrowserJson(ROUTINE_DRAFT_KEY, { name: routineName, exercises: routineExercises });
+            } catch {
+                setSaveError('Bozza scheda conservata solo in memoria: archivio del dispositivo non disponibile.');
             }
+        } else if (!tryRemoveBrowserValue(ROUTINE_DRAFT_KEY)) {
+            setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
         }
-    }, [routineName, routineExercises, editingRoutineId]);
+    }, [routineName, routineExercises, editingRoutineId, setSaveError]);
+
+    const clearRoutineDraft = () => {
+        if (!tryRemoveBrowserValue(ROUTINE_DRAFT_KEY)) {
+            setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
+        }
+    };
 
     const handleRoutineClick = (id: string) => {
         setExpandedRoutineId(prev => prev === id ? null : id);
@@ -56,6 +68,7 @@ export function useTrainingRoutines() {
             await dispatchDomainOperation({ type: 'routine.upsert', routine: duplicated });
         } catch (err) {
             console.error(err);
+            await showAlert('Errore durante la duplicazione della scheda.');
         }
     };
 
@@ -70,7 +83,7 @@ export function useTrainingRoutines() {
         setEditingRoutineId(null);
         setRoutineName('');
         setRoutineExercises([]);
-        localStorage.removeItem('draft_routine');
+        clearRoutineDraft();
     };
 
     const handleSave = async (e?: any) => {
@@ -114,10 +127,10 @@ export function useTrainingRoutines() {
             setRoutineName('');
             setRoutineExercises([]);
             setEditingRoutineId(null);
-            localStorage.removeItem('draft_routine');
+            clearRoutineDraft();
             return true;
         } catch {
-            showAlert("Errore durante il salvataggio della scheda.");
+            await showAlert("Errore durante il salvataggio della scheda.");
             return false;
         }
     };
@@ -129,7 +142,7 @@ export function useTrainingRoutines() {
             await dispatchDomainOperation({ type: 'routine.delete', id });
             if (editingRoutineId === id) handleCancelEdit();
         } catch {
-            showAlert("Errore durante l'eliminazione della scheda.");
+            await showAlert("Errore durante l'eliminazione della scheda.");
         }
     };
 

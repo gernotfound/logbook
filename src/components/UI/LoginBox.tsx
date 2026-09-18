@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
+import { writeBrowserValue } from '../../lib/sync/browserStorage';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface LoginBoxProps {
@@ -32,7 +33,12 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
     const handleAuthAction = async (action: () => Promise<void>) => {
         if (isGuest) {
-            localStorage.setItem('guest_migration_policy', migrationPolicy);
+            try {
+                writeBrowserValue('guest_migration_policy', migrationPolicy);
+            } catch {
+                await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
+                return;
+            }
         }
         await action();
     };
