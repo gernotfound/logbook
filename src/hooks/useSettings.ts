@@ -60,20 +60,28 @@ export function useSettings() {
 
     const handleExportCSV = async () => {
         const userData = useAppStore.getState().userData;
-        if(userData) {
+        if (!userData) return;
+        try {
             const { Exporter } = await import('../lib/export');
             await Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
+        } catch (error) {
+            console.error('Errore esportazione CSV:', error);
+            await showAlert('Esportazione CSV non riuscita. Riprova.');
         }
     };
 
     const handleExportShare = async (options?: { exportLibrary?: boolean | string[], exportRoutines?: boolean | string[], exportTrainingCycles?: boolean | string[] }) => {
         const userData = useAppStore.getState().userData;
-        if(userData) {
+        if (!userData) return;
+        try {
             const { Exporter } = await import('../lib/export');
             const result = await Exporter.exportShareJson(userData, options);
             if (result) {
-                showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
+                await showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
             }
+        } catch (error) {
+            console.error('Errore esportazione condivisione:', error);
+            await showAlert('Esportazione JSON non riuscita. Riprova.');
         }
     };
 
