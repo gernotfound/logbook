@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { readBrowserValue, tryWriteBrowserValue } from '../../lib/sync/browserStorage';
 
 export const InstallPrompt: React.FC = () => {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -8,12 +9,11 @@ export const InstallPrompt: React.FC = () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     // Check se è già in modalità standalone (installata)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as any).standalone === true);
-    
-    // Check se abbiamo già mostrato il prompt (lo salviamo in localStorage per non essere fastidiosi)
-    const hasSeenPrompt = localStorage.getItem('logbook_ios_install_prompt') === 'true';
+
+    // Preferenza non critica: storage non disponibile equivale a prompt non ancora visto.
+    const hasSeenPrompt = readBrowserValue('logbook_ios_install_prompt') === 'true';
 
     if (isIOS && !isStandalone && !hasSeenPrompt) {
-      // Mostriamo il prompt dopo un breve delay
       const timer = setTimeout(() => {
         setShowPrompt(true);
       }, 3000);
@@ -23,7 +23,7 @@ export const InstallPrompt: React.FC = () => {
 
   const handleDismiss = () => {
     setShowPrompt(false);
-    localStorage.setItem('logbook_ios_install_prompt', 'true');
+    tryWriteBrowserValue('logbook_ios_install_prompt', 'true');
   };
 
   if (!showPrompt) return null;
@@ -31,7 +31,7 @@ export const InstallPrompt: React.FC = () => {
   return (
     <div className="install-prompt card safe-bottom" style={{
       position: 'fixed',
-      bottom: '90px', // Sopra la navbar
+      bottom: '90px',
       left: '20px',
       right: '20px',
       zIndex: 9999,
