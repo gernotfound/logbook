@@ -8,6 +8,7 @@ import {
     getWorkoutDateString
 } from '../src/lib/calc/analytics';
 import { calculateSetVolume } from '../src/lib/calc/workout';
+import { getLocalDateString } from '../src/lib/utils/date';
 import type { WorkoutSession, Exercise, NutritionDay } from '../src/types';
 
 describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
@@ -24,10 +25,10 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
     describe('1. Extreme Data Loads & Performance Scaling', () => {
         it('handles 1,000 workouts and 20,000 sets under 350ms without memory or CPU bottleneck', () => {
             const history: WorkoutSession[] = [];
-            const baseTime = new Date('2024-01-01T10:00:00Z').getTime();
+            const baseTime = new Date(2024, 0, 1, 12).getTime();
 
             for (let i = 0; i < 1000; i++) {
-                const sessionDate = new Date(baseTime + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                const sessionDate = getLocalDateString(baseTime + i * 24 * 60 * 60 * 1000);
                 const exercises = [];
                 for (let e = 0; e < 4; e++) {
                     const sets = [];
@@ -58,7 +59,7 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
 
             const nutrition: Record<string, NutritionDay> = {};
             for (let i = 0; i < 1000; i++) {
-                const dayDate = new Date(baseTime + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+                const dayDate = getLocalDateString(baseTime + i * 24 * 60 * 60 * 1000);
                 nutrition[dayDate] = {
                     date: dayDate,
                     kcal: 2400 + (i % 500),
