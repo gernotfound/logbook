@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import { useAuth } from './useAuth';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
-import { Exporter } from '../lib/export';
 import { DB } from '../lib/db';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
@@ -59,20 +58,30 @@ export function useSettings() {
         }
     };
 
-    const handleExportCSV = () => {
+    const handleExportCSV = async () => {
         const userData = useAppStore.getState().userData;
-        if(userData) {
-            Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
+        if (!userData) return;
+        try {
+            const { Exporter } = await import('../lib/export');
+            await Exporter.exportToCSV(userData.history || [], userData.nutrition || {}, userData.library || []);
+        } catch (error) {
+            console.error('Errore esportazione CSV:', error);
+            await showAlert('Esportazione CSV non riuscita. Riprova.');
         }
     };
 
     const handleExportShare = async (options?: { exportLibrary?: boolean | string[], exportRoutines?: boolean | string[], exportTrainingCycles?: boolean | string[] }) => {
         const userData = useAppStore.getState().userData;
-        if(userData) {
+        if (!userData) return;
+        try {
+            const { Exporter } = await import('../lib/export');
             const result = await Exporter.exportShareJson(userData, options);
             if (result) {
-                showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
+                await showAlert(`Esportati con successo: ${result.cyclesCount} cicli, ${result.routinesCount} schede, ${result.libraryCount} esercizi.`);
             }
+        } catch (error) {
+            console.error('Errore esportazione condivisione:', error);
+            await showAlert('Esportazione JSON non riuscita. Riprova.');
         }
     };
 
@@ -97,6 +106,7 @@ export function useSettings() {
                 snapshot = await collectBackupSnapshot(userData, false);
             }
             if (!isCurrentSession(session)) throw new Error('Sessione cambiata.');
+            const { Exporter } = await import('../lib/export');
             await Exporter.exportBackupJson(snapshot.data, session.owner === 'guest' ? null : { uid: session.owner.slice(5) }, snapshot.coverage, snapshot.recovery);
         } catch (error) {
             if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Backup non riuscito.');
@@ -114,6 +124,7 @@ export function useSettings() {
             if (original === undefined) { void showAlert('Nessun archivio precedente da recuperare.'); return; }
             if (!(await showConfirm('Questo archivio precedente non identifica il proprietario. Esportalo solo se i dati su questo dispositivo sono tuoi. Il file originale resterà conservato.'))) return;
             if (!isCurrentSession(session)) return;
+            const { Exporter } = await import('../lib/export');
             await Exporter.downloadFile('logbook_recupero_precedente.json', JSON.stringify({ format: 'logbook-backup', version: 1, userData: original, recovery: { localWorkout: localStorage.getItem('logbook_local_workout') } }, null, 2), 'application/json');
         } catch (error) {
             if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Recupero non riuscito.');
@@ -126,6 +137,7 @@ export function useSettings() {
         importBusy.current = true;
         setImportingData(true);
         try {
+            const { Exporter } = await import('../lib/export');
             await Exporter.importFromJson(file, currentUser, saveUserData, mode);
         } catch (error) {
             console.error("Import error:", error);
