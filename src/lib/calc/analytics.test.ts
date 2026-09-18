@@ -7,6 +7,7 @@ import {
     generateWeekIntervals,
     getWorkoutDateString
 } from './analytics';
+import { getLocalDateString } from '../utils/date';
 import type { WorkoutSession, Exercise, NutritionDay } from '../../types';
 
 describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () => {
@@ -617,14 +618,14 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
         it('T4.1_hypertrophy_mesocycle: 12-week progressive overload with caloric surplus', () => {
             const history: WorkoutSession[] = [];
             const nutrition: Record<string, NutritionDay> = {};
-            const startDate = new Date('2026-06-01T12:00:00Z');
+            const startDate = new Date(2026, 5, 1, 12);
 
             for (let week = 0; week < 12; week++) {
                 const weekStart = new Date(startDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
                 const baseReps = String(10 + week * 2);
                 for (let d = 0; d < 3; d++) {
                     const sessionDate = new Date(weekStart.getTime() + d * 2 * 24 * 60 * 60 * 1000);
-                    const dateStr = sessionDate.toISOString().slice(0, 10);
+                    const dateStr = getLocalDateString(sessionDate);
                     history.push({
                         id: 'w_w' + week + '_d' + d,
                         date: dateStr,
@@ -637,7 +638,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                 }
                 for (let day = 0; day < 7; day++) {
                     const nutritionDate = new Date(weekStart.getTime() + day * 24 * 60 * 60 * 1000);
-                    const dateStr = nutritionDate.toISOString().slice(0, 10);
+                    const dateStr = getLocalDateString(nutritionDate);
                     nutrition[dateStr] = {
                         date: dateStr,
                         kcal: 2800 + week * 50,
@@ -659,13 +660,13 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
         it('T4.2_cutting_phase: 8-week cutting phase with dynamic bodyweight decay and caloric deficit', () => {
             const history: WorkoutSession[] = [];
             const nutrition: Record<string, NutritionDay> = {};
-            const startDate = new Date('2026-06-29T12:00:00Z');
+            const startDate = new Date(2026, 5, 29, 12);
 
             for (let week = 0; week < 8; week++) {
                 const weekStart = new Date(startDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
                 const currentWeight = 85 - (week * 0.8);
                 const sessionDate = new Date(weekStart.getTime() + 24 * 60 * 60 * 1000);
-                const dateStr = sessionDate.toISOString().slice(0, 10);
+                const dateStr = getLocalDateString(sessionDate);
                 history.push({
                     id: 'w_cut_' + week,
                     date: dateStr,
@@ -675,7 +676,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                 });
                 for (let d = 0; d < 7; d++) {
                     const nDate = new Date(weekStart.getTime() + d * 24 * 60 * 60 * 1000);
-                    const nStr = nDate.toISOString().slice(0, 10);
+                    const nStr = getLocalDateString(nDate);
                     nutrition[nStr] = {
                         date: nStr,
                         kcal: Math.round(2300 - week * 50),
