@@ -35,8 +35,17 @@ service cloud.firestore {
         || ('_schemaVersion' in incomingData() && incomingData()._schemaVersion >= resource.data._schemaVersion);
     }
 
+    // Security Rules intentionally enforce only the structural invariants that
+    // belong at the authorization boundary. The complete FieldStamp/VectorClock
+    // parser remains the TypeScript source of truth.
     function isValidSync(docData) {
-      return !('_sync' in docData) || (docData._sync is map && docData._sync.protocolVersion == 1 && docData._sync.clock is map && docData._sync.fields is map);
+      return !('_sync' in docData) || (
+        docData._sync is map
+        && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])
+        && docData._sync.protocolVersion == 1
+        && docData._sync.clock is map
+        && docData._sync.fields is map
+      );
     }
 
     match /{document=**} {
@@ -55,7 +64,10 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read, delete: if isActiveOwner(userId);
+      // Root deletion is server-only. Client-side account deletion must always use
+      // the trusted account-deletion job so subcollections and Firebase Auth cannot
+      // be orphaned.
+      allow read: if isActiveOwner(userId);
 
       allow create, update: if isActiveOwner(userId)
         && incomingData().keys().hasOnly([

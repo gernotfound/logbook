@@ -28,6 +28,15 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent.match(/isActiveOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(12);
   });
 
+  it('keeps root deletion server-only while allowing active-owner reads and writes', () => {
+    const usersBlock = rulesContent.match(/match\s+\/users\/\{userId\}\s*\{([\s\S]*?)\n\s*match\s+\/history_months/);
+    expect(usersBlock).not.toBeNull();
+    expect(usersBlock![1]).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
+    expect(usersBlock![1]).toMatch(/allow\s+create,\s*update:\s*if\s+isActiveOwner\(userId\)/);
+    expect(usersBlock![1]).not.toMatch(/allow\s+read,\s*delete:/);
+    expect(usersBlock![1]).not.toMatch(/allow\s+delete:/);
+  });
+
   it('allows only an active owner to access private month and telemetry collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isActiveOwner\(userId\);/);
@@ -39,6 +48,9 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain("function isValidDataSchema(docData)");
     expect(rulesContent).toContain(`!('_schemaVersion' in docData) || docData._schemaVersion == ${CURRENT_DATA_SCHEMA}`);
     expect(rulesContent).toContain(`docData._sync.protocolVersion == ${CURRENT_SYNC_PROTOCOL}`);
+    expect(rulesContent).toContain("docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])");
+    expect(rulesContent).toContain('docData._sync.clock is map');
+    expect(rulesContent).toContain('docData._sync.fields is map');
     expect(rulesContent).toContain('function preservesDataSchema()');
     expect(rulesContent).toContain("!('_schemaVersion' in resource.data)");
     expect(rulesContent).toContain("'_schemaVersion' in incomingData()");
