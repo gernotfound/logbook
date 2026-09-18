@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { analytics, getAnalyticsConsent } from './lib/firebase';
+import { getAnalyticsConsent, getConsentedAnalytics } from './lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
@@ -146,24 +146,32 @@ function App() {
 
   // Tracciamento dei tab su Google Analytics (SPA tab tracking)
   useEffect(() => {
-    if (analytics && analyticsEnabled) {
-      (logEvent as any)(analytics, 'screen_view', {
+    if (!analyticsEnabled) return;
+    let cancelled = false;
+    void getConsentedAnalytics().then(instance => {
+      if (cancelled || !instance || !getAnalyticsConsent()) return;
+      (logEvent as any)(instance, 'screen_view', {
         screen_name: activeTab,
         screen_class: 'App'
       });
-    }
+    });
+    return () => { cancelled = true; };
   }, [activeTab, analyticsEnabled]);
 
   useEffect(() => {
-    if (analytics && analyticsEnabled) {
-      const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
-      if (subTab) {
-        (logEvent as any)(analytics, 'sub_tab_view', {
-          tab: activeTab,
-          sub_tab: subTab
-        });
-      }
-    }
+    if (!analyticsEnabled) return;
+    const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
+    if (!subTab) return;
+
+    let cancelled = false;
+    void getConsentedAnalytics().then(instance => {
+      if (cancelled || !instance || !getAnalyticsConsent()) return;
+      (logEvent as any)(instance, 'sub_tab_view', {
+        tab: activeTab,
+        sub_tab: subTab
+      });
+    });
+    return () => { cancelled = true; };
   }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab, analyticsEnabled]);
 
   // Track visited tabs for lazy Keep-Alive rendering
