@@ -18,11 +18,10 @@ export default function WorkoutTimer() {
 function OwnerWorkoutTimer({ owner }: { owner: string }) {
     const [restTimer, setRestTimer] = useState<WorkoutTimerSnapshot>(() => readWorkoutTimerSnapshot(owner));
     const [restDisplay, setRestDisplay] = useState<string>(() => {
-        const initial = readWorkoutTimerSnapshot(owner);
-        if (initial.state === 'running') {
-            return formatTimerMs(Date.now() - initial.startTime + initial.accumulated);
+        if (restTimer.state === 'running') {
+            return formatTimerMs(Date.now() - restTimer.startTime + restTimer.accumulated);
         }
-        if (initial.state === 'paused') return formatTimerMs(initial.accumulated);
+        if (restTimer.state === 'paused') return formatTimerMs(restTimer.accumulated);
         return '00:00';
     });
 
