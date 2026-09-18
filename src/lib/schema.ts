@@ -167,7 +167,7 @@ export const DomainParsers = {
                 return WorkoutRoutineSchema.parse(item);
             } catch (e) {
                 quarantineCorruptedRecord({ collection: 'routines', raw: item, error: e });
-                return { name: '', exercises: [] };
+                return { id: '', name: '', exercises: [] };
             }
         }).filter(item => isValidParsedId(item.id));
     },
