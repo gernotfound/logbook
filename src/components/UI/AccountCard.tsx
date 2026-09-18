@@ -225,7 +225,7 @@ export const AccountCard = () => {
                         <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-color)', color: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
                             {currentUser.email?.charAt(0).toUpperCase()}
                         </div>
-                    ) : null}
+                    )}
                     <div>
                         <div style={{ fontWeight: 'bold' }}>{currentUser.displayName || 'Utente LogBook'}</div>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{currentUser.email}</div>
