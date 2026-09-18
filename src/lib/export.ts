@@ -90,7 +90,7 @@ export const Exporter = {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const dateStr = new Date().toISOString().split('T')[0];
+        const dateStr = Logic.getLocalDateString();
         a.download = `logbook_emergency_backup_${dateStr}.json`;
         document.body.appendChild(a);
         a.click();
