@@ -80,13 +80,15 @@ export class AppCheckUnavailableError extends Error {
 
 // Share only the in-flight token bootstrap. A failed initial token acquisition
 // must be retryable on a later foreground/sync attempt instead of being cached
-// for the lifetime of the page. Cloud callers fail closed when no token is ready;
-// the durable local journal remains authoritative and can retry later.
+// for the lifetime of the page. Production cloud callers fail closed when App
+// Check is unavailable; non-production runs may omit the site key so emulator and
+// deterministic persistence tests can exercise Firestore without reCAPTCHA.
 export let appCheckPromise: Promise<AppCheckResult> | null = null;
 export const ensureAppCheck = (): Promise<AppCheckResult> => {
     if (!appCheckPromise) {
         const inFlight = initAppCheck(app).then((result) => {
-            if (!result.success) {
+            const disabledOutsideProduction = result.disabled === true && !import.meta.env.PROD;
+            if (!result.success && !disabledOutsideProduction) {
                 const error = new AppCheckUnavailableError(result);
                 console.warn("App Check non pronto per il cloud:", result.reason ?? result.tokenError ?? result.phase);
                 throw error;
