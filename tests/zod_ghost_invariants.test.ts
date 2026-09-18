@@ -59,4 +59,57 @@ describe('DomainParsers Invariants: Ghost Object Prevention', () => {
 
         expect(result.map(item => item.id)).toEqual(['food1']);
     });
+
+    it('parseRoutines: scarta valori irrecuperabili e ghost objects ma conserva record recuperabili', () => {
+        const input = [
+            { id: 'routine-1', name: true, exercises: [] },
+            null,
+            'routine_corrotta',
+            42,
+            { id: '', name: 'ID Vuoto', exercises: [] },
+            { id: '   ', name: 'ID Spazi', exercises: [] },
+            { name: 'Senza ID', exercises: [] },
+        ];
+
+        const result = DomainParsers.parseRoutines(input);
+
+        expect(result.map(item => item.id)).toEqual(['routine-1']);
+        expect(result[0].name).toBe('');
+    });
+
+    it('parseTrainingCycles: scarta valori irrecuperabili e ghost objects ma conserva record recuperabili', () => {
+        const input = [
+            { id: 'cycle-1', name: true, durationWeeks: 'bad', routines: [] },
+            null,
+            'cycle_corrotta',
+            42,
+            { id: '', name: 'ID Vuoto', durationWeeks: 4, routines: [] },
+            { id: '   ', name: 'ID Spazi', durationWeeks: 4, routines: [] },
+            { name: 'Senza ID', durationWeeks: 4, routines: [] },
+        ];
+
+        const result = DomainParsers.parseTrainingCycles(input);
+
+        expect(result.map(item => item.id)).toEqual(['cycle-1']);
+        expect(result[0].name).toBe('');
+        expect(result[0].durationWeeks).toBe(4);
+    });
+
+    it('parseSupplements: scarta valori irrecuperabili e ghost objects ma conserva record recuperabili', () => {
+        const input = [
+            { id: 'supp-1', name: true, unit: false },
+            null,
+            'supplemento_corrotto',
+            42,
+            { id: '', name: 'ID Vuoto', unit: 'g' },
+            { id: '   ', name: 'ID Spazi', unit: 'g' },
+            { name: 'Senza ID', unit: 'g' },
+        ];
+
+        const result = DomainParsers.parseSupplements(input);
+
+        expect(result.map(item => item.id)).toEqual(['supp-1']);
+        expect(result[0].name).toBe('');
+        expect(result[0].unit).toBe('');
+    });
 });

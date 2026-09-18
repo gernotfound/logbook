@@ -189,9 +189,8 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
                 `CORRUPT_ROUTINE_${SENSITIVE_STRINGS[8]}`,
             ];
             const arrayResult = DomainParsers.parseRoutines(arrayInput);
-            expect(arrayResult).toHaveLength(2);
+            expect(arrayResult).toHaveLength(1);
             expect(arrayResult[0].id).toBe('r1');
-            expect(arrayResult[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(100);
 
@@ -209,9 +208,8 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
                 `CORRUPT_CYCLE_${SENSITIVE_STRINGS[10]}`,
             ];
             const arrayResult = DomainParsers.parseTrainingCycles(arrayInput);
-            expect(arrayResult).toHaveLength(2);
+            expect(arrayResult).toHaveLength(1);
             expect(arrayResult[0].id).toBe('c1');
-            expect(arrayResult[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(100);
 
@@ -229,9 +227,8 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
                 `CORRUPT_SUPPLEMENT_${SENSITIVE_STRINGS[0]}`,
             ];
             const arrayResult = DomainParsers.parseSupplements(arrayInput);
-            expect(arrayResult).toHaveLength(2);
+            expect(arrayResult).toHaveLength(1);
             expect(arrayResult[0].id).toBe('s1');
-            expect(arrayResult[1].name).toBe('');
 
             await vi.advanceTimersByTimeAsync(100);
 
