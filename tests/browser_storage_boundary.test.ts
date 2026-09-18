@@ -7,8 +7,10 @@ import {
     writeBrowserValue,
 } from '../src/lib/sync/browserStorage';
 import { isAccountDeletionPending, markAccountDeletion } from '../src/lib/sync/accountGate';
+import { localStorageMock } from './setup';
 
 const OWNER = 'user:test-user';
+const storageFailure = () => { throw new DOMException('blocked', 'SecurityError'); };
 
 describe('browser storage boundary', () => {
     beforeEach(() => {
@@ -20,16 +22,16 @@ describe('browser storage boundary', () => {
     });
 
     it('keeps optional reads best-effort while strict reads expose storage failures', () => {
-        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-            throw new DOMException('blocked', 'SecurityError');
-        });
+        localStorageMock.getItem
+            .mockImplementationOnce(storageFailure)
+            .mockImplementationOnce(storageFailure);
 
         expect(readBrowserValue('optional')).toBeNull();
         expect(() => readBrowserValueStrict('critical')).toThrow(BrowserStorageError);
     });
 
     it('does not report a critical write as successful when storage rejects it', () => {
-        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        localStorageMock.setItem.mockImplementationOnce(() => {
             throw new DOMException('full', 'QuotaExceededError');
         });
 
@@ -44,15 +46,13 @@ describe('browser storage boundary', () => {
     });
 
     it('keeps account deletion fail-closed when its marker cannot be read', () => {
-        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-            throw new DOMException('blocked', 'SecurityError');
-        });
+        localStorageMock.getItem.mockImplementationOnce(storageFailure);
 
         expect(isAccountDeletionPending(OWNER)).toBe(true);
     });
 
     it('refuses to start account deletion when the durable local marker cannot be written', () => {
-        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        localStorageMock.setItem.mockImplementationOnce(() => {
             throw new DOMException('full', 'QuotaExceededError');
         });
 
