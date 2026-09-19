@@ -32,6 +32,14 @@ TEST_READY.md
 ORIGINAL_REQUEST.md
 # AGENTS.md removed from gitignore because it should be tracked
 
+# Generated PWA icon rasters; public/favicon.svg is the canonical source.
+/public/favicon.png
+/public/apple-touch-icon.png
+/public/icon-192.png
+/public/icon-512.png
+/public/icon-maskable-192.png
+/public/icon-maskable-512.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
