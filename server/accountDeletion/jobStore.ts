@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { FieldValue, Timestamp, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from './firebaseAdmin.js';
+import { completedDeletionPurgeAfter } from './retention.js';
 import {
   PRIVATE_ACCOUNT_COLLECTIONS,
   type AccountDeletionCursor,
@@ -256,10 +257,12 @@ export async function deleteAuthUserLast(uidValue: string): Promise<void> {
 
 export async function markDeletionComplete(uidValue: string): Promise<void> {
   const uid = validateUid(uidValue);
+  const now = Timestamp.now();
   await jobRef(uid).update({
     status: 'complete',
     cursor: { phase: 'complete' },
-    updatedAt: Timestamp.now(),
+    updatedAt: now,
+    purgeAfter: completedDeletionPurgeAfter(now),
     retryable: FieldValue.delete(),
     lastError: FieldValue.delete(),
     leaseOwner: FieldValue.delete(),
