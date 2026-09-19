@@ -96,9 +96,11 @@ import {
   deleteAuthUserLast,
   deletePrivateCollectionPage,
   hashReceipt,
+  markDeletionComplete,
   validateReceipt,
   verifyNoAccountResidue,
 } from '../server/accountDeletion/jobStore';
+import { ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../server/accountDeletion/retention';
 
 describe('M7 native deletion job store', () => {
   beforeEach(() => {
@@ -147,5 +149,20 @@ describe('M7 native deletion job store', () => {
     expect(hashReceipt(receipt)).toMatch(/^[a-f0-9]{64}$/);
     expect(hashReceipt(receipt)).not.toContain(receipt);
     expect(() => validateReceipt('short')).toThrow('Ricevuta di cancellazione non valida.');
+  });
+
+  it('starts the 30-day tombstone retention window only after deletion is complete', async () => {
+    await markDeletionComplete('u');
+
+    const update = state.jobUpdates.at(-1) as {
+      status?: string;
+      updatedAt?: { toMillis: () => number };
+      purgeAfter?: { toMillis: () => number };
+    };
+    expect(update.status).toBe('complete');
+    expect(update.updatedAt).toBeDefined();
+    expect(update.purgeAfter).toBeDefined();
+    expect(update.purgeAfter!.toMillis() - update.updatedAt!.toMillis())
+      .toBe(ACCOUNT_DELETION_COMPLETED_RETENTION_MS);
   });
 });

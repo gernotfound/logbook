@@ -43,7 +43,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Aggiornata al 22 agosto 2026
+              Aggiornata al 19 settembre 2026
             </p>
           </div>
           <button
@@ -131,7 +131,10 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati locali (modalità ospite) rimangono sul dispositivo finché non vengono eliminati manualmente.
             </p>
             <p>
-              I dati cloud vengono conservati finché l'account è attivo. Puoi richiedere la cancellazione completa e immediata di tutti i tuoi dati cloud — incluso l'account — tramite la funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> nelle Impostazioni. L'operazione è irreversibile e costituisce revoca del consenso ai sensi dell'Art. 9 GDPR.
+              I dati cloud vengono conservati finché l'account è attivo. Puoi richiedere la cancellazione completa di tutti i dati applicativi cloud e dell'account tramite la funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> nelle Impostazioni. L'operazione è irreversibile e costituisce revoca del consenso ai sensi dell'Art. 9 GDPR.
+            </p>
+            <p>
+              Dopo il completamento della cancellazione, LogBook conserva temporaneamente un record tecnico server-only di recovery, privo dei dati di allenamento, nutrizione e misurazioni: contiene l'identificativo tecnico del job, stato e timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. Il record è programmato per la rimozione dopo 30 giorni e viene cancellato dal successivo ciclo giornaliero di manutenzione.
             </p>
             <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
               <strong>Attenzione:</strong> Trattandosi di un servizio offerto a titolo amatoriale e gratuito, non sono garantiti backup di livello enterprise. L'utente accetta il rischio di potenziale perdita di dati e si impegna a effettuare esportazioni periodiche (formato CSV) tramite l'apposita funzione.
