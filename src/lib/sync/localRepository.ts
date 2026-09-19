@@ -154,6 +154,7 @@ export async function acknowledgeLocal(owner: string, _id: string, remote: UserD
 export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
     owner = normalizeStorageOwner(owner);
     const parsed = parse(remote);
+    const catalog = await getCachedCatalog();
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
@@ -161,7 +162,12 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
         const newClock = { ...current.clock };
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
-        return { ...current, clock: newClock, baseline: parsed, data: current.actorSeq === expectedSeq ? parsed : current.data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: newSyncMeta };
+        const remoteDocs = projectDocuments(parsed, catalog);
+        const { documents: mergedDocs, syncMetas: mergedMetas } = applySemanticOperations(remoteDocs, pending, newSyncMeta);
+        const reconciled = applyRemoteDocuments(current.data, mergedDocs, catalog);
+        reconciled.pendingConflicts = current.data.pendingConflicts;
+        const data = parse(reconciled);
+        return { ...current, clock: newClock, baseline: parsed, data, pending, completeMonths: [...new Set([...current.completeMonths, ...months])], syncMetaByDocument: mergedMetas };
     });
 }
 
