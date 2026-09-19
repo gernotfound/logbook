@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = '230bc894e60ce05a08bfde621cae73625ec812cd';
+const M6_VITE_BLOB = '64603ce6c204d1e93d57545238f834a5d6c166ba';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== M6_VITE_BLOB) {
   failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
@@ -50,6 +50,7 @@ if (existsSync('dist/sw.js')) {
   if (sw.length < 500) failures.push(`generated service worker is unexpectedly small (${sw.length} bytes)`);
   if (sw.includes('__WB_MANIFEST')) failures.push('generated service worker still contains raw __WB_MANIFEST placeholder');
   if (!sw.includes('index.html')) failures.push('generated service worker does not include index.html in its precache payload');
+  if (!sw.includes('icon-maskable-512.png')) failures.push('generated service worker does not precache the dedicated maskable icon');
 }
 
 if (existsSync('dist/manifest.webmanifest')) {
@@ -58,6 +59,14 @@ if (existsSync('dist/manifest.webmanifest')) {
     if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
     if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
     if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
+
+    const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+    const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png' && icon?.sizes === '192x192' && icon?.type === 'image/png');
+    const hasStandard512 = icons.some(icon => icon?.src === 'icon-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
+    const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
+    if (!hasStandard192) failures.push('PWA manifest missing standard 192x192 PNG icon');
+    if (!hasStandard512) failures.push('PWA manifest missing standard 512x512 PNG icon');
+    if (!hasDedicatedMaskable) failures.push('PWA manifest missing dedicated 512x512 maskable PNG icon');
   } catch (error) {
     failures.push(`PWA manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -69,4 +78,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('M7 native Vercel/PWA contract OK: M6 Vite/PWA config byte-identical, SW precache injected, manifest scope preserved, native Functions bounded to 300s, daily recovery configured.');
+console.log('M7 native Vercel/PWA contract OK: Vite/PWA baseline preserved, SW precache injected, manifest icons/scope preserved, native Functions bounded to 300s, daily recovery configured.');
