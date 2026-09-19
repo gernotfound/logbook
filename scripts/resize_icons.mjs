@@ -9,6 +9,9 @@ const targets = [
   ['public/icon-192.png', 192],
   ['public/icon-512.png', 512],
 ];
+const maskableOutput = 'public/icon-maskable-512.png';
+const maskableSize = 512;
+const maskableArtworkSize = Math.round(maskableSize * 0.88);
 
 async function readEmbeddedArtwork() {
   const svg = await readFile(source, 'utf8');
@@ -44,6 +47,29 @@ async function validateGeneratedIcon(output, size) {
   }
 }
 
+async function generateMaskableIcon(artwork) {
+  // Keep the approved artwork unchanged for normal/iOS icons. Only the maskable
+  // derivative is inset so the [LB] mark stays inside the standard 80% safe zone.
+  const insetArtwork = await sharp(artwork)
+    .resize(maskableArtworkSize, maskableArtworkSize, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+    .png()
+    .toBuffer();
+
+  await sharp({
+    create: {
+      width: maskableSize,
+      height: maskableSize,
+      channels: 4,
+      background: { r: 1, g: 1, b: 4, alpha: 1 },
+    },
+  })
+    .composite([{ input: insetArtwork, gravity: 'centre' }])
+    .png({ compressionLevel: 9 })
+    .toFile(maskableOutput);
+
+  await validateGeneratedIcon(maskableOutput, maskableSize);
+}
+
 export async function generateIcons() {
   const artwork = await readEmbeddedArtwork();
 
@@ -55,7 +81,9 @@ export async function generateIcons() {
     await validateGeneratedIcon(output, size);
   }
 
-  console.log(`Generated and validated ${targets.length} icon assets from ${source}.`);
+  await generateMaskableIcon(artwork);
+
+  console.log(`Generated and validated ${targets.length + 1} icon assets from ${source}.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
