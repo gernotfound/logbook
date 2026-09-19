@@ -1,46 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="LogBook">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="LogBook [LB]">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
-      <stop offset="0" stop-color="#07382f"/>
-      <stop offset="0.58" stop-color="#03261f"/>
-      <stop offset="1" stop-color="#011712"/>
+    <!-- Canonical LogBook background sampled from the approved 1024px artwork. -->
+    <radialGradient id="leftGlow" cx="0" cy="0.50" r="0.72">
+      <stop offset="0%" stop-color="#006173" stop-opacity="0.82"/>
+      <stop offset="48%" stop-color="#006173" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#006173" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#32efb2"/>
-      <stop offset="0.52" stop-color="#20d79a"/>
-      <stop offset="1" stop-color="#17b985"/>
+    <radialGradient id="rightGlow" cx="1" cy="0.52" r="0.72">
+      <stop offset="0%" stop-color="#620078" stop-opacity="0.82"/>
+      <stop offset="50%" stop-color="#620078" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#620078" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="topLeftLift" cx="0" cy="0" r="0.64">
+      <stop offset="0%" stop-color="#38505A" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#38505A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="verticalShade" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#11141E" stop-opacity="0.05"/>
+      <stop offset="48%" stop-color="#11141E" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#080818" stop-opacity="0.52"/>
     </linearGradient>
-    <linearGradient id="accentSoft" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#27cfa2"/>
-      <stop offset="1" stop-color="#4a958c"/>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#01CEE7"/>
+      <stop offset="30%" stop-color="#2A94E1"/>
+      <stop offset="52%" stop-color="#4A69DF"/>
+      <stop offset="70%" stop-color="#7340DF"/>
+      <stop offset="100%" stop-color="#B701E7"/>
     </linearGradient>
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
   </defs>
-  <rect width="1024" height="1024" fill="url(#bg)"/>
-  <path d="M260 265V220c0-38 31-69 69-69h455c46 0 83 37 83 83v552c0 46-37 83-83 83H330c-39 0-70-31-70-70v-82" fill="none" stroke="url(#accent)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="760" y="152" width="48" height="714" rx="22" fill="url(#accent)"/>
-  <g fill="url(#accent)">
-    <rect x="155" y="296" width="134" height="54" rx="27"/>
-    <rect x="155" y="446" width="134" height="54" rx="27"/>
-    <rect x="155" y="596" width="134" height="54" rx="27"/>
-    <rect x="205" y="360" width="24" height="72" rx="12"/>
-    <rect x="205" y="510" width="24" height="72" rx="12"/>
-    <rect x="205" y="660" width="24" height="72" rx="12"/>
+  <!-- Opaque square artwork. iOS/Android apply their own final mask. -->
+  <g id="background">
+    <rect width="1024" height="1024" fill="#111533"/>
+    <rect width="1024" height="1024" fill="url(#leftGlow)"/>
+    <rect width="1024" height="1024" fill="url(#rightGlow)"/>
+    <rect width="1024" height="1024" fill="url(#topLeftLift)"/>
+    <rect width="1024" height="1024" fill="url(#verticalShade)"/>
   </g>
-  <g fill="url(#accent)" filter="url(#softGlow)">
-    <rect x="449" y="394" width="126" height="48" rx="12"/>
-    <rect x="376" y="329" width="56" height="178" rx="24"/>
-    <rect x="335" y="370" width="30" height="96" rx="15"/>
-    <rect x="592" y="329" width="56" height="178" rx="24"/>
-    <rect x="659" y="370" width="30" height="96" rx="15"/>
+  <!-- Approved internal neon frame; it is decoration, not a pre-masked app-icon edge. -->
+  <g id="frame">
+    <rect x="28" y="28" width="968" height="968" rx="190" fill="none" stroke="url(#ring)" stroke-width="12"/>
+    <rect x="36" y="36" width="952" height="952" rx="184" fill="none" stroke="#B7BCC9" stroke-opacity="0.30" stroke-width="2"/>
   </g>
-  <g>
-    <circle cx="390" cy="645" r="54" fill="url(#accent)"/>
-    <path d="M359 646l21 22 43-51" fill="none" stroke="#03261f" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="476" y="610" width="191" height="31" rx="15.5" fill="url(#accentSoft)"/>
-    <rect x="476" y="675" width="139" height="31" rx="15.5" fill="url(#accentSoft)"/>
+  <!-- Exact [LB] proportions/placement traced from the approved artwork. -->
+  <g id="monogram">
+    <path d="M 520.5 352.5 L 520.5 671.5 L 612.5 671.5 L 613.5 670.5 L 621.5 670.5 L 622.5 669.5 L 630.5 668.5 L 643.5 662.5 L 655.5 653.5 L 663.5 644.5 L 673.5 627.5 L 673.5 625.5 L 678.5 614.5 L 678.5 611.5 L 680.5 607.5 L 681.5 599.5 L 682.5 598.5 L 683.5 585.5 L 684.5 584.5 L 685.5 562.5 L 684.5 561.5 L 684.5 548.5 L 683.5 547.5 L 683.5 542.5 L 682.5 541.5 L 682.5 537.5 L 681.5 536.5 L 681.5 533.5 L 678.5 524.5 L 672.5 512.5 L 667.5 505.5 L 658.5 496.5 L 645.5 488.5 L 646.5 486.5 L 656.5 480.5 L 665.5 472.5 L 676.5 457.5 L 682.5 442.5 L 682.5 439.5 L 683.5 438.5 L 683.5 434.5 L 684.5 433.5 L 684.5 423.5 L 685.5 422.5 L 684.5 406.5 L 683.5 405.5 L 683.5 401.5 L 682.5 400.5 L 681.5 394.5 L 674.5 380.5 L 662.5 367.5 L 653.5 361.5 L 641.5 356.5 L 638.5 356.5 L 633.5 354.5 L 629.5 354.5 L 628.5 353.5 L 618.5 353.5 L 617.5 352.5 Z M 587.5 546.5 L 588.5 545.5 L 628.5 545.5 L 629.5 546.5 L 632.5 546.5 L 641.5 551.5 L 646.5 557.5 L 650.5 567.5 L 650.5 584.5 L 646.5 594.5 L 638.5 602.5 L 628.5 606.5 L 588.5 606.5 L 587.5 605.5 Z M 587.5 414.5 L 588.5 413.5 L 624.5 413.5 L 625.5 414.5 L 631.5 415.5 L 636.5 418.5 L 642.5 424.5 L 646.5 433.5 L 646.5 448.5 L 642.5 457.5 L 633.5 465.5 L 624.5 468.5 L 588.5 468.5 L 587.5 467.5 Z M 338.5 352.5 L 338.5 671.5 L 493.5 671.5 L 493.5 604.5 L 406.5 604.5 L 405.5 603.5 L 405.5 352.5 Z M 712.5 246.5 L 712.5 313.5 L 803.5 313.5 L 804.5 314.5 L 804.5 709.5 L 803.5 710.5 L 712.5 710.5 L 712.5 777.5 L 851.5 777.5 L 871.5 757.5 L 871.5 266.5 L 851.5 246.5 Z M 172.5 246.5 L 152.5 266.5 L 152.5 757.5 L 172.5 777.5 L 311.5 777.5 L 311.5 710.5 L 220.5 710.5 L 219.5 709.5 L 219.5 314.5 L 220.5 313.5 L 311.5 313.5 L 311.5 246.5 Z" fill="#FFFFFF" fill-rule="evenodd"/>
   </g>
 </svg>
