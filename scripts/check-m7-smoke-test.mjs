@@ -2,10 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { rmSync, existsSync } from 'node:fs';
 
 console.log('Compiling server functions to JS for smoke test...');
-// Compile api and server folders to a temporary dist directory
+// Compile api and server folders to a temporary dist directory.
 try {
   execFileSync('npx', ['tsc', '--project', 'tsconfig.m7-server.json', '--outDir', '.smoke-test-dist', '--noEmit', 'false'], { stdio: 'inherit' });
-} catch (e) {
+} catch {
   console.error('Failed to compile functions for smoke test');
   process.exit(1);
 }
@@ -24,8 +24,8 @@ async function run() {
   if (res2.status !== 401 && res2.status !== 503) throw new Error('Expected 401 or 503 on cron, got ' + res2.status);
 }
 
-run().catch(e => {
-  console.error(e);
+run().catch(error => {
+  console.error(error);
   process.exit(1);
 });
 `;
@@ -33,14 +33,16 @@ run().catch(e => {
 import { writeFileSync } from 'node:fs';
 writeFileSync('.smoke-test-runner.mjs', runnerScript);
 
-console.log('Running compiled JS functions in Node.js ESM mode...');
+console.log('Running compiled JS functions with require(ESM) disabled to match the Vercel dependency boundary...');
 let success = false;
 try {
-  execFileSync('node', ['.smoke-test-runner.mjs'], { stdio: 'inherit' });
-  console.log('M7 smoke test passed: Vercel Functions loaded and executed successfully under Node ESM.');
+  // Vercel's serverless loader currently rejects the jwks-rsa -> jose v6 require(ESM)
+  // path. Disabling Node's require(ESM) support reproduces that boundary deterministically.
+  execFileSync('node', ['--no-require-module', '.smoke-test-runner.mjs'], { stdio: 'inherit' });
+  console.log('M7 smoke test passed: Vercel Functions loaded and returned controlled application responses.');
   success = true;
-} catch (e) {
-  console.error('M7 smoke test failed: Could not load or execute compiled Vercel Functions.');
+} catch {
+  console.error('M7 smoke test failed: Could not load or execute compiled Vercel Functions at the Vercel-compatible module boundary.');
 } finally {
   if (existsSync('.smoke-test-dist')) rmSync('.smoke-test-dist', { recursive: true, force: true });
   if (existsSync('.smoke-test-runner.mjs')) rmSync('.smoke-test-runner.mjs');
