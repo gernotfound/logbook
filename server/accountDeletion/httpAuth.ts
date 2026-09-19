@@ -1,5 +1,5 @@
 import type { DecodedIdToken } from 'firebase-admin/auth';
-import { adminAppCheck, adminAuth } from './firebaseAdmin';
+import { adminAppCheck, adminAuth } from './firebaseAdmin.js';
 
 const MAX_AUTH_AGE_SECONDS = 5 * 60;
 const MAX_CLOCK_SKEW_SECONDS = 60;

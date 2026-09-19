@@ -12,8 +12,8 @@ import {
   readDeletionStatus,
   revokeAccountAccess,
   verifyNoAccountResidue,
-} from './jobStore';
-import { PRIVATE_ACCOUNT_COLLECTIONS, type AccountDeletionPublicStatus } from './types';
+} from './jobStore.js';
+import { PRIVATE_ACCOUNT_COLLECTIONS, type AccountDeletionPublicStatus } from './types.js';
 
 const SAFETY_BUFFER_MS = 8_000;
 
