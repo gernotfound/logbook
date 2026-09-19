@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = '64603ce6c204d1e93d57545238f834a5d6c166ba';
+const M6_VITE_BLOB = 'b6ffa3eb5ed5c63c4fea8f08061a0e1725069d91';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== M6_VITE_BLOB) {
   failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
@@ -62,10 +62,10 @@ if (existsSync('dist/manifest.webmanifest')) {
 
     const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
     const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png' && icon?.sizes === '192x192' && icon?.type === 'image/png');
-    const hasStandard512 = icons.some(icon => icon?.src === 'icon-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
+    const standard512Icons = icons.filter(icon => icon?.src === 'icon-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
     const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
     if (!hasStandard192) failures.push('PWA manifest missing standard 192x192 PNG icon');
-    if (!hasStandard512) failures.push('PWA manifest missing standard 512x512 PNG icon');
+    if (standard512Icons.length !== 1) failures.push(`PWA manifest must contain exactly one standard 512x512 PNG icon; found ${standard512Icons.length}`);
     if (!hasDedicatedMaskable) failures.push('PWA manifest missing dedicated 512x512 maskable PNG icon');
   } catch (error) {
     failures.push(`PWA manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
