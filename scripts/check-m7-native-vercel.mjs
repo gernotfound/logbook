@@ -8,10 +8,10 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = '230bc894e60ce05a08bfde621cae73625ec812cd';
+const VALIDATED_VITE_BLOB = 'ef93a769e68feb15ec05b0664bf1ac6a0514a1e2';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
-if (currentViteBlob !== M6_VITE_BLOB) {
-  failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
+if (currentViteBlob !== VALIDATED_VITE_BLOB) {
+  failures.push(`vite.config.ts changed from validated PWA baseline: expected ${VALIDATED_VITE_BLOB}, got ${currentViteBlob}`);
 }
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
@@ -41,8 +41,51 @@ if (!accountApi.includes('const POST_BUDGET_MS = 275_000;')) failures.push('POST
 if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
 if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
 
+if (!existsSync('scripts/generate-icons.mjs')) failures.push('missing deterministic PWA icon generator');
+if (!existsSync('public/favicon.svg')) {
+  failures.push('missing canonical SVG icon source');
+} else {
+  const iconSvg = readFileSync('public/favicon.svg', 'utf8');
+  if (!iconSvg.includes('viewBox="0 0 1024 1024"')) failures.push('canonical SVG icon must use the 1024x1024 master canvas');
+  for (const id of ['background', 'frame', 'monogram']) {
+    if (!iconSvg.includes(`id="${id}"`)) failures.push(`canonical SVG icon missing #${id}`);
+  }
+  if (/<image\b/i.test(iconSvg)) failures.push('canonical SVG icon must remain true vector artwork without embedded raster images');
+}
+
 for (const output of ['dist/sw.js', 'dist/manifest.webmanifest']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
+}
+
+const expectedIconDimensions = new Map([
+  ['dist/favicon.png', 64],
+  ['dist/apple-touch-icon.png', 180],
+  ['dist/icon-192.png', 192],
+  ['dist/icon-512.png', 512],
+  ['dist/icon-maskable-192.png', 192],
+  ['dist/icon-maskable-512.png', 512],
+]);
+
+for (const [path, expectedSize] of expectedIconDimensions) {
+  if (!existsSync(path)) {
+    failures.push(`generated icon missing after build: ${path}`);
+    continue;
+  }
+  const bytes = readFileSync(path);
+  const pngSignature = '89504e470d0a1a0a';
+  if (bytes.length < 26 || bytes.subarray(0, 8).toString('hex') !== pngSignature) {
+    failures.push(`${path} is not a valid PNG`);
+    continue;
+  }
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (width !== expectedSize || height !== expectedSize) {
+    failures.push(`${path} dimensions changed: expected ${expectedSize}x${expectedSize}, got ${width}x${height}`);
+  }
+  if (path.endsWith('apple-touch-icon.png')) {
+    const colorType = bytes[25];
+    if (colorType === 4 || colorType === 6) failures.push('apple-touch-icon.png must be opaque (no alpha channel)');
+  }
 }
 
 if (existsSync('dist/sw.js')) {
@@ -58,6 +101,13 @@ if (existsSync('dist/manifest.webmanifest')) {
     if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
     if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
     if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
+
+    const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+    const hasIcon = (src, sizes, purpose) => icons.some(icon => icon.src === src && icon.sizes === sizes && icon.type === 'image/png' && icon.purpose === purpose);
+    if (!hasIcon('icon-192.png', '192x192', 'any')) failures.push('manifest missing standard 192x192 icon');
+    if (!hasIcon('icon-512.png', '512x512', 'any')) failures.push('manifest missing standard 512x512 icon');
+    if (!hasIcon('icon-maskable-192.png', '192x192', 'maskable')) failures.push('manifest missing dedicated 192x192 maskable icon');
+    if (!hasIcon('icon-maskable-512.png', '512x512', 'maskable')) failures.push('manifest missing dedicated 512x512 maskable icon');
   } catch (error) {
     failures.push(`PWA manifest is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -69,4 +119,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('M7 native Vercel/PWA contract OK: M6 Vite/PWA config byte-identical, SW precache injected, manifest scope preserved, native Functions bounded to 300s, daily recovery configured.');
+console.log('M7 native Vercel/PWA contract OK: validated Vite/PWA config, deterministic SVG-derived icon suite, SW precache injected, manifest scope preserved, native Functions bounded to 300s, daily recovery configured.');
