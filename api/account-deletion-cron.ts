@@ -1,5 +1,5 @@
-import { listRecoverableDeletionJobs } from '../server/accountDeletion/jobStore';
-import { processAccountDeletion } from '../server/accountDeletion/runner';
+import { listRecoverableDeletionJobs } from '../server/accountDeletion/jobStore.js';
+import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 
 export const maxDuration = 300;
 

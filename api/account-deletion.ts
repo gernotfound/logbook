@@ -1,12 +1,12 @@
-import { RequestAuthError, verifyDeletionRequester, verifyStatusAppCheck } from '../server/accountDeletion/httpAuth';
+import { RequestAuthError, verifyDeletionRequester, verifyStatusAppCheck } from '../server/accountDeletion/httpAuth.js';
 import {
   createOrRefreshDeletionJob,
   readAuthorizedDeletionJob,
   readDeletionStatus,
   validateReceipt,
   validateUid,
-} from '../server/accountDeletion/jobStore';
-import { processAccountDeletion, progressAndReadStatus } from '../server/accountDeletion/runner';
+} from '../server/accountDeletion/jobStore.js';
+import { processAccountDeletion, progressAndReadStatus } from '../server/accountDeletion/runner.js';
 
 export const maxDuration = 300;
 

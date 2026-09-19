@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { adminAuth, adminDb } from './firebaseAdmin';
+import { FieldValue, Timestamp, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
+import { adminAuth, adminDb } from './firebaseAdmin.js';
 import {
   PRIVATE_ACCOUNT_COLLECTIONS,
   type AccountDeletionCursor,
@@ -8,7 +8,7 @@ import {
   type AccountDeletionPublicStatus,
   type AccountDeletionStatus,
   type PrivateAccountCollection,
-} from './types';
+} from './types.js';
 
 const PAGE_SIZE = 400;
 const RECEIPT_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
@@ -75,7 +75,7 @@ export async function createOrRefreshDeletionJob(uidValue: string, receiptValue:
   const receiptHash = hashReceipt(validateReceipt(receiptValue));
   const ref = jobRef(uid);
 
-  await adminDb().runTransaction(async transaction => {
+  await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
     const now = Timestamp.now();
     if (!snapshot.exists) {
@@ -123,7 +123,7 @@ export async function readAuthorizedDeletionJob(uidValue: string, receiptValue: 
 export async function acquireDeletionLease(uidValue: string, leaseOwner: string, deadlineMs: number): Promise<boolean> {
   const uid = validateUid(uidValue);
   const ref = jobRef(uid);
-  return adminDb().runTransaction(async transaction => {
+  return adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) return false;
     const current = snapshot.data() as AccountDeletionJob;
@@ -153,7 +153,7 @@ export async function parkDeletion(
 ): Promise<void> {
   const uid = validateUid(uidValue);
   const ref = jobRef(uid);
-  await adminDb().runTransaction(async transaction => {
+  await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) return;
     const current = snapshot.data() as AccountDeletionJob;
@@ -276,7 +276,7 @@ export async function markDeletionFailed(
   const uid = validateUid(uidValue);
   const message = error instanceof Error ? error.message : String(error);
   const ref = jobRef(uid);
-  await adminDb().runTransaction(async transaction => {
+  await adminDb().runTransaction(async (transaction: Transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) return;
     const current = snapshot.data() as AccountDeletionJob;
@@ -323,6 +323,6 @@ export async function listRecoverableDeletionJobs(limitCount = 20): Promise<Acco
     .limit(limitCount)
     .get();
   return snapshot.docs
-    .map(item => item.data() as AccountDeletionJob)
-    .filter(job => job.status !== 'failed' || job.retryable !== false);
+    .map((item: QueryDocumentSnapshot) => item.data() as AccountDeletionJob)
+    .filter((job: AccountDeletionJob) => job.status !== 'failed' || job.retryable !== false);
 }
