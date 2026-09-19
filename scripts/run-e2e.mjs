@@ -1,6 +1,7 @@
 import { build, preview } from 'vite';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { generateIcons } from './resize_icons.mjs';
 
 const require = createRequire(import.meta.url);
 // An E2E build must never inherit credentials or endpoints from .env.production.
@@ -16,6 +17,7 @@ Object.assign(process.env, {
   VITE_RECAPTCHA_V3_SITE_KEY: 'dummy-recaptcha-key',
 });
 
+await generateIcons();
 await build();
 const server = await preview({ preview: { host: '127.0.0.1', port: 0, strictPort: true } });
 try {

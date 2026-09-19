@@ -13,6 +13,12 @@ dist-ssr
 *.local
 *.tsbuildinfo
 
+# Generated brand icon derivatives (public/favicon.svg is canonical)
+/public/favicon.png
+/public/apple-touch-icon.png
+/public/icon-192.png
+/public/icon-512.png
+
 # Environment variables
 .env
 .env.*
