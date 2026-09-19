@@ -161,7 +161,7 @@ for (const legacy of [
 if (packageJson.scripts?.['verify:m6'] !== 'npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5') {
   failures.push('package.json verify:m6 must preserve the validated M6 composition exactly');
 }
-if (packageJson.scripts?.['verify:m7'] !== 'npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7' && packageJson.scripts?.['verify:m7'] !== 'npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7') {
+if (packageJson.scripts?.['verify:m7'] !== 'npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7') {
   failures.push('package.json verify:m7 must preserve the validated M7 composition exactly');
 }
 if (packageJson.scripts?.['verify:m8'] !== 'npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8') {
