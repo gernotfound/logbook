@@ -38,7 +38,7 @@ let success = false;
 try {
   // Vercel's serverless loader currently rejects the jwks-rsa -> jose v6 require(ESM)
   // path. Disabling Node's require(ESM) support reproduces that boundary deterministically.
-  execFileSync('node', ['--no-experimental-require-module', '.smoke-test-runner.mjs'], { stdio: 'inherit' });
+  execFileSync('node', ['--no-require-module', '.smoke-test-runner.mjs'], { stdio: 'inherit' });
   console.log('M7 smoke test passed: Vercel Functions loaded and returned controlled application responses.');
   success = true;
 } catch {
