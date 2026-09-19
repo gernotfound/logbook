@@ -4,8 +4,12 @@
   "version": "1.0.2",
   "type": "module",
   "scripts": {
+    "icons:generate": "node scripts/resize_icons.mjs",
+    "predev": "npm run icons:generate",
     "dev": "vite",
+    "prebuild": "npm run icons:generate",
     "build": "tsc --noEmit && vite build",
+    "preanalyze": "npm run icons:generate",
     "analyze": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
