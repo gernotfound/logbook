@@ -1,4 +1,8 @@
 import { listRecoverableDeletionJobs } from '../server/accountDeletion/jobStore.js';
+import {
+  ACCOUNT_DELETION_RETENTION_PAGE_SIZE,
+  purgeExpiredCompletedDeletionJobs,
+} from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
 
 export const maxDuration = 300;
@@ -30,5 +34,12 @@ export async function GET(request: Request): Promise<Response> {
     results.push({ uid: job.uid, result });
   }
 
-  return Response.json({ scanned: jobs.length, processed: results.length, results });
+  let purged = 0;
+  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+    const deleted = await purgeExpiredCompletedDeletionJobs(ACCOUNT_DELETION_RETENTION_PAGE_SIZE);
+    purged += deleted;
+    if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
+  }
+
+  return Response.json({ scanned: jobs.length, processed: results.length, purged, results });
 }

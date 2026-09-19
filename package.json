@@ -28,7 +28,7 @@
     "test:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "test:ci-contract": "node scripts/check-ci-contract.mjs",
     "test:typecheck:m7": "tsc --noEmit -p tsconfig.m7-server.json",
-    "test:m7": "vitest run tests/m7_account_deletion_job_store.test.ts tests/m7_account_deletion_runner.test.ts tests/m7_account_deletion_api.test.ts tests/m7_account_deletion_cron.test.ts",
+    "test:m7": "vitest run tests/m7_account_deletion_job_store.test.ts tests/m7_account_deletion_retention.test.ts tests/m7_account_deletion_runner.test.ts tests/m7_account_deletion_api.test.ts tests/m7_account_deletion_cron.test.ts",
     "test:pwa:m7": "node scripts/check-m7-native-vercel.mjs",
     "test:smoke:m7": "node scripts/check-m7-smoke-test.mjs",
     "test:m8": "vitest run tests/m8_domain_operations.test.ts && vitest run --config vitest.isolated.config.ts tests/isolated/m8_domain_commit.test.ts",

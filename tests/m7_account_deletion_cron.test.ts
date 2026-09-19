@@ -6,9 +6,14 @@ const store = vi.hoisted(() => ({
 const runner = vi.hoisted(() => ({
   processAccountDeletion: vi.fn(),
 }));
+const retention = vi.hoisted(() => ({
+  ACCOUNT_DELETION_RETENTION_PAGE_SIZE: 400,
+  purgeExpiredCompletedDeletionJobs: vi.fn(),
+}));
 
 vi.mock('../server/accountDeletion/jobStore', () => store);
 vi.mock('../server/accountDeletion/runner', () => runner);
+vi.mock('../server/accountDeletion/retention', () => retention);
 
 import { GET } from '../api/account-deletion-cron';
 
@@ -26,6 +31,7 @@ describe('M7 daily account deletion recovery cron', () => {
     delete process.env.CRON_SECRET;
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
     runner.processAccountDeletion.mockResolvedValue('complete');
+    retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
   });
 
   afterEach(() => {
@@ -37,6 +43,7 @@ describe('M7 daily account deletion recovery cron', () => {
     const response = await GET(request());
     expect(response.status).toBe(503);
     expect(store.listRecoverableDeletionJobs).not.toHaveBeenCalled();
+    expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
   });
 
   it('rejects callers that do not present the configured bearer secret', async () => {
@@ -44,6 +51,7 @@ describe('M7 daily account deletion recovery cron', () => {
     const response = await GET(request('wrong-secret'));
     expect(response.status).toBe(401);
     expect(store.listRecoverableDeletionJobs).not.toHaveBeenCalled();
+    expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
   });
 
   it('processes recoverable jobs with the shared idempotent runner when authorized', async () => {
@@ -55,6 +63,27 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(1, 'a', expect.any(Number));
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(2, 'b', expect.any(Number));
-    expect(await response.json()).toMatchObject({ scanned: 2, processed: 2 });
+    expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400);
+    expect(await response.json()).toMatchObject({ scanned: 2, processed: 2, purged: 0 });
+  });
+
+  it('uses only the residual cron budget for completed tombstone garbage collection', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    const order: string[] = [];
+    store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }]);
+    runner.processAccountDeletion.mockImplementation(async () => {
+      order.push('recover');
+      return 'complete';
+    });
+    retention.purgeExpiredCompletedDeletionJobs.mockImplementation(async () => {
+      order.push('purge');
+      return 2;
+    });
+
+    const response = await GET(request('expected-secret'));
+
+    expect(response.status).toBe(200);
+    expect(order).toEqual(['recover', 'purge']);
+    expect(await response.json()).toMatchObject({ scanned: 1, processed: 1, purged: 2 });
   });
 });
