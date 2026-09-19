@@ -4,8 +4,12 @@
   "version": "1.0.2",
   "type": "module",
   "scripts": {
+    "predev": "npm run generate:icons",
     "dev": "vite",
+    "prebuild": "npm run generate:icons",
     "build": "tsc --noEmit && vite build",
+    "generate:icons": "node scripts/generate-icons.mjs",
+    "preanalyze": "npm run generate:icons",
     "analyze": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
