@@ -82,7 +82,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "@vitest/ui": "^4.1.10",
     "fake-indexeddb": "6.2.5",
-    "firebase-tools": "15.30.0",
+    "firebase-tools": "15.30.1",
     "jsdom": "^30.0.1",
     "oxlint": "^1.83.0",
     "rollup-plugin-visualizer": "^7.1.1",
