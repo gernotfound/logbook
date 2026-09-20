@@ -19,6 +19,7 @@ export interface SyncSlice {
     syncing: boolean;
     syncHealth: SyncHealth;
     syncGeneration: number;
+    localPersistenceBlocked: boolean;
     compatibilityStatus: CompatibilityStatus;
     compatibilityError: string | null;
     setSyncing: (value: boolean) => void;
@@ -46,6 +47,7 @@ let pending: Job[] = [];
 let active: Job[] = [];
 let running: Promise<void> | null = null;
 const synced: SyncResult = { ok: true, status: 'synced' };
+const LOCAL_PERSISTENCE_BLOCKED_MESSAGE = 'Archivio locale non leggibile dopo un errore di salvataggio. Le modifiche sono bloccate per evitare perdita di dati; riapri LogBook prima di continuare.';
 const updateRequiredMessage = (error: unknown) => error instanceof Error
     ? error.message
     : 'Questi dati sono stati scritti da una versione più recente di LogBook. Aggiorna l’app prima di continuare.';
@@ -69,6 +71,10 @@ export function clearSyncTimers() {
 }
 
 export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, get) => {
+    const assertLocalPersistenceWritable = () => {
+        if (get().localPersistenceBlocked) throw new Error(LOCAL_PERSISTENCE_BLOCKED_MESSAGE);
+    };
+
     const enterUpdateRequired = (error: unknown) => {
         const message = updateRequiredMessage(error);
         invalidateSession();
@@ -95,7 +101,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (pending.length) await run();
             return;
         }
-        if (!pending.length || get().compatibilityStatus === 'update-required') return;
+        if (!pending.length || get().compatibilityStatus === 'update-required' || get().localPersistenceBlocked) return;
         const jobs = pending;
         pending = [];
         active = jobs;
@@ -104,10 +110,24 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         const current = () => isCurrentSession(session);
         running = (async () => {
             let failureStatus: SyncHealth = 'failed';
+            let blockLocalPersistence = false;
             try {
                 const commits = await Promise.all(jobs.map(job => job.cache));
                 const failed = commits.find(result => !result.ok);
-                if (failed && !failed.ok) throw failed.error;
+                if (failed && !failed.ok) {
+                    if (current() && get().syncGeneration === last.generation) {
+                        try {
+                            const durable = await readLocal(session.owner);
+                            if (current() && get().syncGeneration === last.generation) {
+                                if (!durable) blockLocalPersistence = true;
+                                else set({ userData: { ...durable.data, activeWorkout: get().localWorkout } });
+                            }
+                        } catch {
+                            if (current() && get().syncGeneration === last.generation) blockLocalPersistence = true;
+                        }
+                    }
+                    throw failed.error;
+                }
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
                 const envelope = await readLocal(session.owner);
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
@@ -132,6 +152,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             } catch (error) {
                 if (current() && get().syncGeneration === last.generation) {
                     if (isUpdateRequiredError(error)) enterUpdateRequired(error);
+                    else if (blockLocalPersistence) set({ localPersistenceBlocked: true, syncHealth: 'failed', saveError: LOCAL_PERSISTENCE_BLOCKED_MESSAGE });
                     else set({ syncHealth: failureStatus, saveError: error instanceof Error ? error.message : 'Impossibile salvare i dati.' });
                 }
                 jobs.forEach(job => job.reject(error));
@@ -155,6 +176,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         syncing: false,
         syncHealth: 'synced',
         syncGeneration: 0,
+        localPersistenceBlocked: false,
         compatibilityStatus: 'ok',
         compatibilityError: null,
         setSyncing: value => set({ syncing: value }),
@@ -164,6 +186,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (get().compatibilityStatus === 'update-required') {
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
+            assertLocalPersistenceWritable();
             const { userData, localWorkout } = get();
             const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
             if (!next) {
@@ -185,6 +208,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (get().compatibilityStatus === 'update-required') {
                 return Promise.resolve(updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.'));
             }
+            try { assertLocalPersistenceWritable(); }
+            catch (error) { return Promise.reject(error); }
             const data = get().userData;
             if (!data) return Promise.reject(new Error('Dati utente non caricati'));
             return get().saveUserData(updater(data));
@@ -193,6 +218,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (get().compatibilityStatus === 'update-required') {
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
+            assertLocalPersistenceWritable();
             const userData = get().userData;
             if (!userData) throw new Error('Dati utente non caricati');
 
@@ -209,6 +235,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         },
         submitLegalConsent: async consent => {
             if (get().compatibilityStatus === 'update-required') throw new Error(get().compatibilityError ?? 'Aggiornamento richiesto.');
+            assertLocalPersistenceWritable();
             const session = captureSession();
             const previous = get().userData?.legalConsent;
             const result = get().dispatchDomainOperation({ type: 'legal-consent.set', consent });
@@ -224,7 +251,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (isCurrentSession(session)) set(state => ({ userData: state.userData ? { ...state.userData, legalConsent: consent } : null }));
         },
         flushPendingSyncs: async () => {
-            if (get().compatibilityStatus === 'update-required') return;
+            if (get().compatibilityStatus === 'update-required' || get().localPersistenceBlocked) return;
             if (timer) clearTimeout(timer);
             timer = null;
             if (pending.length || running) {
@@ -265,6 +292,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 saveError: null,
                 syncing: false,
                 syncHealth: 'synced',
+                localPersistenceBlocked: false,
                 compatibilityStatus: 'ok',
                 compatibilityError: null,
             });
