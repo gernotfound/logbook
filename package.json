@@ -83,7 +83,7 @@
     "@vitest/ui": "^4.1.10",
     "fake-indexeddb": "6.2.5",
     "firebase-tools": "15.30.0",
-    "jsdom": "^30.0.1",
+    "jsdom": "^30.1.0",
     "oxlint": "^1.81.0",
     "rollup-plugin-visualizer": "^7.1.1",
     "sharp": "^0.35.4",
