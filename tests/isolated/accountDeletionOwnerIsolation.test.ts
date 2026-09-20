@@ -82,3 +82,26 @@ it('does not purge shared local drafts while explicit guest mode is active', asy
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
 });
+
+it('fails closed and preserves local data when guest ownership cannot be read', async () => {
+    boundary.auth.currentUser = null;
+    const currentStorage = globalThis.localStorage;
+    vi.stubGlobal('localStorage', {
+        get length() { return disk.size; },
+        key: (index: number) => [...disk.keys()][index] ?? null,
+        getItem: (key: string) => {
+            if (key === 'logbook_is_guest') throw new DOMException('blocked', 'SecurityError');
+            return disk.get(key) ?? null;
+        },
+        setItem: currentStorage.setItem.bind(currentStorage),
+        removeItem: currentStorage.removeItem.bind(currentStorage),
+    });
+
+    await expect(resumeAccountDeletion(context)).rejects.toThrow('Browser storage read failed');
+
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(boundary.resetCache).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+    expect(disk.size).toBeGreaterThan(0);
+});
