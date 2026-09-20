@@ -26,6 +26,13 @@ Un solo workflow di orchestrazione non significa che unit, integration, isolated
 - MUST: i file testuali controllati dal gate sono UTF-8 valido senza BOM.
 - MUST: il gate non riscrive automaticamente file malformati.
 
+### Repository documentation hygiene
+
+- MUST: i file task-specific `implementation_plan*.md` sono artefatti di lavoro del branch e devono essere rimossi prima della validazione finale e del merge.
+- MUST: report generati task-specific come `audit_logbook_*.md`, `remediation_logbook_*.md` e le directory legacy `audit-report/` o `docs/ai/` non devono essere tracciati nel candidato finale.
+- MUST: le istruzioni normative correnti vivono in `AGENTS.md` e `.agents/rules/`; le guide operative stabili vivono in `docs/`; gli audit storici deliberatamente conservati vivono in `docs/audits/`.
+- NOTE: cronologia Git e discussioni PR preservano piano, evidenze e report di uno specifico task; copie obsolete in `main` non sono fonte di verità operativa.
+
 ## Single source of truth
 
 - MUST: GitHub Actions invoca `npm run verify:m8`; non ricostruisce manualmente un sottoinsieme alternativo.
