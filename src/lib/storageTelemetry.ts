@@ -2,6 +2,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { getDb, auth, onAuthStateChanged } from './firebase';
 import { UserDataSchema } from './schema';
 import { getStorageDiagnosticData } from './storageStatus';
+import { createTelemetryId } from './telemetry/id';
 
 export type DerivedPlatform = 'ios' | 'ipados' | 'other';
 
@@ -371,7 +372,7 @@ export async function dispatchStorageRecoveryAnomaly(
       return;
     }
 
-    const eventId = `anomaly_${payload.timestamp}_${Math.random().toString(36).slice(2, 9)}`;
+    const eventId = createTelemetryId('anomaly', payload.timestamp);
     const anomalyDocRef = doc(getDb(), "users", uid, "telemetry_anomalies", eventId);
 
     const writePromise = setDoc(anomalyDocRef, payload);
