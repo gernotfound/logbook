@@ -158,7 +158,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         expect(payload.details?.offline).toBe(false);
       });
 
-      it('F8-5: records workout session duration and exercise count in event details', async () => {
+      it('F8-5: preserves allowed workout aggregates and drops non-allowlisted set counts', async () => {
         vi.useFakeTimers();
         telemetryHub.init();
         telemetryHub.setUserId('user_workout');
@@ -173,7 +173,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         await vi.advanceTimersByTimeAsync(100);
 
         const payload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload;
-        expect(payload.details?.totalSets).toBe(32);
+        expect(payload.details?.totalSets).toBeUndefined();
         expect(payload.details?.exercisesCount).toBe(10);
       });
     });
