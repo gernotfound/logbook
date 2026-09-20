@@ -3,6 +3,11 @@ import { screen, fireEvent } from '@testing-library/react';
 import HomeView from './HomeView';
 import { renderWithProviders } from '../../tests/setup';
 import type { WorkoutSession, NutritionDay, Exercise } from '../types';
+// Compile lazy chart modules before the assertions: this suite tests rendering,
+// while the browser suite covers loading the actual split bundles.
+import '../components/analytics/WeeklyVolumeChart';
+import '../components/analytics/VolumeCaloriesCorrelationChart';
+import '../components/Home/WeightChart';
 
 describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.analytics.test.tsx)', () => {
     const mockLibrary: Exercise[] = [
@@ -72,8 +77,6 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
         }
     };
 
-    // Timeout increased to 15000ms: Chart.js rendering within JSDom is extremely CPU-bound.
-    // Under full CI parallelization, React layout effect and canvas painting exceed the 5000ms limit.
     it('renders WeeklyVolumeChart card within HomeView with sentence case header', async () => {
         renderWithProviders(<HomeView onNavigate={() => {}} />, {
             userData: mockUserData
