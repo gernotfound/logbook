@@ -18,6 +18,21 @@ const tracked = execFileSync('git', ['ls-files', '-z'])
   .split('\0')
   .filter(Boolean);
 
+const taskSpecificAnalysisArtifacts = tracked.filter(path => (
+  /^implementation_plan(?:_.*)?\.md$/.test(path)
+  || /^audit_logbook_.*\.md$/.test(path)
+  || /^remediation_logbook_.*\.md$/.test(path)
+  || path.startsWith('audit-report/')
+  || path.startsWith('docs/ai/')
+));
+if (taskSpecificAnalysisArtifacts.length > 0) {
+  failures.push(
+    `task-specific analysis artifacts must not be tracked in the final repository:\n${taskSpecificAnalysisArtifacts
+      .map(path => `  ${path}`)
+      .join('\n')}`,
+  );
+}
+
 // Let Git identify non-binary tracked content, then union that set with known
 // repository text formats so explicitly-text files are still checked even if
 // their current bytes would make Git's binary heuristic conservative.
@@ -66,4 +81,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM.`);
+console.log(`M6 repository hygiene OK: clean worktree; ${checked} tracked text files are UTF-8 without BOM; no task-specific analysis artifacts.`);
