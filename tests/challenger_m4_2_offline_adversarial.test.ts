@@ -74,9 +74,9 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       expect((inMemoryQueue[0].payload as TelemetryErrorPayload).message).toBe('test_error_51');
 
       expect(inMemoryQueue[49].payload.type).toBe('test_event_100');
-      expect((inMemoryQueue[49].payload as TelemetryEventPayload).details?.index).toBe(100);
+      expect((inMemoryQueue[49].payload as TelemetryEventPayload).details?.index).toBeUndefined();
 
-      // Verify intermediate sequence order
+      // Verify intermediate sequence order; arbitrary test metadata is intentionally minimized away.
       for (let idx = 0; idx < 50; idx++) {
         const itemNumber = 51 + idx;
         const item = inMemoryQueue[idx];
