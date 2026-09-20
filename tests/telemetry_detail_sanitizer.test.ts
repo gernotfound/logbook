@@ -9,7 +9,7 @@ describe('telemetry event detail sanitization', () => {
       offline: true,
       durationMinutes: 45,
       nested: {
-        source: 'token="private-value"',
+        source: '?token=private-value',
       },
     };
 
