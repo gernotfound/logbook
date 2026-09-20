@@ -6,6 +6,7 @@ import {
   SESSION_ID_KEY,
   type RateLimitEntry,
 } from './contracts';
+import { createTelemetryId } from './id';
 
 export class TelemetrySessionState {
   private customUserId: string | null | undefined = undefined;
@@ -67,7 +68,7 @@ export class TelemetrySessionState {
           return stored;
         }
 
-        const newId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const newId = createTelemetryId('sess');
         sessionStorage.setItem(SESSION_ID_KEY, newId);
         this.inMemorySessionId = newId;
         return newId;
@@ -77,7 +78,7 @@ export class TelemetrySessionState {
     }
 
     if (!this.inMemorySessionId) {
-      this.inMemorySessionId = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      this.inMemorySessionId = createTelemetryId('sess');
     }
     return this.inMemorySessionId;
   }
