@@ -1,7 +1,7 @@
 {
   "name": "logbook",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "icons:generate": "node scripts/resize_icons.mjs",
