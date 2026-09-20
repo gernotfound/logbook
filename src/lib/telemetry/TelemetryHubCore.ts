@@ -24,6 +24,7 @@ import {
   type TelemetryEventType,
   type TrackErrorOptions,
 } from './contracts';
+import { createTelemetryId } from './id';
 import {
   isTelemetryOffline,
   TelemetryRateLimitState,
@@ -450,7 +451,7 @@ export class TelemetryHub {
   ): void {
     try {
       const now = Date.now();
-      const eventId = `evt_${now}_${Math.random().toString(36).slice(2, 9)}`;
+      const eventId = createTelemetryId('evt', now);
       const context = getTelemetryContext();
       const payload: TelemetryEventPayload = {
         timestamp: now,
