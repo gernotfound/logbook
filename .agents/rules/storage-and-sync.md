@@ -1,6 +1,6 @@
 # Storage e Sincronizzazione - LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-15 | File verificati: src/store/useAppStore.ts, src/lib/schemaEvolution.ts, src/lib/sync/transactionWriter.ts, src/lib/sync/replicateJournal.ts, src/lib/sync/semanticProjection.ts, src/lib/sync/documentProjection.ts, src/lib/sync/localRepository.ts, src/lib/sync/deviceStorage.ts, src/contexts/AuthContext.tsx, src/main.tsx
+> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/store/useAppStore.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
 
 ## Architettura di storage
 
@@ -8,12 +8,26 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 
 | Livello | Tecnologia | Ruolo | Dati principali |
 |---|---|---|---|
-| **Stato operativo** | Zustand 5 (useAppStore) | Stato in memoria, single source of truth per i componenti React | Tutto UserData, localWorkout, syncing, saveError, compatibilityStatus |
-| **Persistenza locale principale** | IndexedDB (idb-keyval) | Copia locale transazionale asincrona dell'envelope dati V4 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
-| **Persistenza sincrona** | localStorage | Dati che richiedono salvataggio sincrono istantaneo | Namespace owner-scoped `logbook:v2:${owner}:*` tramite `deviceStorage.ts`, flag auth/guest e bozze locali |
-| **Replica remota** | Firestore (Firebase) | Sincronizzazione cloud, backup, condivisione cross-device | Documento utente + subcollection mensilizzate |
+| **Stato operativo** | Zustand 5 (`useAppStore`) | Stato in memoria, single source of truth per i componenti React | Tutto `UserData`, `localWorkout`, `syncing`, `saveError`, `compatibilityStatus` |
+| **Persistenza locale principale** | IndexedDB (`idb-keyval`) | Copia locale transazionale asincrona dell'envelope dati V4 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
+| **Persistenza sincrona** | `localStorage` | Dati che richiedono salvataggio sincrono, preferenze e code boundary-specific | Namespace owner-scoped `logbook:v2:${owner}:*`, flag auth/guest, workout/timer, bozze e telemetria queued |
+| **Replica remota** | Firestore | Sincronizzazione cloud e condivisione cross-device | Documento utente + subcollection mensilizzate |
 
-**MUST:** Offline, l'app deve avviarsi e operare dai dati locali (IndexedDB + localStorage).
+**MUST:** offline, l'app deve avviarsi e operare dai dati locali (IndexedDB + storage sincrono pertinente).
+
+## Browser storage boundary
+
+`src/lib/sync/browserStorage.ts` centralizza i casi in cui è necessario distinguere accesso strict da best-effort:
+
+- `readBrowserValueStrict()` fallisce con `BrowserStorageError` se `localStorage` non è disponibile/leggibile;
+- `readBrowserValue()` degrada a `null` ed è adatto solo a hint/preferenze dove “mancante” e “illeggibile” possono avere la stessa semantica;
+- write/remove strict propagano l'errore; gli helper `try*` sono ammessi soltanto nei boundary esplicitamente best-effort.
+
+**MUST:** gate CRITICAL (ownership, lifecycle, logout, account deletion, reload/persistenza) non devono trasformare uno storage illeggibile in “chiave assente” se questa distinzione può cambiare una decisione distruttiva o di sicurezza.
+
+**MAY:** preferenze, hint e code telemetriche possono restare best-effort quando il loro contratto non influenza l'integrità dei dati business.
+
+Non dedurre da questa regola che ogni singolo accesso `localStorage` debba necessariamente passare dallo stesso helper: timer/workout e code specializzate possono avere boundary propri. La semantica strict vs best-effort deve però essere esplicita.
 
 ## Versioni indipendenti e Schema Evolution
 
@@ -27,6 +41,7 @@ CURRENT_BACKUP_SCHEMA = 3
 ```
 
 Le quattro dimensioni NON devono essere riutilizzate come se fossero una sola versione:
+
 - `data schema`: shape business persistita su Firestore;
 - `sync protocol`: shape e semantica di `_sync` / Vector Clock;
 - `local envelope`: shape IndexedDB del journal locale;
@@ -59,6 +74,7 @@ RAW STORAGE
 ### Baseline clean-cut M1
 
 Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 stabilisce una baseline intenzionalmente clean-cut:
+
 - nessuna migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;
 - i registry storici sono vuoti finché non esiste un vero bump futuro N→N+1;
@@ -75,9 +91,9 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 1. Le normali azioni UI/hook invocano `dispatchDomainOperation()` con una `DomainOperation` tipizzata.
 2. Il reducer puro calcola il nuovo `UserData`; `commitDomainOperations()` compila soltanto lo scope dichiarato in `SemanticOperation` e persiste business state + journal nello stesso update IndexedDB.
-3. `documentProjection.ts` continua a proiettare UserData in root + shard mensili; `semanticProjection.ts` resta la fonte di merge policy, Vector Clock, tombstone, `$order` e active-workout guard.
-4. `transactionWriter.ts` legge i documenti Firestore toccati, normalizza data schema + sync protocol, valida `_sync`, confronta FieldStamp remoto e operation locale, quindi esegue al massimo una write per documento toccato.
-5. `replicateJournal.ts` drena lo stesso journal V4 verso Firestore. In assenza di rete o dopo timeout, le operation restano durevoli nel journal.
+3. `documentProjection.ts` proietta `UserData` in root + shard mensili; `semanticProjection.ts` è la fonte di merge policy, Vector Clock, tombstone, `$order` e active-workout guard.
+4. `transactionWriter.ts` legge i documenti Firestore toccati, normalizza data schema + sync protocol, valida `_sync`, confronta `FieldStamp` remoto e operation locale, quindi esegue al massimo una write per documento toccato.
+5. `replicateJournal.ts` drena lo stesso journal V4 verso Firestore. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
 I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente. L'allowlist canonica e il boundary checker sono documentati in `.agents/rules/domain-operations.md`.
@@ -89,6 +105,34 @@ I boundary bulk — bootstrap/initialize, hydration, guest→account merge, impo
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 
 **MUST:** gli helper legacy `syncHistoryMonths` / `syncNutritionMonths` non costituiscono la pipeline normativa di write. Le write utente correnti passano da journal + `transactionWriter`.
+
+## Acknowledge causale e race remote commit → local edit → acknowledge
+
+`acknowledgeThrough(owner, expectedSeq, remote, ..., syncMeta)` è un boundary CRITICAL.
+
+Dopo che Firestore ha accettato un batch, una nuova modifica locale può essere committata prima che arrivi l'ack locale. In quel caso lo snapshot remoto appena confermato è causalmente più nuovo per il batch inviato ma più vecchio rispetto alla nuova modifica locale.
+
+**MUST:** l'ack:
+
+1. rimuove soltanto le pending con `seq <= expectedSeq`;
+2. mantiene le pending con `seq > expectedSeq`;
+3. assorbe il clock/sync metadata restituito dal remoto;
+4. prende lo snapshot remoto confermato come nuova baseline;
+5. rigioca semanticamente sopra tale snapshot soltanto le operation ancora pending;
+6. preserva `pendingConflicts` local-only;
+7. aggiorna `syncMetaByDocument` con il risultato del replay.
+
+**MUST:** non usare `current.data` tal quale come sostituto del replay e non sostituire `data` con lo snapshot remoto quando `actorSeq`/pending sono avanzati: entrambi gli approcci possono perdere rispettivamente modifiche remote o modifiche locali.
+
+La regressione è coperta anche attraverso il reale path transazionale Firestore/emulator: remote commit → edit locale concorrente → acknowledge → secondo flush → convergenza finale.
+
+## Lost acknowledgement
+
+Un timeout/rejection del chiamante non dimostra che il server non abbia applicato la write.
+
+**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal. Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
+
+Vedi anche `.agents/rules/crash-consistency.md`.
 
 ## Hydration cloud
 
@@ -105,39 +149,41 @@ Il sistema `replicateJournal` / `transactionWriter` gestisce l'esito:
 
 | Status | Significato |
 |---|---|
-| synced | Mutazioni applicate confermate su Firestore |
-| rejected | permission-denied - la write è stata rifiutata (App Check, rules, dominio, auth). Il client registra il rigetto. |
-| local-pending | Offline o timeout - transazione nel journal, sincronizzazione in attesa |
-| failed | Errore critico non classificato |
+| `synced` | Mutazioni applicate confermate su Firestore |
+| `rejected` | `permission-denied`: write rifiutata (App Check, Rules, dominio, auth); il client registra il rigetto |
+| `local-pending` | Offline o esito ambiguo per cui il batch completo è ancora provato durevole nel journal |
+| `failed` | Errore critico/non sicuro o stato locale incompatibile con un retry affidabile |
 
 `update-required` è intenzionalmente separato da questi status di trasporto: rappresenta incompatibilità di versione e porta l'intera sessione in fail-closed.
 
-**MUST:** Una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
+**MUST:** una write rifiutata (`rejected`) non deve mai essere esposta all'utente come confermata.
 
-**MUST:** Le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel catch.
+**MUST:** le funzioni di salvataggio devono rigettare se l'accodamento della transazione locale fallisce in maniera critica. Vietato risolvere silenziosamente nel catch.
 
 ## Pre-render bootstrap
 
 All'avvio dell'app (`initApp` in `src/main.tsx`), **prima** di `createRoot().render()`:
 
-1. La cache utente viene recuperata da IndexedDB e assegnata a `window.__INITIAL_USER_DATA__`.
-2. Lo store Zustand viene inizializzato tramite `getInitialUserData()`, validando la cache con `UserDataSchema.parse()`.
+1. la cache utente viene recuperata da IndexedDB e assegnata a `window.__INITIAL_USER_DATA__`;
+2. lo store Zustand viene inizializzato tramite `getInitialUserData()`, validando la cache con `UserDataSchema.parse()`.
 
 Un envelope locale con versione legacy/futura non viene reinterpretato: `readLocal()` fallisce in modo conservativo e i bytes restano in IndexedDB per diagnosi/recupero. Se la versione è futura, il boundary locale segnala anche lo stato applicativo `update-required` prima che l'app diventi editabile.
 
 ## Blindatura in background (Safari Suspend)
 
 Quando `document.visibilityState === 'hidden'`:
+
 1. viene chiamato `draftRegistry.flushAll()` per salvare tutte le bozze;
 2. i dati device-critical vengono scritti sincronicamente tramite le chiavi owner-scoped di `deviceStorage.ts` (per esempio `deviceKey('workout')`);
-3. l'operazione è protetta da try/catch.
+3. l'operazione è protetta secondo il boundary applicabile.
 
 ## PWA Update Barrier
 
-Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli aggiornamenti del Service Worker per prevenire la corruzione dei dati.
-- **MUST:** Se `state.userData` esiste in memoria ma l'envelope persistito è assente, incompatibile o corrotto, l'app deve bloccare l'aggiornamento (`isUnsaved = true`).
+Il componente di ricarica della PWA (`src/lib/sync/reloadBarrier.ts`) regola gli aggiornamenti del Service Worker per prevenire perdita/corruzione dati.
 
-## Merge deterministico (Guest -> Cloud)
+**MUST:** se `state.userData` esiste in memoria ma l'envelope persistito è assente, incompatibile o corrotto, l'app deve bloccare l'aggiornamento (`isUnsaved = true`).
+
+## Merge deterministico (Guest → Cloud)
 
 Al collegamento di un account, se esistono dati guest locali:
 

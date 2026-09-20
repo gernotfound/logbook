@@ -9,6 +9,7 @@ import {
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
 } from './contracts';
+import { sanitizeTelemetryDetails } from './detailSanitizer';
 
 type UserIdProvider = () => string | null;
 
@@ -80,7 +81,7 @@ export async function dispatchTelemetryEvent(
     };
 
     if (payload.details !== undefined) {
-      firestorePayload.details = payload.details;
+      firestorePayload.details = sanitizeTelemetryDetails(payload.details);
     }
 
     const writePromise = setDoc(docRef, firestorePayload, { merge: true });

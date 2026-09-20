@@ -20,7 +20,7 @@ export interface SanitizedErrorData {
   componentStack?: string;
 }
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = __APP_VERSION__;
 
 const EMAIL_REGEX = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
 const EMAIL_TEST_REGEX = /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;

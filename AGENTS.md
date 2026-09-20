@@ -1,107 +1,117 @@
 # LogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-09-15 | Progetto: app PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-09-20 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
 Ogni regola in questo documento è classificata:
 
-- **MUST:** Requisito non negoziabile. Violarlo può causare bug, perdita dati o problemi di sicurezza.
-- **SHOULD:** Preferenza forte. Derogare solo con motivazione esplicita nel piano.
-- **VERIFY:** Controllare codice o dashboard prima di assumere che sia vero.
-- **NOTE:** Contesto storico o informativo, non istruzione esecutiva.
+- **MUST:** requisito non negoziabile. Violarlo può causare bug, perdita dati o problemi di sicurezza.
+- **SHOULD:** preferenza forte. Derogare solo con motivazione tecnica esplicita.
+- **VERIFY:** controllare codice, test o dashboard prima di assumere che sia vero.
+- **NOTE:** contesto storico o informativo, non istruzione esecutiva.
 
-## Fonte di verità
+## Fonte di verità e gestione del drift
 
-1. Il codice e la configurazione effettivamente letti sono la fonte di verità operativa.
-2. `AGENTS.md` descrive invarianti e procedure.
-3. Se documentazione e codice sono in conflitto, segnalare il conflitto e non modificare codice alla cieca.
-4. **MUST:** Non dichiarare mai di aver letto un file se il tool non ne ha restituito il contenuto.
+1. Il repository GitHub `gernotfound/logbook`, al commit realmente letto, è la fonte di verità tecnica.
+2. Prima di analizzare o modificare: controllare l'HEAD reale di `main`, leggere questo file, leggere le regole pertinenti in `.agents/rules/`, quindi cercare implementazione, chiamanti, tipi, test e configurazioni correlate.
+3. `AGENTS.md` contiene gli invarianti trasversali; `.agents/rules/` contiene i contratti specialistici.
+4. Se documentazione e codice divergono, non modificare il codice per farlo aderire alla cieca a una regola obsoleta. Discriminare il comportamento corretto con codice, test, history e configurazione; correggere la fonte normativa nello stesso task quando necessario.
+5. Una regola documentale obsoleta non deve bloccare un upgrade tecnicamente corretto: va aggiornata o rimossa con evidenza e regressioni adeguate.
+6. **MUST:** non dichiarare mai letto, testato, deployato o verificato ciò che non è stato realmente osservato.
 
-## Stack e file canonici
+## Classificazione del rischio
 
-### Stack tecnologico
+Classificare internamente ogni task almeno come STANDARD, SENSITIVE o CRITICAL.
 
-- **Framework:** React 19 + Vite 8 + TypeScript 7
-- **Hosting:** Vercel (frontend Vite/PWA statico, radice `/`)
-- **Boundary server trusted:** Vercel Functions native in `/api/` per Server Account Deletion; Firebase Admin resta server-only
-- **State management:** Zustand 5 (`src/store/useAppStore.ts`)
-- **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`)
-- **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono, Firestore cloud
-- **Backend client:** Firebase Modular SDK v12 (`firebase/firestore`, `firebase/auth`, `firebase/analytics`, `firebase/app-check`)
-- **Styling:** CSS nativo (variabili in `src/styles/global.css`). **MUST:** No Tailwind.
-- **Icone:** `lucide-react`
-- **PWA:** `vite-plugin-pwa`
-- **Monitoring:** `@vercel/analytics`, `@vercel/speed-insights`, Google Analytics (`firebase/analytics`)
-- **Librerie:** `date-fns`, `fast-deep-equal`, `chart.js` + `react-chartjs-2`, `fuse.js`, `react-virtuoso`
-- **Testing:** `vitest` + `@testing-library/react` (unit/integration), Playwright (E2E), `oxlint` (linting), Snyk (sicurezza)
+Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, Firestore e Security Rules, autenticazione, guest→account, schema/migrazioni, import/export, cancellazione account, PWA update/reload e qualunque percorso con rischio di perdita/corruzione dati o sicurezza.
 
-### File canonici — invariante di modifica
+- **MUST:** maggiore è il rischio, maggiore è la profondità di ricerca, test e review.
+- **MUST:** risolvere la root cause, non applicare workaround locali che lasciano invarianti incoerenti.
+- **MUST:** mantenere il diff minimo rispetto all'obiettivo e aggiungere test di regressione quando appropriato.
 
-Per ogni nuova chiave cloud-root, MUST verificare e aggiornare:
+## Autonomia operativa
+
+Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Vercel.
+
+Non richiedere una nuova approvazione per scelte di implementazione, test falliti, CI rossa, conflitti tecnici o correzioni necessarie lungo quel ciclo. Fermarsi solo se serve una vera decisione di prodotto/UX non deducibile, un'azione distruttiva/irreversibile sui dati utente non già autorizzata, oppure mancano permessi/strumenti indispensabili.
+
+Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modifiche. Il piano può vivere nel reasoning, nella descrizione PR o temporaneamente nel branch; non richiede una seconda autorizzazione dopo un mandato generale a procedere. Eventuali `implementation_plan*.md` task-specific sono artefatti temporanei e **MUST** essere rimossi prima del candidato finale, in accordo con `.agents/rules/ci-verification.md`.
+
+## Stack e runtime correnti
+
+- **Framework:** React 19 + Vite 8 + TypeScript 7.
+- **Runtime CI/Vercel:** Node.js 24.x.
+- **Hosting:** Vercel, frontend Vite/PWA alla radice `/`.
+- **Boundary server trusted:** Vercel Functions native in `/api/` per Server Account Deletion; Firebase Admin è server-only.
+- **State management:** Zustand 5 (`src/store/useAppStore.ts`).
+- **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
+- **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
+- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `analytics`, `app-check`).
+- **Styling:** CSS nativo e variabili in `src/styles/global.css`; **MUST:** niente Tailwind.
+- **Icone UI:** `lucide-react`.
+- **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
+- **Monitoring:** telemetria tecnica LogBook su Firestore, `@vercel/analytics`, `@vercel/speed-insights`, Firebase Analytics.
+- **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
+
+## File canonici del modello dati
+
+Per ogni nuova chiave cloud-root, MUST verificare e aggiornare dove applicabile:
 
 | File | Responsabilità |
 |---|---|
-| `src/types.ts` | Definizione del tipo applicativo |
-| `src/lib/schema.ts`, `src/lib/schemas/*.ts` | Schema Zod |
-| `src/lib/sync/documentProjection.ts` | Allowlist/proiezione `UserData` → root Firestore e shard mensili |
-| `src/contexts/AuthContext.tsx` | Gestione autenticazione, hydration e merge |
-| `src/lib/db.ts` e moduli DB correlati | Lettura/scrittura Firestore e boundary DB |
-| `firestore.rules` | Regole di sicurezza |
-| `tests/firestore_security_rules.test.ts` | Test delle regole |
-| Logica di merge/import-export | `src/lib/merge.ts`, `src/lib/export.ts` e boundary correlati |
+| `src/types.ts` | Tipo applicativo |
+| `src/lib/schema.ts`, `src/lib/schemas/*.ts` | Gateway Zod |
+| `src/lib/sync/documentProjection.ts` | Proiezione `UserData` → root/shard Firestore |
+| `src/lib/sync/domainOperations.ts` e boundary correlati | Mutazioni business tipizzate |
+| `src/contexts/AuthContext.tsx` | Auth, hydration e merge |
+| `src/lib/db.ts` e moduli DB correlati | Lettura/scrittura Firestore |
+| `firestore.rules` | Autorizzazione e validazione server-side |
+| `tests/firestore_security_rules.test.ts` | Regressioni Rules |
+| `src/lib/merge.ts`, `src/lib/export.ts` e boundary backup | Merge/import/export |
 
-Violare questa invariante può causare **perdita silenziosa** o mancata replica dei dati al primo ciclo di proiezione/salvataggio/caricamento.
+Prima di modificare un dato, classificarlo come effimero, application/local-only, cloud-root oppure mensilizzato. `UserData` applicativo non coincide automaticamente con il documento root Firestore.
 
-Prima di modificare, classificare il dato come: effimero, application/local-only, cloud-root oppure mensilizzato. `UserData` applicativo non coincide automaticamente con il documento root Firestore.
+→ Contratto completo: `.agents/rules/data-model-and-zod.md`.
 
-→ Mappa normativa completa: `.agents/rules/data-model-and-zod.md`
-
-## Stato, storage e sincronizzazione
-
-Ruoli dei livelli di storage:
+## Storage, persistenza e sincronizzazione
 
 | Livello | Ruolo |
 |---|---|
-| **Zustand** | Stato operativo in memoria, single source of truth per React |
-| **IndexedDB** (`idb-keyval`) | Persistenza locale principale di `UserData` |
-| **`localStorage`** | Persistenza sincrona: `localWorkout`, guest, tab, timer, bozze |
+| **Zustand** | Stato operativo in memoria, source of truth per React |
+| **IndexedDB** | Persistenza locale principale: Local Envelope V4 + journal semantico |
+| **`localStorage`** | Persistenza sincrona/device-critical, preferenze e code boundary-specific |
 | **Firestore** | Replica remota e sincronizzazione cloud |
 
-- **MUST:** Offline, l'app deve avviarsi e operare dai dati locali.
-- **MUST:** Una write rifiutata non deve essere esposta come confermata. La sincronizzazione tramite `replicateJournal` e transazioni gestisce gli esiti e mantiene i dati se offline.
-- **MUST:** Le funzioni di aggiornamento devono rigettare la Promise se la persistenza fallisce. Vietato risolvere silenziosamente nel `catch`.
-- **MUST:** Il PWA reload barrier (`prepareForReload`) deve essere fail-safe: se `userData` esiste in memoria ma `envelope` è nullo o illeggibile, la sessione deve essere considerata *unsafe* (non salvata) per prevenire perdita di dati. Non autorizzare il reload alla cieca.
-- **MUST:** Le normali mutazioni business UI/hook attraversano il boundary Domain Operations. Snapshot-save resta riservato ai boundary bulk/compatibility documentati e allowlisted.
+Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Local Envelope 4, Backup Schema 3. Non incrementare una dimensione per compensare modifiche in un'altra.
 
-### `permission-denied` — gestione per contesto
+- **MUST:** offline l'app deve potersi avviare e operare dai dati locali.
+- **MUST:** le normali mutazioni business UI/hook attraversano Domain Operations. Snapshot-save è riservato ai boundary bulk/compatibility allowlisted.
+- **MUST:** IndexedDB e journal vengono aggiornati atomicamente prima della replica cloud.
+- **MUST:** una write Firestore rifiutata non deve essere esposta come confermata.
+- **MUST:** le Promise di persistenza critica rigettano in caso di failure; vietato trasformare un errore critico in successo silenzioso.
+- **MUST:** il reload barrier è fail-safe: dati in memoria senza envelope leggibile = sessione unsafe, quindi niente reload automatico.
+- **MUST:** una conferma cloud attraverso `acknowledgeThrough()` elimina solo le operation con `seq <= expectedSeq`, assorbe il causal context remoto e rigioca sullo snapshot remoto soltanto le operation locali ancora pending. Una modifica locale avvenuta fra remote commit e acknowledge non può essere sovrascritta da uno snapshot remoto stantio.
+- **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal; stato assente/corrotto/parziale è failure, non pending sicuro.
 
-| Contesto | Comportamento richiesto |
-|---|---|
-| Sincronizzazione (`replicateJournal`) | MUST: gestire e propagare stati di errore (`rejected`). Non mascherare. |
-| Bootstrap App Check | MAY: retry limitato, solo se la causa transitoria è identificata. |
-| Telemetria | MAY: best-effort, può non propagare l'errore alla UI, ma deve registrare localmente il fallimento. |
-| `deleteAccount` | MUST: comunicare all'utente se la cancellazione cloud è parziale. |
+### Accesso browser storage
 
-→ Dettagli completi: `.agents/rules/storage-and-sync.md` e `.agents/rules/domain-operations.md`
+`src/lib/sync/browserStorage.ts` distingue accessi strict e best-effort.
 
-## Dati e validazione
+- **MUST:** gate di sicurezza/lifecycle che devono distinguere “chiave assente” da “storage illeggibile” usano il boundary strict e propagano/classificano l'errore.
+- **MAY:** hint, preferenze e code best-effort possono degradare in modo conservativo secondo il loro contratto.
+- **MUST:** non estendere automaticamente la semantica best-effort a logout, account deletion, reload barrier, ownership o altre invarianti CRITICAL.
 
-- **MUST:** Tutti i dati in ingresso (Firestore, IndexedDB) devono transitare attraverso `UserDataSchema.parse()` al boundary applicabile.
-- **MUST:** Nessun `undefined` nei payload Firestore. Ogni campo opzionale usa `null` o chiave omessa, mai entrambi per lo stesso campo.
-- **SHOULD:** `.passthrough()` sui sub-schema Zod solo dove la compatibilità in avanti è intenzionale.
-- **NOTE:** I sub-schema sanitizzano gli elementi con `id` valido ma campi corrotti, preservando la referenza.
+→ Dettagli: `.agents/rules/storage-and-sync.md`, `.agents/rules/domain-operations.md`, `.agents/rules/crash-consistency.md`.
 
-### Merge guest/cloud
+## Hydration e merge guest→account
 
-- Array con ID: unione deduplicata, priorità guest in caso di collisione.
-- Record per data (`nutrition`): unione date, merge sotto-array per `id`.
-- Scalari: priorità guest se valorizzati.
-- **MUST:** Il risultato deve superare `UserDataSchema.parse()` prima del salvataggio.
-- **NOTE:** La policy "guest wins" non equivale a "dato più recente".
-- **VERIFY:** Leggere implementazione e test prima di cambiare la logica di merge.
-
-→ Dettagli completi: `.agents/rules/data-model-and-zod.md`
+- `window`: startup/foreground con root + finestra mensile; preservare i mesi locali non caricati.
+- `all`: scansione completa per guest→account/operazioni complete; l'assenza remota diventa autorevole per i mesi coperti, quindi le pending locali vengono poi rigiocate.
+- **MUST:** non trattare una hydration `all` come finestra parziale.
+- **MUST:** il merge guest/cloud passa da `UserDataSchema.parse()` prima della persistenza.
+- Array con ID: unione deduplicata con priorità guest in collisione; record per data: merge per data e ID; scalari: guest se valorizzato.
+- **NOTE:** “guest wins” non equivale a “dato più recente”. Leggere implementazione e test prima di alterare questa policy.
 
 ## Workout, timer e date
 
@@ -109,159 +119,175 @@ Ruoli dei livelli di storage:
 
 | Campo | Storage | Scopo |
 |---|---|---|
-| `localWorkout` | `localStorage` + Zustand | Sessione in corso del dispositivo. Non sovrascrivibile da fetch cloud. |
-| `activeWorkout` | Firestore (campo nel documento utente) | Snapshot cloud del workout attivo. |
+| `localWorkout` | `localStorage` owner-scoped + Zustand | Sessione in corso del dispositivo |
+| `activeWorkout` | Firestore | Snapshot cloud del workout attivo |
 
-- **MUST:** Un fetch cloud non deve sovrascrivere `localWorkout` attivo.
-- **MUST:** Su `visibilitychange === 'hidden'`, salvare `localWorkout` sincronamente in `localStorage`, bypassando il debouncer.
-- **MUST:** Proteggere `JSON.stringify` e `localStorage.setItem` con `try/catch`.
+- **MUST:** un fetch cloud non sovrascrive un `localWorkout` attivo.
+- **MUST:** su `visibilitychange === 'hidden'`, salvare i dati device-critical sincronicamente e in modo protetto.
+- **MUST:** il timer usa timestamp e ricalcolo del delta; non affidarsi a un `setInterval` puro per il tempo reale in background.
+- **MUST:** date giornaliere utente in `YYYY-MM-DD` locale tramite l'helper canonico; non usare `toISOString().slice(0, 10)` per rappresentare una data locale.
+- Timestamp evento/audit: UTC/epoch; shard mensile derivato dalla data locale business.
 
-### Timer di recupero (`WorkoutTimer.tsx`)
+## Dati e Zod
 
-- **MUST:** Mai usare `setInterval` puro (throttling in background su mobile).
-- Il timestamp iniziale `Date.now()` è memorizzato in `localStorage` e il delta viene ricalcolato a ogni tick e al ritorno dal background.
+- **MUST:** i dati in ingresso da boundary persistiti vengono prima normalizzati/migrati e poi validati dal gateway Zod applicabile.
+- **MUST:** nessun `undefined` nei payload Firestore.
+- **MUST:** elementi collezione privi dell'identità business richiesta vengono scartati; non creare “ghost record” assegnando identità fittizie per farli passare.
+- **MAY:** campi non-identità corrotti possono essere sanitizzati dai sub-schema solo secondo i fallback esplicitamente modellati.
+- **MUST:** una versione futura sconosciuta è fail-closed / `update-required`; non riscrivere dati futuri con la versione corrente.
 
-### Gestione date
+→ Dettagli: `.agents/rules/data-model-and-zod.md`.
 
-- **MUST:** Date giornaliere utente: `YYYY-MM-DD` locale tramite `Logic.getLocalDateString()`.
-- **MUST:** Non usare `toISOString().slice(0, 10)` per la data locale (sfasa la mezzanotte).
-- Timestamp evento/audit: UTC o epoch.
-- Mese Firestore: derivato dalla data locale della registrazione.
+## Sicurezza e configurazione Firebase
 
-### Edge case (già gestiti nel codice)
+### Boundary di configurazione
 
-- **NOTE:** `routineCount === 0` → `getNextScheduledRoutine` restituisce `null` (nessuna divisione per zero).
-- **NOTE:** Velocità cardio: calcolata solo se `time > 0` e `distance` valida.
+Esistono tre contratti separati:
 
-## Sicurezza e configurazione
+1. **Client Firebase:** otto env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
+2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`; i nomi V3 legacy restano solo fallback transitori.
+3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
 
-### Variabili d'ambiente
-
-- **MUST:** Tutte le 8 variabili `VITE_FIREBASE_*` lette da `src/lib/firebase.ts` devono essere presenti e non vuote; il fail-fast client lancia `Error` se mancano.
-- **MUST:** Accesso statico `import.meta.env.VITE_*`. Mai accesso dinamico con `import.meta.env[key]`.
-- **VERIFY:** `VITE_FIREBASE_DATABASE_URL` è nel fail-fast ma il progetto usa solo Firestore, non Realtime Database. Potrebbe essere rimossa.
-- **MUST:** Le credenziali Firebase Admin e `CRON_SECRET` sono server-only e non devono avere prefisso `VITE_`.
+`.env.example` documenta esclusivamente nomi e placeholder sicuri; i valori reali server devono restare in Vercel/secret storage e non vanno committati.
 
 ### App Check
 
-- Provider: `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`).
-- `isSupported` non esiste per `firebase/app-check`; check manuale su `window.crypto` e `window.fetch`.
-- La site key App Check non fa parte delle otto env client fail-fast: se manca, il modulo App Check entra nel proprio fallback invece di impedire `initializeApp`.
-
-### Domini e CSP
-
-- **MUST:** Se si cambia dominio di hosting, autorizzare in Firebase Auth e Google Cloud Console.
-- **MUST:** Non rimuovere i domini Firebase/Vercel dalla CSP in `vercel.json`.
+- Provider canonico: `ReCaptchaEnterpriseProvider`.
+- Il provider viene bootstrap-pato prima di Firestore; il token è acquisito separatamente e può essere ritentato dopo failure.
+- `firebase/app-check` non espone l'`isSupported` di Analytics; il support check è manuale.
+- **MUST:** un `permission-denied` di sync resta `rejected` finché non è stata discriminata la causa; non etichettare genericamente Rules/Auth/App Check senza evidenza.
 
 ### Firestore Rules
 
-- **MUST:** Dopo ogni modifica a `firestore.rules`, eseguire: `npx firebase-tools deploy --only firestore:rules`.
-- **MUST:** `service-account.json` è nel `.gitignore` e non va mai committato.
-- **NOTE:** Il gate repository corrente testa le Rules con emulator; non effettua il deploy Rules.
+- **MUST:** ogni modifica a `firestore.rules` deve passare i test emulator pertinenti e il gate canonico.
+- Il test Rules e il deploy Rules sono operazioni diverse. Eseguire un deploy reale solo verso un target verificato e quando rientra nel task operativo autorizzato; non rendere una modifica documentale o un test locale capace di modificare implicitamente un progetto Firebase.
+- **MUST:** `service-account.json` resta ignorato e nessuna credenziale privata viene committata.
 
-→ Dettagli completi: `.agents/rules/firebase-config.md`
+→ Dettagli: `.agents/rules/firebase-config.md`.
+
+## Account lifecycle e cancellazione account
+
+La cancellazione account è un workflow CRITICAL server-mediated. Il client non elimina direttamente il root `/users/{uid}`.
+
+- Vercel Functions autenticano la richiesta e il backend trusted usa Firebase Admin.
+- Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
+- `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
+- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; il cron autenticato giornaliero elimina i record scaduti.
+- La copia locale non viene eliminata finché il client non ha prova del completamento cloud secondo il protocollo di recovery.
+- **MUST:** non reintrodurre cancellazioni client-side che bypassino questo workflow.
+
+→ Dettagli: `.agents/rules/account-lifecycle.md`.
+
+## Telemetria, Analytics e privacy
+
+Distinguere tre sistemi:
+
+1. **Telemetria tecnica LogBook:** errori/eventi applicativi sanitizzati; per utenti autenticati può includere UID tecnico, session ID, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Viene scritta nelle raccolte private dell'utente e non va descritta come “anonima”.
+2. **Firebase Analytics:** inizializzazione lazy e consent-aware tramite `getConsentedAnalytics()`.
+3. **Vercel Analytics / Speed Insights:** renderizzati solo quando il medesimo opt-in analytics è attivo.
+
+- **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
+- **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute.
+- **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
+- **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.
+- **MUST:** una modifica materiale alla Privacy Policy richiede bump di `LEGAL_VERSIONS.privacy` e regressioni pertinenti, così gli utenti devono riaccettare la versione aggiornata.
+
+## PWA, Service Worker e icone
+
+- `vite-plugin-pwa` usa manifest e service worker alla radice `/`.
+- La sorgente visuale approvata dell'icona [LB] è canonica; `scripts/resize_icons.mjs` produce favicon, Apple touch e PNG PWA.
+- Il manifest deve contenere un solo asset standard 512×512 e il dedicato `icon-maskable-512.png` per `purpose: maskable`; evitare duplicati semantici.
+- **MUST:** una modifica all'icon pipeline va verificata attraverso build/gate, non solo guardando il file sorgente.
+- **MUST:** il reload/update della PWA rispetta il reload barrier di persistenza prima di applicare una nuova versione.
 
 ## Design system e UX
 
-### Tema
+Tema: dark glassmorphism governato da `src/styles/global.css`; CSS nativo, sentence case italiano.
 
-Dark glassmorphism governato da `src/styles/global.css`. Variabili CSS, classi standard e sentence case italiano.
+- **MUST:** usare `GlobalDialog`/`useDialogStore` per dialoghi applicativi; niente `window.alert`/`window.confirm`.
+- **MUST:** niente `<dialog>` per form/editor complessi mobile; preferire superfici inline/full-screen/accordion.
+- **MUST:** input a `font-size: 16px !important` per prevenire zoom iOS dove applicabile.
+- **MUST:** touch target principali almeno 44×44 px.
+- **SHOULD:** `min-width: 0` nei figli flex soggetti a overflow; `ContextMenu.tsx` per menu contestuali.
+- **MUST:** validare la sintassi CSS e la presenza di tutte le custom properties durante refactor dei token.
+- **VERIFY:** comportamento iOS Safari/PWA e viewport stretti per modifiche UX pertinenti.
 
-- **MUST:** Prestare massima attenzione alla sintassi CSS (chiusura corretta di tutte le parentesi graffe `}`). Un errore di sintassi silenzioso corrompe l'intera interfaccia senza far fallire la build.
-- **MUST:** Durante il refactoring delle variabili CSS (es. estraendo in `tokens.css`), verificare minuziosamente che TUTTE le variabili originali usate nel codice (es. `--primary-dark`) siano migrate e presenti, per evitare fallback errati del browser (es. testo nero su nero).
+### React
 
-→ Dettagli completi: `.agents/rules/design-system.md`
+- **MUST:** sulle superfici mantenute vive sotto `Suspense`, non usare l'attributo HTML `hidden` come meccanismo di tab visibility; il pattern corrente usa `style={{ display: ... }}` e va preservato salvo una migrazione React esplicitamente testata.
+- **MUST:** niente fallback inline di array/oggetti nei selettori Zustand che generano una nuova referenza a ogni render; usare costanti stabili.
+- **SHOULD:** memoizzazione custom solo dove misurata o già motivata dai componenti ad alta frequenza.
 
-### Vincoli UX mobile
+## Processo Git e branch
 
-- **MUST:** Niente `<dialog>` per form/editor complessi; usare vista inline/full-screen o accordion.
-- **MUST:** Usare `GlobalDialog` (`useDialogStore`), mai `window.alert`/`window.confirm`.
-- **MUST:** Input a `font-size: 16px !important` per prevenire zoom iOS.
-- **SHOULD:** `min-width: 0` nei figli flex soggetti a overflow.
-- **MUST:** Touch target principali almeno 44x44px.
-- **SHOULD:** Menu contestuali con `ContextMenu.tsx` invece di bottoni inline.
-- **VERIFY:** Test manuale su iOS Safari/PWA e viewport stretti.
+Per modifiche non banali:
 
-### Anti-pattern React
+- **MUST:** lavorare su branch dedicato, non direttamente su `main`.
+- **MUST:** mantenere la PR draft durante sviluppo/correzioni e renderla pronta solo quando il candidato finale è verificato.
+- **MUST:** prima di ogni validazione candidata registrare l'esatto HEAD; dopo un nuovo commit, le verifiche sul vecchio SHA non certificano più il nuovo candidato.
+- **MUST:** eseguire review finale del diff ed evitare refactor/formattazioni non pertinenti.
+- **MUST:** dopo autorizzazione generale il merge può avvenire autonomamente quando gate e review sono verdi e non restano blocker.
 
-- **MUST:** MAI usare l'attributo HTML `hidden={...}` sui figli di un componente `<Suspense>` in React 18 (o sullo stesso Suspense). React usa internamente `hidden` per gestire le transizioni offscreen, e sovrascriverlo causa conflitti e blocchi permanenti del rendering (schermate vuote). Usare sempre `style={{ display: condizione ? 'block' : 'none' }}`.
-- **MUST:** Mai fallback inline per array/oggetti nei selettori Zustand (es. `state.dati || []` crea referenza nuova a ogni render). Usare costanti condivise stabili dichiarate fuori dal componente.
-- **SHOULD:** `React.memo` con comparatore custom nei componenti ad alta frequenza (`SessionExerciseCard`, `SessionSetRow`), solo dopo profiling.
+## Test e CI
 
-### Feedback immediato
+### Gate canonico
 
-- **MUST:** Nessuna azione "cieca". Ogni interazione (Aggiungi, Salva, Elimina) deve avere riscontro visivo istantaneo nella stessa schermata (toast, aggiornamento ottimistico, svuotamento input).
+Il gate repository completo è:
 
-## Processo di modifica
+```bash
+npm run verify:m8
+```
 
-### Ispezione prima della modifica
+`verify:m8` include transitivamente M7 → M6 → M5 e le suite/gate precedenti: lint, typecheck/hardening, unit/integration/isolated/fuzz/recovery/GC/stress, Firebase Rules emulator, Playwright E2E, no-skips, build e controlli M7/M8.
 
-- **MUST:** Leggere i file coinvolti e cercare simboli, implementazioni e test correlati prima di proporre modifiche.
-- **MUST:** Usare gli strumenti di ricerca e lettura disponibili. Se un file non è leggibile, dichiararlo.
-- **MUST:** Prima di aggiungere un elemento (banner, form, logica), verificare nel codebase che non sia già presente.
+- `npm run lint`, `npm run test`, `npm run build` e `npm run test:e2e` sono diagnostici/sotto-gate; non sostituiscono M8 per il candidato finale.
+- `.github/workflows/verification.yml` usa il job stabile **Canonical Verification**, checkout dell'exact event HEAD, Node 24 e `npm audit --audit-level=high` prima di M8.
+- **MUST:** non dichiarare verde un gate non realmente eseguito.
+- **MUST:** warning inattesi, `act(...)`, unhandled rejection e framework warning nel candidato vanno corretti o spiegati, non soppressi cosmeticamente.
+- **MUST:** test normativi devono attraversare il boundary di produzione che dichiarano di verificare; mock e oracle non possono reimplementare il comportamento sotto test.
 
-### Strict Planning Mode
+→ Contratto completo: `.agents/rules/ci-verification.md` e `.agents/rules/verification-hardening.md`.
 
-Per modifiche strutturali, dati, sync, sicurezza, dipendenze o multi-file:
+## Vercel e deployment
 
-1. Preparare un piano (`implementation_plan.md`) con obiettivo, file coinvolti, rischi, test e rollback.
-2. Richiedere approvazione esplicita dell'utente.
-3. Modificare il repository solo dopo approvazione.
+`vercel.json` è la configurazione repository canonica. Nel contratto corrente:
 
-**NOTE:** Per fix locali e minor, una procedura più breve è accettabile, ma l'agente non deve scrivere su repository senza autorizzazione per modifiche strutturali.
+- **MUST:** `main` è il solo branch abilitato ai deployment Vercel tramite `git.deploymentEnabled`; i branch di sviluppo sono disabilitati.
+- **MUST:** non indebolire questa barriera per ottenere una Preview; la CI GitHub è il gate del branch.
+- Il deployment di produzione deve derivare da `main`.
+- Dopo il merge verificare: commit effettivo su `main`, Canonical Verification sul commit di `main`, deployment Vercel corrispondente e stato verde di entrambi.
+- **VERIFY:** se Vercel Deployment Checks dipende dal nome `Canonical Verification`, non rinominare il job senza prima verificare/aggiornare la configurazione esterna.
 
-### Commenti nel codice
+## Catalogo globale
 
-- **SHOULD:** Commentare decisioni non ovvie, workaround, vincoli esterni e rischi di regressione.
-- **MUST:** Non aggiungere commenti che ripetono ciò che il codice esprime già.
+`global_catalog` è pubblico in lettura e non scrivibile dal client. I seed bundled correnti sono intenzionalmente vuoti.
 
-## Test e deploy
+- Il seed script rifiuta input vuoti/invalidi prima dell'inizializzazione Admin e supporta dry-run sicuro.
+- **MUST:** nessuna pubblicazione parte dai seed bundled vuoti.
+- Una write reale richiede file esterni validati/non vuoti, progetto esplicito e conferma esplicita uguale al progetto; non riutilizzare versioni esistenti.
+- **MAY:** dry-run/validazione sono incoraggiati e non vanno bloccati dalla policy di sicurezza.
 
-### Gate canonico corrente
+→ Dettagli: `.agents/rules/catalog-operations.md`.
 
-- **MUST:** Il gate repository completo corrente è `npm run verify:m8`.
-- `verify:m8` include transitivamente M7 → M6 → M5 e quindi lint, typecheck/hardening, suite unit/integration/isolated/fuzz/recovery/GC/stress, Firestore Rules emulator, Playwright E2E, no-skips, build e i gate M7/M8.
-- `npm run lint`, `npm run test`, `npm run build` e `npm run test:e2e` restano comandi diagnostici o sotto-gate utili, ma **non sostituiscono** `npm run verify:m8` quando è richiesta la validazione canonica completa.
-- **MUST:** Non dichiarare test superati se non sono stati eseguiti.
-- **MUST:** Warning inattesi, React `act(...)`, unhandled rejection o framework warning emersi nelle suite candidate sono regressioni da correggere o spiegare; non vanno soppressi per ottenere un log pulito.
-- **NOTE:** La pipeline GitHub unisce stdout/stderr nel log e fallisce sui codici di uscita; la semplice presenza di stderr non è un failure criterion autonomo.
-- **VERIFY:** Se si modificano testi, placeholder o selettori dell'interfaccia, cercare in `e2e/` se compaiono nei test Playwright e aggiornarli.
+## Repository hygiene ed encoding
 
-→ Contratto completo: `.agents/rules/ci-verification.md`
+- **MUST:** documenti task-specific (`implementation_plan*.md`, report audit/remediation generati, directory legacy di report) non restano nel candidato finale salvo che siano deliberatamente documentazione stabile nel path canonico.
+- Istruzioni normative: `AGENTS.md` + `.agents/rules/`; guide stabili: `docs/`; audit storici deliberati: `docs/audits/`.
+- **MUST:** Markdown e sorgenti UTF-8 senza BOM; non introdurre mojibake.
 
-### Bundle size
-
-- **SHOULD:** Dopo `npm install` di nuove dipendenze, eseguire `npm run analyze`. Se la dipendenza supera ~50 KB gzip, avviare review con l'utente.
-
-### Vercel Deployment
-
-- **VERIFY:** Deployment Checks è attivo nella dashboard Vercel.
-- **VERIFY:** Il workflow canonico `.github/workflows/verification.yml` esiste e il job stabile `Canonical Verification` riporta status su GitHub.
-- **MUST:** Se Vercel Deployment Checks usa `Canonical Verification`, non rinominare quel job senza aggiornare prima la configurazione Vercel verificata.
-- **MUST:** Non assumere che ogni push sia bloccato dai check finché la configurazione non è stata controllata.
-- L'app gira sulla radice `/` del dominio (`base: '/'` in `vite.config.ts`).
-
-### Encoding
-
-- **MUST:** Tutti i file Markdown e sorgente sono UTF-8 senza BOM.
-- **MUST:** Non introdurre mojibake (sequenze come A-grave corrotta, caratteri sostitutivi Unicode e simili).
-- **VERIFY:** Dopo modifiche con copy/paste, controllare accenti, apostrofi, frecce e simboli.
-
-## Riferimenti
-
-Documentazione di dettaglio in `.agents/rules/`:
+## Riferimenti normativi
 
 | Documento | Contenuto |
 |---|---|
-| [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Storage, schema evolution, versioni, hydration, offline-first e sync |
-| [`.agents/rules/domain-operations.md`](.agents/rules/domain-operations.md) | Domain Operations V4 e boundary delle normali business mutation |
-| [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | `UserData`, Zod, cloud-root, shard mensili e local-only |
-| [`.agents/rules/account-lifecycle.md`](.agents/rules/account-lifecycle.md) | Backup/import, account deletion, logout, guest e PWA update |
-| [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Env client/server, App Check, Firestore Rules, CSP e domini |
-| [`.agents/rules/ci-verification.md`](.agents/rules/ci-verification.md) | Gate canonico, exact-head, workflow/job/check e CI contract |
-| [`.agents/rules/crash-consistency.md`](.agents/rules/crash-consistency.md) | Commit atomico, lost ack, replay e recovery process-boundary |
+| [`.agents/rules/storage-and-sync.md`](.agents/rules/storage-and-sync.md) | Storage, versioni, hydration, offline-first e sync |
+| [`.agents/rules/domain-operations.md`](.agents/rules/domain-operations.md) | Domain Operations V4 e mutation boundary |
+| [`.agents/rules/data-model-and-zod.md`](.agents/rules/data-model-and-zod.md) | `UserData`, Zod, root, shard e local-only |
+| [`.agents/rules/account-lifecycle.md`](.agents/rules/account-lifecycle.md) | Backup/import, deletion, logout, guest e PWA update |
+| [`.agents/rules/firebase-config.md`](.agents/rules/firebase-config.md) | Env client/server, App Check, Rules, CSP e domini |
+| [`.agents/rules/ci-verification.md`](.agents/rules/ci-verification.md) | Gate canonico, exact-head e CI contract |
+| [`.agents/rules/crash-consistency.md`](.agents/rules/crash-consistency.md) | Commit atomico, lost ack, replay e recovery |
 | [`.agents/rules/causal-gc.md`](.agents/rules/causal-gc.md) | Tombstone/vector-clock GC e stable frontier |
 | [`.agents/rules/distributed-fuzz.md`](.agents/rules/distributed-fuzz.md) | Fuzz distribuito e convergenza causale |
 | [`.agents/rules/verification-hardening.md`](.agents/rules/verification-hardening.md) | Qualità dei test normativi e production boundaries |
-| [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding, seed vuoti, recovery |
-| [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema, variabili CSS, tipografia e UX |
+| [`.agents/rules/catalog-operations.md`](.agents/rules/catalog-operations.md) | Catalogo globale, seeding e recovery |
+| [`.agents/rules/design-system.md`](.agents/rules/design-system.md) | Tema, CSS, tipografia e UX |

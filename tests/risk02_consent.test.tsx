@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAppStore } from '../src/store/useAppStore';
 import { DB } from '../src/lib/db';
-import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
+import { LEGAL_VERSIONS, needsLegalUpdate } from '../src/lib/legalVersions';
 import { defaultUserDataFallback } from '../src/lib/schema';
 
 describe('RISK-02: Legal Consent Lifecycle', () => {
@@ -25,6 +25,20 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
         privacyVersion: LEGAL_VERSIONS.privacy,
         termsVersion: LEGAL_VERSIONS.terms
     };
+
+    it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
+        expect(LEGAL_VERSIONS.privacy).toBe('1.1.0');
+        expect(LEGAL_VERSIONS.terms).toBe('1.1.0');
+        expect(needsLegalUpdate({
+            ...mockConsent,
+            privacyVersion: '1.0.1'
+        })).toBe(true);
+        expect(needsLegalUpdate({
+            ...mockConsent,
+            termsVersion: '1.0.1'
+        })).toBe(true);
+        expect(needsLegalUpdate(mockConsent)).toBe(false);
+    });
 
     it('Scenario 1: Successo Remoto - Il consenso aggiorna IndexedDB e lo store', async () => {
         vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' });

@@ -1,252 +1,117 @@
-# Guida operativa & consultazione telemetria Firestore (LogBook)
+# Telemetria Firestore — guida operativa LogBook
 
-Questa guida illustra la struttura, le query, le regole di sicurezza e le procedure di troubleshooting per la consultazione degli errori e delle metriche PWA raccolte dall'Hub di Telemetria unificato di LogBook.
+> Stato: guida tecnica stabile | Ultima verifica: 2026-09-20 | Fonti eseguibili: `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `firestore.rules`.
 
----
+Questa guida descrive la telemetria tecnica proprietaria di LogBook. Non va confusa con Firebase Analytics, Vercel Analytics o Speed Insights, che sono sistemi separati e subordinati all'opt-in Analytics dell'utente.
 
-## 1. Modello dati e struttura collezioni
+## Modello dati
 
-La telemetria di LogBook è organizzata in subcollection sotto ogni documento utente autenticato (`users/{userId}`):
+La telemetria cloud è owner-scoped sotto l'utente Firebase autenticato:
 
-### 1.1 Errori globali (`users/{userId}/telemetry_errors/{errorId}`)
-- **ID documento**: `err_${hash}` (hash esadecimale a 8 caratteri basato su algoritmo FNV-1a a 32-bit di `tipo:messaggio`).
-- **Campi consentiti (whitelist)**:
-  - `timestamp` (`number`): Timestamp Unix in millisecondi della prima rilevazione o dell'ultimo aggiornamento.
-  - `type` (`string`): Classe o nome dell'errore (es. `TypeError`, `ZodError`, `SecurityError`, `ChunkLoadError`).
-  - `message` (`string`): Messaggio di errore sanitizzato (completamente privo di PII).
-  - `stack` (`string?`): Stack trace sanitizzato e troncato a max 1.000 caratteri (termina con `...[TRUNCATED]` se eccede).
-  - `componentStack` (`string?`): Component stack di React 19 (se l'errore proviene da un render/boundary).
-  - `source` (`string`): Origine dell'errore (`react_root`, `react_caught`, `react_uncaught`, `react_recoverable`, `window_error`, `unhandled_rejection`, `zod_validation`, `app_error`, `storage`, `custom`).
-  - `context` (`map`):
-    - `appVersion` (`string`): Versione dell'applicazione (es. `"1.0.0"`).
-    - `platform` (`string`): Piattaforma derivata minimizzata (`"ios"`, `"ipados"`, `"other"`).
-    - `displayMode` (`string`): Modalità di visualizzazione (`"standalone"` per PWA installata, `"browser"` per scheda web).
-    - `online` (`boolean`): Stato di connettività al momento dell'evento.
-  - `userId` (`string`): UID Firebase Auth dell'utente (o `'anonymous'` per guest locali).
-  - `sessionId` (`string`): Identificatore di sessione univoco per scheda/avvio (`sess_${timestamp}_${random}`).
-  - `count` (`number`): Numero totale di occorrenze aggregate nella finestra temporale di deduplicazione (60 secondi).
-  - `firstSeen` (`number`): Timestamp Unix (ms) della prima occorrenza rilevata.
-  - `lastSeen` (`number`): Timestamp Unix (ms) della più recente occorrenza rilevata.
+- `users/{uid}/telemetry_errors/{errorId}` — errori deduplicati;
+- `users/{uid}/telemetry_events/{eventId}` — eventi tecnici/operativi;
+- `users/{uid}/telemetry_anomalies/{eventId}` — anomalie di persistenza specifiche.
 
-### 1.2 Eventi e funnel PWA (`users/{userId}/telemetry_events/{eventId}`)
-- **ID documento**: `evt_${timestamp}_${random}`.
-- **Campi consentiti (whitelist)**:
-  - `timestamp` (`number`): Timestamp Unix in millisecondi dell'evento.
-  - `type` (`string`): Tipologia di evento (`pwa_install_impression`, `pwa_install_click`, `pwa_install_prompt_outcome`, `pwa_appinstalled`, `workout_started`, `workout_saved`, `storage_recovery_anomaly`, `zod_schema_fallback`, `custom_event`).
-  - `context` (`map`): Contesto operativo (`appVersion`, `platform`, `displayMode`, `online`).
-  - `userId` (`string`): UID Firebase Auth dell'utente.
-  - `sessionId` (`string`): Identificatore di sessione.
-  - `details` (`map?`): Metadati dell'evento privi di dati sensibili (es. `{ offline: true, durationMinutes: 45, outcome: "accepted" }`).
+Il payload cloud include l'UID tecnico dell'utente autenticato e un `sessionId`. Per questo la telemetria **non è anonima**: è pseudonimizzata e tecnicamente collegabile all'account.
 
-### 1.3 Anomalie di persistenza storage (`users/{userId}/telemetry_anomalies/{eventId}`)
-- **ID documento**: `anomaly_${timestamp}_${random}`.
-- **Campi consentiti**: `type`, `reason`, `timestamp`, `elapsedMs`, `platform`, `standalone`, `persisted`.
+### Errori
 
----
+Gli errori possono includere:
 
-## 2. Esempi di query e ispezione (Firestore Console & SDK)
+- timestamp;
+- tipo, messaggio e source;
+- contesto tecnico (`appVersion`, piattaforma derivata, display mode, stato online);
+- UID e session ID;
+- contatori `count`, `firstSeen`, `lastSeen`;
+- stack/component stack sanitizzati e limitati a 1.000 caratteri.
 
-La telemetria può essere consultata sia su base singolo utente (Client SDK) che su base globale aggregata (Admin SDK / BigQuery).
+La versione applicativa viene dal build-time `__APP_VERSION__`; non deve essere mantenuta con un valore hardcoded separato.
 
-### 2.1 Query su singolo utente (Client / Supporto)
+### Eventi
 
-```typescript
-import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from './firebase';
+Gli eventi possono includere il medesimo contesto tecnico e una mappa `details` bounded dalle Security Rules. I dettagli correnti includono, a seconda dell'evento:
 
-// Recupera gli ultimi 20 errori di un utente specifico
+- stato offline;
+- metadati PWA come outcome/source/prompt availability;
+- identificativo e nome della routine avviata;
+- durata e conteggio esercizi per il workout salvato;
+- metadati di fallback Zod come schema, field path, issue code e tipi atteso/ricevuto.
+
+La telemetria workout **non** invia serie, carichi, ripetizioni, note di sessione, diario alimentare o misurazioni corporee.
+
+## Sanitizzazione e minimizzazione
+
+`src/lib/telemetrySanitizer.ts` sanitizza messaggi e stack. Prima che `telemetry_events.details` attraversi il boundary Firestore, `src/lib/telemetry/detailSanitizer.ts` sanitizza ricorsivamente le stringhe.
+
+I pattern riconosciuti comprendono:
+
+- indirizzi email;
+- IPv4/IPv6;
+- Bearer token e JWT;
+- chiavi API Firebase riconoscibili;
+- path utente Windows/Unix;
+- chiavi sensibili come password, token, secret, apiKey e credenziali equivalenti nei formati riconosciuti.
+
+**MUST:** questa sanitizzazione riduce il rischio di leakage accidentale ma non rende semanticamente innocuo qualunque testo libero. I nuovi eventi devono usare soltanto metadati tecnici bounded; non introdurre note utente, contenuti nutrizionali, misurazioni, testo sanitario libero o altri dati business nel payload telemetrico.
+
+## Guest e coda offline
+
+La coda è best-effort in `localStorage`, con capacità massima corrente di 50 elementi e namespace owner/device tramite `TelemetryQueueStorage`.
+
+- Se l'utente è autenticato ma offline o un invio fallisce, l'evento può essere accodato e ritentato.
+- Un elemento viene inviato soltanto se `payload.userId` è presente, non è `anonymous` e coincide con l'UID autenticato corrente.
+- Gli elementi guest senza UID autenticato **non vengono riassegnati al nuovo account e non vengono caricati su Firestore dopo il login**. Possono restare localmente finché la coda best-effort viene sostituita/espulsa secondo il normale ciclo storage.
+- Durante una account deletion pending, il transport rifiuta nuovi invii per quell'UID.
+
+Questa semantica è intenzionale: non documentare più un automatico “guest telemetry replay into the new account”.
+
+## Retry e rate limit
+
+- finestra di deduplicazione/rate limit errori: 60 secondi;
+- timeout dispatch Firestore: 5 secondi;
+- capacità coda: 50 elementi;
+- retry per elemento: massimo 3;
+- backoff scheduler: da 1 secondo fino a 30 secondi.
+
+Gli errori sono aggregati per hash deterministico di tipo + messaggio sanitizzato. Gli eventi sono append-only secondo le Rules; gli errori ammettono soltanto gli aggiornamenti monotoni previsti dal contratto.
+
+## Security Rules
+
+`firestore.rules` applica:
+
+- ownership (`request.auth.uid == userId`);
+- blocco durante `account_deletions/{uid}`;
+- allowlist delle chiavi top-level;
+- limiti di tipo/dimensione per context/details;
+- immutabilità degli eventi, salvo retry identico;
+- identità stabile e aggiornamenti monotoni per gli errori aggregati.
+
+Le Rules sono un secondo boundary di sicurezza: non sostituiscono la sanitizzazione client e non rendono le stringhe arbitrarie automaticamente sicure dal punto di vista privacy.
+
+## Query operative
+
+Per ispezionare la telemetria di un singolo utente, usare le subcollection private dell'utente autenticato. Analisi amministrative cross-user richiedono un contesto trusted/Admin appropriato: non aggiungere accesso client globale alle collection group.
+
+Esempio singolo utente:
+
+```ts
 const errorsRef = collection(db, 'users', userId, 'telemetry_errors');
-const recentErrorsQuery = query(errorsRef, orderBy('timestamp', 'desc'), limit(20));
-const errorsSnapshot = await getDocs(recentErrorsQuery);
-
-errorsSnapshot.forEach((doc) => {
-  console.log(`[Errore ${doc.id}]`, doc.data());
-});
-
-// Recupera i crash React non gestiti per un utente
-const uncaughtQuery = query(
-  errorsRef,
-  where('source', '==', 'react_uncaught'),
-  orderBy('timestamp', 'desc')
-);
-const uncaughtSnapshot = await getDocs(uncaughtQuery);
+const recentErrors = query(errorsRef, orderBy('timestamp', 'desc'), limit(20));
+const snapshot = await getDocs(recentErrors);
 ```
 
-### 2.2 Query globali Collection Group (Admin / DevOps)
+Prima di aggiungere una nuova query collection-group, verificare gli indici Firestore reali e l'effettivo caso operativo. Non mantenere in questa guida elenchi di indici ipotetici non presenti nel repository.
 
-Per eseguire analisi complessive su tutti gli utenti tramite Firebase Admin SDK o Google Cloud BigQuery:
+## Contratto per nuove metriche
 
-```typescript
-import { collectionGroup, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+Prima di aggiungere un nuovo evento o dettaglio:
 
-// 1. Feed globale dei crash critici (React uncaught o window.onerror)
-const crashFeedQuery = query(
-  collectionGroup(db, 'telemetry_errors'),
-  where('source', 'in', ['react_uncaught', 'window_error', 'unhandled_rejection']),
-  orderBy('timestamp', 'desc'),
-  limit(50)
-);
+1. dimostrare che serve per diagnosi/stabilità e che non esiste un'alternativa meno invasiva;
+2. evitare contenuto business libero;
+3. aggiornare il tipo/consumer interessato;
+4. aggiornare `isValidTelemetryDetails()` / Rules se serve una nuova chiave;
+5. aggiungere test del transport e delle Security Rules;
+6. verificare la coerenza con Privacy Policy, README e `AGENTS.md`;
+7. eseguire il gate canonico `npm run verify:m8`.
 
-// 2. Rilevazione errori ad alta frequenza (count >= 5)
-const errorStormQuery = query(
-  collectionGroup(db, 'telemetry_errors'),
-  where('count', '>=', 5),
-  orderBy('count', 'desc'),
-  limit(25)
-);
-
-// 3. Distribuzione crash per piattaforma PWA su iOS
-const iosPwaCrashesQuery = query(
-  collectionGroup(db, 'telemetry_errors'),
-  where('context.platform', '==', 'ios'),
-  where('context.displayMode', '==', 'standalone'),
-  orderBy('timestamp', 'desc')
-);
-
-// 4. Analisi funnel installazione PWA (ultimi 7 giorni)
-const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-
-const impressionsQuery = query(
-  collectionGroup(db, 'telemetry_events'),
-  where('type', '==', 'pwa_install_impression'),
-  where('timestamp', '>=', weekAgo)
-);
-
-const acceptedPromptQuery = query(
-  collectionGroup(db, 'telemetry_events'),
-  where('type', '==', 'pwa_install_prompt_outcome'),
-  where('details.outcome', '==', 'accepted'),
-  where('timestamp', '>=', weekAgo)
-);
-
-const appInstalledQuery = query(
-  collectionGroup(db, 'telemetry_events'),
-  where('type', '==', 'pwa_appinstalled'),
-  where('timestamp', '>=', weekAgo)
-);
-```
-
----
-
-## 3. Indici compositi Firestore (`firestore.indexes.json`)
-
-Per abilitare l'esecuzione rapida delle query collection group sopra descritte senza errori di indicizzazione:
-
-```json
-{
-  "indexes": [
-    {
-      "collectionGroup": "telemetry_errors",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "source", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_errors",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "type", "order": "ASCENDING" },
-        { "fieldPath": "lastSeen", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_errors",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "context.appVersion", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_errors",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "context.platform", "order": "ASCENDING" },
-        { "fieldPath": "context.displayMode", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_errors",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "count", "order": "DESCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_events",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "type", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_events",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "type", "order": "ASCENDING" },
-        { "fieldPath": "details.offline", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "telemetry_events",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "type", "order": "ASCENDING" },
-        { "fieldPath": "details.outcome", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    }
-  ],
-  "fieldOverrides": []
-}
-```
-
----
-
-## 4. Garanzie di privacy e sanitizzazione dati
-
-Il motore di sanitizzazione (`src/lib/telemetrySanitizer.ts`) garantisce che nessun dato personale o sensibile lasci il dispositivo dell'utente:
-
-1. **Zero PII**:
-   - Indirizzi email $\rightarrow$ `[REDACTED_EMAIL]`.
-   - Indirizzi IP (IPv4 e IPv6) $\rightarrow$ `[REDACTED_IP]`.
-   - Bearer token, token JWT, chiavi API Firebase e password $\rightarrow$ `[REDACTED_TOKEN]` o `[REDACTED]`.
-2. **Sanitizzazione percorsi file system**:
-   - Percorsi Windows (`C:\Users\...`) e Unix (`/home/...`, `/Users/...`) $\rightarrow$ `[REDACTED_PATH]`.
-3. **Troncamento stack trace**:
-   - Stack trace e React component stack sono rigorosamente limitati a massimo 1.000 caratteri e terminano con `...[TRUNCATED]`.
-4. **Zero dati di allenamento o biometrici**:
-   - Non vengono mai inviati carichi, ripetizioni, note testuali, strutture di schede, alimenti o circonferenze corporee dell'utente.
-
----
-
-## 5. Risoluzione problemi comuni (Troubleshooting)
-
-### A. Errori in modalità Guest non visibili su Firestore
-- **Causa**: Gli utenti in modalità guest operano senza sessione Firebase Auth per prevenire violazioni delle regole di sicurezza.
-- **Funzionamento**: Gli errori e gli eventi vengono accodati nella memoria locale sincrona (`localStorage.getItem('logbook_telemetry_queue')`).
-- **Risoluzione**: Quando l'utente effettua il login o collega un account Google (`linkGoogleAccount`), la coda viene automaticamente svuotata e sincronizzata con il nuovo UID autenticato.
-
-### B. Errore `FirebaseError: [code=permission-denied]`
-- **Causa**: Tentativo di scrittura di un payload contenente chiavi non ammesse dalla whitelist o con `userId` non corrispondente a `request.auth.uid`.
-- **Risoluzione**: Verificare che l'oggetto inviato rispetti tassativamente le 12 chiavi consentite per `telemetry_errors` o le 6 chiavi per `telemetry_events`.
-
-### C. Saturazione coda offline (Limite 50 elementi)
-- **Causa**: Sessioni offline molto prolungate con accumulo di numerosi eventi.
-- **Funzionamento**: Viene applicata una politica di espulsione FIFO rigorosa (i record più vecchi oltre il cinquantesimo vengono scartati per proteggere la quota di `localStorage`).
-- **Risoluzione**: Alla prima riconnessione alla rete (`window.addEventListener('online')`), tutti gli eventi residui vengono inviati a Firestore in modo non bloccante.
-
-### D. Deduplicazione e temporizzazione (Finestra 60s)
-- **Causa**: Loop di rendering rapidi o errori ripetuti consecutivamente producono un unico documento Firestore.
-- **Funzionamento**: Gli errori con identico hash `(tipo + messaggio)` aggiornano solo il contatore `count` e il timestamp `lastSeen` anziché creare nuovi documenti.
-- **Risoluzione**: Consultare i campi `count`, `firstSeen` e `lastSeen` del documento per analizzare la frequenza e la persistenza dell'anomalia.
-
-### E. Connessioni lente o timeout di rete (5.000ms)
-- **Causa**: Connessioni mobili 2G/3G instabili.
-- **Funzionamento**: I salvataggi Firestore sono protetti da un timeout di sicurezza di 5 secondi (`Promise.race`). In caso di timeout, l'invio non blocca l'interfaccia utente e il dato viene preservato nella coda offline locale.
+Una modifica materiale al flusso telemetrico può richiedere anche un aggiornamento della versione Privacy (`LEGAL_VERSIONS.privacy`).

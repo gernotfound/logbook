@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
+const appVersion = process.env.npm_package_version || '0.0.0-test';
+
 export default defineConfig({
+    define: { __APP_VERSION__: JSON.stringify(appVersion) },
     test: {
         environment: 'node',
         include: ['tests/gc/**/*.test.ts'],

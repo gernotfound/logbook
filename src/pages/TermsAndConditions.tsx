@@ -40,10 +40,10 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
         }}>
           <div>
             <h2 style={{margin: 0,color: 'var(--text-main)'}}>
-              Termini e Condizioni
+              Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Aggiornati al 28 agosto 2026
+              Aggiornati al 20 settembre 2026
             </p>
           </div>
           <button
@@ -64,58 +64,58 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           lineHeight: '1.7',
           fontSize: '0.95rem',
         }}>
-          <Section title="1. Accettazione dei Termini">
+          <Section title="1. Accettazione dei termini">
             <p>
-              Scaricando, accedendo o utilizzando l'app LogBook ("l'Applicazione"), l'utente accetta di essere vincolato dai presenti Termini e Condizioni. Se non si accettano questi termini, si prega di non utilizzare l'Applicazione.
+              Installando, accedendo o utilizzando LogBook ("l'Applicazione"), l'utente accetta di essere vincolato dai presenti Termini e condizioni. Se non si accettano questi termini, non utilizzare l'Applicazione.
             </p>
           </Section>
 
-          <Section title="2. Disclaimer Medico (Importante)">
+          <Section title="2. Disclaimer medico (importante)">
             <div style={{ padding: '16px', backgroundColor: 'rgba(255, 77, 109, 0.1)', border: '1px solid var(--danger-color)', borderRadius: '8px', color: 'var(--text-main)' }}>
               <strong>LogBook non fornisce consulenza medica.</strong>
               <p style={{ marginTop: '8px', marginBottom: 0 }}>
                 L'Applicazione è progettata unicamente per tracciare e monitorare l'allenamento fisico e l'alimentazione a scopo informativo e personale. Nessuna informazione fornita dall'Applicazione costituisce parere medico, diagnosi o trattamento.
-                Prima di intraprendere qualsiasi nuovo programma di allenamento o dieta, si consiglia vivamente di consultare un medico o un professionista sanitario qualificato.
+                Prima di intraprendere qualsiasi nuovo programma di allenamento o dieta, si consiglia di consultare un medico o un professionista sanitario qualificato.
               </p>
             </div>
           </Section>
 
-          <Section title="3. Natura Amatoriale del Software (AS-IS)">
+          <Section title="3. Natura amatoriale del software (AS-IS)">
             <p>
-              LogBook è un progetto software sviluppato in modo <strong>puramente amatoriale, indipendente e senza scopo di lucro</strong>. L'Applicazione viene fornita "così com'è" (AS-IS) e "come disponibile", senza garanzie di alcun tipo, né espresse né implicite. Non viene garantito un uptime (continuità del servizio) specifico e il software può presentare bug, difetti, vulnerabilità o errori di calcolo.
+              LogBook è un progetto software sviluppato in modo <strong>amatoriale, indipendente e senza scopo di lucro</strong>. L'Applicazione viene fornita "così com'è" (AS-IS) e "come disponibile", senza garanzie di alcun tipo, né espresse né implicite. Non viene garantito un uptime specifico e il software può presentare bug, difetti, vulnerabilità o errori di calcolo.
             </p>
             <p style={{ marginTop: '8px' }}>
-              Il titolare si riserva il diritto insindacabile di modificare, sospendere, interrompere o cessare definitivamente il funzionamento dell'Applicazione in qualsiasi momento e <strong>senza alcun preavviso</strong>. Ti consigliamo vivamente di utilizzare frequentemente la funzione di esportazione dati per avere un backup personale locale delle tue informazioni.
+              Il titolare si riserva il diritto di modificare, sospendere, interrompere o cessare il funzionamento dell'Applicazione nei limiti consentiti dalla legge. È consigliato utilizzare periodicamente le funzioni di backup/esportazione disponibili per mantenere una copia personale dei dati.
             </p>
           </Section>
 
-          <Section title="4. Limitazione di Responsabilità">
+          <Section title="4. Limitazione di responsabilità">
             <p>
-              L'uso dell'Applicazione è a tuo esclusivo rischio. Il titolare dell'Applicazione declina esplicitamente ogni responsabilità per infortuni, danni fisici, problemi di salute, perdita di dati (inclusa la cancellazione improvvisa dell'account o dei salvataggi), danni diretti o indiretti derivanti dall'uso, dall'impossibilità di usare o da malfunzionamenti dell'Applicazione. Non si garantiscono risultati specifici (es. perdita di peso, aumento della massa muscolare) derivanti dall'utilizzo dell'app.
+              L'uso dell'Applicazione avviene sotto la responsabilità dell'utente, nei limiti consentiti dalla legge applicabile. LogBook non garantisce risultati specifici, inclusi perdita di peso o aumento della massa muscolare, e non sostituisce valutazioni mediche o professionali. Le limitazioni previste in questa sezione non escludono responsabilità che non possono essere escluse o limitate per legge.
             </p>
           </Section>
 
-          <Section title="5. Età Minima">
+          <Section title="5. Età minima">
             <p>
-              L'Applicazione è destinata all'uso da parte di persone maggiorenni (18 anni o più). L'utilizzo da parte di minori è consentito solo sotto la supervisione e l'esplicito consenso di un genitore o tutore legale, il quale si assume la responsabilità dell'accettazione di questi Termini.
+              L'Applicazione è destinata esclusivamente a persone maggiorenni (18 anni o più). I minori non devono creare un account né utilizzare il servizio.
             </p>
           </Section>
 
-          <Section title="6. Account e Sicurezza">
+          <Section title="6. Account e sicurezza">
             <p>
-              Se decidi di creare un account (modalità Cloud), sei responsabile di mantenere la riservatezza delle tue credenziali di accesso Google. Il titolare si riserva il diritto di sospendere o chiudere il tuo account in qualsiasi momento se viene rilevato un uso fraudolento, illegale o in violazione di questi Termini.
+              Se decidi di creare un account cloud, sei responsabile di mantenere sicure le credenziali e i metodi di autenticazione associati al tuo account, inclusi eventuali provider esterni. Il titolare può limitare o chiudere un account quando ciò è necessario per sicurezza, prevenzione di abusi, rispetto della legge o violazioni sostanziali di questi Termini.
             </p>
           </Section>
 
-          <Section title="7. Proprietà dei Dati e Contenuti">
+          <Section title="7. Dati dell'utente">
             <p>
-              Tutti i dati personali, gli allenamenti registrati e le metriche corporee inserite rimangono di tua esclusiva proprietà. Puoi esportarli o cancellarli in qualsiasi momento tramite le funzionalità dell'Applicazione.
+              Mantieni i diritti sui contenuti e sui dati che inserisci nell'Applicazione. Le funzioni di backup, esportazione e cancellazione disponibili nell'app sono descritte anche nell'Informativa sulla privacy, che disciplina il trattamento dei dati personali e i relativi tempi di conservazione.
             </p>
           </Section>
 
-          <Section title="8. Legge Applicabile e Foro Competente">
+          <Section title="8. Legge applicabile">
             <p>
-              I presenti Termini sono regolati e interpretati in conformità con le leggi della Repubblica Italiana. Per qualsiasi controversia derivante da o relativa all'uso dell'Applicazione, sarà competente in via esclusiva il Foro italiano.
+              I presenti Termini sono disciplinati dalla legge applicabile. Restano salve le tutele inderogabili riconosciute all'utente dalla normativa eventualmente applicabile, incluse quelle relative a consumatori e protezione dei dati personali.
             </p>
           </Section>
 

@@ -6,8 +6,8 @@ import { LegalConsent } from '../types';
  * Gli utenti esistenti vedranno l'overlay di adeguamento se le versioni non corrispondono.
  */
 export const LEGAL_VERSIONS = {
-  privacy: "1.0.1",
-  terms: "1.0.1",
+  privacy: "1.1.0",
+  terms: "1.1.0",
 } as const;
 
 export type LegalVersionKey = keyof typeof LEGAL_VERSIONS;

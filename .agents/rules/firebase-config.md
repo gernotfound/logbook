@@ -1,6 +1,6 @@
 # Configurazione Firebase — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-18 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti
 
@@ -21,9 +21,9 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
 | `VITE_FIREBASE_MEASUREMENT_ID` | MUST | Usata dalla configurazione Analytics |
 
-**MUST:** L'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
+**MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
 
-Le chiavi Firebase Web sono pubbliche nel bundle client; la protezione dei dati dipende da Security Rules, autenticazione, App Check e configurazione backend.
+Le chiavi Firebase Web sono configurazione pubblica inclusa nel bundle client; la protezione dei dati dipende da Security Rules, autenticazione, App Check e configurazione backend. Non descrivere le env `VITE_*` come segreti server.
 
 ## App Check — reCAPTCHA Enterprise
 
@@ -39,6 +39,17 @@ Le chiavi Firebase Web sono pubbliche nel bundle client; la protezione dei dati 
 **VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
+
+## Analytics Firebase — consent-aware
+
+Firebase Analytics condivide la configurazione Web ma non viene inizializzato incondizionatamente:
+
+- `src/lib/firebase.ts` legge il consenso locale `logbook_analytics_consent` con default `false`;
+- `getConsentedAnalytics()` inizializza/riattiva Analytics solo se il consenso è attivo e il browser lo supporta;
+- la revoca chiama `setAnalyticsCollectionEnabled(..., false)` e impedisce ai consumer di ottenere un'istanza consentita;
+- i consumer devono attendere `getConsentedAnalytics()` e ricontrollare il consenso prima di emettere eventi asincroni.
+
+**MUST:** non introdurre un'importazione/inizializzazione Analytics che aggiri questo boundary o anticipi il consenso.
 
 ## Server trusted M7 — Firebase Admin
 
@@ -56,11 +67,20 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 `CRON_SECRET` è un requisito specifico del cron: se assente, `/api/account-deletion-cron` risponde 503. Non è una variabile necessaria al bootstrap del client Vite.
 
-**MUST:** tutte queste credenziali/config server restano server-only, senza prefisso `VITE_`, e non devono essere inserite nel bundle client o committate.
+**MUST:** tutte queste credenziali/config server restano server-only, senza prefisso `VITE_`, e non devono essere inserite nel bundle client o committate con valori reali.
 
 **VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account.
 
-`.env.example` è attualmente un template client e non rappresenta l'elenco completo della configurazione server M7. Non inferire da quel file che le env Admin/cron non servano; un eventuale template multi-runtime va progettato come task separato, distinguendo chiaramente i boundary.
+## Contratto `.env.example`
+
+`.env.example` documenta entrambi i boundary usando **solo placeholder non sensibili**:
+
+- configurazione client Firebase/App Check (`VITE_*`);
+- nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`).
+
+**MUST:** il template non contiene chiavi private, token, email reali, project identifier privati o altri valori di produzione. La presenza dei nomi server nel template serve soltanto a rendere esplicito il contratto runtime; i valori reali restano in Vercel/secret storage.
+
+**MUST:** non copiare una private key reale in `.env.example`, Markdown, issue, PR, fixture o codice client.
 
 ## Firestore Security Rules
 
@@ -68,13 +88,15 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 Il gate repository corrente testa `firestore.rules` tramite Firebase Emulator (`npm run test:rules`, transitivamente incluso in `verify:m8`). Questo **non** deploya le Rules sul progetto Firebase.
 
-**MUST:** una modifica approvata a `firestore.rules` richiede test pertinenti e un deploy Rules esplicito verso il target corretto:
+**MUST:** una modifica a `firestore.rules` richiede test pertinenti e il gate canonico.
+
+Il deploy reale è un'operazione distinta, da eseguire soltanto quando il task operativo lo richiede e dopo aver verificato il target:
 
 ```bash
 npx firebase-tools deploy --only firestore:rules
 ```
 
-L'autenticazione/credential path usato per il deploy dipende dall'ambiente operativo; non documentare un particolare ruolo IAM o service account come requisito corrente senza evidenza verificata.
+Non trasformare il deploy Rules in un side effect automatico di un test, di una modifica documentale o di una PR. L'autenticazione/credential path usato per il deploy dipende dall'ambiente operativo; non documentare un particolare ruolo IAM o service account come requisito corrente senza evidenza verificata.
 
 I file `firebase.json` e `.firebaserc` definiscono la configurazione repository usata dagli strumenti Firebase; leggere entrambi prima di cambiare target o Rules.
 
@@ -83,6 +105,10 @@ I file `firebase.json` e `.firebaserc` definiscono la configurazione repository 
 - **MUST:** il client non può eliminare direttamente `/users/{uid}`. Il root utente viene eliminato dal backend trusted del job account-deletion dopo la bonifica delle raccolte private e prima della cancellazione finale di Firebase Auth.
 - Le sottocollezioni private mantengono `delete` owner-scoped per le normali operazioni di dominio dove previste; questa capacità non autorizza il client a bypassare il workflow di cancellazione account.
 - `account_deletions/{uid}` resta server-only e costituisce la barriera cross-device durante una cancellazione in corso.
+
+### Telemetria privata
+
+Le raccolte di telemetria utente sono owner-scoped e soggette a validazione Rules tipizzata/bounded. Eventi e anomalie sono immutabili secondo il contratto corrente; gli errori aggregati ammettono soltanto gli aggiornamenti monotoni previsti dalle Rules. Le regole client non trasformano la telemetria tecnica in un database arbitrario.
 
 ### Metadati `_sync`
 
@@ -108,6 +134,15 @@ La CSP è configurata in `vercel.json`. Prima di modificarla:
 1. leggere `vercel.json` e identificare la direttiva interessata;
 2. **MUST:** non rimuovere i domini Firebase/Vercel necessari al comportamento corrente senza una sostituzione verificata;
 3. verificare login, sync, analytics, API M7 e PWA dopo il cambiamento pertinente.
+
+## Vercel branch deployment policy
+
+`vercel.json` contiene il contratto repository corrente per Git deployment:
+
+- `main`: deployment abilitato;
+- altri branch: deployment disabilitato.
+
+**MUST:** i branch di sviluppo non generano Preview Deployment. Non allargare `git.deploymentEnabled` per usare Vercel Preview come sostituto della CI. Il deployment di produzione deriva da `main`.
 
 ## Sicurezza HTTP
 

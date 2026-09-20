@@ -43,7 +43,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Aggiornata al 19 settembre 2026
+              Aggiornata al 20 settembre 2026
             </p>
           </div>
           <button
@@ -67,104 +67,124 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Titolare del trattamento">
             <p>
               Il titolare del trattamento è il developer indipendente dell'applicazione <strong style={{ color: 'var(--text-main)' }}>LogBook PWA</strong>.
-              Per qualsiasi comunicazione relativa alla privacy o all'esercizio dei tuoi diritti, puoi contattarci all'indirizzo email indicato nella pagina delle impostazioni dell'app.
+              Per comunicazioni relative alla privacy o all'esercizio dei tuoi diritti utilizza il canale di contatto pubblico eventualmente indicato nell'applicazione o nella relativa pagina ufficiale. Questa informativa non pubblica recapiti personali o privati del developer.
             </p>
             <p>
-              Il trattamento avviene nel rispetto del Regolamento Generale sulla Protezione dei Dati dell'Unione Europea (GDPR, Regolamento UE 2016/679) e del D.Lgs. 196/2003 e successive modificazioni.
+              Il trattamento avviene nel rispetto del Regolamento Generale sulla Protezione dei Dati dell'Unione Europea (GDPR, Regolamento UE 2016/679) e della normativa nazionale applicabile.
             </p>
           </Section>
 
           <Section title="Che cos'è LogBook">
             <p>
-              LogBook è un'applicazione web progressiva (PWA) gratuita per il tracciamento degli allenamenti e della nutrizione, progettata con un'architettura <em>offline-first</em>.
+              LogBook è un'applicazione web progressiva (PWA) gratuita per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
             </p>
             <p>
-              <strong style={{ color: 'var(--text-main)' }}>Limitazione d'età:</strong> Il servizio è destinato esclusivamente a utenti maggiorenni (18+). Non raccogliamo intenzionalmente dati di minori. Se sei un minore, ti invitiamo a non utilizzare l'app senza la supervisione di un genitore o tutore.
+              <strong style={{ color: 'var(--text-main)' }}>Limitazione d'età:</strong> il servizio è destinato esclusivamente a utenti maggiorenni (18+). Non raccogliamo intenzionalmente dati di minori. Se sei un minore, non utilizzare il servizio.
             </p>
           </Section>
 
-          <Section title="Dati raccolti e finalità">
+          <Section title="Dati trattati e finalità">
             <h3 style={h3Style}>Modalità ospite (senza account)</h3>
             <p>
-              In questa modalità <strong style={{ color: 'var(--text-main)' }}>nessun dato personale viene trasmesso a server remoti</strong>. Tutte le informazioni inserite (allenamenti, misurazioni, piani alimentari) sono memorizzate esclusivamente sul dispositivo tramite IndexedDB e localStorage.
+              I dati business inseriti nell'app — come allenamenti, nutrizione, misurazioni, routine e pianificazioni — restano nella persistenza locale del dispositivo e non vengono sincronizzati su Firestore finché non colleghi un account.
+            </p>
+            <p>
+              La telemetria tecnica propria può essere accodata localmente quando non esiste una sessione Firebase autenticata, ma gli elementi privi di UID autenticato non vengono caricati successivamente su Firestore come dati dell'account. Se abiliti volontariamente le statistiche di utilizzo dalle Impostazioni, anche in modalità ospite possono invece essere attivati i servizi Analytics descritti più avanti. L'uso locale dei dati fitness e l'opt-in Analytics sono quindi flussi distinti.
             </p>
 
-            <h3 style={h3Style}>Modalità cloud (con account Google)</h3>
+            <h3 style={h3Style}>Modalità cloud (con account)</h3>
             <p>
-              Se scegli di accedere con Google, i dati vengono sincronizzati su Firebase Firestore di Google LLC. Nello specifico vengono trattati:
+              Se scegli di creare o collegare un account, i dati applicativi vengono sincronizzati su Firebase Firestore. A seconda del metodo di autenticazione possono essere trattati l'identificativo Firebase dell'account, l'indirizzo email e gli eventuali dati di profilo restituiti dal provider di autenticazione.
             </p>
             <ul style={ulStyle}>
-              <li>L'indirizzo email e il nome associati all'account Google, ai soli fini di autenticazione.</li>
-              <li>I dati di allenamento inseriti (esercizi, serie, carichi, diari alimentari).</li>
-              <li><strong style={{ color: 'var(--primary-color)' }}>Dati relativi alla salute (Art. 9 GDPR):</strong> peso, circonferenze corporee, percentuale di massa grassa, sensazioni di fatica e dolori fisici.</li>
+              <li>Dati di allenamento: routine, sessioni, esercizi, serie, carichi, ripetizioni, RPE e informazioni correlate.</li>
+              <li>Dati di nutrizione: pianificazioni, alimenti, macro, diario e integrazione.</li>
+              <li><strong style={{ color: 'var(--primary-color)' }}>Dati relativi alla salute (Art. 9 GDPR):</strong> peso, composizione corporea, circonferenze, sonno, fatica/dolori e altre misurazioni o annotazioni di salute inserite nell'app.</li>
+              <li>Metadati tecnici necessari a sincronizzazione, versioning, recovery, consenso legale e gestione del ciclo di vita dell'account.</li>
             </ul>
             <p>
-              Questi dati sono memorizzati nella tua area privata su Firestore. Sebbene le regole di sicurezza impediscano l'accesso ad altri utenti, il titolare del trattamento (in qualità di amministratore del database) ha tecnicamente accesso ai dati, ma si impegna a non visualizzarli, analizzarli o cederli in alcun modo, se non per adempiere ad obblighi di legge.
+              I dati cloud sono conservati nell'area privata associata all'account e sono protetti dalle regole di sicurezza applicative. Il backend amministrativo mantiene capacità tecniche necessarie a gestione, sicurezza, recovery e cancellazione account; tali capacità non sono destinate a profilazione commerciale dei dati fitness.
             </p>
 
-            <h3 style={h3Style}>Telemetria tecnica anonima</h3>
+            <h3 style={h3Style}>Telemetria tecnica di stabilità</h3>
             <p>
-              L'app raccoglie in modo anonimo alcune metriche tecniche (tipo di errori JavaScript, senza dati utente) per migliorare la stabilità.
+              LogBook utilizza una telemetria tecnica propria per diagnosticare errori e problemi di stabilità. Per gli utenti autenticati questa telemetria può essere <strong style={{ color: 'var(--text-main)' }}>pseudonimizzata tramite l'UID tecnico Firebase</strong> e può includere un identificativo di sessione, versione dell'app, piattaforma derivata, modalità PWA/browser, stato online, tipo e messaggio di errore sanitizzati, contatori/timestamp e stack trace troncati e sanitizzati.
+            </p>
+            <p>
+              Alcuni eventi operativi includono inoltre metadati limitati del flusso di allenamento, ad esempio stato offline, identificativo e nome della routine avviata, durata della sessione e numero di esercizi. Non vengono inviati tramite questa telemetria serie, carichi, ripetizioni, note di sessione, diario alimentare o misurazioni corporee. Prima della scrittura Firestore, le stringhe dei dettagli evento attraversano il sanitizzatore tecnico; indirizzi email, IP, token, API key, path utente e altre chiavi sensibili riconosciute vengono sostituiti o rimossi.
+            </p>
+            <p>
+              La telemetria tecnica non è quindi descritta come “anonima”: per un account autenticato può essere collegata tecnicamente a quell'account. Il suo scopo è sicurezza, affidabilità e diagnosi, non la profilazione commerciale dei dati di allenamento o nutrizione.
             </p>
           </Section>
 
           <Section title="Base giuridica del trattamento">
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Esecuzione del contratto</strong> (art. 6, par. 1, lett. b GDPR): per fornire le funzionalità dell'app.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Consenso Esplicito</strong> (art. 9, par. 2, lett. a GDPR): per il trattamento dei dati relativi alla salute (categorie particolari di dati). Il consenso viene richiesto esplicitamente al primo accesso.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Legittimo interesse</strong> (art. 6, par. 1, lett. f GDPR): per la telemetria tecnica per la stabilità dell'applicazione.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Consenso</strong> (art. 6, par. 1, lett. a GDPR): per le statistiche di utilizzo non essenziali (Analytics).</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Esecuzione del servizio</strong> (art. 6, par. 1, lett. b GDPR): per autenticazione, sincronizzazione, backup/recovery e funzionalità richieste dall'utente.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Consenso esplicito</strong> (art. 9, par. 2, lett. a GDPR): per il trattamento dei dati relativi alla salute (categorie particolari di dati). Il consenso viene richiesto esplicitamente nell'app.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Legittimo interesse</strong> (art. 6, par. 1, lett. f GDPR): per telemetria tecnica strettamente finalizzata a sicurezza, prevenzione degli errori e stabilità del servizio, con minimizzazione e sanitizzazione.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Consenso</strong> (art. 6, par. 1, lett. a GDPR): per Analytics e statistiche di utilizzo non essenziali.</li>
             </ul>
           </Section>
 
-          <Section title="Statistiche di utilizzo (Analytics) e Cookie Tecnici">
+          <Section title="Analytics e tecnologie di memorizzazione locale">
             <p>
-              L'applicazione utilizza IndexedDB e localStorage per il funzionamento tecnico offline (salvataggio dati di sessione e utente). Questi sono assimilabili a "cookie tecnici" strettamente necessari e non richiedono consenso preventivo, ma sono necessari all'uso dell'app.
+              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. Questi meccanismi sono distinti dai servizi Analytics e sono necessari alle funzionalità locali dell'app.
             </p>
             <p>
-              Le statistiche di utilizzo anonime tramite <strong style={{ color: 'var(--text-main)' }}>Vercel Analytics</strong> e <strong style={{ color: 'var(--text-main)' }}>Speed Insights</strong> sono <strong style={{ color: 'var(--text-main)' }}>disabilitate per impostazione predefinita</strong> (opt-in). Nessun dato personale o identificativo viene raccolto. Puoi abilitarle o disabilitarle dalle Impostazioni dell'app.
+              <strong style={{ color: 'var(--text-main)' }}>Firebase Analytics, Vercel Analytics e Vercel Speed Insights sono disabilitati per impostazione predefinita e vengono attivati soltanto tramite opt-in nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; il codice applicativo impedisce ai consumer Firebase Analytics di ottenere un'istanza consentita quando il consenso è disattivato e non renderizza i componenti Vercel Analytics/Speed Insights senza consenso.
+            </p>
+            <p>
+              Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. LogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
             </p>
           </Section>
 
-          <Section title="Conservazione, Backup e Cancellazione dei Dati">
+          <Section title="Conservazione, backup e cancellazione dei dati">
             <p>
-              I dati locali (modalità ospite) rimangono sul dispositivo finché non vengono eliminati manualmente.
+              I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati cloud vengono conservati finché l'account è attivo. Puoi richiedere la cancellazione completa di tutti i dati applicativi cloud e dell'account tramite la funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> nelle Impostazioni. L'operazione è irreversibile e costituisce revoca del consenso ai sensi dell'Art. 9 GDPR.
+              I dati cloud e la telemetria privata associata all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. LogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
-              Dopo il completamento della cancellazione, LogBook conserva temporaneamente un record tecnico server-only di recovery, privo dei dati di allenamento, nutrizione e misurazioni: contiene l'identificativo tecnico del job, stato e timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. Il record è programmato per la rimozione dopo 30 giorni e viene cancellato dal successivo ciclo giornaliero di manutenzione.
+              La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
+            </p>
+            <p>
+              Dopo il completamento della cancellazione, LogBook conserva temporaneamente un record tecnico server-only di recovery privo dei dati di allenamento, nutrizione e misurazioni. Il record contiene l'identificativo tecnico del job, stato/timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. È programmato per la rimozione dopo 30 giorni e viene eliminato dal successivo ciclo giornaliero di manutenzione applicabile.
             </p>
             <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
-              <strong>Attenzione:</strong> Trattandosi di un servizio offerto a titolo amatoriale e gratuito, non sono garantiti backup di livello enterprise. L'utente accetta il rischio di potenziale perdita di dati e si impegna a effettuare esportazioni periodiche (formato CSV) tramite l'apposita funzione.
+              <strong>Attenzione:</strong> il servizio non garantisce backup di livello enterprise. È consigliato effettuare periodicamente un backup JSON e/o un'esportazione CSV tramite le funzioni dell'app.
             </p>
           </Section>
 
-          <Section title="Trasferimento dei dati e sub-responsabili">
-            <p>I dati degli utenti con account cloud vengono trattati dai seguenti fornitori:</p>
+          <Section title="Fornitori e trasferimento dei dati">
+            <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Google LLC (Firebase / Firestore)</strong> — database cloud. Dati trasferiti e trattati nel rispetto dell'EU-US Data Privacy Framework (o SCC).</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Vercel Inc.</strong> — hosting e analytics anonimo (EU-US Data Privacy Framework).</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, App Check/reCAPTCHA Enterprise e, solo con consenso, Firebase Analytics.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — hosting delle risorse e delle funzioni server; solo con consenso, Vercel Analytics e Speed Insights.</li>
             </ul>
+            <p>
+              I fornitori possono trattare dati in paesi diversi da quello dell'utente secondo i meccanismi di trasferimento e le garanzie previste dalla normativa e dalle rispettive condizioni applicabili.
+            </p>
           </Section>
 
           <Section title="I tuoi diritti (GDPR)">
-            <p>In qualità di interessato, hai il diritto di:</p>
+            <p>Nei limiti e alle condizioni previste dalla normativa applicabile, puoi esercitare i diritti riconosciuti dal GDPR, inclusi:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Accesso e Portabilità (Art. 20)</strong>: esportare i tuoi dati in formato CSV dalle Impostazioni.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati tramite l'app.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione (Oblio - Art. 17)</strong>: chiedere la rimozione dei tuoi dati.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: eliminando l'account e i dati.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Accesso e portabilità</strong>: usare backup JSON/esportazione CSV e richiedere le informazioni applicabili al trattamento.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati modificabili tramite l'app.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: avviare la funzione di eliminazione account per la rimozione dei dati cloud applicativi.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: disabilitare Analytics dalle Impostazioni; per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>
-              Per esercitare i tuoi diritti, puoi contattare il titolare all'indirizzo email indicato nelle Impostazioni.
+              Per richieste che non possono essere gestite direttamente dall'app utilizza il canale di contatto pubblico eventualmente indicato per LogBook. Questa informativa non espone recapiti personali privati.
             </p>
           </Section>
 
           <Section title="Modifiche alla presente informativa">
             <p>
-              La presente informativa può essere aggiornata. La data di aggiornamento è visibile in cima al documento.
+              La presente informativa può essere aggiornata quando cambiano funzionalità, fornitori, basi giuridiche o flussi di dati. Le modifiche materiali comportano l'incremento della versione privacy dell'app e la richiesta di accettazione della versione aggiornata quando previsto dal flusso di consenso.
             </p>
           </Section>
 
@@ -207,4 +227,3 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
     {children}
   </div>
 );
-
