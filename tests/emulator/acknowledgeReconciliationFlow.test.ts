@@ -151,7 +151,8 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         };
 
         const result = await replicateJournal(owner);
-        expect(result).toMatchObject({ ok: true, status: 'synced' });
+        if (!result.ok) throw result.error;
+        expect(result.status).toBe('synced');
         expect(injected).toBe(true);
 
         expect(firstAckCloud?.profile).toMatchObject({ height: '171', name: 'remote-device' });
