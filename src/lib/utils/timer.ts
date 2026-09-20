@@ -11,6 +11,7 @@ export interface WorkoutTimerSnapshot {
 }
 
 const TIMER_STORAGE_KEY = 'timer';
+const OBSOLETE_TIMER_KEYS = ['timer_state', 'timer_start', 'timer_accumulated'] as const;
 
 export const stoppedWorkoutTimer = (): WorkoutTimerSnapshot => ({
     version: 1,
@@ -41,6 +42,17 @@ function normalizeTimerSnapshot(value: unknown): WorkoutTimerSnapshot | null {
     };
 }
 
+function purgeObsoleteTimerValues(owner: string): void {
+    for (const key of OBSOLETE_TIMER_KEYS) {
+        try {
+            writeDeviceValue(key, null, owner);
+        } catch (error) {
+            // Obsolete keys are never read; cleanup is best-effort only.
+            console.warn('Impossibile rimuovere una vecchia chiave del timer:', error);
+        }
+    }
+}
+
 export function readWorkoutTimerSnapshot(owner = storageOwner()): WorkoutTimerSnapshot {
     const raw = readDeviceValue(TIMER_STORAGE_KEY, owner);
     if (raw === null) return stoppedWorkoutTimer();
@@ -62,6 +74,7 @@ export function writeWorkoutTimerSnapshot(snapshot: WorkoutTimerSnapshot, owner 
     // The timer is a single logical value. One Web Storage write prevents a page
     // interruption or quota/security error from persisting only part of its state.
     writeDeviceValue(TIMER_STORAGE_KEY, JSON.stringify(normalized), owner);
+    purgeObsoleteTimerValues(owner);
 }
 
 export const resetGlobalWorkoutTimer = (owner = storageOwner()): boolean => {
