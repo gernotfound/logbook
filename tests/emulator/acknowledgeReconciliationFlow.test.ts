@@ -66,6 +66,7 @@ let env: RulesTestEnvironment;
 
 beforeAll(async () => {
     if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080') throw new Error('Only the isolated local emulator is allowed');
+    vi.stubGlobal('navigator', { onLine: true });
     env = await initializeTestEnvironment({
         projectId: 'demo-logbook-audit',
         firestore: { host: '127.0.0.1', port: 8080, rules: readFileSync('firestore.rules', 'utf8') },
@@ -92,6 +93,7 @@ afterEach(async () => {
 
 afterAll(async () => {
     await env?.cleanup();
+    vi.unstubAllGlobals();
 });
 
 describe('remote commit to local acknowledgement reconciliation', () => {
