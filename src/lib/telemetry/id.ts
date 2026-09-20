@@ -5,12 +5,20 @@ function randomSuffix(): string | null {
   if (!webCrypto) return null;
 
   if (typeof webCrypto.randomUUID === 'function') {
-    return webCrypto.randomUUID().replaceAll('-', '');
+    try {
+      return webCrypto.randomUUID().replaceAll('-', '');
+    } catch {
+      // Telemetry identifiers are best-effort; try the lower-level Web Crypto API.
+    }
   }
 
   if (typeof webCrypto.getRandomValues === 'function') {
-    const bytes = webCrypto.getRandomValues(new Uint8Array(16));
-    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    try {
+      const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fall through to the monotonic runtime-local suffix below.
+    }
   }
 
   return null;
