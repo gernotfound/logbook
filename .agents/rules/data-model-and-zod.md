@@ -1,6 +1,6 @@
 # Modello Dati e Validazione Zod — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-15 | File verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`, `src/lib/sync/documentProjection.ts`, `firestore.rules`
+> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/types.ts`, `src/lib/schema.ts`, `src/lib/schemas/*.ts`, `src/lib/merge.ts`, `src/lib/db.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/domainOperations.ts`, `firestore.rules`
 
 ## Quattro piani distinti
 
@@ -28,9 +28,10 @@ I tipi TypeScript svaniscono a runtime. Il Gateway Zod impedisce che dati malfor
 ### Helper difensivi
 
 Gli schema usano helper specifici con fallback, fra cui:
-- `safeString`, `safeOptionalString`
-- `safeNumber`, `safeOptionalNumber`, `safeOptionalNullableNumber`
-- `safeBoolean`, `safeOptionalBoolean`
+
+- `safeString`, `safeOptionalString`;
+- `safeNumber`, `safeOptionalNumber`, `safeOptionalNullableNumber`;
+- `safeBoolean`, `safeOptionalBoolean`.
 
 Ogni helper applica il comportamento difensivo definito negli schema correnti; non duplicare questa logica nei consumer.
 
@@ -38,13 +39,19 @@ Ogni helper applica il comportamento difensivo definito negli schema correnti; n
 
 I sub-schema possono usare `.passthrough()` dove la compatibilità in avanti è intenzionale.
 
-**SHOULD:** Non aggiungere `.passthrough()` come scorciatoia per evitare di modellare un campo persistito. Un campo business nuovo deve avere classificazione storage e schema espliciti.
+**SHOULD:** non aggiungere `.passthrough()` come scorciatoia per evitare di modellare un campo persistito. Un campo business nuovo deve avere classificazione storage e schema espliciti.
 
-### Comportamento con oggetti fantasma (Ghost Objects)
+### Identità business e oggetti fantasma (Ghost Objects)
 
-Il gateway applica validazione difensiva agli elementi collezione:
-- scarta elementi nulli/primitivi o privi dell'identità richiesta;
-- se un elemento mantiene un'identità valida ma contiene campi corrotti, gli schema possono sanitizzare i campi secondo i default previsti preservando la referenza.
+Gli elementi delle collezioni che hanno un'identità business obbligatoria devono possedere un ID valido **prima** che i fallback permissivi dei campi non-identità vengano applicati.
+
+**MUST:** scartare elementi nulli/primitivi, con ID assente, vuoto o non valido secondo lo schema della collezione. Non generare un ID fittizio e non convertire un valore invalido in stringa pur di conservare il record.
+
+**MAY:** se l'identità è valida ma altri campi sono corrotti, il relativo sub-schema può sanitizzare quei campi secondo fallback modellati e testati, preservando la referenza dell'elemento.
+
+Questa distinzione è già applicata alle collezioni che hanno ricevuto hardening specifico, incluse routines, training cycles e supplements. Quando si introduce una nuova collection schema, la validità dell'identità deve essere esplicita e coperta da test.
+
+**MUST:** un record scartato per identità invalida non deve riapparire come ghost object in projection, merge, UI o successiva sincronizzazione.
 
 ### Cache corrotta vs dati cloud invalidi
 
@@ -54,9 +61,10 @@ Il gateway applica validazione difensiva agli elementi collezione:
 
 ## Valori opzionali Firestore — policy `undefined` vs `null`
 
-**MUST:** Nessun `undefined` nei payload Firestore.
+**MUST:** nessun `undefined` nei payload Firestore.
 
 Ogni boundary di projection deve produrre una rappresentazione coerente:
+
 - `null` quando il contratto root rappresenta esplicitamente l'assenza;
 - chiave omessa dove il contratto lo prevede;
 - mai affidarsi a `undefined` perché Firebase SDK lo rifiuta.
@@ -78,9 +86,9 @@ Per ogni nuova chiave del root Firestore verificare e aggiornare, dove applicabi
 9. semantic projection/path ownership se il campo è mutabile tramite Domain Operations;
 10. controlli di dimensione del documento e test di regressione pertinenti.
 
-**MUST:** Non assumere che aggiungere un campo a `UserDataSchema` lo renda automaticamente cloud-root. Se manca da `rootKeys`, non verrà proiettato nel documento root dalle semantic write correnti.
+**MUST:** non assumere che aggiungere un campo a `UserDataSchema` lo renda automaticamente cloud-root. Se manca da `rootKeys`, non verrà proiettato nel documento root dalle semantic write correnti.
 
-**MUST:** Un campo local-only non va aggiunto a Rules/root projection soltanto perché è parte di `UserData`.
+**MUST:** un campo local-only non va aggiunto a Rules/root projection soltanto perché è parte di `UserData`.
 
 ## Shard mensili
 
