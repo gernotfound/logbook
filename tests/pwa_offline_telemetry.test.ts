@@ -186,7 +186,7 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
-renderHook(() => usePWAInstall());
+      renderHook(() => usePWAInstall());
 
       act(() => {
         window.dispatchEvent(new Event('appinstalled'));
@@ -340,7 +340,7 @@ renderHook(() => usePWAInstall());
         expect(workoutStartedCall).toBeDefined();
         expect(workoutStartedCall[1].details?.offline).toBe(false);
         expect(workoutStartedCall[1].details?.routineId).toBe('routine_push_1');
-        expect(workoutStartedCall[1].details?.routineName).toBe('Push Day A');
+        expect(workoutStartedCall[1].details?.routineName).toBeUndefined();
       });
     });
 
@@ -366,6 +366,7 @@ renderHook(() => usePWAInstall());
       expect(queue[0].payload.type).toBe('workout_started');
       expect((queue[0].payload as TelemetryEventPayload).details?.offline).toBe(true);
       expect((queue[0].payload as TelemetryEventPayload).details?.routineId).toBe('routine_push_1');
+      expect((queue[0].payload as TelemetryEventPayload).details?.routineName).toBeUndefined();
     });
 
     it('tracks workout_saved event with offline: false, duration, and exerciseCount when online', async () => {
@@ -660,6 +661,7 @@ renderHook(() => usePWAInstall());
         expect(started).toBeDefined();
         expect(started[1].details?.offline).toBe(false);
         expect(started[1].details?.routineId).toBe('r_leg_day');
+        expect(started[1].details?.routineName).toBeUndefined();
 
         const saved = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_saved');
         expect(saved).toBeDefined();
