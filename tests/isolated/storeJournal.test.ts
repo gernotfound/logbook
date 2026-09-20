@@ -19,6 +19,14 @@ const data = (height: number) => UserDataSchema.parse({ profile: { height } }) a
 const store = create<AppState>()((...args) => ({ ...createDataSlice(...args), ...createWorkoutSlice(...args), ...createSyncSlice(...args) }));
 const deferred = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 beforeEach(async () => {
+    vi.stubGlobal('localStorage', {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+        key: vi.fn(() => null),
+        length: 0,
+    });
     store.getState().resetStore();
     await clear();
     sdk.auth.currentUser = { uid: 'A' };
@@ -26,7 +34,7 @@ beforeEach(async () => {
     store.setState({ userData: data(170) });
     await initializeLocal('user:A', data(170));
 });
-afterEach(() => { store.getState().cancelPendingSyncs(); vi.restoreAllMocks(); });
+afterEach(() => { store.getState().cancelPendingSyncs(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('store with real IndexedDB commits', () => {
     it('preserves the nutrition alternative in memory and IndexedDB when resolution is rejected', async () => {
         const conflicted = UserDataSchema.parse({ ...data(170), nutritionPlanning: { onDaysCount: 3 }, pendingConflicts: { nutritionPlanning: { onDaysCount: 0 } } }) as unknown as UserData;
