@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { auth } from './lib/firebase'
 import { readLocal } from './lib/sync/localRepository'
+import { readBrowserValueStrict } from './lib/sync/browserStorage'
 import { storageOwner } from './lib/sync/session'
 import { findPendingAccountDeletion, readAccountDeletionMarker } from './lib/sync/accountGate'
 import App from './App'
@@ -29,7 +30,61 @@ import {
 } from './lib/storageTelemetry';
 import { telemetryHub } from './lib/telemetryHub';
 
+const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. LogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
+
+function renderStorageUnavailable(rootElement: HTMLElement | null): void {
+  window.__INITIAL_USER_DATA__ = null;
+  useAppStore.setState({
+    localPersistenceBlocked: true,
+    syncHealth: 'failed',
+    saveError: STORAGE_UNAVAILABLE_MESSAGE,
+  });
+
+  if (!rootElement) return;
+  createRoot(rootElement).render(
+    <StrictMode>
+      <main
+        id="storage-unavailable"
+        role="alert"
+        style={{
+          minHeight: '100dvh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+          background: '#000',
+          color: '#fff',
+          fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
+        }}
+      >
+        <div style={{ maxWidth: '480px', textAlign: 'center' }}>
+          <h1 style={{ marginBottom: '12px' }}>Archivio non disponibile</h1>
+          <p style={{ lineHeight: 1.5 }}>{STORAGE_UNAVAILABLE_MESSAGE}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{ minHeight: '44px', padding: '10px 18px', marginTop: '8px' }}
+          >
+            Riprova
+          </button>
+        </div>
+      </main>
+    </StrictMode>,
+  );
+}
+
 export const initApp = async () => {
+  const rootElement = document.getElementById('root');
+
+  let isGuest = false;
+  try {
+    isGuest = readBrowserValueStrict('logbook_is_guest') === 'true';
+  } catch (error) {
+    console.warn('Bootstrap bloccato: ownership storage non leggibile.', error);
+    renderStorageUnavailable(rootElement);
+    return;
+  }
+
   try {
     telemetryHub.init();
   } catch (err) {
@@ -43,7 +98,6 @@ export const initApp = async () => {
   }
 
   const marker = getStorageMarker();
-  const isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('logbook_is_guest') === 'true';
 
   let cached: UserData | undefined = undefined;
   let readError: unknown = null;
@@ -118,7 +172,6 @@ export const initApp = async () => {
     window.__INITIAL_USER_DATA__ = null;
   }
 
-  const rootElement = document.getElementById('root');
   if (rootElement) {
     createRoot(rootElement, {
       onCaughtError(error, errorInfo) {

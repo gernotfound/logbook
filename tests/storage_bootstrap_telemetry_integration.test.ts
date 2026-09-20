@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as idbKeyval from 'idb-keyval';
+import { createRoot } from 'react-dom/client';
 import { initApp } from '../src/main';
 import { useAppStore } from '../src/store/useAppStore';
 import {
@@ -10,6 +11,7 @@ import {
 } from '../src/lib/storageTelemetry';
 import * as storageTelemetryModule from '../src/lib/storageTelemetry';
 import { CURRENT_DATA_SCHEMA, CURRENT_LOCAL_ENVELOPE, CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
+import { localStorageMock } from './setup';
 
 vi.mock('react-dom/client', () => ({
   createRoot: vi.fn(() => ({
@@ -22,7 +24,14 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
   beforeEach(() => {
     localStorage.clear();
     window.__INITIAL_USER_DATA__ = null;
-    useAppStore.setState({ userData: null, localWorkout: null, saveError: null, syncing: false });
+    useAppStore.setState({
+      userData: null,
+      localWorkout: null,
+      saveError: null,
+      syncing: false,
+      syncHealth: 'synced',
+      localPersistenceBlocked: false,
+    });
     vi.clearAllMocks();
     vi.useRealTimers();
     document.body.innerHTML = '<div id="root"></div>';
@@ -32,6 +41,22 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     localStorage.clear();
     window.__INITIAL_USER_DATA__ = null;
     vi.restoreAllMocks();
+  });
+
+  it('Flow 0: unreadable ownership storage renders a recovery barrier before IndexedDB bootstrap', async () => {
+    localStorageMock.getItem.mockImplementationOnce(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    const getSpy = vi.spyOn(idbKeyval, 'get');
+
+    await initApp();
+
+    expect(getSpy).not.toHaveBeenCalled();
+    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(useAppStore.getState().syncHealth).toBe('failed');
+    expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
+    expect(createRoot).toHaveBeenCalledTimes(1);
   });
 
   it('Flow 1: Valid current cache in IndexedDB initializes store and updates marker', async () => {

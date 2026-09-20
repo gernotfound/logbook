@@ -7,6 +7,8 @@ import {
     writeBrowserValue,
 } from '../src/lib/sync/browserStorage';
 import { isAccountDeletionPending, markAccountDeletion } from '../src/lib/sync/accountGate';
+import { readDeviceValue } from '../src/lib/sync/deviceStorage';
+import { storageOwner } from '../src/lib/sync/session';
 import { localStorageMock } from './setup';
 
 const OWNER = 'user:test-user';
@@ -57,5 +59,17 @@ describe('browser storage boundary', () => {
         });
 
         expect(() => markAccountDeletion(OWNER)).toThrow(BrowserStorageError);
+    });
+
+    it('fails closed instead of guessing the storage owner when ownership markers are unreadable', () => {
+        localStorageMock.getItem.mockImplementationOnce(storageFailure);
+
+        expect(() => storageOwner()).toThrow(BrowserStorageError);
+    });
+
+    it('keeps best-effort device reads non-throwing while owner resolution is unavailable', () => {
+        localStorageMock.getItem.mockImplementationOnce(storageFailure);
+
+        expect(readDeviceValue('workout')).toBeNull();
     });
 });

@@ -10,6 +10,7 @@ import {
   type TelemetryEventPayload,
 } from './contracts';
 import { sanitizeTelemetryDetails } from './detailSanitizer';
+import { createTelemetryId } from './id';
 
 type UserIdProvider = () => string | null;
 
@@ -69,7 +70,8 @@ export async function dispatchTelemetryEvent(
       return false;
     }
 
-    const eventId = payload.id || `evt_${payload.timestamp}_${Math.random().toString(36).slice(2, 9)}`;
+    const eventId = payload.id || createTelemetryId('evt', payload.timestamp);
+    if (!payload.id) payload.id = eventId;
     const docRef = doc(getDb(), 'users', uid, 'telemetry_events', eventId);
 
     const firestorePayload: Record<string, any> = {

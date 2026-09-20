@@ -1,16 +1,13 @@
 import { auth } from '../firebase';
+import { readBrowserValueStrict } from './browserStorage';
 import { userOwner } from './owner';
 
 export { userOwner, normalizeStorageOwner } from './owner';
 
 let epoch = 0;
 export function storageOwner(): string {
-    let guest = false;
-    let recoveryUid: string | null = null;
-    try {
-        guest = localStorage.getItem('logbook_is_guest') === 'true';
-        recoveryUid = localStorage.getItem('logbook_guest_migration_sync_recovery');
-    } catch { /* No local ownership markers available. */ }
+    const guest = readBrowserValueStrict('logbook_is_guest') === 'true';
+    const recoveryUid = readBrowserValueStrict('logbook_guest_migration_sync_recovery');
 
     const uid = auth.currentUser?.uid;
     // Once the authenticated envelope is durable, the recovery marker is the

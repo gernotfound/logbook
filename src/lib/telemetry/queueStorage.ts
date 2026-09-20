@@ -7,6 +7,7 @@ import {
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
 } from './contracts';
+import { createTelemetryId } from './id';
 
 export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
@@ -108,7 +109,7 @@ export class TelemetryQueueStorage {
     try {
       const items = [...this.getQueuedEvents()];
       const newItem: QueuedTelemetryItem = {
-        id: payload.id || `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: payload.id || createTelemetryId('item'),
         timestamp: payload.timestamp || Date.now(),
         itemType: kind,
         payload,

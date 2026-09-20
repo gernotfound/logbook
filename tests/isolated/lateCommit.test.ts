@@ -19,6 +19,14 @@ const deferred = <T>() => { let resolve!: (value: T) => void; let reject!: (err:
 
 beforeEach(async () => {
     vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal('localStorage', {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
+        key: vi.fn(() => null),
+        length: 0,
+    });
     invalidateSession(); await clear();
     remote.auth.currentUser = { uid: 'a' }; remote.apply.mockReset();
     await initializeLocal('user:a', data(170)); await commitLocal('user:a', data(171), data(170));
