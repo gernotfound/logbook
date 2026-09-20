@@ -77,7 +77,13 @@ export class CloudDataIntegrityError extends Error {
 }
 
 function assertRemoteBusinessPreserved(path: string, raw: DocumentData, normalized: DocumentData): void {
-    const mismatch = findLossyNormalization(raw, normalized);
+    // The root document intentionally excludes application-only/monthly keys such as
+    // history, nutrition and pendingConflicts. Only root fields that survive the
+    // canonical root projection belong to this Firestore document contract.
+    const protectedRaw = path === ''
+        ? Object.fromEntries(Object.entries(raw).filter(([key]) => Object.hasOwn(normalized, key)))
+        : raw;
+    const mismatch = findLossyNormalization(protectedRaw, normalized);
     if (mismatch) throw new CloudDataIntegrityError(path, mismatch);
 }
 
