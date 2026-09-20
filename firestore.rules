@@ -79,7 +79,6 @@ service cloud.firestore {
         && details.keys().hasOnly([
           'offline',
           'routineId',
-          'routineName',
           'duration',
           'durationMinutes',
           'exerciseCount',
@@ -99,7 +98,6 @@ service cloud.firestore {
         ])
         && (!('offline' in details) || details.offline is bool)
         && (!('routineId' in details) || details.routineId == null || isStringAtMost(details.routineId, 128))
-        && (!('routineName' in details) || details.routineName == null || isStringAtMost(details.routineName, 128))
         && (!('duration' in details) || isStringAtMost(details.duration, 32) || details.duration is int || details.duration is float)
         && (!('durationMinutes' in details) || isNonNegativeInt(details.durationMinutes))
         && (!('exerciseCount' in details) || isNonNegativeInt(details.exerciseCount))
