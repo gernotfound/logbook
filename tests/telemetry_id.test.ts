@@ -7,13 +7,13 @@ describe('telemetry identifiers', () => {
     vi.unstubAllGlobals();
   });
 
-  it('prefers Web Crypto UUIDs when available', () => {
+  it('prefers Web Crypto UUID entropy while preserving the identifier shape', () => {
     vi.stubGlobal('crypto', {
       randomUUID: vi.fn(() => '123e4567-e89b-42d3-a456-426614174000'),
       getRandomValues: vi.fn(),
     });
 
-    expect(createTelemetryId('evt', 123)).toBe('evt_123e4567-e89b-42d3-a456-426614174000');
+    expect(createTelemetryId('evt', 123)).toBe('evt_123_123e4567e89b42d3a456426614174000');
   });
 
   it('remains collision-safe within the runtime without falling back to Math.random', () => {
