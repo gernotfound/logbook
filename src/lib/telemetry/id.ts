@@ -5,7 +5,7 @@ function randomSuffix(): string | null {
   if (!webCrypto) return null;
 
   if (typeof webCrypto.randomUUID === 'function') {
-    return webCrypto.randomUUID();
+    return webCrypto.randomUUID().replaceAll('-', '');
   }
 
   if (typeof webCrypto.getRandomValues === 'function') {
@@ -17,13 +17,14 @@ function randomSuffix(): string | null {
 }
 
 /**
- * Telemetry identifiers prefer Web Crypto but stay best-effort when crypto is
- * unavailable. The monotonic fallback is deliberately non-security-sensitive:
- * it prevents same-runtime collisions without making telemetry a hard app gate.
+ * Telemetry identifiers preserve the historical prefix/timestamp/suffix shape
+ * while replacing Math.random entropy with Web Crypto whenever available.
+ * The monotonic fallback is deliberately non-security-sensitive: it prevents
+ * same-runtime collisions without making telemetry a hard app gate.
  */
 export function createTelemetryId(prefix: string, timestamp: number = Date.now()): string {
   const suffix = randomSuffix();
-  if (suffix) return `${prefix}_${suffix}`;
+  if (suffix) return `${prefix}_${timestamp}_${suffix}`;
 
   fallbackSequence = (fallbackSequence + 1) % Number.MAX_SAFE_INTEGER;
   return `${prefix}_${timestamp}_${fallbackSequence.toString(36)}`;
