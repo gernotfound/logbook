@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { auth } from './lib/firebase'
-import { readLocal, preserveLegacyCache } from './lib/sync/localRepository'
+import { readLocal } from './lib/sync/localRepository'
 import { storageOwner } from './lib/sync/session'
 import { findPendingAccountDeletion, readAccountDeletionMarker } from './lib/sync/accountGate'
 import App from './App'
@@ -52,7 +52,6 @@ export const initApp = async () => {
     const catalog = await getCachedCatalog();
     try {
       if (!isGuest && typeof auth.authStateReady === 'function') await auth.authStateReady();
-      await preserveLegacyCache();
       // A pending deletion marker can outlive Firebase Auth. Reuse it only when there is
       // no authenticated user, or when it belongs to the currently authenticated UID.
       // A stale marker from account A must never select A's envelope while account B is active.
