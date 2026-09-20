@@ -1,6 +1,6 @@
 # Storage e Sincronizzazione - LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/store/useAppStore.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
+> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/store/useAppStore.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
 
 ## Architettura di storage
 
@@ -79,6 +79,8 @@ Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 
 - nessuna importazione compatibile di backup V1/V2;
 - i registry storici sono vuoti finché non esiste un vero bump futuro N→N+1;
 - vecchi formati locali/backup vengono rifiutati e non riscritti;
+- la vecchia cache locale non attribuita `logbook_cached_user_data` non viene letta, preservata né esportata dal prodotto corrente;
+- il timer legge esclusivamente lo snapshot owner-scoped `timer`; eventuali chiavi timer obsolete possono essere eliminate best-effort ma non vengono mai usate come fallback;
 - un documento Firestore senza `_schemaVersion` è considerato schema 1 baseline, senza eseguire migrazioni storiche;
 - ogni documento Firestore realmente toccato da una semantic write viene riscritto lazy con `_schemaVersion: CURRENT_DATA_SCHEMA`;
 - non esiste una scansione cloud solo per aggiornare i marker.
@@ -205,7 +207,7 @@ Il formato importabile corrente è `logbook-backup` V3 e contiene anche `dataSch
 
 **MUST:** backup V1/V2 e versioni future non vengono importati nella baseline clean-cut M1.
 
-**NOTE:** `handleExportRecovery()` costituisce un carve-out intenzionale: può serializzare il vecchio archivio locale non attribuito come `logbook-backup` `version: 1` per recupero manuale. Quel raw legacy recovery file non è un backup V1 supportato dall'importer corrente e non deve essere presentato come tale.
+**MUST:** non esiste un export di recupero V1 per la vecchia cache locale non attribuita; il prodotto corrente non la legge né la converte.
 
 Il recovery raw di un backup cloud può conservare i documenti originali con `_schemaVersion`/`_sync`, ma il business snapshot deve usare solo dati già normalizzati e deve escludere entrambi i metadati dal `UserData`.
 

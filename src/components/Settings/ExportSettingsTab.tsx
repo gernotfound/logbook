@@ -23,7 +23,6 @@ interface ExportSettingsTabProps {
     onTrainingCyclesSelectionChange: (value: ExportSelection) => void;
     onExportShare: (options?: ExportShareOptions) => void | Promise<void>;
     onExportBackup: () => void | Promise<void>;
-    onExportRecovery: () => void | Promise<void>;
     onExportCSV: () => void;
     onImportFile: (event: ChangeEvent<HTMLInputElement>, mode?: ImportMode) => void | Promise<void>;
     importingData: boolean;
@@ -42,7 +41,6 @@ export function ExportSettingsTab({
     onTrainingCyclesSelectionChange,
     onExportShare,
     onExportBackup,
-    onExportRecovery,
     onExportCSV,
     onImportFile,
     importingData,
@@ -95,7 +93,6 @@ export function ExportSettingsTab({
                         <input type="file" accept=".json" style={{ display: 'none' }} onChange={event => onImportFile(event, 'restore')} disabled={importingData} />
                     </label>
                 </div>
-                <button className="btn" style={{ marginTop: '12px', minHeight: '44px' }} onClick={onExportRecovery}>Esporta archivio precedente</button>
             </div>
 
             <div className="section-divider">

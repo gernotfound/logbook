@@ -15,7 +15,7 @@ import { ExportSettingsTab } from './Settings/ExportSettingsTab';
 const SettingsView = () => {
     const {
         deletingAccount, pendingAccountDeletion,
-        handleExportCSV, handleExportShare, handleExportBackup, handleExportRecovery, handleImportFile, importingData, exportingData,
+        handleExportCSV, handleExportShare, handleExportBackup, handleImportFile, importingData, exportingData,
         handleDeleteAccount
     } = useSettings();
 
@@ -121,7 +121,6 @@ const SettingsView = () => {
                     onTrainingCyclesSelectionChange={setExportTrainingCycles}
                     onExportShare={handleExportShare}
                     onExportBackup={handleExportBackup}
-                    onExportRecovery={handleExportRecovery}
                     onExportCSV={handleExportCSV}
                     onImportFile={handleImportFile}
                     importingData={importingData}

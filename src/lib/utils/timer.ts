@@ -11,7 +11,7 @@ export interface WorkoutTimerSnapshot {
 }
 
 const TIMER_STORAGE_KEY = 'timer';
-const LEGACY_TIMER_KEYS = ['timer_state', 'timer_start', 'timer_accumulated'] as const;
+const OBSOLETE_TIMER_KEYS = ['timer_state', 'timer_start', 'timer_accumulated'] as const;
 
 export const stoppedWorkoutTimer = (): WorkoutTimerSnapshot => ({
     version: 1,
@@ -42,59 +42,29 @@ function normalizeTimerSnapshot(value: unknown): WorkoutTimerSnapshot | null {
     };
 }
 
-function removeLegacyTimerValues(owner: string): void {
-    for (const key of LEGACY_TIMER_KEYS) {
+function purgeObsoleteTimerValues(owner: string): void {
+    for (const key of OBSOLETE_TIMER_KEYS) {
         try {
             writeDeviceValue(key, null, owner);
         } catch (error) {
-            // Once the canonical snapshot exists, legacy cleanup is non-critical:
-            // reads never fall back to legacy data while the canonical key exists.
+            // Obsolete keys are never read; cleanup is best-effort only.
             console.warn('Impossibile rimuovere una vecchia chiave del timer:', error);
         }
     }
 }
 
-function readLegacyTimerSnapshot(owner: string): WorkoutTimerSnapshot | null {
-    const state = readDeviceValue('timer_state', owner);
-    if (state !== 'running' && state !== 'paused') return null;
-
-    const start = Number(readDeviceValue('timer_start', owner) ?? 0);
-    const accumulated = Number(readDeviceValue('timer_accumulated', owner) ?? 0);
-    if (!finiteNonNegative(start) || !finiteNonNegative(accumulated)) return null;
-    if (state === 'running' && start <= 0) return null;
-
-    return {
-        version: 1,
-        state,
-        startTime: state === 'paused' ? 0 : start,
-        accumulated,
-    };
-}
-
 export function readWorkoutTimerSnapshot(owner = storageOwner()): WorkoutTimerSnapshot {
     const raw = readDeviceValue(TIMER_STORAGE_KEY, owner);
-    if (raw !== null) {
-        try {
-            const parsed = normalizeTimerSnapshot(JSON.parse(raw));
-            if (parsed) return parsed;
-            console.warn('Snapshot timer non valido. Il timer viene ripristinato in stato fermo.');
-        } catch (error) {
-            console.warn('Snapshot timer non leggibile. Il timer viene ripristinato in stato fermo:', error);
-        }
-        return stoppedWorkoutTimer();
-    }
-
-    const legacy = readLegacyTimerSnapshot(owner);
-    if (!legacy) return stoppedWorkoutTimer();
+    if (raw === null) return stoppedWorkoutTimer();
 
     try {
-        // Write the complete canonical snapshot first. If legacy cleanup later fails,
-        // the canonical value remains authoritative and prevents torn-state recovery.
-        writeWorkoutTimerSnapshot(legacy, owner);
+        const parsed = normalizeTimerSnapshot(JSON.parse(raw));
+        if (parsed) return parsed;
+        console.warn('Snapshot timer non valido. Il timer viene ripristinato in stato fermo.');
     } catch (error) {
-        console.warn('Migrazione dello stato timer non riuscita; uso temporaneo del formato precedente:', error);
+        console.warn('Snapshot timer non leggibile. Il timer viene ripristinato in stato fermo:', error);
     }
-    return legacy;
+    return stoppedWorkoutTimer();
 }
 
 export function writeWorkoutTimerSnapshot(snapshot: WorkoutTimerSnapshot, owner = storageOwner()): void {
@@ -104,13 +74,12 @@ export function writeWorkoutTimerSnapshot(snapshot: WorkoutTimerSnapshot, owner 
     // The timer is a single logical value. One Web Storage write prevents a page
     // interruption or quota/security error from persisting only part of its state.
     writeDeviceValue(TIMER_STORAGE_KEY, JSON.stringify(normalized), owner);
-    removeLegacyTimerValues(owner);
+    purgeObsoleteTimerValues(owner);
 }
 
 export const resetGlobalWorkoutTimer = (owner = storageOwner()): boolean => {
     try {
         // Persist an explicit stopped snapshot instead of deleting the canonical key.
-        // This also prevents stale legacy keys from resurrecting a timer after reset.
         writeWorkoutTimerSnapshot(stoppedWorkoutTimer(), owner);
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('logbook_reset_timer'));

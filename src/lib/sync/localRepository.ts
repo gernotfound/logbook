@@ -256,17 +256,10 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
     owner = normalizeStorageOwner(owner);
-    const revert = (data: UserData) => equal(data.legalConsent, expected) ? parse({ ...data, legalConsent: previous }) : data;
+    const revert = (data: UserData): UserData => equal(data.legalConsent, expected) ? parse({ ...data, legalConsent: previous }) : data;
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
         if (!current) return raw!;
         return { ...current, data: revert(current.data) };
     });
-}
-
-export async function preserveLegacyCache(): Promise<boolean> {
-    const legacy = await get('logbook_cached_user_data');
-    if (legacy === undefined) return false;
-    await update('logbook:recovery:legacy', original => original ?? legacy);
-    return true;
 }
