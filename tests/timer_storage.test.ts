@@ -21,30 +21,16 @@ describe('atomic workout timer storage', () => {
         vi.restoreAllMocks();
     });
 
-    it('migrates a valid legacy three-key timer into one canonical snapshot', () => {
+    it('ignores obsolete three-key timer state when the canonical snapshot is absent', () => {
         localStorage.setItem(deviceKey('timer_state', OWNER), 'running');
         localStorage.setItem(deviceKey('timer_start', OWNER), '1000');
         localStorage.setItem(deviceKey('timer_accumulated', OWNER), '250');
 
-        expect(readWorkoutTimerSnapshot(OWNER)).toEqual({
-            version: 1,
-            state: 'running',
-            startTime: 1000,
-            accumulated: 250,
-        });
-
-        expect(JSON.parse(localStorage.getItem(deviceKey('timer', OWNER))!)).toEqual({
-            version: 1,
-            state: 'running',
-            startTime: 1000,
-            accumulated: 250,
-        });
-        expect(localStorage.getItem(deviceKey('timer_state', OWNER))).toBeNull();
-        expect(localStorage.getItem(deviceKey('timer_start', OWNER))).toBeNull();
-        expect(localStorage.getItem(deviceKey('timer_accumulated', OWNER))).toBeNull();
+        expect(readWorkoutTimerSnapshot(OWNER)).toEqual(stoppedWorkoutTimer());
+        expect(localStorage.getItem(deviceKey('timer', OWNER))).toBeNull();
     });
 
-    it('keeps the canonical stopped snapshot authoritative over stale legacy keys', () => {
+    it('keeps the canonical stopped snapshot authoritative over obsolete keys', () => {
         localStorage.setItem(deviceKey('timer_state', OWNER), 'running');
         localStorage.setItem(deviceKey('timer_start', OWNER), '1000');
         localStorage.setItem(deviceKey('timer_accumulated', OWNER), '250');
