@@ -29,21 +29,23 @@ La versione applicativa viene dal build-time `__APP_VERSION__`; non deve essere 
 
 ### Eventi
 
-Gli eventi possono includere il medesimo contesto tecnico e una mappa `details` bounded dalle Security Rules. I dettagli correnti includono, a seconda dell'evento:
+Gli eventi possono includere il medesimo contesto tecnico e una mappa `details` bounded da un'allowlist applicativa e dalle Security Rules. I dettagli correnti includono, a seconda dell'evento:
 
 - stato offline;
 - metadati PWA come outcome/source/prompt availability;
-- identificativo e nome della routine avviata;
+- identificativo tecnico della routine avviata, ma non il nome scelto dall'utente;
 - durata e conteggio esercizi per il workout salvato;
 - metadati di fallback Zod come schema, field path, issue code e tipi atteso/ricevuto.
 
-La telemetria workout **non** invia serie, carichi, ripetizioni, note di sessione, diario alimentare o misurazioni corporee.
+La telemetria workout **non** invia nomi di routine, serie, carichi, ripetizioni, note di sessione, diario alimentare o misurazioni corporee.
 
 ## Sanitizzazione e minimizzazione
 
-`src/lib/telemetrySanitizer.ts` sanitizza messaggi e stack. Prima che `telemetry_events.details` attraversi il boundary Firestore, `src/lib/telemetry/detailSanitizer.ts` sanitizza ricorsivamente le stringhe.
+`src/lib/telemetrySanitizer.ts` sanitizza messaggi e stack. `src/lib/telemetry/detailSanitizer.ts` costituisce il boundary canonico dei dettagli evento: accetta soltanto le chiavi tecniche esplicitamente previste, valida i tipi/limiti pertinenti, scarta chiavi sconosciute e strutture libere e sanitizza le stringhe ammesse.
 
-I pattern riconosciuti comprendono:
+Lo stesso boundary viene applicato prima della persistenza nella coda telemetrica locale e prima della scrittura Firestore. In questo modo anche un caller obsoleto o una vecchia voce di coda non può trasformare un'etichetta business libera, come il nome di una routine, in telemetria persistita.
+
+I pattern di stringa riconosciuti comprendono:
 
 - indirizzi email;
 - IPv4/IPv6;
@@ -52,7 +54,7 @@ I pattern riconosciuti comprendono:
 - path utente Windows/Unix;
 - chiavi sensibili come password, token, secret, apiKey e credenziali equivalenti nei formati riconosciuti.
 
-**MUST:** questa sanitizzazione riduce il rischio di leakage accidentale ma non rende semanticamente innocuo qualunque testo libero. I nuovi eventi devono usare soltanto metadati tecnici bounded; non introdurre note utente, contenuti nutrizionali, misurazioni, testo sanitario libero o altri dati business nel payload telemetrico.
+**MUST:** la sanitizzazione riduce il rischio di leakage accidentale ma non rende semanticamente innocuo qualunque testo libero. I nuovi eventi devono usare soltanto metadati tecnici bounded; non introdurre note utente, nomi/etichette business, contenuti nutrizionali, misurazioni, testo sanitario libero o altri dati business nel payload telemetrico.
 
 ## Guest e coda offline
 
@@ -82,11 +84,11 @@ Gli errori sono aggregati per hash deterministico di tipo + messaggio sanitizzat
 - ownership (`request.auth.uid == userId`);
 - blocco durante `account_deletions/{uid}`;
 - allowlist delle chiavi top-level;
-- limiti di tipo/dimensione per context/details;
+- allowlist, limiti di tipo/dimensione e rifiuto di `routineName` nei dettagli evento;
 - immutabilità degli eventi, salvo retry identico;
 - identità stabile e aggiornamenti monotoni per gli errori aggregati.
 
-Le Rules sono un secondo boundary di sicurezza: non sostituiscono la sanitizzazione client e non rendono le stringhe arbitrarie automaticamente sicure dal punto di vista privacy.
+Le Rules sono un secondo boundary di sicurezza: non sostituiscono la minimizzazione client e non rendono le stringhe arbitrarie automaticamente sicure dal punto di vista privacy.
 
 ## Query operative
 
@@ -109,8 +111,8 @@ Prima di aggiungere un nuovo evento o dettaglio:
 1. dimostrare che serve per diagnosi/stabilità e che non esiste un'alternativa meno invasiva;
 2. evitare contenuto business libero;
 3. aggiornare il tipo/consumer interessato;
-4. aggiornare `isValidTelemetryDetails()` / Rules se serve una nuova chiave;
-5. aggiungere test del transport e delle Security Rules;
+4. aggiornare `sanitizeTelemetryDetails()` e `isValidTelemetryDetails()` / Rules quando serve una nuova chiave;
+5. aggiungere test del transport, della coda e delle Security Rules;
 6. verificare la coerenza con Privacy Policy, README e `AGENTS.md`;
 7. eseguire il gate canonico `npm run verify:m8`.
 

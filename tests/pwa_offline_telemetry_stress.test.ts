@@ -71,10 +71,10 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       expect(firstItem.itemType).toBe('error');
       expect((firstItem.payload as TelemetryErrorPayload).message).toBe('error_101');
 
-      // Item 150 was even -> event_150
+      // Item 150 was even -> event_150. Test-only arbitrary metadata is minimized away.
       expect(lastItem.itemType).toBe('event');
       expect((lastItem.payload as TelemetryEventPayload).type).toBe('event_150');
-      expect((lastItem.payload as TelemetryEventPayload).details?.sequence).toBe(150);
+      expect((lastItem.payload as TelemetryEventPayload).details?.sequence).toBeUndefined();
 
       // Verify continuous monotonic sequence from 101 to 150
       for (let idx = 0; idx < queued.length; idx++) {

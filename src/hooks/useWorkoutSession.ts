@@ -139,8 +139,7 @@ export function useWorkoutSession() {
             const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
             telemetryHub.trackEvent('workout_started', {
                 offline: isOffline,
-                routineId: routine?.id || null,
-                routineName: routine?.name || null
+                routineId: routine?.id || null
             });
         } catch {
             // Fail-safe non-blocking telemetry
@@ -163,8 +162,7 @@ export function useWorkoutSession() {
             const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
             telemetryHub.trackEvent('workout_started', {
                 offline: isOffline,
-                routineId: 'free_workout',
-                routineName: 'Allenamento libero'
+                routineId: 'free_workout'
             });
         } catch {
             // Fail-safe non-blocking telemetry

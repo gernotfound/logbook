@@ -7,7 +7,24 @@ import {
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
 } from './contracts';
+import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { createTelemetryId } from './id';
+
+function minimizeEventPayload(payload: TelemetryEventPayload): TelemetryEventPayload {
+  if (payload.details === undefined) return payload;
+  return {
+    ...payload,
+    details: sanitizeTelemetryDetails(payload.details),
+  };
+}
+
+function minimizeQueuedItem(item: QueuedTelemetryItem): QueuedTelemetryItem {
+  if (item.itemType !== 'event') return item;
+  return {
+    ...item,
+    payload: minimizeEventPayload(item.payload as TelemetryEventPayload),
+  };
+}
 
 export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
@@ -33,14 +50,16 @@ export class TelemetryQueueStorage {
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            return parsed.filter(
-              (item) =>
-                item &&
-                typeof item === 'object' &&
-                typeof item.id === 'string' &&
-                item.payload &&
-                typeof item.payload === 'object'
-            );
+            return parsed
+              .filter(
+                (item) =>
+                  item &&
+                  typeof item === 'object' &&
+                  typeof item.id === 'string' &&
+                  item.payload &&
+                  typeof item.payload === 'object'
+              )
+              .map((item) => minimizeQueuedItem(item as QueuedTelemetryItem));
           }
         }
       }
@@ -108,11 +127,14 @@ export class TelemetryQueueStorage {
   ): void {
     try {
       const items = [...this.getQueuedEvents()];
+      const minimizedPayload = kind === 'event'
+        ? minimizeEventPayload(payload as TelemetryEventPayload)
+        : payload;
       const newItem: QueuedTelemetryItem = {
-        id: payload.id || createTelemetryId('item'),
-        timestamp: payload.timestamp || Date.now(),
+        id: minimizedPayload.id || createTelemetryId('item'),
+        timestamp: minimizedPayload.timestamp || Date.now(),
         itemType: kind,
-        payload,
+        payload: minimizedPayload,
         queuedAt: Date.now(),
         retryCount: 0,
       };
@@ -141,7 +163,7 @@ export class TelemetryQueueStorage {
   }
 
   public replaceQueue(items: QueuedTelemetryItem[]): void {
-    this.saveQueuedEvents(items, true);
+    this.saveQueuedEvents(items.map(minimizeQueuedItem), true);
   }
 
   public reset(): void {

@@ -34,12 +34,11 @@ export default defineConfig({
       },
       manifest: {
         id: basePath,
-        name: 'LogBook Premium',
+        name: 'LogBook',
         short_name: 'LogBook',
         description: "L'app definitiva per il tracciamento di allenamento, nutrizione e progressi. Funziona anche offline in palestra.",
         theme_color: '#000000',
         background_color: '#000000',
-        display_override: ['window-controls-overlay', 'standalone'],
         display: 'standalone',
         orientation: 'portrait',
         start_url: basePath,

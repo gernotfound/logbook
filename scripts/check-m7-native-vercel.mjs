@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = 'b6ffa3eb5ed5c63c4fea8f08061a0e1725069d91';
+const M6_VITE_BLOB = '53a434012b3db444f9caa2e93c6e44e4054b2a3f';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== M6_VITE_BLOB) {
   failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
@@ -56,9 +56,12 @@ if (existsSync('dist/sw.js')) {
 if (existsSync('dist/manifest.webmanifest')) {
   try {
     const manifest = JSON.parse(readFileSync('dist/manifest.webmanifest', 'utf8'));
+    if (manifest.name !== 'LogBook') failures.push(`PWA manifest name changed: ${String(manifest.name)}`);
+    if (manifest.short_name !== 'LogBook') failures.push(`PWA manifest short_name changed: ${String(manifest.short_name)}`);
     if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
     if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
     if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
+    if ('display_override' in manifest) failures.push('PWA manifest must not request desktop display overrides');
 
     const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
     const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png' && icon?.sizes === '192x192' && icon?.type === 'image/png');
@@ -78,4 +81,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('M7 native Vercel/PWA contract OK: Vite/PWA baseline preserved, SW precache injected, manifest icons/scope preserved, native Functions bounded to 300s, daily recovery configured.');
+console.log('M7 native Vercel/PWA contract OK: mobile standalone manifest, Vite/PWA baseline, SW precache, icons/scope, native Functions and daily recovery preserved.');

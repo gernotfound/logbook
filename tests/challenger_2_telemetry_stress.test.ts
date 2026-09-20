@@ -90,11 +90,12 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(queue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
       expect(queue.length).toBe(50);
 
-      // Verify that the oldest 30 items (1..30) were evicted FIFO, and exactly 31..80 remain in order
+      // Verify that the oldest 30 items (1..30) were evicted FIFO, and exactly 31..80 remain in order.
+      // Test-only arbitrary metadata is intentionally removed by the telemetry detail allowlist.
       expect(queue[0].payload.type).toBe('event_seq_31');
-      expect((queue[0].payload as TelemetryEventPayload).details?.index).toBe(31);
+      expect((queue[0].payload as TelemetryEventPayload).details?.index).toBeUndefined();
       expect(queue[queue.length - 1].payload.type).toBe('event_seq_80');
-      expect((queue[queue.length - 1].payload as TelemetryEventPayload).details?.index).toBe(80);
+      expect((queue[queue.length - 1].payload as TelemetryEventPayload).details?.index).toBeUndefined();
 
       // Verify continuous sequence
       for (let j = 0; j < 50; j++) {
