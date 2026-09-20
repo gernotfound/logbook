@@ -18,7 +18,7 @@ describe('SettingsView decomposition parity', () => {
         fireEvent.click(screen.getByRole('tab', { name: 'Esporta' }));
         expect(screen.getByRole('button', { name: /Esporta JSON/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Backup JSON/i })).toBeDefined();
-        expect(screen.getByRole('button', { name: /Esporta archivio precedente/i })).toBeDefined();
+        expect(screen.queryByRole('button', { name: /Esporta archivio precedente/i })).toBeNull();
         expect(screen.getByRole('button', { name: /Esporta dati \(CSV\)/i })).toBeDefined();
     });
 });
