@@ -140,7 +140,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         context: telemetryContext,
         userId: 'a',
         sessionId: 'session-a',
-        details: { offline: false, routineId: 'routine-1', routineName: 'Upper A' },
+        details: { offline: false, routineId: 'routine-1' },
     };
     const error = {
         timestamp: 1000,
