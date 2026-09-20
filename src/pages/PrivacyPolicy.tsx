@@ -89,7 +89,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati business inseriti nell'app — come allenamenti, nutrizione, misurazioni, routine e pianificazioni — restano nella persistenza locale del dispositivo e non vengono sincronizzati su Firestore finché non colleghi un account.
             </p>
             <p>
-              Se abiliti volontariamente le statistiche di utilizzo dalle Impostazioni, anche in modalità ospite possono essere attivati i servizi Analytics descritti più avanti. L'uso locale dei dati fitness e l'opt-in Analytics sono quindi due flussi distinti.
+              La telemetria tecnica propria può essere accodata localmente quando non esiste una sessione Firebase autenticata, ma gli elementi privi di UID autenticato non vengono caricati successivamente su Firestore come dati dell'account. Se abiliti volontariamente le statistiche di utilizzo dalle Impostazioni, anche in modalità ospite possono invece essere attivati i servizi Analytics descritti più avanti. L'uso locale dei dati fitness e l'opt-in Analytics sono quindi flussi distinti.
             </p>
 
             <h3 style={h3Style}>Modalità cloud (con account)</h3>
@@ -111,7 +111,10 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               LogBook utilizza una telemetria tecnica propria per diagnosticare errori e problemi di stabilità. Per gli utenti autenticati questa telemetria può essere <strong style={{ color: 'var(--text-main)' }}>pseudonimizzata tramite l'UID tecnico Firebase</strong> e può includere un identificativo di sessione, versione dell'app, piattaforma derivata, modalità PWA/browser, stato online, tipo e messaggio di errore sanitizzati, contatori/timestamp e stack trace troncati e sanitizzati.
             </p>
             <p>
-              I sanitizzatori rimuovono dalle stringhe riconosciute indirizzi email, indirizzi IP, token, API key, path utente e altre chiavi sensibili prima dell'invio. La telemetria tecnica non è quindi descritta come “anonima”: per un account autenticato può essere collegata tecnicamente a quell'account. Il suo scopo è sicurezza, affidabilità e diagnosi, non la profilazione dei dati di allenamento o nutrizione.
+              Alcuni eventi operativi includono inoltre metadati limitati del flusso di allenamento, ad esempio stato offline, identificativo e nome della routine avviata, durata della sessione e numero di esercizi. Non vengono inviati tramite questa telemetria serie, carichi, ripetizioni, note di sessione, diario alimentare o misurazioni corporee. Prima della scrittura Firestore, le stringhe dei dettagli evento attraversano il sanitizzatore tecnico; indirizzi email, IP, token, API key, path utente e altre chiavi sensibili riconosciute vengono sostituiti o rimossi.
+            </p>
+            <p>
+              La telemetria tecnica non è quindi descritta come “anonima”: per un account autenticato può essere collegata tecnicamente a quell'account. Il suo scopo è sicurezza, affidabilità e diagnosi, non la profilazione commerciale dei dati di allenamento o nutrizione.
             </p>
           </Section>
 
