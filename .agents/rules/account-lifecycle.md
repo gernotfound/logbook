@@ -1,6 +1,6 @@
 # Ciclo di vita account — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-19
+> Stato: normativo | Ultima verifica: 2026-09-20
 
 ## Backup JSON e importazione
 
@@ -8,18 +8,14 @@
 
 La lettura di tutti i documenti non costituisce uno snapshot atomico fra dispositivi. Il file registra la propria copertura; con modifiche concorrenti può essere necessario ripetere l'esportazione. Un errore di rete non deve produrre un backup dichiarato completo se la copertura richiesta non è stata acquisita.
 
-La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento.
-
-Esiste una recovery escape hatch distinta: `handleExportRecovery()` può esportare il vecchio archivio locale non attribuito come JSON `logbook-backup` `version: 1`. Quel file preserva i dati legacy per recupero manuale ed è intenzionalmente **non importabile** dall'importer V3 corrente. Non descriverlo come backup V1 supportato.
+La baseline clean-cut corrente **non importa Backup Schema V1/V2**: `decodeImport()` li rifiuta tramite `LegacyVersionError`. Anche versioni future sconosciute falliscono chiuso e richiedono aggiornamento. Non esiste più un percorso prodotto che legga, preservi o esporti la vecchia cache locale non attribuita `logbook_cached_user_data`: prima dell'esistenza di account reali quel compatibility layer è stato rimosso intenzionalmente.
 
 - **Importa JSON:** opera soltanto su formati supportati e applica l'unione prevista senza mutazioni in place. Le collisioni e i ricalcoli seguono il contratto corrente dell'importer.
 - **Ripristina:** sostituisce i campi presenti nel formato supportato rispetto allo stato locale disponibile; non autorizza a trattare dati cloud mai caricati come assenti.
 - L'anteprima/commit deve invalidarsi se cambia sessione o baseline rilevante durante l'operazione.
 - La conferma segue la persistenza locale; offline non va presentata come conferma cloud.
 - I consensi importati non sostituiscono l'accettazione corrente.
-- La recovery conserva il file originale quando non esiste una migrazione supportata; non inventare una conversione V1/V2 per aggirare la baseline clean-cut.
-
-La vecchia cache senza owner viene copiata senza sovrascrivere un archivio recovery già presente. “Esporta archivio precedente” rende disponibile il file per recupero esplicito. Le vecchie credenziali/code REST non vengono riprodotte o esportate.
+- Non inventare conversioni V1/V2 per aggirare la baseline clean-cut.
 
 ## Esportazione CSV
 
