@@ -2,6 +2,7 @@ import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import { del } from 'idb-keyval';
 import { useAppStore } from '../../store/useAppStore';
 import { withTimeout } from './db_core';
+import { readBrowserValueStrict } from '../sync/browserStorage';
 import { storageOwner, captureSession, isCurrentSession } from '../sync/session';
 import {
     clearAccountDeletion,
@@ -124,11 +125,7 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker):
 }
 
 function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
-    try {
-        if (localStorage.getItem('logbook_is_guest') === 'true') return true;
-    } catch {
-        // If guest state cannot be read, Firebase Auth below still protects authenticated owners.
-    }
+    if (readBrowserValueStrict('logbook_is_guest') === 'true') return true;
     const currentUid = auth.currentUser?.uid;
     return Boolean(currentUid && currentUid !== marker.uid);
 }
