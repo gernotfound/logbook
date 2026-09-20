@@ -9,11 +9,11 @@ import { scrubPII } from '../telemetrySanitizer';
  */
 export function sanitizeTelemetryDetails<T>(value: T): T {
   if (typeof value === 'string') {
-    return scrubPII(value) as T;
+    return scrubPII(value) as unknown as T;
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeTelemetryDetails(item)) as T;
+    return value.map((item) => sanitizeTelemetryDetails(item)) as unknown as T;
   }
 
   if (value && typeof value === 'object') {
@@ -21,7 +21,7 @@ export function sanitizeTelemetryDetails<T>(value: T): T {
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
       output[key] = sanitizeTelemetryDetails(item);
     }
-    return output as T;
+    return output as unknown as T;
   }
 
   return value;
