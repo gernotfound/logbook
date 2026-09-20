@@ -6,7 +6,6 @@ import { DB } from '../lib/db';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
 import type { ImportMode } from '../lib/backup';
-import { get } from 'idb-keyval';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
 
 export function useSettings() {
@@ -116,21 +115,6 @@ export function useSettings() {
         }
     };
 
-    const handleExportRecovery = async () => {
-        const session = captureSession();
-        try {
-            const original = await get('logbook:recovery:legacy') ?? await get('logbook_cached_user_data');
-            if (!isCurrentSession(session)) return;
-            if (original === undefined) { void showAlert('Nessun archivio precedente da recuperare.'); return; }
-            if (!(await showConfirm('Questo archivio precedente non identifica il proprietario. Esportalo solo se i dati su questo dispositivo sono tuoi. Il file originale resterà conservato.'))) return;
-            if (!isCurrentSession(session)) return;
-            const { Exporter } = await import('../lib/export');
-            await Exporter.downloadFile('logbook_recupero_precedente.json', JSON.stringify({ format: 'logbook-backup', version: 1, userData: original, recovery: { localWorkout: localStorage.getItem('logbook_local_workout') } }, null, 2), 'application/json');
-        } catch (error) {
-            if (isCurrentSession(session)) void showAlert(error instanceof Error ? error.message : 'Recupero non riuscito.');
-        }
-    };
-
     const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>, mode: ImportMode = 'merge') => {
         const file = e.target.files?.[0];
         if (!file || importBusy.current) return;
@@ -194,7 +178,7 @@ export function useSettings() {
         deletingAccount,
         pendingAccountDeletion,
         importingData,
-        exportingData, handleExportRecovery,
+        exportingData,
         handleSaveProfile,
         handleExportCSV, handleExportShare, handleExportBackup, handleImportFile,
         handleDeleteAccount
