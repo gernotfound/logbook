@@ -8,6 +8,7 @@ import { WorkoutSet, ExerciseLibraryItem } from '../src/types';
 describe('Empirical Challenger Focus & Scroll Suite', () => {
     let originalScrollTo: typeof window.scrollTo;
     let scrollToSpy: ReturnType<typeof vi.fn>;
+    const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
 
     beforeEach(() => {
         originalScrollTo = window.scrollTo;
@@ -17,6 +18,8 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
 
     afterEach(() => {
         window.scrollTo = originalScrollTo;
+        if (originalScrollIntoView) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
+        else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
         vi.restoreAllMocks();
     });
 
@@ -208,7 +211,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
     });
 
     describe('3. Intentional Scroll Preservation Verification', () => {
-        it('preserves dropdown listbox keyboard scrollIntoView with block: nearest', () => {
+        it('scrolls the dropdown during keyboard navigation without moving the page', () => {
             const mockExercises: ExerciseLibraryItem[] = [
                 { id: '1', name: 'Panca piana', category: 'Chest', equipment: 'Barbell', custom: false },
                 { id: '2', name: 'Squat', category: 'Legs', equipment: 'Barbell', custom: false },
@@ -216,8 +219,7 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
             ];
 
             const scrollIntoViewMock = vi.fn();
-            Element.prototype.scrollIntoView = scrollIntoViewMock;
-            HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+            Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoViewMock });
 
             render(
                 <ExerciseSearchDropdown
@@ -233,13 +235,22 @@ describe('Empirical Challenger Focus & Scroll Suite', () => {
             fireEvent.focus(input);
             expect(scrollIntoViewMock).not.toHaveBeenCalled();
 
-            // Arrow down key navigation triggers intentional scroll with block: nearest
-            fireEvent.keyDown(input, { key: 'ArrowDown' });
-
-            expect(scrollIntoViewMock).toHaveBeenCalledWith({
-                block: 'nearest',
-                behavior: 'smooth'
+            const list = screen.getByRole('listbox');
+            const options = screen.getAllByRole('option');
+            Object.defineProperty(list, 'clientHeight', { configurable: true, value: 50 });
+            options.forEach((option, index) => {
+                Object.defineProperty(option, 'offsetTop', { configurable: true, value: index * 50 });
+                Object.defineProperty(option, 'offsetHeight', { configurable: true, value: 50 });
             });
+            fireEvent.keyDown(input, { key: 'ArrowDown' });
+            expect(list.scrollTop).toBe(0);
+            fireEvent.keyDown(input, { key: 'ArrowDown' });
+            expect(list.scrollTop).toBe(50);
+            expect(input.getAttribute('aria-activedescendant')).toBe(options[1].id);
+            fireEvent.keyDown(input, { key: 'ArrowUp' });
+            expect(list.scrollTop).toBe(0);
+            expect(scrollIntoViewMock).not.toHaveBeenCalled();
+            expect(scrollToSpy).not.toHaveBeenCalled();
         });
     });
 });

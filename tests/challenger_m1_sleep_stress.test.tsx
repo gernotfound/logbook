@@ -118,11 +118,10 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             // Initially loaded with today's data
             expect(hoursInput.value).toBe('08:00');
             expect(deepInput.value).toBe('02:00');
-            expect(container.textContent).toContain('🌙 Dati sonno (' + today + ')');
+            expect(container.textContent).toContain('Dati sonno (' + today + ')');
 
-            // Find history card for yesterday and click it
-            const historyCards = container.querySelectorAll('.card');
-            // The history cards start from index 1 (card 0 is the sleep-form-card)
+            // Use the explicit edit button, which is also keyboard accessible.
+            const historyCards = container.querySelectorAll('.tracking-history-open');
             const yesterdayCard = Array.from(historyCards).find(c => c.textContent?.includes('19/08/2026') || c.textContent?.includes(yesterday));
             expect(yesterdayCard).toBeDefined();
 
@@ -146,7 +145,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             // Form must revert to today's values
             expect(hoursInput.value).toBe('08:00');
             expect(deepInput.value).toBe('02:00');
-            expect(container.textContent).toContain('🌙 Dati sonno (' + today + ')');
+            expect(container.textContent).toContain('Dati sonno (' + today + ')');
         });
     });
 
@@ -447,7 +446,7 @@ describe('Empirical Challenger: Sleep Format in HH:MM & State Integration Stress
             expect(historyText).toContain('07:15'); // Formatted from 7.25
 
             // Find date2 card
-            const cards = container.querySelectorAll('.card');
+            const cards = container.querySelectorAll('.tracking-history-open');
             const date2Card = Array.from(cards).find(c => c.textContent?.includes('19/08/2026') || c.textContent?.includes(date2));
             expect(date2Card).toBeDefined();
 

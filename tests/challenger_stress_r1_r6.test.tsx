@@ -347,7 +347,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
      * ========================================================================= */
     describe('R4: SessionSetRow Special Button & Dropset Hierarchy', () => {
 
-        it('renders set label S1 and accessible "+" button with proper ARIA label', () => {
+        it('renders set label S1 and an accessible set options button', () => {
             render(
                 <SessionSetRow
                     set={{ id: 'set_1', kg: '80', reps: '8' }}
@@ -364,9 +364,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             );
 
             expect(screen.getByText('S1')).toBeDefined();
-            const btn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
+            const btn = screen.getByRole('button', { name: 'Opzioni serie 1' });
             expect(btn).toBeDefined();
-            expect(btn.textContent).toBe('+');
+            expect(btn.getAttribute('aria-expanded')).toBe('false');
         });
 
         it('expands special set menu and allows adding dropset or isometry', () => {
@@ -386,11 +386,13 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 />
             );
 
-            const dropsetOpt = screen.getByText('+ Dropset');
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni serie 1' }));
+            const dropsetOpt = screen.getByRole('menuitem', { name: '+ Dropset' });
             fireEvent.click(dropsetOpt);
             expect(mockAdd).toHaveBeenCalledWith('dropset', 'set_1');
 
-            const isometryOpt = screen.getByText('+ Isometria');
+            fireEvent.click(screen.getByRole('button', { name: 'Opzioni serie 1' }));
+            const isometryOpt = screen.getByRole('menuitem', { name: '+ Isometria' });
             fireEvent.click(isometryOpt);
             expect(mockAdd).toHaveBeenCalledWith('isometry', 'set_1');
         });
@@ -422,8 +424,8 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 />
             );
 
-            expect(screen.getByText('↳ Dropset')).toBeDefined();
-            expect(screen.getByText('↳ Isometria')).toBeDefined();
+            expect(screen.getByText('Dropset 1')).toBeDefined();
+            expect(screen.getByText('Isometria 1')).toBeDefined();
 
             const dsKgInput = screen.getByDisplayValue('70');
             fireEvent.change(dsKgInput, { target: { value: '75' } });

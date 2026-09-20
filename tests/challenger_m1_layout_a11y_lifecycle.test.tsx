@@ -298,7 +298,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
   // ============================================================================
   // 5. LAYOUT GEOMETRY & RESPONSIVE DESIGN CSS VALIDATION
   // ============================================================================
-  describe('Layout Geometry & Dark Glassmorphism CSS Conformance', () => {
+  describe('Layout geometry & opaque theme surfaces', () => {
     it('verifies safe-area-inset and bottom positioning above bottom-nav', () => {
       const cssPath = path.resolve(__dirname, '../src/styles/global.css');
       const cssContent = fs.readFileSync(cssPath, 'utf-8');
@@ -306,17 +306,18 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
       // .sync-indicator positioning
       const indicatorBlock = cssContent.match(/\.sync-indicator\s*\{([^}]+)\}/)![1];
       expect(indicatorBlock).toMatch(/position:\s*fixed/);
-      expect(indicatorBlock).toMatch(/bottom:\s*calc\(76px\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\)/);
-      expect(indicatorBlock).toMatch(/right:\s*max\(16px,\s*calc\(env\(safe-area-inset-right,\s*0px\)\s*\+\s*16px\)\)/);
-      expect(indicatorBlock).toMatch(/border-radius:\s*9999px/);
+      expect(indicatorBlock).toMatch(/bottom:\s*calc\(var\(--nav-height\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*\.5rem\)/);
+      expect(indicatorBlock).toMatch(/right:\s*max\(1rem,\s*env\(safe-area-inset-right,\s*0px\)\)/);
+      expect(indicatorBlock).toMatch(/border-radius:\s*999px/);
 
       // .sync-error-toast positioning & styling
       const toastBlock = cssContent.match(/\.sync-error-toast\s*\{([^}]+)\}/)![1];
       expect(toastBlock).toMatch(/position:\s*fixed/);
-      expect(toastBlock).toMatch(/bottom:\s*calc\(76px\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\)/);
-      expect(toastBlock).toMatch(/max-width:\s*480px/);
-      expect(toastBlock).toMatch(/backdrop-filter:\s*blur\(16px\)/);
-      expect(toastBlock).toMatch(/box-sizing:\s*border-box/);
+      expect(toastBlock).toMatch(/bottom:\s*calc\(var\(--nav-height\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*\.5rem\)/);
+      expect(toastBlock).toMatch(/max-width:\s*30rem/);
+      expect(toastBlock).toMatch(/background:\s*var\(--danger-soft\)/);
+      expect(toastBlock).not.toContain('backdrop-filter');
+      expect(cssContent).toMatch(/\*\s*\{[^}]*box-sizing:\s*border-box/);
     });
 
     it('verifies Italian sentence case in App and store notifications', async () => {

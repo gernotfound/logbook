@@ -30,9 +30,10 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
       const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
       // Check .context-menu-trigger CSS definition
-      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*min-width:\s*44px/);
-      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*min-height:\s*44px/);
-      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*touch-action:\s*manipulation/);
+      // 2.75rem is 44 CSS pixels at the default 16px root size and grows with text size.
+      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*min-width:\s*2\.75rem/);
+      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*min-height:\s*2\.75rem/);
+      expect(cssContent).toMatch(/button,\s*\[role="button"\],\s*a\s*\{[^}]*touch-action:\s*manipulation/);
     });
 
     it('verifies ContextMenu trigger button has .context-menu-trigger class and meets touch target standards', () => {
@@ -106,23 +107,24 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
   /* -------------------------------------------------------------------------- */
   /* 2. DARK GLASSMORPHISM CSS VARIABLES & THEME CONSISTENCY                    */
   /* -------------------------------------------------------------------------- */
-  describe('2. Dark Glassmorphism CSS Variables & Theme Consistency', () => {
-    it('verifies ContextMenu CSS rules use standard Dark Glassmorphism variables from global.css', () => {
+  describe('2. Opaque surfaces & theme consistency', () => {
+    it('verifies ContextMenu uses shared theme colors and an opaque surface', () => {
       const cssPath = path.resolve(__dirname, '../src/styles/global.css');
       const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
       // Check context menu section exists and references variables
-      const contextMenuSection = cssContent.slice(cssContent.indexOf('Context Menu Component'));
+      const contextMenuSection = cssContent.slice(cssContent.indexOf('.context-menu-container'), cssContent.indexOf('.grid-2'));
       expect(contextMenuSection).toContain('var(--text-muted)');
       expect(contextMenuSection).toContain('var(--text-main)');
-      expect(contextMenuSection).toContain('var(--glass-border)');
+      expect(contextMenuSection).toContain('var(--border-strong)');
       expect(contextMenuSection).toContain('var(--primary-color)');
-      expect(contextMenuSection).toContain('var(--primary-glow)');
+      expect(contextMenuSection).toContain('var(--primary-soft)');
       expect(contextMenuSection).toContain('var(--danger-color)');
-      expect(contextMenuSection).toContain('backdrop-filter: blur(16px)');
+      expect(contextMenuSection).toMatch(/\.context-menu-dropdown\s*\{[^}]*background:\s*var\(--surface-color\)/);
+      expect(contextMenuSection).not.toContain('backdrop-filter');
     });
 
-    it('verifies dropdown popup has backdrop filter, border, and dark surface background', () => {
+    it('verifies dropdown popup and actions use the themed menu classes', () => {
       const items: ContextMenuItem[] = [
         { id: '1', label: 'Azione standard', onClick: vi.fn() },
         { id: '2', label: 'Azione primaria', variant: 'primary', onClick: vi.fn() },

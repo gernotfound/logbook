@@ -20,6 +20,8 @@ import { useAppStore } from '../src/store/useAppStore';
 describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m23_1)', () => {
     const cssPath = path.resolve(__dirname, '../src/styles/global.css');
     const globalCss = fs.readFileSync(cssPath, 'utf-8');
+    const trainingCss = fs.readFileSync(path.resolve(__dirname, '../src/components/Training/training.css'), 'utf-8');
+    const trackingCss = fs.readFileSync(path.resolve(__dirname, '../src/components/Nutrition/TrackingViews.css'), 'utf-8');
 
     beforeEach(() => {
         useAppStore.setState({
@@ -63,32 +65,34 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
      * SECTION 1: GLOBAL CSS STRUCTURAL RULES, #APP-CONTAINER & OVERFLOW-X: CLIP
      * ========================================================================= */
     describe('1. Global CSS Architecture & Root Overflow Defense', () => {
-        it('1.1: #app-container enforces overflow-x: clip, max-width: 600px, and margin: 0 auto', () => {
+        it('1.1: #app-container is centered, adapts to desktop, and keeps sticky ancestors unclipped', () => {
             // Find #app-container block in global.css
             const appContainerMatch = globalCss.match(/#app-container\s*\{([^}]+)\}/);
             expect(appContainerMatch, 'Must define #app-container block in global.css').not.toBeNull();
 
             const content = appContainerMatch![1];
-            expect(content).toMatch(/max-width:\s*600px/);
+            expect(content).toMatch(/max-width:\s*40rem/);
             expect(content).toMatch(/margin:\s*0\s+auto/);
-            expect(content).toMatch(/overflow-x:\s*clip/);
+            // An overflow container around the workout would change the sticky timer's scroll ancestor.
+            expect(content).not.toMatch(/overflow(?:-x|-y)?:\s*(?:auto|scroll|hidden)/);
             expect(content).toMatch(/position:\s*relative/);
-            expect(content).toMatch(/min-height:\s*100vh/);
+            expect(content).toMatch(/min-height:\s*100dvh/);
+            expect(globalCss).toMatch(/@media\s*\(min-width:\s*1024px\)\s*\{\s*#app-container\s*\{\s*max-width:\s*60rem/);
         });
 
-        it('1.2: .grid-2 has display: grid, grid-template-columns: 1fr 1fr, min-width: 0 and responsive media query at <= 360px', () => {
+        it('1.2: .grid-2 has two shrinkable columns and a single column at <= 360px', () => {
             const grid2Match = globalCss.match(/\.grid-2\s*\{([^}]+)\}/);
             expect(grid2Match, 'Must define .grid-2 utility class').not.toBeNull();
 
             const grid2Props = grid2Match![1];
             expect(grid2Props).toMatch(/display:\s*grid/);
-            expect(grid2Props).toMatch(/grid-template-columns:\s*1fr\s+1fr/);
+            expect(grid2Props).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
             expect(grid2Props).toMatch(/min-width:\s*0/);
 
             // Responsive media query at <= 360px switching to 1fr
             const mediaQueryMatch = globalCss.match(/@media\s*\(\s*max-width:\s*360px\s*\)\s*\{[\s\S]*?\.grid-2\s*\{([^}]+)\}[\s\S]*?\}/);
             expect(mediaQueryMatch, 'Must define @media (max-width: 360px) rule for .grid-2').not.toBeNull();
-            expect(mediaQueryMatch![1]).toMatch(/grid-template-columns:\s*1fr/);
+            expect(mediaQueryMatch![1]).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
         });
 
         it('1.3: .section-divider and .section-divider-last are defined with proper border, padding and margin', () => {
@@ -96,14 +100,14 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(dividerMatch).not.toBeNull();
             const dividerProps = dividerMatch![1];
             expect(dividerProps).toMatch(/border-bottom:\s*1px\s+solid\s+var\(--glass-border\)/);
-            expect(dividerProps).toMatch(/padding-bottom:\s*20px/);
-            expect(dividerProps).toMatch(/margin-bottom:\s*25px/);
+            expect(dividerProps).toMatch(/padding-bottom:\s*1\.5rem/);
+            expect(dividerProps).toMatch(/margin-bottom:\s*1\.5rem/);
 
             const lastDividerMatch = globalCss.match(/\.section-divider-last\s*\{([^}]+)\}/);
             expect(lastDividerMatch).not.toBeNull();
             const lastProps = lastDividerMatch![1];
-            expect(lastProps).toMatch(/padding-bottom:\s*20px/);
-            expect(lastProps).toMatch(/margin-bottom:\s*25px/);
+            expect(lastProps).toMatch(/padding-bottom:\s*1\.5rem/);
+            expect(lastProps).toMatch(/margin-bottom:\s*1\.5rem/);
         });
 
         it('1.4: Universal utility flex classes enforce min-width: 0 to prevent flexbox mobile blowouts', () => {
@@ -118,7 +122,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
         });
 
         it('1.5: Input, select, and textarea rules enforce font-size: 16px !important for Safari iOS zoom defense', () => {
-            const inputRuleMatch = globalCss.match(/input,\s*select,\s*textarea\s*\{([^}]+)\}/);
+            const inputRuleMatch = globalCss.match(/(?:^|\n)input,\s*select,\s*textarea\s*\{([^}]+)\}/);
             expect(inputRuleMatch).not.toBeNull();
             expect(inputRuleMatch![1]).toMatch(/font-size:\s*16px\s*!important/);
         });
@@ -220,7 +224,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(screen.getByText('Sessioni')).toBeDefined();
         });
 
-        it('2.5: SessionSetRow inputs row has minWidth: 0 on inputs container and flex inputs', () => {
+        it('2.5: SessionSetRow fields and inputs can shrink inside their grid', () => {
             const mockSet = { id: 's1', kg: '100', reps: '10', done: false };
             const { container } = render(
                 <SessionSetRow
@@ -244,14 +248,13 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(kgInput).not.toBeNull();
             expect(repsInput).not.toBeNull();
 
-            expect(kgInput.style.minWidth).toBe('0px');
-            expect(kgInput.style.flex).toMatch(/^1/);
-            expect(repsInput.style.minWidth).toBe('0px');
-            expect(repsInput.style.flex).toMatch(/^1/);
-
-            const parentInputsContainer = kgInput.parentElement!;
-            expect(parentInputsContainer.style.minWidth).toBe('0px');
-            expect(parentInputsContainer.style.flex).toMatch(/^1/);
+            for (const input of [kgInput, repsInput]) {
+                expect(input.parentElement!.classList.contains('workout-set-field')).toBe(true);
+                expect(input.closest('.workout-set-row')).not.toBeNull();
+            }
+            expect(trainingCss).toMatch(/\.workout-set-field\s*\{[^}]*min-width:\s*0/);
+            expect(trainingCss).toMatch(/\.workout-set-field input\s*\{[^}]*min-width:\s*0/);
+            expect(trainingCss).toMatch(/\.workout-set-row\s*\{[^}]*grid-template-columns:[^;]*minmax\(0,\s*1fr\)/);
         });
 
         it('2.6: DataMeasurements and DataSleep multi-input rows enforce minWidth: 0', () => {
@@ -293,10 +296,10 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             const waistInput = mContainer.querySelector('#measure-waist') as HTMLInputElement;
             const neckInput = mContainer.querySelector('#measure-neck') as HTMLInputElement;
 
-            expect(weightInput.parentElement!.style.minWidth).toBe('0px');
-            expect(bfInput.parentElement!.style.minWidth).toBe('0px');
-            expect(waistInput.parentElement!.style.minWidth).toBe('0px');
-            expect(neckInput.parentElement!.style.minWidth).toBe('0px');
+            for (const input of [weightInput, bfInput, waistInput, neckInput]) {
+                expect(input.closest('.tracking-field')).not.toBeNull();
+            }
+            expect(trackingCss).toMatch(/\.tracking-field\s*\{[^}]*min-width:\s*0/);
 
             const { container: sContainer } = render(
                 <DataSleep
@@ -334,11 +337,9 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             const deepInput = sContainer.querySelector('#sleep-deep') as HTMLInputElement;
             const lightInput = sContainer.querySelector('#sleep-light') as HTMLInputElement;
 
-            const deepContainer = deepInput.closest('.input-row > div') as HTMLElement;
-            const lightContainer = lightInput.closest('.input-row > div') as HTMLElement;
-
-            expect(deepContainer.style.minWidth).toBe('0px');
-            expect(lightContainer.style.minWidth).toBe('0px');
+            expect(deepInput.closest('.tracking-field')).not.toBeNull();
+            expect(lightInput.closest('.tracking-field')).not.toBeNull();
+            expect(trackingCss).toMatch(/\.tracking-fields\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
         });
     });
 
@@ -360,7 +361,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
 
         const mealTypes = ['Colazione', 'Pranzo', 'Cena', 'Spuntini'];
 
-        it('3.1: FoodItemRow quick-add buttons container explicitly declares flexWrap: wrap', () => {
+        it('3.1: FoodItemRow quick-add buttons use a shrinkable grid and retain meal callbacks', () => {
             const onQuickAdd = vi.fn();
 render(
                 <FoodItemRow
@@ -373,12 +374,11 @@ render(
                 />
             );
 
-            const quickAddLabel = screen.getByText('+ Aggiungi a:');
-            const quickAddContainer = quickAddLabel.parentElement as HTMLElement;
+            const quickAddContainer = screen.getByRole('button', { name: `Aggiungi ${mockFood.name} a Colazione` }).parentElement as HTMLElement;
 
             expect(quickAddContainer).not.toBeNull();
-            expect(quickAddContainer.style.display).toBe('flex');
-            expect(quickAddContainer.style.flexWrap).toBe('wrap');
+            expect(quickAddContainer.classList.contains('tracking-quick-meals')).toBe(true);
+            expect(trackingCss).toMatch(/\.tracking-quick-meals\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
 
             // All 4 meal type buttons are rendered and interactive
             for (const mt of mealTypes) {
@@ -476,7 +476,7 @@ render(
 
             while ((match = mqRegex.exec(globalCss)) !== null) {
                 const body = match[1];
-                if (body.includes('.grid-2') && body.includes('grid-template-columns: 1fr')) {
+                if (body.includes('.grid-2') && /grid-template-columns:\s*minmax\(0,\s*1fr\)/.test(body)) {
                     foundGridOverride = true;
                     break;
                 }
@@ -571,27 +571,27 @@ render(
             }
         });
 
-        it('6.2: .section-divider is actively used in all refactored views', () => {
+        it('6.2: refactored views group their content in shared visual sections', () => {
             const filesToCheck = [
-                'src/components/SettingsView.tsx',
-                'src/components/Training/planning/TrainingPlanning.tsx',
-                'src/components/Training/TrainingSessionSetup.tsx',
-                'src/components/Nutrition/NutritionMeals.tsx',
-                'src/components/Nutrition/NutritionFoodArchive.tsx',
-                'src/components/Data/DataMeasurements.tsx',
-                'src/components/Data/DataSleep.tsx',
-                'src/components/Data/DataBiometry.tsx',
-                'src/components/Training/routines/RoutineEditor.tsx',
-                'src/components/Training/session/SessionExerciseCard.tsx'
+                ['src/components/SettingsView.tsx', 'settings-group'],
+                ['src/components/Training/planning/TrainingPlanning.tsx', 'section-divider'],
+                ['src/components/Training/TrainingSessionSetup.tsx', 'section-divider'],
+                ['src/components/Nutrition/NutritionMeals.tsx', 'section-divider'],
+                ['src/components/Nutrition/NutritionFoodArchive.tsx', 'section-divider'],
+                ['src/components/Data/DataMeasurements.tsx', 'tracking-panel'],
+                ['src/components/Data/DataSleep.tsx', 'tracking-panel'],
+                ['src/components/Data/DataBiometry.tsx', 'tracking-panel'],
+                ['src/components/Training/routines/RoutineEditor.tsx', 'section-divider'],
+                ['src/components/Training/session/SessionExerciseCard.tsx', 'section-divider']
             ];
 
-            for (const relPath of filesToCheck) {
+            for (const [relPath, sectionClass] of filesToCheck) {
                 const absPath = path.resolve(__dirname, '..', relPath);
                 expect(fs.existsSync(absPath), `File ${relPath} must exist`).toBe(true);
                 const fileContent = fs.readFileSync(absPath, 'utf-8');
                 expect(
-                    fileContent.includes('section-divider'),
-                    `File ${relPath} should utilize .section-divider class`
+                    fileContent.includes(sectionClass),
+                    `File ${relPath} should utilize .${sectionClass} class`
                 ).toBe(true);
             }
         });
