@@ -16,6 +16,20 @@ describe('telemetry identifiers', () => {
     expect(createTelemetryId('evt', 123)).toBe('evt_123_123e4567e89b42d3a456426614174000');
   });
 
+  it('falls back to getRandomValues when randomUUID fails', () => {
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn(() => {
+        throw new Error('randomUUID unavailable');
+      }),
+      getRandomValues: vi.fn((bytes: Uint8Array) => {
+        bytes.fill(0xab);
+        return bytes;
+      }),
+    });
+
+    expect(createTelemetryId('evt', 123)).toBe(`evt_123_${'ab'.repeat(16)}`);
+  });
+
   it('remains collision-safe within the runtime without falling back to Math.random', () => {
     vi.stubGlobal('crypto', undefined);
     const randomSpy = vi.spyOn(Math, 'random').mockImplementation(() => {
