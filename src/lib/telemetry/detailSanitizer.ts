@@ -38,7 +38,7 @@ function sanitizeDetailValue(key: string, value: unknown): TelemetryDetailValue 
   }
 
   if (NON_NEGATIVE_INTEGER_KEYS.has(key)) {
-    return Number.isInteger(value) && (value as number) >= 0 ? value as number : undefined;
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
   }
 
   if (key === 'durationSec') {
