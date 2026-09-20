@@ -147,10 +147,11 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                         />
                         <button
                             type="button"
+                            aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
                             onClick={() => setShowPassword(!showPassword)}
                             className="ui-login-box-10" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}
                         >
-                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                         </button>
                     </div>
                 )}
