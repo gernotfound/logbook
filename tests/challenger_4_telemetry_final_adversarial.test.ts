@@ -232,14 +232,16 @@ describe('Challenger 4: Final Adversarial Telemetry & Stress Verification Harnes
 
       // Enqueue 75 distinct events
       for (let i = 0; i < 75; i++) {
-        telemetryHub.trackEvent('test_event', { index: i });
+        telemetryHub.trackEvent(`test_event_${i}`, { index: i });
       }
 
       const queue = telemetryHub.getQueuedEvents();
       expect(queue.length).toBe(50);
-      // Oldest 25 dropped (indices 0..24), newest 50 retained (indices 25..74)
-      expect((queue[0].payload as any).details.index).toBe(25);
-      expect((queue[49].payload as any).details.index).toBe(74);
+      // Oldest 25 event types are dropped; arbitrary test-only detail keys are minimized away.
+      expect(queue[0].payload.type).toBe('test_event_25');
+      expect(queue[49].payload.type).toBe('test_event_74');
+      expect((queue[0].payload as any).details?.index).toBeUndefined();
+      expect((queue[49].payload as any).details?.index).toBeUndefined();
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
     });
