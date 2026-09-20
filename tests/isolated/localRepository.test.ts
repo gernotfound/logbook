@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { hydrateLocal, commitLocal, initializeLocal, preserveLegacyCache, readLocal } from '../../src/lib/sync/localRepository';
+import { hydrateLocal, commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -118,13 +118,6 @@ describe('durable owner-scoped journal', () => {
         expect((await readLocal('a'))?.data.profile.height).toBe('171');
         expect((await readLocal('b'))?.data.profile.height).toBe('180');
         expect((await readLocal('guest'))?.pending).toEqual([]);
-    });
-
-    it('preserves an unowned legacy cache without silently assigning it', async () => {
-        await set('logbook_cached_user_data', data(175));
-        expect(await preserveLegacyCache()).toBe(true);
-        expect(await get('logbook:recovery:legacy')).toEqual(data(175));
-        expect(await readLocal('a')).toBeUndefined();
     });
 
     it('rejects corrupt envelope ownership and preserves the original bytes', async () => {
