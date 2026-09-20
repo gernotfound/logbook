@@ -1,6 +1,6 @@
 # Operazioni Catalogo Globale — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-12
+> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/lib/catalog/catalogService.ts`, seed JSON correnti, `scripts/seed-catalog.mjs`, Rules e test di seeding
 
 ## Struttura Firestore — `global_catalog`
 
@@ -22,25 +22,37 @@ I file `src/lib/catalog/seedExercises.json` e `src/lib/catalog/seedFoods.json` s
 
 ### Fallback offline
 
-Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade silenziosamente sul seed locale. Essendo quest'ultimo vuoto, il fallback restituisce **array vuoti validi**, non un catalogo popolato. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
+Se `global_catalog/manifest` non è raggiungibile, il `CatalogService` cade sul seed locale secondo il proprio boundary. Essendo quest'ultimo vuoto, il fallback restituisce **array vuoti validi**, non un catalogo popolato. L'app non va in crash e i `customItems` dell'utente continuano a funzionare.
 
 ## Script di seeding (`scripts/seed-catalog.mjs`)
 
-Lo script popola `global_catalog` su Firestore usando i seed locali.
+Lo script pubblica versioni del `global_catalog` su Firestore usando input JSON espliciti.
 
-### Validazione e pubblicazione
+### Validazione e dry-run
 
-Lo script rifiuta array vuoti, ID assenti/duplicati, nomi vuoti, macronutrienti non numerici/negativi e documenti JSON oltre 800.000 byte. Non carica credenziali o Admin SDK durante validazione e dry-run. I seed bundled attuali causano pertanto un errore esplicito, senza inizializzare Firebase.
+Lo script rifiuta array vuoti, ID assenti/duplicati, nomi vuoti, macronutrienti non numerici/negativi e documenti JSON oltre 800.000 byte. La validazione/dry-run avviene prima dell'inizializzazione Firebase Admin.
 
-Progetto e versione sono obbligatori. Una scrittura richiede inoltre `--confirm` uguale al progetto indicato. Il service account opzionale deve appartenere allo stesso progetto; il file resta escluso da Git. Non esiste più un progetto di produzione hardcoded.
+Con i seed bundled correnti vuoti, quindi, il comando fallisce in validazione **prima di poter scrivere**. Non documentare il contrario: la protezione contro un catalogo vuoto è intenzionale e deve restare testata.
 
-**MUST:** Non eseguire MAI accidentalmente questo script. Poiché i JSON locali sono stati svuotati per la policy "enforce manual input", eseguirlo sovrascriverebbe `global_catalog` su Firestore con array vuoti, distruggendo il database cloud di esercizi e alimenti per tutti gli utenti.
+**MAY:** eseguire `--dry-run` è il percorso raccomandato per validare file esterni e deve rimanere non distruttivo.
+
+Esempio sicuro:
 
 ```bash
 node scripts/seed-catalog.mjs --dry-run --project=demo-logbook-audit --version=test-1 --exercises=/percorso/esercizi.json --foods=/percorso/alimenti.json
 ```
 
-La pubblicazione crea `exercises_<versione>` e `foods_<versione>`, conserva l'eventuale manifest precedente in `previous_manifest_<versione>` e aggiorna il manifest in un'unica transazione. Il riuso di una versione esistente fallisce: i documenti letti dai client precedenti non vengono sovrascritti. Il percorso di scrittura richiede una verifica isolata con Admin SDK prima dell'uso operativo; i test attuali coprono validazione e dry-run.
+### Pubblicazione reale
+
+Progetto e versione sono obbligatori. Una scrittura richiede inoltre `--confirm` uguale al progetto indicato. Il service account opzionale deve appartenere allo stesso progetto; il file resta escluso da Git. Non esiste un progetto di produzione hardcoded.
+
+**MUST:** una pubblicazione reale non usa i seed bundled vuoti. Deve ricevere input esterni espliciti, validi e non vuoti, superare prima la validazione/dry-run e puntare a un progetto verificato.
+
+**MUST:** non indebolire i guardrail `--project`, `--version`, `--confirm`, non-empty validation o project-match per rendere più comodo il seeding.
+
+La pubblicazione crea `exercises_<versione>` e `foods_<versione>`, conserva l'eventuale manifest precedente in `previous_manifest_<versione>` e aggiorna il manifest in un'unica transazione. Il riuso di una versione esistente fallisce: i documenti letti dai client precedenti non vengono sovrascritti.
+
+Il percorso di scrittura richiede una verifica isolata con Admin SDK prima dell'uso operativo; i test correnti coprono validazione e dry-run. L'assenza di un test end-to-end contro produzione non autorizza a saltare i guardrail.
 
 Per il rollback, dopo verifica dei documenti referenziati, ripristinare il manifest archiviato mediante una procedura amministrativa approvata. Non cancellare i documenti delle versioni precedenti mentre possono essere letti da client ancora attivi.
 
