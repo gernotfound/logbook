@@ -53,8 +53,8 @@ function renderStorageUnavailable(rootElement: HTMLElement | null): void {
           alignItems: 'center',
           justifyContent: 'center',
           padding: '24px',
-          background: '#000',
-          color: '#fff',
+          background: 'var(--bg-color)',
+          color: 'var(--text-main)',
           fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
         }}
       >

@@ -61,7 +61,7 @@ export function ExportSettingsTab({
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <button
                         className="btn"
-                        style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0, opacity: noShareSelection ? 0.5 : 1 }}
+                        style={{ flex: 1, background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0, opacity: noShareSelection ? 0.5 : 1 }}
                         onClick={() => onExportShare({
                             exportLibrary: exportLibrary === 'all' ? true : exportLibrary === 'none' ? false : exportLibrary,
                             exportRoutines: exportRoutines === 'all' ? true : exportRoutines === 'none' ? false : exportRoutines,
@@ -85,7 +85,7 @@ export function ExportSettingsTab({
                 <p style={{ margin: '0 0 15px 0', fontSize: '0.75rem', color: 'var(--warning-color)' }}>L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    <button className="btn" style={{ flex: 1, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0 }} onClick={onExportBackup} disabled={exportingData}>
+                    <button className="btn" style={{ flex: 1, background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0 }} onClick={onExportBackup} disabled={exportingData}>
                         <span aria-hidden="true">📤</span> {exportingData ? 'Preparazione backup…' : 'Backup JSON'}
                     </button>
                     <label className="btn btn-primary" style={{ flex: 1, margin: 0, textAlign: 'center', cursor: 'pointer', opacity: importingData ? 0.7 : 1 }}>
@@ -97,7 +97,7 @@ export function ExportSettingsTab({
 
             <div className="section-divider">
                 <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">📊</span> Esportazione Legacy</h3>
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={onExportCSV}>
+                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={onExportCSV}>
                     <Save size={16} aria-hidden="true" /> Esporta dati (CSV)
                 </button>
             </div>

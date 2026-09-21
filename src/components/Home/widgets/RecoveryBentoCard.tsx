@@ -185,7 +185,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                     gap: '6px',
                                     background: 'var(--danger-soft)',
                                     border: '1px solid var(--danger-color)',
-                                    color: '#ff6b81',
+                                    color: 'var(--danger-color)',
                                     padding: '4px 10px',
                                     borderRadius: '8px',
                                     fontSize: '0.85rem',
@@ -227,11 +227,11 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px', fontSize: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--warning-color)' }}></div>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--muscle-fatigue)' }}></div>
                         <span style={{ color: 'var(--text-muted)' }}>Affaticato</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--danger-color)' }}></div>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--muscle-pain)' }}></div>
                         <span style={{ color: 'var(--text-muted)' }}>Dolorante</span>
                     </div>
                 </div>

@@ -46,7 +46,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                                     </span>
                                 </div>
                                 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-light)', padding: '10px', borderRadius: '8px' }}>
                                     <div style={{ textAlign: 'center' }}>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Kcal</div>
                                         <div style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(day.kcal || 0)}</div>

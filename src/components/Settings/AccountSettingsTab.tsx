@@ -50,7 +50,7 @@ export function AccountSettingsTab({
             )}
 
             <div className="section-divider">
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={onCheckUpdate}>
+                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={onCheckUpdate}>
                     <span aria-hidden="true">🔄</span> Cerca aggiornamenti
                 </button>
             </div>

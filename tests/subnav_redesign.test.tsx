@@ -6,7 +6,12 @@ import SubNav from '../src/components/UI/SubNav';
 const items = [{ id: 'session', label: 'Sessione' }, { id: 'planning', label: 'Pianificazione' }, { id: 'history', label: 'Storico' }] as const;
 function Example() {
   const [value, setValue] = useState<'session' | 'planning' | 'history'>('session');
-  return <SubNav id="test" label="Allenamento" items={items} value={value} onChange={setValue} />;
+  return (
+    <>
+      <SubNav id="test" label="Allenamento" items={items} value={value} onChange={setValue} />
+      <div id={`test-panel-${value}`} role="tabpanel" aria-labelledby={`test-tab-${value}`}>{value}</div>
+    </>
+  );
 }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -21,6 +26,9 @@ describe('sub-navigation interaction', () => {
     expect(document.activeElement).toBe(planning);
     expect(planning.getAttribute('aria-selected')).toBe('true');
     expect(planning.getAttribute('aria-controls')).toBe('test-panel-planning');
+    expect(document.getElementById('test-panel-planning')).not.toBeNull();
+    expect(session.getAttribute('aria-controls')).toBeNull();
+    expect(history.getAttribute('aria-controls')).toBeNull();
     expect(session.tabIndex).toBe(-1);
     fireEvent.keyDown(planning, { key: 'End' });
     expect(document.activeElement).toBe(history);
@@ -41,7 +49,12 @@ describe('sub-navigation interaction', () => {
       observe() {}
       disconnect = disconnect;
     });
-    const { unmount } = render(<SubNav id="test" label="Allenamento" items={items} value="history" onChange={vi.fn()} />);
+    const { unmount } = render(
+      <>
+        <SubNav id="test" label="Allenamento" items={items} value="history" onChange={vi.fn()} />
+        <div id="test-panel-history" role="tabpanel" aria-labelledby="test-tab-history">history</div>
+      </>
+    );
     const list = screen.getByRole('tablist');
     const history = screen.getByRole('tab', { name: 'Storico' });
     // Geometry here tests only scroll ownership; real viewport layout is covered by E2E.

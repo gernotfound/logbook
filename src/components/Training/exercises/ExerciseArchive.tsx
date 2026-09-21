@@ -61,7 +61,7 @@ export function ExerciseArchive({
                                             <div className="flex items-center gap-6" style={{ flexWrap: 'wrap' }}>
                                                 <div className={`font-bold ${(expandedExId === exercise.id || editingExId === exercise.id) ? 'text-primary' : 'text-white'}`}>{exercise.name}</div>
                                                 {routineCount > 0 && (
-                                                    <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                                    <span style={{ fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', background: 'var(--surface-light)', color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                                         {routineCount === 1 ? 'In 1 scheda' : `In ${routineCount} schede`}
                                                     </span>
                                                 )}
@@ -75,7 +75,7 @@ export function ExerciseArchive({
                                                         </span>
                                                     )}
                                                     {exercise.equipmentWeight !== undefined && exercise.equipmentWeight > 0 && (
-                                                        <span className="badge" style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'rgba(255, 255, 255, 0.1)', color: 'var(--text-muted)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                                        <span className="badge" style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'var(--surface-light)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}>
                                                             Attrezzo: {exercise.equipmentWeight} kg
                                                         </span>
                                                     )}

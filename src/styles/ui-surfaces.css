@@ -67,10 +67,6 @@
 .ui-global-dialog-10 { background: transparent; color: var(--text-main); }
 .ui-global-dialog-11 { color: var(--text-muted); }
 .ui-global-dialog-12 { background: var(--surface-light); color: var(--text-main); }
-.ui-install-prompt-1 { box-shadow: none; margin: 1rem; display: flex; flex-direction: column; gap: .75rem; }
-.ui-install-prompt-2 { font-size: 0.95rem; }
-.ui-install-prompt-3 { font-size: 0.95rem; color: var(--text-muted); }
-.ui-install-prompt-4 { border: 1px solid currentColor; border-radius: 0.25rem; font-size: 1.1rem; }
 .ui-login-box-1 { background: var(--surface-color); backdrop-filter: none; border-radius: 1.25rem; border: 1px solid var(--glass-border); box-shadow: none; }
 .ui-login-box-2 { color: var(--primary-color); }
 .ui-login-box-3 { font-size: 0.9rem; color: var(--text-muted); }
@@ -97,7 +93,6 @@
 .ui-reload-prompt-3 { font-size: 0.95rem; }
 .ui-reload-prompt-4 { font-size: 0.95rem; }
 
-.install-prompt { bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + .75rem); max-width: 35rem; margin: 0 auto; }
 .ui-account-card-6, .ui-account-card-27 { overflow-y: auto; padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px)); }
 .ui-account-card-7, .ui-account-card-28 { max-height: calc(100dvh - 2rem); overflow-y: auto; }
 
@@ -105,8 +100,3 @@
 .btn-warning { background: var(--warning-color); border-color: var(--warning-color); color: var(--on-warning); }
 .dialog-overlay { padding: max(1rem,env(safe-area-inset-top,0px)) 1rem max(1rem,env(safe-area-inset-bottom,0px)); }
 @media (max-width: 380px) { .nav-item { font-size: .625rem; } }
-@media (min-width: 768px) { #app-container { max-width: 48rem; } }
-@media (min-width: 1024px) { #app-container { max-width: 60rem; } }
-/* iOS standalone can retain light status icons even when the page theme changes. */
-@media (display-mode: standalone) { body::before { content: ''; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top,0px); background: #000; z-index: 10003; pointer-events: none; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

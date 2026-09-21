@@ -96,7 +96,7 @@ export default function SubNav<T extends string>({
             id={`${id}-tab-${item.id}`}
             type="button"
             role="tab"
-            aria-controls={`${id}-panel-${item.id}`}
+            aria-controls={value === item.id ? `${id}-panel-${item.id}` : undefined}
             aria-selected={value === item.id}
             tabIndex={value === item.id ? 0 : -1}
             className={`sub-nav-btn ${value === item.id ? 'active' : ''}`}

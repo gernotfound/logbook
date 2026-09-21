@@ -117,7 +117,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                 fontSize: '0.75rem',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
-                                background: 'rgba(255,255,255,0.06)',
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 color: 'var(--text-main)',
                                 display: 'flex',
@@ -142,7 +142,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                             width: '100%',
                             fontSize: '0.75rem',
                             padding: '4px 8px',
-                            background: 'rgba(255, 255, 255, 0.03)',
+                            background: 'var(--surface-light)',
                             border: '1px dashed var(--glass-border)',
                             color: 'var(--text-muted)',
                             marginBottom: 0
@@ -159,7 +159,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                     key={week.weekNumber}
                                     style={{
                                         padding: '6px 8px',
-                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        background: 'var(--surface-light)',
                                         borderRadius: '6px',
                                         fontSize: '0.75rem'
                                     }}
@@ -203,7 +203,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                             {timeline.progressPercent}% completato
                         </span>
                     </div>
-                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '5px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
                         <div
                             style={{
                                 height: '100%',

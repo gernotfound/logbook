@@ -104,7 +104,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 fontSize: '16px',
                                 textAlign: 'center',
                                 borderRadius: '8px',
-                                background: 'rgba(0,0,0,0.3)',
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 color: 'var(--text-main)',
                                 boxSizing: 'border-box'
@@ -136,7 +136,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                         fontSize: '16px',
                                         textAlign: 'center',
                                         borderRadius: '8px',
-                                        background: 'rgba(0,0,0,0.3)',
+                                        background: 'var(--surface-light)',
                                         border: '1px solid var(--glass-border)',
                                         color: 'var(--text-main)',
                                         boxSizing: 'border-box'
@@ -159,7 +159,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                         fontSize: '16px',
                                         textAlign: 'center',
                                         borderRadius: '8px',
-                                        background: 'rgba(0,0,0,0.3)',
+                                        background: 'var(--surface-light)',
                                         border: '1px solid var(--glass-border)',
                                         color: 'var(--text-main)',
                                         boxSizing: 'border-box'
@@ -177,7 +177,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     )}
 
                     {/* Riga 3: Tecniche speciali pre-attivate */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                             Tecnica:
                         </span>
@@ -192,7 +192,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
                                     color: exercise.defaultTechnique === 'dropset' ? 'var(--on-warning)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'dropset' ? 700 : 500,
-                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    border: '1px solid var(--glass-border)',
                                     borderRadius: '8px'
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'dropset')}
@@ -209,7 +209,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
                                     color: exercise.defaultTechnique === 'isometrics' ? 'var(--on-accent)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'isometrics' ? 700 : 500,
-                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    border: '1px solid var(--glass-border)',
                                     borderRadius: '8px'
                                 }}
                                 onClick={() => onUpdateTechnique(index, 'isometrics')}

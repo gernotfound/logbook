@@ -45,7 +45,7 @@ export const ExportSelector = memo(function ExportSelector({
                         else if (event.target.value === 'none') onChange('none');
                         else onChange([]);
                     }}
-                    style={{ background: 'rgba(0,0,0,0.5)', color: 'white', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '8px', fontSize: '16px', minHeight: '44px' }}
+                    style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', borderRadius: '6px', padding: '8px', fontSize: '16px', minHeight: '44px' }}
                 >
                     <option value="all">Tutti ({items.length})</option>
                     <option value="custom">Seleziona...</option>
@@ -54,7 +54,7 @@ export const ExportSelector = memo(function ExportSelector({
             </div>
 
             {isCustom && (
-                <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px' }}>
+                <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--surface-light)', padding: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                             {selectedIds.length} selezionati su {items.length}
@@ -66,7 +66,7 @@ export const ExportSelector = memo(function ExportSelector({
                                 placeholder="Cerca..."
                                 value={searchQuery}
                                 onChange={event => setSearchQuery(event.target.value)}
-                                style={{ width: '150px', maxWidth: '100%', padding: '8px', fontSize: '16px', minHeight: '44px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-main)' }}
+                                style={{ width: '150px', maxWidth: '100%', padding: '8px', fontSize: '16px', minHeight: '44px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: 'var(--text-main)' }}
                             />
                         )}
                     </div>

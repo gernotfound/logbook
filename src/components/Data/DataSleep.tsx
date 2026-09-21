@@ -39,7 +39,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                     <button
                         className="btn btn-small"
                         onClick={handlePrevDay}
-                        style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
+                        style={{ background: 'var(--surface-light)', color: 'var(--text-main)' }}
                     >
                         ◀ Prec.
                     </button>
@@ -62,7 +62,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         onClick={handleNextDay}
                         disabled={activeDateStr === today}
                         style={{
-                            background: 'rgba(255,255,255,0.05)',
+                            background: 'var(--surface-light)',
                             color: 'var(--text-main)',
                             opacity: activeDateStr === today ? 0.3 : 1
                         }}
@@ -214,7 +214,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
 
                 <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
                     {isEditing && (
-                        <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={() => sleepHook.setEditingDate(null)}>
+                        <button className="btn" style={{ flex: 1, background: 'var(--surface-light)' }} onClick={() => sleepHook.setEditingDate(null)}>
                             Annulla
                         </button>
                     )}

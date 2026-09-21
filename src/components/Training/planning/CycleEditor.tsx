@@ -152,7 +152,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     marginBottom: 0,
                                     borderRadius: '8px',
                                     border: '1px solid var(--glass-border)',
-                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    background: 'var(--surface-light)',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -222,7 +222,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     marginBottom: 0,
                                     borderRadius: '8px',
                                     border: '1px solid var(--glass-border)',
-                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    background: 'var(--surface-light)',
                                     cursor: 'pointer'
                                 }}
                             >
@@ -361,7 +361,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 <button
                     type="button"
                     className="btn flex-1"
-                    style={{ background: 'rgba(255,255,255,0.08)', marginBottom: 0 }}
+                    style={{ background: 'var(--surface-light)', marginBottom: 0 }}
                     onClick={onCancel}
                 >
                     Annulla

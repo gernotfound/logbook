@@ -26,9 +26,13 @@ export const HomeWorkoutWidget: React.FC<HomeWorkoutWidgetProps> = ({
                 <h3>{inProgress ? activeWorkout.routineName || 'Allenamento libero' : completed ? 'Allenamento completato' : 'Pronto ad allenarti?'}</h3>
                 <p className="text-sm home-muted">{inProgress ? `Sessione in corso · ${activeWorkout.exercises.length} esercizi` : completed ? `${todaysWorkout.routineName || 'Sessione'} · ${todaysWorkout.exercises.length} esercizi` : 'Nessun allenamento registrato oggi.'}</p>
             </div>
-            <button className={completed ? 'btn btn-secondary' : 'btn btn-primary'} type="button" onClick={() => onNavigate('training')}
-                aria-label={inProgress ? 'Riprendi allenamento' : completed ? 'Apri allenamento' : 'Inizia allenamento di oggi'}>
-                <Play size={20} aria-hidden="true" />{inProgress ? 'Riprendi allenamento' : completed ? 'Apri allenamento' : 'Inizia allenamento'}
+            <button
+                className={completed ? 'btn btn-secondary' : 'btn btn-primary'}
+                type="button"
+                onClick={() => onNavigate(completed ? 'training-history' : 'training')}
+                aria-label={inProgress ? 'Riprendi allenamento' : completed ? 'Apri lo storico degli allenamenti' : 'Inizia allenamento di oggi'}
+            >
+                <Play size={20} aria-hidden="true" />{inProgress ? 'Riprendi allenamento' : completed ? 'Vai allo storico' : 'Inizia allenamento'}
             </button>
         </section>
     );

@@ -78,6 +78,7 @@ export function ExerciseEditorForm({
                 <div>
                     <input
                         type="text"
+                        aria-label="Nome esercizio"
                         placeholder="Nome esercizio (es. Panca piana con bilanciere)"
                         value={exName}
                         style={isDuplicateName ? { borderColor: 'var(--danger-color)' } : undefined}
@@ -91,6 +92,7 @@ export function ExerciseEditorForm({
                 </div>
                 <input
                     type="text"
+                    aria-label="Note di setup"
                     placeholder="Note di setup (opzionale, es. Inclinazione 30°)"
                     value={exNotes}
                     onChange={event => setExNotes(event.target.value)}
@@ -129,7 +131,7 @@ export function ExerciseEditorForm({
 
             {trackingType === 'weight_reps' && (
                 <div className="mb-20" style={{ marginTop: '30px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '1px solid var(--glass-border)', borderBottom: '1px solid var(--glass-border)' }}>
                         <label className="text-white text-sm font-medium m-0 cursor-pointer" htmlFor="ex-bodyweight">
                             Esercizio a corpo libero
                         </label>
@@ -141,7 +143,7 @@ export function ExerciseEditorForm({
                             style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: 'var(--primary-color)', margin: 0 }}
                         />
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--glass-border)' }}>
                         <label className="text-white text-sm font-medium m-0" htmlFor="ex-equipment-weight">
                             Peso attrezzo
                         </label>
@@ -155,7 +157,7 @@ export function ExerciseEditorForm({
                             value={equipmentWeight}
                             onChange={event => setEquipmentWeight(event.target.value)}
                             onFocus={event => event.target.select()}
-                            style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-main)' }}
+                            style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '16px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}
                         />
                     </div>
                 </div>
@@ -177,7 +179,7 @@ export function ExerciseEditorForm({
                 <button
                     type="button"
                     className="btn flex-1 mb-0"
-                    style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }}
+                    style={{ background: 'var(--surface-light)', whiteSpace: 'nowrap', margin: 0 }}
                     onClick={onCancel}
                     disabled={isSaving}
                 >
@@ -199,7 +201,7 @@ export function ExerciseEditorForm({
                     <button
                         type="button"
                         className="btn w-full mb-0"
-                        style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ff4d6d', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                        style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
                         onClick={onRestore}
                     >
                         <span aria-hidden="true">🔄</span> Ripristina all'originale

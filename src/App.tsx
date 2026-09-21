@@ -29,7 +29,6 @@ import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
 import ReloadPrompt from './components/UI/ReloadPrompt';
-import { InstallPrompt } from './components/UI/InstallPrompt';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
@@ -208,6 +207,11 @@ function App() {
   };
 
   const handleHomeNavigate = (tab: string) => {
+    if (tab === 'training-history') {
+      setTrainingSubTab('history');
+      handleTabChange('training');
+      return;
+    }
     if (tab === 'training') setTrainingSubTab('session');
     if (tab === 'nutrition') setNutritionSubTab('meals');
     handleTabChange(tab);
@@ -318,7 +322,6 @@ function App() {
       <GlobalDialog />
       {showConsentOverlay && <ConsentOverlay />}
       <ReloadPrompt />
-      <InstallPrompt />
       {guestLoginOverlayVisible && (
         <div id="auth-overlay" style={{ zIndex: 10001 }}>
           <LoginBox onCancel={closeGuestLogin} />

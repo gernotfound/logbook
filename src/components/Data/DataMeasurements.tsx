@@ -84,7 +84,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     <button 
                         className="btn btn-small" 
                         onClick={handlePrevDay} 
-                        style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}
+                        style={{ background: 'var(--surface-light)', color: 'var(--text-main)' }}
                     >
                         ◀ Prec.
                     </button>
@@ -107,7 +107,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                         onClick={handleNextDay} 
                         disabled={activeDateStr === todayStr} 
                         style={{ 
-                            background: 'rgba(255,255,255,0.05)', 
+                            background: 'var(--surface-light)',
                             color: 'var(--text-main)', 
                             opacity: activeDateStr === todayStr ? 0.3 : 1 
                         }}
@@ -318,7 +318,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
                 {isEditing && (
-                    <button className="btn" style={{ flex: 1, background: 'rgba(255,255,255,0.1)' }} onClick={handleCancelEdit}>
+                    <button className="btn" style={{ flex: 1, background: 'var(--surface-light)' }} onClick={handleCancelEdit}>
                         Annulla
                     </button>
                 )}

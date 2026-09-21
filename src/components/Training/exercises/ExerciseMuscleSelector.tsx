@@ -164,7 +164,7 @@ export function ExerciseMuscleSelector({
                 ))}
             </div>
 
-            <div className="rounded-8 overflow-hidden" style={{ background: 'rgba(0,0,0,0.1)' }}>
+            <div className="rounded-8 overflow-hidden" style={{ background: 'var(--surface-light)' }}>
                 <MuscleModel
                     selectedMuscles={selectedMuscleIds as any}
                     secondaryMuscles={secondaryMuscles.map((muscle: any) => muscle.id)}

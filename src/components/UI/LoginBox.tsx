@@ -132,6 +132,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
                 <input
                     type="email"
+                    aria-label="Email"
                     placeholder="La tua email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
@@ -144,6 +145,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     <div style={{ position: "relative" }}>
                         <input
                             type={showPassword ? "text" : "password"}
+                            aria-label="Password"
                             placeholder={mode === 'register' ? 'Password (min 8 car, A-a, num, spec)' : 'Password'}
                             value={password}
                             onChange={e => setPassword(e.target.value)}
@@ -165,6 +167,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                 {mode === 'register' && (
                     <input
                         type={showPassword ? "text" : "password"}
+                        aria-label="Conferma password"
                         placeholder="Conferma Password"
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
