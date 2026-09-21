@@ -145,7 +145,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                         cursor: 'pointer',
                                         textAlign: 'left',
                                         background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
-                                        color: isPain ? '#ff6b81' : '#ffffff',
+                                        color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
                                         border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--border-color)',
                                         transition: 'all 0.2s ease'
                                     }}

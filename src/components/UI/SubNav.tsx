@@ -84,6 +84,11 @@ export default function SubNav<T extends string>({
         aria-label={label}
         aria-orientation="horizontal"
         onScroll={updateEdges}
+        onWheel={event => {
+          if (event.deltaY !== 0 && event.currentTarget.scrollWidth > event.currentTarget.clientWidth) {
+            event.currentTarget.scrollLeft += event.deltaY;
+          }
+        }}
       >
         {items.map((item, index) => (
           <button

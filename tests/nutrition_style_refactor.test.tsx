@@ -143,7 +143,7 @@ render(
     });
 
     describe('R1 & R2: NutritionMeals', () => {
-        it('renders TDEE target, search title, and macro header labels without bright text colors', () => {
+        it('renders the calorie target, semantic macro labels, and search within themed panels', () => {
             const mockHook: any = {
                 todayNutrition: { kcal: 1800, pro: 140, carbs: 200, fat: 50 },
                 dailyTarget: { kcal: 2400, pro: 160, carbs: 280, fat: 65 },
@@ -175,21 +175,21 @@ renderWithProviders(
 
             // Target kcal text
             const targetKcal = screen.getByText('2400');
-            expect(targetKcal.style.color).toBe('var(--text-main)');
+            expect(targetKcal.closest('.tracking-panel')).not.toBeNull();
 
-            // PRO, CAR, GRA labels in header
-            expect(screen.getByText('PRO').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('CAR').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('GRA').style.color).toBe('var(--text-muted)');
+            // Descriptive labels live in a definition list, so the values remain understandable without color.
+            expect(screen.getByText('Proteine').tagName).toBe('DT');
+            expect(screen.getByText('Carboidrati').tagName).toBe('DT');
+            expect(screen.getByText('Grassi').tagName).toBe('DT');
 
             // Search heading
             const searchHeading = screen.getByRole('heading', { level: 2, name: /Cerca alimento/i });
-            expect(searchHeading.style.color).toBe('var(--text-main)');
+            expect(searchHeading.classList.contains('tracking-heading')).toBe(true);
 
             // Meal category headers (Colazione, Pranzo, Cena, Spuntini) should be var(--text-main) and not text-primary
             const colazioneHeader = screen.getByRole('heading', { level: 2, name: /Colazione/i });
             expect(colazioneHeader.classList.contains('text-primary')).toBe(false);
-            expect(colazioneHeader.style.color).toBe('var(--text-main)');
+            expect(colazioneHeader.classList.contains('tracking-heading')).toBe(true);
         });
     });
 
@@ -278,7 +278,7 @@ renderWithProviders(
     });
 
     describe('HomeNutritionWidget alignment', () => {
-        it('renders heading and macro labels in var(--text-muted) and target in var(--text-main)', () => {
+        it('renders a readable calorie target and named macronutrients', () => {
             render(
                 <HomeNutritionWidget
                     kcalEaten={1500}
@@ -291,14 +291,14 @@ renderWithProviders(
             );
 
             const heading = screen.getByRole('heading', { level: 2, name: /Nutrizione/i });
-            expect(heading.style.color).toBe('var(--text-main)');
+            expect(heading.querySelector('.home-section-link')).not.toBeNull();
 
             const targetKcal = screen.getByText(/2200/i);
-            expect(targetKcal.style.color).toBe('var(--text-muted)');
+            expect(targetKcal.classList.contains('home-muted')).toBe(true);
 
-            expect(screen.getByText('CARBO').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('PRO').style.color).toBe('var(--text-muted)');
-            expect(screen.getByText('GRASSI').style.color).toBe('var(--text-muted)');
+            expect(screen.getByText('Carboidrati').tagName).toBe('DT');
+            expect(screen.getByText('Proteine').tagName).toBe('DT');
+            expect(screen.getByText('Grassi').tagName).toBe('DT');
         });
     });
 });

@@ -76,7 +76,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                     padding: '2px 8px',
                                     borderRadius: '12px',
                                     background: 'var(--primary-color)',
-                                    color: '#000'
+                                    color: 'var(--on-primary)'
                                 }}
                             >
                                 Attivo
@@ -178,7 +178,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                                     background: 'rgba(14, 165, 233, 0.1)',
                                                     border: '1px solid rgba(14, 165, 233, 0.25)',
                                                     borderRadius: '4px',
-                                                    color: '#fff',
+                                                    color: 'var(--text-main)',
                                                     fontSize: '0.75rem'
                                                 }}
                                             >

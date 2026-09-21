@@ -60,7 +60,7 @@ export function NutritionFoodSearch({
             </div>
 
             {searchResults.length > 0 && (
-                <div id="active-search-results" className="tracking-search-results" aria-label="Alimenti trovati">
+                <div className="tracking-search-results" aria-label="Alimenti trovati">
                     {searchResults.map((food: any, idx: number) => (
                         <div key={food.id || idx} className="tracking-food-result">
                             <div className="tracking-row tracking-row--wrap">

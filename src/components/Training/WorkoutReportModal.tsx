@@ -18,6 +18,8 @@ interface WorkoutReportModalProps {
 const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, history, library, onClose, fromEndWorkout }) => {
     const titleId = useId();
     const closeButtonRef = useRef<HTMLButtonElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const onCloseRef = useRef(onClose);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
@@ -30,22 +32,49 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
     const [isSavingRoutineLoading, setIsSavingRoutineLoading] = useState(false);
 
     useEffect(() => {
+        onCloseRef.current = onClose;
+    }, [onClose]);
+
+    useEffect(() => {
         const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         closeButtonRef.current?.focus();
 
         const handleKeyDown = (event: KeyboardEvent) => {
+            // GlobalDialog is a portal above this page and manages its own focus.
+            if (document.querySelector('[role="alertdialog"][aria-modal="true"]')) return;
             if (event.key === 'Escape') {
                 event.preventDefault();
-                onClose();
+                onCloseRef.current();
+            }
+            if (event.key === 'Tab') {
+                const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+                    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                );
+                if (!focusable?.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) {
+                    event.preventDefault();
+                    first.focus();
+                }
             }
         };
 
         document.addEventListener('keydown', handleKeyDown);
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
-            previouslyFocused?.focus();
+            if (previouslyFocused?.isConnected) {
+                previouslyFocused.focus();
+            } else {
+                requestAnimationFrame(() => {
+                    document.querySelector<HTMLElement>('.bottom-nav [aria-current="page"]')?.focus();
+                });
+            }
         };
-    }, [onClose]);
+    }, []);
 
     const handleSaveAsRoutine = async () => {
         if (!newRoutineName.trim()) {
@@ -133,7 +162,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
     };
 
     return (
-        <div className="workout-report" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div ref={dialogRef} className="workout-report" role="dialog" aria-modal="true" aria-labelledby={titleId}>
             <div className="workout-report-page">
                 {/* Header */}
                 <header className="workout-report-header">
@@ -257,7 +286,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             <div key={ex.exId} className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{ex.exName}</span>
-                                                    {ex.isPR && <span style={{ background: 'var(--warning-color)', color: '#000', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>PR</span>}
+                                                    {ex.isPR && <span style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>PR</span>}
                                                 </div>
 
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

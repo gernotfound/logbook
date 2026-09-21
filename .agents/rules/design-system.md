@@ -1,64 +1,30 @@
 # Design System — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-09 | File verificati: `src/styles/global.css`
+> Stato: normativo | Ultima verifica: 2026-09-21 | File verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`
 
-## Tema: Dark Glassmorphism
+## Tema adattivo
 
-Il tema è profondo, minimale e governato centralmente da `src/styles/global.css`.
+La presentazione usa superfici, controlli e navigazione ispirati alle app iPhone, conservando un layout leggibile su schermi piccoli e desktop. `src/styles/global.css` importa i moduli `tokens.css`, `base.css`, `components.css`, `utilities.css`, `context-menu.css` e `ui-surfaces.css`. Le sezioni possono importare il proprio CSS.
 
-### Variabili CSS principali
+`tokens.css` definisce i temi dark e light. Usare token semantici, non colori di testo fissati per il solo tema scuro:
 
-**Sfondi:**
-- `--bg-color: #000000`
-- `--surface-color: #0d0d0d`
-- `--surface-light: #1a1a1a`
+- Superfici e testo: `--bg-color`, `--surface-color`, `--surface-light`, `--text-main`, `--text-muted`, `--glass-border`.
+- Azioni e relativi colori leggibili: `--primary-color`/`--on-primary`, `--accent-color`/`--on-accent`, `--warning-color`/`--on-warning`, `--success-color`/`--on-success`, `--danger-color`/`--on-danger`.
+- Grafici e mappa: `--chart-grid`, `--muscle-base`, `--muscle-outline`, `--muscle-active`, `--muscle-fatigue`, `--muscle-pain`.
 
-**Accenti:**
-- `--primary-color: #00e5ff`
-- `--primary-glow: rgba(0, 229, 255, 0.3)`
-- `--accent-color: #cc00ff`
+La scelta `system | light | dark` è una preferenza del dispositivo salvata best-effort nella sola chiave `logbook:appearance:v1`. `public/appearance.js` applica il tema prima che React monti l'app; `useAppearanceStore` ascolta le variazioni del sistema e delle altre schede. **MUST:** non mettere questa scelta in `UserData`, Firestore o nei backup. Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione e la UI comunica il limite.
 
-**Feedback:**
-- `--danger-color: #ff4d6d`
-- `--warning-color: #ffb703`
-- `--success-color: #2ecc71`
+## Layout, controlli e accessibilità
 
-**Trasparenze in vetro:**
-- `--glass-bg: rgba(13, 13, 13, 0.85)`
-- `--glass-border: rgba(255, 255, 255, 0.1)`
+- **MUST:** controlli principali e navigazione con area di tocco almeno 44×44 px; mantenere il rispetto delle safe area e uno spazio in fondo ai contenuti sopra la barra fissa.
+- **MUST:** input, select e textarea a `font-size: 16px !important` dove applicabile per evitare lo zoom automatico di iOS Safari.
+- **MUST:** usare nomi accessibili, stato e focus visibile per tab, menu, dialoghi, mappe interattive e pulsanti a icona. `SubNav<T>` fornisce il pattern condiviso dei tab.
+- **SHOULD:** usare classi e token per gli stili statici; lasciare inline solo valori realmente dinamici o codice legacy non ancora migrato. Preferire `rem` per le dimensioni che devono seguire le preferenze di carattere; il valore di 16 px degli input è un'eccezione intenzionale.
+- **SHOULD:** applicare `min-width: 0` ai figli di layout flex/grid soggetti a overflow e controllare le viewport da 320 px in su.
+- **MUST:** testo rivolto all'utente in sentence case italiano, salvo sigle, nomi propri e marchi. Icone UI `lucide-react` di norma da 20 o 24 px.
 
-**Testi:**
-- `--text-main: #f0f0f0`
-- `--text-muted: #9ba3af`
+## Verifica
 
-### Classi e prefissi standard
-
-`.card`, `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-small`, `.btn-icon`, `.form-group`, `.input-row`, `.spinner`
-
-## Tipografia e dimensioni
-
-- **MUST:** Usare le classi di utilità globali per i testi: `.text-xs`, `.text-sm`, `.text-md`, `.text-base`, `.text-lg`, `.text-xl` (definite in `global.css`).
-- **MUST:** Non usare stili inline (`style={{ fontSize: '...' }}`) salvo eccezioni dinamiche imprescindibili.
-- **MUST:** Usare `rem` e mai `px` per scalare con le preferenze di accessibilità.
-- **SHOULD:** Affidarsi ai tag semantici (`<h1>`, `<h2>`, `<h3>`, `<h4>`) per i titoli.
-- **Eccezione:** I campi `<input>`, `<select>` e `<textarea>` devono mantenere `font-size: 16px !important` (già gestito globalmente) per prevenire lo zoom automatico su iOS Safari.
-
-## Stile testuale — Sentence case italiano
-
-**MUST:** Ogni testo rivolto all'utente (label, bottoni, placeholder, alert, titoli) deve rispettare la convenzione italiana del Sentence case.
-
-- ❌ Sbagliato (Title case): "Nuova Misurazione Corporea", "Salva Modifiche Scheda"
-- ✅ Corretto: "Nuova misurazione corporea", "Salva modifiche scheda"
-
-Solo la primissima lettera della frase va in maiuscolo. Le parole successive sono minuscole, salvo nomi propri, sigle o marchi.
-
-## Iconografia
-
-`lucide-react` con proporzioni coerenti: di norma `size={24}` o `size={20}`.
-
-## Regola di consistenza
-
-Quando aggiungi un elemento di UI, assicurati che rispetti la densità, il contrasto e il feeling premium del tema dark glassmorphism.
-
-- **MUST:** Prestare massima attenzione alla sintassi CSS (chiusura corretta di tutte le parentesi graffe `}`). Un errore di sintassi silenzioso nel CSS rompe l'intero layout senza far fallire la build.
-- **MUST:** Durante un refactoring delle variabili CSS (es. l'estrazione in file di token dedicati), verificare minuziosamente che TUTTE le variabili originali (es. `--primary-dark`) siano migrate e caricate correttamente per evitare fallback del browser.
+- **MUST:** durante i refactor dei token, controllare la sintassi CSS e che ogni custom property utilizzata sia definita o abbia un fallback deliberato.
+- **VERIFY:** testare light/dark e preferenza di sistema, caricamento iniziale senza flash, cambio di tema e indisponibilità dello storage.
+- **VERIFY:** controllare navigazione, timer sticky, report e mappa muscolare su viewport strette e desktop. Playwright WebKit è una verifica preventiva; la PWA installata su iPhone richiede accettazione reale sul dispositivo.

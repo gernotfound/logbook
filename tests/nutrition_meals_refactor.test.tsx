@@ -71,7 +71,7 @@ describe('NutritionMeals decomposition parity', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Modifica porzione di Avena' }));
         expect(screen.getByRole('heading', { level: 2, name: /Modifica porzione/i })).toBeDefined();
 
-        fireEvent.click(screen.getByRole('button', { name: /Rimuovi Avena/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
         expect(removeFood).toHaveBeenCalledWith('m1');
     });
 });

@@ -190,7 +190,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     padding: '6px 12px',
                                     fontSize: '0.85rem',
                                     background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
-                                    color: exercise.defaultTechnique === 'dropset' ? '#000' : 'var(--text-main)',
+                                    color: exercise.defaultTechnique === 'dropset' ? 'var(--on-warning)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'dropset' ? 700 : 500,
                                     border: '1px solid rgba(255,255,255,0.1)',
                                     borderRadius: '8px'
@@ -207,7 +207,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     padding: '6px 12px',
                                     fontSize: '0.85rem',
                                     background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
-                                    color: exercise.defaultTechnique === 'isometrics' ? '#fff' : 'var(--text-main)',
+                                    color: exercise.defaultTechnique === 'isometrics' ? 'var(--on-accent)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'isometrics' ? 700 : 500,
                                     border: '1px solid rgba(255,255,255,0.1)',
                                     borderRadius: '8px'

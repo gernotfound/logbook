@@ -81,7 +81,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                                 padding: '3px 10px',
                                 borderRadius: '12px',
                                 background: 'var(--primary-color)',
-                                color: '#000'
+                                color: 'var(--on-primary)'
                             }}
                         >
                             {activeCycle.name}
@@ -127,7 +127,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
 
                                     <div className="flex-between items-center mb-10">
                                         <div>
-                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#fff' }}>
+                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
                                                 {nextScheduled.nextRoutine.name}
                                             </div>
                                             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
