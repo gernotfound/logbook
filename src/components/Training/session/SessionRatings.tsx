@@ -256,7 +256,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                                     cursor: 'pointer',
                                                     textAlign: 'left',
                                                     background: isPain ? 'rgba(239, 68, 68, 0.25)' : 'var(--surface-light, #1a1a1a)',
-                                                    color: isPain ? '#ff6b81' : '#ffffff',
+                                                    color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
                                                     border: isPain ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.08)',
                                                     transition: 'all 0.2s ease'
                                                 }}
@@ -328,4 +328,3 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 };
 
 export default SessionRatings;
-

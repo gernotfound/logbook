@@ -33,6 +33,7 @@ import { InstallPrompt } from './components/UI/InstallPrompt';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
+import { AlertTriangle, X } from 'lucide-react';
 
 const HomeView = lazy(() => import('./components/Home/HomeView'));
 const TrainingView = lazy(() => import('./components/Training/TrainingView'));
@@ -206,6 +207,12 @@ function App() {
     });
   };
 
+  const handleHomeNavigate = (tab: string) => {
+    if (tab === 'training') setTrainingSubTab('session');
+    if (tab === 'nutrition') setNutritionSubTab('meals');
+    handleTabChange(tab);
+  };
+
   useEffect(() => {
     const handleNavEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -235,9 +242,9 @@ function App() {
   if (loading) {
     return (
       <div id="auth-overlay">
-        <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
-            <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
-            <div className="spinner" style={{margin: '20px auto'}}></div>
+        <div id="auth-loading" className="auth-panel">
+            <h1 className="text-primary mb-10">LogBook</h1>
+            <div className="spinner auth-spinner"></div>
             <p>Caricamento...</p>
         </div>
       </div>
@@ -247,15 +254,15 @@ function App() {
   if (compatibilityStatus === 'update-required') {
     return (
       <div id="auth-overlay" role="alert" aria-live="assertive">
-        <div style={{ textAlign: 'center', maxWidth: '520px', padding: '32px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-          <h1 style={{ color: 'var(--primary-color)', marginBottom: '12px' }}>Aggiornamento richiesto</h1>
+        <div className="auth-panel">
+          <h1 className="text-primary mb-10">Aggiornamento richiesto</h1>
           <p style={{ lineHeight: 1.5 }}>
             Questa copia di LogBook non può modificare in sicurezza i dati trovati. I dati locali e cloud sono stati lasciati intatti.
           </p>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          <p className="text-muted">
             {compatibilityError ?? 'Aggiorna LogBook alla versione più recente prima di continuare.'}
           </p>
-          <button type="button" onClick={() => window.location.reload()} style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}>
+          <button type="button" onClick={() => window.location.reload()} className="btn btn-primary">
             Ricarica LogBook
           </button>
         </div>
@@ -274,9 +281,9 @@ function App() {
   if (guestLoginMigrationPending) {
     return (
       <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
-        <div id="auth-loading" style={{ textAlign: 'center', maxWidth: '400px', padding: '30px', background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)'}}>
-          <h1 style={{color:'var(--primary-color)', marginBottom: '10px'}}>LogBook</h1>
-          <div className="spinner" style={{margin: '20px auto'}}></div>
+        <div id="auth-loading" className="auth-panel">
+          <h1 className="text-primary mb-10">LogBook</h1>
+          <div className="spinner auth-spinner"></div>
           <p>Preparazione account...</p>
         </div>
       </div>
@@ -286,18 +293,18 @@ function App() {
   if (guestLoginMigrationFailed) {
     return (
       <div id="auth-overlay" style={{ zIndex: 10001 }} role="alert" aria-live="assertive">
-        <div style={{ textAlign: 'center', maxWidth: '460px', padding: '30px', background: 'rgba(30, 41, 59, 0.96)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-          <h1 style={{ color: 'var(--primary-color)', marginBottom: '10px' }}>Accesso non completato</h1>
+        <div className="auth-panel">
+          <h1 className="text-primary mb-10">Accesso non completato</h1>
           <p style={{ lineHeight: 1.5 }}>
             I dati salvati su questo dispositivo sono stati conservati.
           </p>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          <p className="text-muted">
             Riprova per completare in sicurezza la preparazione dell’account.
           </p>
           <button
             type="button"
             onClick={() => void retryGuestMigration()}
-            style={{ marginTop: '12px', padding: '10px 18px', borderRadius: '8px', cursor: 'pointer' }}
+            className="btn btn-primary"
           >
             Riprova
           </button>
@@ -318,38 +325,10 @@ function App() {
         </div>
       )}
       {isGuest && (
-        <div style={{
-          position: 'fixed',
-          top: 'env(safe-area-inset-top, 0px)',
-          left: 0, right: 0,
-          background: 'rgba(245, 158, 11, 0.92)',
-          backdropFilter: 'blur(6px)',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '10px',
-          padding: '8px 16px',
-          fontSize: '0.85rem',
-          zIndex: 8888,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-        }}>
-          <span style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>⚠️ Modalità locale · I dati sono solo su questo dispositivo</span>
-          <button
-            onClick={openGuestLogin}
-            style={{
-              background: '#fff',
-              color: '#92400e',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '5px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              flexShrink: 0,
-              whiteSpace: 'nowrap'
-            }}
-          >
+        <div className="guest-banner">
+          <AlertTriangle size={20} aria-hidden="true" />
+          <span className="guest-banner-text">Modalità locale · I dati sono solo su questo dispositivo</span>
+          <button type="button" className="btn btn-small" onClick={openGuestLogin}>
             Accedi
           </button>
         </div>
@@ -372,7 +351,7 @@ function App() {
           role="alert"
           aria-live="assertive"
         >
-          <span className="sync-error-icon" aria-hidden="true">⚠️</span>
+          <AlertTriangle className="sync-error-icon" size={20} aria-hidden="true" />
           <span className="sync-error-text">{saveError}</span>
           <button
             type="button"
@@ -380,21 +359,21 @@ function App() {
             aria-label="Chiudi avviso"
             onClick={() => setSaveError(null)}
           >
-            ✕
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
       )}
 
-      <main id="app-container" style={isGuest ? { paddingTop: '36px' } : undefined}>
+      <main id="app-container">
         <ErrorBoundary key={isGuest ? 'guest' : currentUser?.uid}>
           <Suspense fallback={
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column' }}>
+            <div className="app-loading">
               <div className="spinner"></div>
               <p style={{ color: 'var(--text-muted)' }}>Caricamento...</p>
             </div>
           }>
             <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
-              {(visitedTabs.home || activeTab === 'home') && <HomeView onNavigate={handleTabChange} />}
+              {(visitedTabs.home || activeTab === 'home') && <HomeView onNavigate={handleHomeNavigate} />}
             </div>
             <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
               {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}

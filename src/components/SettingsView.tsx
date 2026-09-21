@@ -11,6 +11,22 @@ import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { PrivacySettingsTab } from './Settings/PrivacySettingsTab';
 import { ExportSettingsTab } from './Settings/ExportSettingsTab';
+import SubNav from './UI/SubNav';
+import { useAppearanceStore, type ThemePreference } from '../store/useAppearanceStore';
+import './SettingsView.css';
+
+type SettingsTab = 'account' | 'privacy' | 'export' | 'appearance';
+const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
+    { id: 'account', label: 'Account' },
+    { id: 'privacy', label: 'Privacy' },
+    { id: 'export', label: 'Esporta' },
+    { id: 'appearance', label: 'Aspetto' },
+];
+const APPEARANCE_OPTIONS: readonly { id: ThemePreference; label: string }[] = [
+    { id: 'system', label: 'Sistema' },
+    { id: 'light', label: 'Chiaro' },
+    { id: 'dark', label: 'Scuro' },
+];
 
 const SettingsView = () => {
     const {
@@ -25,7 +41,10 @@ const SettingsView = () => {
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
     const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
-    const [activeTab, setActiveTab] = useState<'account' | 'privacy' | 'export'>('account');
+    const [activeTab, setActiveTab] = useState<SettingsTab>('account');
+    const appearance = useAppearanceStore(state => state.preference);
+    const setAppearance = useAppearanceStore(state => state.setPreference);
+    const [appearanceNotSaved, setAppearanceNotSaved] = useState(false);
     const [exportLibrary, setExportLibrary] = useState<ExportSelection>('all');
     const [exportRoutines, setExportRoutines] = useState<ExportSelection>('all');
     const [exportTrainingCycles, setExportTrainingCycles] = useState<ExportSelection>('all');
@@ -76,16 +95,13 @@ const SettingsView = () => {
     }, []);
 
     return (
-        <div id="view-settings" className="view-section active">
-            <h1 style={{marginBottom: '15px'}}><span aria-hidden="true">⚙️</span> Impostazioni</h1>
+        <div id="view-settings" className="view-section active settings-view">
+            <h1 className="settings-title">Impostazioni</h1>
 
-            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Impostazioni" style={{ marginBottom: '20px' }}>
-                <button type="button" role="tab" aria-selected={activeTab === 'account'} className={`sub-nav-btn ${activeTab === 'account' ? 'active' : ''}`} onClick={() => setActiveTab('account')}>Account</button>
-                <button type="button" role="tab" aria-selected={activeTab === 'privacy'} className={`sub-nav-btn ${activeTab === 'privacy' ? 'active' : ''}`} onClick={() => setActiveTab('privacy')}>Privacy</button>
-                <button type="button" role="tab" aria-selected={activeTab === 'export'} className={`sub-nav-btn ${activeTab === 'export' ? 'active' : ''}`} onClick={() => setActiveTab('export')}>Esporta</button>
-            </div>
+            <SubNav id="settings" label="Sotto-menu Impostazioni" items={SETTINGS_TABS} value={activeTab} onChange={setActiveTab} />
 
             {activeTab === 'account' && (
+                <div id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account">
                 <AccountSettingsTab
                     pendingAccountDeletion={pendingAccountDeletion}
                     isInstallable={isInstallable}
@@ -97,18 +113,22 @@ const SettingsView = () => {
                     onCheckUpdate={handleCheckUpdate}
                     onDeleteAccount={handleDeleteAccount}
                 />
+                </div>
             )}
 
             {activeTab === 'privacy' && (
+                <div id="settings-panel-privacy" role="tabpanel" aria-labelledby="settings-tab-privacy">
                 <PrivacySettingsTab
                     analyticsEnabled={analyticsEnabled}
                     onOpenTerms={() => setShowTerms(true)}
                     onOpenPrivacy={() => setShowPrivacy(true)}
                     onToggleAnalytics={handleAnalyticsToggle}
                 />
+                </div>
             )}
 
             {activeTab === 'export' && (
+                <div id="settings-panel-export" role="tabpanel" aria-labelledby="settings-tab-export">
                 <ExportSettingsTab
                     library={storeLibrary}
                     routines={storeRoutines}
@@ -126,6 +146,29 @@ const SettingsView = () => {
                     importingData={importingData}
                     exportingData={exportingData}
                 />
+                </div>
+            )}
+
+            {activeTab === 'appearance' && (
+                <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" className="settings-group">
+                    <h2>Aspetto</h2>
+                    <p className="settings-help">Scegli il tema di questo dispositivo. La scelta non modifica i dati del tuo account.</p>
+                    <fieldset className="appearance-options" aria-label="Tema dell'app">
+                        {APPEARANCE_OPTIONS.map(option => (
+                            <label key={option.id} className={`appearance-option ${appearance === option.id ? 'is-selected' : ''}`}>
+                                <input
+                                    type="radio"
+                                    name="appearance"
+                                    value={option.id}
+                                    checked={appearance === option.id}
+                                    onChange={() => setAppearanceNotSaved(!setAppearance(option.id))}
+                                />
+                                {option.label}
+                            </label>
+                        ))}
+                    </fieldset>
+                    {appearanceNotSaved && <p role="status" className="settings-help settings-help-last">Il tema è attivo ora, ma il browser non ha potuto conservarlo per i prossimi avvii.</p>}
+                </section>
             )}
 
             {showPrivacy && (

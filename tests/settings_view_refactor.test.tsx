@@ -21,4 +21,13 @@ describe('SettingsView decomposition parity', () => {
         expect(screen.queryByRole('button', { name: /Esporta archivio precedente/i })).toBeNull();
         expect(screen.getByRole('button', { name: /Esporta dati \(CSV\)/i })).toBeDefined();
     });
+
+    it('offers a device-only appearance choice alongside the existing settings', () => {
+        renderWithProviders(<SettingsView />);
+        fireEvent.click(screen.getByRole('tab', { name: 'Aspetto' }));
+        expect(screen.getByRole('tabpanel', { name: 'Aspetto' })).toBeDefined();
+        expect(screen.getByRole('radio', { name: 'Sistema' })).toBeDefined();
+        expect(screen.getByRole('radio', { name: 'Chiaro' })).toBeDefined();
+        expect(screen.getByRole('radio', { name: 'Scuro' })).toBeDefined();
+    });
 });

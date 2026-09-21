@@ -49,7 +49,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                             onClick={() => onSelectEdit(day)}
                         >
                             <div>
-                                <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: editingDate === day.date ? 'var(--primary-color)' : 'white' }}>
+                                <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: editingDate === day.date ? 'var(--primary-color)' : 'var(--text-main)' }}>
                                     📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date} {day.measurementTime ? `alle ${day.measurementTime}` : ''}
                                 </div>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>

@@ -3,8 +3,18 @@ import TrainingPlanning from './planning/TrainingPlanning';
 import TrainingRoutines from './TrainingRoutines';
 import TrainingExercises from './TrainingExercises';
 import TrainingHistory from './TrainingHistory';
+import SubNav from '../UI/SubNav';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import type { WorkoutSession, TrainingSubTab } from '../../types';
+import './training.css';
+
+const TRAINING_TABS: ReadonlyArray<{ id: TrainingSubTab; label: string }> = [
+    { id: 'session', label: 'Sessione' },
+    { id: 'planning', label: 'Pianificazione' },
+    { id: 'routines', label: 'Schede' },
+    { id: 'exercises', label: 'Esercizi' },
+    { id: 'history', label: 'Storico' }
+];
 
 interface TrainingViewProps {
     subTab?: TrainingSubTab;
@@ -21,32 +31,28 @@ const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
         }
     };
 
-    const handleWheel = (e: any) => {
-        if (e.deltaY !== 0) {
-            e.currentTarget.scrollLeft += e.deltaY;
-        }
-    };
-
     return (
         <div id="view-training" className="view-section active">
-            <div className="sub-nav" role="tablist" aria-label="Sotto-menu Allenamento" onWheel={handleWheel}>
-                <button type="button" role="tab" aria-selected={subTab === 'session'} className={`sub-nav-btn ${subTab === 'session' ? 'active' : ''}`} onClick={() => setSubTab?.('session')}>Sessione</button>
-                <button type="button" role="tab" aria-selected={subTab === 'planning'} className={`sub-nav-btn ${subTab === 'planning' ? 'active' : ''}`} onClick={() => setSubTab?.('planning')}>Pianificazione</button>
-                <button type="button" role="tab" aria-selected={subTab === 'routines'} className={`sub-nav-btn ${subTab === 'routines' ? 'active' : ''}`} onClick={() => setSubTab?.('routines')}>Schede</button>
-                <button type="button" role="tab" aria-selected={subTab === 'exercises'} className={`sub-nav-btn ${subTab === 'exercises' ? 'active' : ''}`} onClick={() => setSubTab?.('exercises')}>Esercizi</button>
-                <button type="button" role="tab" aria-selected={subTab === 'history'} className={`sub-nav-btn ${subTab === 'history' ? 'active' : ''}`} onClick={() => setSubTab?.('history')}>Storico</button>
-            </div>
+            <SubNav
+                id="training"
+                label="Sotto-menu Allenamento"
+                items={TRAINING_TABS}
+                value={subTab}
+                onChange={tab => setSubTab?.(tab)}
+            />
 
             {subTab === 'session' && (
-                <TrainingSession
-                    onNavigateToHistory={() => setSubTab?.('history')}
-                    onNavigateToPlanning={() => setSubTab?.('planning')}
-                />
+                <div id="training-panel-session" role="tabpanel" aria-labelledby="training-tab-session">
+                    <TrainingSession
+                        onNavigateToHistory={() => setSubTab?.('history')}
+                        onNavigateToPlanning={() => setSubTab?.('planning')}
+                    />
+                </div>
             )}
-            {subTab === 'planning' && <TrainingPlanning />}
-            {subTab === 'routines' && <TrainingRoutines />}
-            {subTab === 'exercises' && <TrainingExercises />}
-            {subTab === 'history' && <TrainingHistory onEditWorkout={handleEditWorkout} />}
+            {subTab === 'planning' && <div id="training-panel-planning" role="tabpanel" aria-labelledby="training-tab-planning"><TrainingPlanning /></div>}
+            {subTab === 'routines' && <div id="training-panel-routines" role="tabpanel" aria-labelledby="training-tab-routines"><TrainingRoutines /></div>}
+            {subTab === 'exercises' && <div id="training-panel-exercises" role="tabpanel" aria-labelledby="training-tab-exercises"><TrainingExercises /></div>}
+            {subTab === 'history' && <div id="training-panel-history" role="tabpanel" aria-labelledby="training-tab-history"><TrainingHistory onEditWorkout={handleEditWorkout} /></div>}
         </div>
     );
 };

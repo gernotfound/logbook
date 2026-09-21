@@ -202,7 +202,7 @@ Distinguere tre sistemi:
 
 ## Design system e UX
 
-Tema: dark glassmorphism governato da `src/styles/global.css`; CSS nativo, sentence case italiano.
+Tema adattivo system/light/dark con superfici e controlli ispirati a iOS. `src/styles/global.css` importa i moduli CSS e `src/styles/tokens.css` definisce i token semantici; CSS nativo, sentence case italiano. La scelta del tema è locale al dispositivo, non è un dato di `UserData`.
 
 - **MUST:** usare `GlobalDialog`/`useDialogStore` per dialoghi applicativi; niente `window.alert`/`window.confirm`.
 - **MUST:** niente `<dialog>` per form/editor complessi mobile; preferire superfici inline/full-screen/accordion.

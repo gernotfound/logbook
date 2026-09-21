@@ -7,7 +7,6 @@ import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
-import WorkoutReportModal from './WorkoutReportModal';
 import type { WorkoutSession } from '../../types';
 
 // Responsabilità: renderizzare la UI di un allenamento in corso (lista esercizi, timer).
@@ -46,9 +45,10 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
 
 export interface ActiveWorkoutSessionProps {
     onNavigateToHistory?: () => void;
+    onWorkoutCompleted?: (workout: WorkoutSession) => void;
 }
 
-export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessionProps) => {
+export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }: ActiveWorkoutSessionProps) => {
     const {
         activeWorkout, library, history,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
@@ -68,7 +68,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
     const [openHistoryExIndex, setOpenHistoryExIndex] = useState<number | null>(null);
     const [openSetupExIndex, setOpenSetupExIndex] = useState<number | null>(null);
     const [openSpecialMenuId, setOpenSpecialMenuId] = useState<string | null>(null);
-    const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
 
     const handleMoveExercise = useCallback((fromIndex: number, direction: 'up' | 'down') => {
         const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
@@ -197,27 +196,12 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory }: ActiveWorkoutSessi
     const handleEndWorkout = async () => {
         const finishedWorkout = await endWorkout();
         if (finishedWorkout) {
-            setReportWorkout(finishedWorkout);
+            onWorkoutCompleted?.(finishedWorkout);
         }
     };
 
-    const handleCloseReport = () => {
-        setReportWorkout(null);
-        window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
-    };
-
     return (
-        <div className="training-sub-view active">
-            {reportWorkout && (
-                <WorkoutReportModal 
-                    workout={reportWorkout}
-                    history={history}
-                    library={library}
-                    onClose={handleCloseReport}
-                    fromEndWorkout={true}
-                />
-            )}
-
+        <div className="training-sub-view active workout-session">
             <SessionHeader 
                 isEditingHistory={activeWorkout.isEditingHistory}
                 routineName={activeWorkout.routineName}

@@ -9,6 +9,13 @@ import { DB } from '../src/lib/db';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const readGlobalStyles = () => {
+  const stylesDir = path.resolve(__dirname, '../src/styles');
+  const globalCss = fs.readFileSync(path.join(stylesDir, 'global.css'), 'utf-8');
+  const importedFiles = [...globalCss.matchAll(/@import '\.\/([^']+\.css)'/g)].map((match) => match[1]);
+  return [globalCss, ...importedFiles.map((file) => fs.readFileSync(path.join(stylesDir, file), 'utf-8'))].join('\n');
+};
+
 describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online Lifecycle', () => {
 
   beforeEach(() => {
@@ -49,8 +56,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
   // ============================================================================
   describe('DOM Isolation & Click Non-Blocking Verification', () => {
     it('verifies .sync-indicator has pointer-events: none in CSS', () => {
-      const cssPath = path.resolve(__dirname, '../src/styles/global.css');
-      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+      const cssContent = readGlobalStyles();
 
       // Extract .sync-indicator block
       const indicatorBlockMatch = cssContent.match(/\.sync-indicator\s*\{([^}]+)\}/);
@@ -61,8 +67,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
     });
 
     it('verifies #sync-overlay is completely absent from CSS and App markup', async () => {
-      const cssPath = path.resolve(__dirname, '../src/styles/global.css');
-      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+      const cssContent = readGlobalStyles();
       expect(cssContent).not.toMatch(/#sync-overlay/);
 
       const appPath = path.resolve(__dirname, '../src/App.tsx');
@@ -103,8 +108,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
   // ============================================================================
   describe('Z-Index Stacking Hierarchy: sync-indicator < sync-error-toast < BottomNav < GlobalDialog', () => {
     it('verifies exact z-index values in CSS and component definitions', () => {
-      const cssPath = path.resolve(__dirname, '../src/styles/global.css');
-      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+      const cssContent = readGlobalStyles();
 
       // 1. .sync-indicator z-index (9990)
       const indicatorMatch = cssContent.match(/\.sync-indicator\s*\{[^}]*z-index:\s*(\d+)/);
@@ -300,23 +304,27 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
   // ============================================================================
   describe('Layout Geometry & Dark Glassmorphism CSS Conformance', () => {
     it('verifies safe-area-inset and bottom positioning above bottom-nav', () => {
-      const cssPath = path.resolve(__dirname, '../src/styles/global.css');
-      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+      const cssContent = readGlobalStyles();
+      const tokensCss = fs.readFileSync(path.resolve(__dirname, '../src/styles/tokens.css'), 'utf-8');
+      const navBlock = cssContent.match(/\.bottom-nav\s*\{([^}]+)\}/)![1];
+
+      expect(tokensCss).toMatch(/--nav-height:\s*4\.75rem/);
+      expect(navBlock).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom,\s*0px\)/);
 
       // .sync-indicator positioning
       const indicatorBlock = cssContent.match(/\.sync-indicator\s*\{([^}]+)\}/)![1];
       expect(indicatorBlock).toMatch(/position:\s*fixed/);
-      expect(indicatorBlock).toMatch(/bottom:\s*calc\(76px\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\)/);
-      expect(indicatorBlock).toMatch(/right:\s*max\(16px,\s*calc\(env\(safe-area-inset-right,\s*0px\)\s*\+\s*16px\)\)/);
-      expect(indicatorBlock).toMatch(/border-radius:\s*9999px/);
+      expect(indicatorBlock).toMatch(/bottom:\s*calc\(var\(--nav-height\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*0\.5rem\)/);
+      expect(indicatorBlock).toMatch(/right:\s*max\(1rem,\s*env\(safe-area-inset-right,\s*0px\)\)/);
+      expect(indicatorBlock).toMatch(/border-radius:\s*999px/);
 
       // .sync-error-toast positioning & styling
       const toastBlock = cssContent.match(/\.sync-error-toast\s*\{([^}]+)\}/)![1];
       expect(toastBlock).toMatch(/position:\s*fixed/);
-      expect(toastBlock).toMatch(/bottom:\s*calc\(76px\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\)/);
-      expect(toastBlock).toMatch(/max-width:\s*480px/);
-      expect(toastBlock).toMatch(/backdrop-filter:\s*blur\(16px\)/);
-      expect(toastBlock).toMatch(/box-sizing:\s*border-box/);
+      expect(toastBlock).toMatch(/bottom:\s*calc\(var\(--nav-height\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*0\.5rem\)/);
+      expect(toastBlock).toMatch(/max-width:\s*30rem/);
+      expect(toastBlock).toMatch(/background:\s*var\(--danger-soft\)/);
+      expect(toastBlock).toMatch(/border:\s*1px\s+solid\s+var\(--danger-color\)/);
     });
 
     it('verifies Italian sentence case in App and store notifications', async () => {

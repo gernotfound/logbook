@@ -96,7 +96,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             borderRadius: '50%', 
                             width: '36px', 
                             height: '36px', 
-                            color: '#fff', 
+                            color: 'var(--on-primary)',
                             flexShrink: 0,
                             display: 'inline-flex',
                             alignItems: 'center',

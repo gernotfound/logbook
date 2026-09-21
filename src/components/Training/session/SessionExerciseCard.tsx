@@ -148,7 +148,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <button
                         type="button"
                         className="btn-small"
-                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '36px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em', color: '#000' }}
+                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em', color: 'var(--text-main)' }}
                         onClick={() => setShowPositionMenu(v => !v)}
                         aria-label="Cambia posizione esercizio"
                     >#{exIndex + 1}</button>
@@ -183,7 +183,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <button
                     type="button"
                     className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
-                    style={isHistoryOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
+                    style={isHistoryOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
                     onClick={() => onToggleHistory(exIndex)}
                 >
                     🕒 Storico
@@ -191,7 +191,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <button
                     type="button"
                     className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
-                    style={isSetupOpen ? { background: 'var(--primary-color)', color: '#000' } : {}}
+                    style={isSetupOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
                     onClick={() => onToggleSetup(exIndex)}
                 >
                     <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup

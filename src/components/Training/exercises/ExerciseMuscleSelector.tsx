@@ -34,15 +34,17 @@ export function ExerciseMuscleSelector({
                 <label className="text-white text-sm font-bold">Muscoli coinvolti</label>
                 <div className="flex gap-5 bg-black-20 p-4 rounded-8">
                     <button
+                        type="button"
                         className={`btn-icon ${selectionMode === 'primary' ? 'active' : ''}`}
-                        style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent', color: selectionMode === 'primary' ? '#000' : 'rgba(255, 255, 255, 0.7)' }}
+                        style={{ padding: '4px 12px', fontSize: '0.875rem', borderRadius: '6px', background: selectionMode === 'primary' ? 'var(--primary-color)' : 'transparent', color: selectionMode === 'primary' ? 'var(--on-primary)' : 'var(--text-muted)' }}
                         onClick={() => setSelectionMode('primary')}
                     >
                         Primari
                     </button>
                     <button
+                        type="button"
                         className={`btn-icon ${selectionMode === 'secondary' ? 'active' : ''}`}
-                        style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--secondary-color, #4db6ac)' : 'transparent', color: selectionMode === 'secondary' ? '#000' : 'rgba(255, 255, 255, 0.7)' }}
+                        style={{ padding: '4px 12px', fontSize: '0.875rem', borderRadius: '6px', background: selectionMode === 'secondary' ? 'var(--accent-color)' : 'transparent', color: selectionMode === 'secondary' ? 'var(--on-accent)' : 'var(--text-muted)' }}
                         onClick={() => setSelectionMode('secondary')}
                     >
                         Secondari
@@ -91,7 +93,7 @@ export function ExerciseMuscleSelector({
                 <div
                     className="flex-col gap-6 mb-12 overflow-y-auto p-6 rounded-8"
                     style={{
-                        background: 'rgba(0, 0, 0, 0.35)',
+                        background: 'var(--surface-color)',
                         border: '1px solid var(--glass-border)',
                         maxHeight: '220px'
                     }}
@@ -104,18 +106,18 @@ export function ExerciseMuscleSelector({
                             const isSecondary = secondaryMuscles.some(secondary => secondary.id === muscle.id);
 
                             let btnBackground = 'var(--surface-light, #1a1a1a)';
-                            let btnColor = '#ffffff';
+                            let btnColor = 'var(--text-main)';
                             let btnBorder = '1px solid rgba(255, 255, 255, 0.08)';
-                            let badgeColor = 'rgba(255, 255, 255, 0.7)';
+                            let badgeColor = 'var(--text-muted)';
 
                             if (isPrimary) {
                                 btnBackground = 'linear-gradient(135deg, var(--primary-color), var(--primary-dark))';
-                                btnColor = '#000000';
+                                btnColor = 'var(--on-primary)';
                                 btnBorder = '1px solid var(--primary-color)';
-                                badgeColor = '#000000';
+                                badgeColor = 'var(--on-primary)';
                             } else if (isSecondary) {
                                 btnBackground = 'rgba(0, 229, 255, 0.15)';
-                                btnColor = '#ffffff';
+                                btnColor = 'var(--text-main)';
                                 btnBorder = '1px solid var(--secondary-color, #4db6ac)';
                                 badgeColor = 'var(--secondary-color, #4db6ac)';
                             }
@@ -155,7 +157,7 @@ export function ExerciseMuscleSelector({
                     </span>
                 ))}
                 {secondaryMuscles.map(muscle => (
-                    <span key={muscle.id} className="badge flex items-center gap-5" style={{ background: 'var(--secondary-color, rgba(0, 229, 255, 0.3))', color: '#fff', border: '1px solid var(--secondary-color, #4db6ac)' }}>
+                    <span key={muscle.id} className="badge flex items-center gap-5" style={{ background: 'var(--accent-color)', color: 'var(--on-accent)', border: '1px solid var(--accent-color)' }}>
                         {muscle.name}
                         <span className="cursor-pointer font-bold" onClick={() => toggleMuscle(muscle)}>✕</span>
                     </span>

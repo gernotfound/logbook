@@ -51,7 +51,7 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
     };
 
     return (
-        <div>
+        <div className="tracking-stack">
             {setSelectedDate && (
                 <NutritionDateNavigator
                     targetDateStr={targetDateStr}
@@ -61,58 +61,46 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                 />
             )}
 
-            <div className="section-divider">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', background: 'rgba(255,255,255,0.05)', padding: '10px 15px', borderRadius: '10px' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: isDayOn ? 'var(--primary-color)' : 'var(--text-main)' }}>
-                        {isDayOn ? '🔥 Giorno ON' : '🛋️ Giorno OFF'}
-                    </div>
+            <section className="tracking-panel" aria-label="Riepilogo alimentazione">
+                <div className="tracking-row tracking-row--wrap mb-15">
+                    <h2 className={`tracking-heading ${isDayOn ? 'tracking-accent' : ''}`}>
+                        {isDayOn ? 'Giorno ON' : 'Giorno OFF'}
+                    </h2>
                     <button
-                        className="btn btn-small"
+                        type="button"
+                        className="btn btn-secondary"
                         onClick={async () => {
                             const confirmed = await showConfirm(`Sei sicuro di voler cambiare il giorno in ${isDayOn ? 'OFF' : 'ON'}?`);
                             if (confirmed) {
                                 setDayType(!isDayOn);
                             }
                         }}
-                        style={{ margin: 0 }}
                     >
                         Cambia giorno
                     </button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                <div className="tracking-row mb-15">
                     <div>
-                        <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)' }}>{Math.round(todayNutrition.kcal)}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>kcal assunte</div>
+                        <strong className="nutrition-calorie-value">{Math.round(todayNutrition.kcal)}</strong>
+                        <span className="tracking-muted text-sm block">kcal assunte</span>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{dailyTarget.kcal || 0}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>TDEE target</div>
+                    <div className="text-right">
+                        <strong>{dailyTarget.kcal || 0}</strong>
+                        <span className="tracking-muted text-sm block">Obiettivo kcal</span>
                     </div>
                 </div>
 
-                <div className="progress-bg" style={{ marginBottom: '20px' }}>
-                    <div className="progress-fill" style={{ width: `${dailyTarget.kcal > 0 ? Math.min((todayNutrition.kcal / dailyTarget.kcal) * 100, 100) : 0}%`, background: 'linear-gradient(90deg, var(--warning-color), #fcd34d)' }}></div>
+                <div className="progress-bg mb-15" aria-hidden="true">
+                    <div className="progress-fill" style={{ width: `${dailyTarget.kcal > 0 ? Math.min((todayNutrition.kcal / dailyTarget.kcal) * 100, 100) : 0}%` }} />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                    <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>PRO</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.pro)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.pro}</span></div>
-                        <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--success-color)', width: `${dailyTarget.pro > 0 ? Math.min((todayNutrition.pro / dailyTarget.pro) * 100, 100) : 0}%` }}></div></div>
-                    </div>
-                    <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>CAR</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.carbs)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.carbs}</span></div>
-                        <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--primary-color)', width: `${dailyTarget.carbs > 0 ? Math.min((todayNutrition.carbs / dailyTarget.carbs) * 100, 100) : 0}%` }}></div></div>
-                    </div>
-                    <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: '10px 5px', borderRadius: '10px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'bold' }}>GRA</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{Math.round(todayNutrition.fat)}<span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>/{dailyTarget.fat}</span></div>
-                        <div className="progress-bg" style={{ height: '4px', marginTop: '6px' }}><div className="progress-fill" style={{ background: 'var(--danger-color)', width: `${dailyTarget.fat > 0 ? Math.min((todayNutrition.fat / dailyTarget.fat) * 100, 100) : 0}%` }}></div></div>
-                    </div>
-                </div>
-            </div>
+                <dl className="tracking-metrics tracking-metrics--three">
+                    <div><dt>Proteine</dt><dd>{Math.round(todayNutrition.pro)}<span className="text-sm tracking-muted"> / {dailyTarget.pro} g</span></dd></div>
+                    <div><dt>Carboidrati</dt><dd>{Math.round(todayNutrition.carbs)}<span className="text-sm tracking-muted"> / {dailyTarget.carbs} g</span></dd></div>
+                    <div><dt>Grassi</dt><dd>{Math.round(todayNutrition.fat)}<span className="text-sm tracking-muted"> / {dailyTarget.fat} g</span></dd></div>
+                </dl>
+            </section>
 
             <NutritionFoodSearch
                 mealTypes={MEAL_TYPES}

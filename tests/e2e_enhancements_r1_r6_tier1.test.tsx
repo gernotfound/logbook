@@ -617,7 +617,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                expect(screen.getByText(/Nuovo ciclo di allenamento/i)).toBeDefined();
+                expect(screen.getByRole('heading', { name: /Crea ciclo di allenamento/i })).toBeDefined();
                 const inputs = container.querySelectorAll('input');
                 expect(inputs.length).toBeGreaterThan(0);
             });

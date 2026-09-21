@@ -17,17 +17,17 @@ export function NutritionDateNavigator({
     const isToday = targetDateStr === today;
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <button className="btn btn-small" onClick={onPrevious} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}>◀ Prec.</button>
-            <div style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} onClick={onToday} title="Torna a oggi">
-                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+        <div className="tracking-day">
+            <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onPrevious} aria-label="Giorno precedente">‹ <span>Prec.</span></button>
+            <button type="button" className="tracking-day-current" onClick={onToday} title="Torna a oggi">
+                <strong>
                     {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr) : targetDateStr}
-                </div>
+                </strong>
                 {isToday && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
+                    <span className="text-sm tracking-accent">Oggi</span>
                 )}
-            </div>
-            <button className="btn btn-small" onClick={onNext} disabled={isToday} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', opacity: isToday ? 0.3 : 1 }}>Succ. ▶</button>
+            </button>
+            <button type="button" className="btn btn-secondary tracking-day-arrow" onClick={onNext} disabled={isToday} aria-label="Giorno successivo"><span>Succ.</span> ›</button>
         </div>
     );
 }

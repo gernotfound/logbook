@@ -38,7 +38,7 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                     <span className="text-xs text-primary font-bold uppercase tracking-wider block">
                         Programmazione rotazione
                     </span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#fff' }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
                         🔄 Calendario rotazione schede ({schedule.totalSessions} sedute)
                     </span>
                 </div>
@@ -90,7 +90,7 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                                             border: '1px solid rgba(14, 165, 233, 0.3)',
                                             borderRadius: '4px',
                                             fontSize: '0.75rem',
-                                            color: '#fff',
+                                            color: 'var(--text-main)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '5px'

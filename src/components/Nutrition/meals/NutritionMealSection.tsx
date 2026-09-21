@@ -42,9 +42,9 @@ export function NutritionMealSection({
     });
 
     return (
-        <div className="section-divider">
-            <div className="flex-between mb-10 pb-10 border-b">
-                <h2 className="m-0" style={{color: 'var(--text-main)'}}>{mealType}</h2>
+        <section className="tracking-panel">
+            <div className="tracking-row tracking-row--wrap mb-10 pb-10 border-b">
+                <h2 className="tracking-heading">{mealType}</h2>
                 <span className="text-sm text-muted">
                     {Math.round(subKcal)} kcal • P:{Math.round(subP)} C:{Math.round(subC)} G:{Math.round(subF)}
                 </span>
@@ -79,20 +79,17 @@ export function NutritionMealSection({
                     return (
                         <div
                             key={item.time || item.id}
-                            className="flex-between py-10 border-b-dashed"
-                            style={{ cursor: 'pointer', transition: 'background 0.2s', padding: '10px 6px', borderRadius: '8px' }}
-                            onClick={() => onEditingMealItemChange(item)}
-                            title="Clicca per modificare la porzione"
+                            className="tracking-meal-row"
                         >
-                            <div style={{ flex: 1 }}>
-                                <div className="font-bold flex items-center gap-6">
+                            <button type="button" className="tracking-meal-open" onClick={() => onEditingMealItemChange(item)} aria-label={`Modifica porzione di ${item.name}`}>
+                                <span className="font-bold flex items-center gap-6">
                                     <span>{item.name}</span>
                                     <Pencil size={16} aria-hidden="true" />
-                                </div>
-                                <div className="text-muted text-sm mt-2">
+                                </span>
+                                <span className="text-muted text-sm mt-2">
                                     {qty}{item.unit || 'g'} • {itemKcal} kcal
-                                </div>
-                            </div>
+                                </span>
+                            </button>
                             <button
                                 type="button"
                                 className="btn-icon text-danger"
@@ -100,7 +97,7 @@ export function NutritionMealSection({
                                     event.stopPropagation();
                                     onRemoveFood(item.time ?? item.id);
                                 }}
-                                aria-label="Rimuovi alimento"
+                                aria-label={`Rimuovi ${item.name}`}
                             >
                                 ✕
                             </button>
@@ -108,6 +105,6 @@ export function NutritionMealSection({
                     );
                 })
             )}
-        </div>
+        </section>
     );
 }

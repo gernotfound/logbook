@@ -22,7 +22,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
     return (
         <React.Fragment>
             {/* Sticky Timer */}
-            <div style={{ position: 'sticky', top: 'env(safe-area-inset-top, 0px)', zIndex: 100, background: 'var(--bg-color)', padding: '10px 0', borderBottom: '1px solid var(--glass-border)', marginBottom: '15px' }}>
+            <div className="workout-sticky-timer">
                 <WorkoutTimer />
             </div>
 

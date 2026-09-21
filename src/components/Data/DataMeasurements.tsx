@@ -88,10 +88,12 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                     >
                         ◀ Prec.
                     </button>
-                    <div 
-                        style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} 
-                        onClick={handleToday} 
+                    <button
+                        type="button"
+                        className="data-day-current"
+                        onClick={handleToday}
                         title="Torna a oggi"
+                        aria-label="Torna a oggi"
                     >
                         <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
                             {Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}
@@ -99,7 +101,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                         {activeDateStr === todayStr && (
                             <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                         )}
-                    </div>
+                    </button>
                     <button 
                         className="btn btn-small" 
                         onClick={handleNextDay} 
@@ -116,7 +118,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
             )}
 
             <div id="measurement-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
-                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
+                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'var(--text-main)',marginBottom: '10px', marginTop: 0}}>
                     {isEditing ? <><Pencil size={18} aria-hidden="true" /> Modifica misurazione</> : <><Plus size={18} aria-hidden="true" /> Nuova misurazione</>}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>

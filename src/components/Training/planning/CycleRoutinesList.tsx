@@ -52,7 +52,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                         background: 'rgba(255, 255, 255, 0.06)',
                         border: '1px solid var(--glass-border)',
                         borderRadius: '8px',
-                        color: '#fff'
+                        color: 'var(--text-main)'
                     }}
                 >
                     <option value="">+ Aggiungi scheda alla sequenza</option>

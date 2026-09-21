@@ -98,7 +98,7 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(tablist).not.toBeNull();
         
         const tabs = within(tablist).getAllByRole('tab');
-        expect(tabs.length).toBe(3);
+        expect(tabs.length).toBe(4);
         
         const accountTab = tabs[0];
         const privacyTab = tabs[1];

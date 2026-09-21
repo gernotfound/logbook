@@ -184,7 +184,7 @@ describe('Training Planning & Volume Calculations', () => {
         it('renders active cycle, MuscleModel, and weekly volume list', () => {
             render(<TrainingPlanning />);
 
-            expect(screen.getByText(/Pianificazione/)).toBeDefined();
+            expect(screen.getByRole('button', { name: /Crea ciclo/i })).toBeDefined();
             expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText(/8 settimane/).length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText(/Focus petto e spalle/).length).toBeGreaterThanOrEqual(1);
@@ -205,10 +205,10 @@ describe('Training Planning & Volume Calculations', () => {
         it('allows opening cycle editor and creating a new cycle', async () => {
             render(<TrainingPlanning />);
 
-            const newBtn = screen.getByText(/Nuovo ciclo/i);
+            const newBtn = screen.getByRole('button', { name: /Crea ciclo/i });
             fireEvent.click(newBtn);
 
-            expect(screen.getByText(/Nuovo ciclo di allenamento/)).toBeDefined();
+            expect(screen.getByRole('heading', { name: /Crea ciclo di allenamento/ })).toBeDefined();
 
             const nameInput = screen.getByPlaceholderText('Es. Mesociclo ipertrofia 4 giorni');
             fireEvent.change(nameInput, { target: { value: 'Nuovo Ciclo Forza' } });
@@ -224,6 +224,24 @@ describe('Training Planning & Volume Calculations', () => {
                 const cycles = useAppStore.getState().userData?.trainingCycles || [];
                 expect(cycles.some(c => c.name === 'Nuovo Ciclo Forza')).toBe(true);
             });
+        });
+
+        it('updates the draft muscle map as routines are selected without saving the cycle', () => {
+            const originalCycles = useAppStore.getState().userData?.trainingCycles;
+            render(<TrainingPlanning />);
+
+            const createButton = screen.getByRole('button', { name: /Crea ciclo/i });
+            fireEvent.click(createButton);
+            const form = document.getElementById('cycle-editor-form');
+            const map = form?.querySelector('.cycle-muscle-map');
+            expect(map?.textContent).toContain('Nessun muscolo evidenziato');
+
+            fireEvent.change(screen.getByRole('combobox'), { target: { value: 'r_push' } });
+            expect(map?.querySelector('.muscle-legend')?.textContent).toContain('Petto');
+            expect(useAppStore.getState().userData?.trainingCycles).toEqual(originalCycles);
+
+            fireEvent.click(createButton);
+            expect(document.getElementById('cycle-editor-form')).toBeNull();
         });
 
         it('supports duplicating and deleting a cycle', async () => {
@@ -515,5 +533,3 @@ describe('Training Planning & Volume Calculations', () => {
         });
     });
 });
-
-

@@ -1,0 +1,31 @@
+#view-data .section-divider,
+#view-data .section-divider-last {
+    margin: 0 0 1rem;
+    padding: 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    background: var(--surface-color);
+    min-width: 0;
+}
+
+.data-day-current {
+    flex: 1;
+    min-width: 0;
+    margin: 0 .625rem;
+    padding: .5rem;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: var(--surface-color);
+    color: var(--text-main);
+    cursor: pointer;
+    text-align: center;
+    min-height: 3rem;
+}
+
+.data-day-current:hover { background: var(--surface-light); }
+
+@media (max-width: 22.5rem) {
+    #view-data .section-divider,
+    #view-data .section-divider-last { padding: .75rem; }
+    .data-day-current { margin: 0 .25rem; }
+}

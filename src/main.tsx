@@ -11,6 +11,7 @@ import ErrorBoundary from './components/UI/ErrorBoundary'
 import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
+import { initializeAppearance } from './store/useAppearanceStore'
 import { getInitialLocalWorkout } from './store/slices/createWorkoutSlice'
 import type { UserData } from './types'
 
@@ -74,6 +75,7 @@ function renderStorageUnavailable(rootElement: HTMLElement | null): void {
 }
 
 export const initApp = async () => {
+  initializeAppearance();
   const rootElement = document.getElementById('root');
 
   let isGuest = false;

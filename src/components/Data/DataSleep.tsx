@@ -43,10 +43,12 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                     >
                         ◀ Prec.
                     </button>
-                    <div
-                        style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }}
+                    <button
+                        type="button"
+                        className="data-day-current"
                         onClick={handleToday}
                         title="Torna a oggi"
+                        aria-label="Torna a oggi"
                     >
                         <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
                             {Logic.formatItalianDate ? Logic.formatItalianDate(activeDateStr) : activeDateStr}
@@ -54,7 +56,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                         {activeDateStr === today && (
                             <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                         )}
-                    </div>
+                    </button>
                     <button
                         className="btn btn-small"
                         onClick={handleNextDay}
@@ -71,7 +73,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
             )}
 
             <div id="sleep-form-card" className="section-divider" style={isEditing ? { border: '2px solid var(--primary-color)', padding: '15px', borderRadius: '12px' } : undefined}>
-                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'white',marginBottom: '10px', marginTop: 0}}>
+                <h2 style={{color: isEditing ? 'var(--primary-color)' : 'var(--text-main)',marginBottom: '10px', marginTop: 0}}>
                     {isEditing ? <><Pencil size={18} aria-hidden="true" /> Modifica sonno ({activeDateStr})</> : <>🌙 Dati sonno ({activeDateStr})</>}
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>

@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useId } from 'react';
 import MuscleModelPaths from './MuscleModelPaths';
 import { Logic } from '../../lib/logic';
 
 const MUSCLE_NAMES_MAP = new Map<string, string>(Logic.MUSCLES.map(m => [m.id, m.name]));
+const EMPTY_MUSCLES: string[] = [];
 
 const REVERSE_GROUP_MAP: Record<string, string> = (() => {
     const map: Record<string, string> = {};
@@ -29,13 +30,14 @@ interface MuscleModelProps {
 }
 
 export default function MuscleModel({ 
-    selectedMuscles = [], 
-    secondaryMuscles = [], 
+    selectedMuscles = EMPTY_MUSCLES,
+    secondaryMuscles = EMPTY_MUSCLES,
     muscleColors,
     interactive = false, 
     onToggleMuscle 
 }: MuscleModelProps) {
     const [tooltip, setTooltip] = useState({ visible: false, text: '', x: 0, y: 0 });
+    const descriptionId = useId();
 
     const primaryIds = useMemo(() => {
         const set = new Set<string>();
@@ -92,7 +94,7 @@ export default function MuscleModel({
         const isPrimary = primaryIds.has(id);
         const isSecondary = secondaryIds.has(id);
         
-        let fill = 'transparent';
+        let fill = 'var(--surface-light, #1a1a1a)';
         if (isPrimary) {
             fill = 'var(--primary-color, #00e5ff)';
         } else if (isSecondary) {
@@ -101,7 +103,8 @@ export default function MuscleModel({
 
         return {
             fill,
-            transition: 'all 0.3s ease',
+            stroke: 'var(--text-muted, #9ba3af)',
+            strokeWidth: '0.3',
             cursor: interactive ? 'pointer' : 'default',
         };
     }, [muscleColors, primaryIds, secondaryIds, interactive]);
@@ -146,42 +149,70 @@ export default function MuscleModel({
 
     return (
         <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: '100%', padding: '30px 0 10px 0', margin: '0 auto', overflow: 'hidden', textAlign: 'center' }}>
-            <svg 
-                viewBox="0 5 70 89" 
+            <svg
+                role="img"
+                aria-label="Mappa dei muscoli, vista anteriore e posteriore"
+                aria-describedby={descriptionId}
+                viewBox="0 5 70 89"
                 style={{ width: '100%', height: 'auto', backgroundColor: 'transparent', borderRadius: 0, overflow: 'visible' }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             >
-                <defs>
-                    <pattern id="textured_black_pattern" width="10" height="10" patternUnits="userSpaceOnUse">
-                        <rect width="10" height="10" fill="#222"></rect>
-                        <circle cx="5" cy="5" r="1" fill="#444"></circle>
-                    </pattern>
-                </defs>
-                <g id="figures" stroke="#CCCCCC" strokeWidth="0.3" fill="transparent">
+                <g id="figures" stroke="var(--text-muted, #9ba3af)" strokeWidth="0.3" fill="var(--surface-light, #1a1a1a)">
                     <MuscleModelPaths getPathStyle={getPathStyle} />
                 </g>
             </svg>
+
+            <p id={descriptionId} className="muscle-legend">
+                {selectedMuscles.length === 0 && secondaryMuscles.length === 0
+                    ? 'Nessun muscolo evidenziato.'
+                    : (
+                        <>
+                            {selectedMuscles.length > 0 ? `Primari: ${selectedMuscles.map(Logic.getMuscleName).join(', ')}. ` : ''}
+                            {secondaryMuscles.length > 0 ? `Secondari: ${secondaryMuscles.map(Logic.getMuscleName).join(', ')}.` : ''}
+                        </>
+                    )}
+            </p>
+
+            {interactive && onToggleMuscle ? (
+                <details className="muscle-text-selection">
+                    <summary>Seleziona muscoli dall’elenco</summary>
+                    <div className="muscle-text-options">
+                        {Logic.MUSCLES.map(muscle => {
+                            const isSelected = selectedMuscles.includes(muscle.id)
+                                || secondaryMuscles.includes(muscle.id)
+                                || Boolean(muscleColors?.[muscle.id]);
+                            return (
+                                <button
+                                    key={muscle.id}
+                                    type="button"
+                                    aria-pressed={isSelected}
+                                    onClick={() => onToggleMuscle(muscle.id)}
+                                >
+                                    {muscle.name}{isSelected ? ' ✓' : ''}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </details>
+            ) : null}
 
             {tooltip.visible && (
                 <div style={{
                     position: 'fixed',
                     left: tooltip.x + 15,
                     top: tooltip.y + 15,
-                    backgroundColor: 'rgba(0,0,0,0.85)',
-                    color: '#fff',
+                    backgroundColor: 'var(--surface-color, #0d0d0d)',
+                    color: 'var(--text-main, #f0f0f0)',
                     padding: '6px 12px',
                     borderRadius: '6px',
-                    fontSize: '12px',
                     fontWeight: 'bold',
                     pointerEvents: 'none',
                     zIndex: 9999,
-                    backdropFilter: 'blur(4px)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
                     whiteSpace: 'nowrap'
-                }}>
+                }} className="text-sm">
                     {tooltip.text}
                 </div>
             )}
