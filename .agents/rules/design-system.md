@@ -1,6 +1,6 @@
 # Design System — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-21 | File verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`
+> Stato: normativo | Ultima verifica: 2026-09-21 | File verificati: `src/styles/global.css`, `src/styles/tokens.css`, `public/appearance.js`, `public/appearance.css`, `index.html`
 
 ## Tema adattivo
 
@@ -12,7 +12,9 @@ La presentazione usa superfici, controlli e navigazione ispirati alle app iPhone
 - Azioni e relativi colori leggibili: `--primary-color`/`--on-primary`, `--accent-color`/`--on-accent`, `--warning-color`/`--on-warning`, `--success-color`/`--on-success`, `--danger-color`/`--on-danger`.
 - Grafici e mappa: `--chart-grid`, `--muscle-base`, `--muscle-outline`, `--muscle-active`, `--muscle-fatigue`, `--muscle-pain`.
 
-La scelta `system | light | dark` è una preferenza del dispositivo salvata best-effort nella sola chiave `logbook:appearance:v1`. `public/appearance.js` applica il tema prima che React monti l'app; `useAppearanceStore` ascolta le variazioni del sistema e delle altre schede. **MUST:** non mettere questa scelta in `UserData`, Firestore o nei backup. Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione e la UI comunica il limite.
+La scelta `system | light | dark` è una preferenza del dispositivo salvata best-effort nella sola chiave `logbook:appearance:v1`. `index.html` carica `public/appearance.js` e `public/appearance.css` prima del bundle React: lo script imposta il tema e il CSS colora pagina e loader già al primo disegno. `useAppearanceStore` ascolta le variazioni del sistema e delle altre schede. **MUST:** non mettere questa scelta in `UserData`, Firestore o nei backup. Se lo storage non è scrivibile, il tema scelto resta applicato per la sessione e la UI comunica il limite.
+
+**MUST:** i token critici del tema duplicati nel CSS di bootstrap `public/appearance.css` devono restare coerenti con i corrispondenti token runtime in `src/styles/tokens.css`, sia per dark sia per light e per la preferenza di sistema. Quando cambia uno dei due file, verificare anche l'altro: sfondo, superfici, testo, colori delle azioni, bordi e `color-scheme` non devono cambiare tra il loader iniziale e l'app montata.
 
 ## Layout, controlli e accessibilità
 
@@ -26,5 +28,5 @@ La scelta `system | light | dark` è una preferenza del dispositivo salvata best
 ## Verifica
 
 - **MUST:** durante i refactor dei token, controllare la sintassi CSS e che ogni custom property utilizzata sia definita o abbia un fallback deliberato.
-- **VERIFY:** testare light/dark e preferenza di sistema, caricamento iniziale senza flash, cambio di tema e indisponibilità dello storage.
+- **VERIFY:** testare light/dark e preferenza di sistema, caricamento iniziale senza flash, cambio di tema e indisponibilità dello storage; confrontare i token critici di `public/appearance.css` e `src/styles/tokens.css` dopo ogni modifica alla palette.
 - **VERIFY:** controllare navigazione, timer sticky, report e mappa muscolare su viewport strette e desktop. Playwright WebKit è una verifica preventiva; la PWA installata su iPhone richiede accettazione reale sul dispositivo.
