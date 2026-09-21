@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Timer, ChevronDown, Activity } from 'lucide-react';
 import { ExerciseLibraryItem } from '../../../types';
 
@@ -26,6 +26,10 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     onUpdateTechnique
 }) => {
     const isCardio = libDef?.trackingType === 'cardio';
+    const fieldId = useId();
+    const setsId = `${fieldId}-sets`;
+    const minRepsId = `${fieldId}-min-reps`;
+    const maxRepsId = `${fieldId}-max-reps`;
 
     return (
         <div className="flex-col bg-card-inner p-12 rounded-8 gap-10" style={{ border: '1px solid var(--glass-border)' }}>
@@ -73,11 +77,11 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     gap: '8px',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    background: 'rgba(0, 229, 255, 0.06)',
-                    border: '1px solid rgba(0, 229, 255, 0.2)',
+                    background: 'var(--primary-soft)',
+                    border: '1px solid var(--primary-color)',
                     marginTop: '4px'
                 }}>
-                    <Activity size={18} aria-hidden="true" style={{ color: '#00e5ff' }} />
+                    <Activity size={18} aria-hidden="true" style={{ color: 'var(--primary-color)' }} />
                     <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         Esercizio cardio — le metriche verranno registrate durante la sessione.
                     </span>
@@ -86,10 +90,11 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                 <>
                     {/* Riga 1: Serie */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                        <label htmlFor={setsId} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                             Serie:
                         </label>
                         <input
+                            id={setsId}
                             type="number" min="1" max="20"
                             placeholder="3"
                             value={exercise.setsCount !== undefined && exercise.setsCount !== null ? exercise.setsCount : ''}
@@ -116,12 +121,15 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     {/* Riga 2: Rep min e Rep max */}
                     {libDef?.trackingType !== 'time' ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                            <span id={`${fieldId}-reps-label`} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                                 Ripetizioni:
-                            </label>
+                            </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                                 <input
+                                    id={minRepsId}
                                     type="number"
+                                    aria-label="Ripetizioni minime"
+                                    aria-describedby={`${fieldId}-reps-label`}
                                     placeholder="Min (es. 8)"
                                     value={exercise.minReps || ''}
                                     onChange={e => onUpdateReps(index, 'minReps', e.target.value)}
@@ -144,7 +152,10 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 />
                                 <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: '1rem' }}>-</span>
                                 <input
+                                    id={maxRepsId}
                                     type="number"
+                                    aria-label="Ripetizioni massime"
+                                    aria-describedby={`${fieldId}-reps-label`}
                                     placeholder="Max (es. 12)"
                                     value={exercise.maxReps || ''}
                                     onChange={e => onUpdateReps(index, 'maxReps', e.target.value)}
@@ -189,7 +200,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     margin: 0,
                                     padding: '6px 12px',
                                     fontSize: '0.85rem',
-                                    background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'rgba(255,255,255,0.08)',
+                                    background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'var(--surface-light)',
                                     color: exercise.defaultTechnique === 'dropset' ? 'var(--on-warning)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'dropset' ? 700 : 500,
                                     border: '1px solid var(--glass-border)',
@@ -206,7 +217,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     margin: 0,
                                     padding: '6px 12px',
                                     fontSize: '0.85rem',
-                                    background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'rgba(255,255,255,0.08)',
+                                    background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'var(--surface-light)',
                                     color: exercise.defaultTechnique === 'isometrics' ? 'var(--on-accent)' : 'var(--text-main)',
                                     fontWeight: exercise.defaultTechnique === 'isometrics' ? 700 : 500,
                                     border: '1px solid var(--glass-border)',

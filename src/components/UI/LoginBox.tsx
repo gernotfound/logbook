@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
 import { writeBrowserValue } from '../../lib/sync/browserStorage';
 import { Eye, EyeOff } from 'lucide-react';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 
 interface LoginBoxProps {
     onCancel?: () => void;
@@ -19,8 +20,16 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     const [loading, setLoading] = useState(false);
     const [resetSent, setResetSent] = useState(false);
     const [migrationPolicy, setMigrationPolicy] = useState<'merge' | 'skip'>('merge');
-    
-    const { showAlert } = useDialogStore();
+    const { showAlert, isOpen: globalDialogOpen } = useDialogStore();
+    const titleId = useId();
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const emailInputRef = useRef<HTMLInputElement>(null);
+    useModalFocusTrap({
+        containerRef: dialogRef,
+        initialFocusRef: emailInputRef,
+        active: Boolean(onCancel) && !globalDialogOpen,
+        onEscape: onCancel,
+    });
 
     const checkPasswordStrength = (pass: string) => {
         if (pass.length < 8) return "La password deve contenere almeno 8 caratteri.";
@@ -90,8 +99,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
     };
 
     return (
-        <div id="auth-login-box" className="ui-login-box-1" style={{ textAlign: "center", width: "90%", maxWidth: "25rem", margin: "0 auto", padding: "1.875rem", overflowY: "auto", maxHeight: "100vh" }}>
-            <h1 className="ui-login-box-2" style={{ marginBottom: "0.625rem" }}>LogBook</h1>
+        <div id="auth-login-box" ref={dialogRef} role={onCancel ? "dialog" : undefined} aria-modal={onCancel ? "true" : undefined} aria-labelledby={onCancel ? titleId : undefined} tabIndex={onCancel ? -1 : undefined} className="ui-login-box-1" style={{ textAlign: "center", width: "90%", maxWidth: "25rem", margin: "0 auto", padding: "1.875rem", overflowY: "auto", maxHeight: "100vh" }}>
+            <h1 id={titleId} className="ui-login-box-2" style={{ marginBottom: "0.625rem" }}>LogBook</h1>
             <p className="ui-login-box-3" style={{ marginBottom: "1.25rem" }}>
                 Accedi o registrati per sincronizzare i tuoi allenamenti sul cloud.
             </p>
@@ -131,6 +140,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
                 <input
+                    ref={emailInputRef}
                     type="email"
                     aria-label="Email"
                     placeholder="La tua email"

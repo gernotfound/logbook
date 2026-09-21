@@ -62,6 +62,25 @@ describe('LoginBox guest Google authentication', () => {
         expect(localStorage.getItem('guest_migration_policy')).toBe('skip');
     });
 
+    it('exposes guest login as a modal dialog and traps focus until it closes', () => {
+        const opener = document.createElement('button');
+        opener.textContent = 'Apri';
+        document.body.appendChild(opener);
+        opener.focus();
+        const onCancel = vi.fn();
+        const view = render(<LoginBox onCancel={onCancel} />);
+
+        const dialog = screen.getByRole('dialog', { name: 'LogBook' });
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(document.activeElement).toBe(screen.getByLabelText('Email'));
+
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(onCancel).toHaveBeenCalledTimes(1);
+        view.unmount();
+        expect(document.activeElement).toBe(opener);
+        opener.remove();
+    });
+
     it('keeps the normal Google login flow when there is no guest session', async () => {
         authState.isGuest = false;
         render(<LoginBox />);

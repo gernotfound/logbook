@@ -49,3 +49,18 @@ test('completed workout report has a reachable close control on a narrow viewpor
   await close.click();
   await expect(dialog).toHaveCount(0);
 });
+
+
+test('adaptive appearance resolves system light and explicit dark on desktop', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await continueAsGuest(page);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
+
+  await page.evaluate(() => localStorage.setItem('logbook:appearance:v1', 'dark'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'dark');
+  await expect(page.getByRole('button', { name: 'Allenamento', exact: true })).toBeVisible();
+});
