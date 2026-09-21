@@ -20,13 +20,14 @@ export const ConsentOverlay: React.FC = () => {
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const globalDialogOpen = useDialogStore(state => state.isOpen);
     const titleId = useId();
     const dialogRef = useRef<HTMLDivElement>(null);
     const firstCheckboxRef = useRef<HTMLInputElement>(null);
     useModalFocusTrap({
         containerRef: dialogRef,
         initialFocusRef: firstCheckboxRef,
-        active: !showPrivacy && !showTerms,
+        active: !showPrivacy && !showTerms && !globalDialogOpen,
     });
 
     const handleAccept = async () => {
