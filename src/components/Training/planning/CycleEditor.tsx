@@ -2,17 +2,22 @@
 // Props: initialCycle, routines, onSave, onCancel.
 // Effetti: chiama onSave col nuovo ciclo validato; usa lo state di dialogStore per gli alert.
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Pencil, Save, Plus } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
-import type { TrainingCycle, WorkoutRoutine } from '../../../types';
+import { Logic } from '../../../lib/logic';
+import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
 import { useCycleForm } from './useCycleForm';
 import { CycleSchedulePreview } from './CycleSchedulePreview';
 import { CycleRoutinesList } from './CycleRoutinesList';
+import { CycleMuscleMap } from './CycleMuscleMap';
+
+const EMPTY_LIBRARY: Exercise[] = [];
 
 interface CycleEditorProps {
     initialCycle?: TrainingCycle | null;
     routines: WorkoutRoutine[];
+    library?: Exercise[];
     onSave: (cycleData: TrainingCycle) => void;
     onCancel: () => void;
 }
@@ -20,6 +25,7 @@ interface CycleEditorProps {
 export const CycleEditor: React.FC<CycleEditorProps> = ({
     initialCycle,
     routines,
+    library = EMPTY_LIBRARY,
     onSave,
     onCancel
 }) => {
@@ -73,20 +79,19 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         setShowSchedulePreview(!showSchedulePreview);
     }, [showSchedulePreview, setShowSchedulePreview]);
 
+    const highlightedMuscles = useMemo(() => Logic.calculateCycleVolume({
+        id: 'cycle-preview',
+        name: 'Anteprima ciclo',
+        durationWeeks: 1,
+        routines: cycleRoutines
+    }, routines, library).highlightedMuscles, [cycleRoutines, library, routines]);
+
     return (
-        <form onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
-            <div className="flex-between mb-15 items-center">
+        <form id="cycle-editor-form" onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
+            <div className="mb-15">
                 <h2 className="m-0" style={{color: 'var(--primary-color)'}}>
-                    {initialCycle ? <><Pencil size={18} aria-hidden="true" /> Modifica ciclo</> : <><Plus size={18} aria-hidden="true" /> Nuovo ciclo di allenamento</>}
+                    {initialCycle ? <><Pencil size={18} aria-hidden="true" /> Modifica ciclo</> : <><Plus size={18} aria-hidden="true" /> Crea ciclo di allenamento</>}
                 </h2>
-                <button
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    onClick={onCancel}
-                    style={{ marginBottom: 0 }}
-                >
-                    ✕ Chiudi
-                </button>
             </div>
 
             <div className="mb-15">
@@ -344,6 +349,12 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     onTogglePreview={togglePreview}
                 />
             )}
+
+            <CycleMuscleMap
+                title="Mappa muscolare del ciclo settimanale"
+                highlightedMuscles={highlightedMuscles}
+                emptyMessage="Aggiungi una scheda al ciclo per evidenziare i muscoli allenati."
+            />
 
             {/* Pulsanti di azione ordinati e bilanciati */}
             <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>

@@ -120,7 +120,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
   const renderPlanPreview = (title: string, plan: NutritionPlanning | null, isCloud: boolean) => {
     if (!plan) return <div className="text-muted p-3 text-sm">Nessun piano</div>;
     return (
-      <div className="card p-3 mb-2" style={{ borderLeft: isCloud ? '4px solid var(--primary-color)' : '4px solid var(--warning-color)' }}>
+      <div className="card p-3 mb-2" style={{ borderLeft: isCloud ? '0.25rem solid var(--primary-color)' : '0.25rem solid var(--warning-color)' }}>
         <h4 className="text-sm font-bold mb-2">{title}</h4>
         <div className="text-xs mb-1">
           <strong>Kcal medie totali:</strong> {plan.totalKcal || 'N/D'} kcal
@@ -149,9 +149,8 @@ export const NutritionConflictDialog: React.FC<Props> = ({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 'max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left))',
-        background: 'rgba(0, 0, 0, 0.72)',
-        backdropFilter: 'blur(5px)',
-        overflow: 'hidden'
+        background: 'var(--bg-color)',
+                overflow: 'hidden'
       }}
     >
       <div
@@ -163,7 +162,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
         tabIndex={-1}
         className="card p-0 overflow-hidden safe-top safe-bottom"
         style={{
-          maxWidth: '500px',
+          maxWidth: '31.25rem',
           width: '100%',
           maxHeight: 'calc(100dvh - 2rem)',
           display: 'flex',
@@ -171,8 +170,8 @@ export const NutritionConflictDialog: React.FC<Props> = ({
           background: 'var(--surface-color)',
           color: 'var(--text-main)',
           border: '1px solid var(--glass-border)',
-          borderRadius: '16px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.8)'
+          borderRadius: '1rem',
+          boxShadow: 'none'
         }}
       >
         <div className="p-4 border-b" style={{ borderColor: 'var(--glass-border)', flexShrink: 0 }}>
@@ -201,10 +200,9 @@ export const NutritionConflictDialog: React.FC<Props> = ({
           {view === 'compare' ? (
             <>
               <button
-                className="btn btn-primary"
                 onClick={() => onResolve('local')}
                 disabled={isSyncing}
-                style={{ background: 'var(--warning-color)', color: '#000' }}
+                className="btn btn-warning"
               >
                 Mantieni dispositivo
               </button>
@@ -234,8 +232,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
           ) : (
             <>
               <button
-                className="btn btn-primary"
-                style={{ background: 'var(--danger-color)', color: '#fff' }}
+                className="btn btn-danger"
                 onClick={() => onResolve('cloud')}
                 disabled={isSyncing}
               >

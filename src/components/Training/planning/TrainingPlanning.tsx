@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
-import MuscleModel from '../MuscleModel';
 import { CycleEditor } from './CycleEditor';
 import { CycleCard } from './CycleCard';
+import { CycleMuscleMap } from './CycleMuscleMap';
 import type { TrainingCycle, WorkoutRoutine, Exercise } from '../../../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
@@ -48,6 +48,19 @@ export default function TrainingPlanning() {
         setIsEditing(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         document.getElementById('view-training')?.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEditor = () => {
+        setIsEditing(false);
+        setEditingCycle(null);
+    };
+
+    const handleToggleCreate = () => {
+        if (isEditing && editingCycle === null) {
+            handleCancelEditor();
+            return;
+        }
+        handleCreateNew();
     };
 
     const handleEditCycle = (cycle: TrainingCycle) => {
@@ -123,43 +136,34 @@ export default function TrainingPlanning() {
 
     return (
         <div>
-            {/* Header */}
-            <div className="section-divider">
-                <div className="flex-between items-center">
-                    <div>
-                        <h1 className="m-0" style={{color: 'var(--primary-color)'}}>🎯 Pianificazione</h1>
-                        <p className="text-muted text-sm m-0 mt-4">
-                            Periodizzazione, split settimanale e volume muscolare
-                        </p>
-                    </div>
-                    {!isEditing && (
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleCreateNew}
-                            style={{ marginBottom: 0, padding: '8px 16px', fontSize: '0.95rem' }}
-                        >
-                            <Plus size={16} aria-hidden="true" /> Nuovo ciclo
-                        </button>
-                    )}
+            {!editingCycle && (
+                <div className="training-planning-create">
+                    <button
+                        type="button"
+                        className="btn btn-primary w-full flex-center"
+                        onClick={handleToggleCreate}
+                        aria-expanded={isEditing}
+                        aria-controls="cycle-editor-form"
+                    >
+                        {isEditing ? <Minus size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
+                        Crea ciclo
+                    </button>
                 </div>
-            </div>
+            )}
 
             {/* Cycle Editor Form */}
             {isEditing && (
                 <CycleEditor
                     initialCycle={editingCycle}
                     routines={routines}
+                    library={library}
                     onSave={handleSaveCycle}
-                    onCancel={() => {
-                        setIsEditing(false);
-                        setEditingCycle(null);
-                    }}
+                    onCancel={handleCancelEditor}
                 />
             )}
 
             {/* Active Cycle Overview */}
-            <div className="section-divider">
+            <div className={activeCycle ? 'card training-cycle-active-card' : 'section-divider'}>
                 <div className="flex-between items-start mb-15 pb-15 border-b">
                     <div>
                         <h2 className="m-0 text-white">
@@ -223,18 +227,13 @@ export default function TrainingPlanning() {
                     </p>
                 )}
 
-                {/* Manichino Muscolare Vettoriale (Sempre visibile come da Regola 5) */}
-                <div className="mb-15 flex-center w-full flex-col">
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 'bold' }}>
-                        Mappa muscolare del ciclo settimanale
-                    </div>
-                    <div style={{ width: '100%', maxWidth: '400px', display: 'flex', justifyContent: 'center' }}>
-                        <MuscleModel
-                            muscleColors={cycleVolumeData.muscleColors}
-                            selectedMuscles={cycleVolumeData.highlightedMuscles}
-                        />
-                    </div>
-                </div>
+                {activeCycle ? (
+                    <CycleMuscleMap
+                        title="Mappa muscolare del ciclo"
+                        highlightedMuscles={cycleVolumeData.highlightedMuscles}
+                        emptyMessage="Le schede di questo ciclo non contengono ancora muscoli associati."
+                    />
+                ) : null}
 
                 {/* Dettaglio Volume Muscolare per Gruppo - collassabile */}
                 {activeCycle ? (
@@ -366,7 +365,7 @@ export default function TrainingPlanning() {
                     <div style={{ textAlign: 'center', padding: '15px 10px', color: 'var(--text-muted)' }}>
                         <p className="m-0 text-sm font-semibold text-white">Nessun ciclo di allenamento attivo</p>
                         <p className="m-0 text-xs text-muted mt-4">
-                            Utilizza il pulsante &quot;+ Nuovo ciclo&quot; in alto per impostare la tua prima programmazione.
+                            Utilizza il pulsante &quot;Crea ciclo&quot; in alto per impostare la tua prima programmazione.
                         </p>
                     </div>
                 )}

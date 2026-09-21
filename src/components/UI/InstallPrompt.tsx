@@ -29,31 +29,20 @@ export const InstallPrompt: React.FC = () => {
   if (!showPrompt) return null;
 
   return (
-    <div className="install-prompt card safe-bottom" style={{
-      position: 'fixed',
-      bottom: '90px',
-      left: '20px',
-      right: '20px',
-      zIndex: 9999,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-      animation: 'fadeSlideUp 0.3s ease-out'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <h3 style={{margin: 0}}>Installa LogBook</h3>
-        <button onClick={handleDismiss} className="btn-icon" aria-label="Chiudi" style={{ margin: '-5px -5px 0 0' }}>
+    <aside className="install-prompt card ui-install-prompt-1" aria-label="Installa LogBook">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <h3 style={{ margin: 0 }}>Installa LogBook</h3>
+        <button type="button" onClick={handleDismiss} className="btn-icon" aria-label="Chiudi suggerimento installazione" style={{ margin: "-0.3125rem -0.3125rem 0 0" }}>
           &times;
         </button>
       </div>
-      <p style={{ margin: 0, fontSize: '0.95rem' }}>
+      <p className="ui-install-prompt-2" style={{ margin: 0 }}>
         Per un'esperienza ottimale in palestra, installa l'app:
       </p>
-      <ol style={{ margin: '0 0 0 20px', fontSize: '0.95rem', color: 'var(--text-muted)' }}>
-        <li>Tocca l'icona Condividi <span style={{ display: 'inline-block', border: '1px solid currentColor', borderRadius: '4px', padding: '0 4px', fontSize: '1.1rem' }}>[↑]</span> in basso</li>
+      <ol className="ui-install-prompt-3" style={{ margin: "0 0 0 1.25rem" }}>
+        <li>Tocca l'icona Condividi <span className="ui-install-prompt-4" style={{ display: "inline-block", padding: "0 0.25rem" }}>[↑]</span> in basso</li>
         <li>Scegli <strong>"Aggiungi alla schermata Home"</strong></li>
       </ol>
-    </div>
+    </aside>
   );
 };

@@ -59,7 +59,7 @@ describe('NutritionMeals decomposition parity', () => {
             <NutritionMeals mealsHook={mockHook} selectedDate="2026-08-16" setSelectedDate={setSelectedDate} />
         );
 
-        fireEvent.click(screen.getByRole('button', { name: /Prec\./i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Giorno precedente' }));
         expect(setSelectedDate).toHaveBeenCalledWith('2026-08-15');
 
         fireEvent.change(screen.getByPlaceholderText(/Cerca alimento/i), { target: { value: 'pollo' } });
@@ -68,10 +68,10 @@ describe('NutritionMeals decomposition parity', () => {
         fireEvent.click(screen.getByTitle('Aggiungi a Colazione'));
         expect(addFood).toHaveBeenCalledWith(food, 'Colazione');
 
-        fireEvent.click(screen.getByText('Avena'));
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica porzione di Avena' }));
         expect(screen.getByRole('heading', { level: 2, name: /Modifica porzione/i })).toBeDefined();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Rimuovi' }));
+        fireEvent.click(screen.getByRole('button', { name: /Rimuovi Avena/i }));
         expect(removeFood).toHaveBeenCalledWith('m1');
     });
 });

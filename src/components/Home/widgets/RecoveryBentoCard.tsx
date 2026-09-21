@@ -27,10 +27,10 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
     const activePainsSet = useMemo(() => new Set(activePains), [activePains]);
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '15px' }}>
+        <div className="home-recovery">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '8px'}}>
-                    <Activity size={18} color="#ff4d6d" />
+                    <Activity size={18} color="var(--danger-color)" />
                     Recupero e Dolori
                 </h2>
                 <button
@@ -46,9 +46,9 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                         fontWeight: 600,
                         padding: '3px 8px',
                         borderRadius: '6px',
-                        background: activePains.length > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                        color: activePains.length > 0 ? '#ff4d6d' : 'var(--text-muted)',
-                        border: activePains.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        background: activePains.length > 0 ? 'var(--danger-soft)' : 'var(--surface-light)',
+                        color: activePains.length > 0 ? 'var(--danger-color)' : 'var(--text-muted)',
+                        border: activePains.length > 0 ? '1px solid var(--danger-color)' : '1px solid var(--border-color)',
                         cursor: activePains.length > 0 ? 'pointer' : 'default',
                         transition: 'all 0.2s ease'
                     }}
@@ -111,7 +111,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
             {searchQuery.trim() && (
                 <div 
                     style={{ 
-                        background: 'rgba(0, 0, 0, 0.45)', 
+                        background: 'var(--surface-light)',
                         border: '1px solid var(--glass-border)',
                         borderRadius: '8px',
                         padding: '6px',
@@ -144,14 +144,14 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                         fontSize: '0.85rem',
                                         cursor: 'pointer',
                                         textAlign: 'left',
-                                        background: isPain ? 'rgba(239, 68, 68, 0.25)' : 'var(--surface-light, #1a1a1a)',
+                                        background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
                                         color: isPain ? '#ff6b81' : '#ffffff',
-                                        border: isPain ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.08)',
+                                        border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--border-color)',
                                         transition: 'all 0.2s ease'
                                     }}
                                 >
                                     <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? '#ff4d6d' : 'var(--text-muted)' }}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)' }}>
                                         {isPain ? '✓ Dolorante' : '+ Aggiungi'}
                                     </span>
                                 </button>
@@ -183,8 +183,8 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    border: '1px solid rgba(239, 68, 68, 0.5)',
+                                    background: 'var(--danger-soft)',
+                                    border: '1px solid var(--danger-color)',
                                     color: '#ff6b81',
                                     padding: '4px 10px',
                                     borderRadius: '8px',
@@ -199,7 +199,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                     style={{
                                         background: 'transparent',
                                         border: 'none',
-                                        color: '#ff4d6d',
+                                        color: 'var(--danger-color)',
                                         fontWeight: 'bold',
                                         fontSize: '0.85rem',
                                         cursor: 'pointer',
@@ -218,7 +218,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                 )}
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '12px' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--surface-light)', padding: '12px', borderRadius: '12px' }}>
                 <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                     <MuscleModel 
                         muscleColors={combinedColors} 
@@ -227,11 +227,11 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px', fontSize: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f97316' }}></div>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--warning-color)' }}></div>
                         <span style={{ color: 'var(--text-muted)' }}>Affaticato</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }}></div>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--danger-color)' }}></div>
                         <span style={{ color: 'var(--text-muted)' }}>Dolorante</span>
                     </div>
                 </div>

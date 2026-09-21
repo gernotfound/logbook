@@ -14,9 +14,9 @@ export function NutritionSupplementIntakes({
     if (intakes.length === 0) return null;
 
     return (
-        <div className="section-divider-last">
-            <div className="flex-between mb-10 pb-10 border-b">
-                <h2 className="m-0" style={{color: 'var(--text-main)'}}>Integratori</h2>
+        <section className="tracking-panel">
+            <div className="tracking-row tracking-row--wrap mb-10 pb-10 border-b">
+                <h2 className="tracking-heading">Integratori</h2>
                 <span className="text-sm text-muted">
                     {intakes.length} assunzioni
                 </span>
@@ -28,13 +28,11 @@ export function NutritionSupplementIntakes({
                 return (
                     <div
                         key={intake.id}
-                        className="flex-between py-10 border-b-dashed"
-                        style={{ padding: '10px 6px', borderRadius: '8px' }}
+                        className="tracking-meal-row"
                     >
-                        <div style={{ flex: 1 }}>
+                        <div>
                             <div className="font-bold flex items-center gap-6">
-                                <span style={{ color: 'var(--text-main)' }}>{supplement ? supplement.name : 'Integratore eliminato'}</span>
-                                <span style={{ fontSize: '0.75rem' }}>💊</span>
+                                <span>{supplement ? supplement.name : 'Integratore eliminato'}</span>
                             </div>
                             <div className="text-muted text-sm mt-2">
                                 {intake.amount} {supplement ? supplement.unit : 'g'} • {timeStr}
@@ -51,6 +49,6 @@ export function NutritionSupplementIntakes({
                     </div>
                 );
             })}
-        </div>
+        </section>
     );
 }

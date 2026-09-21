@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Trophy, ArrowUp, ArrowDown, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
 import { Logic } from '../../lib/logic';
@@ -16,7 +16,8 @@ interface WorkoutReportModalProps {
 }
 
 const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, history, library, onClose, fromEndWorkout }) => {
-    
+    const titleId = useId();
+    const closeButtonRef = useRef<HTMLButtonElement>(null);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
 
@@ -27,6 +28,24 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
     const [isSavingAsRoutine, setIsSavingAsRoutine] = useState(false);
     const [newRoutineName, setNewRoutineName] = useState(`Allenamento libero - ${Logic.getLocalDateString()}`);
     const [isSavingRoutineLoading, setIsSavingRoutineLoading] = useState(false);
+
+    useEffect(() => {
+        const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        closeButtonRef.current?.focus();
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onClose();
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            previouslyFocused?.focus();
+        };
+    }, [onClose]);
 
     const handleSaveAsRoutine = async () => {
         if (!newRoutineName.trim()) {
@@ -114,39 +133,13 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0, 0, 0, 0.85)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            animation: 'fadeIn 0.3s ease-out',
-            overflow: 'hidden'
-        }}>
-            <div style={{
-                background: 'var(--surface-color)',
-                width: '100%',
-                maxWidth: '600px',
-                margin: 'auto',
-                height: '100%',
-                maxHeight: '100vh',
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'relative'
-            }}>
+        <div className="workout-report" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+            <div className="workout-report-page">
                 {/* Header */}
-                <div style={{
-                    padding: '20px',
-                    borderBottom: '1px solid var(--glass-border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px'
-                }}>
+                <header className="workout-report-header">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <h2 style={{margin: 0,color: 'var(--text-main)'}}>{report.workoutName}</h2>
+                        <span className="text-sm text-primary font-bold">Allenamento completato</span>
+                        <h1 id={titleId}>{report.workoutName}</h1>
                         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                             {Logic.formatItalianDate ? Logic.formatItalianDate(report.date) : report.date}
                         </p>
@@ -163,6 +156,8 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             </span>
                         </div>
                         <button 
+                            ref={closeButtonRef}
+                            type="button"
                             onClick={onClose} 
                             style={{ 
                                 background: 'transparent', 
@@ -182,10 +177,10 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             <X size={24} />
                         </button>
                     </div>
-                </div>
+                </header>
 
                 {/* Content */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="workout-report-content">
                     
                     {/* Summary Cards */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -299,7 +294,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '16px 20px', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <footer className="workout-report-footer">
                     {canSaveAsRoutine && !isSavingAsRoutine && (
                         <button className="btn btn-secondary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={() => setIsSavingAsRoutine(true)}>
                             Salva come scheda
@@ -334,10 +329,10 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             </div>
                         </div>
                     )}
-                    <button className="btn btn-primary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={onClose}>
-                        {fromEndWorkout ? 'Chiudi e torna alla Home' : 'Chiudi Report'}
+                    <button className="btn btn-primary workout-report-close" type="button" onClick={onClose}>
+                        {fromEndWorkout ? 'Chiudi e torna alla Home' : 'Chiudi report'}
                     </button>
-                </div>
+                </footer>
             </div>
         </div>
     );
