@@ -65,16 +65,20 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         const btn24 = screen.getByText('24 sett');
 
         fireEvent.click(btn4);
-        expect(btn4.style.background).toBe('var(--primary-color)');
+        expect(btn4.getAttribute('aria-pressed')).toBe('true');
+        expect(btn8.getAttribute('aria-pressed')).toBe('false');
 
         fireEvent.click(btn12);
-        expect(btn12.style.background).toBe('var(--primary-color)');
+        expect(btn12.getAttribute('aria-pressed')).toBe('true');
+        expect(btn4.getAttribute('aria-pressed')).toBe('false');
 
         fireEvent.click(btn24);
-        expect(btn24.style.background).toBe('var(--primary-color)');
+        expect(btn24.getAttribute('aria-pressed')).toBe('true');
+        expect(btn12.getAttribute('aria-pressed')).toBe('false');
 
         fireEvent.click(btn8);
-        expect(btn8.style.background).toBe('var(--primary-color)');
+        expect(btn8.getAttribute('aria-pressed')).toBe('true');
+        expect(btn24.getAttribute('aria-pressed')).toBe('false');
     });
 
     it('renders VolumeCaloriesCorrelationChart empty and non-empty states correctly', async () => {

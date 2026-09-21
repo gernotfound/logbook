@@ -25,14 +25,18 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
   /* 1. MOBILE TOUCH TARGETS & CSS INTEGRITY (>= 44x44px)                       */
   /* -------------------------------------------------------------------------- */
   describe('1. Mobile Touch Targets & CSS Rules (>= 44x44px)', () => {
-    it('verifies .context-menu-trigger in global.css enforces min-width: 44px and min-height: 44px', () => {
-      const cssPath = path.resolve(__dirname, '../src/styles/global.css');
-      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+    it('verifies the imported ContextMenu styles provide a 44px trigger and touch manipulation', () => {
+      const stylesDir = path.resolve(__dirname, '../src/styles');
+      const globalCss = fs.readFileSync(path.join(stylesDir, 'global.css'), 'utf-8');
+      const menuCss = fs.readFileSync(path.join(stylesDir, 'context-menu.css'), 'utf-8');
+      const baseCss = fs.readFileSync(path.join(stylesDir, 'base.css'), 'utf-8');
 
-      // Check .context-menu-trigger CSS definition
-      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*min-width:\s*44px/);
-      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*min-height:\s*44px/);
-      expect(cssContent).toMatch(/\.context-menu-trigger\s*\{[^}]*touch-action:\s*manipulation/);
+      // cssReadCompat expands the imported modules for the effective global stylesheet.
+      expect(globalCss).toContain('.context-menu-trigger');
+      // 2.75rem is 44px at the 16px root font size; larger user fonts enlarge the target.
+      expect(menuCss).toMatch(/\.context-menu-trigger\s*\{[^}]*min-width:\s*2\.75rem/);
+      expect(menuCss).toMatch(/\.context-menu-trigger\s*\{[^}]*min-height:\s*2\.75rem/);
+      expect(baseCss).toMatch(/button,\s*\[role="button"\],\s*a\s*\{[^}]*touch-action:\s*manipulation/);
     });
 
     it('verifies ContextMenu trigger button has .context-menu-trigger class and meets touch target standards', () => {
@@ -104,25 +108,25 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
   });
 
   /* -------------------------------------------------------------------------- */
-  /* 2. DARK GLASSMORPHISM CSS VARIABLES & THEME CONSISTENCY                    */
+  /* 2. ADAPTIVE THEME VARIABLES & CONSISTENCY                                  */
   /* -------------------------------------------------------------------------- */
-  describe('2. Dark Glassmorphism CSS Variables & Theme Consistency', () => {
-    it('verifies ContextMenu CSS rules use standard Dark Glassmorphism variables from global.css', () => {
-      const cssPath = path.resolve(__dirname, '../src/styles/global.css');
-      const cssContent = fs.readFileSync(cssPath, 'utf-8');
+  describe('2. Adaptive Theme Variables & Theme Consistency', () => {
+    it('verifies ContextMenu uses semantic tokens defined for both themes', () => {
+      const stylesDir = path.resolve(__dirname, '../src/styles');
+      const globalCss = fs.readFileSync(path.join(stylesDir, 'global.css'), 'utf-8');
+      const menuCss = fs.readFileSync(path.join(stylesDir, 'context-menu.css'), 'utf-8');
+      const tokensCss = fs.readFileSync(path.join(stylesDir, 'tokens.css'), 'utf-8');
 
-      // Check context menu section exists and references variables
-      const contextMenuSection = cssContent.slice(cssContent.indexOf('Context Menu Component'));
-      expect(contextMenuSection).toContain('var(--text-muted)');
-      expect(contextMenuSection).toContain('var(--text-main)');
-      expect(contextMenuSection).toContain('var(--glass-border)');
-      expect(contextMenuSection).toContain('var(--primary-color)');
-      expect(contextMenuSection).toContain('var(--primary-glow)');
-      expect(contextMenuSection).toContain('var(--danger-color)');
-      expect(contextMenuSection).toContain('backdrop-filter: blur(16px)');
+      expect(globalCss).toContain('.context-menu-dropdown');
+      expect(globalCss).toContain(':root[data-theme="light"]');
+      expect(tokensCss).toContain(':root[data-theme="light"]');
+      for (const token of ['text-muted', 'text-main', 'surface-color', 'border-strong', 'primary-color', 'danger-color']) {
+        expect(menuCss).toContain(`var(--${token})`);
+        expect(tokensCss.match(new RegExp(`--${token}:`, 'g'))?.length).toBeGreaterThanOrEqual(2);
+      }
     });
 
-    it('verifies dropdown popup has backdrop filter, border, and dark surface background', () => {
+    it('verifies dropdown popup and variant items use their styled classes', () => {
       const items: ContextMenuItem[] = [
         { id: '1', label: 'Azione standard', onClick: vi.fn() },
         { id: '2', label: 'Azione primaria', variant: 'primary', onClick: vi.fn() },

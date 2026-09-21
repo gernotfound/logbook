@@ -63,32 +63,34 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
      * SECTION 1: GLOBAL CSS STRUCTURAL RULES, #APP-CONTAINER & OVERFLOW-X: CLIP
      * ========================================================================= */
     describe('1. Global CSS Architecture & Root Overflow Defense', () => {
-        it('1.1: #app-container enforces overflow-x: clip, max-width: 600px, and margin: 0 auto', () => {
+        it('1.1: #app-container clips horizontal overflow and stays centered at mobile and desktop widths', () => {
             // Find #app-container block in global.css
             const appContainerMatch = globalCss.match(/#app-container\s*\{([^}]+)\}/);
             expect(appContainerMatch, 'Must define #app-container block in global.css').not.toBeNull();
             
             const content = appContainerMatch![1];
-            expect(content).toMatch(/max-width:\s*600px/);
+            expect(content).toMatch(/max-width:\s*40rem/);
             expect(content).toMatch(/margin:\s*0\s+auto/);
             expect(content).toMatch(/overflow-x:\s*clip/);
             expect(content).toMatch(/position:\s*relative/);
             expect(content).toMatch(/min-height:\s*100vh/);
+            expect(globalCss).toMatch(/@media\s*\(min-width:\s*48rem\)\s*\{\s*#app-container\s*\{\s*max-width:\s*48rem/);
+            expect(globalCss).toMatch(/@media\s*\(min-width:\s*64rem\)\s*\{\s*#app-container\s*\{\s*max-width:\s*60rem/);
         });
 
-        it('1.2: .grid-2 has display: grid, grid-template-columns: 1fr 1fr, min-width: 0 and responsive media query at <= 360px', () => {
+        it('1.2: .grid-2 uses shrinkable columns and switches to one column at 360px', () => {
             const grid2Match = globalCss.match(/\.grid-2\s*\{([^}]+)\}/);
             expect(grid2Match, 'Must define .grid-2 utility class').not.toBeNull();
             
             const grid2Props = grid2Match![1];
             expect(grid2Props).toMatch(/display:\s*grid/);
-            expect(grid2Props).toMatch(/grid-template-columns:\s*1fr\s+1fr/);
+            expect(grid2Props).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
             expect(grid2Props).toMatch(/min-width:\s*0/);
 
-            // Responsive media query at <= 360px switching to 1fr
-            const mediaQueryMatch = globalCss.match(/@media\s*\(\s*max-width:\s*360px\s*\)\s*\{[\s\S]*?\.grid-2\s*\{([^}]+)\}[\s\S]*?\}/);
-            expect(mediaQueryMatch, 'Must define @media (max-width: 360px) rule for .grid-2').not.toBeNull();
-            expect(mediaQueryMatch![1]).toMatch(/grid-template-columns:\s*1fr/);
+            // 22.5rem is 360px at the 16px root size.
+            const mediaQueryMatch = globalCss.match(/@media\s*\(max-width:\s*22\.5rem\)\s*\{\s*\.grid-2\s*\{([^}]+)\}/);
+            expect(mediaQueryMatch, 'Must define the 360px single-column breakpoint for .grid-2').not.toBeNull();
+            expect(mediaQueryMatch![1]).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
         });
 
         it('1.3: .section-divider and .section-divider-last are defined with proper border, padding and margin', () => {
@@ -96,14 +98,14 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(dividerMatch).not.toBeNull();
             const dividerProps = dividerMatch![1];
             expect(dividerProps).toMatch(/border-bottom:\s*1px\s+solid\s+var\(--glass-border\)/);
-            expect(dividerProps).toMatch(/padding-bottom:\s*20px/);
-            expect(dividerProps).toMatch(/margin-bottom:\s*25px/);
+            expect(dividerProps).toMatch(/padding-bottom:\s*1\.5rem/);
+            expect(dividerProps).toMatch(/margin-bottom:\s*1\.5rem/);
 
             const lastDividerMatch = globalCss.match(/\.section-divider-last\s*\{([^}]+)\}/);
             expect(lastDividerMatch).not.toBeNull();
             const lastProps = lastDividerMatch![1];
-            expect(lastProps).toMatch(/padding-bottom:\s*20px/);
-            expect(lastProps).toMatch(/margin-bottom:\s*25px/);
+            expect(lastProps).toMatch(/padding-bottom:\s*1\.5rem/);
+            expect(lastProps).toMatch(/margin-bottom:\s*1\.5rem/);
         });
 
         it('1.4: Universal utility flex classes enforce min-width: 0 to prevent flexbox mobile blowouts', () => {
@@ -118,9 +120,9 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
         });
 
         it('1.5: Input, select, and textarea rules enforce font-size: 16px !important for Safari iOS zoom defense', () => {
-            const inputRuleMatch = globalCss.match(/input,\s*select,\s*textarea\s*\{([^}]+)\}/);
-            expect(inputRuleMatch).not.toBeNull();
-            expect(inputRuleMatch![1]).toMatch(/font-size:\s*16px\s*!important/);
+            const inputRules = [...globalCss.matchAll(/input,\s*select,\s*textarea\s*\{([^}]+)\}/g)];
+            expect(inputRules.length).toBeGreaterThan(0);
+            expect(inputRules.some(rule => /font-size:\s*16px\s*!important/.test(rule[1]))).toBe(true);
         });
     });
 
@@ -195,7 +197,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             expect(unitCol.style.flex).toMatch(/^1/);
         });
 
-        it('2.3: HomeNutritionWidget macro section has flex: 1', () => {
+        it('2.3: HomeNutritionWidget macros stay readable beside the calorie ring', () => {
             render(
                 <HomeNutritionWidget
                     kcalEaten={1800}
@@ -207,16 +209,20 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                 />
             );
 
-            const carboLabel = screen.getByText('CARBO');
-            const proLabel = screen.getByText('PRO');
-            const grassiLabel = screen.getByText('GRASSI');
+            const carboLabel = screen.getByText('Carboidrati');
+            const proLabel = screen.getByText('Proteine');
+            const grassiLabel = screen.getByText('Grassi');
 
-            const macroContainer = carboLabel.closest('div[style*="flex: 1"]') as HTMLElement;
+            const macroContainer = carboLabel.closest('.home-macros') as HTMLElement;
             expect(macroContainer).not.toBeNull();
-            expect(macroContainer.style.flex).toMatch(/^1/);
-            expect(carboLabel).toBeDefined();
-            expect(proLabel).toBeDefined();
-            expect(grassiLabel).toBeDefined();
+            expect(macroContainer.querySelectorAll('dt')).toHaveLength(3);
+            expect(carboLabel.nextElementSibling?.textContent).toMatch(/200\s*g/);
+            expect(proLabel.nextElementSibling?.textContent).toMatch(/150\s*g/);
+            expect(grassiLabel.nextElementSibling?.textContent).toMatch(/60\s*g/);
+            expect(macroContainer.parentElement?.classList.contains('home-nutrition-details')).toBe(true);
+            const homeCss = fs.readFileSync(path.resolve(__dirname, '../src/components/Home/home.css'), 'utf-8');
+            expect(homeCss).toMatch(/\.home-nutrition-details\s*\{[^}]*flex:\s*1;[^}]*min-width:\s*0/);
+            expect(homeCss).toMatch(/\.home-macros\s*>\s*div\s*\{[^}]*flex-wrap:\s*wrap/);
         });
 
         it('2.4: HomeView stats cards (Massa grassa, Streak, Sessioni) render correctly without overflow', () => {
@@ -479,21 +485,11 @@ render(
             }
         });
 
-        it('4.2: Static CSS evaluation confirms media query switches .grid-2 to 1fr at <= 360px', () => {
-            // Regex to check media query block
-            const mqRegex = /@media\s*\(\s*max-width:\s*360px\s*\)\s*\{([\s\S]*?)\}/g;
-            let match;
-            let foundGridOverride = false;
-
-            while ((match = mqRegex.exec(globalCss)) !== null) {
-                const body = match[1];
-                if (body.includes('.grid-2') && body.includes('grid-template-columns: 1fr')) {
-                    foundGridOverride = true;
-                    break;
-                }
-            }
-
-            expect(foundGridOverride, 'Must have @media (max-width: 360px) rule overriding .grid-2 to 1fr').toBe(true);
+        it('4.2: Utility stylesheet keeps the 360px grid override after wider viewport rules', () => {
+            const gridBase = globalCss.indexOf('.grid-2 { display: grid;');
+            const narrowOverride = globalCss.search(/@media\s*\(max-width:\s*22\.5rem\)\s*\{\s*\.grid-2\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+            expect(gridBase).toBeGreaterThanOrEqual(0);
+            expect(narrowOverride).toBeGreaterThan(gridBase);
         });
     });
 
@@ -582,7 +578,7 @@ render(
             }
         });
 
-        it('6.2: .section-divider is actively used in all refactored views', () => {
+        it('6.2: refactored views retain visible section separation', () => {
             const filesToCheck = [
                 'src/components/Settings/AccountSettingsTab.tsx',
                 'src/components/Settings/PrivacySettingsTab.tsx',
@@ -604,8 +600,8 @@ render(
                 expect(fs.existsSync(absPath), `File ${relPath} must exist`).toBe(true);
                 const fileContent = fs.readFileSync(absPath, 'utf-8');
                 expect(
-                    fileContent.includes('section-divider'),
-                    `File ${relPath} should utilize .section-divider class`
+                    /section-divider|tracking-panel/.test(fileContent),
+                    `File ${relPath} should utilize a divider or panel surface`
                 ).toBe(true);
             }
         });
