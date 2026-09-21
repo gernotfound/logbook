@@ -48,4 +48,14 @@ describe('post-redesign UI hardening', () => {
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-fatigue)');
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-pain)');
   });
+  it('keeps routine editor fields explicitly named and theme-adaptive', () => {
+    const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
+    expect(routineItem).toContain('htmlFor={setsId}');
+    expect(routineItem).toContain('aria-label="Ripetizioni minime"');
+    expect(routineItem).toContain('aria-label="Ripetizioni massime"');
+    expect(routineItem).not.toMatch(/rgba\(255\s*,\s*255\s*,\s*255/);
+    expect(routineItem).not.toContain('#00e5ff');
+    expect(routineItem).toContain("background: 'var(--primary-soft)'");
+  });
+
 });
