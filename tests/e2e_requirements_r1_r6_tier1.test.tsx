@@ -594,7 +594,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const chestPath = container.querySelector('#chest-upper-left');
+                const chestPath = container.querySelector('[data-muscle-path="chest-upper-left"]');
                 expect(chestPath).not.toBeNull();
                 const style = chestPath?.getAttribute('style') || '';
                 expect(style.includes('#ff4d6d') || style.includes('rgb(255, 77, 109)')).toBe(true);
@@ -609,7 +609,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const chestPath = container.querySelector('#chest-upper-left');
+                const chestPath = container.querySelector('[data-muscle-path="chest-upper-left"]');
                 if (chestPath) {
                     fireEvent.click(chestPath);
                     expect(mockToggle).toHaveBeenCalledTimes(1);

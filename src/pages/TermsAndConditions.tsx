@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useScrollLock } from '../hooks/useScrollLock';
+import { useModalFocusTrap } from '../hooks/useModalFocusTrap';
 
 export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useScrollLock();
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useModalFocusTrap({ containerRef: dialogRef, initialFocusRef: closeButtonRef, onEscape: onClose });
   return (
-    <div style={{
+    <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       backgroundColor: 'rgba(0,0,0,0.75)',
       zIndex: 100000,
@@ -39,7 +44,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           flexShrink: 0,
         }}>
           <div>
-            <h2 style={{margin: 0,color: 'var(--text-main)'}}>
+            <h2 id={titleId} style={{margin: 0,color: 'var(--text-main)'}}>
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -47,6 +52,8 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
             </p>
           </div>
           <button
+            ref={closeButtonRef}
+            type="button"
             className="btn-icon"
             onClick={onClose}
             aria-label="Chiudi termini"
@@ -120,7 +127,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           </Section>
 
           <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid var(--glass-border)', textAlign: 'center' }}>
-            <button className="btn btn-secondary" onClick={onClose}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
               Chiudi
             </button>
           </div>

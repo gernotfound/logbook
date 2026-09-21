@@ -273,7 +273,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
             />
 
             {activeWorkout.isEditingHistory ? (
-                <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
+                <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
                     <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
                         ⏱️ Durata della sessione
                     </label>

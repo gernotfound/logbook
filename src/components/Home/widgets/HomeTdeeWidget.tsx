@@ -14,7 +14,7 @@ interface HomeTdeeWidgetProps {
 
 export const HomeTdeeWidget: React.FC<HomeTdeeWidgetProps> = ({ tdeeCalc }) => {
     return (
-        <div className="card" style={{ border: '1px solid rgba(46, 204, 113, 0.3)', background: 'linear-gradient(145deg, rgba(0, 0, 0, 0.6) 0%, rgba(46, 204, 113, 0.05) 100%)' }}>
+        <div className="card" style={{ border: '1px solid rgba(46, 204, 113, 0.3)', background: 'var(--surface-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <h2 style={{margin: 0, color: 'var(--success-color)'}}>TDEE reale stimato</h2>
@@ -29,7 +29,7 @@ export const HomeTdeeWidget: React.FC<HomeTdeeWidgetProps> = ({ tdeeCalc }) => {
                 </div>
             </div>
             
-            <div style={{ marginTop: '15px', padding: '10px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', fontSize: '0.85rem' }}>
+            <div style={{ marginTop: '15px', padding: '10px', background: 'var(--surface-light)', borderRadius: '8px', fontSize: '0.85rem' }}>
                 {tdeeCalc?.error ? (
                     <div style={{ color: 'var(--warning-color)', textAlign: 'center' }}>
                         ⏳ {tdeeCalc?.message}

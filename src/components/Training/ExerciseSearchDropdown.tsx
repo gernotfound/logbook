@@ -295,7 +295,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                     onMouseEnter={() => setHighlightedIndex(idx)}
                                     style={{
                                         padding: '10px 14px',
-                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                        borderBottom: '1px solid var(--glass-border)',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         justifyContent: 'space-between',

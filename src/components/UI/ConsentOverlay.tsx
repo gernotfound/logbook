@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../hooks/useAuth';
@@ -8,6 +8,7 @@ import { TermsAndConditions } from '../../pages/TermsAndConditions';
 import { useSettings } from '../../hooks/useSettings';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import { useDialogStore } from '../../store/useDialogStore';
+import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 
 export const ConsentOverlay: React.FC = () => {
     useScrollLock();
@@ -19,6 +20,15 @@ export const ConsentOverlay: React.FC = () => {
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const globalDialogOpen = useDialogStore(state => state.isOpen);
+    const titleId = useId();
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const firstCheckboxRef = useRef<HTMLInputElement>(null);
+    useModalFocusTrap({
+        containerRef: dialogRef,
+        initialFocusRef: firstCheckboxRef,
+        active: !showPrivacy && !showTerms && !globalDialogOpen,
+    });
 
     const handleAccept = async () => {
         if (!acceptedTerms || !acceptedHealth || isSaving) return;
@@ -41,9 +51,9 @@ export const ConsentOverlay: React.FC = () => {
     };
 
     return (
-        <div className="ui-consent-overlay-1" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "1rem", overflowY: "auto" }}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="ui-consent-overlay-1" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "1rem", overflowY: "auto" }}>
             <div className="ui-consent-overlay-2" style={{ maxWidth: "37.5rem", width: "100%", marginTop: "auto", marginBottom: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                <h2 className="ui-consent-overlay-3" style={{ margin: 0 }}>
+                <h2 id={titleId} className="ui-consent-overlay-3" style={{ margin: 0 }}>
                     Aggiornamento Termini e Privacy
                 </h2>
                 <p className="ui-consent-overlay-4" style={{ margin: 0, lineHeight: "1.5" }}>
@@ -54,6 +64,7 @@ export const ConsentOverlay: React.FC = () => {
                     {/* Checkbox 1: T&C e Privacy */}
                     <label style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer" }}>
                         <input
+                            ref={firstCheckboxRef}
                             type="checkbox"
                             checked={acceptedTerms}
                             onChange={(e) => setAcceptedTerms(e.target.checked)}

@@ -212,7 +212,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       expect(computedSvgStyleInt.width).toBe('100%');
 
       // Click on chest path element
-      const chestPath = svgElementInt.querySelector('path[id*="chest"], path[id*="pectoral"], path[id*="petto"]') || svgElementInt.querySelector('path');
+      const chestPath = svgElementInt.querySelector('path[data-muscle-path*="chest"], path[data-muscle-path*="pectoral"], path[data-muscle-path*="petto"]') || svgElementInt.querySelector('path');
       if (chestPath) {
         chestPath.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         expect(typeof toggledMuscleId).toBe('string');

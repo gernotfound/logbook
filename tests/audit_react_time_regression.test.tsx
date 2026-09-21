@@ -71,7 +71,7 @@ describe('Audit regression: React time boundaries', () => {
         });
 
         expect(hookResult).not.toBeNull();
-        expect((hookResult as any).muscleColors.chest_lower).toBe('#f97316');
+        expect((hookResult as any).muscleColors.chest_lower).toBe('var(--muscle-fatigue)');
 
         act(() => {
             vi.advanceTimersByTime(60_000);

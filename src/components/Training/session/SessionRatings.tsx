@@ -43,7 +43,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
     const painColors = useMemo(() => {
         const colors: Record<string, string> = {};
-        const DANGER_COLOR = '#ef4444';
+        const DANGER_COLOR = 'var(--muscle-pain)';
         (pains || []).forEach(mId => {
             if (!mId || typeof mId !== 'string') return;
             colors[mId] = DANGER_COLOR;
@@ -88,7 +88,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 />
             </div>
 
-            <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
                 <h3 style={{marginTop: 0, marginBottom: '12px'}}>Valuta sessione (1-10)</h3>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -146,14 +146,14 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
             </div>
 
             {/* DOMS Muscle Pain Tracking Accordion */}
-            <div style={{ margin: '20px 0', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
+            <div style={{ margin: '20px 0', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
                 <button
                     type="button"
                     onClick={() => setIsDomsOpen(prev => !prev)}
                     className={`accordion-btn ${isDomsOpen ? 'expanded' : ''}`}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Zap size={18} aria-hidden="true" style={{ color: '#eab308' }} />
+                        <Zap size={18} aria-hidden="true" style={{ color: 'var(--warning-color)' }} />
                         <span>Dolori muscolari</span>
                         <span 
                             style={{
@@ -161,8 +161,8 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                 padding: '2px 8px',
                                 borderRadius: '6px',
                                 background: pains.length > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.08)',
-                                color: pains.length > 0 ? '#ff4d6d' : 'var(--text-muted)',
-                                border: pains.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : 'none'
+                                color: pains.length > 0 ? 'var(--danger-color)' : 'var(--text-muted)',
+                                border: pains.length > 0 ? '1px solid var(--danger-color)' : 'none'
                             }}
                         >
                             {pains.length > 0 ? `${pains.length} selezionati` : 'Opzionale'}
@@ -221,7 +221,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                         {searchQuery.trim() && (
                             <div 
                                 style={{ 
-                                    background: 'rgba(0, 0, 0, 0.45)', 
+                                    background: 'var(--surface-light)',
                                     border: '1px solid var(--glass-border)',
                                     borderRadius: '8px',
                                     padding: '6px',
@@ -255,14 +255,14 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                                     fontSize: '0.85rem',
                                                     cursor: 'pointer',
                                                     textAlign: 'left',
-                                                    background: isPain ? 'rgba(239, 68, 68, 0.25)' : 'var(--surface-light, #1a1a1a)',
+                                                    background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
                                                     color: isPain ? 'var(--danger-color)' : 'var(--text-main)',
-                                                    border: isPain ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.08)',
+                                                    border: isPain ? '1px solid var(--danger-color)' : '1px solid var(--glass-border)',
                                                     transition: 'all 0.2s ease'
                                                 }}
                                             >
                                                 <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? '#ff4d6d' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     {isPain ? <><Check size={14} aria-hidden="true" /> Dolorante</> : <><Plus size={14} aria-hidden="true" /> Aggiungi</>}
                                                 </span>
                                             </button>
@@ -282,9 +282,9 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             gap: '6px',
-                                            background: 'rgba(239, 68, 68, 0.15)',
-                                            border: '1px solid rgba(239, 68, 68, 0.5)',
-                                            color: '#ff6b81',
+                                            background: 'var(--danger-soft)',
+                                            border: '1px solid var(--danger-color)',
+                                            color: 'var(--danger-color)',
                                             padding: '4px 10px',
                                             borderRadius: '8px',
                                             fontSize: '0.85rem',
@@ -297,7 +297,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                             onClick={() => handleToggleMuscle(mId)}
                                             className="btn-link"
                                             style={{
-                                                color: '#ff4d6d',
+                                                color: 'var(--danger-color)',
                                                 padding: '0 2px',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',

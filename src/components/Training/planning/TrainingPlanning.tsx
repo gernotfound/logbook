@@ -199,7 +199,7 @@ export default function TrainingPlanning() {
                 </div>
 
                 {activeCycle?.startDate && (
-                    <div style={{ marginBottom: '15px', padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                    <div style={{ marginBottom: '15px', padding: '10px 12px', background: 'var(--surface-light)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                         <div className="flex-between text-xs mb-6">
                             <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
                                 📅 {activeCycleTimeline.formattedRange}
@@ -208,7 +208,7 @@ export default function TrainingPlanning() {
                                 {activeCycleTimeline.statusLabel} ({activeCycleTimeline.progressPercent}%)
                             </span>
                         </div>
-                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
                             <div
                                 style={{
                                     height: '100%',
@@ -247,7 +247,7 @@ export default function TrainingPlanning() {
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 padding: '10px 12px',
-                                background: 'rgba(255,255,255,0.04)',
+                                background: 'var(--surface-light)',
                                 border: '1px solid var(--glass-border)',
                                 borderRadius: isVolumeOpen ? '8px 8px 0 0' : '8px',
                                 cursor: 'pointer',
@@ -292,7 +292,7 @@ export default function TrainingPlanning() {
                                             key={item.key || idx}
                                             style={{
                                                 padding: '8px 12px',
-                                                background: 'rgba(255,255,255,0.04)',
+                                                background: 'var(--surface-light)',
                                                 borderRadius: '8px',
                                                 border: '1px solid var(--glass-border)'
                                             }}
@@ -310,7 +310,7 @@ export default function TrainingPlanning() {
                                                 style={{
                                                     width: '100%',
                                                     height: '6px',
-                                                    background: 'rgba(255,255,255,0.1)',
+                                                    background: 'var(--surface-light)',
                                                     borderRadius: '3px',
                                                     overflow: 'hidden'
                                                 }}
@@ -345,7 +345,7 @@ export default function TrainingPlanning() {
                                             style={{
                                                 padding: '6px 10px',
                                                 borderRadius: '8px',
-                                                background: 'rgba(255,255,255,0.05)',
+                                                background: 'var(--surface-light)',
                                                 border: '1px solid var(--glass-border)',
                                                 fontSize: '0.85rem',
                                                 display: 'flex',

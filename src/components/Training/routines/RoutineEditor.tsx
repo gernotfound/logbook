@@ -107,7 +107,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                 <button 
                     type="button" 
                     className="btn flex-1 mb-0" 
-                    style={{ background: 'rgba(255,255,255,0.1)', whiteSpace: 'nowrap', margin: 0 }} 
+                    style={{ background: 'var(--surface-light)', whiteSpace: 'nowrap', margin: 0 }}
                     onClick={onCancel}
                     disabled={isSaving}
                 >
@@ -116,7 +116,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                 <button 
                     type="button" 
                     className="btn btn-primary flex-1 mb-0" 
-                    style={{ whiteSpace: 'nowrap', margin: 0 }} 
+                    style={{ whiteSpace: 'nowrap', margin: 0 }}
                     onClick={onSave}
                     disabled={isSaving}
                 >

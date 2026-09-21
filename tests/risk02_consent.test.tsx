@@ -107,6 +107,25 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         });
     });
 
+    it('Isola il focus dentro il consenso finch? il gate ? aperto', () => {
+        render(<><button type="button">Fuori overlay</button><ConsentOverlay /></>);
+        const dialog = screen.getByRole('dialog', { name: /Aggiornamento Termini e Privacy/i });
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+
+        const checkboxes = screen.getAllByRole('checkbox');
+        expect(document.activeElement).toBe(checkboxes[0]);
+
+        const last = screen.getByRole('button', { name: /Elimina account permanentemente/i });
+        last.focus();
+        fireEvent.keyDown(last, { key: 'Tab' });
+        expect(document.activeElement).toBe(checkboxes[0]);
+
+        checkboxes[0].focus();
+        fireEvent.keyDown(checkboxes[0], { key: 'Tab', shiftKey: true });
+        expect(document.activeElement).toBe(last);
+        expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Fuori overlay' }));
+    });
+
     it('Pulsante disabilitato se consenso incompleto', () => {
         render(<ConsentOverlay />);
         const button = screen.getByRole('button', { name: /accetta e continua/i }) as HTMLButtonElement;

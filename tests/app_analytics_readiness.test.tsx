@@ -50,7 +50,6 @@ vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: {
 vi.mock('../src/components/UI/BottomNav', () => ({ default: () => null }));
 vi.mock('../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
 vi.mock('../src/components/UI/ReloadPrompt', () => ({ default: () => null }));
-vi.mock('../src/components/UI/InstallPrompt', () => ({ InstallPrompt: () => null }));
 vi.mock('../src/components/UI/ConsentOverlay', () => ({ ConsentOverlay: () => null }));
 vi.mock('../src/components/UI/LoginBox', () => ({ LoginBox: () => null }));
 vi.mock('../src/components/Home/HomeView', () => ({ default: () => <div>Home</div> }));

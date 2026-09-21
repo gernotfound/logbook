@@ -23,7 +23,7 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
         <div
             style={{
                 padding: '12px',
-                background: 'rgba(255, 255, 255, 0.02)',
+                background: 'var(--surface-light)',
                 border: '1px solid var(--glass-border)',
                 borderRadius: '8px',
                 marginBottom: '15px'
@@ -66,9 +66,9 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                             key={week.weekNumber}
                             style={{
                                 padding: '8px 10px',
-                                background: 'rgba(255, 255, 255, 0.04)',
+                                background: 'var(--surface-light)',
                                 borderRadius: '6px',
-                                border: '1px solid rgba(255, 255, 255, 0.05)'
+                                border: '1px solid var(--glass-border)'
                             }}
                         >
                             <div className="flex-between items-center mb-6">

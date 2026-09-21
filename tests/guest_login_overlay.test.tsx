@@ -54,9 +54,6 @@ vi.mock('../src/components/UI/ReloadPrompt', () => ({
     default: () => null,
 }));
 
-vi.mock('../src/components/UI/InstallPrompt', () => ({
-    InstallPrompt: () => null,
-}));
 
 vi.mock('../src/components/UI/ConsentOverlay', () => ({
     ConsentOverlay: () => null,

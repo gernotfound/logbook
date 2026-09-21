@@ -113,7 +113,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
 
     const renderDateNavigator = () => (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <button className="btn btn-small" onClick={handlePrevDay} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)' }}>◀ Prec.</button>
+            <button className="btn btn-small" onClick={handlePrevDay} style={{ background: 'var(--surface-light)', color: 'var(--text-main)' }}>◀ Prec.</button>
             <div style={{ textAlign: 'center', flex: 1, margin: '0 10px', cursor: 'pointer' }} onClick={handleToday} title="Torna a oggi">
                 <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
                     {Logic.formatItalianDate ? Logic.formatItalianDate(targetDateStr || '') : targetDateStr}
@@ -122,7 +122,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>OGGI</div>
                 )}
             </div>
-            <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
+            <button className="btn btn-small" onClick={handleNextDay} disabled={targetDateStr === Logic.getLocalDateString()} style={{ background: 'var(--surface-light)', color: 'var(--text-main)', opacity: targetDateStr === Logic.getLocalDateString() ? 0.3 : 1 }}>Succ. ▶</button>
         </div>
     );
 
@@ -143,7 +143,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                     + Nuovo integratore
                 </button>
             ) : (
-                <div className="card mb-15" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--primary-color)' }}>
+                <div className="card mb-15" style={{ background: 'var(--surface-light)', border: '1px solid var(--primary-color)' }}>
                     <h2 className="mb-15" style={{color: 'var(--text-main)'}}>
                         {editingSuppId ? 'Modifica integratore' : 'Crea nuovo integratore'}
                     </h2>
@@ -304,12 +304,12 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                             </div>
 
                             {suppIntakes.length > 0 && (
-                                <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '10px' }}>
+                                <div style={{ background: 'var(--surface-light)', borderRadius: '8px', padding: '10px' }}>
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>Storico odierno:</div>
                                     {suppIntakes.map(intake => {
                                         const timeStr = new Date(intake.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
                                         return (
-                                            <div key={intake.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed rgba(255,255,255,0.1)' }}>
+                                            <div key={intake.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px dashed var(--glass-border)' }}>
                                                 <div style={{ fontSize: '0.95rem' }}>
                                                     <span style={{ color: 'var(--text-muted)', marginRight: '8px' }}>{timeStr}</span>
                                                     <strong>{intake.amount}</strong> {supp.unit}

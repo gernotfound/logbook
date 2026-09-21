@@ -49,7 +49,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                         maxWidth: '100%',
                         display: 'block',
                         padding: '10px 12px',
-                        background: 'rgba(255, 255, 255, 0.06)',
+                        background: 'var(--surface-light)',
                         border: '1px solid var(--glass-border)',
                         borderRadius: '8px',
                         color: 'var(--text-main)'
@@ -65,7 +65,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
             </div>
 
             {cycleRoutines.length === 0 ? (
-                <div style={{ padding: '15px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ padding: '15px', background: 'var(--surface-light)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     <p className="m-0 text-xs">Nessuna scheda aggiunta al ciclo. Seleziona una scheda dal menu in alto per iniziare la sequenza.</p>
                 </div>
             ) : (
@@ -78,7 +78,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                 key={`${item.routineId}-${idx}`}
                                 style={{
                                     padding: '10px 12px',
-                                    background: 'rgba(255,255,255,0.04)',
+                                    background: 'var(--surface-light)',
                                     border: '1px solid var(--glass-border)',
                                     borderRadius: '8px',
                                     display: 'flex',

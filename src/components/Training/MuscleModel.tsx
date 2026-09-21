@@ -38,6 +38,8 @@ export default function MuscleModel({
 }: MuscleModelProps) {
     const [tooltip, setTooltip] = useState({ visible: false, text: '', x: 0, y: 0 });
     const descriptionId = useId();
+    const instanceId = useId().replace(/:/g, '');
+    const getPathId = useCallback((pathId: string) => `${instanceId}-${pathId}`, [instanceId]);
 
     const primaryIds = useMemo(() => {
         const set = new Set<string>();
@@ -111,8 +113,9 @@ export default function MuscleModel({
 
     const handleMouseMove = useCallback((e: React.MouseEvent) => {
         const target = e.target as SVGElement;
-        if (target.tagName === 'path' && target.id) {
-            const logicId = REVERSE_GROUP_MAP[target.id];
+        if (target.tagName === 'path') {
+            const pathId = target.dataset.musclePath;
+            const logicId = pathId ? REVERSE_GROUP_MAP[pathId] : undefined;
             if (logicId) {
                 const name = MUSCLE_NAMES_MAP.get(logicId) || logicId;
                 const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -139,8 +142,9 @@ export default function MuscleModel({
     const handleClick = useCallback((e: React.MouseEvent) => {
         if (!interactive || !onToggleMuscle) return;
         const target = e.target as SVGElement;
-        if (target.tagName === 'path' && target.id) {
-            const logicId = REVERSE_GROUP_MAP[target.id];
+        if (target.tagName === 'path') {
+            const pathId = target.dataset.musclePath;
+            const logicId = pathId ? REVERSE_GROUP_MAP[pathId] : undefined;
             if (logicId) {
                 onToggleMuscle(logicId);
             }
@@ -159,8 +163,8 @@ export default function MuscleModel({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             >
-                <g id="figures" stroke="var(--text-muted, #9ba3af)" strokeWidth="0.3" fill="var(--surface-light, #1a1a1a)">
-                    <MuscleModelPaths getPathStyle={getPathStyle} />
+                <g id={`${instanceId}-figures`} stroke="var(--text-muted, #9ba3af)" strokeWidth="0.3" fill="var(--surface-light, #1a1a1a)">
+                    <MuscleModelPaths getPathStyle={getPathStyle} getPathId={getPathId} />
                 </g>
             </svg>
 

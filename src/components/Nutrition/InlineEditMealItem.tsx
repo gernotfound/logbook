@@ -109,7 +109,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
             {/* Macro Summary Preview */}
             <div 
                 style={{
-                    background: 'rgba(255, 255, 255, 0.04)',
+                    background: 'var(--surface-light)',
                     border: '1px solid var(--glass-border)',
                     borderRadius: '10px',
                     padding: '12px',

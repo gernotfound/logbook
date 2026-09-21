@@ -9,7 +9,6 @@ vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: {
 vi.mock('../src/components/UI/BottomNav', () => ({ default: () => <nav data-testid="bottom-nav" /> }));
 vi.mock('../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
 vi.mock('../src/components/UI/ReloadPrompt', () => ({ default: () => null }));
-vi.mock('../src/components/UI/InstallPrompt', () => ({ InstallPrompt: () => null }));
 vi.mock('../src/components/UI/ConsentOverlay', () => ({ ConsentOverlay: () => null }));
 vi.mock('../src/components/UI/LoginBox', () => ({ LoginBox: () => <div data-testid="guest-login-box" /> }));
 vi.mock('../src/components/Home/HomeView', () => ({ default: () => <div>Home view</div> }));

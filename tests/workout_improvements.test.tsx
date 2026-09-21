@@ -259,12 +259,12 @@ describe('Workout Improvements & History Edit Suite', () => {
         <MuscleModel muscleColors={customColors} interactive={false} />
       );
 
-      const chestPath = container.querySelector('#chest-upper-left');
+      const chestPath = container.querySelector('[data-muscle-path="chest-upper-left"]');
       expect(chestPath).not.toBeNull();
       expect(chestPath?.getAttribute('style')).toContain('fill: rgb(239, 68, 68)');
 
       // 'back' is a logical group mapping to lats, traps, etc.
-      const latsPath = container.querySelector('#lats-mid-left');
+      const latsPath = container.querySelector('[data-muscle-path="lats-mid-left"]');
       expect(latsPath).not.toBeNull();
       expect(latsPath?.getAttribute('style')).toContain('fill: rgb(249, 115, 22)');
     });
@@ -335,8 +335,8 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(hookResult.volumeChartData.datasets[0].data[pettoIndex]).toBe(5);
 
       // Fatigue / MuscleColors: 24h passed -> baseFatigue = 1 - 24/72 = 0.667 (> 0.35) -> #f97316 (orange)
-      expect(hookResult.muscleColors['chest-lower-left']).toBe('#f97316');
-      expect(hookResult.muscleColors['chest_lower']).toBe('#f97316');
+      expect(hookResult.muscleColors['chest-lower-left']).toBe('var(--muscle-fatigue)');
+      expect(hookResult.muscleColors['chest_lower']).toBe('var(--muscle-fatigue)');
     });
 
     test('useHomeView correctly exposes estimated BF from recent nutrition measurements', () => {

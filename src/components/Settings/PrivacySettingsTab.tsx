@@ -15,10 +15,10 @@ export function PrivacySettingsTab({
         <>
             <div className="section-divider" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <h3 style={{margin: '0 0 5px 0'}}><span aria-hidden="true">⚖️</span> Legale e privacy</h3>
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={onOpenTerms}>
+                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={onOpenTerms}>
                     <span aria-hidden="true">📄</span> Termini e condizioni
                 </button>
-                <button className="btn" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={onOpenPrivacy}>
+                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={onOpenPrivacy}>
                     <span aria-hidden="true">📋</span> Informativa sulla privacy
                 </button>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>

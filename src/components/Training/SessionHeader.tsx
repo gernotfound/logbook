@@ -47,7 +47,7 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
                     </div>
                     <button 
                         className="btn btn-small" 
-                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.85rem', background: 'rgba(255,255,255,0.1)' }}
+                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.85rem', background: 'var(--surface-light)' }}
                         onClick={onCancelHistory}
                     >
                         Annulla

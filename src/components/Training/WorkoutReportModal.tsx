@@ -175,11 +175,11 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '0.75rem', background: 'var(--surface-light)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Clock size={12} />
                                 {Logic.formatDuration ? Logic.formatDuration(report.durationSeconds) : report.durationSeconds}
                             </span>
-                            <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.08)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '0.75rem', background: 'var(--surface-light)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Layers size={12} />
                                 {workout.exercises?.length || 0} Esercizi
                             </span>
@@ -293,7 +293,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                                     {/* Previous Bar */}
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '35px' }}>Prec.</span>
-                                                        <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                        <div style={{ flex: 1, height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
                                                             <div style={{ width: `${prevWidth}%`, height: '100%', background: 'var(--text-muted)' }} />
                                                         </div>
                                                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '50px', textAlign: 'right' }}>{formatKg(ex.previousVolume)}</span>
@@ -302,7 +302,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                                     {/* Current Bar */}
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         <span style={{ fontSize: '0.75rem', color: 'var(--text-main)', width: '35px' }}>Oggi</span>
-                                                        <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                        <div style={{ flex: 1, height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
                                                             <div style={{ width: `${currWidth}%`, height: '100%', background: ex.volumeDelta >= 0 ? 'var(--primary-color)' : 'var(--danger-color)' }} />
                                                         </div>
                                                         <span style={{ fontSize: '0.75rem', color: 'var(--text-main)', width: '50px', textAlign: 'right', fontWeight: 'bold' }}>{formatKg(ex.currentVolume)}</span>
@@ -332,7 +332,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     
                     {isSavingAsRoutine && (
                         <div style={{
-                            background: 'rgba(255,255,255,0.05)',
+                            background: 'var(--surface-light)',
                             padding: '16px',
                             borderRadius: '12px',
                             display: 'flex',

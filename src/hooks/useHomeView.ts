@@ -142,7 +142,7 @@ export function useHomeView(): HomeViewState {
 
     const painColors = useMemo(() => {
         const colors: Record<string, string> = {};
-        const DANGER_COLOR = '#ef4444';
+        const DANGER_COLOR = 'var(--muscle-pain)';
         (activePains || []).forEach(mId => {
             if (!mId || typeof mId !== 'string') return;
             colors[mId] = DANGER_COLOR;
@@ -248,7 +248,7 @@ export function useHomeView(): HomeViewState {
 
         const colors: Record<string, string> = {};
         fatigue.forEach((val, pathOrId) => {
-            if (val > 0.3) colors[pathOrId] = '#f97316'; // Affaticamento (arancione)
+            if (val > 0.3) colors[pathOrId] = 'var(--muscle-fatigue)'; // Affaticamento semanticamente coerente con il tema
         });
 
         const sortedVolume = Array.from(volume.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);

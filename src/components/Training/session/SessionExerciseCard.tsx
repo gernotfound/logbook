@@ -206,7 +206,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             {!(exItem.minReps || exItem.maxReps) && <div style={{ marginBottom: '15px' }}></div>}
 
             {isHistoryOpen && (
-                <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <h3 style={{marginBottom: '8px', marginTop: 0}}>Ultimi 2 allenamenti:</h3>
                     {pastWorkouts.length === 0 ? (
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
@@ -243,7 +243,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {isSetupOpen && (
-                <div style={{ padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
+                <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Modifica setup (globale):</h3>
                     <input
                         id={`setup-${exItem.exId}`}
@@ -263,7 +263,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {libDef?.trackingType === 'cardio' ? (
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
+                <div style={{ background: 'var(--surface-light)', padding: '15px', borderRadius: '12px', border: '1px solid var(--glass-border)', marginTop: '10px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
                         <div>
                             <label className="text-muted text-xs mb-4 block">Durata (min)</label>
@@ -350,7 +350,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <button
                             type="button"
                             className="btn btn-secondary btn-small"
-                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', marginBottom: 0 }}
+                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'var(--surface-light)', color: 'var(--text-muted)', marginBottom: 0 }}
                             onClick={handleRemoveLastSet}
                             disabled={(exItem.sets || []).length === 0}
                             aria-label="Rimuovi serie"
@@ -360,7 +360,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <button
                             type="button"
                             className="btn btn-small"
-                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'rgba(255,255,255,0.05)', marginBottom: 0 }}
+                            style={{ flex: 1, minWidth: 0, border: '1px dashed var(--glass-border)', background: 'var(--surface-light)', marginBottom: 0 }}
                             onClick={() => onAddSet(exIndex)}
                             aria-label="Aggiungi serie"
                         >
@@ -374,7 +374,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={val => onUpdateSessionNote(exIndex, val)}
-                style={{ width: '100%', padding: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '12px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
             />
         </div>
     );

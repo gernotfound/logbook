@@ -495,7 +495,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 />
             );
 
-            const leftChest = container.querySelector('#chest-upper-left');
+            const leftChest = container.querySelector('[data-muscle-path="chest-upper-left"]');
             expect(leftChest).not.toBeNull();
             const style = leftChest?.getAttribute('style') || '';
             expect(style.includes('#ff4d6d') || style.includes('rgb(255, 77, 109)')).toBe(true);
