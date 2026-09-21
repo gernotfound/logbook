@@ -32,6 +32,11 @@ describe('post-redesign UI hardening', () => {
     }
   });
 
+  it('keeps the guest account action readable on warning surfaces', () => {
+    const components = read('src/styles/components.css');
+    expect(components).toMatch(/\.guest-banner \.btn\s*\{[^}]*background:\s*var\(--warning-color\)[^}]*color:\s*var\(--on-warning\)/);
+  });
+
   it('uses semantic danger and muscle-state colors instead of dark-theme red/orange literals', () => {
     for (const path of [
       'src/components/Training/session/SessionRatings.tsx',

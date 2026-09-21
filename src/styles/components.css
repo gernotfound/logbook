@@ -193,12 +193,12 @@
     gap: 0.75rem;
     background: var(--warning-soft);
     border-bottom: 1px solid var(--warning-color);
-    color: var(--warning-color);
+    color: var(--text-main);
     padding: 0.625rem 1rem;
 }
 
 .guest-banner-text { flex: 1; min-width: 0; font-size: 0.875rem; line-height: 1.4; text-align: center; }
-.guest-banner .btn { background: var(--surface-color); color: var(--warning-color); border-color: var(--warning-color); margin: 0; }
+.guest-banner .btn { background: var(--warning-color); color: var(--on-warning); border-color: var(--warning-color); margin: 0; }
 
 .auth-panel {
     width: 100%;
