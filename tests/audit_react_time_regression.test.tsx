@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
@@ -71,7 +71,7 @@ describe('Audit regression: React time boundaries', () => {
         });
 
         expect(hookResult).not.toBeNull();
-        expect((hookResult as any).muscleColors.chest_lower).toBe('#f97316');
+        expect((hookResult as any).muscleColors.chest_lower).toBe('var(--muscle-fatigue)');
 
         act(() => {
             vi.advanceTimersByTime(60_000);
@@ -80,3 +80,4 @@ describe('Audit regression: React time boundaries', () => {
         expect((hookResult as any).muscleColors.chest_lower).toBeUndefined();
     });
 });
+
