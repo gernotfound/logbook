@@ -36,6 +36,21 @@ it('repairs a lagging durable snapshot before reload', async () => {
     expect(durable?.data).toEqual(UserDataSchema.parse(app.state.userData));
     expect(durable?.pending.length).toBeGreaterThan(0);
 });
+it('repairs a lagging guest snapshot without creating a cloud journal', async () => {
+    await clear();
+    disk.set('logbook_is_guest', 'true');
+    (app.auth as any).currentUser = null;
+    invalidateSession();
+    const base = parse(170);
+    app.state.userData = base;
+    await initializeLocal('guest', base);
+    app.state.userData = parse(171);
+    app.flush.mockRejectedValue(new Error('offline'));
+    await prepareForReload();
+    const durable = await readLocal('guest');
+    expect(durable?.data).toEqual(UserDataSchema.parse(app.state.userData));
+    expect(durable?.pending).toHaveLength(0);
+});
 it('still blocks reload when the durable envelope is missing', async () => {
     await clear();
     app.flush.mockRejectedValue(new Error('offline'));
