@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { useDialogStore } from '../../store/useDialogStore';
 import { GlobalDialog } from './GlobalDialog';
+import { DB } from '../../lib/db';
 
 interface Props {
   children?: ReactNode;
@@ -33,7 +34,6 @@ class ErrorBoundary extends Component<Props, State> {
     if (!confirmed) return;
 
     try {
-      const { DB } = await import('../../lib/db');
       await DB.purgeAllLocalUserData();
       window.location.reload();
     } catch (error) {
