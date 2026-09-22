@@ -1,32 +1,29 @@
 # Debug Background Sync
 
-## Verifica che il sync funzioni
+## Comportamento attuale
 
-1. Apri DevTools > Application > Service Workers
-2. Clicca "Update" per forzare reload del SW
-3. Apri Console (dentro DevTools > Service Worker)
-4. Esegui azione offline (es. salva allenamento)
-5. Torna online → attendi 1-2s
-6. Verifica log: `[SW] Sync event received: logbook-sync`
+Il Service Worker non salva direttamente dati utente e non conserva credenziali o payload di sincronizzazione.
+Quando riceve l'evento `logbook-sync`, invia `LOGBOOK_SYNC_REQUIRED` alle finestre LogBook aperte.
+L'app risponde rieseguendo il journal durevole associato all'owner corrente.
 
-## Errori comuni
+Lo stesso replay viene richiesto anche quando:
 
-### "Sync failed: 401 Unauthorized"
-- Token scaduto. L'app ritenterà al prossimo avvio appoggiandosi all'SDK nativo Firestore.
+1. il browser torna online;
+2. la PWA torna visibile in primo piano;
+3. una registrazione Background Sync precedente si riattiva dopo un aggiornamento.
 
-### "Sync failed: Network error"
-- Rete instabile o errore 50x. Il SW ritenta automaticamente (max 3 volte con exponential backoff).
+## Verifica che il replay funzioni
 
-### "Sync event non ricevuto"
-- Browser non supporta Background Sync (es. Safari iOS).
-- Fallback: sync al prossimo avvio dell'app.
+1. Apri DevTools > Application > Service Workers.
+2. Porta LogBook offline ed esegui una modifica che resti nel journal locale.
+3. Torna online oppure riporta la PWA in primo piano.
+4. Verifica che la sincronizzazione riparta senza letture di token o payload dal Service Worker.
+5. Se il browser supporta Background Sync, un evento `logbook-sync` deve soltanto notificare le finestre aperte.
 
-## Reset manuale
+## Compatibilità browser
 
-Per cancellare payload pendenti in locale (IndexedDB):
-```ts
-import { del } from 'idb-keyval';
-await del('pending_sync_payload');
-await del('pending_sync_token');
-await del('sync_failed');
-```
+Safari/iOS può non supportare Background Sync. Questo non blocca il recupero: online, riapertura e ritorno in primo piano usano comunque lo stesso journal durevole.
+
+## Chiavi legacy
+
+`pending_sync_payload`, `pending_sync_token` e `sync_failed` appartengono al vecchio meccanismo di Background Sync. Il codice corrente non le usa per scrivere dati; vengono soltanto ripulite nei percorsi di recupero/logout per evitare residui di installazioni precedenti.

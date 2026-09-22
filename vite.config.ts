@@ -12,6 +12,19 @@ const buildTime = new Date().toISOString()
 
 const basePath = '/'
 
+// vite-plugin-pwa 1.3.0 still emits Rollup's deprecated inlineDynamicImports
+// in its nested Vite 8 service-worker build. Translate it to the equivalent
+// Rolldown/Vite 8 option until the upstream plugin ships that migration.
+const pwaVite8OutputCompatibility = () => ({
+  name: 'logbook:pwa-vite8-output-compatibility',
+  config(config: any) {
+    const output = config.build?.rollupOptions?.output
+    if (!output || Array.isArray(output) || output.inlineDynamicImports === undefined) return
+    delete output.inlineDynamicImports
+    output.codeSplitting = false
+  }
+})
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
@@ -30,7 +43,10 @@ export default defineConfig({
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'favicon.svg', 'icons.svg'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-        maximumFileSizeToCacheInBytes: 3000000
+        maximumFileSizeToCacheInBytes: 3000000,
+        buildPlugins: {
+          vite: [pwaVite8OutputCompatibility()]
+        }
       },
       manifest: {
         id: basePath,

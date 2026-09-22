@@ -160,7 +160,7 @@ export const DB = {
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
             setLastSavedStateStr(JSON.stringify(state));
-            return { data: state as unknown as UserData, cloudDocuments, completeMonths };
+            return { data: state as unknown as UserData, cloudDocuments, completeMonths, backgroundSyncFailed };
         } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
             throw error;

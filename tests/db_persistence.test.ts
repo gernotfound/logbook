@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { set as setIdb } from 'idb-keyval';
 
 vi.unmock('../src/lib/db');
 
 import { TestDB as DB } from './testUtils';
-
 
 
 describe('DB Persistence for Training Cycles and Planning', () => {
@@ -87,6 +87,19 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(loadedData?.trainingCycles).toHaveLength(1);
         expect(loadedData?.trainingCycles[0].id).toBe('cycle_loaded');
         expect(loadedData?.activeCycleId).toBe('cycle_loaded');
+    });
+
+    it('DB.loadCloudPayload propagates a previous background sync failure on normal cloud loads', async () => {
+        await setIdb('sync_failed', true);
+        vi.mocked(getDoc).mockResolvedValueOnce({
+            exists: () => true,
+            data: () => ({ profile: { name: 'Mario' } })
+        } as any);
+
+        const payload = await DB.loadCloudPayload();
+
+        expect(payload).not.toBeNull();
+        expect(payload?.backgroundSyncFailed).toBe(true);
     });
 
     it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {

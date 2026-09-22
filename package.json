@@ -93,6 +93,7 @@
   },
   "allowScripts": {
     "@firebase/util": true,
-    "protobufjs": true
+    "protobufjs": true,
+    "re2": true
   }
 }
