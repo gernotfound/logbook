@@ -12,6 +12,7 @@ import { loadNutritionMonths } from './db/db_nutrition';
 import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
 import { storageOwner } from './sync/session';
 import { classifySyncFailure } from './sync/syncFailure';
+import { replicateJournal } from './sync/replicateJournal';
 
 export const DB = {
     resetCache() {
@@ -174,7 +175,6 @@ export const DB = {
         if (!user) return { ok: true, status: 'synced' };
         try {
             await ensureAppCheck();
-            const { replicateJournal } = await import('./sync/replicateJournal');
             const result = await replicateJournal();
             if (result.ok) setLastSavedStateStr(JSON.stringify(state));
             return result;
