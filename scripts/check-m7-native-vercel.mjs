@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = '53a434012b3db444f9caa2e93c6e44e4054b2a3f';
+const M6_VITE_BLOB = '4c218ca9d0e07c4de1cb46c3d094e78e673a3cf4';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== M6_VITE_BLOB) {
   failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);

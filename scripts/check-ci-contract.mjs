@@ -64,6 +64,7 @@ requirePattern(
 );
 
 requirePattern('stable canonical job identity', workflow, /^    name: ["']Canonical Verification["']\s*$/m);
+requirePattern('pinned Ubuntu runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern(
   'expected SHA binding',
@@ -174,4 +175,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: main PRs and pushes, exact-head guard, stable Canonical Verification job, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');
+console.log('M8 CI contract OK: main PRs and pushes, exact-head guard, stable Canonical Verification job, pinned Ubuntu 24.04 runner, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');

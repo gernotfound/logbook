@@ -293,11 +293,12 @@ vi.mock('../src/lib/db', () => ({
     saveUserData: vi.fn().mockResolvedValue({ ok: true, status: 'synced' }),
     secureLogOut: vi.fn().mockResolvedValue(undefined),
     deleteAccount: vi.fn().mockResolvedValue(undefined),
-    purgeAllLocalUserData: vi.fn().mockImplementation(async () => {
-      delete idbStore['logbook:v2:user:test-user-id'];
+    purgeAllLocalUserData: vi.fn().mockImplementation(async (owner = 'user:test-user-id') => {
+      delete idbStore[`logbook:v2:${owner}`];
       delete idbStore['logbook_cached_user_data'];
       delete idbStore['pending_sync_token'];
       delete idbStore['pending_sync_payload'];
+      delete idbStore['sync_failed'];
       localStorage.removeItem(deviceKey('workout'));
       localStorage.removeItem('logbook_local_workout');
       localStorage.removeItem('logbook_timer_state');
@@ -306,8 +307,14 @@ vi.mock('../src/lib/db', () => ({
       localStorage.removeItem('draft_measurement');
       localStorage.removeItem('draft_exercise');
       localStorage.removeItem('draft_routine');
-      localStorage.removeItem('logbook_is_guest');
       localStorage.removeItem('logbook_awaiting_redirect');
+      localStorage.removeItem('logbook_telemetry_queue');
+      localStorage.removeItem('guest_migration_policy');
+      const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
+      if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
+        localStorage.removeItem('logbook_guest_migration_sync_recovery');
+      }
+      if (owner === 'guest') localStorage.removeItem('logbook_is_guest');
     }),
   },
 }));

@@ -40,7 +40,8 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
             'draft_exercise',
             'draft_routine',
             'logbook_is_guest',
-            'logbook_awaiting_redirect'
+            'logbook_awaiting_redirect',
+            'guest_migration_policy'
         ];
 
         const deviceKeys = [
@@ -68,6 +69,17 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(idb.del).toHaveBeenCalledWith('logbook_cached_user_data');
         expect(idb.del).toHaveBeenCalledWith('pending_sync_token');
         expect(idb.del).toHaveBeenCalledWith('pending_sync_payload');
+        expect(idb.del).toHaveBeenCalledWith('sync_failed');
+    });
+
+    it('purgeAllLocalUserData removes only the current owner guest migration recovery marker', async () => {
+        localStorage.setItem('logbook_guest_migration_sync_recovery', 'user123');
+        await DB.purgeAllLocalUserData('user:user123');
+        expect(localStorage.getItem('logbook_guest_migration_sync_recovery')).toBeNull();
+
+        localStorage.setItem('logbook_guest_migration_sync_recovery', 'another-user');
+        await DB.purgeAllLocalUserData('user:user123');
+        expect(localStorage.getItem('logbook_guest_migration_sync_recovery')).toBe('another-user');
     });
 
     it('purgeAllLocalUserData reports IndexedDB failure and still cleans localStorage', async () => {

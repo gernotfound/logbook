@@ -34,15 +34,19 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
     const failures: unknown[] = [];
     const results = await Promise.allSettled([
         del('logbook:v2:' + owner), del('logbook_cached_user_data'),
-        del('pending_sync_token'), del('pending_sync_payload')
+        del('pending_sync_token'), del('pending_sync_payload'), del('sync_failed')
     ]);
     for (const result of results) if (result.status === 'rejected') failures.push(result.reason);
     const keys = new Set([
         'logbook_local_workout', 'logbook_timer_state', 'logbook_timer_start', 'logbook_timer_accumulated',
         'draft_measurement', 'draft_exercise', 'draft_routine', 'logbook_awaiting_redirect',
-        'logbook_telemetry_queue'
+        'logbook_telemetry_queue', 'guest_migration_policy'
     ]);
     try {
+        const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
+        if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
+            keys.add('logbook_guest_migration_sync_recovery');
+        }
         const prefix = 'logbook:v2:' + owner + ':';
         for (let index = 0; index < localStorage.length; index++) {
             const key = localStorage.key(index);

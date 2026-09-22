@@ -1,28 +1,9 @@
-import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, renderHook } from '@testing-library/react';
-import { renderWithProviders, emptyUserData, defaultMockUserData } from './setup';
+import { defaultMockUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
-import { Logic } from '../src/lib/logic';
-import {
-    UserDataSchema,
-    ExerciseSchema,
-    NutritionDaySchema,
-    FoodSchema,
-    WorkoutSessionSchema
-} from '../src/lib/schema';
-import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
-import DataMeasurements from '../src/components/Data/DataMeasurements';
-import SessionSetRow from '../src/components/Training/session/SessionSetRow';
-import SessionRatings from '../src/components/Training/session/SessionRatings';
-import MuscleModel from '../src/components/Training/MuscleModel';
-import HomeView from '../src/components/Home/HomeView';
-import { useNutritionMeasurements } from '../src/hooks/useNutritionMeasurements';
-import type { Food, NutritionDay } from '../src/types';
+import type { NutritionDay } from '../src/types';
 import {
     getLatestUserWeightContract,
-    calculateEffectiveSetWeightContract,
-    calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
     autoHealPainsContract
