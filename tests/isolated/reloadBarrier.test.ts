@@ -28,9 +28,17 @@ it('allows offline update only with the durable copy and synchronous active work
     expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
     expect((await readLocal('user:a'))?.data).toEqual(UserDataSchema.parse(app.state.userData));
 });
-it('blocks reload after local storage failure or a newer uncommitted edit', async () => {
+it('repairs a lagging durable snapshot before reload', async () => {
     app.state.userData = parse(171);
-    app.flush.mockRejectedValue(new Error('quota'));
+    app.flush.mockRejectedValue(new Error('offline'));
+    await prepareForReload();
+    const durable = await readLocal('user:a');
+    expect(durable?.data).toEqual(UserDataSchema.parse(app.state.userData));
+    expect(durable?.pending.length).toBeGreaterThan(0);
+});
+it('still blocks reload when the durable envelope is missing', async () => {
+    await clear();
+    app.flush.mockRejectedValue(new Error('offline'));
     await expect(prepareForReload()).rejects.toThrow('non sono ancora salvate');
     expect(disk.size).toBe(0);
 });
@@ -58,7 +66,7 @@ it('hard reloads only after the durable reload barrier succeeds', async () => {
     expect(reload).toHaveBeenCalledTimes(1);
 });
 it('never hard reloads when the durable reload barrier rejects', async () => {
-    app.state.userData = parse(171);
+    await clear();
     app.flush.mockRejectedValue(new Error('offline'));
     const reload = vi.fn();
     await expect(safeHardReload(reload)).rejects.toThrow('non sono ancora salvate');
