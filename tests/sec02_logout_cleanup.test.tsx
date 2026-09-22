@@ -165,5 +165,6 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         expect(useAppStore.getState().userData).toBeNull();
         expect(useAppStore.getState().localWorkout).toBeNull();
         expect(useAppStore.getState().syncing).toBe(false);
+        expect(useAppStore.getState().saveError).toBeNull();
     });
 });
