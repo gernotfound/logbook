@@ -6,7 +6,6 @@ import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { normalizeCloudDocument } from './schemaEvolution';
 import { set, get, del } from 'idb-keyval';
-import { useDialogStore } from '../store/useDialogStore';
 import { withTimeout, setLastSavedStateStr } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
@@ -18,18 +17,16 @@ export const DB = {
     resetCache() {
         setLastSavedStateStr(null);
     },
-    async loadCloudPayload(options?: { allMonths?: boolean }): Promise<{ data: UserData, cloudDocuments: Map<string, any>, completeMonths: string[] } | null> {
+    async loadCloudPayload(options?: { allMonths?: boolean }): Promise<{ data: UserData, cloudDocuments: Map<string, any>, completeMonths: string[], backgroundSyncFailed?: boolean } | null> {
         const user = auth.currentUser;
         if (!user) return null;
         try {
-            Promise.all([
+            let backgroundSyncFailed = false;
+            await Promise.all([
                 get('sync_failed').then(failed => {
                     if (failed) {
                         console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
-                        useDialogStore.getState().showAlert(
-                            "Sincronizzazione in background interrotta",
-                            "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token è scaduto. Nessun problema: il salvataggio verrà completato automaticamente adesso che sei online."
-                        );
+                        backgroundSyncFailed = true;
                     }
                     return set('sync_failed', false);
                 }),
@@ -103,7 +100,7 @@ export const DB = {
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
                 setLastSavedStateStr(JSON.stringify(state));
-                return { data: state as unknown as UserData, cloudDocuments, completeMonths };
+                return { data: state as unknown as UserData, cloudDocuments, completeMonths, backgroundSyncFailed };
             }
 
             if (options?.allMonths) {
@@ -194,6 +191,7 @@ export const DB = {
         const owner = storageOwner();
         await auth.signOut();
         await this.purgeAllLocalUserData(owner);
+        this.resetCache();
     },
     async deleteAccount() {
         return deleteAccount(this);

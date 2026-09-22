@@ -3,8 +3,9 @@ import { rmSync, existsSync } from 'node:fs';
 
 console.log('Compiling server functions to JS for smoke test...');
 // Compile api and server folders to a temporary dist directory.
+const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 try {
-  execFileSync('npx', ['tsc', '--project', 'tsconfig.m7-server.json', '--outDir', '.smoke-test-dist', '--noEmit', 'false'], { stdio: 'inherit' });
+  execFileSync(npxCommand, ['tsc', '--project', 'tsconfig.m7-server.json', '--outDir', '.smoke-test-dist', '--noEmit', 'false'], { stdio: 'inherit', shell: process.platform === 'win32' });
 } catch {
   console.error('Failed to compile functions for smoke test');
   process.exit(1);

@@ -65,9 +65,14 @@ export default function VolumeCaloriesCorrelationChart({
     stats: { hasData: false, correlationCoefficient: null, correlationInsight: '', avgWeeklyVolumeKg: 0, avgDailyKcal: 0, validDataPointsCount: 0 }
   });
 
+  const [prevParams, setPrevParams] = useState({ history, nutrition, library, userWeight, selectedWeeks });
+  if (history !== prevParams.history || nutrition !== prevParams.nutrition || library !== prevParams.library || userWeight !== prevParams.userWeight || selectedWeeks !== prevParams.selectedWeeks) {
+    setPrevParams({ history, nutrition, library, userWeight, selectedWeeks });
+    setIsCalculating(true);
+  }
+
   useEffect(() => {
     let isMounted = true;
-    setIsCalculating(true);
 
     calculateCorrelationStats(history, nutrition, library, userWeight, selectedWeeks)
       .then((res: any) => {
