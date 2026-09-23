@@ -67,6 +67,9 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(firebaseSource).not.toContain('firebase/analytics');
             expect(firebaseSource).not.toContain('measurementId');
             expect(firebaseSource).not.toContain('VITE_FIREBASE_MEASUREMENT_ID');
+            expect(firebaseSource).toContain('memoryLocalCache');
+            expect(firebaseSource).not.toContain('persistentLocalCache');
+            expect(firebaseSource).not.toContain('persistentMultipleTabManager');
             expect(appSource).not.toContain('firebase/analytics');
             expect(vercelConfig).not.toContain('google-analytics.com');
             expect(vercelConfig).not.toContain('googletagmanager.com');
@@ -123,12 +126,20 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
                 import.meta.env[key] = `valid_${key}`;
             }
 
+            const firestore = await import('firebase/firestore');
             const firebaseModule = await import('../src/lib/firebase');
+            const db = firebaseModule.getDb();
+
             expect(firebaseModule.auth).toBeDefined();
-            expect(firebaseModule.getDb).toBeDefined();
+            expect(db).toBeDefined();
             expect(firebaseModule.provider).toBeDefined();
             expect(firebaseModule.signInWithPopup).toBeDefined();
             expect(firebaseModule.signOut).toBeDefined();
+            expect(vi.mocked(firestore.memoryLocalCache)).toHaveBeenCalled();
+            expect(vi.mocked(firestore.initializeFirestore)).toHaveBeenCalledWith(
+                expect.anything(),
+                { localCache: expect.anything() }
+            );
         });
     });
 });

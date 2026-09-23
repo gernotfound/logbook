@@ -263,7 +263,7 @@ vi.mock('firebase/firestore', () => {
   const writeBatch = vi.fn().mockReturnValue({ set: vi.fn(), delete: vi.fn(), commit: vi.fn().mockResolvedValue(undefined) });
   return {
     getFirestore: vi.fn(() => ({})), initializeFirestore: vi.fn(() => ({})),
-    persistentLocalCache: vi.fn(), persistentMultipleTabManager: vi.fn(),
+    memoryLocalCache: vi.fn(() => ({})),
     waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
     doc: vi.fn(), getDoc, setDoc: vi.fn().mockResolvedValue(undefined),
     deleteDoc: vi.fn().mockResolvedValue(undefined), collection: vi.fn(),

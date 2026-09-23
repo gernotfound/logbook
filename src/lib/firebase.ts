@@ -23,8 +23,7 @@ import {
 } from "firebase/auth";
 import {
     initializeFirestore,
-    persistentLocalCache,
-    persistentMultipleTabManager,
+    memoryLocalCache,
     waitForPendingWrites
 } from "firebase/firestore";
 import { ensureAppCheckProvider, initAppCheck, type AppCheckResult } from './appCheck';
@@ -113,7 +112,10 @@ export const getDb = () => {
         // state or a future caller constructs Firestore before ensureAppCheck().
         ensureAppCheckProvider(app);
         _db = initializeFirestore(app, {
-            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+            // Durable offline data belongs to LogBook's owner-scoped IndexedDB envelope.
+            // Keep Firestore memory-only so logout/account deletion cannot leave a second
+            // persistent copy of private cloud documents on the device.
+            localCache: memoryLocalCache()
         });
     }
     return _db;

@@ -1,6 +1,6 @@
 # Storage e Sincronizzazione - LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/store/useAppStore.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
+> Stato: normativo | Ultima verifica: 2026-09-23 | File verificati: `src/store/useAppStore.ts`, `src/lib/firebase.ts`, `src/lib/schemaEvolution.ts`, `src/lib/sync/transactionWriter.ts`, `src/lib/sync/replicateJournal.ts`, `src/lib/sync/semanticProjection.ts`, `src/lib/sync/documentProjection.ts`, `src/lib/sync/localRepository.ts`, `src/lib/sync/deviceStorage.ts`, `src/lib/sync/browserStorage.ts`, `src/lib/utils/timer.ts`, `src/hooks/useSettings.ts`, `src/contexts/AuthContext.tsx`, `src/main.tsx`
 
 ## Architettura di storage
 
@@ -14,6 +14,8 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 | **Replica remota** | Firestore | Sincronizzazione cloud e condivisione cross-device | Documento utente + subcollection mensilizzate |
 
 **MUST:** offline, l'app deve avviarsi e operare dai dati locali (IndexedDB + storage sincrono pertinente).
+
+**MUST:** la cache locale del client Firestore resta **memory-only**. La durabilità offline dei dati utente appartiene all'envelope IndexedDB owner-scoped di LogBook; non introdurre `persistentLocalCache()` come seconda copia persistente non gestita dal lifecycle di logout/cancellazione account.
 
 ## Browser storage boundary
 
