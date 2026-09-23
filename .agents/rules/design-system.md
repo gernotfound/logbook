@@ -19,6 +19,7 @@ La scelta `system | light | dark` è una preferenza del dispositivo salvata best
 ## Layout, controlli e accessibilità
 
 - **MUST:** controlli principali e navigazione con area di tocco almeno 44×44 px; mantenere il rispetto delle safe area e uno spazio in fondo ai contenuti sopra la barra fissa.
+- **MUST:** la PWA non deve bloccare una singola orientazione dello schermo salvo una necessità essenziale documentata e testata; il manifest corrente lascia l'orientazione al dispositivo/utente.
 - **MUST:** input, select e textarea a `font-size: 16px !important` dove applicabile per evitare lo zoom automatico di iOS Safari.
 - **MUST:** usare nomi accessibili, stato e focus visibile per tab, menu, dialoghi, mappe interattive e pulsanti a icona. `SubNav<T>` fornisce il pattern condiviso dei tab.
 - **SHOULD:** usare classi e token per gli stili statici; lasciare inline solo valori realmente dinamici o codice legacy non ancora migrato. Preferire `rem` per le dimensioni che devono seguire le preferenze di carattere; il valore di 16 px degli input è un'eccezione intenzionale.

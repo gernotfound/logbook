@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = '45973f039acbed793d88c8a9256cefe4e6b2927b';
+const M6_VITE_BLOB = 'c3f6338b4259692b27609fe6d9f0a320f73d347e';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== M6_VITE_BLOB) {
   failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
@@ -71,6 +71,7 @@ if (existsSync('dist/manifest.webmanifest')) {
     if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
     if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
     if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
+    if ('orientation' in manifest) failures.push('PWA manifest must not lock the app to a single screen orientation');
     if ('display_override' in manifest) failures.push('PWA manifest must not request desktop display overrides');
 
     const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
