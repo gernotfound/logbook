@@ -45,6 +45,34 @@ describe('M8 domain commit durability', () => {
         expect(stored?.clock[stored.actorId]).toBe(1);
     });
 
+    it('persists training-cycle strategy in IndexedDB with its semantic journal', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+
+        const cycle = {
+            id: 'cycle-strategy',
+            name: 'Ciclo volume',
+            durationWeeks: 6,
+            strategy: {
+                intent: 'development' as const,
+                progressionFocus: 'volume' as const,
+                primaryMuscles: ['quads'],
+            },
+            routines: [],
+        };
+        const result = await commitDomainOperations(
+            'user:a',
+            { type: 'training-cycle.upsert', cycle },
+            initial,
+        );
+        const stored = await readLocal('user:a');
+
+        expect(result.data.trainingCycles?.[0]?.strategy).toEqual(cycle.strategy);
+        expect(stored?.data.trainingCycles?.[0]?.strategy).toEqual(cycle.strategy);
+        expect(stored?.pending.some(operation => operation.path[0] === 'trainingCycles')).toBe(true);
+    });
+
     it('serializes concurrent domain commits without losing either intent', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();

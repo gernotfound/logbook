@@ -3,6 +3,7 @@ import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
 import { ContextMenu, ContextMenuItem } from '../../UI/ContextMenu';
 import { Pencil, Copy, Trash2 } from 'lucide-react';
+import { CycleStrategySummary } from './CycleStrategySummary';
 
 interface CycleCardProps {
     cycle: TrainingCycle;
@@ -97,6 +98,10 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                 </div>
 
                 <ContextMenu items={menuItems} />
+            </div>
+
+            <div className="mb-10">
+                <CycleStrategySummary strategy={cycle.strategy} />
             </div>
 
             {cycle.notes && (

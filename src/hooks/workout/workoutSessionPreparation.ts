@@ -29,7 +29,11 @@ export function buildRoutineWorkout(
     const belongsToActiveCycle = activeCycle && (activeCycle.routines || []).some(r => r.routineId === routine.id);
 
     const assignedCycleId = cycleInfo?.cycleId || (belongsToActiveCycle ? activeCycle.id : undefined);
-    const assignedCycleName = cycleInfo?.cycleName || (belongsToActiveCycle ? activeCycle.name : undefined);
+    const assignedCycle = assignedCycleId
+        ? (userData?.trainingCycles || []).find(cycle => cycle.id === assignedCycleId)
+        : undefined;
+    const assignedCycleName = cycleInfo?.cycleName || assignedCycle?.name || (belongsToActiveCycle ? activeCycle.name : undefined);
+    const assignedCycleStrategy = assignedCycle?.strategy ? structuredClone(assignedCycle.strategy) : undefined;
 
     return {
         id: runtime.generateId('w'),
@@ -37,6 +41,7 @@ export function buildRoutineWorkout(
         routineName: routine.name,
         cycleId: assignedCycleId,
         cycleName: assignedCycleName,
+        ...(assignedCycleStrategy ? { cycleStrategy: assignedCycleStrategy } : {}),
         date: runtime.getLocalDateString(),
         globalStartTime: runtime.now(),
         exercises: (routine.exercises || []).map((ex: any) => {

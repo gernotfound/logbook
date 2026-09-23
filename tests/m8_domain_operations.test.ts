@@ -97,6 +97,30 @@ describe('M8 Domain Operations V4', () => {
         expect((replay.get('history_months/2026-09')?.['w-2'] as any).globalEndTime).toBe(200);
     });
 
+    it('persists and semantically syncs structured training-cycle strategy', () => {
+        const before = base({ trainingCycles: [] });
+        const cycle = {
+            id: 'cycle-strategy',
+            name: 'Volume quadricipiti',
+            durationWeeks: 6,
+            strategy: {
+                intent: 'development' as const,
+                progressionFocus: 'volume' as const,
+                primaryMuscles: ['quads'],
+                secondaryMuscles: ['triceps'],
+            },
+            routines: [],
+        };
+
+        const { after, operations, replay } = compile(before, { type: 'training-cycle.upsert', cycle });
+
+        expect(after.trainingCycles?.[0]?.strategy).toEqual(cycle.strategy);
+        expect(operations.length).toBeGreaterThan(0);
+        expect(operations.every(operation => operation.docPath === '')).toBe(true);
+        const replayCycles = replay.get('')?.trainingCycles as Array<typeof cycle> | undefined;
+        expect(replayCycles?.find(item => item.id === cycle.id)?.strategy).toEqual(cycle.strategy);
+    });
+
     it('emits ordered-keyed order intent for routine reorder', () => {
         const before = base({ routines: [
             { id: 'r1', name: 'A', exercises: [] },

@@ -188,6 +188,7 @@ describe('Training Planning & Volume Calculations', () => {
             expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText(/8 settimane/).length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText(/Focus petto e spalle/).length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText('Obiettivo non specificato').length).toBeGreaterThanOrEqual(1);
 
             // Muscle model present
             expect(document.querySelector('.muscle-map-container') || document.querySelector('svg')).toBeDefined();
@@ -213,17 +214,46 @@ describe('Training Planning & Volume Calculations', () => {
             const nameInput = screen.getByPlaceholderText('Es. Mesociclo ipertrofia 4 giorni');
             fireEvent.change(nameInput, { target: { value: 'Nuovo Ciclo Forza' } });
 
-            // Select a routine to add
-            const selectRoutine = screen.getByRole('combobox');
+            // Select a routine and declare the cycle strategy.
+            const selectRoutine = screen.getByRole('combobox', { name: /Aggiungi scheda alla sequenza/i });
             fireEvent.change(selectRoutine, { target: { value: 'r_push' } });
+            fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
+            fireEvent.click(screen.getByRole('button', { name: 'Performance' }));
+            fireEvent.change(screen.getByRole('combobox', { name: 'Aggiungi focus primario' }), { target: { value: 'quads' } });
+            fireEvent.change(screen.getByRole('combobox', { name: 'Aggiungi focus secondario' }), { target: { value: 'triceps' } });
 
             const saveBtn = screen.getByText(/Salva ciclo/i);
             fireEvent.click(saveBtn);
 
             await waitFor(() => {
                 const cycles = useAppStore.getState().userData?.trainingCycles || [];
-                expect(cycles.some(c => c.name === 'Nuovo Ciclo Forza')).toBe(true);
+                const created = cycles.find(c => c.name === 'Nuovo Ciclo Forza');
+                expect(created?.strategy).toEqual({
+                    intent: 'development',
+                    progressionFocus: 'performance',
+                    primaryMuscles: ['quads'],
+                    secondaryMuscles: ['triceps']
+                });
             });
+        });
+
+        it('exposes accessible intent/focus controls without forcing muscle priorities', () => {
+            render(<TrainingPlanning />);
+            fireEvent.click(screen.getByRole('button', { name: /Crea ciclo/i }));
+
+            expect(screen.getByRole('group', { name: 'Intento del ciclo' })).toBeDefined();
+            const primarySelect = screen.getByRole('combobox', { name: 'Aggiungi focus primario' }) as HTMLSelectElement;
+            expect(primarySelect.disabled).toBe(true);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Mantenimento' }));
+            expect(primarySelect.disabled).toBe(false);
+            expect(screen.queryByRole('group', { name: 'Focus principale della progressione' })).toBeNull();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Deload' }));
+            expect(screen.queryByRole('group', { name: 'Focus principale della progressione' })).toBeNull();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
+            expect(screen.getByRole('group', { name: 'Focus principale della progressione' })).toBeDefined();
         });
 
         it('updates the draft muscle map as routines are selected without saving the cycle', () => {
@@ -236,7 +266,7 @@ describe('Training Planning & Volume Calculations', () => {
             const map = form?.querySelector('.cycle-muscle-map');
             expect(map?.textContent).toContain('Nessun muscolo evidenziato');
 
-            fireEvent.change(screen.getByRole('combobox'), { target: { value: 'r_push' } });
+            fireEvent.change(screen.getByRole('combobox', { name: /Aggiungi scheda alla sequenza/i }), { target: { value: 'r_push' } });
             expect(map?.querySelector('.muscle-legend')?.textContent).toContain('Petto');
             expect(useAppStore.getState().userData?.trainingCycles).toEqual(originalCycles);
 
@@ -244,7 +274,17 @@ describe('Training Planning & Volume Calculations', () => {
             expect(document.getElementById('cycle-editor-form')).toBeNull();
         });
 
-        it('supports duplicating and deleting a cycle', async () => {
+        it('supports duplicating and deleting a cycle while preserving its strategy', async () => {
+            const current = useAppStore.getState().userData!;
+            useAppStore.setState({
+                userData: {
+                    ...current,
+                    trainingCycles: current.trainingCycles?.map(cycle => ({
+                        ...cycle,
+                        strategy: { intent: 'development', progressionFocus: 'volume' },
+                    })),
+                },
+            });
             render(<TrainingPlanning />);
 
             // Open ContextMenu for the active cycle and duplicate
@@ -256,7 +296,8 @@ describe('Training Planning & Volume Calculations', () => {
 
             await waitFor(() => {
                 const cycles = useAppStore.getState().userData?.trainingCycles || [];
-                expect(cycles.some(c => c.name.includes('- 1'))).toBe(true);
+                const duplicate = cycles.find(c => c.name.includes('- 1'));
+                expect(duplicate?.strategy).toEqual({ intent: 'development', progressionFocus: 'volume' });
             });
 
             // Open ContextMenu for the second cycle and delete it
@@ -286,6 +327,43 @@ describe('Training Planning & Volume Calculations', () => {
             expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
             expect(screen.getByText(/Modifica ciclo/)).toBeDefined();
             scrollToSpy.mockRestore();
+        });
+
+        it('lets an already-used cycle change strategy without rewriting historical session context', async () => {
+            const current = useAppStore.getState().userData!;
+            useAppStore.setState({
+                userData: {
+                    ...current,
+                    trainingCycles: current.trainingCycles?.map(cycle => cycle.id === 'cycle_active'
+                        ? {
+                            ...cycle,
+                            strategy: { intent: 'development', progressionFocus: 'performance' }
+                        }
+                        : cycle),
+                    history: [{
+                        id: 'history-cycle-strategy',
+                        cycleId: 'cycle_active',
+                        cycleName: 'Mesociclo Massa',
+                        cycleStrategy: { intent: 'development', progressionFocus: 'performance' },
+                        date: '2026-09-10',
+                        exercises: []
+                    }]
+                }
+            });
+
+            render(<TrainingPlanning />);
+            fireEvent.click(screen.getByTitle('Opzioni'));
+            fireEvent.click(screen.getByRole('menuitem', { name: /Modifica/i }));
+
+            expect(screen.getByText(/sessioni future; le sessioni già registrate non vengono riscritte/i)).toBeDefined();
+            fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+            fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
+
+            await waitFor(() => {
+                const data = useAppStore.getState().userData!;
+                expect(data.trainingCycles?.find(cycle => cycle.id === 'cycle_active')?.strategy?.progressionFocus).toBe('volume');
+                expect(data.history?.[0]?.cycleStrategy?.progressionFocus).toBe('performance');
+            });
         });
 
         it('supports activating and deactivating a training cycle', async () => {

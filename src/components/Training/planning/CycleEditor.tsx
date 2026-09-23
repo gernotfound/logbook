@@ -11,6 +11,7 @@ import { useCycleForm } from './useCycleForm';
 import { CycleSchedulePreview } from './CycleSchedulePreview';
 import { CycleRoutinesList } from './CycleRoutinesList';
 import { CycleMuscleMap } from './CycleMuscleMap';
+import { CycleStrategyFields } from './CycleStrategyFields';
 
 const EMPTY_LIBRARY: Exercise[] = [];
 
@@ -18,6 +19,7 @@ interface CycleEditorProps {
     initialCycle?: TrainingCycle | null;
     routines: WorkoutRoutine[];
     library?: Exercise[];
+    hasRecordedSessions?: boolean;
     onSave: (cycleData: TrainingCycle) => void;
     onCancel: () => void;
 }
@@ -26,6 +28,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     initialCycle,
     routines,
     library = EMPTY_LIBRARY,
+    hasRecordedSessions = false,
     onSave,
     onCancel
 }) => {
@@ -52,6 +55,11 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             setSessionsPerWeek,
             notes,
             setNotes,
+            strategyIntent,
+            progressionFocus,
+            setProgressionFocus,
+            primaryMuscles,
+            secondaryMuscles,
             cycleRoutines,
             showSchedulePreview,
             setShowSchedulePreview,
@@ -71,6 +79,9 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             handleAddRoutineById,
             handleMoveRoutine,
             handleRemoveRoutine,
+            handleStrategyIntentChange,
+            handleAddPriorityMuscle,
+            handleRemovePriorityMuscle,
             handleSubmit
         }
     } = form;
@@ -270,31 +281,6 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     />
                 </div>
 
-                <div>
-                    <div className="flex-between items-center mb-4">
-                        <label htmlFor="cycle-sessions-per-week" className="text-xs text-muted font-bold block">
-                            Frequenza di allenamento (sedute a settimana)
-                        </label>
-                        <span className="text-xs text-primary font-bold">
-                            {form.state.tempFreq} {form.state.tempFreq === 1 ? 'seduta' : 'sedute'} / sett.
-                        </span>
-                    </div>
-                    <input
-                        id="cycle-sessions-per-week"
-                        type="number"
-                        min="1"
-                        max="14"
-                        value={sessionsPerWeek}
-                        onChange={e => setSessionsPerWeek(e.target.value)}
-                        onFocus={e => e.target.select()}
-                        placeholder="Es. 4"
-                        required
-                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                    />
-                    <p className="text-xs text-muted mt-4 mb-0">
-                        Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
-                    </p>
-                </div>
             </div>
 
             {startDate && (
@@ -319,12 +305,50 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 </div>
             )}
 
+            <CycleStrategyFields
+                intent={strategyIntent}
+                progressionFocus={progressionFocus}
+                primaryMuscles={primaryMuscles}
+                secondaryMuscles={secondaryMuscles}
+                hasRecordedSessions={hasRecordedSessions}
+                onIntentChange={handleStrategyIntentChange}
+                onProgressionFocusChange={setProgressionFocus}
+                onAddMuscle={handleAddPriorityMuscle}
+                onRemoveMuscle={handleRemovePriorityMuscle}
+            />
+
+            <div className="mb-15">
+                <div className="flex-between items-center mb-4">
+                    <label htmlFor="cycle-sessions-per-week" className="text-xs text-muted font-bold block">
+                        Frequenza di allenamento (sedute a settimana)
+                    </label>
+                    <span className="text-xs text-primary font-bold">
+                        {form.state.tempFreq} {form.state.tempFreq === 1 ? 'seduta' : 'sedute'} / sett.
+                    </span>
+                </div>
+                <input
+                    id="cycle-sessions-per-week"
+                    type="number"
+                    min="1"
+                    max="14"
+                    value={sessionsPerWeek}
+                    onChange={e => setSessionsPerWeek(e.target.value)}
+                    onFocus={e => e.target.select()}
+                    placeholder="Es. 4"
+                    required
+                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                />
+                <p className="text-xs text-muted mt-4 mb-0">
+                    Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
+                </p>
+            </div>
+
             <div className="mb-15">
                 <label className="text-xs text-muted font-bold block mb-4">
-                    Note o obiettivo (opzionale)
+                    Note (opzionale)
                 </label>
                 <textarea
-                    placeholder="Es. Focus deltoidi laterali e dorso, progressione carichi..."
+                    placeholder="Es. Indicazioni personali sul ciclo..."
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     rows={2}

@@ -36,6 +36,12 @@ describe('DB Persistence for Training Cycles and Planning', () => {
                     id: 'cycle_test',
                     name: 'Mesociclo Massa',
                     durationWeeks: 8,
+                    strategy: {
+                        intent: 'development',
+                        progressionFocus: 'volume',
+                        primaryMuscles: ['quads'],
+                        secondaryMuscles: ['triceps']
+                    },
                     routines: [{ routineId: 'r1', frequencyPerWeek: 2 }]
                 }
             ],
@@ -51,6 +57,12 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(userDocCall).toBeDefined();
         expect(userDocCall[1].trainingCycles).toHaveLength(1);
         expect(userDocCall[1].trainingCycles[0].name).toBe('Mesociclo Massa');
+        expect(userDocCall[1].trainingCycles[0].strategy).toEqual({
+            intent: 'development',
+            progressionFocus: 'volume',
+            primaryMuscles: ['quads'],
+            secondaryMuscles: ['triceps']
+        });
         expect(userDocCall[1].activeCycleId).toBe('cycle_test');
         expect(mockBatch.commit).toHaveBeenCalled();
     });
@@ -66,6 +78,10 @@ describe('DB Persistence for Training Cycles and Planning', () => {
                     id: 'cycle_loaded',
                     name: 'Ciclo Forza',
                     durationWeeks: 6,
+                    strategy: {
+                        intent: 'maintenance',
+                        primaryMuscles: ['chest']
+                    },
                     routines: []
                 }
             ],
@@ -86,6 +102,10 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(loadedData).not.toBeNull();
         expect(loadedData?.trainingCycles).toHaveLength(1);
         expect(loadedData?.trainingCycles[0].id).toBe('cycle_loaded');
+        expect(loadedData?.trainingCycles[0].strategy).toEqual({
+            intent: 'maintenance',
+            primaryMuscles: ['chest']
+        });
         expect(loadedData?.activeCycleId).toBe('cycle_loaded');
     });
 
