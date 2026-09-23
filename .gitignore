@@ -19,6 +19,8 @@ dist-ssr
 /public/icon-192.png
 /public/icon-512.png
 /public/icon-maskable-512.png
+/public/favicon.ico
+/public/social-share.jpg
 
 # Environment variables
 .env

@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = '4c218ca9d0e07c4de1cb46c3d094e78e673a3cf4';
+const M6_VITE_BLOB = '45973f039acbed793d88c8a9256cefe4e6b2927b';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== M6_VITE_BLOB) {
   failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
@@ -41,7 +41,7 @@ if (!accountApi.includes('const POST_BUDGET_MS = 275_000;')) failures.push('POST
 if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
 if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
 
-for (const output of ['dist/sw.js', 'dist/manifest.webmanifest']) {
+for (const output of ['dist/sw.js', 'dist/manifest.webmanifest', 'dist/index.html', 'dist/favicon.ico', 'dist/social-share.jpg']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing after verify:m6 build: ${output}`);
 }
 
@@ -51,6 +51,16 @@ if (existsSync('dist/sw.js')) {
   if (sw.includes('__WB_MANIFEST')) failures.push('generated service worker still contains raw __WB_MANIFEST placeholder');
   if (!sw.includes('index.html')) failures.push('generated service worker does not include index.html in its precache payload');
   if (!sw.includes('icon-maskable-512.png')) failures.push('generated service worker does not precache the dedicated maskable icon');
+  if (sw.includes('social-share.jpg')) failures.push('social share card should not be precached by the offline app shell');
+}
+
+if (existsSync('dist/index.html')) {
+  const builtHtml = readFileSync('dist/index.html', 'utf8');
+  if (!builtHtml.includes('https://logbook-gnf.vercel.app/social-share.jpg?v=20260923')) failures.push('built HTML must expose the revisioned social share card URL');
+  if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
+  if (!builtHtml.includes('apple-touch-icon.png?v=20260923')) failures.push('built HTML must revision the Apple touch icon URL');
+  if (!builtHtml.includes('favicon.svg?v=20260923')) failures.push('built HTML must revision the SVG favicon URL');
+  if (!builtHtml.includes('favicon.ico?v=20260923')) failures.push('built HTML must expose the ICO favicon fallback');
 }
 
 if (existsSync('dist/manifest.webmanifest')) {
@@ -64,9 +74,9 @@ if (existsSync('dist/manifest.webmanifest')) {
     if ('display_override' in manifest) failures.push('PWA manifest must not request desktop display overrides');
 
     const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
-    const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png' && icon?.sizes === '192x192' && icon?.type === 'image/png');
-    const standard512Icons = icons.filter(icon => icon?.src === 'icon-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
-    const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
+    const hasStandard192 = icons.some(icon => icon?.src === 'icon-192.png?v=20260923' && icon?.sizes === '192x192' && icon?.type === 'image/png');
+    const standard512Icons = icons.filter(icon => icon?.src === 'icon-512.png?v=20260923' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose !== 'maskable');
+    const hasDedicatedMaskable = icons.some(icon => icon?.src === 'icon-maskable-512.png?v=20260923' && icon?.sizes === '512x512' && icon?.type === 'image/png' && icon?.purpose === 'maskable');
     if (!hasStandard192) failures.push('PWA manifest missing standard 192x192 PNG icon');
     if (standard512Icons.length !== 1) failures.push(`PWA manifest must contain exactly one standard 512x512 PNG icon; found ${standard512Icons.length}`);
     if (!hasDedicatedMaskable) failures.push('PWA manifest missing dedicated 512x512 maskable PNG icon');
