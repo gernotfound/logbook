@@ -94,7 +94,7 @@ npx firebase-tools deploy --only firestore:rules
 
 Non trasformare il deploy Rules in un side effect automatico di un test, di una modifica documentale o di una PR. L'autenticazione/credential path usato per il deploy dipende dall'ambiente operativo; non documentare un particolare ruolo IAM o service account come requisito corrente senza evidenza verificata.
 
-I file `firebase.json`, `firestore.indexes.json` e `.firebaserc` definiscono la configurazione repository usata dagli strumenti Firebase; leggere tutti quelli presenti prima di cambiare target, Rules, indici o TTL.
+I file `firebase.json` e `.firebaserc` definiscono la configurazione repository usata dagli strumenti Firebase; leggere entrambi prima di cambiare target o Rules. Eventuali indici o policy esterne vanno verificate direttamente sul progetto reale.
 
 ### Account deletion
 
@@ -106,7 +106,7 @@ I file `firebase.json`, `firestore.indexes.json` e `.firebaserc` definiscono la 
 
 Le raccolte di telemetria utente sono owner-scoped e soggette a validazione Rules tipizzata/bounded. Eventi e anomalie sono immutabili secondo il contratto corrente; gli errori aggregati ammettono soltanto gli aggiornamenti monotoni previsti dalle Rules. Le regole client non trasformano la telemetria tecnica in un database arbitrario.
 
-La retention prevista usa il timestamp Firestore `expireAt`: 30 giorni da `lastSeen` per `telemetry_errors` e 30 giorni da `timestamp` per `telemetry_events` / `telemetry_anomalies`. Le Rules richiedono `expireAt` sulle nuove scritture telemetriche: un client obsoleto che lo omette deve fallire soltanto sul canale telemetrico best-effort, senza creare nuovi documenti non soggetti a retention. `firestore.indexes.json` dichiara la policy TTL su `expireAt` per le tre collection group e disabilita l'indicizzazione ordinaria del campo. **MUST:** la presenza della configurazione nel repository non prova che la policy TTL sia attiva nel progetto reale; verificare/deployare esplicitamente il control plane Firebase prima di descrivere la retention come operativa.
+La retention prevista usa il timestamp Firestore `expireAt`: 30 giorni da `lastSeen` per `telemetry_errors` e 30 giorni da `timestamp` per `telemetry_events` / `telemetry_anomalies`. Le Rules richiedono `expireAt` sulle nuove scritture telemetriche: un client obsoleto che lo omette deve fallire soltanto sul canale telemetrico best-effort, senza creare nuovi documenti non soggetti a retention. La cancellazione viene eseguita dal maintenance cron server-side attraverso Firebase Admin, con scansione paginata degli utenti e cancellazione bounded dei documenti scaduti. **MUST:** il cron deve restare protetto da `CRON_SECRET`, rispettare il budget temporale e mantenere un cursore server-only per riprendere in sicurezza una sweep incompleta.
 
 ### Metadati `_sync`
 

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   TELEMETRY_RETENTION_DAYS,
@@ -21,16 +20,4 @@ describe('telemetry retention', () => {
     expect(() => telemetryExpiresAt(Number.POSITIVE_INFINITY)).toThrow('Telemetry retention anchor must be finite');
   });
 
-  it('declares TTL policies for all private telemetry collection groups without indexing expireAt', () => {
-    const firebaseConfig = JSON.parse(readFileSync('firebase.json', 'utf8'));
-    const indexConfig = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
-
-    expect(firebaseConfig.firestore.indexes).toBe('firestore.indexes.json');
-    expect(indexConfig.indexes).toEqual([]);
-    expect(indexConfig.fieldOverrides).toEqual([
-      { collectionGroup: 'telemetry_errors', fieldPath: 'expireAt', ttl: true, indexes: [] },
-      { collectionGroup: 'telemetry_events', fieldPath: 'expireAt', ttl: true, indexes: [] },
-      { collectionGroup: 'telemetry_anomalies', fieldPath: 'expireAt', ttl: true, indexes: [] },
-    ]);
-  });
 });
