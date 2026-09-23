@@ -1,8 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { getAnalyticsConsent, getConsentedAnalytics } from './lib/firebase';
-import { logEvent } from 'firebase/analytics';
+import { getAnalyticsConsent } from './lib/analyticsConsent';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -143,36 +142,6 @@ function App() {
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, [setSaveError]);
-
-  // Tracciamento dei tab su Google Analytics (SPA tab tracking)
-  useEffect(() => {
-    if (!analyticsEnabled) return;
-    let cancelled = false;
-    void getConsentedAnalytics().then(instance => {
-      if (cancelled || !instance || !getAnalyticsConsent()) return;
-      (logEvent as any)(instance, 'screen_view', {
-        screen_name: activeTab,
-        screen_class: 'App'
-      });
-    });
-    return () => { cancelled = true; };
-  }, [activeTab, analyticsEnabled]);
-
-  useEffect(() => {
-    if (!analyticsEnabled) return;
-    const subTab = activeTab === 'training' ? trainingSubTab : activeTab === 'nutrition' ? nutritionSubTab : activeTab === 'data' ? dataSubTab : null;
-    if (!subTab) return;
-
-    let cancelled = false;
-    void getConsentedAnalytics().then(instance => {
-      if (cancelled || !instance || !getAnalyticsConsent()) return;
-      (logEvent as any)(instance, 'sub_tab_view', {
-        tab: activeTab,
-        sub_tab: subTab
-      });
-    });
-    return () => { cancelled = true; };
-  }, [activeTab, trainingSubTab, nutritionSubTab, dataSubTab, analyticsEnabled]);
 
   // Track visited tabs for lazy Keep-Alive rendering
   const [visitedTabs, setVisitedTabs] = useState<Record<string, boolean>>(() => ({ [activeTab]: true }));

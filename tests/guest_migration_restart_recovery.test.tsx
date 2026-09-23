@@ -2,7 +2,6 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('firebase/analytics', () => ({ logEvent: vi.fn() }));
 vi.mock('@vercel/analytics/react', () => ({ Analytics: () => null }));
 vi.mock('@vercel/speed-insights/react', () => ({ SpeedInsights: () => null }));
 vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));

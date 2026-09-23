@@ -20,16 +20,6 @@ vi.mock('../src/hooks/useAuth', () => ({
     useAuth: () => authState,
 }));
 
-vi.mock('../src/lib/firebase', () => ({
-    analytics: null,
-    getAnalyticsConsent: () => false,
-    getConsentedAnalytics: async () => null,
-}));
-
-vi.mock('firebase/analytics', () => ({
-    logEvent: vi.fn(),
-}));
-
 vi.mock('@vercel/analytics/react', () => ({
     Analytics: () => null,
 }));

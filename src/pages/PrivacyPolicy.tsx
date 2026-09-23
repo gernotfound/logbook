@@ -142,7 +142,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. Questi meccanismi sono distinti dai servizi Analytics e sono necessari alle funzionalità locali dell'app.
             </p>
             <p>
-              <strong style={{ color: 'var(--text-main)' }}>Firebase Analytics, Vercel Analytics e Vercel Speed Insights sono disabilitati per impostazione predefinita e vengono attivati soltanto tramite opt-in nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; il codice applicativo impedisce ai consumer Firebase Analytics di ottenere un'istanza consentita quando il consenso è disattivato e non renderizza i componenti Vercel Analytics/Speed Insights senza consenso.
+              <strong style={{ color: 'var(--text-main)' }}>Vercel Analytics e Vercel Speed Insights sono disabilitati per impostazione predefinita e vengono attivati soltanto tramite opt-in nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; l'app non renderizza questi componenti senza consenso. Google/Firebase Analytics non viene inizializzato né utilizzato da LogBook.
             </p>
             <p>
               Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. LogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
@@ -170,7 +170,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Fornitori e trasferimento dei dati">
             <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, App Check/reCAPTCHA Enterprise e, solo con consenso, Firebase Analytics.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore e App Check/reCAPTCHA Enterprise. LogBook non utilizza Firebase Analytics.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — hosting delle risorse e delle funzioni server; solo con consenso, Vercel Analytics e Speed Insights.</li>
             </ul>
             <p>

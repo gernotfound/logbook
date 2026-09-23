@@ -8,7 +8,7 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 
 ### Client Firebase — fail-fast
 
-`src/lib/firebase.ts` controlla all'avvio otto variabili `VITE_FIREBASE_*`. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
+`src/lib/firebase.ts` controlla all'avvio sette variabili `VITE_FIREBASE_*`. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
 
 | Variabile | Stato corrente | Note |
 |---|---|---|
@@ -19,7 +19,6 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | `VITE_FIREBASE_STORAGE_BUCKET` | MUST | Config Firebase Web |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST | Config Firebase Web |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
-| `VITE_FIREBASE_MEASUREMENT_ID` | MUST | Usata dalla configurazione Analytics |
 
 **MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
 
@@ -30,26 +29,23 @@ Le chiavi Firebase Web sono configurazione pubblica inclusa nel bundle client; l
 - **Provider:** `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`).
 - **Bootstrap provider:** `src/lib/firebase.ts` inizializza il provider App Check prima di inizializzare Firestore. L'acquisizione del token resta asincrona e distinta dal bootstrap del provider.
 - **Stato:** `src/lib/appCheck.ts` distingue provider non inizializzato, disabled, unsupported, provider-ready, token-ready, token-error ed errore di inizializzazione. Un provider senza token non è considerato App Check attivo.
-- **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`); `firebase/app-check` non espone l'`isSupported` usato da Analytics.
+- **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
 - **Compatibilità transitoria:** `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` restano fallback runtime temporanei per evitare un cutover configurazione distruttivo; non usare questi nomi in nuova configurazione o documentazione.
-- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle otto env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
+- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle sette env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
 **VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
-## Analytics Firebase — consent-aware
+## Analytics non essenziali
 
-Firebase Analytics condivide la configurazione Web ma non viene inizializzato incondizionatamente:
+Google/Firebase Analytics non fa parte del prodotto e `src/lib/firebase.ts` non deve importare `firebase/analytics`, configurare `measurementId` o richiedere `VITE_FIREBASE_MEASUREMENT_ID`.
 
-- `src/lib/firebase.ts` legge il consenso locale `logbook_analytics_consent` con default `false`;
-- `getConsentedAnalytics()` inizializza/riattiva Analytics solo se il consenso è attivo e il browser lo supporta;
-- la revoca chiama `setAnalyticsCollectionEnabled(..., false)` e impedisce ai consumer di ottenere un'istanza consentita;
-- i consumer devono attendere `getConsentedAnalytics()` e ricontrollare il consenso prima di emettere eventi asincroni.
+L'opt-in `logbook_analytics_consent` governa esclusivamente Vercel Analytics e Speed Insights tramite `src/lib/analyticsConsent.ts`; resta disabilitato per default e revocabile.
 
-**MUST:** non introdurre un'importazione/inizializzazione Analytics che aggiri questo boundary o anticipi il consenso.
+**MUST:** non reintrodurre Google/Firebase Analytics senza una nuova decisione di prodotto e una rivalutazione privacy esplicita.
 
 ## Server trusted M7 — Firebase Admin
 
@@ -133,7 +129,7 @@ La CSP è configurata in `vercel.json`. Prima di modificarla:
 
 1. leggere `vercel.json` e identificare la direttiva interessata;
 2. **MUST:** non rimuovere i domini Firebase/Vercel necessari al comportamento corrente senza una sostituzione verificata;
-3. verificare login, sync, analytics, API M7 e PWA dopo il cambiamento pertinente.
+3. verificare login, sync, Vercel Analytics/Speed Insights, API M7 e PWA dopo il cambiamento pertinente.
 
 ## Vercel branch deployment policy
 

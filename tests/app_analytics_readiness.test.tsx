@@ -1,12 +1,8 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsHarness = vi.hoisted(() => ({
-    consent: true,
-    getConsentedAnalytics: vi.fn<() => Promise<any>>(),
-    logEvent: vi.fn(),
-}));
+const analyticsHarness = vi.hoisted(() => ({ consent: false }));
 
 const storeState = vi.hoisted(() => ({
     syncing: false,
@@ -35,17 +31,12 @@ vi.mock('../src/store/useAppStore', () => {
     return { useAppStore };
 });
 
-vi.mock('../src/lib/firebase', () => ({
+vi.mock('../src/lib/analyticsConsent', () => ({
     getAnalyticsConsent: () => analyticsHarness.consent,
-    getConsentedAnalytics: analyticsHarness.getConsentedAnalytics,
 }));
 
-vi.mock('firebase/analytics', () => ({
-    logEvent: analyticsHarness.logEvent,
-}));
-
-vi.mock('@vercel/analytics/react', () => ({ Analytics: () => null }));
-vi.mock('@vercel/speed-insights/react', () => ({ SpeedInsights: () => null }));
+vi.mock('@vercel/analytics/react', () => ({ Analytics: () => <div data-testid="vercel-analytics" /> }));
+vi.mock('@vercel/speed-insights/react', () => ({ SpeedInsights: () => <div data-testid="vercel-speed-insights" /> }));
 vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('../src/components/UI/BottomNav', () => ({ default: () => null }));
 vi.mock('../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
@@ -60,67 +51,27 @@ vi.mock('../src/components/SettingsView', () => ({ default: () => <div>Settings<
 
 import App from '../src/App';
 
-function deferred<T>() {
-    let resolve!: (value: T) => void;
-    const promise = new Promise<T>(res => { resolve = res; });
-    return { promise, resolve };
-}
-
-describe('App Firebase Analytics readiness', () => {
+describe('App optional analytics consent', () => {
     beforeEach(() => {
-        analyticsHarness.consent = true;
-        analyticsHarness.getConsentedAnalytics.mockReset();
-        analyticsHarness.logEvent.mockReset();
+        analyticsHarness.consent = false;
         localStorage.clear();
         sessionStorage.clear();
     });
 
-    it('emits the initial screen_view after delayed cold-start Analytics readiness without navigation', async () => {
-        const readiness = deferred<any>();
-        analyticsHarness.getConsentedAnalytics.mockReturnValue(readiness.promise);
-
+    it('keeps Vercel analytics disabled by default', async () => {
         render(<App />);
-
-        await waitFor(() => expect(analyticsHarness.getConsentedAnalytics).toHaveBeenCalledTimes(1));
-        expect(analyticsHarness.logEvent).not.toHaveBeenCalled();
-
-        await act(async () => {
-            readiness.resolve({ name: 'analytics-test' });
-            await readiness.promise;
-        });
-
-        await waitFor(() => expect(analyticsHarness.logEvent).toHaveBeenCalledWith(
-            { name: 'analytics-test' },
-            'screen_view',
-            { screen_name: 'home', screen_class: 'App' }
-        ));
+        await screen.findByText('Home');
+        expect(screen.queryByTestId('vercel-analytics')).toBeNull();
+        expect(screen.queryByTestId('vercel-speed-insights')).toBeNull();
     });
 
-    it('emits the current screen_view when consent is granted before Analytics becomes ready', async () => {
-        analyticsHarness.consent = false;
-        const readiness = deferred<any>();
-        analyticsHarness.getConsentedAnalytics.mockReturnValue(readiness.promise);
-
+    it('enables only the Vercel analytics components after opt-in changes', async () => {
         render(<App />);
-        expect(analyticsHarness.getConsentedAnalytics).not.toHaveBeenCalled();
-
+        await screen.findByText('Home');
         analyticsHarness.consent = true;
-        act(() => {
-            window.dispatchEvent(new Event('analytics_consent_changed'));
-        });
+        act(() => window.dispatchEvent(new Event('analytics_consent_changed')));
 
-        await waitFor(() => expect(analyticsHarness.getConsentedAnalytics).toHaveBeenCalledTimes(1));
-        expect(analyticsHarness.logEvent).not.toHaveBeenCalled();
-
-        await act(async () => {
-            readiness.resolve({ name: 'analytics-test' });
-            await readiness.promise;
-        });
-
-        await waitFor(() => expect(analyticsHarness.logEvent).toHaveBeenCalledWith(
-            { name: 'analytics-test' },
-            'screen_view',
-            { screen_name: 'home', screen_class: 'App' }
-        ));
+        await waitFor(() => expect(screen.getByTestId('vercel-analytics')).toBeDefined());
+        expect(screen.getByTestId('vercel-speed-insights')).toBeDefined();
     });
 });
