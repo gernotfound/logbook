@@ -96,6 +96,30 @@ describe('M7 daily account deletion recovery cron', () => {
     info.mockRestore();
   });
 
+  it('keeps account deletion recovery successful when telemetry retention fails', async () => {
+    process.env.CRON_SECRET = 'expected-secret';
+    store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }]);
+    telemetryRetention.purgeExpiredTelemetry.mockRejectedValue(new Error('telemetry unavailable'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await GET(request('expected-secret'));
+
+    expect(response.status).toBe(200);
+    expect(runner.processAccountDeletion).toHaveBeenCalledWith('a', expect.any(Number));
+    expect(await response.json()).toMatchObject({
+      scanned: 1,
+      processed: 1,
+      purged: 0,
+      telemetryUsersScanned: 0,
+      telemetryPurged: 0,
+      telemetryCycleCompleted: false,
+    });
+    expect(error).toHaveBeenCalledWith('[account-deletion-cron] telemetry retention failed', {
+      kind: 'Error',
+    });
+    error.mockRestore();
+  });
+
   it('uses only the residual cron budget for completed tombstone garbage collection', async () => {
     process.env.CRON_SECRET = 'expected-secret';
     const order: string[] = [];
