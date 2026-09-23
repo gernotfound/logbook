@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { telemetryHub } from '../lib/telemetryHub';
 
 // Extend window object to include beforeinstallprompt event
 interface BeforeInstallPromptEvent extends Event {
@@ -23,15 +22,11 @@ export function usePWAInstall() {
             const promptEvent = e as BeforeInstallPromptEvent;
             promptRef.current = promptEvent;
             setDeferredPrompt(promptEvent);
-            // Telemetry: Track install prompt impression
-            telemetryHub.trackEvent('pwa_install_impression');
         };
 
         const handleAppInstalled = () => {
             promptRef.current = null;
             setDeferredPrompt(null);
-            // Telemetry: Track native appinstalled event
-            telemetryHub.trackEvent('pwa_appinstalled');
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -51,18 +46,12 @@ export function usePWAInstall() {
         setDeferredPrompt(null);
 
         try {
-            // Telemetry: Track install button click
-            telemetryHub.trackEvent('pwa_install_click');
-
             // Mostra il prompt di installazione PWA
             prompt.prompt();
 
             // Attende la risposta dell'utente
             const choice = await prompt.userChoice;
             const outcome = choice?.outcome || 'dismissed';
-            
-            // Telemetry: Track prompt outcome
-            telemetryHub.trackEvent('pwa_install_prompt_outcome', { outcome });
 
             if (outcome === 'accepted') {
                 console.log('Utente ha accettato l\'installazione PWA');

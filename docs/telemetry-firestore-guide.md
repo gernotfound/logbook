@@ -1,6 +1,6 @@
 # Telemetria Firestore — guida operativa LogBook
 
-> Stato: guida tecnica stabile | Ultima verifica: 2026-09-20 | Fonti eseguibili: `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `firestore.rules`.
+> Stato: guida tecnica stabile | Ultima verifica: 2026-09-23 | Fonti eseguibili: `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/hooks/usePWAInstall.ts`, `src/hooks/useWorkoutSession.ts`, `firestore.rules`.
 
 Questa guida descrive la telemetria tecnica proprietaria di LogBook. Non va confusa con Vercel Analytics o Speed Insights, che sono sistemi separati e subordinati all'opt-in Analytics dell'utente. Google/Firebase Analytics non viene utilizzato.
 
@@ -29,15 +29,9 @@ La versione applicativa viene dal build-time `__APP_VERSION__`; non deve essere 
 
 ### Eventi
 
-Gli eventi possono includere il medesimo contesto tecnico e una mappa `details` bounded da un'allowlist applicativa e dalle Security Rules. I dettagli correnti includono, a seconda dell'evento:
+Gli eventi di produzione della telemetria proprietaria sono riservati a diagnostica, integrità e recovery. I dettagli tecnici restano bounded da un'allowlist applicativa e dalle Security Rules; esempi correnti sono i metadati di fallback Zod (schema, field path, issue code e tipi atteso/ricevuto) e le anomalie di persistenza.
 
-- stato offline;
-- metadati PWA come outcome/source/prompt availability;
-- identificativo tecnico della routine avviata, ma non il nome scelto dall'utente;
-- durata e conteggio esercizi per il workout salvato;
-- metadati di fallback Zod come schema, field path, issue code e tipi atteso/ricevuto.
-
-La telemetria workout **non** invia nomi di routine, serie, carichi, ripetizioni, note di sessione, diario alimentare o misurazioni corporee.
+**MUST:** i flussi di utilizzo ordinario non emettono telemetria proprietaria comportamentale. In particolare `usePWAInstall` non registra impression/click/outcome di installazione e `useWorkoutSession` non registra avvio/salvataggio degli allenamenti. Eventuali future statistiche di utilizzo richiedono una decisione di prodotto e il relativo boundary di consenso; non vanno reintrodotte come telemetria tecnica.
 
 ## Sanitizzazione e minimizzazione
 

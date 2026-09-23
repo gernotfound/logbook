@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { telemetryHub, TELEMETRY_QUEUE_KEY, TELEMETRY_QUEUE_CAPACITY, type TelemetryEventPayload } from '../src/lib/telemetryHub';
+import { telemetryHub, TELEMETRY_QUEUE_KEY, TELEMETRY_QUEUE_CAPACITY } from '../src/lib/telemetryHub';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { useAppStore } from '../src/store/useAppStore';
@@ -10,7 +10,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import SettingsView from '../src/components/SettingsView';
 import type { UserData } from '../src/types';
 
-describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
+describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   let mockSetDoc: any;
 
   beforeEach(() => {
@@ -42,8 +42,8 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
   // =========================================================================
   // 1. PWA Install Funnel Analytics
   // =========================================================================
-  describe('1. PWA Install Funnel Analytics', () => {
-    it('tracks beforeinstallprompt event as pwa_install_impression and sets isInstallable', async () => {
+  describe('1. PWA install behavior without proprietary usage telemetry', () => {
+    it('handles beforeinstallprompt without emitting a proprietary usage event', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
@@ -62,16 +62,11 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
 
       expect(result.current.isInstallable).toBe(true);
 
-      await waitFor(() => {
-        expect(mockSetDoc).toHaveBeenCalled();
-        const calls = mockSetDoc.mock.calls;
-        const lastCall = calls[calls.length - 1][1] as TelemetryEventPayload;
-        expect(lastCall.type).toBe('pwa_install_impression');
-        expect(lastCall.userId).toBe('user_pwa_test');
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_impression')).toBe(false);
     });
 
-    it('tracks promptInstall click and accepted user choice outcome', async () => {
+    it('runs promptInstall for an accepted choice without proprietary funnel telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
@@ -97,17 +92,13 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       expect(mockPrompt).toHaveBeenCalled();
       expect(result.current.isInstallable).toBe(false);
 
-      await waitFor(() => {
-        const types = mockSetDoc.mock.calls.map((c: any) => c[1].type);
-        expect(types).toContain('pwa_install_click');
-        expect(types).toContain('pwa_install_prompt_outcome');
-
-        const outcomeCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'pwa_install_prompt_outcome');
-        expect(outcomeCall[1].details?.outcome).toBe('accepted');
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const types = mockSetDoc.mock.calls.map((c: any) => c[1].type);
+      expect(types).not.toContain('pwa_install_click');
+      expect(types).not.toContain('pwa_install_prompt_outcome');
     });
 
-    it('tracks promptInstall click and dismissed user choice outcome', async () => {
+    it('handles a dismissed install choice without proprietary funnel telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
@@ -128,14 +119,11 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
         await result.current.promptInstall();
       });
 
-      await waitFor(() => {
-        const outcomeCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'pwa_install_prompt_outcome');
-        expect(outcomeCall).toBeDefined();
-        expect(outcomeCall[1].details?.outcome).toBe('dismissed');
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_prompt_outcome')).toBe(false);
     });
 
-    it('prevents duplicate prompt calls and telemetry emissions on rapid consecutive promptInstall invocations before userChoice settles', async () => {
+    it('prevents duplicate prompt calls on rapid consecutive promptInstall invocations', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
@@ -179,10 +167,10 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       expect(result.current.isInstallable).toBe(false);
 
       const clickCalls = mockSetDoc.mock.calls.filter((c: any) => c[1].type === 'pwa_install_click');
-      expect(clickCalls.length).toBe(1);
+      expect(clickCalls.length).toBe(0);
     });
 
-    it('tracks native appinstalled event completing install funnel', async () => {
+    it('handles native appinstalled without proprietary funnel telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
 
@@ -192,11 +180,8 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
         window.dispatchEvent(new Event('appinstalled'));
       });
 
-      await waitFor(() => {
-        const calls = mockSetDoc.mock.calls;
-        const installedCall = calls.find((c: any) => c[1].type === 'pwa_appinstalled');
-        expect(installedCall).toBeDefined();
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_appinstalled')).toBe(false);
     });
 
     it('handles prompt error gracefully and clears deferredPrompt', async () => {
@@ -284,10 +269,8 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
 
       expect(mockPrompt).toHaveBeenCalled();
 
-      await waitFor(() => {
-        const types = mockSetDoc.mock.calls.map((c: any) => c[1].type);
-        expect(types).toContain('pwa_install_click');
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_click')).toBe(false);
 
       unmount();
     });
@@ -296,7 +279,7 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
   // =========================================================================
   // 2. Offline Workout Lifecycle Analytics
   // =========================================================================
-  describe('2. Offline Workout Lifecycle Analytics', () => {
+  describe('2. Offline workout lifecycle without proprietary usage telemetry', () => {
     const mockUserData: UserData = {
       profile: { name: 'Athlete' },
       routines: [
@@ -316,7 +299,7 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       history: [],
     } as unknown as UserData;
 
-    it('tracks workout_started event with offline: false when online', async () => {
+    it('starts an online workout without emitting workout usage telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_online');
 
@@ -334,17 +317,11 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       expect(useAppStore.getState().localWorkout).not.toBeNull();
       expect(useAppStore.getState().localWorkout?.routineId).toBe('routine_push_1');
 
-      await waitFor(() => {
-        expect(mockSetDoc).toHaveBeenCalled();
-        const workoutStartedCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_started');
-        expect(workoutStartedCall).toBeDefined();
-        expect(workoutStartedCall[1].details?.offline).toBe(false);
-        expect(workoutStartedCall[1].details?.routineId).toBe('routine_push_1');
-        expect(workoutStartedCall[1].details?.routineName).toBeUndefined();
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_started')).toBe(false);
     });
 
-    it('tracks workout_started event with offline: true and buffers in localStorage when offline', async () => {
+    it('starts an offline workout without buffering workout usage telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_offline');
 
@@ -362,14 +339,10 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       });
 
       const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(1);
-      expect(queue[0].payload.type).toBe('workout_started');
-      expect((queue[0].payload as TelemetryEventPayload).details?.offline).toBe(true);
-      expect((queue[0].payload as TelemetryEventPayload).details?.routineId).toBe('routine_push_1');
-      expect((queue[0].payload as TelemetryEventPayload).details?.routineName).toBeUndefined();
+      expect(queue.some(item => item.payload.type === 'workout_started')).toBe(false);
     });
 
-    it('tracks workout_saved event with offline: false, duration, and exerciseCount when online', async () => {
+    it('saves an online workout without emitting workout usage telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_online');
 
@@ -402,16 +375,11 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
 
       expect(useAppStore.getState().localWorkout).toBeNull();
 
-      await waitFor(() => {
-        const workoutSavedCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_saved');
-        expect(workoutSavedCall).toBeDefined();
-        expect(workoutSavedCall[1].details?.offline).toBe(false);
-        expect(workoutSavedCall[1].details?.exerciseCount).toBe(2);
-        expect(workoutSavedCall[1].details?.duration).toBeDefined();
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
     });
 
-    it('tracks workout_saved event with offline: true and buffers in localStorage when offline', async () => {
+    it('saves an offline workout without buffering workout usage telemetry', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_athlete_offline');
 
@@ -443,13 +411,10 @@ describe('Milestone 2: PWA Analytics & Offline Workout Usage Suite', () => {
       });
 
       const queue = telemetryHub.getQueuedEvents();
-      expect(queue.length).toBe(1);
-      expect(queue[0].payload.type).toBe('workout_saved');
-      expect((queue[0].payload as TelemetryEventPayload).details?.offline).toBe(true);
-      expect((queue[0].payload as TelemetryEventPayload).details?.exerciseCount).toBe(1);
+      expect(queue.some(item => item.payload.type === 'workout_saved')).toBe(false);
     });
 
-    it('ensures workout saving is never interrupted if telemetry dispatch throws or times out', async () => {
+    it('keeps workout saving independent from telemetry transport failures', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_throw_test');
 
