@@ -22,7 +22,7 @@ export function PrivacySettingsTab({
                     <span aria-hidden="true">📋</span> Informativa sulla privacy
                 </button>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                    Titolare del trattamento: LogBook Developer. I recapiti personali del developer non sono pubblicati nell'app.
+                    Titolare e contatto privacy: da completare prima della distribuzione commerciale; consulta l'informativa privacy.
                 </div>
             </div>
 

@@ -48,7 +48,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
               Termini e condizioni
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Aggiornati al 20 settembre 2026
+              Aggiornati al 23 settembre 2026
             </p>
           </div>
           <button
@@ -87,7 +87,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
             </div>
           </Section>
 
-          <Section title="3. Natura amatoriale del software (AS-IS)">
+          <Section title="3. Disponibilit� del software">
             <p>
               LogBook è un progetto software sviluppato in modo <strong>amatoriale, indipendente e senza scopo di lucro</strong>. L'Applicazione viene fornita "così com'è" (AS-IS) e "come disponibile", senza garanzie di alcun tipo, né espresse né implicite. Non viene garantito un uptime specifico e il software può presentare bug, difetti, vulnerabilità o errori di calcolo.
             </p>
