@@ -36,10 +36,10 @@ La cancellazione viene eseguita dal maintenance cron server-side già schedulato
 
 Prima del go-live devono essere completati e documentati:
 
-- deploy delle Security Rules con gate obbligatorio `expireAt` sul progetto Firebase reale;
+- Security Rules live con gate obbligatorio `expireAt` sul progetto Firebase reale;
 - verifica di eventuali documenti telemetrici preesistenti privi di `expireAt`; se presenti, migrazione o cancellazione secondo una procedura approvata;
 - verifica runtime dopo il rilascio che i nuovi documenti contengano `expireAt` e che le scritture non siano rifiutate;
 - osservazione di almeno un'esecuzione reale del cron con i contatori `telemetryUsersScanned`, `telemetryPurged` e `telemetryCycleCompleted`;
 - conferma che l'informativa Privacy pubblicata descriva la retention effettivamente attiva.
 
-Il progetto Firebase attuale non ha billing abilitato e il deploy delle policy Firestore TTL native è stato rifiutato dal control plane; per questo la retention è implementata con il cron applicativo, senza introdurre un requisito di billing solo per la cancellazione telemetrica.
+La retention applicativa non dipende dalle policy Firestore TTL native: il maintenance cron usa Firebase Admin e resta quindi compatibile con il piano Firebase corrente senza introdurre un requisito di billing solo per la cancellazione telemetrica.

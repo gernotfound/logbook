@@ -42,9 +42,16 @@ export async function GET(request: Request): Promise<Response> {
     if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
   }
 
-  const telemetryRetention = Date.now() + SAFETY_BUFFER_MS < deadlineMs
-    ? await purgeExpiredTelemetry(deadlineMs)
-    : { usersScanned: 0, documentsDeleted: 0, completedCycle: false };
+  let telemetryRetention = { usersScanned: 0, documentsDeleted: 0, completedCycle: false };
+  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+    try {
+      telemetryRetention = await purgeExpiredTelemetry(deadlineMs);
+    } catch (error) {
+      console.error('[account-deletion-cron] telemetry retention failed', {
+        kind: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
 
   console.info('[account-deletion-cron] completed', {
     scanned: jobs.length,
