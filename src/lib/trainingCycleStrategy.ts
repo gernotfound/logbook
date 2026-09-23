@@ -10,7 +10,7 @@ export const CYCLE_INTENT_LABELS: Record<TrainingCycleStrategy['intent'], string
 export const CYCLE_FOCUS_LABELS: Record<NonNullable<TrainingCycleStrategy['progressionFocus']>, string> = {
     performance: 'Performance',
     volume: 'Volume',
-    density: 'Densità',
+    density: 'Densit\u00e0',
     execution: 'Esecuzione',
 };
 
@@ -24,7 +24,7 @@ export function getCycleStrategyLabel(strategy?: TrainingCycleStrategy): string 
     if (!strategy) return 'Obiettivo non specificato';
     const intent = CYCLE_INTENT_LABELS[strategy.intent];
     if (strategy.intent === 'development' && strategy.progressionFocus) {
-        return `${intent} · Focus ${CYCLE_FOCUS_LABELS[strategy.progressionFocus].toLowerCase()}`;
+        return `${intent} \u00b7 Focus ${CYCLE_FOCUS_LABELS[strategy.progressionFocus].toLowerCase()}`;
     }
     return intent;
 }

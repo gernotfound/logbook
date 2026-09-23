@@ -355,7 +355,7 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(screen.getByTitle('Opzioni'));
             fireEvent.click(screen.getByRole('menuitem', { name: /Modifica/i }));
 
-            expect(screen.getByText(/sessioni future; quelle già registrate conservano il contesto/i)).toBeDefined();
+            expect(screen.getByText(/sessioni future; le sessioni già registrate non vengono riscritte/i)).toBeDefined();
             fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
             fireEvent.click(screen.getByRole('button', { name: /Salva modifiche/i }));
 

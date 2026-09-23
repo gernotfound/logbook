@@ -136,7 +136,7 @@ export function CycleStrategyFields({
             </div>
             {hasRecordedSessions && (
                 <p className="text-xs text-muted mt-12 mb-0" role="note">
-                    Questo ciclo ha già sessioni registrate. Le modifiche all'obiettivo valgono per le sessioni future; quelle già registrate conservano il contesto salvato al loro avvio.
+                    Questo ciclo ha già sessioni registrate. Le modifiche all'obiettivo valgono per le sessioni future; le sessioni già registrate non vengono riscritte e conservano l'eventuale contesto salvato al loro avvio.
                 </p>
             )}
         </section>

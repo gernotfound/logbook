@@ -283,6 +283,14 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             await showAlert("Aggiungi almeno una scheda al ciclo di allenamento.");
             return;
         }
+        if (!initialCycle && !strategyIntent) {
+            await showAlert("Seleziona l'obiettivo del ciclo.");
+            return;
+        }
+        if (strategyIntent === 'development' && !progressionFocus) {
+            await showAlert("Seleziona cosa vuoi far progredire principalmente.");
+            return;
+        }
 
         const weeks = Math.max(1, parseInt(durationWeeks, 10) || 4);
         const freqPerWeek = Math.max(1, parseInt(sessionsPerWeek, 10) || cycleRoutines.length);

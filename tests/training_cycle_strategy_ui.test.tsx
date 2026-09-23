@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import { CycleStrategySummary } from '../src/components/Training/planning/CycleStrategySummary';
+import { useDialogStore } from '../src/store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine } from '../src/types';
 
 const routines: WorkoutRoutine[] = [{
@@ -20,6 +21,33 @@ function fillBaseCycle() {
 }
 
 describe('training cycle strategy UI', () => {
+    it('requires an explicit intent for a new cycle and a focus for development', async () => {
+        const showAlert = useDialogStore.getState().showAlert as ReturnType<typeof vi.fn>;
+        showAlert.mockClear();
+        const onSave = vi.fn();
+        const { container } = render(
+            <CycleEditor routines={routines} onSave={onSave} onCancel={vi.fn()} />
+        );
+
+        fillBaseCycle();
+        fireEvent.submit(container.querySelector('form')!);
+        await waitFor(() => expect(showAlert).toHaveBeenCalledWith("Seleziona l'obiettivo del ciclo."));
+        expect(onSave).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
+        fireEvent.submit(container.querySelector('form')!);
+        await waitFor(() => expect(showAlert).toHaveBeenCalledWith('Seleziona cosa vuoi far progredire principalmente.'));
+        expect(onSave).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+        fireEvent.submit(container.querySelector('form')!);
+        await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+        expect(onSave.mock.calls[0][0].strategy).toEqual({
+            intent: 'development',
+            progressionFocus: 'volume',
+        });
+    });
+
     it('creates a development/performance cycle with primary and secondary muscle priorities', async () => {
         const onSave = vi.fn();
         const { container } = render(
