@@ -706,9 +706,11 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 const nameInput = container.querySelector('input[type="text"]') as HTMLInputElement;
                 fireEvent.change(nameInput, { target: { value: 'Mesociclo Autunno' } });
 
-                // Add routine
-                const select = container.querySelector('select') as HTMLSelectElement;
+                // Add routine and declare the new cycle strategy
+                const select = screen.getByRole('combobox', { name: 'Aggiungi scheda alla sequenza' });
                 fireEvent.change(select, { target: { value: 'r1' } });
+                fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
+                fireEvent.click(screen.getByRole('button', { name: 'Performance' }));
 
                 // Submit
                 const submitBtn = screen.getByText(/Salva ciclo/i);
