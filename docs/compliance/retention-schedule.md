@@ -30,11 +30,11 @@
 
 ## Attivazione tecnica telemetry
 
-Il repository prepara una retention nominale di 30 giorni tramite un campo Firestore `expireAt` calcolato dall'evento o dall'ultima occorrenza dell'errore, Security Rules compatibili con client già installati e policy TTL dichiarate in `firestore.indexes.json`. Il campo TTL è escluso dagli indici ordinari perché non viene interrogato dall'app.
+Il repository prepara una retention nominale di 30 giorni tramite un campo Firestore `expireAt` calcolato dall'evento o dall'ultima occorrenza dell'errore, Security Rules che rifiutano nuove scritture telemetriche prive di scadenza e policy TTL dichiarate in `firestore.indexes.json`. Il campo TTL è escluso dagli indici ordinari perché non viene interrogato dall'app. I client PWA obsoleti possono perdere temporaneamente la sola telemetria best-effort finché non si aggiornano; le funzionalità essenziali restano indipendenti da questo canale.
 
 Prima del merge/go-live della relativa informativa devono essere completati e documentati:
 
-- deploy delle Security Rules compatibili sul progetto Firebase reale;
+- deploy delle Security Rules con gate obbligatorio `expireAt` sul progetto Firebase reale;
 - confronto/esportazione degli eventuali indici Firestore già esistenti nel progetto: poiché il repository non aveva finora un manifest indici, `firestore.indexes.json` non deve essere deployato alla cieca prima di aver riconciliato lo stato live;
 - attivazione e stato effettivo delle tre policy TTL `expireAt` per `telemetry_errors`, `telemetry_events` e `telemetry_anomalies`;
 - verifica di eventuali documenti telemetrici preesistenti privi di `expireAt`, con backfill o cancellazione secondo una procedura approvata;

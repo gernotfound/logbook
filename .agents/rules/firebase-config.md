@@ -106,7 +106,7 @@ I file `firebase.json`, `firestore.indexes.json` e `.firebaserc` definiscono la 
 
 Le raccolte di telemetria utente sono owner-scoped e soggette a validazione Rules tipizzata/bounded. Eventi e anomalie sono immutabili secondo il contratto corrente; gli errori aggregati ammettono soltanto gli aggiornamenti monotoni previsti dalle Rules. Le regole client non trasformano la telemetria tecnica in un database arbitrario.
 
-La retention prevista usa il timestamp Firestore `expireAt`: 30 giorni da `lastSeen` per `telemetry_errors` e 30 giorni da `timestamp` per `telemetry_events` / `telemetry_anomalies`. `firestore.indexes.json` dichiara la policy TTL su `expireAt` per le tre collection group e disabilita l'indicizzazione ordinaria del campo. **MUST:** la presenza della configurazione nel repository non prova che la policy TTL sia attiva nel progetto reale; verificare/deployare esplicitamente il control plane Firebase prima di descrivere la retention come operativa.
+La retention prevista usa il timestamp Firestore `expireAt`: 30 giorni da `lastSeen` per `telemetry_errors` e 30 giorni da `timestamp` per `telemetry_events` / `telemetry_anomalies`. Le Rules richiedono `expireAt` sulle nuove scritture telemetriche: un client obsoleto che lo omette deve fallire soltanto sul canale telemetrico best-effort, senza creare nuovi documenti non soggetti a retention. `firestore.indexes.json` dichiara la policy TTL su `expireAt` per le tre collection group e disabilita l'indicizzazione ordinaria del campo. **MUST:** la presenza della configurazione nel repository non prova che la policy TTL sia attiva nel progetto reale; verificare/deployare esplicitamente il control plane Firebase prima di descrivere la retention come operativa.
 
 ### Metadati `_sync`
 

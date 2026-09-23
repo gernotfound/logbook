@@ -121,13 +121,12 @@ service cloud.firestore {
         || (isNonEmptyStringAtMost(docData.userId, 128) && docData.userId == userId);
     }
 
-    // expireAt is optional during the rollout so already-installed clients remain compatible.
-    // Once present, it must be a bounded timestamp and cannot be removed from mutable error docs.
+    // Telemetry must always carry an expiry. Old clients that omit it are rejected
+    // non-blockingly so they cannot create new telemetry outside the retention policy.
     function isValidTelemetryExpiry(docData) {
-      return !('expireAt' in docData) || (
-        docData.expireAt is timestamp
-        && docData.expireAt <= request.time + duration.value(31, 'd')
-      );
+      return 'expireAt' in docData
+        && docData.expireAt is timestamp
+        && docData.expireAt <= request.time + duration.value(31, 'd');
     }
 
     function preservesTelemetryExpiry() {

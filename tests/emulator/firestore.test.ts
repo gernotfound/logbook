@@ -130,6 +130,7 @@ it('rejects untyped root fields', async () => {
 
 it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const eventRef = doc(db, 'users/a/telemetry_events/e1');
     const errorRef = doc(db, 'users/a/telemetry_errors/err1');
     const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
@@ -141,6 +142,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         userId: 'a',
         sessionId: 'session-a',
         details: { offline: false, routineId: 'routine-1' },
+        expireAt,
     };
     const error = {
         timestamp: 1000,
@@ -153,6 +155,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         count: 1,
         firstSeen: 1000,
         lastSeen: 1000,
+        expireAt,
     };
     const anomaly = {
         type: 'storage_recovery_anomaly',
@@ -162,6 +165,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         platform: 'other',
         standalone: false,
         persisted: null,
+        expireAt,
     };
 
     await assertSucceeds(setDoc(eventRef, event));
@@ -190,12 +194,15 @@ it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevent
         sessionId: 'session-a',
     };
     const eventRef = doc(db, 'users/a/telemetry_events/ttl-event');
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/missing-expiry'), event));
     await assertSucceeds(setDoc(eventRef, { ...event, expireAt: validExpireAt }));
     await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-expiry-type'), { ...event, expireAt: '2099-01-01' }));
     await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-expiry-window'), { ...event, expireAt: tooFarExpireAt }));
 
     const legacyEventRef = doc(db, 'users/a/telemetry_events/legacy-event');
-    await assertSucceeds(setDoc(legacyEventRef, event));
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a/telemetry_events/legacy-event'), event);
+    });
     await assertSucceeds(setDoc(legacyEventRef, { ...event, expireAt: validExpireAt }));
     await assertFails(setDoc(legacyEventRef, { ...event, type: 'tampered', expireAt: validExpireAt }));
 
@@ -222,6 +229,7 @@ it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevent
 
 it('makes telemetry events/anomalies immutable and error aggregation monotonic', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const eventRef = doc(db, 'users/a/telemetry_events/e1');
     const errorRef = doc(db, 'users/a/telemetry_errors/err1');
     const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
@@ -233,6 +241,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         userId: 'a',
         sessionId: 'session-a',
         details: { source: 'settings' },
+        expireAt,
     };
     const error = {
         timestamp: 1000,
@@ -245,6 +254,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         count: 1,
         firstSeen: 1000,
         lastSeen: 1000,
+        expireAt,
     };
     const anomaly = {
         type: 'storage_recovery_anomaly',
@@ -254,6 +264,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         platform: 'other',
         standalone: false,
         persisted: false,
+        expireAt,
     };
 
     await assertSucceeds(setDoc(eventRef, event));

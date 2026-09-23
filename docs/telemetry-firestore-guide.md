@@ -75,9 +75,9 @@ Gli errori sono aggregati per hash deterministico di tipo + messaggio sanitizzat
 
 ## Retention e rollout TTL
 
-Le Security Rules accettano temporaneamente anche documenti senza `expireAt` per non rompere i client PWA già installati durante il rollout. Quando `expireAt` è presente deve essere un timestamp e non può superare di oltre 31 giorni il tempo della richiesta; sugli errori già dotati di scadenza non può essere rimosso. Eventi e anomalie legacy possono ricevere una sola aggiunta del campo `expireAt` senza altre mutazioni.
+Le Security Rules richiedono `expireAt` su ogni nuova scrittura di telemetria client. I client PWA obsoleti che non inviano il campo vengono quindi rifiutati soltanto sul canale telemetrico, che è best-effort e non blocca le funzionalità essenziali dell'app: questo evita che continuino a creare documenti senza scadenza. Il timestamp non può superare di oltre 31 giorni il tempo della richiesta; sugli errori già dotati di scadenza non può essere rimosso. Eventi e anomalie legacy già presenti nel cloud possono ricevere una sola aggiunta del campo `expireAt` senza altre mutazioni.
 
-Questa compatibilità non sostituisce la policy TTL: prima di dichiarare operativa la retention occorre verificare sul progetto Firebase reale che le tre policy siano attive e gestire gli eventuali documenti legacy privi del campo. La cancellazione TTL è asincrona e può avvenire dopo la scadenza nominale con il ritardo tecnico previsto da Firestore.
+La regola stretta non sostituisce la policy TTL: prima di dichiarare operativa la retention occorre verificare sul progetto Firebase reale che le tre policy siano attive e gestire gli eventuali documenti legacy privi del campo. La cancellazione TTL è asincrona e può avvenire dopo la scadenza nominale con il ritardo tecnico previsto da Firestore.
 
 ## Security Rules
 

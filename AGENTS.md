@@ -187,7 +187,7 @@ Distinguere due sistemi:
 
 - **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
 - **MUST:** telemetria tecnica propria e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
-- **MUST:** la telemetria Firestore nuova usa `expireAt` per la retention di 30 giorni; errori ancorati a `lastSeen`, eventi/anomalie a `timestamp`. Le policy TTL vivono in `firestore.indexes.json`, ma il loro stato live resta **VERIFY** sul progetto Firebase reale.
+- **MUST:** la telemetria Firestore nuova usa obbligatoriamente `expireAt` per la retention di 30 giorni; errori ancorati a `lastSeen`, eventi/anomalie a `timestamp`. Scritture telemetriche client prive di scadenza vengono rifiutate senza rendere bloccante la telemetria. Le policy TTL vivono in `firestore.indexes.json`, ma il loro stato live resta **VERIFY** sul progetto Firebase reale.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute.
 - **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
 - **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.

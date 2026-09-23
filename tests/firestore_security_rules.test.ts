@@ -134,6 +134,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('function isValidTelemetryContext(context)');
     expect(rulesContent).toContain('function isValidTelemetryDetails(details)');
     expect(rulesContent).toContain('function isValidTelemetryExpiry(docData)');
+    expect(rulesContent).toContain("'expireAt' in docData");
     expect(rulesContent).toContain("docData.expireAt is timestamp");
     expect(rulesContent).toContain("request.time + duration.value(31, 'd')");
     expect(rulesContent).toContain('details.size() <= 12');
