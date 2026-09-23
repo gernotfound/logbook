@@ -60,7 +60,6 @@ describe('workout session preparation', () => {
                 primaryMuscles: ['chest'],
             },
             date: '2026-09-16',
-            globalStartTime: 1_700_000_000_000,
         });
         expect(workout.exercises[0].sets).toHaveLength(1);
         expect(workout.exercises[1].sets).toHaveLength(2);
@@ -131,7 +130,6 @@ describe('workout session preparation', () => {
         expect(freeWorkout).toMatchObject({
             routineName: 'Allenamento libero',
             date: '2026-09-16',
-            globalStartTime: 1_700_000_000_000,
             exercises: [],
         });
     });
@@ -175,6 +173,7 @@ describe('workout session preparation', () => {
             routineName: 'Storico',
             exercises: [],
             pains: ['chest'],
+            readiness: { capturedAt: 1_700_000_000_000, energy: 3, stress: 4 },
         } as WorkoutSession;
 
         const saved = prepareHistoricalWorkoutForSave(
@@ -195,6 +194,7 @@ describe('workout session preparation', () => {
             fatigueRating: 4,
             waterLiters: 1.5,
             pains: ['chest'],
+            readiness: { capturedAt: 1_700_000_000_000, energy: 3, stress: 4 },
             date: '2026-09-16',
         });
         expect(saved.isEditingHistory).toBeUndefined();
@@ -211,6 +211,7 @@ describe('workout session preparation', () => {
             fatigueRating: 5,
             waterLiters: '1,5',
             pains: ['back'],
+            readiness: { capturedAt: 900, motivation: 5, muscleRecovery: 2 },
             isEditingHistory: true,
             originalHistoryId: 'old-id',
             exercises: [],
@@ -230,6 +231,7 @@ describe('workout session preparation', () => {
             fatigueRating: 5,
             waterLiters: 1.5,
             pains: ['back'],
+            readiness: { capturedAt: 900, motivation: 5, muscleRecovery: 2 },
         });
         expect(prepared.finishedWorkout.isEditingHistory).toBeUndefined();
         expect(prepared.finishedWorkout.originalHistoryId).toBeUndefined();

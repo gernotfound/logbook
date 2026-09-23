@@ -105,6 +105,16 @@ export const TrainingCycleStrategySchema = z.object({
     secondaryMuscles: z.array(z.string().trim().min(1)).optional().catch([]),
 }).passthrough();
 
+const ReadinessRatingSchema = z.number().int().min(1).max(5);
+
+export const WorkoutReadinessSchema = z.object({
+    capturedAt: z.number().finite().nonnegative(),
+    energy: ReadinessRatingSchema.optional(),
+    stress: ReadinessRatingSchema.optional(),
+    motivation: ReadinessRatingSchema.optional(),
+    muscleRecovery: ReadinessRatingSchema.optional(),
+}).strict();
+
 export const WorkoutSessionSchema = z.object({
     id: safeOptionalString(),
     routineId: safeOptionalString(),
@@ -112,6 +122,7 @@ export const WorkoutSessionSchema = z.object({
     cycleId: safeOptionalString(),
     cycleName: safeOptionalString(),
     cycleStrategy: TrainingCycleStrategySchema.optional().catch(undefined),
+    readiness: WorkoutReadinessSchema.optional().catch(undefined),
     date: safeOptionalString(),
     globalStartTime: safeOptionalNumber(),
     globalEndTime: safeOptionalNumber(),

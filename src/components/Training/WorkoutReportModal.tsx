@@ -210,7 +210,21 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
                 {/* Content */}
                 <div className="workout-report-content">
-                    
+                    {workout.readiness && (
+                        <section className="workout-report-phase" aria-labelledby={`${titleId}-before`}>
+                            <h2 id={`${titleId}-before`}>Prima della sessione</h2>
+                            <div className="workout-report-metrics">
+                                {workout.readiness.energy !== undefined && <span>Energia <strong>{workout.readiness.energy}/5</strong></span>}
+                                {workout.readiness.stress !== undefined && <span>Stress <strong>{workout.readiness.stress}/5</strong></span>}
+                                {workout.readiness.motivation !== undefined && <span>Motivazione <strong>{workout.readiness.motivation}/5</strong></span>}
+                                {workout.readiness.muscleRecovery !== undefined && <span>Recupero muscolare <strong>{workout.readiness.muscleRecovery}/5</strong></span>}
+                            </div>
+                        </section>
+                    )}
+
+                    <section className="workout-report-phase" aria-labelledby={`${titleId}-session`}>
+                        <h2 id={`${titleId}-session`}>Sessione</h2>
+
                     {/* Summary Cards */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -233,6 +247,8 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                              <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{report.exerciseComparisons.length}</span>
                         </div>
                     </div>
+
+                    </section>
 
                     {report.isFirstSession ? (
                         <div style={{
@@ -319,6 +335,17 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                 </div>
                             )}
                         </>
+                    )}
+                    {(workout.moodRating !== undefined || workout.pumpRating !== undefined || workout.fatigueRating !== undefined || workout.waterLiters !== undefined || (workout.pains?.length ?? 0) > 0) && (
+                        <section className="workout-report-phase" aria-labelledby={`${titleId}-after`}>
+                            <h2 id={`${titleId}-after`}>Dopo la sessione</h2>
+                            <div className="workout-report-metrics">
+                                {workout.moodRating !== undefined && workout.moodRating !== null && <span>Umore <strong>{workout.moodRating}/10</strong></span>}
+                                {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/10</strong></span>}
+                                {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/10</strong></span>}
+                                {workout.waterLiters !== undefined && <span>Acqua <strong>{workout.waterLiters} L</strong></span>}
+                            </div>
+                        </section>
                     )}
                 </div>
 

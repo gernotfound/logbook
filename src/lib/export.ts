@@ -125,7 +125,7 @@ export const Exporter = {
 
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
-        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";
+        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
 
         history.forEach(session => {
             const dateStr = session.globalStartTime
@@ -138,6 +138,11 @@ export const Exporter = {
             const pump = session.pumpRating || "";
             const fatigue = session.fatigueRating || "";
             const water = session.waterLiters !== undefined ? session.waterLiters : "";
+            const readiness = session.readiness || {};
+            const energy = readiness.energy ?? "";
+            const stress = readiness.stress ?? "";
+            const motivation = readiness.motivation ?? "";
+            const muscleRecovery = readiness.muscleRecovery ?? "";
 
             if (session.exercises && session.exercises.length > 0) {
                 session.exercises.forEach((ex: any) => {
@@ -156,7 +161,7 @@ export const Exporter = {
 
                             workoutCsv += this.formatCsvRow([
                                 dateStr, routineName, exName, idx + 1, reps, time, kg, distance, speed, incline, kcal,
-                                sessionDuration, mood, pump, fatigue, water
+                                sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                             ]);
 
                             if (set.dropsets && set.dropsets.length > 0) {
@@ -166,7 +171,7 @@ export const Exporter = {
                                     const label = set.dropsets.length > 1 ? `${idx + 1} (Dropset ${dsIdx + 1})` : `${idx + 1} (Dropset)`;
                                     workoutCsv += this.formatCsvRow([
                                         dateStr, routineName, exName, label, dsReps, "", dsKg, "", "", "", "",
-                                        sessionDuration, mood, pump, fatigue, water
+                                        sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
                             }
@@ -178,7 +183,7 @@ export const Exporter = {
                                     const label = set.isometrics.length > 1 ? `${idx + 1} (Isometria ${isoIdx + 1})` : `${idx + 1} (Isometria)`;
                                     workoutCsv += this.formatCsvRow([
                                         dateStr, routineName, exName, label, "", isoTime, isoKg, "", "", "", "",
-                                        sessionDuration, mood, pump, fatigue, water
+                                        sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
                             }
@@ -205,7 +210,7 @@ export const Exporter = {
             ]);
         });
 
-        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L)\n";
+        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
         if (workoutCsv !== workoutHeader) {
             this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
         } else {

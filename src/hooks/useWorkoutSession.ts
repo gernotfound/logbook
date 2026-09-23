@@ -12,7 +12,7 @@ import {
     prepareHistoricalWorkoutForSave,
 } from './workout/workoutSessionPreparation';
 import { mapFirebaseErrorCode } from '../lib/errorHandler';
-import type { WorkoutSession, WorkoutRoutine, Exercise } from '../types';
+import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from '../types';
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 
@@ -128,8 +128,6 @@ export function useWorkoutSession() {
             return;
         }
         
-        resetGlobalWorkoutTimer();
-
         const newActiveWorkout = buildRoutineWorkout(userData, routine, cycleInfo);
         mutateActiveWorkout(newActiveWorkout);
     }, [selectedRoutine, showAlert, mutateActiveWorkout]);
@@ -141,11 +139,32 @@ export function useWorkoutSession() {
             return;
         }
 
-        resetGlobalWorkoutTimer();
-
         const newActiveWorkout = buildFreeWorkout();
         mutateActiveWorkout(newActiveWorkout);
     }, [showAlert, mutateActiveWorkout]);
+
+    const confirmWorkoutStart = useCallback(async (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => {
+        const currentWorkout = useAppStore.getState().localWorkout;
+        if (!currentWorkout || currentWorkout.isEditingHistory) return false;
+        if (currentWorkout.globalStartTime) return true;
+
+        const startedAt = Date.now();
+        const hasReadiness = readiness && Object.values(readiness).some(value => value !== undefined);
+        const startedWorkout: WorkoutSession = {
+            ...currentWorkout,
+            globalStartTime: startedAt,
+            ...(hasReadiness ? { readiness: { capturedAt: startedAt, ...readiness } } : {}),
+        };
+
+        resetGlobalWorkoutTimer();
+        try {
+            const result = await setSyncedLocalWorkout(startedWorkout);
+            return result.ok;
+        } catch {
+            await showAlert('Impossibile iniziare la sessione: i dati non sono stati salvati.');
+            return false;
+        }
+    }, [setSyncedLocalWorkout, showAlert]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
         const currentLocal = useAppStore.getState().localWorkout;
@@ -302,6 +321,7 @@ export function useWorkoutSession() {
         pains, setPains, togglePain,
         startWorkout,
         startFreeWorkout,
+        confirmWorkoutStart,
         endWorkout,
         deleteWorkout,
         startEditHistoricalWorkout,

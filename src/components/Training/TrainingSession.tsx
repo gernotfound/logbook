@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { TrainingSessionSetup } from './TrainingSessionSetup';
 import { ActiveWorkoutSession } from './ActiveWorkoutSession';
+import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import type { WorkoutSession } from '../../types';
 
@@ -11,7 +12,7 @@ interface TrainingSessionProps {
 }
 
 const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
-    const { activeWorkout, history, library } = useWorkoutSession();
+    const { activeWorkout, history, library, confirmWorkoutStart } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
     const handleCloseReport = useCallback(() => {
         setReportWorkout(null);
@@ -28,6 +29,16 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 library={library}
                 fromEndWorkout
                 onClose={handleCloseReport}
+            />
+        );
+    }
+
+    if (activeWorkout && !activeWorkout.isEditingHistory && !activeWorkout.globalStartTime) {
+        return (
+            <PreSessionCheckIn
+                routineName={activeWorkout.routineName}
+                date={activeWorkout.date}
+                onStart={confirmWorkoutStart}
             />
         );
     }
