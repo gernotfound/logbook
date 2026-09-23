@@ -31,6 +31,23 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
     expect(bodyBlock).toMatch(/padding:\s*env\(safe-area-inset-top,\s*0px\).*calc\(var\(--nav-height\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*1rem\)/);
   });
 
+  it('uses one deterministic icon highlight layer and clears it when the active tab changes', () => {
+    const setActiveTab = vi.fn();
+    const { container, rerender } = render(<BottomNav activeTab="home" setActiveTab={setActiveTab} />);
+
+    expect(container.querySelectorAll('.nav-icon-shell')).toHaveLength(5);
+    expect(container.querySelectorAll('.nav-item.active')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Home' }).classList.contains('active')).toBe(true);
+
+    rerender(<BottomNav activeTab="data" setActiveTab={setActiveTab} />);
+    expect(container.querySelectorAll('.nav-item.active')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Home' }).classList.contains('active')).toBe(false);
+    expect(screen.getByRole('button', { name: /Dati/i }).classList.contains('active')).toBe(true);
+
+    expect(navCss).toMatch(/\.nav-item\.active\s+\.nav-icon-shell\s*\{/);
+    expect(navCss).not.toMatch(/\.nav-item\.active\s+svg\s*\{[^}]*background/);
+  });
+
   it('renders BottomNav with correct accessibility and tab switching', () => {
     const setActiveTab = vi.fn();
     render(<BottomNav activeTab="home" setActiveTab={setActiveTab} />);

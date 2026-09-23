@@ -71,7 +71,10 @@ const SettingsView = () => {
                 const reg = await navigator.serviceWorker.getRegistration();
                 if (reg) {
                     await reg.update();
-                    useDialogStore.getState().showAlert("Controllo aggiornamenti inviato. Se è disponibile una nuova versione, il banner di aggiornamento comparirà a breve in basso.");
+                    if (reg.waiting) {
+                        window.dispatchEvent(new Event('logbook:pwa-update-waiting'));
+                    }
+                    useDialogStore.getState().showAlert("Controllo aggiornamenti completato. Se è disponibile una nuova versione, il banner di aggiornamento comparirà in basso.");
                 } else {
                     useDialogStore.getState().showAlert("Nessun Service Worker trovato. Assicurati che l'app sia installata correttamente.");
                 }

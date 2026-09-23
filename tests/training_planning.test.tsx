@@ -219,8 +219,15 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.change(selectRoutine, { target: { value: 'r_push' } });
             fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
             fireEvent.click(screen.getByRole('button', { name: 'Performance' }));
-            fireEvent.change(screen.getByRole('combobox', { name: 'Aggiungi focus primario' }), { target: { value: 'quads' } });
-            fireEvent.change(screen.getByRole('combobox', { name: 'Aggiungi focus secondario' }), { target: { value: 'triceps' } });
+            const primarySearch = screen.getByRole('combobox', { name: 'Cerca focus primario' });
+            fireEvent.focus(primarySearch);
+            fireEvent.change(primarySearch, { target: { value: 'quadricipiti' } });
+            fireEvent.click(screen.getByRole('option', { name: 'Quadricipiti' }));
+
+            const secondarySearch = screen.getByRole('combobox', { name: 'Cerca focus secondario' });
+            fireEvent.focus(secondarySearch);
+            fireEvent.change(secondarySearch, { target: { value: 'tricipiti' } });
+            fireEvent.click(screen.getByRole('option', { name: 'Tricipiti' }));
 
             const saveBtn = screen.getByText(/Salva ciclo/i);
             fireEvent.click(saveBtn);
@@ -242,11 +249,11 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(screen.getByRole('button', { name: /Crea ciclo/i }));
 
             expect(screen.getByRole('group', { name: 'Intento del ciclo' })).toBeDefined();
-            const primarySelect = screen.getByRole('combobox', { name: 'Aggiungi focus primario' }) as HTMLSelectElement;
-            expect(primarySelect.disabled).toBe(true);
+            const primarySearch = screen.getByRole('combobox', { name: 'Cerca focus primario' }) as HTMLInputElement;
+            expect(primarySearch.disabled).toBe(true);
 
             fireEvent.click(screen.getByRole('button', { name: 'Mantenimento' }));
-            expect(primarySelect.disabled).toBe(false);
+            expect(primarySearch.disabled).toBe(false);
             expect(screen.queryByRole('group', { name: 'Focus principale della progressione' })).toBeNull();
 
             fireEvent.click(screen.getByRole('button', { name: 'Deload' }));

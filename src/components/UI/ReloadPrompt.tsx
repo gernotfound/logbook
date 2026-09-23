@@ -16,22 +16,23 @@ export const ReloadPrompt: React.FC = () => {
   } = useRegisterSW({
     onRegistered(r) {
       if (r && typeof r.update === 'function') {
-        // Controllo periodico degli aggiornamenti SW ogni 60 minuti
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-        intervalRef.current = setInterval(() => {
-          if (r && typeof r.update === 'function') {
-            try {
-              const updateRes = r.update();
-              if (updateRes && typeof updateRes.catch === 'function') {
-                updateRes.catch(err => console.log('SW periodic update error:', err));
-              }
-            } catch (err) {
-              console.log('SW periodic update synchronous error:', err);
+        const requestUpdate = () => {
+          try {
+            const updateRes = r.update();
+            if (updateRes && typeof updateRes.catch === 'function') {
+              updateRes.catch(err => console.log('SW update error:', err));
             }
+          } catch (err) {
+            console.log('SW update synchronous error:', err);
           }
-        }, 60 * 60 * 1000);
+        };
+
+        // Controlla subito: iOS/PWA può tenere aperta una build per molto tempo.
+        requestUpdate();
+
+        // Mantieni anche il controllo periodico come fallback.
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = setInterval(requestUpdate, 60 * 60 * 1000);
       }
     },
     onRegisterError(error) {
@@ -71,9 +72,14 @@ export const ReloadPrompt: React.FC = () => {
           navigator.serviceWorker.getRegistration().then(reg => {
             if (reg && typeof reg.update === 'function') {
               try {
+                if (reg.waiting) setNeedRefresh(true);
                 const updateRes = reg.update();
-                if (updateRes && typeof updateRes.catch === 'function') {
-                  updateRes.catch(err => console.log('SW visibility update error:', err));
+                if (updateRes && typeof updateRes.then === 'function') {
+                  updateRes
+                    .then(() => {
+                      if (reg.waiting) setNeedRefresh(true);
+                    })
+                    .catch(err => console.log('SW visibility update error:', err));
                 }
               } catch (err) {
                 console.log('SW visibility update synchronous error:', err);
@@ -89,7 +95,13 @@ export const ReloadPrompt: React.FC = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [setNeedRefresh]);
+
+  useEffect(() => {
+    const handleWaitingUpdate = () => setNeedRefresh(true);
+    window.addEventListener('logbook:pwa-update-waiting', handleWaitingUpdate);
+    return () => window.removeEventListener('logbook:pwa-update-waiting', handleWaitingUpdate);
+  }, [setNeedRefresh]);
 
   if (!needRefresh && !chunkFailed) {
     return null;

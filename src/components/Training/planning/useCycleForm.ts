@@ -66,7 +66,9 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             : String(initialCycle?.routines?.length || 4)
     );
     const [notes, setNotes] = useState(initialCycle?.notes || '');
-    const [strategyIntent, setStrategyIntent] = useState<TrainingCycleIntent | ''>(initialCycle?.strategy?.intent ?? '');
+    const [strategyIntent, setStrategyIntent] = useState<TrainingCycleIntent | '' | null>(
+        initialCycle ? (initialCycle.strategy?.intent ?? '') : null
+    );
     const [progressionFocus, setProgressionFocus] = useState<TrainingCycleProgressionFocus | ''>(initialCycle?.strategy?.progressionFocus ?? '');
     const [primaryMuscles, setPrimaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.primaryMuscles ?? [])]);
     const [secondaryMuscles, setSecondaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.secondaryMuscles ?? [])]);
@@ -283,7 +285,7 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             await showAlert("Aggiungi almeno una scheda al ciclo di allenamento.");
             return;
         }
-        if (!initialCycle && !strategyIntent) {
+        if (!initialCycle && strategyIntent === null) {
             await showAlert("Seleziona l'obiettivo del ciclo.");
             return;
         }
