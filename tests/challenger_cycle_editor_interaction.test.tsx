@@ -293,9 +293,11 @@ describe('Challenger 2 Empirical Verification: CycleEditor UI & Two-Way Binding'
         fireEvent.change(durationInput, { target: { value: '6' } });
 
         // Add 2 routines
-        const select = screen.getByRole('combobox');
+        const select = screen.getByRole('combobox', { name: 'Aggiungi scheda alla sequenza' });
         fireEvent.change(select, { target: { value: 'routine_1' } });
         fireEvent.change(select, { target: { value: 'routine_2' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Performance' }));
 
         // Submit form
         const form = container.querySelector('form')!;
@@ -362,7 +364,7 @@ describe('Challenger 2 Empirical Verification: CycleEditor UI & Two-Way Binding'
             />
         );
 
-        const select = screen.getByRole('combobox');
+        const select = screen.getByRole('combobox', { name: 'Aggiungi scheda alla sequenza' });
         fireEvent.change(select, { target: { value: 'routine_1' } });
         fireEvent.change(select, { target: { value: 'routine_2' } });
         fireEvent.change(select, { target: { value: 'routine_3' } });

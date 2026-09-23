@@ -22,7 +22,13 @@ describe('JSON Export/Import Logic', () => {
             profile: { dob: '2000-01-01' },
             library: [{ id: 'ex1', name: 'Panca', setsCount: 3, sets: [] }],
             routines: [{ id: 'r1', name: 'A', exercises: [] }],
-            trainingCycles: [{ id: 'c1', name: 'Ciclo 1', durationWeeks: 4, routines: [] }],
+            trainingCycles: [{
+                id: 'c1',
+                name: 'Ciclo 1',
+                durationWeeks: 4,
+                strategy: { intent: 'development', progressionFocus: 'volume', primaryMuscles: ['quads'] },
+                routines: []
+            }],
             history: [{ id: 'h1', date: '2023-01-01', routineName: 'A', exercises: [] }]
         };
 
@@ -42,6 +48,11 @@ describe('JSON Export/Import Logic', () => {
         expect(parsed.userData.library.length).toBe(1);
         expect(parsed.userData.history).toBeUndefined();
         expect(parsed.userData.profile).toBeUndefined();
+        expect(parsed.userData.trainingCycles[0].strategy).toEqual({
+            intent: 'development',
+            progressionFocus: 'volume',
+            primaryMuscles: ['quads']
+        });
     });
 
     it('exportBackupJson contains all fields, owner and independent versions', async () => {

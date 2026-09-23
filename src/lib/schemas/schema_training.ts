@@ -98,12 +98,20 @@ export const SessionExerciseSchema = z.object({
     maxReps: safeOptionalNumber(),
 }).passthrough().catch({ exId: '', sessionNote: '', sets: [] }).default({ exId: '', sessionNote: '', sets: [] });
 
+export const TrainingCycleStrategySchema = z.object({
+    intent: z.enum(['development', 'maintenance', 'deload']),
+    progressionFocus: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
+    primaryMuscles: z.array(z.string().trim().min(1)).optional().catch([]),
+    secondaryMuscles: z.array(z.string().trim().min(1)).optional().catch([]),
+}).passthrough();
+
 export const WorkoutSessionSchema = z.object({
     id: safeOptionalString(),
     routineId: safeOptionalString(),
     routineName: safeOptionalString(),
     cycleId: safeOptionalString(),
     cycleName: safeOptionalString(),
+    cycleStrategy: TrainingCycleStrategySchema.optional().catch(undefined),
     date: safeOptionalString(),
     globalStartTime: safeOptionalNumber(),
     globalEndTime: safeOptionalNumber(),
@@ -141,6 +149,7 @@ export const TrainingCycleSchema = z.object({
     startDate: safeOptionalString(),
     endDate: safeOptionalString(),
     notes: safeOptionalString(),
+    strategy: TrainingCycleStrategySchema.optional().catch(undefined),
     routines: z.array(TrainingCycleRoutineItemSchema).catch([]).default([]),
     createdAt: safeOptionalNumber(),
     isActive: safeOptionalBoolean(),

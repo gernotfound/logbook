@@ -6,16 +6,21 @@ import { Logic } from '../../../lib/logic';
 import { CycleEditor } from './CycleEditor';
 import { CycleCard } from './CycleCard';
 import { CycleMuscleMap } from './CycleMuscleMap';
-import type { TrainingCycle, WorkoutRoutine, Exercise } from '../../../types';
+import { CycleStrategySummary } from './CycleStrategySummary';
+import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const EMPTY_CYCLES: TrainingCycle[] = [];
+const EMPTY_HISTORY: WorkoutSession[] = [];
 
 export default function TrainingPlanning() {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
+    const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
+    const activeWorkout = useAppStore(state => state.userData?.activeWorkout ?? null);
+    const localWorkout = useAppStore(state => state.localWorkout);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
@@ -29,6 +34,14 @@ export default function TrainingPlanning() {
         if (!activeCycleId) return null;
         return trainingCycles.find(c => c.id === activeCycleId) || null;
     }, [trainingCycles, activeCycleId]);
+
+    const editingCycleHasRecordedSessions = useMemo(() => {
+        if (!editingCycle) return false;
+        const cycleId = editingCycle.id;
+        return history.some(workout => workout.cycleId === cycleId)
+            || localWorkout?.cycleId === cycleId
+            || activeWorkout?.cycleId === cycleId;
+    }, [activeWorkout, editingCycle, history, localWorkout]);
 
     // Volume and muscle mapping for active cycle
     const cycleVolumeData = useMemo(() => {
@@ -159,6 +172,7 @@ export default function TrainingPlanning() {
                     library={library}
                     onSave={handleSaveCycle}
                     onCancel={handleCancelEditor}
+                    hasRecordedSessions={editingCycleHasRecordedSessions}
                 />
             )}
 
@@ -174,6 +188,7 @@ export default function TrainingPlanning() {
                                 <span style={{ fontSize: '0.95rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
                                     {activeCycle.durationWeeks} settimane
                                 </span>
+                                <CycleStrategySummary strategy={activeCycle.strategy} />
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                                     {cycleVolumeData.totalWorkoutsPerWeek} sessioni • {cycleVolumeData.totalSetsPerWeek} serie / sett.
                                 </div>

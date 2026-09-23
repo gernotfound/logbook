@@ -103,6 +103,8 @@ export interface WorkoutSession {
     routineName?: string;
     cycleId?: string;
     cycleName?: string;
+    // Snapshot captured when the session starts. Absence means the historical intent was unspecified.
+    cycleStrategy?: TrainingCycleStrategy;
     date?: string;
     globalStartTime?: number;
     globalEndTime?: number;
@@ -207,6 +209,16 @@ export interface Food {
     cholesterol?: number | null;
 }
 
+export type TrainingCycleIntent = 'development' | 'maintenance' | 'deload';
+export type TrainingCycleProgressionFocus = 'performance' | 'volume' | 'density' | 'execution';
+
+export interface TrainingCycleStrategy {
+    intent: TrainingCycleIntent;
+    progressionFocus?: TrainingCycleProgressionFocus;
+    primaryMuscles?: string[];
+    secondaryMuscles?: string[];
+}
+
 export interface TrainingCycleRoutineItem {
     routineId: string;
     frequencyPerWeek: number; // es. 1, 2, 3
@@ -221,6 +233,7 @@ export interface TrainingCycle {
     startDate?: string; // es. YYYY-MM-DD
     endDate?: string; // es. YYYY-MM-DD
     notes?: string;
+    strategy?: TrainingCycleStrategy;
     routines: TrainingCycleRoutineItem[];
     createdAt?: number;
     isActive?: boolean;

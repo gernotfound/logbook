@@ -36,6 +36,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
 
             <div className="mb-12">
                 <select
+                    aria-label="Aggiungi scheda alla sequenza"
                     onChange={e => {
                         if (e.target.value) {
                             onAdd(e.target.value);

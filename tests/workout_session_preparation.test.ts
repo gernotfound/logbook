@@ -34,6 +34,11 @@ describe('workout session preparation', () => {
                 id: 'cycle-a',
                 name: 'Cycle A',
                 durationWeeks: 4,
+                strategy: {
+                    intent: 'development',
+                    progressionFocus: 'performance',
+                    primaryMuscles: ['chest'],
+                },
                 routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }],
             }],
             library: [
@@ -49,6 +54,11 @@ describe('workout session preparation', () => {
             routineName: 'Routine A',
             cycleId: 'cycle-a',
             cycleName: 'Cycle A',
+            cycleStrategy: {
+                intent: 'development',
+                progressionFocus: 'performance',
+                primaryMuscles: ['chest'],
+            },
             date: '2026-09-16',
             globalStartTime: 1_700_000_000_000,
         });
@@ -56,6 +66,30 @@ describe('workout session preparation', () => {
         expect(workout.exercises[1].sets).toHaveLength(2);
         expect(workout.exercises[1].sets.every(set => set.dropsets?.length === 1)).toBe(true);
         expect(workout.exercises[1]).toMatchObject({ minReps: 6, maxReps: 8 });
+    });
+
+    it('snapshots cycle strategy so later edits do not rewrite historical session meaning', () => {
+        const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
+        const userData: UserData = {
+            activeCycleId: 'cycle-a',
+            trainingCycles: [{
+                id: 'cycle-a',
+                name: 'Cycle A',
+                durationWeeks: 4,
+                strategy: { intent: 'development', progressionFocus: 'performance' },
+                routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }],
+            }],
+        };
+
+        const firstSession = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+        userData.trainingCycles![0] = {
+            ...userData.trainingCycles![0],
+            strategy: { intent: 'development', progressionFocus: 'volume' },
+        };
+        const secondSession = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(firstSession.cycleStrategy).toEqual({ intent: 'development', progressionFocus: 'performance' });
+        expect(secondSession.cycleStrategy).toEqual({ intent: 'development', progressionFocus: 'volume' });
     });
 
     it('lets explicit cycle info override active-cycle inference and builds free workouts deterministically', () => {

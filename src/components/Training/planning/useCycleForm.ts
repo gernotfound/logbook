@@ -5,7 +5,14 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { addDays, differenceInCalendarDays, parseISO, format, isValid, startOfDay } from 'date-fns';
 import { Logic } from '../../../lib/logic';
-import type { TrainingCycle, WorkoutRoutine, TrainingCycleRoutineItem } from '../../../types';
+import type {
+    TrainingCycle,
+    TrainingCycleIntent,
+    TrainingCycleProgressionFocus,
+    TrainingCycleRoutineItem,
+    TrainingCycleStrategy,
+    WorkoutRoutine,
+} from '../../../types';
 
 function computeEndDate(startIso: string, weeks: number): string {
     try {
@@ -59,6 +66,10 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             : String(initialCycle?.routines?.length || 4)
     );
     const [notes, setNotes] = useState(initialCycle?.notes || '');
+    const [strategyIntent, setStrategyIntent] = useState<TrainingCycleIntent | ''>(initialCycle?.strategy?.intent ?? '');
+    const [progressionFocus, setProgressionFocus] = useState<TrainingCycleProgressionFocus | ''>(initialCycle?.strategy?.progressionFocus ?? '');
+    const [primaryMuscles, setPrimaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.primaryMuscles ?? [])]);
+    const [secondaryMuscles, setSecondaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.secondaryMuscles ?? [])]);
     const [cycleRoutines, setCycleRoutines] = useState<TrainingCycleRoutineItem[]>(
         initialCycle?.routines ? structuredClone(initialCycle.routines) : []
     );
@@ -81,6 +92,10 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
                     : String(initialCycle.routines?.length || 4)
             );
             setNotes(initialCycle.notes || '');
+            setStrategyIntent(initialCycle.strategy?.intent ?? '');
+            setProgressionFocus(initialCycle.strategy?.progressionFocus ?? '');
+            setPrimaryMuscles([...(initialCycle.strategy?.primaryMuscles ?? [])]);
+            setSecondaryMuscles([...(initialCycle.strategy?.secondaryMuscles ?? [])]);
             setCycleRoutines(initialCycle.routines ? structuredClone(initialCycle.routines) : []);
         }
     }, [initialCycle]);
@@ -228,6 +243,34 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         setCycleRoutines(prev => prev.filter((_, i) => i !== index));
     };
 
+    const handleStrategyIntentChange = (intent: TrainingCycleIntent | '') => {
+        setStrategyIntent(intent);
+        if (intent !== 'development') setProgressionFocus('');
+        if (!intent) {
+            setPrimaryMuscles([]);
+            setSecondaryMuscles([]);
+        }
+    };
+
+    const handleAddPriorityMuscle = (priority: 'primary' | 'secondary', muscleId: string) => {
+        if (!muscleId) return;
+        if (priority === 'primary') {
+            setPrimaryMuscles(prev => prev.includes(muscleId) ? prev : [...prev, muscleId]);
+            setSecondaryMuscles(prev => prev.filter(id => id !== muscleId));
+            return;
+        }
+        setSecondaryMuscles(prev => prev.includes(muscleId) ? prev : [...prev, muscleId]);
+        setPrimaryMuscles(prev => prev.filter(id => id !== muscleId));
+    };
+
+    const handleRemovePriorityMuscle = (priority: 'primary' | 'secondary', muscleId: string) => {
+        if (priority === 'primary') {
+            setPrimaryMuscles(prev => prev.filter(id => id !== muscleId));
+            return;
+        }
+        setSecondaryMuscles(prev => prev.filter(id => id !== muscleId));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmedName = name.trim();
@@ -245,16 +288,26 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         const freqPerWeek = Math.max(1, parseInt(sessionsPerWeek, 10) || cycleRoutines.length);
         const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
         const validEndDate = Logic.parseDateInput(endDateTextInput) || endDate || (validStartDate ? computeEndDate(validStartDate, weeks) : undefined);
+        const editableStrategy: TrainingCycleStrategy | undefined = strategyIntent
+            ? {
+                intent: strategyIntent,
+                ...(strategyIntent === 'development' && progressionFocus ? { progressionFocus } : {}),
+                ...(primaryMuscles.length ? { primaryMuscles: [...primaryMuscles] } : {}),
+                ...(secondaryMuscles.length ? { secondaryMuscles: [...secondaryMuscles] } : {}),
+            }
+            : undefined;
+        const strategy = editableStrategy;
 
         const cycle: TrainingCycle = {
             id: initialCycle?.id || Logic.generateId('cycle'),
             name: trimmedName,
             durationWeeks: weeks,
             sessionsPerWeek: freqPerWeek,
-            progressionMode: 'sequential',
+            progressionMode: initialCycle?.progressionMode ?? 'sequential',
             startDate: validStartDate,
             endDate: validEndDate,
             notes: notes.trim(),
+            ...(strategy ? { strategy } : {}),
             routines: cycleRoutines,
             createdAt: initialCycle?.createdAt || Date.now(),
             isActive: initialCycle?.isActive ?? false
@@ -301,6 +354,10 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             durationWeeks, setDurationWeeks,
             sessionsPerWeek, setSessionsPerWeek,
             notes, setNotes,
+            strategyIntent,
+            progressionFocus, setProgressionFocus,
+            primaryMuscles,
+            secondaryMuscles,
             cycleRoutines, setCycleRoutines,
             showSchedulePreview, setShowSchedulePreview,
             tempWeeks, tempFreq
@@ -319,6 +376,9 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             handleAddRoutineById,
             handleMoveRoutine,
             handleRemoveRoutine,
+            handleStrategyIntentChange,
+            handleAddPriorityMuscle,
+            handleRemovePriorityMuscle,
             handleSubmit
         }
     };
