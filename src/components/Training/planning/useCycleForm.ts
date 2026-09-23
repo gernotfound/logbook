@@ -66,8 +66,8 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             : String(initialCycle?.routines?.length || 4)
     );
     const [notes, setNotes] = useState(initialCycle?.notes || '');
-    const [strategyIntent, setStrategyIntent] = useState<TrainingCycleIntent | '' | null>(
-        initialCycle ? (initialCycle.strategy?.intent ?? '') : null
+    const [strategyIntent, setStrategyIntent] = useState<TrainingCycleIntent | ''>(
+        initialCycle?.strategy?.intent ?? ''
     );
     const [progressionFocus, setProgressionFocus] = useState<TrainingCycleProgressionFocus | ''>(initialCycle?.strategy?.progressionFocus ?? '');
     const [primaryMuscles, setPrimaryMuscles] = useState<string[]>([...(initialCycle?.strategy?.primaryMuscles ?? [])]);
@@ -248,10 +248,6 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
     const handleStrategyIntentChange = (intent: TrainingCycleIntent | '') => {
         setStrategyIntent(intent);
         if (intent !== 'development') setProgressionFocus('');
-        if (!intent) {
-            setPrimaryMuscles([]);
-            setSecondaryMuscles([]);
-        }
     };
 
     const handleAddPriorityMuscle = (priority: 'primary' | 'secondary', muscleId: string) => {
@@ -285,10 +281,6 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
             await showAlert("Aggiungi almeno una scheda al ciclo di allenamento.");
             return;
         }
-        if (!initialCycle && strategyIntent === null) {
-            await showAlert("Seleziona l'obiettivo del ciclo.");
-            return;
-        }
         if (strategyIntent === 'development' && !progressionFocus) {
             await showAlert("Seleziona cosa vuoi far progredire principalmente.");
             return;
@@ -298,9 +290,10 @@ export function useCycleForm({ initialCycle, routines, onSave, showAlert }: UseC
         const freqPerWeek = Math.max(1, parseInt(sessionsPerWeek, 10) || cycleRoutines.length);
         const validStartDate = Logic.parseDateInput(dateTextInput) || startDate || undefined;
         const validEndDate = Logic.parseDateInput(endDateTextInput) || endDate || (validStartDate ? computeEndDate(validStartDate, weeks) : undefined);
-        const editableStrategy: TrainingCycleStrategy | undefined = strategyIntent
+        const hasStrategyDetails = Boolean(strategyIntent || primaryMuscles.length || secondaryMuscles.length);
+        const editableStrategy: TrainingCycleStrategy | undefined = hasStrategyDetails
             ? {
-                intent: strategyIntent,
+                ...(strategyIntent ? { intent: strategyIntent } : {}),
                 ...(strategyIntent === 'development' && progressionFocus ? { progressionFocus } : {}),
                 ...(primaryMuscles.length ? { primaryMuscles: [...primaryMuscles] } : {}),
                 ...(secondaryMuscles.length ? { secondaryMuscles: [...secondaryMuscles] } : {}),

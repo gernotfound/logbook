@@ -19,6 +19,50 @@ describe('training cycle strategy schema', () => {
         expect(parsed.strategy).toBeUndefined();
     });
 
+    it('accepts muscle priorities with an unspecified objective', () => {
+        const parsed = TrainingCycleSchema.parse({
+            ...baseCycle,
+            strategy: {
+                primaryMuscles: ['biceps_right'],
+                secondaryMuscles: ['delts_rear_left'],
+            },
+        });
+
+        expect(parsed.strategy).toEqual({
+            primaryMuscles: ['biceps_right'],
+            secondaryMuscles: ['delts_rear_left'],
+        });
+    });
+
+    it('preserves unspecified muscle priorities through export, backup and merge', () => {
+        const cycle: TrainingCycle = {
+            ...baseCycle,
+            strategy: {
+                primaryMuscles: ['biceps_right'],
+                secondaryMuscles: ['delts_rear_left'],
+            },
+        };
+        const data: UserData = {
+            library: [],
+            routines: [],
+            trainingCycles: [cycle],
+        };
+
+        const shared = buildShareExportData(data, {
+            exportLibrary: false,
+            exportRoutines: false,
+            exportTrainingCycles: true,
+        });
+        expect(shared.trainingCycles[0].strategy).toEqual(cycle.strategy);
+
+        const backup = createBackup(data, 'owner-1');
+        const decoded = decodeImport(JSON.parse(JSON.stringify(backup)), 'owner-1');
+        expect((decoded.data.trainingCycles as TrainingCycle[])[0].strategy).toEqual(cycle.strategy);
+
+        const merged = mergeUserData({ trainingCycles: [] }, data);
+        expect(merged.trainingCycles?.[0]?.strategy).toEqual(cycle.strategy);
+    });
+
     it.each([
         ['performance'],
         ['volume'],

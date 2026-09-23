@@ -249,11 +249,15 @@ describe('Training Planning & Volume Calculations', () => {
             fireEvent.click(screen.getByRole('button', { name: /Crea ciclo/i }));
 
             expect(screen.getByRole('group', { name: 'Intento del ciclo' })).toBeDefined();
+            const unspecified = screen.getByRole('button', { name: 'Non specificato' });
+            expect(unspecified.getAttribute('aria-pressed')).toBe('true');
+
             const primarySearch = screen.getByRole('combobox', { name: 'Cerca focus primario' }) as HTMLInputElement;
-            expect(primarySearch.disabled).toBe(true);
+            expect(primarySearch.disabled).toBe(false);
+            fireEvent.focus(primarySearch);
+            expect(screen.getByRole('listbox', { name: 'Risultati focus primario' })).toBeDefined();
 
             fireEvent.click(screen.getByRole('button', { name: 'Mantenimento' }));
-            expect(primarySearch.disabled).toBe(false);
             expect(screen.queryByRole('group', { name: 'Focus principale della progressione' })).toBeNull();
 
             fireEvent.click(screen.getByRole('button', { name: 'Deload' }));
