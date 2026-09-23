@@ -38,6 +38,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
 
             let localWorkout: WorkoutSession | null = {
                 id: 'w_combo_1',
+                globalStartTime: 1,
                 routineName: 'Chest Day',
                 exercises: [{ exId: 'ex_bench', sessionNote: 'Heavy', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
             };
