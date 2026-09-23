@@ -24,7 +24,7 @@
     "test:integration": "vitest run tests/",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:isolated": "vitest run --config vitest.isolated.config.ts",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-logbook-audit --config firebase.emulator.json \"vitest run --config vitest.emulator.config.ts\"",
+    "test:rules": "node scripts/run-firestore-rules-tests.mjs",
     "test:coverage": "vitest run --coverage",
     "test:no-skips": "node scripts/check-test-skips.mjs",
     "test:typecheck:m5": "tsc --noEmit -p tsconfig.m5-tests.json",
@@ -69,6 +69,9 @@
     "@babel/plugin-transform-runtime": "^7.29.0",
     "jwks-rsa": {
       "jose": "5.10.0"
+    },
+    "gaxios": {
+      "uuid": "^11.1.1"
     }
   },
   "devDependencies": {
@@ -82,7 +85,6 @@
     "@vitest/coverage-v8": "^4.1.11",
     "@vitest/ui": "^4.1.11",
     "fake-indexeddb": "6.2.5",
-    "firebase-tools": "15.30.2",
     "jsdom": "^30.1.0",
     "oxlint": "^1.83.0",
     "rollup-plugin-visualizer": "^7.1.1",
