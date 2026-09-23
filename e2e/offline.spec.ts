@@ -38,6 +38,7 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 7. Inizia l'allenamento
     await page.locator('#view-training').getByRole('button', { name: 'Inizia allenamento', exact: true }).click();
+    await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
     await expect(page.locator('button:has-text("Termina")')).toBeVisible();
 
     // 8. Vai offline
