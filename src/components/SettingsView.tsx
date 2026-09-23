@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
-import { getAnalyticsConsent, setAnalyticsConsent } from '../lib/firebase';
+import { getAnalyticsConsent, setAnalyticsConsent } from '../lib/analyticsConsent';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { PrivacySettingsTab } from './Settings/PrivacySettingsTab';

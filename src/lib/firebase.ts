@@ -1,5 +1,4 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics, isSupported, setAnalyticsCollectionEnabled, type Analytics } from "firebase/analytics";
 import {
     getAuth,
     GoogleAuthProvider,
@@ -37,8 +36,7 @@ const envVars: Record<string, string | undefined> = {
     'VITE_FIREBASE_PROJECT_ID': import.meta.env.VITE_FIREBASE_PROJECT_ID,
     'VITE_FIREBASE_STORAGE_BUCKET': import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     'VITE_FIREBASE_MESSAGING_SENDER_ID': import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    'VITE_FIREBASE_APP_ID': import.meta.env.VITE_FIREBASE_APP_ID,
-    'VITE_FIREBASE_MEASUREMENT_ID': import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+    'VITE_FIREBASE_APP_ID': import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const missingEnvVars = Object.entries(envVars)
@@ -56,8 +54,7 @@ const firebaseConfig = {
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -109,66 +106,6 @@ export const ensureAppCheck = (): Promise<AppCheckResult> => {
     return appCheckPromise;
 };
 
-// Analytics is initialized lazily and only while consent is active. Consumers
-// await getConsentedAnalytics() instead of treating a mutable module binding as a
-// readiness signal, so the first SPA event can wait for isSupported().
-let analytics: Analytics | null = null;
-let analyticsInstance: Analytics | null = null;
-let analyticsInitPromise: Promise<Analytics | null> | null = null;
-let currentAnalyticsConsent = false;
-try {
-    currentAnalyticsConsent = typeof localStorage !== 'undefined' && localStorage.getItem('logbook_analytics_consent') === 'true';
-} catch {
-    // Unreadable consent defaults to disabled collection.
-}
-
-const enableConsentedAnalytics = (): Promise<Analytics | null> => {
-    if (!currentAnalyticsConsent) return Promise.resolve(null);
-
-    if (analyticsInstance) {
-        try {
-            setAnalyticsCollectionEnabled(analyticsInstance, true);
-            analytics = analyticsInstance;
-            return Promise.resolve(analyticsInstance);
-        } catch (err) {
-            console.warn('Firebase Analytics non supportato o disabilitato:', err);
-            return Promise.resolve(null);
-        }
-    }
-
-    if (!analyticsInitPromise) {
-        const inFlight = (async (): Promise<Analytics | null> => {
-            try {
-                const supported = await isSupported();
-                // Consent can change while the asynchronous capability check is in flight.
-                if (!supported || !currentAnalyticsConsent) return null;
-                analyticsInstance ??= getAnalytics(app);
-                if (!currentAnalyticsConsent) return null;
-                setAnalyticsCollectionEnabled(analyticsInstance, true);
-                analytics = analyticsInstance;
-                return analyticsInstance;
-            } catch (err) {
-                console.warn('Firebase Analytics non supportato o disabilitato:', err);
-                return null;
-            }
-        })();
-        analyticsInitPromise = inFlight;
-        void inFlight.finally(() => {
-            if (analyticsInitPromise === inFlight) analyticsInitPromise = null;
-        });
-    }
-
-    return analyticsInitPromise;
-};
-
-export const getConsentedAnalytics = async (): Promise<Analytics | null> => {
-    if (!currentAnalyticsConsent) return null;
-    const instance = await enableConsentedAnalytics();
-    return currentAnalyticsConsent ? instance : null;
-};
-
-if (currentAnalyticsConsent) void enableConsentedAnalytics();
-
 let _db: ReturnType<typeof initializeFirestore> | null = null;
 export const getDb = () => {
     if (!_db) {
@@ -188,23 +125,6 @@ provider.setCustomParameters({ prompt: 'select_account' });
 setPersistence(auth, browserLocalPersistence)
     .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
-export const getAnalyticsConsent = () => currentAnalyticsConsent;
-
-export const setAnalyticsConsent = (consent: boolean) => {
-    currentAnalyticsConsent = consent;
-    if (!consent) {
-        if (analyticsInstance) setAnalyticsCollectionEnabled(analyticsInstance, false);
-        analytics = null;
-    } else {
-        void enableConsentedAnalytics();
-    }
-    try {
-        localStorage.setItem('logbook_analytics_consent', consent ? 'true' : 'false');
-    } catch (err) {
-        console.warn('Impossibile memorizzare la preferenza Analytics:', err);
-    }
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('analytics_consent_changed'));
-};
 export {
     auth,
     provider,
@@ -224,6 +144,5 @@ export {
     signOut,
     onAuthStateChanged,
     waitForPendingWrites,
-    deleteUser,
-    analytics
+    deleteUser
 };

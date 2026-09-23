@@ -12,7 +12,6 @@ Object.assign(process.env, {
   VITE_FIREBASE_STORAGE_BUCKET: 'dummy-bucket.appspot.com',
   VITE_FIREBASE_MESSAGING_SENDER_ID: '1234567890',
   VITE_FIREBASE_APP_ID: '1:1234567890:web:123456',
-  VITE_FIREBASE_MEASUREMENT_ID: 'G-12345',
   VITE_FIREBASE_DATABASE_URL: 'https://demo-logbook-audit.firebaseio.com',
   VITE_RECAPTCHA_V3_SITE_KEY: 'dummy-recaptcha-key',
 });

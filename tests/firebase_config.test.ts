@@ -11,8 +11,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         'VITE_FIREBASE_PROJECT_ID',
         'VITE_FIREBASE_STORAGE_BUCKET',
         'VITE_FIREBASE_MESSAGING_SENDER_ID',
-        'VITE_FIREBASE_APP_ID',
-        'VITE_FIREBASE_MEASUREMENT_ID'
+        'VITE_FIREBASE_APP_ID'
     ] as const;
 
     beforeEach(() => {
@@ -50,7 +49,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(fileContent).not.toMatch(/logbook-prod/);
         });
 
-        it('declares all 8 required VITE_FIREBASE_* environment variables', () => {
+        it('declares all 7 required VITE_FIREBASE_* environment variables', () => {
             const firebaseFilePath = path.resolve(__dirname, '../src/lib/firebase.ts');
             const fileContent = fs.readFileSync(firebaseFilePath, 'utf-8');
 
@@ -58,6 +57,19 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
                 expect(fileContent).toContain(`'${key}'`);
                 expect(fileContent).toContain(`import.meta.env.${key}`);
             }
+        });
+
+        it('does not initialize or allowlist Google/Firebase Analytics', () => {
+            const firebaseSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebase.ts'), 'utf-8');
+            const appSource = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf-8');
+            const vercelConfig = fs.readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf-8');
+
+            expect(firebaseSource).not.toContain('firebase/analytics');
+            expect(firebaseSource).not.toContain('measurementId');
+            expect(firebaseSource).not.toContain('VITE_FIREBASE_MEASUREMENT_ID');
+            expect(appSource).not.toContain('firebase/analytics');
+            expect(vercelConfig).not.toContain('google-analytics.com');
+            expect(vercelConfig).not.toContain('googletagmanager.com');
         });
     });
 
@@ -94,7 +106,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             );
         });
 
-        it('throws descriptive error listing all 8 variables when none are defined', async () => {
+        it('throws descriptive error listing all 7 variables when none are defined', async () => {
             for (const key of requiredEnvKeys) {
                 delete (import.meta.env as any)[key];
             }
@@ -102,7 +114,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_DATABASE_URL, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_DATABASE_URL, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID/
             );
         });
 

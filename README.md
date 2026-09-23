@@ -76,8 +76,7 @@ La sorgente approvata dell'icona [LB] viene processata da `scripts/resize_icons.
 Sono sistemi distinti:
 
 - **telemetria tecnica LogBook:** errori/eventi sanitizzati per stabilità e diagnostica; per un account autenticato può essere collegata all'UID tecnico dell'utente e non viene descritta come anonima;
-- **Firebase Analytics:** opt-in, inizializzazione lazy e consent-aware;
-- **Vercel Analytics + Speed Insights:** renderizzati soltanto quando l'utente abilita l'opt-in Analytics.
+- **Vercel Analytics + Speed Insights:** renderizzati soltanto quando l'utente abilita l'opt-in Analytics. Google/Firebase Analytics non viene utilizzato.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.
 
@@ -116,7 +115,7 @@ npm run dev
 
 `.env.example` contiene soltanto **nomi e placeholder**. Non contiene credenziali reali.
 
-Il client richiede le otto variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. Per collegare un clone a servizi cloud reali occorre una configurazione Firebase propria o un ambiente autorizzato.
+Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. Per collegare un clone a servizi cloud reali occorre una configurazione Firebase propria o un ambiente autorizzato.
 
 Le API trusted di account deletion usano inoltre variabili **server-only**:
 

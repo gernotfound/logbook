@@ -2,7 +2,7 @@
 
 > Stato: guida tecnica stabile | Ultima verifica: 2026-09-20 | Fonti eseguibili: `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `firestore.rules`.
 
-Questa guida descrive la telemetria tecnica proprietaria di LogBook. Non va confusa con Firebase Analytics, Vercel Analytics o Speed Insights, che sono sistemi separati e subordinati all'opt-in Analytics dell'utente.
+Questa guida descrive la telemetria tecnica proprietaria di LogBook. Non va confusa con Vercel Analytics o Speed Insights, che sono sistemi separati e subordinati all'opt-in Analytics dell'utente. Google/Firebase Analytics non viene utilizzato.
 
 ## Modello dati
 

@@ -47,11 +47,11 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
-- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `analytics`, `app-check`).
+- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `app-check`).
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** telemetria tecnica LogBook su Firestore, `@vercel/analytics`, `@vercel/speed-insights`, Firebase Analytics.
+- **Monitoring:** telemetria tecnica LogBook su Firestore, `@vercel/analytics`, `@vercel/speed-insights`. Google/Firebase Analytics non fa parte del prodotto.
 - **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
 
 ## File canonici del modello dati
@@ -144,7 +144,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 
 Esistono tre contratti separati:
 
-1. **Client Firebase:** otto env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
+1. **Client Firebase:** sette env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`; i nomi V3 legacy restano solo fallback transitori.
 3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
 
@@ -154,7 +154,7 @@ Esistono tre contratti separati:
 
 - Provider canonico: `ReCaptchaEnterpriseProvider`.
 - Il provider viene bootstrap-pato prima di Firestore; il token è acquisito separatamente e può essere ritentato dopo failure.
-- `firebase/app-check` non espone l'`isSupported` di Analytics; il support check è manuale.
+- Il support check App Check è manuale (`window.crypto`, `window.fetch`); non dipende da Firebase Analytics.
 - **MUST:** un `permission-denied` di sync resta `rejected` finché non è stata discriminata la causa; non etichettare genericamente Rules/Auth/App Check senza evidenza.
 
 ### Firestore Rules
@@ -180,11 +180,10 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 ## Telemetria, Analytics e privacy
 
-Distinguere tre sistemi:
+Distinguere due sistemi:
 
 1. **Telemetria tecnica LogBook:** errori/eventi applicativi sanitizzati; per utenti autenticati può includere UID tecnico, session ID, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Viene scritta nelle raccolte private dell'utente e non va descritta come “anonima”.
-2. **Firebase Analytics:** inizializzazione lazy e consent-aware tramite `getConsentedAnalytics()`.
-3. **Vercel Analytics / Speed Insights:** renderizzati solo quando il medesimo opt-in analytics è attivo.
+2. **Vercel Analytics / Speed Insights:** renderizzati solo quando l'opt-in analytics è attivo. Google/Firebase Analytics non viene inizializzato né usato.
 
 - **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute.
