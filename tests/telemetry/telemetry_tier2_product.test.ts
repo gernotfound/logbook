@@ -219,7 +219,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
           injected_field: 'malicious',
         };
 
-        const allowedKeys = new Set(['timestamp', 'type', 'message', 'stack', 'context', 'userId', 'sessionId', 'count', 'firstSeen', 'lastSeen', 'source', 'componentStack']);
+        const allowedKeys = new Set(['timestamp', 'type', 'message', 'stack', 'context', 'userId', 'sessionId', 'count', 'firstSeen', 'lastSeen', 'source', 'componentStack', 'expireAt']);
         const isPermitted = Object.keys(payloadWithInjected).every((k) => allowedKeys.has(k));
         expect(isPermitted).toBe(false);
       });

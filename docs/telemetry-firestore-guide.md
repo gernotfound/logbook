@@ -12,6 +12,8 @@ La telemetria cloud è owner-scoped sotto l'utente Firebase autenticato:
 - `users/{uid}/telemetry_events/{eventId}` — eventi tecnici/operativi;
 - `users/{uid}/telemetry_anomalies/{eventId}` — anomalie di persistenza specifiche.
 
+I nuovi documenti includono `expireAt` come timestamp Firestore: 30 giorni da `lastSeen` per gli errori aggregati e 30 giorni da `timestamp` per eventi/anomalie. Il maintenance cron server-side usa questo campo per eliminare automaticamente la telemetria scaduta con Firebase Admin.
+
 Il payload cloud include l'UID tecnico dell'utente autenticato e un `sessionId`. Per questo la telemetria **non è anonima**: è pseudonimizzata e tecnicamente collegabile all'account.
 
 ### Errori
@@ -70,6 +72,12 @@ Questa semantica è intenzionale: non documentare più un automatico “guest te
 - backoff scheduler: da 1 secondo fino a 30 secondi.
 
 Gli errori sono aggregati per hash deterministico di tipo + messaggio sanitizzato. Gli eventi sono append-only secondo le Rules; gli errori ammettono soltanto gli aggiornamenti monotoni previsti dal contratto.
+
+## Retention e maintenance cron
+
+Le Security Rules richiedono `expireAt` su ogni nuova scrittura di telemetria client. I client PWA obsoleti che non inviano il campo vengono quindi rifiutati soltanto sul canale telemetrico, che è best-effort e non blocca le funzionalità essenziali dell'app: questo evita che continuino a creare documenti senza scadenza. Il timestamp non può superare di oltre 31 giorni il tempo della richiesta; sugli errori già dotati di scadenza non può essere rimosso. Eventi e anomalie legacy già presenti nel cloud possono ricevere una sola aggiunta del campo `expireAt` senza altre mutazioni.
+
+La cancellazione automatica non dipende da Firestore TTL: il cron Vercel già usato per il recovery account deletion esegue anche una sweep server-side della telemetria scaduta. La sweep pagina gli utenti, elimina soltanto documenti con `expireAt <= now`, rispetta il budget temporale della Function e salva un cursore server-only per riprendere senza starvation in caso di dataset più grande. La scadenza nominale resta 30 giorni; la rimozione effettiva può avvenire alla successiva esecuzione giornaliera del cron.
 
 ## Security Rules
 

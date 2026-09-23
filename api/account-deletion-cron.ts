@@ -4,6 +4,7 @@ import {
   purgeExpiredCompletedDeletionJobs,
 } from '../server/accountDeletion/retention.js';
 import { processAccountDeletion } from '../server/accountDeletion/runner.js';
+import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
 
 export const maxDuration = 300;
 
@@ -41,11 +42,26 @@ export async function GET(request: Request): Promise<Response> {
     if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
   }
 
+  const telemetryRetention = Date.now() + SAFETY_BUFFER_MS < deadlineMs
+    ? await purgeExpiredTelemetry(deadlineMs)
+    : { usersScanned: 0, documentsDeleted: 0, completedCycle: false };
+
   console.info('[account-deletion-cron] completed', {
     scanned: jobs.length,
     processed: results.length,
     purged,
+    telemetryUsersScanned: telemetryRetention.usersScanned,
+    telemetryPurged: telemetryRetention.documentsDeleted,
+    telemetryCycleCompleted: telemetryRetention.completedCycle,
   });
 
-  return Response.json({ scanned: jobs.length, processed: results.length, purged, results });
+  return Response.json({
+    scanned: jobs.length,
+    processed: results.length,
+    purged,
+    telemetryUsersScanned: telemetryRetention.usersScanned,
+    telemetryPurged: telemetryRetention.documentsDeleted,
+    telemetryCycleCompleted: telemetryRetention.completedCycle,
+    results,
+  });
 }

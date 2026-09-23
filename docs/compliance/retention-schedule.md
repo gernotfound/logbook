@@ -8,9 +8,9 @@
 |---|---|---|---|---|---|
 | Dati core account | Firestore + copia locale owner-scoped | Creazione/inserimento | Per la durata dell'account e finché necessari al servizio; eventuale policy inattività `[TO_DECIDE]` | Account deletion + cancellazione locale dopo prova completion | Implementato per cancellazione account |
 | Dati guest | IndexedDB/localStorage dispositivo | Primo uso | Finché l'utente li mantiene o li elimina/migra | Azioni locali / browser OS / migrazione | Implementato |
-| Telemetria tecnica `telemetry_errors` | Firestore | Invio errore | **Target 30 giorni dall'ultima occorrenza** | TTL/purge automatico `[TO_IMPLEMENT_AND_VERIFY]` | **Blocker P1** |
-| Telemetria tecnica `telemetry_events` | Firestore | Invio evento | **Target 30 giorni dall'evento** | TTL/purge automatico `[TO_IMPLEMENT_AND_VERIFY]` | **Blocker P1** |
-| Telemetria storage `telemetry_anomalies` | Firestore | Invio anomalia | **Target 30 giorni dall'evento** | TTL/purge automatico `[TO_IMPLEMENT_AND_VERIFY]` | **Blocker P1** |
+| Telemetria tecnica `telemetry_errors` | Firestore | Ultima occorrenza aggregata | **30 giorni dall'ultima occorrenza** | Campo `expireAt` + maintenance cron giornaliero | Implementato nel repository; runtime cron da verificare dopo deploy |
+| Telemetria tecnica `telemetry_events` | Firestore | Evento | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Implementato nel repository; runtime cron da verificare dopo deploy |
+| Telemetria storage `telemetry_anomalies` | Firestore | Anomalia | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Implementato nel repository; runtime cron da verificare dopo deploy |
 | Coda telemetria offline | localStorage owner/device | Failure/offline | Bounded a 50 elementi; espulsione/retry secondo codice | Queue lifecycle/logout/storage cleanup | Implementato |
 | Consenso legale | UserData root | Accettazione | Finché serve a dimostrare la versione accettata e per la durata pertinente del rapporto/obblighi | Definire dopo cessazione: `[TO_VALIDATE]` | Persistito, retention post-account da definire |
 | Consenso analytics | storage locale | Opt-in | Finché preferenza attiva o storage disponibile | Revoca/settings/storage clear | Implementato come preferenza; evidenza/versioning da migliorare |
@@ -28,14 +28,18 @@
 4. Le retention dei fornitori vanno riportate solo dopo verifica del piano/configurazione reale.
 5. Ogni eccezione legale alla cancellazione deve essere documentata con dataset, base, durata e accessi ridotti.
 
-## Blocker tecnico telemetry
+## Attivazione tecnica telemetry
 
-Il target di 30 giorni è una scelta di minimizzazione proposta per la diagnostica tecnica. Prima di dichiararlo operativo servono:
+Il repository applica una retention nominale di 30 giorni tramite un campo Firestore `expireAt` calcolato dall'evento o dall'ultima occorrenza dell'errore e Security Rules che rifiutano nuove scritture telemetriche prive di scadenza. I client PWA obsoleti possono perdere temporaneamente la sola telemetria best-effort finché non si aggiornano; le funzionalità essenziali restano indipendenti da questo canale.
 
-- campo/strategia di scadenza compatibile con Firestore;
-- Security Rules coerenti;
-- purge/TTL live verificato sulle tre collection group;
-- test di regressione;
-- aggiornamento Privacy Policy se la descrizione della retention cambia materialmente.
+La cancellazione viene eseguita dal maintenance cron server-side già schedulato quotidianamente. La sweep usa Firebase Admin, pagina gli utenti, elimina i documenti scaduti nelle tre subcollection e mantiene un cursore server-only se il budget della Function termina prima di completare il ciclo.
 
-Finché questi punti non sono chiusi, il target non va presentato agli utenti come retention effettiva.
+Prima del go-live devono essere completati e documentati:
+
+- deploy delle Security Rules con gate obbligatorio `expireAt` sul progetto Firebase reale;
+- verifica di eventuali documenti telemetrici preesistenti privi di `expireAt`; se presenti, migrazione o cancellazione secondo una procedura approvata;
+- verifica runtime dopo il rilascio che i nuovi documenti contengano `expireAt` e che le scritture non siano rifiutate;
+- osservazione di almeno un'esecuzione reale del cron con i contatori `telemetryUsersScanned`, `telemetryPurged` e `telemetryCycleCompleted`;
+- conferma che l'informativa Privacy pubblicata descriva la retention effettivamente attiva.
+
+Il progetto Firebase attuale non ha billing abilitato e il deploy delle policy Firestore TTL native è stato rifiutato dal control plane; per questo la retention è implementata con il cron applicativo, senza introdurre un requisito di billing solo per la cancellazione telemetrica.

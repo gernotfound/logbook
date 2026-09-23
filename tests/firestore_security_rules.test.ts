@@ -126,13 +126,17 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
       expect(rulesContent).toMatch(/match\s+\/telemetry_events\/\{eventId\}/);
       expect(rulesContent).toContain('function isValidTelemetryEvent(docData, userId)');
       expect(rulesContent).toContain('isValidTelemetryEvent(incomingData(), userId)');
-      expect(rulesContent).toContain('incomingData() == resource.data');
+      expect(rulesContent).toContain('isIdenticalTelemetryRetryOrExpiryUpgrade()');
     }
   });
 
   it('bounds telemetry types, context, details and mutable fields', () => {
     expect(rulesContent).toContain('function isValidTelemetryContext(context)');
     expect(rulesContent).toContain('function isValidTelemetryDetails(details)');
+    expect(rulesContent).toContain('function isValidTelemetryExpiry(docData)');
+    expect(rulesContent).toContain("'expireAt' in docData");
+    expect(rulesContent).toContain("docData.expireAt is timestamp");
+    expect(rulesContent).toContain("request.time + duration.value(31, 'd')");
     expect(rulesContent).toContain('details.size() <= 12');
     expect(rulesContent).toContain("details.keys().hasOnly([");
     expect(rulesContent).toContain("isStringAtMost(docData.message, 4096)");
@@ -140,5 +144,7 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent).toContain('docData.count <= 1000000');
     expect(rulesContent).toContain('incomingData().count >= resource.data.count');
     expect(rulesContent).toContain('incomingData().lastSeen >= resource.data.lastSeen');
+    expect(rulesContent).toContain('preservesTelemetryExpiry()');
+    expect(rulesContent).toContain("affectedKeys().hasOnly(['expireAt'])");
   });
 });

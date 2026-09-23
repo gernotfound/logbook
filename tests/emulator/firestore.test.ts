@@ -130,6 +130,7 @@ it('rejects untyped root fields', async () => {
 
 it('accepts bounded owner telemetry and rejects malformed payloads', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const eventRef = doc(db, 'users/a/telemetry_events/e1');
     const errorRef = doc(db, 'users/a/telemetry_errors/err1');
     const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
@@ -141,6 +142,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         userId: 'a',
         sessionId: 'session-a',
         details: { offline: false, routineId: 'routine-1' },
+        expireAt,
     };
     const error = {
         timestamp: 1000,
@@ -153,6 +155,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         count: 1,
         firstSeen: 1000,
         lastSeen: 1000,
+        expireAt,
     };
     const anomaly = {
         type: 'storage_recovery_anomaly',
@@ -162,6 +165,7 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
         platform: 'other',
         standalone: false,
         persisted: null,
+        expireAt,
     };
 
     await assertSucceeds(setDoc(eventRef, event));
@@ -177,8 +181,55 @@ it('accepts bounded owner telemetry and rejects malformed payloads', async () =>
     await assertFails(setDoc(doc(db, 'users/a/telemetry_anomalies/bad-anomaly'), { ...anomaly, platform: 'android' }));
 });
 
+it('allows bounded telemetry expiry, supports legacy expiry upgrade, and prevents expiry removal', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const validExpireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
+    const tooFarExpireAt = new Date(Date.now() + (32 * 24 * 60 * 60 * 1000));
+
+    const event = {
+        timestamp: 1000,
+        type: 'schema_fallback',
+        context: telemetryContext,
+        userId: 'a',
+        sessionId: 'session-a',
+    };
+    const eventRef = doc(db, 'users/a/telemetry_events/ttl-event');
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/missing-expiry'), event));
+    await assertSucceeds(setDoc(eventRef, { ...event, expireAt: validExpireAt }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-expiry-type'), { ...event, expireAt: '2099-01-01' }));
+    await assertFails(setDoc(doc(db, 'users/a/telemetry_events/bad-expiry-window'), { ...event, expireAt: tooFarExpireAt }));
+
+    const legacyEventRef = doc(db, 'users/a/telemetry_events/legacy-event');
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a/telemetry_events/legacy-event'), event);
+    });
+    await assertSucceeds(setDoc(legacyEventRef, { ...event, expireAt: validExpireAt }));
+    await assertFails(setDoc(legacyEventRef, { ...event, type: 'tampered', expireAt: validExpireAt }));
+
+    const error = {
+        timestamp: 1000,
+        type: 'TypeError',
+        message: 'safe message',
+        source: 'window_error',
+        context: telemetryContext,
+        userId: 'a',
+        sessionId: 'session-a',
+        count: 1,
+        firstSeen: 1000,
+        lastSeen: 1000,
+        expireAt: validExpireAt,
+    };
+    const errorRef = doc(db, 'users/a/telemetry_errors/ttl-error');
+    await assertSucceeds(setDoc(errorRef, error));
+    await assertSucceeds(setDoc(errorRef, { count: 2, lastSeen: 1100 }, { merge: true }));
+    await assertFails(setDoc(errorRef, { ...error, count: 2, lastSeen: 1100, expireAt: tooFarExpireAt }));
+    const { expireAt: _removedExpiry, ...withoutExpiry } = error;
+    await assertFails(setDoc(errorRef, { ...withoutExpiry, count: 2, lastSeen: 1100 }));
+});
+
 it('makes telemetry events/anomalies immutable and error aggregation monotonic', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
     const eventRef = doc(db, 'users/a/telemetry_events/e1');
     const errorRef = doc(db, 'users/a/telemetry_errors/err1');
     const anomalyRef = doc(db, 'users/a/telemetry_anomalies/a1');
@@ -190,6 +241,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         userId: 'a',
         sessionId: 'session-a',
         details: { source: 'settings' },
+        expireAt,
     };
     const error = {
         timestamp: 1000,
@@ -202,6 +254,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         count: 1,
         firstSeen: 1000,
         lastSeen: 1000,
+        expireAt,
     };
     const anomaly = {
         type: 'storage_recovery_anomaly',
@@ -211,6 +264,7 @@ it('makes telemetry events/anomalies immutable and error aggregation monotonic',
         platform: 'other',
         standalone: false,
         persisted: false,
+        expireAt,
     };
 
     await assertSucceeds(setDoc(eventRef, event));

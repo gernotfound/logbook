@@ -155,6 +155,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
         'lastSeen',
         'source',
         'componentStack',
+        'expireAt',
       ]);
 
       const keys = Object.keys(dispatchedPayload);

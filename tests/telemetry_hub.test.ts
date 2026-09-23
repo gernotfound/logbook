@@ -20,6 +20,7 @@ import {
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
+import { TELEMETRY_RETENTION_MS } from '../src/lib/telemetry/retention';
 
 describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   let mockSetDoc: any;
@@ -362,6 +363,8 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       expect(payload.firstSeen).toBe(baseTime);
       expect(payload.lastSeen).toBe(baseTime + 20000);
       expect(payload.count).toBe(2);
+      expect((payload as TelemetryErrorPayload & { expireAt: Date }).expireAt)
+        .toEqual(new Date(baseTime + 20000 + TELEMETRY_RETENTION_MS));
     });
 
     it('dispatches trailing aggregation update when additional errors occur after initial dispatch and window expires', async () => {

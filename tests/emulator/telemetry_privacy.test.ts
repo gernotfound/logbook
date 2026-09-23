@@ -42,14 +42,17 @@ const baseEvent = {
 
 it('allows technical workout metadata but rejects user-authored routine names', async () => {
   const db = env.authenticatedContext('a').firestore();
+  const expireAt = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000));
 
   await assertSucceeds(setDoc(doc(db, 'users/a/telemetry_events/technical'), {
     ...baseEvent,
+    expireAt,
     details: { offline: false, routineId: 'routine-1' },
   }));
 
   await assertFails(setDoc(doc(db, 'users/a/telemetry_events/business-label'), {
     ...baseEvent,
+    expireAt,
     details: {
       offline: false,
       routineId: 'routine-1',

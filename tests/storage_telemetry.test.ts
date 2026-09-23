@@ -18,6 +18,7 @@ import {
 } from '../src/lib/storageTelemetry';
 import * as firestoreModule from 'firebase/firestore';
 import * as firebaseLib from '../src/lib/firebase';
+import { TELEMETRY_RETENTION_MS } from '../src/lib/telemetry/retention';
 
 describe('Storage Recovery Telemetry Suite', () => {
   beforeEach(() => {
@@ -409,7 +410,10 @@ describe('Storage Recovery Telemetry Suite', () => {
       expect(setDocSpy).toHaveBeenCalledTimes(1);
       const [docRef, data] = setDocSpy.mock.calls[0];
       expect(docRef.path).toMatch(/^users\/test_user_uid_123\/telemetry_anomalies\/anomaly_1724486500000_/);
-      expect(data).toEqual(payload);
+      expect(data).toEqual({
+        ...payload,
+        expireAt: new Date(payload.timestamp + TELEMETRY_RETENTION_MS),
+      });
     });
 
     it('does not throw or reject if Firestore write rejects or times out', async () => {
