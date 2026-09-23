@@ -329,6 +329,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex_bench', name: 'Panca Piana Bilanciere', setsCount: 3, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     routineName: 'Push A',
                     exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '80', reps: '8' }] }]
@@ -347,6 +348,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex_squat', name: 'Squat Classico', setsCount: 3, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     routineName: 'Legs A',
                     exercises: [{ exId: 'ex_squat', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '5' }] }]
@@ -442,6 +444,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex2', name: 'Military Press', setsCount: 3, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     routineName: 'Upper Day',
                     exercises: [
@@ -815,6 +818,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'r1', name: 'Upper Pure', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w_active_adhoc',
                     routineId: 'r1',
                     routineName: 'Upper Pure',
@@ -856,6 +860,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'r1', name: 'Upper Pure', exercises: [{ exId: 'ex_bench', setsCount: 3 }] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w_active_adhoc',
                     routineId: 'r1',
                     routineName: 'Upper Pure',
