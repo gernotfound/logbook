@@ -121,6 +121,30 @@ service cloud.firestore {
         || (isNonEmptyStringAtMost(docData.userId, 128) && docData.userId == userId);
     }
 
+    // expireAt is optional during the rollout so already-installed clients remain compatible.
+    // Once present, it must be a bounded timestamp and cannot be removed from mutable error docs.
+    function isValidTelemetryExpiry(docData) {
+      return !('expireAt' in docData) || (
+        docData.expireAt is timestamp
+        && docData.expireAt <= request.time + duration.value(31, 'd')
+      );
+    }
+
+    function preservesTelemetryExpiry() {
+      return !('expireAt' in resource.data) || (
+        'expireAt' in incomingData()
+        && incomingData().expireAt >= resource.data.expireAt
+      );
+    }
+
+    function isIdenticalTelemetryRetryOrExpiryUpgrade() {
+      return incomingData() == resource.data || (
+        !('expireAt' in resource.data)
+        && 'expireAt' in incomingData()
+        && incomingData().diff(resource.data).affectedKeys().hasOnly(['expireAt'])
+      );
+    }
+
     function isValidTelemetryError(docData, userId) {
       return docData.keys().hasOnly([
           'timestamp',
@@ -134,7 +158,8 @@ service cloud.firestore {
           'sessionId',
           'count',
           'firstSeen',
-          'lastSeen'
+          'lastSeen',
+          'expireAt'
         ])
         && 'timestamp' in docData
         && 'type' in docData
@@ -159,7 +184,8 @@ service cloud.firestore {
         && docData.count <= 1000000
         && isNonNegativeInt(docData.firstSeen)
         && isNonNegativeInt(docData.lastSeen)
-        && docData.lastSeen >= docData.firstSeen;
+        && docData.lastSeen >= docData.firstSeen
+        && isValidTelemetryExpiry(docData);
     }
 
     function preservesTelemetryErrorIdentity() {
@@ -174,7 +200,8 @@ service cloud.firestore {
         && (!('sessionId' in resource.data) || incomingData().sessionId == resource.data.sessionId)
         && (!('firstSeen' in resource.data) || incomingData().firstSeen == resource.data.firstSeen)
         && (!('count' in resource.data) || incomingData().count >= resource.data.count)
-        && (!('lastSeen' in resource.data) || incomingData().lastSeen >= resource.data.lastSeen);
+        && (!('lastSeen' in resource.data) || incomingData().lastSeen >= resource.data.lastSeen)
+        && preservesTelemetryExpiry();
     }
 
     function isValidTelemetryEvent(docData, userId) {
@@ -184,7 +211,8 @@ service cloud.firestore {
           'context',
           'userId',
           'sessionId',
-          'details'
+          'details',
+          'expireAt'
         ])
         && 'timestamp' in docData
         && 'type' in docData
@@ -195,7 +223,8 @@ service cloud.firestore {
         && isValidTelemetryContext(docData.context)
         && hasValidTelemetryUser(docData, userId)
         && isNonEmptyStringAtMost(docData.sessionId, 128)
-        && (!('details' in docData) || isValidTelemetryDetails(docData.details));
+        && (!('details' in docData) || isValidTelemetryDetails(docData.details))
+        && isValidTelemetryExpiry(docData);
     }
 
     function isValidTelemetryAnomaly(docData) {
@@ -206,7 +235,8 @@ service cloud.firestore {
           'elapsedMs',
           'platform',
           'standalone',
-          'persisted'
+          'persisted',
+          'expireAt'
         ])
         && 'type' in docData
         && 'reason' in docData
@@ -221,7 +251,8 @@ service cloud.firestore {
         && isNonNegativeInt(docData.elapsedMs)
         && (docData.platform == 'ios' || docData.platform == 'ipados' || docData.platform == 'other')
         && docData.standalone is bool
-        && (docData.persisted == null || docData.persisted is bool);
+        && (docData.persisted == null || docData.persisted is bool)
+        && isValidTelemetryExpiry(docData);
     }
 
     match /{document=**} {
@@ -319,21 +350,22 @@ service cloud.firestore {
         allow read, delete: if isActiveOwner(userId);
         allow create: if isActiveOwner(userId)
           && isValidTelemetryEvent(incomingData(), userId);
-        // Events are append-only. An identical retry is allowed so a client can
-        // safely recover from an ambiguous network timeout without mutating history.
+        // Events are append-only. Identical retries remain valid, and legacy
+        // documents may receive only the rollout expiry field without changing history.
         allow update: if isActiveOwner(userId)
           && isValidTelemetryEvent(incomingData(), userId)
-          && incomingData() == resource.data;
+          && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }
 
       match /telemetry_anomalies/{eventId} {
         allow read, delete: if isActiveOwner(userId);
         allow create: if isActiveOwner(userId)
           && isValidTelemetryAnomaly(incomingData());
-        // Storage anomalies are immutable after creation; only an identical retry is valid.
+        // Storage anomalies are immutable after creation apart from a one-time
+        // legacy upgrade that adds only the rollout expiry field.
         allow update: if isActiveOwner(userId)
           && isValidTelemetryAnomaly(incomingData())
-          && incomingData() == resource.data;
+          && isIdenticalTelemetryRetryOrExpiryUpgrade();
       }
     }
   }

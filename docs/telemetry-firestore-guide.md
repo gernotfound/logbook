@@ -12,6 +12,8 @@ La telemetria cloud è owner-scoped sotto l'utente Firebase autenticato:
 - `users/{uid}/telemetry_events/{eventId}` — eventi tecnici/operativi;
 - `users/{uid}/telemetry_anomalies/{eventId}` — anomalie di persistenza specifiche.
 
+I nuovi documenti includono `expireAt` come timestamp Firestore: 30 giorni da `lastSeen` per gli errori aggregati e 30 giorni da `timestamp` per eventi/anomalie. `firestore.indexes.json` dichiara `expireAt` come campo TTL per tutte e tre le collection group e lo esenta dagli indici ordinari.
+
 Il payload cloud include l'UID tecnico dell'utente autenticato e un `sessionId`. Per questo la telemetria **non è anonima**: è pseudonimizzata e tecnicamente collegabile all'account.
 
 ### Errori
@@ -70,6 +72,12 @@ Questa semantica è intenzionale: non documentare più un automatico “guest te
 - backoff scheduler: da 1 secondo fino a 30 secondi.
 
 Gli errori sono aggregati per hash deterministico di tipo + messaggio sanitizzato. Gli eventi sono append-only secondo le Rules; gli errori ammettono soltanto gli aggiornamenti monotoni previsti dal contratto.
+
+## Retention e rollout TTL
+
+Le Security Rules accettano temporaneamente anche documenti senza `expireAt` per non rompere i client PWA già installati durante il rollout. Quando `expireAt` è presente deve essere un timestamp e non può superare di oltre 31 giorni il tempo della richiesta; sugli errori già dotati di scadenza non può essere rimosso. Eventi e anomalie legacy possono ricevere una sola aggiunta del campo `expireAt` senza altre mutazioni.
+
+Questa compatibilità non sostituisce la policy TTL: prima di dichiarare operativa la retention occorre verificare sul progetto Firebase reale che le tre policy siano attive e gestire gli eventuali documenti legacy privi del campo. La cancellazione TTL è asincrona e può avvenire dopo la scadenza nominale con il ritardo tecnico previsto da Firestore.
 
 ## Security Rules
 

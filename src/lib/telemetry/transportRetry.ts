@@ -11,6 +11,7 @@ import {
 } from './contracts';
 import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { createTelemetryId } from './id';
+import { telemetryExpiresAt } from './retention';
 
 type UserIdProvider = () => string | null;
 
@@ -37,6 +38,7 @@ export async function dispatchTelemetryError(
       count: payload.count,
       firstSeen: payload.firstSeen,
       lastSeen: payload.lastSeen,
+      expireAt: telemetryExpiresAt(payload.lastSeen),
       source: payload.source,
     };
 
@@ -80,6 +82,7 @@ export async function dispatchTelemetryEvent(
       context: payload.context,
       userId: uid,
       sessionId: payload.sessionId,
+      expireAt: telemetryExpiresAt(payload.timestamp),
     };
 
     if (payload.details !== undefined) {

@@ -3,6 +3,7 @@ import { getDb, auth, onAuthStateChanged } from './firebase';
 import { UserDataSchema } from './schema';
 import { getStorageDiagnosticData } from './storageStatus';
 import { createTelemetryId } from './telemetry/id';
+import { telemetryExpiresAt } from './telemetry/retention';
 
 export type DerivedPlatform = 'ios' | 'ipados' | 'other';
 
@@ -375,7 +376,10 @@ export async function dispatchStorageRecoveryAnomaly(
     const eventId = createTelemetryId('anomaly', payload.timestamp);
     const anomalyDocRef = doc(getDb(), "users", uid, "telemetry_anomalies", eventId);
 
-    const writePromise = setDoc(anomalyDocRef, payload);
+    const writePromise = setDoc(anomalyDocRef, {
+      ...payload,
+      expireAt: telemetryExpiresAt(payload.timestamp),
+    });
     const timeoutPromise = new Promise<void>((_, reject) =>
       setTimeout(() => reject(new Error("Timeout invio telemetria")), 5000)
     );
