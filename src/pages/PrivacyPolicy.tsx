@@ -73,8 +73,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         }}>
           <Section title="Titolare del trattamento">
             <p>
-              Il titolare del trattamento è il developer indipendente dell'applicazione <strong style={{ color: 'var(--text-main)' }}>LogBook PWA</strong>.
-              Per comunicazioni relative alla privacy o all'esercizio dei tuoi diritti utilizza il canale di contatto pubblico eventualmente indicato nell'applicazione o nella relativa pagina ufficiale. Questa informativa non pubblica recapiti personali o privati del developer.
+              Prima della distribuzione commerciale devono essere indicati qui l'identità e i recapiti del titolare del trattamento: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
+              Se LogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
             </p>
             <p>
               Il trattamento avviene nel rispetto del Regolamento Generale sulla Protezione dei Dati dell'Unione Europea (GDPR, Regolamento UE 2016/679) e della normativa nazionale applicabile.
@@ -83,7 +83,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           <Section title="Che cos'è LogBook">
             <p>
-              LogBook è un'applicazione web progressiva (PWA) gratuita per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
+              LogBook è un'applicazione web progressiva (PWA) per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
             </p>
             <p>
               <strong style={{ color: 'var(--text-main)' }}>Limitazione d'età:</strong> il servizio è destinato esclusivamente a utenti maggiorenni (18+). Non raccogliamo intenzionalmente dati di minori. Se sei un minore, non utilizzare il servizio.
