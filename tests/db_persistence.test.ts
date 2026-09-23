@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDoc, getDocs, writeBatch } from 'firebase/firestore';
-import { set as setIdb } from 'idb-keyval';
+import { get as getIdb, set as setIdb } from 'idb-keyval';
 
 vi.unmock('../src/lib/db');
 
@@ -89,8 +89,10 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         expect(loadedData?.activeCycleId).toBe('cycle_loaded');
     });
 
-    it('DB.loadCloudPayload propagates a previous background sync failure on normal cloud loads', async () => {
+    it('DB.loadCloudPayload only cleans the legacy background sync failure marker', async () => {
         await setIdb('sync_failed', true);
+        await setIdb('pending_sync_payload', { stale: true });
+        await setIdb('pending_sync_token', 'stale-token');
         vi.mocked(getDoc).mockResolvedValueOnce({
             exists: () => true,
             data: () => ({ profile: { name: 'Mario' } })
@@ -99,7 +101,10 @@ describe('DB Persistence for Training Cycles and Planning', () => {
         const payload = await DB.loadCloudPayload();
 
         expect(payload).not.toBeNull();
-        expect(payload?.backgroundSyncFailed).toBe(true);
+        expect(payload).not.toHaveProperty('backgroundSyncFailed');
+        expect(await getIdb('sync_failed')).toBeUndefined();
+        expect(await getIdb('pending_sync_payload')).toBeUndefined();
+        expect(await getIdb('pending_sync_token')).toBeUndefined();
     });
 
     it('DB.loadUserData defaults trainingCycles to [] and activeCycleId to null if absent', async () => {

@@ -56,6 +56,7 @@ describe('M7 daily account deletion recovery cron', () => {
 
   it('processes recoverable jobs with the shared idempotent runner when authorized', async () => {
     process.env.CRON_SECRET = 'expected-secret';
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const response = await GET(request('expected-secret'));
 
     expect(response.status).toBe(200);
@@ -65,6 +66,12 @@ describe('M7 daily account deletion recovery cron', () => {
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(2, 'b', expect.any(Number));
     expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400);
     expect(await response.json()).toMatchObject({ scanned: 2, processed: 2, purged: 0 });
+    expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
+      scanned: 2,
+      processed: 2,
+      purged: 0,
+    });
+    info.mockRestore();
   });
 
   it('uses only the residual cron budget for completed tombstone garbage collection', async () => {
