@@ -182,10 +182,11 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 Distinguere due sistemi:
 
-1. **Telemetria tecnica LogBook:** errori/eventi applicativi sanitizzati; per utenti autenticati può includere UID tecnico, session ID, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Viene scritta nelle raccolte private dell'utente e non va descritta come “anonima”.
+1. **Telemetria tecnica LogBook:** errori/eventi diagnostici sanitizzati; per utenti autenticati può includere UID tecnico, session ID, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non traccia avvio/salvataggio workout né funnel di installazione PWA. Viene scritta nelle raccolte private dell'utente e non va descritta come “anonima”.
 2. **Vercel Analytics / Speed Insights:** renderizzati solo quando l'opt-in analytics è attivo. Google/Firebase Analytics non viene inizializzato né usato.
 
 - **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
+- **MUST:** telemetria tecnica propria e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute.
 - **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
 - **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.

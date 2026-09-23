@@ -12,7 +12,6 @@ import {
     prepareHistoricalWorkoutForSave,
 } from './workout/workoutSessionPreparation';
 import { mapFirebaseErrorCode } from '../lib/errorHandler';
-import { telemetryHub } from '../lib/telemetryHub';
 import type { WorkoutSession, WorkoutRoutine, Exercise } from '../types';
 import { auth } from '../lib/firebase';
 import { draftRegistry } from '../lib/utils/draftRegistry';
@@ -133,17 +132,6 @@ export function useWorkoutSession() {
 
         const newActiveWorkout = buildRoutineWorkout(userData, routine, cycleInfo);
         mutateActiveWorkout(newActiveWorkout);
-
-        // Telemetry: Non-blocking tracking of workout start
-        try {
-            const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
-            telemetryHub.trackEvent('workout_started', {
-                offline: isOffline,
-                routineId: routine?.id || null
-            });
-        } catch {
-            // Fail-safe non-blocking telemetry
-        }
     }, [selectedRoutine, showAlert, mutateActiveWorkout]);
 
     const startFreeWorkout = useCallback(async () => {
@@ -157,16 +145,6 @@ export function useWorkoutSession() {
 
         const newActiveWorkout = buildFreeWorkout();
         mutateActiveWorkout(newActiveWorkout);
-
-        try {
-            const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
-            telemetryHub.trackEvent('workout_started', {
-                offline: isOffline,
-                routineId: 'free_workout'
-            });
-        } catch {
-            // Fail-safe non-blocking telemetry
-        }
     }, [showAlert, mutateActiveWorkout]);
 
     const startEditHistoricalWorkout = useCallback(async (workout: WorkoutSession) => {
@@ -253,7 +231,7 @@ export function useWorkoutSession() {
         if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
         const endTime = new Date().getTime();
-        const { finishedWorkout, diff, durationStr, sessionPains } = prepareCompletedWorkout(currentWorkout, endTime);
+        const { finishedWorkout, sessionPains } = prepareCompletedWorkout(currentWorkout, endTime);
 
         try {
             const currentData = useAppStore.getState().userData;
@@ -272,19 +250,6 @@ export function useWorkoutSession() {
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
-            try {
-                const isOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
-                const durationVal = finishedWorkout.globalDurationStr || finishedWorkout.manualDurationStr || durationStr;
-                telemetryHub.trackEvent('workout_saved', {
-                    offline: isOffline,
-                    duration: durationVal,
-                    durationMinutes: Math.round(diff / 60),
-                    exerciseCount: (finishedWorkout.exercises || []).length,
-                    exercisesCount: (finishedWorkout.exercises || []).length
-                });
-            } catch {
-                // Fail-safe non-blocking telemetry
-            }
             return finishedWorkout;
         } catch {
             if (auth.currentUser?.uid === expectedUid) await showAlert("Errore durante il salvataggio della sessione.");

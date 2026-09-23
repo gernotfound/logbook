@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
-import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub } from '../src/lib/telemetryHub';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
@@ -10,7 +10,7 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import SettingsView from '../src/components/SettingsView';
 import type { UserData, WorkoutSession } from '../src/types';
 
-describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking Stress Tests', () => {
+describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', () => {
   let mockSetDoc: any;
 
   beforeEach(() => {
@@ -143,12 +143,9 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
         await result.current.promptInstall();
       });
 
-      await waitFor(() => {
-        const outcomeCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'pwa_install_prompt_outcome');
-        expect(outcomeCall).toBeDefined();
-        // Fallback should be 'dismissed' when choice is null or invalid
-        expect(outcomeCall[1].details?.outcome).toBe('dismissed');
-      });
+      expect(result.current.isInstallable).toBe(false);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_install_prompt_outcome')).toBe(false);
     });
 
     it('handles multiple rapid beforeinstallprompt events and appinstalled sequence', async () => {
@@ -177,10 +174,8 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
       // Should reset isInstallable to false
       expect(result.current.isInstallable).toBe(false);
 
-      await waitFor(() => {
-        const types = mockSetDoc.mock.calls.map((c: any) => c[1].type);
-        expect(types).toContain('pwa_appinstalled');
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'pwa_appinstalled')).toBe(false);
     });
   });
 
@@ -228,12 +223,8 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
 
       expect(useAppStore.getState().localWorkout).toBeNull();
 
-      await waitFor(() => {
-        const workoutSavedCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_saved');
-        expect(workoutSavedCall).toBeDefined();
-        expect(workoutSavedCall[1].details?.exerciseCount).toBe(0);
-        expect(workoutSavedCall[1].details?.offline).toBe(false);
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
     });
 
     it('handles ending a workout with corrupted/missing exercises array (null/undefined)', async () => {
@@ -268,11 +259,8 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
 
       expect(useAppStore.getState().localWorkout).toBeNull();
 
-      await waitFor(() => {
-        const workoutSavedCall = mockSetDoc.mock.calls.find((c: any) => c[1].type === 'workout_saved');
-        expect(workoutSavedCall).toBeDefined();
-        expect(workoutSavedCall[1].details?.exerciseCount).toBe(0);
-      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
     });
 
     it('handles workout with invalid ratings and non-numeric water values safely', async () => {
@@ -315,7 +303,7 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
       expect(useAppStore.getState().localWorkout).toBeNull();
     });
 
-    it('guarantees workout saving never hangs even if telemetryHub.trackEvent throws synchronously', async () => {
+    it('does not depend on telemetryHub.trackEvent when saving a workout', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_telemetry_throw');
 
@@ -351,12 +339,12 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
       });
 
       expect(useAppStore.getState().localWorkout).toBeNull();
-      expect(trackEventSpy).toHaveBeenCalled();
+      expect(trackEventSpy).not.toHaveBeenCalled();
 
       trackEventSpy.mockRestore();
     });
 
-    it('handles starting a workout when telemetryHub.trackEvent throws synchronously', async () => {
+    it('does not depend on telemetryHub.trackEvent when starting a workout', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_telemetry_start_throw');
 
@@ -384,6 +372,7 @@ describe('Milestone 2 Challenger Suite: PWA Analytics & Offline Workout Tracking
 
       expect(useAppStore.getState().localWorkout).not.toBeNull();
       expect(useAppStore.getState().localWorkout?.routineId).toBe('r1');
+      expect(trackEventSpy).not.toHaveBeenCalled();
 
       trackEventSpy.mockRestore();
     });
