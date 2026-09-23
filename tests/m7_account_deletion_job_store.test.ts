@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   jobUpdates: [] as unknown[],
   deleteUser: vi.fn(),
   revokeRefreshTokens: vi.fn(),
+  projectedQueries: [] as string[],
 }));
 
 function fakeDocument(path: string): any {
@@ -38,27 +39,38 @@ function fakeDocument(path: string): any {
 }
 
 function fakeCollection(path: string): any {
+  const query = (filterId?: string, count = Number.POSITIVE_INFINITY): any => ({
+    where(_field: unknown, _operator: string, value: unknown) {
+      return query(String(value), count);
+    },
+    select() {
+      state.projectedQueries.push(path);
+      return query(filterId, count);
+    },
+    limit(nextCount: number) {
+      return query(filterId, nextCount);
+    },
+    async get() {
+      const prefix = `${path}/`;
+      const paths = [...state.docs]
+        .filter(candidate => candidate.startsWith(prefix) && candidate.slice(prefix.length).split('/').length === 1)
+        .filter(candidate => filterId === undefined || candidate === `${path}/${filterId}`)
+        .slice(0, count);
+      return {
+        empty: paths.length === 0,
+        size: paths.length,
+        docs: paths.map(candidate => ({ ref: fakeDocument(candidate) })),
+      };
+    },
+  });
+
   return {
     path,
     id: path.split('/').at(-1),
     doc(id: string) {
       return fakeDocument(`${path}/${id}`);
     },
-    limit(count: number) {
-      return {
-        async get() {
-          const prefix = `${path}/`;
-          const paths = [...state.docs]
-            .filter(candidate => candidate.startsWith(prefix) && candidate.slice(prefix.length).split('/').length === 1)
-            .slice(0, count);
-          return {
-            empty: paths.length === 0,
-            size: paths.length,
-            docs: paths.map(candidate => ({ ref: fakeDocument(candidate) })),
-          };
-        },
-      };
-    },
+    ...query(),
   };
 }
 
@@ -107,6 +119,7 @@ describe('M7 native deletion job store', () => {
     state.docs.clear();
     state.batchSizes.length = 0;
     state.jobUpdates.length = 0;
+    state.projectedQueries.length = 0;
     vi.clearAllMocks();
     state.deleteUser.mockResolvedValue(undefined);
     state.revokeRefreshTokens.mockResolvedValue(undefined);
@@ -125,6 +138,28 @@ describe('M7 native deletion job store', () => {
 
     expect(state.batchSizes).toEqual([400, 400, 150]);
     expect([...state.docs].filter(path => path.startsWith('users/u/history_months/'))).toHaveLength(0);
+    expect(state.projectedQueries.filter(path => path === 'users/u/history_months').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('uses reference-only projections when verifying account deletion residue', async () => {
+    state.docs.add('account_deletions/u');
+
+    await expect(verifyNoAccountResidue('u')).resolves.toBeUndefined();
+
+    expect(state.projectedQueries).toContain('users');
+    expect(state.projectedQueries).toContain('users/u/history_months');
+    expect(state.projectedQueries).toContain('users/u/nutrition_months');
+    expect(state.projectedQueries).toContain('users/u/telemetry_errors');
+    expect(state.projectedQueries).toContain('users/u/telemetry_events');
+    expect(state.projectedQueries).toContain('users/u/telemetry_anomalies');
+  });
+
+  it('fails closed when the user root document still exists', async () => {
+    state.docs.add('account_deletions/u');
+    state.docs.add('users/u');
+
+    await expect(verifyNoAccountResidue('u')).rejects.toThrow('User root document still exists after deletion.');
+    expect(state.projectedQueries).toContain('users');
   });
 
   it('fails closed on an unexpected residual private subcollection', async () => {

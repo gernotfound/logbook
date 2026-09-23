@@ -35,7 +35,8 @@ function errorResponse(error: unknown): Response {
   if (error instanceof RequestInputError) {
     return Response.json({ error: error.message }, { status: 400 });
   }
-  console.error('[account-deletion] backend failure', error);
+  const kind = error instanceof Error ? error.name : 'UnknownError';
+  console.error('[account-deletion] backend failure', { kind });
   return Response.json({ error: 'Servizio di cancellazione temporaneamente non disponibile. La copia locale è stata conservata.' }, { status: 500 });
 }
 

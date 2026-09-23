@@ -112,6 +112,9 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <p>
               I dati cloud sono conservati nell'area privata associata all'account e sono protetti dalle regole di sicurezza applicative. Il backend amministrativo mantiene capacità tecniche necessarie a gestione, sicurezza, recovery e cancellazione account; tali capacità non sono destinate a profilazione commerciale dei dati fitness.
             </p>
+            <p>
+              Nell'architettura attuale LogBook non prevede ruoli palestra, coach o amministratore con accesso ai dati degli iscritti: una palestra che rende disponibile il servizio ai propri iscritti non riceve per questo motivo accesso ai loro dati in LogBook. Qualsiasi futura funzione di condivisione richiederà una specifica modifica del prodotto e della relativa informativa.
+            </p>
 
             <h3 style={h3Style}>Telemetria tecnica di stabilità</h3>
             <p>

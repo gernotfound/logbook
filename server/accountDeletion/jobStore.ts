@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { FieldValue, Timestamp, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, Timestamp, type QueryDocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from './firebaseAdmin.js';
 import { completedDeletionPurgeAfter } from './retention.js';
 import {
@@ -186,7 +186,7 @@ export async function deletePrivateCollectionPage(
   const uid = validateUid(uidValue);
   if (!PRIVATE_ACCOUNT_COLLECTIONS.includes(name)) throw new Error(`Unknown private collection: ${name}`);
   const db = adminDb();
-  const page = await db.collection('users').doc(uid).collection(name).limit(PAGE_SIZE).get();
+  const page = await db.collection('users').doc(uid).collection(name).limit(PAGE_SIZE).select().get();
   if (page.empty) return 0;
 
   const batch = db.batch();
@@ -221,12 +221,13 @@ export async function markVerifying(uidValue: string): Promise<void> {
 
 export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
   const uid = validateUid(uidValue);
-  const root = adminDb().collection('users').doc(uid);
-  const rootSnapshot = await root.get();
-  if (rootSnapshot.exists) throw new Error('User root document still exists after deletion.');
+  const users = adminDb().collection('users');
+  const root = users.doc(uid);
+  const rootSnapshot = await users.where(FieldPath.documentId(), '==', uid).select().limit(1).get();
+  if (!rootSnapshot.empty) throw new Error('User root document still exists after deletion.');
 
   for (const name of PRIVATE_ACCOUNT_COLLECTIONS) {
-    const residual = await root.collection(name).limit(1).get();
+    const residual = await root.collection(name).limit(1).select().get();
     if (!residual.empty) throw new Error(`Residual documents remain in ${name}.`);
   }
 
@@ -234,7 +235,7 @@ export async function verifyNoAccountResidue(uidValue: string): Promise<void> {
   const collections = await root.listCollections();
   for (const collection of collections) {
     if (known.has(collection.id)) continue;
-    const residual = await collection.limit(1).get();
+    const residual = await collection.limit(1).select().get();
     if (!residual.empty) {
       throw new NonRetryableDeletionError(`Unexpected residual collection: ${collection.id}.`);
     }

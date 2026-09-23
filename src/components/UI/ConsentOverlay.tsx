@@ -57,7 +57,7 @@ export const ConsentOverlay: React.FC = () => {
                     Aggiornamento Termini e Privacy
                 </h2>
                 <p className="ui-consent-overlay-4" style={{ margin: 0, lineHeight: "1.5" }}>
-                    Per continuare a utilizzare LogBook e per essere conformi alle normative europee sulla protezione dei dati (GDPR), ti chiediamo di leggere e accettare i nostri documenti legali e di acconsentire al trattamento dei tuoi dati.
+                    Prima di continuare a utilizzare LogBook, leggi i documenti legali e indica separatamente le scelte richieste per i trattamenti basati sul consenso.
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
@@ -71,7 +71,7 @@ export const ConsentOverlay: React.FC = () => {
                             style={{ width: "1.25rem", height: "1.25rem", accentColor: "var(--primary-color)", marginTop: "0.125rem", flexShrink: 0 }}
                         />
                         <span className="ui-consent-overlay-5" style={{ lineHeight: "1.4" }}>
-                            Ho letto e accetto i <button className="btn-link ui-consent-overlay-6" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button> e l'<button className="btn-link ui-consent-overlay-7" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button>.
+                            Confermo di avere almeno 18 anni, ho letto l'<button className="btn-link ui-consent-overlay-7" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowPrivacy(true); }}>Informativa sulla Privacy</button> e accetto i <button className="btn-link ui-consent-overlay-6" style={{ padding: 0, textDecoration: "underline", cursor: "pointer" }} onClick={(e) => { e.preventDefault(); setShowTerms(true); }}>Termini e Condizioni</button>.
                         </span>
                     </label>
 

@@ -27,11 +27,11 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.2.0');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.2.1');
         expect(LEGAL_VERSIONS.terms).toBe('1.2.0');
         expect(needsLegalUpdate({
             ...mockConsent,
-            privacyVersion: '1.0.1'
+            privacyVersion: '1.2.0'
         })).toBe(true);
         expect(needsLegalUpdate({
             ...mockConsent,
@@ -81,6 +81,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConsentOverlay } from '../src/components/UI/ConsentOverlay';
+import { PrivacyPolicy } from '../src/pages/PrivacyPolicy';
 import { useDialogStore } from '../src/store/useDialogStore';
 
 vi.mock('../src/hooks/useAuth', () => ({
@@ -124,6 +125,19 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         fireEvent.keyDown(checkboxes[0], { key: 'Tab', shiftKey: true });
         expect(document.activeElement).toBe(last);
         expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Fuori overlay' }));
+    });
+
+    it('presenta eta, informativa e termini senza dichiarare conformita legale', () => {
+        render(<ConsentOverlay />);
+        expect(screen.getByText(/almeno 18 anni/i)).toBeDefined();
+        expect(screen.getByRole('button', { name: /Informativa sulla Privacy/i })).toBeDefined();
+        expect(screen.getByRole('button', { name: /Termini e Condizioni/i })).toBeDefined();
+        expect(screen.queryByText(/essere conformi/i)).toBeNull();
+    });
+
+    it('chiarisce che una palestra non riceve automaticamente accesso ai dati degli iscritti', () => {
+        render(<PrivacyPolicy onClose={vi.fn()} />);
+        expect(screen.getByText(/non riceve per questo motivo accesso ai loro dati in LogBook/i)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {

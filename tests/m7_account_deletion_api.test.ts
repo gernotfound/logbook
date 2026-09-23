@@ -66,15 +66,17 @@ describe('M7 native account deletion HTTP boundary', () => {
     expect(store.createOrRefreshDeletionJob).not.toHaveBeenCalled();
   });
 
-  it('returns 500 for backend failure after validated input so the client preserves recovery state', async () => {
-    store.createOrRefreshDeletionJob.mockRejectedValueOnce(new Error('firestore unavailable'));
+  it('returns 500 without leaking backend error details after validated input', async () => {
+    store.createOrRefreshDeletionJob.mockRejectedValueOnce(new Error('firestore unavailable for athlete@example.test with sensitive-marker'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const response = await POST(request('POST', { receiptToken: 'receipt' }));
 
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining('temporaneamente non disponibile') });
-    expect(consoleError).toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith('[account-deletion] backend failure', { kind: 'Error' });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('athlete@example.test');
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('sensitive-marker');
     consoleError.mockRestore();
   });
 
