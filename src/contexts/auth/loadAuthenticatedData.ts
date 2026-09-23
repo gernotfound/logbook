@@ -7,7 +7,6 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { useDialogStore } from '../../store/useDialogStore';
 
 type LoadAuthenticatedDataOptions = {
     user: User;
@@ -48,13 +47,6 @@ export async function loadAuthenticatedData({
         if (!isCurrent()) return;
 
         if (payload) {
-            if (payload.backgroundSyncFailed) {
-                console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
-                useDialogStore.getState().showAlert(
-                    "Sincronizzazione in background interrotta",
-                    "Mentre eri offline, l'app ha provato a salvare i dati in background ma la connessione era instabile o il token è scaduto. Nessun problema: il salvataggio verrà completato automaticamente adesso che sei online."
-                );
-            }
             const cloudData = payload.data;
             try {
                 const { hydrateLocal } = await import('../../lib/sync/localRepository');

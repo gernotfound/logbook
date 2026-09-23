@@ -5,7 +5,7 @@ import type { UserData, SyncResult } from '../types';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { normalizeCloudDocument } from './schemaEvolution';
-import { set, get, del } from 'idb-keyval';
+import { del } from 'idb-keyval';
 import { withTimeout, setLastSavedStateStr } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
@@ -18,21 +18,14 @@ export const DB = {
     resetCache() {
         setLastSavedStateStr(null);
     },
-    async loadCloudPayload(options?: { allMonths?: boolean }): Promise<{ data: UserData, cloudDocuments: Map<string, any>, completeMonths: string[], backgroundSyncFailed?: boolean } | null> {
+    async loadCloudPayload(options?: { allMonths?: boolean }): Promise<{ data: UserData, cloudDocuments: Map<string, any>, completeMonths: string[] } | null> {
         const user = auth.currentUser;
         if (!user) return null;
         try {
-            let backgroundSyncFailed = false;
             await Promise.all([
-                get('sync_failed').then(failed => {
-                    if (failed) {
-                        console.warn("Precedente Background Sync fallito. Ci penserà l'SDK di Firestore ora.");
-                        backgroundSyncFailed = true;
-                    }
-                    return set('sync_failed', false);
-                }),
                 del('pending_sync_payload'),
-                del('pending_sync_token')
+                del('pending_sync_token'),
+                del('sync_failed')
             ]).catch(() => {});
 
             const cloudDocuments = new Map<string, any>();
@@ -101,7 +94,7 @@ export const DB = {
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
                 setLastSavedStateStr(JSON.stringify(state));
-                return { data: state as unknown as UserData, cloudDocuments, completeMonths, backgroundSyncFailed };
+                return { data: state as unknown as UserData, cloudDocuments, completeMonths };
             }
 
             if (options?.allMonths) {
@@ -160,7 +153,7 @@ export const DB = {
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
             setLastSavedStateStr(JSON.stringify(state));
-            return { data: state as unknown as UserData, cloudDocuments, completeMonths, backgroundSyncFailed };
+            return { data: state as unknown as UserData, cloudDocuments, completeMonths };
         } catch (error: any) {
             console.error("Errore caricamento dati dal cloud:", error);
             throw error;

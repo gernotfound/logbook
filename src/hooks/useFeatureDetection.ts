@@ -1,8 +1,4 @@
 // Feature detection per API non supportate su iOS o con comportamento anomalo
-export const isBackgroundSyncSupported = 
-  'serviceWorker' in navigator && 
-  'SyncManager' in window;
-
 export const isPushNotificationSupported = 
   'PushManager' in window;
 

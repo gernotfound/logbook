@@ -41,5 +41,11 @@ export async function GET(request: Request): Promise<Response> {
     if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
   }
 
+  console.info('[account-deletion-cron] completed', {
+    scanned: jobs.length,
+    processed: results.length,
+    purged,
+  });
+
   return Response.json({ scanned: jobs.length, processed: results.length, purged, results });
 }
