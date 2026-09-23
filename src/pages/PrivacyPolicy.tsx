@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Aggiornata al 20 settembre 2026
+              Aggiornata al 23 settembre 2026
             </p>
           </div>
           <button
@@ -73,8 +73,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         }}>
           <Section title="Titolare del trattamento">
             <p>
-              Il titolare del trattamento è il developer indipendente dell'applicazione <strong style={{ color: 'var(--text-main)' }}>LogBook PWA</strong>.
-              Per comunicazioni relative alla privacy o all'esercizio dei tuoi diritti utilizza il canale di contatto pubblico eventualmente indicato nell'applicazione o nella relativa pagina ufficiale. Questa informativa non pubblica recapiti personali o privati del developer.
+              Prima della distribuzione commerciale devono essere indicati qui l'identità e i recapiti del titolare del trattamento: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
+              Se LogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
             </p>
             <p>
               Il trattamento avviene nel rispetto del Regolamento Generale sulla Protezione dei Dati dell'Unione Europea (GDPR, Regolamento UE 2016/679) e della normativa nazionale applicabile.
@@ -83,7 +83,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
           <Section title="Che cos'è LogBook">
             <p>
-              LogBook è un'applicazione web progressiva (PWA) gratuita per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
+              LogBook è un'applicazione web progressiva (PWA) per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
             </p>
             <p>
               <strong style={{ color: 'var(--text-main)' }}>Limitazione d'età:</strong> il servizio è destinato esclusivamente a utenti maggiorenni (18+). Non raccogliamo intenzionalmente dati di minori. Se sei un minore, non utilizzare il servizio.
@@ -171,7 +171,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — hosting delle risorse e delle funzioni server; solo con consenso, Vercel Analytics e Speed Insights.</li>
             </ul>
             <p>
-              I fornitori possono trattare dati in paesi diversi da quello dell'utente secondo i meccanismi di trasferimento e le garanzie previste dalla normativa e dalle rispettive condizioni applicabili.
+              Prima della distribuzione commerciale devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).
             </p>
           </Section>
 
@@ -185,7 +185,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>
-              Per richieste che non possono essere gestite direttamente dall'app utilizza il canale di contatto pubblico eventualmente indicato per LogBook. Questa informativa non espone recapiti personali privati.
+              Per richieste che non possono essere gestite direttamente dall'app utilizza il contatto privacy <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>. Hai inoltre il diritto di proporre reclamo al Garante per la protezione dei dati personali.
             </p>
           </Section>
 
