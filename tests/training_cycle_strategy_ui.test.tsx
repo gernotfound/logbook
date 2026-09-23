@@ -5,6 +5,7 @@ import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import { CycleStrategySummary } from '../src/components/Training/planning/CycleStrategySummary';
 import { useDialogStore } from '../src/store/useDialogStore';
 import type { TrainingCycle, WorkoutRoutine } from '../src/types';
+import { MUSCLES } from '../src/lib/constants/muscles';
 
 const routines: WorkoutRoutine[] = [{
     id: 'routine-1',
@@ -21,7 +22,7 @@ function fillBaseCycle() {
 }
 
 describe('training cycle strategy UI', () => {
-    it('requires an explicit intent for a new cycle and a focus for development', async () => {
+    it('keeps Non specificato always visible and allows an explicit unspecified choice', async () => {
         const showAlert = useDialogStore.getState().showAlert as ReturnType<typeof vi.fn>;
         showAlert.mockClear();
         const onSave = vi.fn();
@@ -30,10 +31,28 @@ describe('training cycle strategy UI', () => {
         );
 
         fillBaseCycle();
+        expect(screen.getByRole('button', { name: 'Non specificato' })).toBeDefined();
+
         fireEvent.submit(container.querySelector('form')!);
         await waitFor(() => expect(showAlert).toHaveBeenCalledWith("Seleziona l'obiettivo del ciclo."));
         expect(onSave).not.toHaveBeenCalled();
 
+        fireEvent.click(screen.getByRole('button', { name: 'Non specificato' }));
+        fireEvent.submit(container.querySelector('form')!);
+
+        await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+        expect(onSave.mock.calls[0][0].strategy).toBeUndefined();
+    });
+
+    it('requires a progression focus only when Sviluppo is selected', async () => {
+        const showAlert = useDialogStore.getState().showAlert as ReturnType<typeof vi.fn>;
+        showAlert.mockClear();
+        const onSave = vi.fn();
+        const { container } = render(
+            <CycleEditor routines={routines} onSave={onSave} onCancel={vi.fn()} />
+        );
+
+        fillBaseCycle();
         fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
         fireEvent.submit(container.querySelector('form')!);
         await waitFor(() => expect(showAlert).toHaveBeenCalledWith('Seleziona cosa vuoi far progredire principalmente.'));
@@ -48,7 +67,7 @@ describe('training cycle strategy UI', () => {
         });
     });
 
-    it('creates a development/performance cycle with primary and secondary muscle priorities', async () => {
+    it('searches the full mannequin muscle catalog, including unilateral muscles', async () => {
         const onSave = vi.fn();
         const { container } = render(
             <CycleEditor routines={routines} onSave={onSave} onCancel={vi.fn()} />
@@ -57,26 +76,30 @@ describe('training cycle strategy UI', () => {
         fillBaseCycle();
         fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
         fireEvent.click(screen.getByRole('button', { name: 'Performance' }));
-        fireEvent.change(
-            screen.getByRole('combobox', { name: 'Aggiungi focus primario' }),
-            { target: { value: 'quads' } },
-        );
-        fireEvent.change(
-            screen.getByRole('combobox', { name: 'Aggiungi focus secondario' }),
-            { target: { value: 'triceps' } },
-        );
+
+        const primarySearch = screen.getByRole('combobox', { name: 'Cerca focus primario' });
+        fireEvent.focus(primarySearch);
+        expect(
+            screen.getByRole('listbox', { name: 'Risultati focus primario' }).querySelectorAll('[role="option"]')
+        ).toHaveLength(MUSCLES.length);
+        fireEvent.change(primarySearch, { target: { value: 'bicipite destro' } });
+        fireEvent.click(screen.getByRole('option', { name: 'Bicipite destro' }));
+
+        const secondarySearch = screen.getByRole('combobox', { name: 'Cerca focus secondario' });
+        fireEvent.focus(secondarySearch);
+        fireEvent.change(secondarySearch, { target: { value: 'deltoide posteriore sinistro' } });
+        fireEvent.click(screen.getByRole('option', { name: 'Deltoide posteriore sinistro' }));
+
         fireEvent.submit(container.querySelector('form')!);
 
         await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
         expect(onSave.mock.calls[0][0].strategy).toEqual({
             intent: 'development',
             progressionFocus: 'performance',
-            primaryMuscles: ['quads'],
-            secondaryMuscles: ['triceps'],
+            primaryMuscles: ['biceps_right'],
+            secondaryMuscles: ['delts_rear_left'],
         });
-        expect(screen.getByRole('group', { name: 'Intento del ciclo' })).toBeDefined();
-        expect(screen.getByRole('group', { name: 'Focus principale della progressione' })).toBeDefined();
-        expect(screen.getByRole('button', { name: /Rimuovi Quadricipiti dal focus primario/i })).toBeDefined();
+        expect(screen.getByRole('button', { name: /Rimuovi Bicipite destro dal focus primario/i })).toBeDefined();
     });
 
     it('changes an existing development cycle from performance to volume', async () => {

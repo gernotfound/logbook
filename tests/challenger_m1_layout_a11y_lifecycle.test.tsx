@@ -308,7 +308,7 @@ describe('Empirical Challenger: Layout Geometry, Accessibility, Z-Index & Online
       const tokensCss = fs.readFileSync(path.resolve(__dirname, '../src/styles/tokens.css'), 'utf-8');
       const navBlock = cssContent.match(/\.bottom-nav\s*\{([^}]+)\}/)![1];
 
-      expect(tokensCss).toMatch(/--nav-height:\s*4\.75rem/);
+      expect(tokensCss).toMatch(/--nav-height:\s*3\.25rem/);
       expect(navBlock).toMatch(/padding-bottom:\s*env\(safe-area-inset-bottom,\s*0px\)/);
 
       // .sync-indicator positioning

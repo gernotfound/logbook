@@ -160,6 +160,53 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     unmount();
   });
 
+  test('R1: a waiting worker on foreground restores the update prompt', async () => {
+    const mockUpdate = vi.fn().mockResolvedValue(undefined);
+    const mockGetRegistration = vi.fn().mockResolvedValue({
+      update: mockUpdate,
+      waiting: {},
+    });
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: { getRegistration: mockGetRegistration },
+      writable: true,
+      configurable: true,
+    });
+
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [false, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+
+    const { unmount } = render(<ReloadPrompt />);
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(mockSetNeedRefresh).toHaveBeenCalledWith(true);
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  test('R1: manual update waiting event restores the update prompt', () => {
+    vi.mocked(useRegisterSW).mockReturnValue({
+      needRefresh: [false, mockSetNeedRefresh],
+      offlineReady: [false, vi.fn()],
+      updateServiceWorker: mockUpdateServiceWorker,
+    });
+
+    const { unmount } = render(<ReloadPrompt />);
+    act(() => {
+      window.dispatchEvent(new Event('logbook:pwa-update-waiting'));
+    });
+
+    expect(mockSetNeedRefresh).toHaveBeenCalledWith(true);
+    unmount();
+  });
+
   test('R1 Edge Case: Does NOT trigger update when visibility changes to hidden', async () => {
     const mockUpdate = vi.fn().mockResolvedValue(undefined);
     const mockGetRegistration = vi.fn().mockResolvedValue({
@@ -220,7 +267,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     unmount();
   });
 
-  test('R1: onRegistered configures periodic timer and onRegisterError handles errors gracefully', () => {
+  test('R1: onRegistered checks immediately, keeps the periodic timer and handles errors gracefully', () => {
     vi.useFakeTimers();
     let registeredCallback: ((r: any) => void) | undefined;
     let registerErrorCallback: ((error: any) => void) | undefined;
@@ -249,12 +296,15 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       registeredCallback!(mockRegistration);
     });
 
-    // Advance 60 minutes
+    // Registration performs an immediate check.
+    expect(mockRegistration.update).toHaveBeenCalledTimes(1);
+
+    // Advance 60 minutes for the fallback periodic check.
     act(() => {
       vi.advanceTimersByTime(60 * 60 * 1000);
     });
 
-    expect(mockRegistration.update).toHaveBeenCalledTimes(1);
+    expect(mockRegistration.update).toHaveBeenCalledTimes(2);
 
     // Trigger onRegisterError
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -371,7 +421,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     consoleSpy.mockRestore();
   });
 
-  test('Edge Case: Periodic timer handles SW registration update rejection gracefully', () => {
+  test('Edge Case: Periodic timer handles SW registration update rejection gracefully', async () => {
     vi.useFakeTimers();
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     let registeredCallback: ((r: any) => void) | undefined;
@@ -399,7 +449,9 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       vi.advanceTimersByTime(60 * 60 * 1000);
     });
 
-    expect(mockRegistration.update).toHaveBeenCalledTimes(1);
+    expect(mockRegistration.update).toHaveBeenCalledTimes(2);
+    await act(async () => { await Promise.resolve(); });
+    expect(consoleSpy).toHaveBeenCalledWith('SW update error:', expect.any(Error));
 
     unmount();
     consoleSpy.mockRestore();
@@ -459,8 +511,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       vi.advanceTimersByTime(60 * 60 * 1000);
     });
 
-    expect(mockRegistration.update).toHaveBeenCalledTimes(1);
-    expect(consoleSpy).toHaveBeenCalledWith('SW periodic update synchronous error:', expect.any(Error));
+    expect(mockRegistration.update).toHaveBeenCalledTimes(2);
+    expect(consoleSpy).toHaveBeenCalledWith('SW update synchronous error:', expect.any(Error));
 
     unmount();
     consoleSpy.mockRestore();
