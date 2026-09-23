@@ -48,6 +48,12 @@ describe('post-redesign UI hardening', () => {
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-fatigue)');
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-pain)');
   });
+  it('keeps the cycle duration compact and muscle search results in document flow', () => {
+    const components = read('src/styles/components.css');
+    expect(components).toMatch(/\.cycle-duration-input\s*\{[^}]*width:\s*7\.5rem/);
+    expect(components).toMatch(/\.muscle-priority-results\s*\{[^}]*position:\s*static/);
+  });
+
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
     const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
     expect(routineItem).toContain('htmlFor={setsId}');

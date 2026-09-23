@@ -121,6 +121,27 @@ describe('M8 Domain Operations V4', () => {
         expect(replayCycles?.find(item => item.id === cycle.id)?.strategy).toEqual(cycle.strategy);
     });
 
+    it('persists muscle priorities when the cycle objective is unspecified', () => {
+        const before = base({ trainingCycles: [] });
+        const cycle = {
+            id: 'cycle-priorities',
+            name: 'Priorità muscolari',
+            durationWeeks: 6,
+            strategy: {
+                primaryMuscles: ['biceps_right'],
+                secondaryMuscles: ['delts_rear_left'],
+            },
+            routines: [],
+        };
+
+        const { after, operations, replay } = compile(before, { type: 'training-cycle.upsert', cycle });
+
+        expect(after.trainingCycles?.[0]?.strategy).toEqual(cycle.strategy);
+        expect(operations.length).toBeGreaterThan(0);
+        const replayCycles = replay.get('')?.trainingCycles as Array<typeof cycle> | undefined;
+        expect(replayCycles?.find(item => item.id === cycle.id)?.strategy).toEqual(cycle.strategy);
+    });
+
     it('emits ordered-keyed order intent for routine reorder', () => {
         const before = base({ routines: [
             { id: 'r1', name: 'A', exercises: [] },

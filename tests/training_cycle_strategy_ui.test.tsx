@@ -22,26 +22,54 @@ function fillBaseCycle() {
 }
 
 describe('training cycle strategy UI', () => {
-    it('keeps Non specificato always visible and allows an explicit unspecified choice', async () => {
-        const showAlert = useDialogStore.getState().showAlert as ReturnType<typeof vi.fn>;
-        showAlert.mockClear();
+    it('preselects Non specificato and keeps muscle priorities usable without an objective', async () => {
+        const onSave = vi.fn();
+        const { container } = render(
+            <CycleEditor routines={routines} onSave={onSave} onCancel={vi.fn()} />
+        );
+
+        const unspecified = screen.getByRole('button', { name: 'Non specificato' });
+        expect(unspecified.getAttribute('aria-pressed')).toBe('true');
+
+        const primarySearch = screen.getByRole('combobox', { name: 'Cerca focus primario' }) as HTMLInputElement;
+        expect(primarySearch.disabled).toBe(false);
+        fireEvent.focus(primarySearch);
+        expect(screen.getByRole('listbox', { name: 'Risultati focus primario' })).toBeDefined();
+        fireEvent.change(primarySearch, { target: { value: 'bicipite destro' } });
+        fireEvent.click(screen.getByRole('option', { name: 'Bicipite destro' }));
+
+        fillBaseCycle();
+        fireEvent.submit(container.querySelector('form')!);
+
+        await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+        expect(onSave.mock.calls[0][0].strategy).toEqual({
+            primaryMuscles: ['biceps_right'],
+        });
+    });
+
+    it('keeps selected muscle priorities when the objective returns to Non specificato', async () => {
         const onSave = vi.fn();
         const { container } = render(
             <CycleEditor routines={routines} onSave={onSave} onCancel={vi.fn()} />
         );
 
         fillBaseCycle();
-        expect(screen.getByRole('button', { name: 'Non specificato' })).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Sviluppo' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Performance' }));
 
-        fireEvent.submit(container.querySelector('form')!);
-        await waitFor(() => expect(showAlert).toHaveBeenCalledWith("Seleziona l'obiettivo del ciclo."));
-        expect(onSave).not.toHaveBeenCalled();
+        const primarySearch = screen.getByRole('combobox', { name: 'Cerca focus primario' });
+        fireEvent.focus(primarySearch);
+        fireEvent.change(primarySearch, { target: { value: 'quadricipiti' } });
+        fireEvent.click(screen.getByRole('option', { name: 'Quadricipiti' }));
 
         fireEvent.click(screen.getByRole('button', { name: 'Non specificato' }));
-        fireEvent.submit(container.querySelector('form')!);
+        expect(screen.getByRole('button', { name: /Rimuovi Quadricipiti dal focus primario/i })).toBeDefined();
 
+        fireEvent.submit(container.querySelector('form')!);
         await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-        expect(onSave.mock.calls[0][0].strategy).toBeUndefined();
+        expect(onSave.mock.calls[0][0].strategy).toEqual({
+            primaryMuscles: ['quads'],
+        });
     });
 
     it('requires a progression focus only when Sviluppo is selected', async () => {

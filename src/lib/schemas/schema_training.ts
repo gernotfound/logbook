@@ -99,7 +99,7 @@ export const SessionExerciseSchema = z.object({
 }).passthrough().catch({ exId: '', sessionNote: '', sets: [] }).default({ exId: '', sessionNote: '', sets: [] });
 
 export const TrainingCycleStrategySchema = z.object({
-    intent: z.enum(['development', 'maintenance', 'deload']),
+    intent: z.enum(['development', 'maintenance', 'deload']).optional(),
     progressionFocus: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
     primaryMuscles: z.array(z.string().trim().min(1)).optional().catch([]),
     secondaryMuscles: z.array(z.string().trim().min(1)).optional().catch([]),

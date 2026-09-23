@@ -277,7 +277,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                         onChange={e => handleDurationWeeksChange(e.target.value)}
                         onFocus={e => e.target.select()}
                         required
-                        style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                        className="cycle-duration-input"
                     />
                 </div>
 

@@ -333,6 +333,14 @@
     margin-bottom: 0;
 }
 
+.cycle-duration-input {
+    width: 7.5rem;
+    max-width: 100%;
+    display: block;
+    box-sizing: border-box;
+    font-size: 16px !important;
+}
+
 .cycle-muscle-priorities {
     display: grid;
     gap: 0.75rem;
@@ -350,11 +358,8 @@
 }
 
 .muscle-priority-results {
-    position: absolute;
-    top: calc(100% + 0.25rem);
-    left: 0;
-    right: 0;
-    z-index: 40;
+    position: static;
+    margin-top: 0.25rem;
     max-height: 15rem;
     overflow-y: auto;
     overscroll-behavior: contain;

@@ -213,7 +213,7 @@ export type TrainingCycleIntent = 'development' | 'maintenance' | 'deload';
 export type TrainingCycleProgressionFocus = 'performance' | 'volume' | 'density' | 'execution';
 
 export interface TrainingCycleStrategy {
-    intent: TrainingCycleIntent;
+    intent?: TrainingCycleIntent;
     progressionFocus?: TrainingCycleProgressionFocus;
     primaryMuscles?: string[];
     secondaryMuscles?: string[];

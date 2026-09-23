@@ -92,6 +92,30 @@ describe('workout session preparation', () => {
         expect(secondSession.cycleStrategy).toEqual({ intent: 'development', progressionFocus: 'volume' });
     });
 
+    it('snapshots muscle priorities even when the cycle objective is unspecified', () => {
+        const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
+        const userData: UserData = {
+            activeCycleId: 'cycle-a',
+            trainingCycles: [{
+                id: 'cycle-a',
+                name: 'Cycle A',
+                durationWeeks: 4,
+                strategy: {
+                    primaryMuscles: ['biceps_right'],
+                    secondaryMuscles: ['delts_rear_left'],
+                },
+                routines: [{ routineId: 'routine-a', frequencyPerWeek: 1 }],
+            }],
+        };
+
+        const session = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(session.cycleStrategy).toEqual({
+            primaryMuscles: ['biceps_right'],
+            secondaryMuscles: ['delts_rear_left'],
+        });
+    });
+
     it('lets explicit cycle info override active-cycle inference and builds free workouts deterministically', () => {
         const routine = { id: 'routine-a', name: 'Routine A', exercises: [] } as WorkoutRoutine;
         const workout = buildRoutineWorkout(

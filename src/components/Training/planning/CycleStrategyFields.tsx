@@ -4,7 +4,7 @@ import { MUSCLES, type MuscleDef } from '../../../lib/constants/muscles';
 import { CYCLE_FOCUS_LABELS, CYCLE_INTENT_LABELS, getMuscleName } from '../../../lib/trainingCycleStrategy';
 
 interface CycleStrategyFieldsProps {
-    intent: TrainingCycleIntent | '' | null;
+    intent: TrainingCycleIntent | '';
     progressionFocus: TrainingCycleProgressionFocus | '';
     primaryMuscles: string[];
     secondaryMuscles: string[];
@@ -40,7 +40,6 @@ function matchesMuscleSearch(muscle: MuscleDef, query: string): boolean {
 interface MusclePriorityPickerProps {
     priority: 'primary' | 'secondary';
     ids: string[];
-    enabled: boolean;
     onAddMuscle: (priority: 'primary' | 'secondary', muscleId: string) => void;
     onRemoveMuscle: (priority: 'primary' | 'secondary', muscleId: string) => void;
 }
@@ -48,7 +47,6 @@ interface MusclePriorityPickerProps {
 function MusclePriorityPicker({
     priority,
     ids,
-    enabled,
     onAddMuscle,
     onRemoveMuscle,
 }: MusclePriorityPickerProps) {
@@ -87,20 +85,19 @@ function MusclePriorityPicker({
                     role="combobox"
                     aria-label={`Cerca ${label.toLocaleLowerCase('it')}`}
                     aria-autocomplete="list"
-                    aria-expanded={enabled && open}
+                    aria-expanded={open}
                     aria-controls={listId}
                     autoComplete="off"
-                    disabled={!enabled}
                     value={query}
                     onChange={event => {
                         setQuery(event.target.value);
                         setOpen(true);
                     }}
                     onFocus={() => setOpen(true)}
-                    placeholder={enabled ? 'Cerca muscolo (es. deltoide, polpaccio...)' : 'Seleziona prima un obiettivo'}
+                    placeholder="Cerca muscolo (es. deltoide, polpaccio...)"
                     className="muscle-priority-search"
                 />
-                {enabled && open && (
+                {open && (
                     <div id={listId} role="listbox" aria-label={`Risultati ${label.toLocaleLowerCase('it')}`} className="muscle-priority-results">
                         {availableMuscles.length > 0 ? availableMuscles.map(muscle => (
                             <button
@@ -208,14 +205,12 @@ export function CycleStrategyFields({
                 <MusclePriorityPicker
                     priority="primary"
                     ids={primaryMuscles}
-                    enabled={Boolean(intent)}
                     onAddMuscle={onAddMuscle}
                     onRemoveMuscle={onRemoveMuscle}
                 />
                 <MusclePriorityPicker
                     priority="secondary"
                     ids={secondaryMuscles}
-                    enabled={Boolean(intent)}
                     onAddMuscle={onAddMuscle}
                     onRemoveMuscle={onRemoveMuscle}
                 />
