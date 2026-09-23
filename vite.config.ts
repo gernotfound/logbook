@@ -56,7 +56,6 @@ export default defineConfig({
         theme_color: '#000000',
         background_color: '#000000',
         display: 'standalone',
-        orientation: 'portrait',
         start_url: basePath,
         scope: basePath,
         lang: 'it-IT',
