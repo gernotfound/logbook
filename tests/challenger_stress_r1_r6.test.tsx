@@ -364,7 +364,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             );
 
             expect(screen.getByText('S1')).toBeDefined();
-            const btn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
+            const btn = screen.getByRole('button', { name: 'Aggiungi alla serie' });
             expect(btn).toBeDefined();
             expect(btn.textContent).toBe('+');
         });

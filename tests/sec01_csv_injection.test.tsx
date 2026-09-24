@@ -125,12 +125,12 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
         // La riga 2 potrebbe essere vuota se c'è un trailing newline.
         const validWorkoutRecords = workoutRecords.filter(r => r.length > 1);
         
-        expect(validWorkoutRecords[0].length).toBe(21);
-        expect(validWorkoutRecords[1].length).toBe(21);
+        expect(validWorkoutRecords[0].length).toBe(25);
+        expect(validWorkoutRecords[1].length).toBe(25);
         expect(validWorkoutRecords[1][1]).toBe(`'=cmd|calc`);
         expect(validWorkoutRecords[1][2]).toBe(`'-Attacco!`);
-        expect(validWorkoutRecords[1][5]).toBe(''); // RIR assente resta una cella vuota.
-        expect(validWorkoutRecords[1][7]).toBe("-10"); // Kg numerico intoccato!
+        expect(validWorkoutRecords[1][7]).toBe(''); // RIR assente resta una cella vuota.
+        expect(validWorkoutRecords[1][9]).toBe("-10"); // Kg numerico intoccato!
 
         // Test espliciti su Nutrition per LF, CRLF, escaped quotes e virgole interne
         const nutritionRecords = parseCsvForTest(nutritionCsv).filter(r => r.length > 1);
