@@ -238,4 +238,56 @@ describe('workout session preparation', () => {
         expect(prepared.finishedWorkout.isEditingHistory).toBeUndefined();
         expect(prepared.finishedWorkout.originalHistoryId).toBeUndefined();
     });
+
+    it('marks new sessions as 1-5 while preserving legacy 1-10 historical ratings', () => {
+        const runtime = createRuntime();
+        expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
+
+        const legacy = {
+            id: 'legacy-rating',
+            date: '2026-09-01',
+            exercises: [],
+            isEditingHistory: true,
+            originalHistoryId: 'legacy-rating',
+            moodRating: 8,
+            pumpRating: 7,
+            fatigueRating: 6,
+        } as WorkoutSession;
+        const savedLegacy = prepareHistoricalWorkoutForSave(
+            legacy,
+            'legacy-rating',
+            { mood: '8', pump: '7', fatigue: '6' },
+            '',
+            '00:45:00',
+            runtime,
+        );
+        expect(savedLegacy.moodRating).toBe(8);
+        expect(savedLegacy.pumpRating).toBe(7);
+        expect(savedLegacy.fatigueRating).toBe(6);
+        expect(savedLegacy.ratingScale).toBeUndefined();
+
+        const savedLegacyDecimal = prepareHistoricalWorkoutForSave(
+            { ...legacy, moodRating: 7.5 },
+            'legacy-rating',
+            { mood: '7.5', pump: '', fatigue: '' },
+            '',
+            '00:45:00',
+            runtime,
+        );
+        expect(savedLegacyDecimal.moodRating).toBe(7.5);
+
+        const invalidNew = { ...legacy, id: 'new-rating', originalHistoryId: 'new-rating', ratingScale: 5 as const };
+        const savedNew = prepareHistoricalWorkoutForSave(
+            invalidNew,
+            'new-rating',
+            { mood: '8', pump: '5', fatigue: '4' },
+            '',
+            '00:45:00',
+            runtime,
+        );
+        expect(savedNew.moodRating).toBeNull();
+        expect(savedNew.pumpRating).toBe(5);
+        expect(savedNew.fatigueRating).toBe(4);
+    });
+
 });

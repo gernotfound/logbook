@@ -270,7 +270,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     <ExerciseSearchDropdown
                         library={library}
                         onSelectExercise={addExtraExercise}
-                        placeholder="ðŸ” Cerca esercizio extra da aggiungere..."
+                        placeholder="?? Cerca esercizio extra da aggiungere..."
                     />
                 </div>
             </div>
@@ -285,6 +285,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                 setPump={setPump}
                 fatigue={fatigue}
                 setFatigue={setFatigue}
+                ratingScale={activeWorkout.ratingScale ?? 10}
                 pains={pains}
                 onTogglePain={togglePain}
                 onSetPains={setPains}
@@ -294,7 +295,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
             {activeWorkout.isEditingHistory ? (
                 <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
                     <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        â±ï¸ Durata della sessione
+                        ?? Durata della sessione
                     </label>
                     <input 
                         id="workout-manual-duration"
@@ -335,7 +336,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
             ) : (
                 <>
                     <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={onRequestEnd}>
-                        <span aria-hidden="true">ðŸ</span> Termina sessione
+                        <span aria-hidden="true">??</span> Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
                         <Trash2 size={16} aria-hidden="true" /> Elimina sessione

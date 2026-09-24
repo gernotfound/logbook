@@ -43,6 +43,7 @@ export function buildRoutineWorkout(
         cycleName: assignedCycleName,
         ...(assignedCycleStrategy ? { cycleStrategy: assignedCycleStrategy } : {}),
         date: runtime.getLocalDateString(),
+        ratingScale: 5,
         exercises: (routine.exercises || []).map((ex: any) => {
             const libDef = (userData?.library || []).find(l => l.id === ex.exId);
             const isCardio = libDef?.trackingType === 'cardio';
@@ -54,7 +55,7 @@ export function buildRoutineWorkout(
                 const plannedTechnique = plan?.technique || ex.defaultTechnique;
                 if (plannedTechnique === 'dropset' || ['rest_pause', 'cluster', 'rep_match', 'diminishing'].includes(plannedTechnique)) {
                     setObj.technique = plannedTechnique;
-                    const extraSegments = plannedTechnique === 'cluster' && plan?.segmentCount
+                    const extraSegments = plan?.segmentCount
                         ? Math.max(1, plan.segmentCount - 1)
                         : 1;
                     setObj.segments = Array.from({ length: extraSegments }, () => ({
@@ -84,6 +85,7 @@ export function buildFreeWorkout(runtime: WorkoutPreparationRuntime = defaultRun
         id: runtime.generateId('w'),
         routineName: 'Allenamento libero',
         date: runtime.getLocalDateString(),
+        ratingScale: 5,
         exercises: [],
     };
 }
@@ -148,7 +150,8 @@ export function prepareHistoricalWorkoutForSave(
     manualDuration: string,
     runtime: WorkoutPreparationRuntime = defaultRuntime,
 ): WorkoutSession {
-    const valRes = Logic.validateWorkoutRatings(ratings.mood, ratings.pump, ratings.fatigue);
+    const ratingScale = currentWorkout.ratingScale ?? 10;
+    const valRes = Logic.validateWorkoutRatings(ratings.mood, ratings.pump, ratings.fatigue, ratingScale);
     const durationStr = Logic.normalizeDuration(
         manualDuration?.trim() || currentWorkout.manualDurationStr || currentWorkout.globalDurationStr || '00:00:00',
     );
@@ -181,10 +184,12 @@ export function prepareCompletedWorkout(
     durationStr: string;
     sessionPains: string[];
 } {
+    const ratingScale = currentWorkout.ratingScale ?? 10;
     const valRes = Logic.validateWorkoutRatings(
         String(currentWorkout.moodRating ?? ''),
         String(currentWorkout.pumpRating ?? ''),
         String(currentWorkout.fatigueRating ?? ''),
+        ratingScale,
     );
     const startTime = currentWorkout.globalStartTime || endTime;
     const diff = Math.max(0, Math.floor((endTime - startTime) / 1000));

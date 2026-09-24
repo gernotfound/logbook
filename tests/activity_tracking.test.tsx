@@ -173,4 +173,18 @@ describe('activity export and local-day behavior', () => {
         expect(hook.result.current.savedSteps).toBeUndefined();
         expect(hook.result.current.steps).toBe('');
     });
+
+    it('edits a legitimate cardio session whose stable id is "new" instead of treating it as a draft sentinel', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 8, 24, 12, 0, 0));
+        useAppStore.setState({ userData: parse({ nutrition: {
+            '2026-09-24': { date: '2026-09-24', cardioSessions: [{ ...cardio('new', 42), notes: 'existing' }] },
+        } }) });
+        const hook = renderHook(() => useActivityTracking());
+        act(() => hook.result.current.editCardio('new'));
+        expect(hook.result.current.isCreatingCardio).toBe(false);
+        expect(hook.result.current.cardioForm.durationMinutes).toBe('42');
+        expect(hook.result.current.cardioForm.notes).toBe('existing');
+    });
+
 });

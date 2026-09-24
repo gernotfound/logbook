@@ -90,12 +90,34 @@ export const SessionExerciseIsometricSchema = z.object({
 }).passthrough().catch({ id: '', kg: '', time: '' }).default({ id: '', kg: '', time: '' });
 
 const SessionSetSegmentSchema = z.object({
-    id: safeString(''),
+    id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo segmento non valido'),
     kg: safeString(''),
     reps: safeString(''),
     time: safeOptionalString(),
     restBeforeSeconds: z.number().int().nonnegative().optional().catch(undefined),
 }).passthrough();
+
+function sanitizeSetSegments(value: unknown): unknown[] {
+    if (!Array.isArray(value)) return [];
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = SessionSetSegmentSchema.safeParse(raw);
+        if (!parsed.success || seen.has(parsed.data.id)) {
+            reportZodSchemaFallback({
+                schema: 'SessionSetSegmentSchema',
+                field: 'id',
+                fallbackUsed: 'record_quarantined',
+                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
+                error: parsed.success ? undefined : parsed.error,
+            });
+            continue;
+        }
+        seen.add(parsed.data.id);
+        result.push(parsed.data);
+    }
+    return result;
+}
 
 export const SessionExerciseSetSchema = z.object({
     id: safeString(''),
@@ -110,7 +132,7 @@ export const SessionExerciseSetSchema = z.object({
     done: safeOptionalBoolean(),
     technique: SetTechniqueSchema.optional().catch(undefined),
     executionMode: z.enum(['standard', 'stop_reps']).optional().catch(undefined),
-    segments: z.array(SessionSetSegmentSchema).optional().catch(undefined),
+    segments: z.preprocess(sanitizeSetSegments, z.array(SessionSetSegmentSchema)).optional().catch(undefined),
     target: SetTargetSchema.optional().catch(undefined),
     dropsets: z.array(SessionExerciseDropsetSchema).optional().catch([]).default([]),
     isometrics: z.array(SessionExerciseIsometricSchema).optional().catch([]).default([]),
@@ -159,6 +181,7 @@ export const WorkoutSessionSchema = z.object({
     globalEndTime: safeOptionalNumber(),
     globalDurationStr: safeOptionalString(),
     manualDurationStr: safeOptionalString(),
+    ratingScale: z.union([z.literal(5), z.literal(10)]).optional().catch(undefined),
     moodRating: safeOptionalNullableNumber(),
     pumpRating: safeOptionalNullableNumber(),
     fatigueRating: safeOptionalNullableNumber(),

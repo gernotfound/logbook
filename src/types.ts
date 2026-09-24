@@ -149,6 +149,8 @@ export interface WorkoutSession {
     globalEndTime?: number;
     globalDurationStr?: string;
     manualDurationStr?: string;
+    // New sessions use 1?5. Absence means legacy 1?10 data.
+    ratingScale?: 5 | 10;
     moodRating?: number | null;
     pumpRating?: number | null;
     fatigueRating?: number | null;

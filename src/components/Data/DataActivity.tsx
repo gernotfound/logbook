@@ -13,6 +13,7 @@ export default function DataActivity() {
     const activeDate = activity.selectedDate;
     const isToday = activeDate === activity.today;
     const form = activity.cardioForm;
+    const dateNavigationLocked = activity.editingCardioId !== null;
 
     const previousDay = () => activity.setSelectedDate(shiftDateString(activeDate, -1));
     const nextDay = () => { if (!isToday) activity.setSelectedDate(shiftDateString(activeDate, 1)); };
@@ -44,12 +45,12 @@ export default function DataActivity() {
             </section>
 
             <nav className="activity-date-nav" aria-label="Giorno attività">
-                <button type="button" className="btn btn-small" onClick={previousDay}>◀ Prec.</button>
-                <button type="button" className="data-day-current" onClick={() => activity.setSelectedDate(activity.today)} aria-label="Torna a oggi">
+                <button type="button" className="btn btn-small" onClick={previousDay} disabled={dateNavigationLocked}>◀ Prec.</button>
+                <button type="button" className="data-day-current" onClick={() => activity.setSelectedDate(activity.today)} aria-label="Torna a oggi" disabled={dateNavigationLocked}>
                     <strong>{Logic.formatItalianDate(activeDate)}</strong>
                     {isToday && <span>OGGI</span>}
                 </button>
-                <button type="button" className="btn btn-small" onClick={nextDay} disabled={isToday}>Succ. ▶</button>
+                <button type="button" className="btn btn-small" onClick={nextDay} disabled={isToday || dateNavigationLocked}>Succ. ▶</button>
             </nav>            <section className="section-divider" aria-labelledby="daily-activity-title">
                 <div className="activity-heading-row">
                     <div>
@@ -116,7 +117,7 @@ export default function DataActivity() {
                 )}                {activity.editingCardioId !== null && (
                     <form className="activity-cardio-editor" onSubmit={event => { event.preventDefault(); void activity.saveCardio(); }}>
                         <div className="activity-editor-title">
-                            <h3>{activity.editingCardioId === 'new' ? 'Nuova sessione cardio' : 'Modifica sessione cardio'}</h3>
+                            <h3>{activity.isCreatingCardio ? 'Nuova sessione cardio' : 'Modifica sessione cardio'}</h3>
                             <button type="button" className="activity-icon-btn" aria-label="Chiudi modulo cardio" onClick={activity.cancelCardio}><X size={20} /></button>
                         </div>
                         <div className="activity-primary-fields">

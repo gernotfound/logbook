@@ -165,6 +165,8 @@ export function computeWorkoutReport(
     const totalVolumeIsComplete = engine.exercises.every(progression => progression.current.tonnageComplete);
     const comparisonsWithPrevious = exerciseComparisons.filter(comparison => comparison.progression.previousComparable);
     const previousTotalVolume = comparisonsWithPrevious.reduce((sum, comparison) => sum + comparison.previousVolume, 0);
+    const comparableCurrentVolume = comparisonsWithPrevious.reduce((sum, comparison) => sum + comparison.currentVolume, 0);
+    const comparableCurrentVolumeIsComplete = comparisonsWithPrevious.every(comparison => comparison.progression.current.tonnageComplete);
     const previousVolumeIsComplete = comparisonsWithPrevious.every(
         comparison => comparison.progression.previousComparable?.tonnageComplete,
     );
@@ -185,8 +187,8 @@ export function computeWorkoutReport(
     if (comparisonsWithPrevious.length > 0) {
         report.previousTotalVolume = previousTotalVolume;
         report.previousVolumeIsComplete = previousVolumeIsComplete;
-        if (totalVolumeIsComplete && previousVolumeIsComplete && previousTotalVolume > 0) {
-            report.volumeDeltaPercent = ((totalVolume - previousTotalVolume) / previousTotalVolume) * 100;
+        if (comparableCurrentVolumeIsComplete && previousVolumeIsComplete && previousTotalVolume > 0) {
+            report.volumeDeltaPercent = ((comparableCurrentVolume - previousTotalVolume) / previousTotalVolume) * 100;
         }
     }
 

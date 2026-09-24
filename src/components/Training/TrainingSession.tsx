@@ -19,7 +19,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         pains, setPains, togglePain,
     } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
-    const [isPostSession, setIsPostSession] = useState(false);
+    const [pendingEndTime, setPendingEndTime] = useState<number | null>(null);
+    const isPostSession = pendingEndTime !== null;
     const handleCloseReport = useCallback(() => {
         setReportWorkout(null);
         window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
@@ -29,9 +30,9 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     // cancellazione del workout locale che segue un salvataggio riuscito.
     if (isPostSession && activeWorkout && !activeWorkout.isEditingHistory) {
         const finish = async () => {
-            const finished = await endWorkout(false);
+            const finished = await endWorkout(false, pendingEndTime);
             if (finished) {
-                setIsPostSession(false);
+                setPendingEndTime(null);
                 setReportWorkout(finished);
             }
         };
@@ -47,11 +48,12 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                     mood={mood} setMood={setMood}
                     pump={pump} setPump={setPump}
                     fatigue={fatigue} setFatigue={setFatigue}
+                    ratingScale={5}
                     pains={pains} onTogglePain={togglePain} onSetPains={setPains}
                 />
                 <div className="pre-session-actions">
                     <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>
-                    <button type="button" className="btn btn-secondary" onClick={() => setIsPostSession(false)}>Torna all’allenamento</button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setPendingEndTime(null)}>Torna all’allenamento</button>
                 </div>
             </section>
         );
@@ -87,7 +89,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     return (
         <ActiveWorkoutSession
             onNavigateToHistory={onNavigateToHistory}
-            onRequestEnd={() => setIsPostSession(true)}
+            onRequestEnd={() => setPendingEndTime(Date.now())}
         />
     );
 };

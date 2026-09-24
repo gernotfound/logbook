@@ -1,4 +1,4 @@
-import type { SessionExerciseSet, SetSegment, SetTechnique } from '../types';
+import type { PlannedSetTechnique, SessionExerciseSet, SetSegment, SetTechnique } from '../types';
 
 export const ADVANCED_TECHNIQUES: Exclude<SetTechnique, 'straight'>[] = ['dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing'];
 
@@ -15,6 +15,21 @@ export function getSetTechnique(set: SessionExerciseSet): SetTechnique {
 export function getSetSegments(set: SessionExerciseSet): SetSegment[] {
     if (set.segments?.length) return set.segments;
     return (set.dropsets || []).map(ds => ({ id: ds.id, kg: ds.kg, reps: ds.reps }));
+}
+
+export function getRoutineSetPlan(set: SessionExerciseSet): PlannedSetTechnique {
+    const technique = getSetTechnique(set);
+    const segments = getSetSegments(set);
+    const plan: PlannedSetTechnique = { technique };
+    if (set.target) plan.target = structuredClone(set.target);
+    if (technique !== 'straight' && segments.length > 0) {
+        plan.segmentCount = segments.length + 1;
+        const firstRest = segments[0]?.restBeforeSeconds;
+        if (firstRest !== undefined && segments.every(segment => segment.restBeforeSeconds === firstRest)) {
+            plan.restSeconds = firstRest;
+        }
+    }
+    return plan;
 }
 
 export function getSetTotalReps(set: SessionExerciseSet): number {

@@ -460,4 +460,28 @@ describe('contextual progression engine', () => {
 
         expect(compareExposureCompatibility(secondExposure, firstExposure)).toEqual({ level: 'high', reasons: [] });
     });
+
+    it('uses an earlier same-day session when timestamps establish chronology', () => {
+        const previous = { ...workout({ id: 'same-day-1', date: '2026-09-24', sets: [set(100, 8, 2)] }), globalStartTime: 1_000, globalEndTime: 2_000 };
+        const current = { ...workout({ id: 'same-day-2', date: '2026-09-24', sets: [set(100, 9, 2)] }), globalStartTime: 3_000, globalEndTime: 4_000 };
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+        expect(analysis.previousComparable?.sessionId).toBe('same-day-1');
+        expect(analysis.classification).toBe('performance_record');
+    });
+
+    it('does not treat blank planned sets as observed density work', () => {
+        const observed = [set(100, 8, 2), set(100, 8, 2), set(100, 8, 2), set(100, 8, 2)];
+        const blanks = [
+            set(100, 8, 2),
+            { id: 'blank-1', kg: '', reps: '', technique: 'straight' as const },
+            { id: 'blank-2', kg: '', reps: '', technique: 'straight' as const },
+            { id: 'blank-3', kg: '', reps: '', technique: 'straight' as const },
+        ];
+        const previous = workout({ id: 'density-prev', date: '2026-09-17', routineId: 'density-r', focus: 'density', duration: '01:00:00', sets: observed });
+        const current = workout({ id: 'density-current', date: '2026-09-24', routineId: 'density-r', focus: 'density', duration: '00:50:00', sets: blanks });
+        const density = computeProgressionEngine(current, [previous], library).density;
+        expect(density?.quality).toBe('limited');
+        expect(density?.headline).toContain('lavoro diverso');
+    });
+
 });
