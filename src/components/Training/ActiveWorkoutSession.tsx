@@ -58,7 +58,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
         saveHistoryEdit, cancelHistoryEdit,
         addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
-        addSpecialSet, updateSpecialSet, removeSpecialSet,
+        addSpecialSet, updateSpecialSet, removeSpecialSet, addSegment, updateSetTarget,
         updateSetupNote, updateSessionNote
     } = useWorkoutSession();
 
@@ -145,13 +145,21 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
         addSpecialSet(exIndex, setId, type, () => setOpenSpecialMenuId(null));
     }, [addSpecialSet]);
 
-    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, val: any) => {
+    const handleUpdateSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, val: any) => {
         updateSpecialSet(exIndex, setId, type, idx, field, val);
     }, [updateSpecialSet]);
 
-    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number) => {
+    const handleRemoveSpecialSet = useCallback((exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => {
         removeSpecialSet(exIndex, setId, type, idx);
     }, [removeSpecialSet]);
+
+    const handleAddSegment = useCallback((exIndex: number, setId: string) => {
+        addSegment(exIndex, setId);
+    }, [addSegment]);
+
+    const handleUpdateSetTarget = useCallback((exIndex: number, setId: string, reps: number | undefined) => {
+        updateSetTarget(exIndex, setId, reps);
+    }, [updateSetTarget]);
 
     const handleToggleSpecialMenu = useCallback((setId: string) => {
         setOpenSpecialMenuId(prev => (prev === setId ? null : setId));
@@ -242,6 +250,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
                                 onAddSpecialSet={handleAddSpecialSet}
                                 onUpdateSpecialSet={handleUpdateSpecialSet}
                                 onRemoveSpecialSet={handleRemoveSpecialSet}
+                                onAddSegment={handleAddSegment}
+                                onUpdateSetTarget={handleUpdateSetTarget}
                                 onToggleSpecialMenu={handleToggleSpecialMenu}
                             />
                         );

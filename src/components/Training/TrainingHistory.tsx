@@ -1,3 +1,4 @@
+import { formatAdvancedSetSummary } from '../../lib/advancedSets';
 import { useMemo, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { BarChart2, Pencil, Trash2 } from 'lucide-react';
@@ -120,7 +121,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                             const libDef = libraryMap.get(ex.exId);
                                             const exName = libDef ? libDef.name : (ex.name || 'Esercizio rimosso');
                                             
-                                            const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time || s.distance || s.speed || s.kcal || s.rir !== undefined);
+                                            const validSets = (ex.sets || []).filter((s: any) => s.kg || s.reps || s.time || s.distance || s.speed || s.kcal || s.rir !== undefined || s.segments?.length || s.dropsets?.length || s.isometrics?.length);
                                             return (
                                                 <div key={exIdx} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
                                                     <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{exName}</span>
@@ -142,7 +143,8 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                                         const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
                                                         const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
                                                         const displayRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? ` · ${s.rir} RIR` : '';
-                                                        return `${displayKg}kg×${displayReps}${displayRir}`;
+                                                        const advanced = formatAdvancedSetSummary(s);
+                                                        return `${displayKg}kg×${displayReps}${displayRir}${advanced ? ` · ${advanced}` : ''}`;
                                                         }).join(', ')}</span>
                                                     )}
                                                 </div>

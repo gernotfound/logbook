@@ -329,10 +329,10 @@ describe('Workout Improvements & History Edit Suite', () => {
 
       expect(hookResult.loading).toBe(false);
       
-      // Volume calculation: 3 main sets + 2 dropsets = 5 sets for Petto
+      // Volume calculation: composed dropsets remain one work set: 3 work sets for Petto
       expect(hookResult.volumeChartData.labels).toContain('Petto');
       const pettoIndex = hookResult.volumeChartData.labels.indexOf('Petto');
-      expect(hookResult.volumeChartData.datasets[0].data[pettoIndex]).toBe(5);
+      expect(hookResult.volumeChartData.datasets[0].data[pettoIndex]).toBe(3);
 
       // Fatigue / MuscleColors: 24h passed -> baseFatigue = 1 - 24/72 = 0.667 (> 0.35) -> #f97316 (orange)
       expect(hookResult.muscleColors['chest-lower-left']).toBe('var(--muscle-fatigue)');

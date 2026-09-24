@@ -50,15 +50,28 @@ export function buildRoutineWorkout(
             const sets = [];
             for (let i = 0; i < setsCount; i++) {
                 const setObj: any = { id: runtime.generateId('s'), kg: '', reps: '' };
-                if (ex.defaultTechnique === 'dropset') {
-                    setObj.dropsets = [{ id: runtime.generateId('ds'), kg: '', reps: '' }];
-                } else if (ex.defaultTechnique === 'isometrics') {
+                const plan = ex.setPlans?.[i];
+                const plannedTechnique = plan?.technique || ex.defaultTechnique;
+                if (plannedTechnique === 'dropset' || ['rest_pause', 'cluster', 'rep_match', 'diminishing'].includes(plannedTechnique)) {
+                    setObj.technique = plannedTechnique;
+                    const extraSegments = plannedTechnique === 'cluster' && plan?.segmentCount
+                        ? Math.max(1, plan.segmentCount - 1)
+                        : 1;
+                    setObj.segments = Array.from({ length: extraSegments }, () => ({
+                        id: runtime.generateId('seg'),
+                        kg: '',
+                        reps: '',
+                        ...(plan?.restSeconds !== undefined ? { restBeforeSeconds: plan.restSeconds } : {}),
+                    }));
+                    if (plan?.target) setObj.target = structuredClone(plan.target);
+                } else if (plannedTechnique === 'isometrics') {
                     setObj.isometrics = [{ id: runtime.generateId('iso'), kg: '', time: '' }];
                 }
                 sets.push(setObj);
             }
             const result: any = { id: runtime.generateId('se'), exId: ex.exId, sets, sessionNote: '' };
             if (ex.defaultTechnique) result.defaultTechnique = ex.defaultTechnique;
+            if (ex.setPlans) result.setPlans = structuredClone(ex.setPlans);
             if (ex.minReps) result.minReps = ex.minReps;
             if (ex.maxReps) result.maxReps = ex.maxReps;
             return result;
@@ -108,6 +121,13 @@ export function prepareHistoricalWorkoutForEditing(
                 kg: iso.kg !== undefined && iso.kg !== null ? String(iso.kg) : '',
                 time: iso.time !== undefined && iso.time !== null ? String(iso.time) : '',
             })),
+            segments: Array.isArray(s.segments) ? s.segments.map((segment: any) => ({
+                ...segment,
+                id: segment.id || runtime.generateId('seg'),
+                kg: segment.kg !== undefined && segment.kg !== null ? String(segment.kg) : '',
+                reps: segment.reps !== undefined && segment.reps !== null ? String(segment.reps) : '',
+                ...(segment.time !== undefined && segment.time !== null ? { time: String(segment.time) } : {}),
+            })) : undefined,
         })),
     }));
 

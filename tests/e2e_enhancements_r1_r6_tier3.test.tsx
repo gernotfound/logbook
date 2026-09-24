@@ -247,7 +247,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             act(() => {
                 result.current.addSpecialSet(1, 's2', 'dropset');
             });
-            expect(localWorkout?.exercises[1].sets[0].dropsets?.length).toBe(1);
+            expect(localWorkout?.exercises[1].sets[0].segments?.length).toBe(1);
 
             // 2. Add isometry to ex_press (index 0)
             act(() => {
@@ -261,7 +261,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             });
 
             expect(localWorkout?.exercises[0].exId).toBe('ex_lateral');
-            expect(localWorkout?.exercises[0].sets[0].dropsets?.length).toBe(1);
+            expect(localWorkout?.exercises[0].sets[0].segments?.length).toBe(1);
             expect(localWorkout?.exercises[1].exId).toBe('ex_press');
             expect(localWorkout?.exercises[1].sets[0].isometrics?.length).toBe(1);
 

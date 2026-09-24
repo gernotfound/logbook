@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
+import { formatAdvancedSetSummary, techniqueLabel } from '../../../lib/advancedSets';
 
 interface SessionSetRowProps {
     set: any;
@@ -12,8 +13,10 @@ interface SessionSetRowProps {
     onRemoveSet: (sIndex: number) => void;
     onUpdateSet: (setId: string, field: string, value: any) => void;
     onAddSpecialSet: (type: string, setId: string) => void;
-    onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
-    onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics', idx: number) => void;
+    onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: any) => void;
+    onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => void;
+    onAddSegment: (setId: string) => void;
+    onUpdateSetTarget: (setId: string, reps: number | undefined) => void;
 }
 
 const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
@@ -26,7 +29,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     onUpdateSet,
     onAddSpecialSet,
     onUpdateSpecialSet,
-    onRemoveSpecialSet
+    onRemoveSpecialSet,
+    onAddSegment,
+    onUpdateSetTarget
 }) => {
     const [isRirOpen, setIsRirOpen] = React.useState(false);
     const rirTriggerRef = React.useRef<HTMLButtonElement>(null);
@@ -52,9 +57,9 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
             <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px', border: '1px solid var(--primary-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '75px' }}>
                     <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
-                    <button 
-                        className="btn-icon" 
-                        style={{ color: 'var(--danger-color)', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }} 
+                    <button
+                        className="btn-icon"
+                        style={{ color: 'var(--danger-color)', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
                         onClick={() => onRemoveSet(sIndex)}
                         aria-label={`Rimuovi serie ${sIndex + 1}`}
                     >
@@ -65,46 +70,46 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, position: 'relative', minWidth: 0 }}>
                     {trackingType === 'time' ? (
                         <>
-                            <BufferedInput 
-                                id={`kg-${s.id}`} 
-                                type="number" 
-                                step="0.25" 
-                                placeholder="Kg (opz)" 
-                                value={s.kg ?? ''} 
-                                onChange={val => onUpdateSet(s.id, 'kg', val)} 
+                            <BufferedInput
+                                id={`kg-${s.id}`}
+                                type="number"
+                                step="0.25"
+                                placeholder="Kg (opz)"
+                                value={s.kg ?? ''}
+                                onChange={val => onUpdateSet(s.id, 'kg', val)}
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 1, minWidth: 0 }} 
+                                style={{ margin: 0, flex: 1, minWidth: 0 }}
                             />
-                            <BufferedInput 
-                                id={`time-${s.id}`} 
-                                type="text" 
-                                placeholder="Tempo (es. 60s)" 
-                                value={s.time ?? ''} 
-                                onChange={val => onUpdateSet(s.id, 'time', val)} 
+                            <BufferedInput
+                                id={`time-${s.id}`}
+                                type="text"
+                                placeholder="Tempo (es. 60s)"
+                                value={s.time ?? ''}
+                                onChange={val => onUpdateSet(s.id, 'time', val)}
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 2, minWidth: 0 }} 
+                                style={{ margin: 0, flex: 2, minWidth: 0 }}
                             />
                         </>
                     ) : (
                         <>
-                            <BufferedInput 
-                                id={`kg-${s.id}`} 
-                                type="number" 
-                                step="0.25" 
-                                placeholder="Kg" 
-                                value={s.kg ?? ''} 
-                                onChange={val => onUpdateSet(s.id, 'kg', val)} 
+                            <BufferedInput
+                                id={`kg-${s.id}`}
+                                type="number"
+                                step="0.25"
+                                placeholder="Kg"
+                                value={s.kg ?? ''}
+                                onChange={val => onUpdateSet(s.id, 'kg', val)}
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 1, minWidth: 0 }} 
+                                style={{ margin: 0, flex: 1, minWidth: 0 }}
                             />
-                            <BufferedInput 
-                                id={`reps-${s.id}`} 
-                                type="number" 
-                                placeholder="Reps" 
-                                value={s.reps ?? ''} 
-                                onChange={val => onUpdateSet(s.id, 'reps', val)} 
+                            <BufferedInput
+                                id={`reps-${s.id}`}
+                                type="number"
+                                placeholder="Reps"
+                                value={s.reps ?? ''}
+                                onChange={val => onUpdateSet(s.id, 'reps', val)}
                                 onFocus={e => e.target.select()}
-                                style={{ margin: 0, flex: 1, minWidth: 0 }} 
+                                style={{ margin: 0, flex: 1, minWidth: 0 }}
                             />
                         </>
                     )}
@@ -196,13 +201,13 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             )}
                         </div>
                     )}
-                    <button 
-                        className="btn-icon" 
-                        style={{ 
-                            background: 'var(--primary-color)', 
-                            borderRadius: '50%', 
-                            width: '36px', 
-                            height: '36px', 
+                    <button
+                        className="btn-icon"
+                        style={{
+                            background: 'var(--primary-color)',
+                            borderRadius: '50%',
+                            width: '44px',
+                            height: '44px',
                             color: 'var(--on-primary)',
                             flexShrink: 0,
                             display: 'inline-flex',
@@ -213,41 +218,73 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             fontSize: '1.2rem',
                             lineHeight: 1,
                             alignSelf: 'center'
-                        }} 
+                        }}
                         onClick={onToggleMenu}
-                        aria-label="Aggiungi dropset o isometria"
+                        aria-label="Aggiungi alla serie"
                     >
                         +
                     </button>
-                    
+
                     {isOpenMenu && (
                         <>
-                            <div 
-                                style={{ position: 'fixed', inset: 0, zIndex: 45 }} 
-                                onClick={onToggleMenu} 
+                            <div
+                                style={{ position: 'fixed', inset: 0, zIndex: 45 }}
+                                onClick={onToggleMenu}
                             />
-                            <div 
-                                className="special-menu" 
-                                style={{ 
-                                    position: 'absolute', 
-                                    right: 0, 
-                                    top: '40px', 
-                                    background: 'var(--surface-color)', 
-                                    padding: '10px', 
-                                    borderRadius: '8px', 
-                                    zIndex: 50, 
+                            <div
+                                className="special-menu"
+                                style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    top: '40px',
+                                    background: 'var(--surface-color)',
+                                    padding: '10px',
+                                    borderRadius: '8px',
+                                    zIndex: 50,
                                     minWidth: '140px',
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.8)', 
-                                    border: '1px solid var(--glass-border)' 
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
+                                    border: '1px solid var(--glass-border)'
                                 }}
                             >
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet('dropset', s.id)}>+ Dropset</button>
+                                {[
+                                    ['dropset', 'Dropset'],
+                                    ['rest_pause', 'Rest-pause'],
+                                    ['cluster', 'Cluster'],
+                                    ['rep_match', 'Rep-match'],
+                                    ['diminishing', 'Diminishing set'],
+                                ].map(([value, label]) => (
+                                    <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(value, s.id)}>+ {label}</button>
+                                ))}
                                 <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => onAddSpecialSet('isometry', s.id)}>+ Isometria</button>
                             </div>
                         </>
                     )}
                 </div>
             </div>
+
+            {s.technique && s.technique !== 'straight' && (
+                <div style={{ marginLeft: '20px', borderLeft: '2px solid var(--primary-color)', padding: '8px 0 8px 10px', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px' }}>{formatAdvancedSetSummary(s) || techniqueLabel(s.technique)}</div>
+                    {(s.technique === 'rep_match' || s.technique === 'diminishing') && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target reps</span>
+                            <BufferedInput id={`target-${s.id}`} type="number" placeholder="—" value={s.target?.reps ?? ''} onChange={val => {
+                                const parsed = Number(val);
+                                onUpdateSetTarget(s.id, val === '' || !Number.isFinite(parsed) ? undefined : Math.max(0, Math.trunc(parsed)));
+                            }} style={{ margin: 0, width: '82px' }} />
+                        </div>
+                    )}
+                    {(s.segments || []).map((segment: any, segmentIndex: number) => (
+                        <div key={segment.id || segmentIndex} style={{ display: 'grid', gridTemplateColumns: s.technique === 'dropset' ? '1fr 1fr 44px' : '76px 1fr 1fr 44px', gap: '5px', alignItems: 'center', marginBottom: '5px' }}>
+                            {s.technique !== 'dropset' && <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />}
+                            <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
+                            <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
+                            <button className="btn-icon" aria-label={`Rimuovi segmento ${segmentIndex + 1}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
+                        </div>
+                    ))}
+                    <button className="btn btn-small" style={{ minHeight: '44px', margin: 0 }} onClick={() => onAddSegment(s.id)}>+ Segmento</button>
+                </div>
+            )}
 
             {(s.dropsets || []).map((ds: any, dsIdx: number) => {
                 const label = (s.dropsets && s.dropsets.length > 1) ? `↳ Dropset ${dsIdx + 1}` : '↳ Dropset';
