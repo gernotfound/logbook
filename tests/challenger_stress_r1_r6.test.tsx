@@ -506,9 +506,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 <SessionRatings
                     water="2.0"
                     setWater={vi.fn()}
-                    mood="7"
+                    mood="4"
                     setMood={vi.fn()}
-                    pump="8"
+                    pump="5"
                     setPump={vi.fn()}
                     fatigue="5"
                     setFatigue={vi.fn()}
@@ -516,9 +516,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             );
 
             expect(screen.getByDisplayValue('2.0')).toBeDefined();
-            expect(screen.getByDisplayValue('7')).toBeDefined();
-            expect(screen.getByDisplayValue('8')).toBeDefined();
-            expect(screen.getByDisplayValue('5')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Umore: 4 su 5' }).getAttribute('aria-pressed')).toBe('true');
+            expect(screen.getByRole('button', { name: 'Pump: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
+            expect(screen.getByRole('button', { name: 'Stanchezza: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
         });
 
         it('HomeView displays Panoramica di oggi with activePains without crash', () => {

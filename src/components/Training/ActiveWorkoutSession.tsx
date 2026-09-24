@@ -9,7 +9,6 @@ import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
-import type { WorkoutSession } from '../../types';
 
 // Responsabilità: renderizzare la UI di un allenamento in corso (lista esercizi, timer).
 // Props: onNavigateToHistory (callback per navigare allo storico).
@@ -47,16 +46,16 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
 
 export interface ActiveWorkoutSessionProps {
     onNavigateToHistory?: () => void;
-    onWorkoutCompleted?: (workout: WorkoutSession) => void;
+    onRequestEnd?: () => void;
 }
 
-export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }: ActiveWorkoutSessionProps) => {
+export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: ActiveWorkoutSessionProps) => {
     const {
         activeWorkout, library, history,
         mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
         manualDuration, setManualDuration,
         pains, setPains, togglePain,
-        endWorkout, deleteWorkout,
+        deleteWorkout,
         saveHistoryEdit, cancelHistoryEdit,
         addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
@@ -209,13 +208,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
         }
     };
 
-    const handleEndWorkout = async () => {
-        const finishedWorkout = await endWorkout();
-        if (finishedWorkout) {
-            onWorkoutCompleted?.(finishedWorkout);
-        }
-    };
-
     return (
         <div className="training-sub-view active workout-session">
             <SessionHeader 
@@ -278,12 +270,13 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
                     <ExerciseSearchDropdown
                         library={library}
                         onSelectExercise={addExtraExercise}
-                        placeholder="🔍 Cerca esercizio extra da aggiungere..."
+                        placeholder="ðŸ” Cerca esercizio extra da aggiungere..."
                     />
                 </div>
             </div>
 
-            <SessionRatings
+            {activeWorkout.isEditingHistory && (
+<SessionRatings
                 water={water}
                 setWater={setWater}
                 mood={mood}
@@ -296,11 +289,12 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
                 onTogglePain={togglePain}
                 onSetPains={setPains}
             />
+            )}
 
             {activeWorkout.isEditingHistory ? (
                 <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
                     <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        ⏱️ Durata della sessione
+                        â±ï¸ Durata della sessione
                     </label>
                     <input 
                         id="workout-manual-duration"
@@ -340,8 +334,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
                 </>
             ) : (
                 <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleEndWorkout}>
-                        <span aria-hidden="true">🏁</span> Termina sessione
+                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={onRequestEnd}>
+                        <span aria-hidden="true">ðŸ</span> Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
                         <Trash2 size={16} aria-hidden="true" /> Elimina sessione
