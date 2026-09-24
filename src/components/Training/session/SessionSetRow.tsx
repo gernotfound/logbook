@@ -29,10 +29,22 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     onRemoveSpecialSet
 }) => {
     const [isRirOpen, setIsRirOpen] = React.useState(false);
+    const rirTriggerRef = React.useRef<HTMLButtonElement>(null);
+    const firstRirOptionRef = React.useRef<HTMLButtonElement>(null);
     const hasRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
+
+    React.useEffect(() => {
+        if (isRirOpen) firstRirOptionRef.current?.focus();
+    }, [isRirOpen]);
+
+    const closeRirMenu = (restoreFocus = false) => {
+        if (restoreFocus) rirTriggerRef.current?.focus();
+        setIsRirOpen(false);
+    };
+
     const selectRir = (rir: number | undefined) => {
         onUpdateSet(s.id, 'rir', rir);
-        setIsRirOpen(false);
+        closeRirMenu(true);
     };
 
     return (
@@ -99,6 +111,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     {trackingType !== 'time' && (
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                             <button
+                                ref={rirTriggerRef}
                                 type="button"
                                 className="btn-icon"
                                 style={{
@@ -121,10 +134,16 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             </button>
                             {isRirOpen && (
                                 <>
-                                    <div style={{ position: 'fixed', inset: 0, zIndex: 55 }} onClick={() => setIsRirOpen(false)} />
+                                    <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 55 }} onClick={() => closeRirMenu(false)} />
                                     <div
                                         role="menu"
                                         aria-label={`Seleziona RIR serie ${sIndex + 1}`}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Escape') {
+                                                event.preventDefault();
+                                                closeRirMenu(true);
+                                            }
+                                        }}
                                         style={{
                                             position: 'absolute',
                                             right: 0,
@@ -145,6 +164,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                         {Array.from({ length: 11 }, (_, rir) => (
                                             <button
                                                 key={rir}
+                                                ref={rir === 0 ? firstRirOptionRef : undefined}
                                                 type="button"
                                                 role="menuitemradio"
                                                 aria-checked={s.rir === rir}
