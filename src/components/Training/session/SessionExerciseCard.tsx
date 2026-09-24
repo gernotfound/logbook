@@ -10,6 +10,11 @@ interface SessionExerciseCardProps {
     totalExercises?: number;
     libDef: any;
     pastWorkouts: Array<{ date: string; sets: any[]; note: string }>;
+    progressionHint?: {
+        previousDate: string;
+        previousReference: string;
+        quality: string;
+    };
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
@@ -38,6 +43,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     totalExercises,
     libDef,
     pastWorkouts,
+    progressionHint,
     isHistoryOpen,
     isSetupOpen,
     openSpecialMenuId,
@@ -146,6 +152,15 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         <div className="section-divider">
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
+                {progressionHint && (
+                    <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '3px' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            Ultima esposizione confrontabile · {progressionHint.previousDate || 'data non disponibile'}
+                        </span>
+                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{progressionHint.previousReference}</strong>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.quality}</span>
+                    </div>
+                )}
             </div>
             <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
                 {/* Position dropdown */}
@@ -397,6 +412,9 @@ export const SessionExerciseCard = React.memo(SessionExerciseCardInner, (prev, n
         prev.exItem === next.exItem &&
         prev.libDef === next.libDef &&
         prev.pastWorkouts === next.pastWorkouts &&
+        prev.progressionHint?.previousDate === next.progressionHint?.previousDate &&
+        prev.progressionHint?.previousReference === next.progressionHint?.previousReference &&
+        prev.progressionHint?.quality === next.progressionHint?.quality &&
         prev.isHistoryOpen === next.isHistoryOpen &&
         prev.isSetupOpen === next.isSetupOpen &&
         prev.openSpecialMenuId === next.openSpecialMenuId &&

@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { X, Trophy, ArrowUp, ArrowDown, Activity, Clock, Layers } from 'lucide-react';
+import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
+import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
+import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
 import { Logic } from '../../lib/logic';
 import type { WorkoutSession, Exercise, RoutineExercise, WorkoutRoutine } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
@@ -21,6 +23,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
     const dialogRef = useRef<HTMLDivElement>(null);
     const onCloseRef = useRef(onClose);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
+    const nutrition = useAppStore(state => state.userData?.nutrition);
     const showAlert = useDialogStore(state => state.showAlert);
 
     const isFreeWorkoutJustEnded = fromEndWorkout && !workout.routineId;
@@ -147,23 +150,12 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
     const report = useMemo(() => {
         const libraryMap = new Map(library.map(l => [l.id, l]));
-        return computeWorkoutReport(workout, history, libraryMap);
-    }, [workout, history, library]);
+        return computeWorkoutReport(workout, history, libraryMap, undefined, { nutrition });
+    }, [workout, history, library, nutrition]);
 
     const formatKg = (val: number) => {
         if (val >= 1000) return `${(val / 1000).toFixed(2)} t`;
         return `${val.toFixed(1).replace(/\.0$/, '')} kg`;
-    };
-
-    const formatDelta = (val: number, isPercent = false) => {
-        const prefix = val > 0 ? '+' : '';
-        const num = val.toFixed(1).replace(/\.0$/, '');
-        return `${prefix}${num}${isPercent ? '%' : ''}`;
-    };
-
-    const formatSetEffort = (kg: string, reps: string, rir?: number) => {
-        const output = `${kg || '?'} kg × ${reps || '?'}`;
-        return `${output} · RIR ${rir !== undefined ? rir : '—'}`;
     };
 
     return (
@@ -228,130 +220,130 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     )}
 
                     <section className="workout-report-phase" aria-labelledby={`${titleId}-session`}>
-                        <h2 id={`${titleId}-session`}>Sessione</h2>
-
-                    {/* Summary Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Volume Totale</span>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>{formatKg(report.totalVolume)}</span>
-                            {report.volumeDeltaPercent !== undefined && (
-                                <span style={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: 'bold',
-                                    color: report.volumeDeltaPercent > 0 ? 'var(--success-color)' : (report.volumeDeltaPercent < 0 ? 'var(--danger-color)' : 'var(--text-muted)'),
-                                    display: 'flex', alignItems: 'center', gap: '2px'
-                                }}>
-                                    {report.volumeDeltaPercent > 0 ? <ArrowUp size={12} /> : (report.volumeDeltaPercent < 0 ? <ArrowDown size={12} /> : null)}
-                                    {formatDelta(report.volumeDeltaPercent, true)} vs prec.
-                                </span>
-                            )}
+                        <h2 id={`${titleId}-session`}>Progressione contestuale</h2>
+                        <div className="workout-report-metrics">
+                            <span>Strategia <strong>{getCycleStrategyLabel(workout.cycleStrategy)}</strong></span>
+                            <span>Tonnellaggio <strong>{report.totalVolumeIsComplete ? formatKg(report.totalVolume) : 'Dati incompleti'}</strong></span>
+                            <span>Esercizi analizzati <strong>{report.exerciseComparisons.length}</strong></span>
                         </div>
-                        <div className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'center' }}>
-                             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Esercizi Condivisi</span>
-                             <span style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--text-main)' }}>{report.exerciseComparisons.length}</span>
-                        </div>
-                    </div>
-
+                        {!report.totalVolumeIsComplete && (
+                            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                Il tonnellaggio totale non viene stimato quando manca il peso corporeo storico necessario per esercizi bodyweight.
+                            </p>
+                        )}
                     </section>
 
-                    {report.isFirstSession ? (
-                        <div style={{
-                            background: 'rgba(0, 229, 255, 0.1)',
-                            border: '1px solid rgba(0, 229, 255, 0.2)',
-                            borderRadius: '12px',
-                            padding: '20px',
-                            textAlign: 'center',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '10px'
-                        }}>
-                            <span style={{ fontSize: '2rem' }}>🎉</span>
-                            <h3 style={{margin: 0,color: 'var(--primary-color)'}}>Prima sessione completata!</h3>
-                            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Non abbiamo allenamenti precedenti con questa scheda per fare un confronto. I progressi verranno tracciati dalla prossima volta!</p>
+                    {report.density && (
+                        <div className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '6px' }}>
+                            <strong>{report.density.headline}</strong>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{report.density.detail}</span>
                         </div>
-                    ) : (
-                        <>
-                            {/* PR Section */}
-                            {report.newPRs.length > 0 && (
-                                <div className="card" style={{ margin: 0, padding: '16px', background: 'rgba(234, 179, 8, 0.05)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
-                                    <h3 style={{margin: '0 0 12px',color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '6px'}}>
-                                        <Trophy size={16} /> Nuovi Record Personali
-                                    </h3>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {report.newPRs.map(pr => (
-                                            <div key={pr.exId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}>
-                                                <span>{pr.exName}</span>
-                                                <span style={{ fontWeight: 'bold', color: 'var(--warning-color)' }}>
-                                                    {pr.volumeDelta > 0 ? `+${pr.volumeDeltaPercent.toFixed(1)}% Vol` : `+${pr.weightDelta.toFixed(1)}kg Media`}
+                    )}
+
+                    {report.isFirstSession && (
+                        <div className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '6px' }}>
+                            <strong style={{ color: 'var(--primary-color)' }}>Baseline iniziale registrata</strong>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                Non ci sono ancora esposizioni precedenti sufficientemente confrontabili. Questa sessione diventa il riferimento per i confronti successivi.
+                            </span>
+                        </div>
+                    )}
+
+                    {report.newPRs.length > 0 && (
+                        <div className="card" style={{ margin: 0, padding: '16px', background: 'rgba(234, 179, 8, 0.05)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
+                            <h3 style={{ margin: '0 0 12px', color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Trophy size={16} /> Record di performance
+                            </h3>
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                                {report.newPRs.map(pr => (
+                                    <div key={pr.exId} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'baseline' }}>
+                                        <span>{pr.exName}</span>
+                                        <strong style={{ color: 'var(--warning-color)', textAlign: 'right' }}>
+                                            {formatProgressionReference(pr.progression.current)}
+                                        </strong>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {report.exerciseComparisons.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <h3 style={{ margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Activity size={16} /> Analisi per esercizio
+                            </h3>
+                            {report.exerciseComparisons.map(ex => {
+                                const progression = ex.progression;
+                                const recentChain = progression.recentComparable
+                                    .map(item => formatProgressionReference(item))
+                                    .join(' → ');
+
+                                return (
+                                    <div key={ex.exId} className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
+                                            <div style={{ minWidth: 0 }}>
+                                                <strong style={{ display: 'block', fontSize: '0.98rem' }}>{ex.exName}</strong>
+                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                    {progressionTrendLabel(progression.trendDirection, progression.intent)} · {progressionQualityLabel(progression.quality)}
                                                 </span>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                                            {ex.isPR && (
+                                                <span style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', fontSize: '0.75rem', padding: '3px 7px', borderRadius: '6px', fontWeight: 700, flexShrink: 0 }}>
+                                                    PR
+                                                </span>
+                                            )}
+                                        </div>
 
-                            {/* Exercise List */}
-                            {report.exerciseComparisons.length > 0 && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <h3 style={{margin: 0,color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px'}}>
-                                        <Activity size={16} /> Confronto Esercizi
-                                    </h3>
-                                    {report.exerciseComparisons.map(ex => {
-                                        const maxVol = Math.max(ex.currentVolume, ex.previousVolume);
-                                        const currWidth = maxVol > 0 ? (ex.currentVolume / maxVol) * 100 : 0;
-                                        const prevWidth = maxVol > 0 ? (ex.previousVolume / maxVol) * 100 : 0;
+                                        <div style={{ display: 'grid', gap: '4px' }}>
+                                            <strong>{progression.headline}</strong>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{progression.detail}</span>
+                                        </div>
 
-                                        return (
-                                            <div key={ex.exId} className="card" style={{ margin: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{ex.exName}</span>
-                                                    {ex.isPR && <span style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', fontSize: '0.75rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>PR</span>}
-                                                </div>
+                                        <div className="workout-report-metrics">
+                                            <span>Serie <strong>{progression.current.workSets}</strong></span>
+                                            <span>Ripetizioni <strong>{progression.current.totalReps}</strong></span>
+                                            <span>
+                                                Tonnellaggio{' '}
+                                                <strong>{progression.current.tonnageComplete && progression.current.tonnageKg !== undefined ? formatKg(progression.current.tonnageKg) : '—'}</strong>
+                                            </span>
+                                        </div>
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                    {/* Previous Bar */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '35px' }}>Prec.</span>
-                                                        <div style={{ flex: 1, height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
-                                                            <div style={{ width: `${prevWidth}%`, height: '100%', background: 'var(--text-muted)' }} />
-                                                        </div>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: '50px', textAlign: 'right' }}>{formatKg(ex.previousVolume)}</span>
-                                                    </div>
-                                                    
-                                                    {/* Current Bar */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-main)', width: '35px' }}>Oggi</span>
-                                                        <div style={{ flex: 1, height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
-                                                            <div style={{ width: `${currWidth}%`, height: '100%', background: ex.volumeDelta >= 0 ? 'var(--primary-color)' : 'var(--danger-color)' }} />
-                                                        </div>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-main)', width: '50px', textAlign: 'right', fontWeight: 'bold' }}>{formatKg(ex.currentVolume)}</span>
-                                                    </div>
-                                                </div>
-
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                                                    <span>Reps: {ex.currentReps} <span style={{ color: ex.repsDelta > 0 ? 'var(--success-color)' : (ex.repsDelta < 0 ? 'var(--danger-color)' : 'inherit') }}>({formatDelta(ex.repsDelta)})</span></span>
-                                                    <span>Peso medio: {formatKg(ex.currentAvgWeight)} <span style={{ color: ex.weightDelta > 0 ? 'var(--success-color)' : (ex.weightDelta < 0 ? 'var(--danger-color)' : 'inherit') }}>({formatDelta(ex.weightDelta)})</span></span>
-                                                </div>
-
-                                                {ex.setEffortComparisons.length > 0 && (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.8rem', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                                                        {ex.setEffortComparisons.map(set => (
-                                                            <div key={set.setNumber} style={{ display: 'grid', gridTemplateColumns: '30px 1fr', gap: '4px 8px', minWidth: 0 }}>
-                                                                <strong style={{ gridRow: '1 / span 2', color: 'var(--text-main)' }}>S{set.setNumber}</strong>
-                                                                <span style={{ color: 'var(--text-muted)', minWidth: 0 }}>Prec.: {formatSetEffort(set.previousKg, set.previousReps, set.previousRir)}</span>
-                                                                <span style={{ color: 'var(--text-main)', minWidth: 0 }}>Oggi: {formatSetEffort(set.currentKg, set.currentReps, set.currentRir)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                        {progression.previousComparable && (
+                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                                Ultima esposizione confrontabile · {progression.previousComparable.date || 'data non disponibile'} ·{' '}
+                                                <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.previousComparable)}</strong>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </>
+                                        )}
+
+                                        {progression.cycleBaseline && progression.cycleBaseline.sessionId !== progression.previousComparable?.sessionId && (
+                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                                Baseline del ciclo · {progression.cycleBaseline.date || 'data non disponibile'} ·{' '}
+                                                <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.cycleBaseline)}</strong>
+                                            </div>
+                                        )}
+
+                                        {progression.bestHistorical && (
+                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                                Miglior riferimento storico comparabile · {progression.bestHistorical.date || 'data non disponibile'} ·{' '}
+                                                <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.bestHistorical)}</strong>
+                                            </div>
+                                        )}
+
+                                        {progression.recentComparable.length >= 2 && (
+                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                                                Ultime esposizioni confrontabili: <strong style={{ color: 'var(--text-main)' }}>{recentChain}</strong>
+                                            </div>
+                                        )}
+
+                                        {progression.qualityReasons.length > 0 && (
+                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
+                                                {progression.qualityReasons.join(' ')}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     )}
                     {(workout.moodRating !== undefined || workout.pumpRating !== undefined || workout.fatigueRating !== undefined || workout.waterLiters !== undefined || (workout.pains?.length ?? 0) > 0) && (
                         <section className="workout-report-phase" aria-labelledby={`${titleId}-after`}>

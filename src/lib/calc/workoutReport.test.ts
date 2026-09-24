@@ -149,7 +149,7 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
             expect(report.newPRs.some(pr => pr.exId === 'ex-pullup')).toBe(false);
         });
 
-        it('awards PR when volume increases compared to previous execution', () => {
+        it('awards a strong PR when output improves at comparable declared RIR', () => {
             const prevWorkout: WorkoutSession = {
                 id: 'w-1',
                 routineId: 'r-upper',
@@ -158,7 +158,7 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
                     {
                         exId: 'ex-bench',
                         sessionNote: '',
-                        sets: [{ id: 's1', kg: '80', reps: '10' }] // 800 volume
+                        sets: [{ id: 's1', kg: '80', reps: '10', rir: 2 }] // 800 volume
                     }
                 ]
             };
@@ -171,7 +171,7 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
                     {
                         exId: 'ex-bench',
                         sessionNote: '',
-                        sets: [{ id: 's1', kg: '80', reps: '12' }] // 960 volume (+160)
+                        sets: [{ id: 's1', kg: '80', reps: '12', rir: 2 }] // 960 volume (+160)
                     }
                 ]
             };
