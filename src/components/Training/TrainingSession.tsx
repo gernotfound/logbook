@@ -13,7 +13,11 @@ interface TrainingSessionProps {
 }
 
 const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
-    const { activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout, mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater, pains, setPains, togglePain } = useWorkoutSession();
+    const {
+        activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout,
+        mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
+        pains, setPains, togglePain,
+    } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
     const [isPostSession, setIsPostSession] = useState(false);
     const handleCloseReport = useCallback(() => {
@@ -24,12 +28,33 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     // Il report appartiene al contenitore della sessione: deve sopravvivere alla
     // cancellazione del workout locale che segue un salvataggio riuscito.
     if (isPostSession && activeWorkout && !activeWorkout.isEditingHistory) {
-        const finish = async () => { const finished = await endWorkout(); if (finished) { setIsPostSession(false); setReportWorkout(finished); } };
-        return (<section className="pre-session-checkin post-session-checkin" aria-labelledby="post-session-title">
-            <header className="pre-session-header"><p className="pre-session-eyebrow">Fine sessione</p><h2 id="post-session-title">Com’è andato l’allenamento?</h2><p>Registra le sensazioni finali prima di salvare la sessione.</p></header>
-            <SessionRatings water={water} setWater={setWater} mood={mood} setMood={setMood} pump={pump} setPump={setPump} fatigue={fatigue} setFatigue={setFatigue} pains={pains} onTogglePain={togglePain} onSetPains={setPains} />
-            <div className="pre-session-actions"><button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button><button type="button" className="btn btn-secondary" onClick={() => setIsPostSession(false)}>Torna all’allenamento</button></div>
-        </section>);
+        const finish = async () => {
+            const finished = await endWorkout(false);
+            if (finished) {
+                setIsPostSession(false);
+                setReportWorkout(finished);
+            }
+        };
+        return (
+            <section className="pre-session-checkin post-session-checkin" aria-labelledby="post-session-title">
+                <header className="pre-session-header">
+                    <p className="pre-session-eyebrow">Fine sessione</p>
+                    <h2 id="post-session-title">Com’è andato l’allenamento?</h2>
+                    <p>Registra le sensazioni finali prima di salvare la sessione.</p>
+                </header>
+                <SessionRatings
+                    water={water} setWater={setWater}
+                    mood={mood} setMood={setMood}
+                    pump={pump} setPump={setPump}
+                    fatigue={fatigue} setFatigue={setFatigue}
+                    pains={pains} onTogglePain={togglePain} onSetPains={setPains}
+                />
+                <div className="pre-session-actions">
+                    <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsPostSession(false)}>Torna all’allenamento</button>
+                </div>
+            </section>
+        );
     }
 
     if (reportWorkout) {

@@ -238,13 +238,13 @@ export function useWorkoutSession() {
         return false;
     }, [showConfirm, setLocalWorkout]);
 
-    const endWorkout = useCallback(async (): Promise<WorkoutSession | null> => {
+    const endWorkout = useCallback(async (confirmEnd = true): Promise<WorkoutSession | null> => {
         if (endingRef.current) return null;
         endingRef.current = true;
         const expectedUid = auth.currentUser?.uid;
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
-        if (!expectedId || !(await showConfirm("Terminare l'allenamento?"))) return null;
+        if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
         draftRegistry.flushAll();
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
