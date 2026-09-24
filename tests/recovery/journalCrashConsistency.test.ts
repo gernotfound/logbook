@@ -21,6 +21,7 @@ vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: r
 import type { UserData } from '../../src/types';
 import { UserDataSchema } from '../../src/lib/schema';
 import {
+    commitDomainOperations,
     commitLocal,
     hydrateLocal,
     initializeLocal,
@@ -208,6 +209,26 @@ describe('M3 journal crash consistency', () => {
         expect(retry).toMatchObject({ ok: true, status: 'synced' });
         expect(cloudSnapshot()).toBe(committedCloud);
         expect((await readLocal(owner))?.pending).toEqual([]);
+    });
+
+    it('recovers offline activity journal entries without losing steps or keyed cardio sessions', async () => {
+        await commitDomainOperations(owner, [
+            { type: 'activity-steps.set', date: '2026-09-24', steps: 11000, source: 'manual', capturedAt: 100 },
+            { type: 'cardio-session.upsert', date: '2026-09-24', session: { id: 'cardio-a', modality: 'bike', durationMinutes: 40, intensity: 'moderate', source: 'manual' } },
+        ], data(170));
+        const unavailable = Object.assign(new Error('Injected remote outage'), { code: 'unavailable' });
+        remote.apply.mockRejectedValueOnce(unavailable);
+
+        const first = await replicateJournal();
+        expect(first.status).toBe('local-pending');
+        expect((await readLocal(owner))?.data.nutrition?.['2026-09-24']).toMatchObject({ steps: 11000, cardioSessions: [{ id: 'cardio-a', durationMinutes: 40 }] });
+
+        installReplaySafeRemote();
+        invalidateSession();
+        const retry = await replicateJournal();
+        expect(retry).toMatchObject({ ok: true, status: 'synced' });
+        expect((await readLocal(owner))?.pending).toEqual([]);
+        expect(currentCloudData().nutrition?.['2026-09-24']).toMatchObject({ steps: 11000, cardioSessions: [{ id: 'cardio-a', durationMinutes: 40 }] });
     });
 
     it('leaves cloud untouched and journal durable when the remote fails before commit, then converges on retry', async () => {

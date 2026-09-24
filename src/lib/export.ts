@@ -221,6 +221,34 @@ export const Exporter = {
             ]);
         });
 
+        let stepsCsv = "Data,Passi,Fonte,Rilevato il\n";
+        let cardioCsv = "Data,ID,Ora inizio,Modalità,Struttura,Durata (min),Intensità,FC media (bpm),Distanza (km),Note,Fonte,ID esterno\n";
+        let stepsRows = 0;
+        let cardioRows = 0;
+        nutritionDates.forEach(date => {
+            const day = nutrition[date];
+            if (typeof day?.steps === 'number' && Number.isFinite(day.steps) && day.steps >= 0) {
+                const capturedAt = typeof day.stepsCapturedAt === 'number' && Number.isFinite(day.stepsCapturedAt)
+                    ? new Date(day.stepsCapturedAt).toISOString()
+                    : "";
+                stepsCsv += this.formatCsvRow([date, day.steps, day.stepsSource || "", capturedAt]);
+                stepsRows++;
+            }
+            if (Array.isArray(day?.cardioSessions)) {
+                day.cardioSessions.forEach((session: any) => {
+                    if (!session?.id) return;
+                    const startedAt = typeof session.startedAt === 'number' && Number.isFinite(session.startedAt)
+                        ? new Date(session.startedAt).toISOString()
+                        : "";
+                    cardioCsv += this.formatCsvRow([
+                        date, session.id, startedAt, session.modality, session.structure || "", session.durationMinutes,
+                        session.intensity || "", session.averageHeartRate, session.distanceKm, session.notes || "", session.source || "", session.externalId || ""
+                    ]);
+                    cardioRows++;
+                });
+            }
+        });
+
         const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
         if (workoutCsv !== workoutHeader) {
             this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
@@ -231,6 +259,16 @@ export const Exporter = {
             setTimeout(() => {
                 this.downloadFile("misurazioni.csv", nutritionCsv, "text/csv;charset=utf-8;");
             }, 500);
+        }
+        if (stepsRows > 0) {
+            setTimeout(() => {
+                this.downloadFile("passi.csv", stepsCsv, "text/csv;charset=utf-8;");
+            }, 1000);
+        }
+        if (cardioRows > 0) {
+            setTimeout(() => {
+                this.downloadFile("cardio.csv", cardioCsv, "text/csv;charset=utf-8;");
+            }, 1500);
         }
     },
 

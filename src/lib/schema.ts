@@ -262,4 +262,4 @@ export const AppTabSchema = z.enum(['home', 'training', 'nutrition', 'data', 'se
 export const MainTabSchema = AppTabSchema;
 export const TrainingSubTabSchema = z.enum(['session', 'planning', 'routines', 'exercises', 'history']);
 export const NutritionSubTabSchema = z.enum(['meals', 'planning', 'archive', 'history', 'supplements']);
-export const DataSubTabSchema = z.enum(['measurements', 'sleep', 'biometry', 'history']);
+export const DataSubTabSchema = z.enum(['measurements', 'sleep', 'activity', 'biometry', 'history']);

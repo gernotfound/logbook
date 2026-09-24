@@ -50,7 +50,8 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(tablist).not.toBeNull();
         
         const tabs = within(tablist).getAllByRole('tab');
-        expect(tabs.length).toBe(4);
+        expect(tabs.length).toBe(5);
+        expect(tabs.map(tab => tab.textContent)).toEqual(['Misurazioni', 'Sonno', 'Attività', 'Biometria', 'Storico']);
         
         const measurementsTab = tabs[0];
         const sleepTab = tabs[1];

@@ -4,6 +4,7 @@ import { useSleepMeasurements } from '../../hooks/useSleepMeasurements';
 import DataMeasurements from './DataMeasurements';
 import DataBiometry from './DataBiometry';
 import DataSleep from './DataSleep';
+import DataActivity from './DataActivity';
 import DataHistory from './DataHistory';
 import type { DataSubTab } from '../../types';
 import { useLocalToday } from '../../hooks/useLocalToday';
@@ -13,6 +14,7 @@ import './data.css';
 const DATA_TABS: ReadonlyArray<{ id: DataSubTab; label: string }> = [
     { id: 'measurements', label: 'Misurazioni' },
     { id: 'sleep', label: 'Sonno' },
+    { id: 'activity', label: 'Attività' },
     { id: 'biometry', label: 'Biometria' },
     { id: 'history', label: 'Storico' }
 ];
@@ -102,6 +104,12 @@ const DataView: React.FC<DataViewProps> = ({
             {currentSubTab === 'biometry' && (
                 <div id="data-panel-biometry" role="tabpanel" aria-labelledby="data-tab-biometry" className="data-sub-view active">
                     <DataBiometry />
+                </div>
+            )}
+
+            {currentSubTab === 'activity' && (
+                <div id="data-panel-activity" role="tabpanel" aria-labelledby="data-tab-activity" className="data-sub-view active">
+                    <DataActivity />
                 </div>
             )}
 

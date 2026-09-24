@@ -40,6 +40,28 @@ export interface WeeklyNutritionPoint {
     avgFat?: number;
 }
 
+export interface WeeklyActivityPoint {
+    weekIndex: number;
+    weekStart: string;
+    weekEnd: string;
+    label: string;
+    averageSteps: number | null;
+    totalSteps: number;
+    stepDaysCount: number;
+    daysConsidered: number;
+    cardioMinutes: number;
+    cardioSessionsCount: number;
+    cardioMinutesByIntensity: { low: number; moderate: number; high: number; unclassified: number };
+}
+
+export interface WeeklyActivityStats {
+    hasData: boolean;
+    totalSteps: number;
+    stepDaysCount: number;
+    cardioMinutes: number;
+    cardioSessionsCount: number;
+}
+
 export interface VolumeCaloriesPoint {
     weekIndex: number;
     weekStart: string;
@@ -267,6 +289,78 @@ export function computeWeeklyNutritionSeries(
             hasData: overallLoggedDays > 0
         }
     };
+}
+
+export function computeWeeklyActivitySeries(
+    nutrition: Record<string, NutritionDay> | null | undefined = {},
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date()
+): { points: WeeklyActivityPoint[]; stats: WeeklyActivityStats } {
+    const safeNutrition = nutrition && typeof nutrition === 'object' ? nutrition : {};
+    const intervals = generateWeekIntervals(numWeeks, referenceDate);
+    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
+    const safeReference = isValid(parsedReference) ? parsedReference : new Date();
+    const referenceDateStr = format(safeReference, 'yyyy-MM-dd');
+
+    const points = intervals.map((interval, weekIndex): WeeklyActivityPoint => {
+        const effectiveEnd = interval.weekEnd < referenceDateStr ? interval.weekEnd : referenceDateStr;
+        let totalSteps = 0;
+        let stepDaysCount = 0;
+        let daysConsidered = 0;
+        let cardioMinutes = 0;
+        let cardioSessionsCount = 0;
+        const cardioMinutesByIntensity = { low: 0, moderate: 0, high: 0, unclassified: 0 };
+
+        if (effectiveEnd >= interval.weekStart) {
+            let cur = parseISO(interval.weekStart);
+            const end = parseISO(effectiveEnd);
+            while (cur <= end) {
+                daysConsidered++;
+                const dateStr = format(cur, 'yyyy-MM-dd');
+                const day = safeNutrition[dateStr];
+                if (day && typeof day.steps === 'number' && Number.isFinite(day.steps) && day.steps >= 0) {
+                    totalSteps += day.steps;
+                    stepDaysCount++;
+                }
+                for (const session of Array.isArray(day?.cardioSessions) ? day.cardioSessions : []) {
+                    const duration = Number(session?.durationMinutes);
+                    if (!Number.isFinite(duration) || duration <= 0) continue;
+                    cardioMinutes += duration;
+                    cardioSessionsCount++;
+                    if (session.intensity === 'low' || session.intensity === 'moderate' || session.intensity === 'high') {
+                        cardioMinutesByIntensity[session.intensity] += duration;
+                    } else {
+                        cardioMinutesByIntensity.unclassified += duration;
+                    }
+                }
+                cur = addDays(cur, 1);
+            }
+        }
+
+        return {
+            weekIndex,
+            weekStart: interval.weekStart,
+            weekEnd: interval.weekEnd,
+            label: interval.label,
+            averageSteps: stepDaysCount > 0 ? Math.round(totalSteps / stepDaysCount) : null,
+            totalSteps,
+            stepDaysCount,
+            daysConsidered,
+            cardioMinutes: Math.round(cardioMinutes * 10) / 10,
+            cardioSessionsCount,
+            cardioMinutesByIntensity,
+        };
+    });
+
+    const stats = points.reduce<WeeklyActivityStats>((acc, point) => ({
+        hasData: acc.hasData || point.stepDaysCount > 0 || point.cardioSessionsCount > 0,
+        totalSteps: acc.totalSteps + point.totalSteps,
+        stepDaysCount: acc.stepDaysCount + point.stepDaysCount,
+        cardioMinutes: Math.round((acc.cardioMinutes + point.cardioMinutes) * 10) / 10,
+        cardioSessionsCount: acc.cardioSessionsCount + point.cardioSessionsCount,
+    }), { hasData: false, totalSteps: 0, stepDaysCount: 0, cardioMinutes: 0, cardioSessionsCount: 0 });
+
+    return { points, stats };
 }
 
 export function calculatePearsonCorrelation(x: number[], y: number[]): number | null {
