@@ -1,5 +1,6 @@
 import type { WorkoutSession, SessionExercise } from '../../types';
 import { calculateEffectiveSetWeight, VolumeExerciseRef } from './workout';
+import { getSetSegments } from '../advancedSets';
 
 export interface SetEffortComparison {
     setNumber: number;
@@ -64,17 +65,16 @@ function calculateExerciseStats(
             weightCount++;
         }
 
-        // Dropsets
-        for (const ds of (set.dropsets || [])) {
-            const dsreps = parseInt(String(ds.reps), 10) || 0;
-            if (dsreps <= 0) continue;
+        for (const segment of getSetSegments(set)) {
+            const segmentReps = parseInt(String(segment.reps), 10) || 0;
+            if (segmentReps <= 0) continue;
 
-            const dskg = calculateEffectiveSetWeight(ds.kg, libEx, userWeight);
-            volume += dskg * dsreps;
-            totalReps += dsreps;
+            const segmentKg = calculateEffectiveSetWeight(segment.kg, libEx, userWeight);
+            volume += segmentKg * segmentReps;
+            totalReps += segmentReps;
 
-            if (dskg > 0) {
-                totalWeight += dskg;
+            if (segmentKg > 0) {
+                totalWeight += segmentKg;
                 weightCount++;
             }
         }

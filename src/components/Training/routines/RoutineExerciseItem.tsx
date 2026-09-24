@@ -1,6 +1,7 @@
 import React, { useId } from 'react';
-import { ArrowUp, ArrowDown, Trash2, Timer, ChevronDown, Activity } from 'lucide-react';
-import { ExerciseLibraryItem } from '../../../types';
+import { ArrowUp, ArrowDown, Trash2, Activity } from 'lucide-react';
+import { ExerciseLibraryItem, PlannedSetTechnique, SetTechnique } from '../../../types';
+import { techniqueLabel } from '../../../lib/advancedSets';
 
 interface RoutineExerciseItemProps {
     exercise: any;
@@ -11,7 +12,8 @@ interface RoutineExerciseItemProps {
     onRemove: (index: number) => void;
     onUpdateSetsCount: (index: number, value: string) => void;
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
-    onUpdateTechnique: (index: number, tech: 'dropset' | 'isometrics') => void;
+    onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: SetTechnique) => void;
+    onUpdateSetPlanField: (exerciseIndex: number, setIndex: number, field: 'restSeconds' | 'segmentCount' | 'targetReps', value: string) => void;
 }
 
 export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
@@ -23,7 +25,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     onRemove,
     onUpdateSetsCount,
     onUpdateReps,
-    onUpdateTechnique
+    onUpdateSetPlan,
+    onUpdateSetPlanField
 }) => {
     const isCardio = libDef?.trackingType === 'cardio';
     const fieldId = useId();
@@ -187,48 +190,76 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </div>
                     )}
 
-                    {/* Riga 3: Tecniche speciali pre-attivate */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
-                            Tecnica:
-                        </span>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
-                            <button
-                                type="button"
-                                className={`btn btn-small ${exercise.defaultTechnique === 'dropset' ? 'btn-primary' : ''}`}
-                                style={{
-                                    margin: 0,
-                                    padding: '6px 12px',
-                                    fontSize: '0.85rem',
-                                    background: exercise.defaultTechnique === 'dropset' ? 'var(--warning-color)' : 'var(--surface-light)',
-                                    color: exercise.defaultTechnique === 'dropset' ? 'var(--on-warning)' : 'var(--text-main)',
-                                    fontWeight: exercise.defaultTechnique === 'dropset' ? 700 : 500,
-                                    border: '1px solid var(--glass-border)',
-                                    borderRadius: '8px'
-                                }}
-                                onClick={() => onUpdateTechnique(index, 'dropset')}
-                            >
-                                <ChevronDown size={14} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Dropset {exercise.defaultTechnique === 'dropset' ? '✓' : ''}
-                            </button>
-                            <button
-                                type="button"
-                                className={`btn btn-small ${exercise.defaultTechnique === 'isometrics' ? 'btn-primary' : ''}`}
-                                style={{
-                                    margin: 0,
-                                    padding: '6px 12px',
-                                    fontSize: '0.85rem',
-                                    background: exercise.defaultTechnique === 'isometrics' ? 'var(--accent-color)' : 'var(--surface-light)',
-                                    color: exercise.defaultTechnique === 'isometrics' ? 'var(--on-accent)' : 'var(--text-main)',
-                                    fontWeight: exercise.defaultTechnique === 'isometrics' ? 700 : 500,
-                                    border: '1px solid var(--glass-border)',
-                                    borderRadius: '8px'
-                                }}
-                                onClick={() => onUpdateTechnique(index, 'isometrics')}
-                            >
-                                <Timer size={14} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }} /> Isometria {exercise.defaultTechnique === 'isometrics' ? '✓' : ''}
-                            </button>
+                    <div style={{ paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>
+                            Tecnica per serie:
                         </div>
+                        {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
+                            const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
+                            const technique: SetTechnique = plan?.technique || 'straight';
+                            return (
+                                <div key={setIndex} style={{ display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr)', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                                    <strong style={{ fontSize: '0.8rem' }}>S{setIndex + 1}</strong>
+                                    <div style={{ minWidth: 0 }}>
+                                        <select
+                                            aria-label={`Tecnica serie ${setIndex + 1}`}
+                                            value={technique}
+                                            onChange={event => onUpdateSetPlan(index, setIndex, event.target.value as SetTechnique)}
+                                            style={{ margin: 0, width: '100%', minHeight: '44px', fontSize: '16px' }}
+                                        >
+                                            <option value="straight">Serie normale</option>
+                                            <option value="dropset">Dropset</option>
+                                            <option value="rest_pause">Rest-pause</option>
+                                            <option value="cluster">Cluster</option>
+                                            <option value="rep_match">Rep-match</option>
+                                            <option value="diminishing">Diminishing set</option>
+                                        </select>
+                                        {technique !== 'straight' && (
+                                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                                {technique !== 'dropset' && (
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        aria-label={`Recupero serie ${setIndex + 1}`}
+                                                        placeholder="Rec s"
+                                                        value={plan?.restSeconds ?? ''}
+                                                        onChange={event => onUpdateSetPlanField(index, setIndex, 'restSeconds', event.target.value)}
+                                                        style={{ margin: 0, width: '88px', minHeight: '44px', fontSize: '16px' }}
+                                                    />
+                                                )}
+                                                {technique === 'cluster' && (
+                                                    <input
+                                                        type="number"
+                                                        min="2"
+                                                        aria-label={`Segmenti serie ${setIndex + 1}`}
+                                                        placeholder="Segmenti"
+                                                        value={plan?.segmentCount ?? ''}
+                                                        onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}
+                                                        style={{ margin: 0, width: '105px', minHeight: '44px', fontSize: '16px' }}
+                                                    />
+                                                )}
+                                                {(technique === 'rep_match' || technique === 'diminishing') && (
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        aria-label={`Target ripetizioni serie ${setIndex + 1}`}
+                                                        placeholder="Target reps"
+                                                        value={plan?.target?.reps ?? ''}
+                                                        onChange={event => onUpdateSetPlanField(index, setIndex, 'targetReps', event.target.value)}
+                                                        style={{ margin: 0, width: '112px', minHeight: '44px', fontSize: '16px' }}
+                                                    />
+                                                )}
+                                                <span style={{ alignSelf: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                    {techniqueLabel(technique)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
+
                 </>
             )}
         </div>

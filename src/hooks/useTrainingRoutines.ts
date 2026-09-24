@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { readBrowserValue, tryRemoveBrowserValue, writeBrowserJson } from '../lib/sync/browserStorage';
-import { RoutineExercise, WorkoutRoutine } from '../types';
+import { PlannedSetTechnique, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: any[] = [];
@@ -189,6 +189,56 @@ export function useTrainingRoutines() {
         });
     };
 
+    const handleUpdateSetPlan = (
+        exerciseIndex: number,
+        setIndex: number,
+        technique: SetTechnique,
+    ) => {
+        setRoutineExercises(prev => {
+            const exercises = [...prev];
+            const exercise = { ...exercises[exerciseIndex] };
+            const count = Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3);
+            const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
+                ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
+            }));
+            plans[setIndex] = { technique };
+            exercise.setPlans = plans;
+            exercises[exerciseIndex] = exercise;
+            return exercises;
+        });
+    };
+
+    const handleUpdateSetPlanField = (
+        exerciseIndex: number,
+        setIndex: number,
+        field: 'restSeconds' | 'segmentCount' | 'targetReps',
+        value: string,
+    ) => {
+        setRoutineExercises(prev => {
+            const exercises = [...prev];
+            const exercise = { ...exercises[exerciseIndex] };
+            const count = Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3);
+            const plans: PlannedSetTechnique[] = Array.from({ length: count }, (_, index) => ({
+                ...(exercise.setPlans?.[index] || { technique: 'straight' as const }),
+            }));
+            const plan = { ...plans[setIndex] };
+            const parsed = value.trim() === '' ? undefined : Number.parseInt(value, 10);
+
+            if (field === 'targetReps') {
+                if (parsed === undefined || !Number.isFinite(parsed) || parsed < 1) delete plan.target;
+                else plan.target = { type: 'reps', reps: parsed };
+            } else if (parsed === undefined || !Number.isFinite(parsed) || parsed < (field === 'restSeconds' ? 0 : 2)) {
+                delete plan[field];
+            } else {
+                plan[field] = parsed;
+            }
+            plans[setIndex] = plan;
+            exercise.setPlans = plans;
+            exercises[exerciseIndex] = exercise;
+            return exercises;
+        });
+    };
+
     const handleRemoveExerciseFromRoutine = (indexToRemove: number) => {
         setRoutineExercises(prev => prev.filter((_, idx) => idx !== indexToRemove));
     };
@@ -213,7 +263,7 @@ export function useTrainingRoutines() {
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete, handleDuplicate,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
-        handleUpdateTechnique,
+        handleUpdateTechnique, handleUpdateSetPlan, handleUpdateSetPlanField,
         handleRemoveExerciseFromRoutine, moveExercise
     };
 }
