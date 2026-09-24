@@ -204,7 +204,7 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
     const checkRating = (val: any) => {
         if (val === null || val === undefined || val === '') return { val: null, invalid: false };
         if (typeof val === 'number') {
-            const ok = !isNaN(val) && val >= 1 && val <= 10;
+            const ok = !isNaN(val) && Number.isInteger(val) && val >= 1 && val <= 5;
             return { val: ok ? val : null, invalid: !ok };
         }
         if (typeof val === 'string') {
@@ -212,7 +212,7 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
             if (trimmed === '') return { val: null, invalid: false };
             if (/^\d+(\.\d+)?$/.test(trimmed)) {
                 const num = parseFloat(trimmed);
-                const ok = num >= 1 && num <= 10;
+                const ok = Number.isInteger(num) && num >= 1 && num <= 5;
                 return { val: ok ? num : null, invalid: !ok };
             }
             return { val: null, invalid: true };
@@ -229,9 +229,9 @@ export function validateWorkoutRatings(mood: any, pump?: any, fatigue?: any) {
         pump: p.val,
         fatigue: f.val,
         errors: {
-            mood: m.invalid ? "Voto umore deve essere un intero da 1 a 10" : null,
-            pump: p.invalid ? "Voto pump deve essere un intero da 1 a 10" : null,
-            fatigue: f.invalid ? "Voto stanchezza deve essere un intero da 1 a 10" : null
+            mood: m.invalid ? "Voto umore deve essere un intero da 1 a 5" : null,
+            pump: p.invalid ? "Voto pump deve essere un intero da 1 a 5" : null,
+            fatigue: f.invalid ? "Voto stanchezza deve essere un intero da 1 a 5" : null
         }
     };
 }

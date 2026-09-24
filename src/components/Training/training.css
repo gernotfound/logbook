@@ -265,3 +265,8 @@
 .workout-report-metrics { display: flex; flex-wrap: wrap; gap: .5rem; }
 .workout-report-metrics > span { padding: .5rem .75rem; border: 1px solid var(--glass-border); border-radius: var(--radius-control, .875rem); background: var(--surface-light); color: var(--text-muted); }
 .workout-report-metrics strong { color: var(--text-main); }
+
+.pre-session-primary-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.post-session-ratings { margin: 20px 0; padding: 15px; background: var(--surface-light); border-radius: 12px; border: 1px solid var(--glass-border); }
+.post-session-ratings h3 { margin: 0 0 12px; }
+.post-session-ratings .readiness-metric + .readiness-metric { margin-top: 16px; }
