@@ -529,6 +529,11 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             await act(async () => {
                 fireEvent.click(endBtn);
             });
+            expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeDefined();
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: 'Salva e termina' }));
+                await vi.advanceTimersByTimeAsync(1100);
+            });
 
             // Advance only the global debouncer. shouldAdvanceTime=false means
             // existing real intervals are paused; we advance exactly 1100ms.
