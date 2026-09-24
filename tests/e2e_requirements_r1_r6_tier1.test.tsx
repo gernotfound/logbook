@@ -621,19 +621,19 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     <SessionRatings 
                         water="1.5"
                         setWater={vi.fn()}
-                        mood="8"
+                        mood="4"
                         setMood={vi.fn()}
-                        pump="9"
+                        pump="5"
                         setPump={vi.fn()}
-                        fatigue="6"
+                        fatigue="3"
                         setFatigue={vi.fn()}
                     />
                 );
 
                 expect(screen.getByDisplayValue('1.5')).toBeDefined();
-                expect(screen.getByDisplayValue('8')).toBeDefined();
-                expect(screen.getByDisplayValue('9')).toBeDefined();
-                expect(screen.getByDisplayValue('6')).toBeDefined();
+                expect(screen.getByRole('button', { name: 'Umore: 4 su 5' }).getAttribute('aria-pressed')).toBe('true');
+                expect(screen.getByRole('button', { name: 'Pump: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
+                expect(screen.getByRole('button', { name: 'Stanchezza: 3 su 5' }).getAttribute('aria-pressed')).toBe('true');
             });
 
             it('T1.5.6: HomeView renders without crash when activePains are present in store', () => {

@@ -449,10 +449,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 )).not.toThrow();
             });
 
-            it('T2.5.6: validateWorkoutRatings validates numeric bounds (1-10)', () => {
-                const valid = Logic.validateWorkoutRatings(8, 7, 5);
+            it('T2.5.6: validateWorkoutRatings validates numeric bounds (1-5)', () => {
+                const valid = Logic.validateWorkoutRatings(4, 3, 5);
                 expect(valid.isValid).toBe(true);
-                expect(valid.mood).toBe(8);
+                expect(valid.mood).toBe(4);
 
                 const invalid = Logic.validateWorkoutRatings(15, 0, -2);
                 expect(invalid.isValid).toBe(false);

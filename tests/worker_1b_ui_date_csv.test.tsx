@@ -325,7 +325,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
             expect(cycles.some(c => c.name === 'Mesociclo Massa - 1')).toBe(true);
         });
 
-        it('SessionRatings renders Valuta sessione (1-10) in sentence case', () => {
+        it('SessionRatings renders Valuta sessione in sentence case', () => {
             render(
                 <SessionRatings
                     water=""
@@ -339,7 +339,7 @@ describe('Worker 1B: UI/UX, Date Navigation, CSV Export & PWA Fixes', () => {
                 />
             );
 
-            expect(screen.getByText('Valuta sessione (1-10)')).toBeDefined();
+            expect(screen.getByText('Valuta sessione')).toBeDefined();
         });
     });
 

@@ -357,9 +357,9 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                         <section className="workout-report-phase" aria-labelledby={`${titleId}-after`}>
                             <h2 id={`${titleId}-after`}>Dopo la sessione</h2>
                             <div className="workout-report-metrics">
-                                {workout.moodRating !== undefined && workout.moodRating !== null && <span>Umore <strong>{workout.moodRating}/10</strong></span>}
-                                {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/10</strong></span>}
-                                {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/10</strong></span>}
+                                {workout.moodRating !== undefined && workout.moodRating !== null && <span>Umore <strong>{workout.moodRating}/5</strong></span>}
+                                {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/5</strong></span>}
+                                {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/5</strong></span>}
                                 {workout.waterLiters !== undefined && <span>Acqua <strong>{workout.waterLiters} L</strong></span>}
                             </div>
                         </section>
