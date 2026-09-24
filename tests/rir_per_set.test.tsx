@@ -114,6 +114,11 @@ describe('RIR reale per singola serie', () => {
         const choices = screen.getAllByRole('menuitemradio');
         expect(choices).toHaveLength(11);
         expect((choices[0] as HTMLElement).style.minHeight).toBe('44px');
+        expect(document.activeElement).toBe(choices[0]);
+        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+        expect(document.activeElement).toBe(trigger);
+        expect(screen.queryByRole('menu')).toBeNull();
+        fireEvent.click(trigger);
         fireEvent.click(screen.getByRole('menuitemradio', { name: '0' }));
         expect(onUpdateSet).toHaveBeenLastCalledWith('s1', 'rir', 0);
 
