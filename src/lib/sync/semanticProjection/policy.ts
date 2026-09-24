@@ -25,6 +25,7 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
                 if (path.length === 3) return 'property';
                 if (path[3] === 'sets') {
                     if (path.length === 4) return 'keyed';
+                    if (path.length === 6 && path[5] === 'segments') return 'ordered-keyed';
                     return 'property';
                 }
                 return 'property';
@@ -52,6 +53,7 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
             if (path.length === 3) return 'property';
             if (path[3] === 'sets') {
                 if (path.length === 4) return 'keyed';
+                if (path.length === 6 && path[5] === 'segments') return 'ordered-keyed';
                 return 'property';
             }
             return 'property';

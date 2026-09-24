@@ -18,7 +18,8 @@ interface RoutineEditorProps {
     onRemoveExercise: (index: number) => void;
     onUpdateSetsCount: (index: number, value: string) => void;
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
-    onUpdateTechnique: (index: number, tech: 'dropset' | 'isometrics') => void;
+    onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: import('../../../types').SetTechnique) => void;
+    onUpdateSetPlanField: (exerciseIndex: number, setIndex: number, field: 'restSeconds' | 'segmentCount' | 'targetReps', value: string) => void;
     onSave: () => void;
     onCancel: () => void;
     isSaving?: boolean;
@@ -37,7 +38,8 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     onRemoveExercise,
     onUpdateSetsCount,
     onUpdateReps,
-    onUpdateTechnique,
+    onUpdateSetPlan,
+    onUpdateSetPlanField,
     onSave,
     onCancel,
     isSaving
@@ -95,7 +97,8 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                                     onRemove={onRemoveExercise}
                                     onUpdateSetsCount={onUpdateSetsCount}
                                     onUpdateReps={onUpdateReps}
-                                    onUpdateTechnique={onUpdateTechnique}
+                                    onUpdateSetPlan={onUpdateSetPlan}
+                                    onUpdateSetPlanField={onUpdateSetPlanField}
                                 />
                             );
                         })}

@@ -1,6 +1,7 @@
 import Fuse from 'fuse.js';
 import { MUSCLES } from '../constants/muscles';
 import { getDetailedMuscleCategory } from './planning';
+import { getSetSegments } from '../advancedSets';
 
 export const normalizeStem = (str: string): string => {
     if (!str || typeof str !== 'string') return '';
@@ -307,6 +308,7 @@ export function calculateSetVolume(
     set: {
         kg?: string | number;
         reps?: string | number;
+        segments?: Array<{ kg?: string | number; reps?: string | number }>;
         dropsets?: Array<{ kg?: string | number; reps?: string | number }>;
     },
     exercise?: VolumeExerciseRef | null,
@@ -317,12 +319,10 @@ export function calculateSetVolume(
     const effectiveWeight = calculateEffectiveSetWeight(set.kg, exercise, userWeight);
     let volume = effectiveWeight * reps;
 
-    if (Array.isArray(set.dropsets)) {
-        for (const ds of set.dropsets) {
-            const dsReps = parseInt(String(ds.reps ?? ''), 10) || 0;
-            const dsEffectiveWeight = calculateEffectiveSetWeight(ds.kg, exercise, userWeight);
-            volume += dsEffectiveWeight * dsReps;
-        }
+    for (const segment of getSetSegments(set as any)) {
+        const segmentReps = parseInt(String(segment.reps ?? ''), 10) || 0;
+        const segmentEffectiveWeight = calculateEffectiveSetWeight(segment.kg, exercise, userWeight);
+        volume += segmentEffectiveWeight * segmentReps;
     }
     return volume;
 }

@@ -11,5 +11,7 @@ describe('Semantic Merge Policy', () => {
 
     it('2. returns correct policy for nested activeWorkout sets', () => {
         expect(getMergePolicy('', ['activeWorkout', 'exercises', 'ex1', 'sets', 's1'])).toBe('property');
+        expect(getMergePolicy('', ['activeWorkout', 'exercises', 'ex1', 'sets', 's1', 'segments'])).toBe('ordered-keyed');
+        expect(getMergePolicy('history_months/2026-09', ['w1', 'exercises', 'ex1', 'sets', 's1', 'segments'])).toBe('ordered-keyed');
     });
 });

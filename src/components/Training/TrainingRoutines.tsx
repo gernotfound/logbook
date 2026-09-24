@@ -17,7 +17,7 @@ const TrainingRoutines: React.FC = () => {
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete, handleDuplicate,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
-        handleUpdateTechnique,
+        handleUpdateSetPlan, handleUpdateSetPlanField,
         handleRemoveExerciseFromRoutine, moveExercise
     } = useTrainingRoutines();
 
@@ -81,7 +81,8 @@ const TrainingRoutines: React.FC = () => {
                         onRemoveExercise={handleRemoveExerciseFromRoutine}
                         onUpdateSetsCount={handleUpdateSetsCount}
                         onUpdateReps={handleUpdateReps}
-                        onUpdateTechnique={handleUpdateTechnique}
+                        onUpdateSetPlan={handleUpdateSetPlan}
+                        onUpdateSetPlanField={handleUpdateSetPlanField}
                         onSave={async () => {
                             if (isSaving) return;
                             setIsSaving(true);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
 import { formatAdvancedSetSummary, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
+import { calculateSetVolume } from '../src/lib/calc/workout';
 import { buildRoutineWorkout, prepareHistoricalWorkoutForEditing } from '../src/hooks/workout/workoutSessionPreparation';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
 
@@ -40,6 +41,14 @@ describe('advanced set segments', () => {
         expect(workout.exercises[0].sets[1].segments).toHaveLength(2);
         expect(workout.exercises[0].sets[1].segments?.every(s => s.restBeforeSeconds === 15)).toBe(true);
         expect(workout.exercises[0].sets[2].target?.reps).toBe(10);
+    });
+
+    it('includes generalized segments in observed volume', () => {
+        const set = {
+            id: 's1', kg: '100', reps: '8', technique: 'rest_pause' as const,
+            segments: [{ id: 'seg1', kg: '100', reps: '3', restBeforeSeconds: 20 }],
+        };
+        expect(calculateSetVolume(set, null, 80)).toBe(1100);
     });
 
     it('normalizes advanced historical segment values for safe editing', () => {
