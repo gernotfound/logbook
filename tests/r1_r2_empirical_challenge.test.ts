@@ -378,7 +378,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
         });
 
         // 2.3 PR Invariant: First Session NEVER awards PRs, regardless of weight/volume
-        it('R2.3: Guarantees 0 PRs awarded on first workout session of any routine', () => {
+        it('R2.3: Treats first exercise exposures as baselines and continues history across routines', () => {
             const firstSession: WorkoutSession = {
                 id: 'sess-first',
                 routineId: 'routine-legs',
@@ -392,9 +392,9 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             const reportEmptyHistory = computeWorkoutReport(firstSession, [], libraryMap, 80);
             expect(reportEmptyHistory.isFirstSession).toBe(true);
             expect(reportEmptyHistory.newPRs).toHaveLength(0);
-            expect(reportEmptyHistory.exerciseComparisons).toHaveLength(0);
+            expect(reportEmptyHistory.exerciseComparisons).toHaveLength(2);
 
-            // History with un-matching routineIds
+            // A different routine does not break the same exercise's exposure history.
             const unmatchingHistory: WorkoutSession[] = [
                 {
                     id: 'sess-other-1',
@@ -405,7 +405,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             ];
 
             const reportUnmatching = computeWorkoutReport(firstSession, unmatchingHistory, libraryMap, 80);
-            expect(reportUnmatching.isFirstSession).toBe(true);
+            expect(reportUnmatching.isFirstSession).toBe(false);
             expect(reportUnmatching.newPRs).toHaveLength(0);
         });
 
@@ -460,18 +460,18 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
         });
 
         // 2.5 PR Invariant: Progression scenarios correctly award PRs
-        it('R2.5: Correctly awards PRs for volume increases, load progression with equal/more reps', () => {
+        it('R2.5: Awards strong performance records only when output improves at comparable declared RIR', () => {
             const prevSession: WorkoutSession = {
                 id: 'sess-prev',
                 routineId: 'routine-push',
                 date: '2026-08-20',
                 exercises: [
                     // Bench: 100kg x 10 = 1000 vol
-                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '10' }] },
+                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '10', rir: 2 }] },
                     // Pullup (BW 80kg): 0kg x 10 = 800 vol
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '0', reps: '10' }] },
+                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '0', reps: '10', rir: 2 }] },
                     // Cable Fly: 15kg x 10 = 150 vol
-                    { exId: 'ex-cable-fly', sets: [{ id: 's3', kg: '15', reps: '10' }] }
+                    { exId: 'ex-cable-fly', sets: [{ id: 's3', kg: '15', reps: '10', rir: 2 }] }
                 ]
             };
 
@@ -481,11 +481,11 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 date: '2026-08-27',
                 exercises: [
                     // Bench: 100kg x 11 = 1100 vol (+100 vol, +1 rep) -> PR
-                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '11' }] },
+                    { exId: 'ex-bench', sets: [{ id: 's1', kg: '100', reps: '11', rir: 2 }] },
                     // Pullup: +5kg weighted (85 eff) x 10 = 850 vol (+50 vol, +5 avgWeight) -> PR
-                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '5', reps: '10' }] },
+                    { exId: 'ex-pullup', sets: [{ id: 's2', kg: '5', reps: '10', rir: 2 }] },
                     // Cable Fly: 15kg x 10 = 150 vol (Exact tie) -> NOT PR
-                    { exId: 'ex-cable-fly', sets: [{ id: 's3', kg: '15', reps: '10' }] }
+                    { exId: 'ex-cable-fly', sets: [{ id: 's3', kg: '15', reps: '10', rir: 2 }] }
                 ]
             };
 
@@ -495,31 +495,31 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
         });
 
         // 2.6 History Search Resilience: picks closest previous workout with date <= currentWorkout.date
-        it('R2.6: Correctly selects latest prior workout matching routineId and ignores future or different routine dates', () => {
+        it('R2.6: Selects the latest prior comparable exercise exposure and ignores future dates', () => {
             const h1: WorkoutSession = {
                 id: 'sess-1',
                 routineId: 'r-push',
                 date: '2026-08-01',
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '80', reps: '10' }] }] // 800 vol
+                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '80', reps: '10', rir: 2 }] }] // 800 vol
             };
             const h2: WorkoutSession = {
                 id: 'sess-2',
                 routineId: 'r-push',
                 date: '2026-08-15',
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '90', reps: '10' }] }] // 900 vol (target previous)
+                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '90', reps: '10', rir: 2 }] }] // 900 vol (target previous)
             };
             const h3Future: WorkoutSession = {
                 id: 'sess-3',
                 routineId: 'r-push',
                 date: '2026-09-05', // in the future relative to current session (2026-08-25)
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '150', reps: '10' }] }]
+                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '150', reps: '10', rir: 2 }] }]
             };
 
             const current: WorkoutSession = {
                 id: 'sess-curr',
                 routineId: 'r-push',
                 date: '2026-08-25',
-                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '95', reps: '10' }] }] // 950 vol
+                exercises: [{ exId: 'ex-bench', sets: [{ id: 's', kg: '95', reps: '10', rir: 2 }] }] // 950 vol
             };
 
             // History provided in descending chronological order: [h3Future, h2, h1]
@@ -540,7 +540,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 routineId: 'r-pull',
                 date: '2026-08-20',
                 exercises: [
-                    { exId: 'ex-pullup', sets: [{ id: 's1', kg: '0', reps: '8' }] } // 80 * 8 = 640
+                    { exId: 'ex-pullup', sets: [{ id: 's1', kg: '0', reps: '8', rir: 2 }] } // 80 * 8 = 640
                 ]
             };
 
@@ -550,7 +550,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
                 date: '2026-08-27',
                 exercises: [
                     // Established exercise: improved from 640 to 800 vol -> PR
-                    { exId: 'ex-pullup', sets: [{ id: 's1', kg: '0', reps: '10' }] }, // 80 * 10 = 800
+                    { exId: 'ex-pullup', sets: [{ id: 's1', kg: '0', reps: '10', rir: 2 }] }, // 80 * 10 = 800
                     // Brand new exercise introduced in this workout session -> NOT PR
                     { exId: 'ex-cable-fly', sets: [{ id: 's2', kg: '20', reps: '12' }] }
                 ]

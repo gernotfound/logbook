@@ -3,6 +3,8 @@ import { Trash2, Save } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
+import { computeProgressionEngine, formatProgressionReference, progressionQualityLabel } from '../../lib/calc/progression';
+import { useAppStore } from '../../store/useAppStore';
 import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
@@ -61,6 +63,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
         addSpecialSet, updateSpecialSet, removeSpecialSet, addSegment, updateSetTarget,
         updateSetupNote, updateSessionNote
     } = useWorkoutSession();
+    const nutrition = useAppStore(state => state.userData?.nutrition);
 
     // Previene lo spegnimento automatico dello schermo durante la sessione attiva
     useWakeLock(true);
@@ -184,6 +187,11 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
     }, [history]);
 
     const libraryMap = useMemo(() => new Map(library.map(l => [l.id, l])), [library]);
+    const progressionMap = useMemo(() => {
+        if (!activeWorkout) return new Map();
+        const engine = computeProgressionEngine(activeWorkout, history, libraryMap, { nutrition });
+        return new Map(engine.exercises.map(analysis => [analysis.exId, analysis]));
+    }, [activeWorkout, history, libraryMap, nutrition]);
 
     if (!activeWorkout) return null;
 
@@ -224,6 +232,12 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
                     (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
+                        const progression = progressionMap.get(exItem.exId);
+                        const progressionHint = progression?.previousComparable ? {
+                            previousDate: progression.previousComparable.date,
+                            previousReference: formatProgressionReference(progression.previousComparable),
+                            quality: progressionQualityLabel(progression.quality),
+                        } : undefined;
 
                         return (
                             <SessionExerciseCard
@@ -233,6 +247,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onWorkoutCompleted }
                                 totalExercises={(activeWorkout.exercises || []).length}
                                 libDef={libDef}
                                 pastWorkouts={pastWorkouts}
+                                progressionHint={progressionHint}
                                 isHistoryOpen={openHistoryExIndex === exIndex}
                                 isSetupOpen={openSetupExIndex === exIndex}
                                 openSpecialMenuId={openSpecialMenuId}
