@@ -210,6 +210,25 @@ describe('M8 Domain Operations V4', () => {
             .every(op => op.guard?.equals === 'live-1')).toBe(true);
     });
 
+    it('projects readiness with the active workout and preserves it on completion/history edits', () => {
+        const active: WorkoutSession = {
+            id: 'live-ready', date: '2026-09-24', globalStartTime: 100, exercises: [],
+            readiness: { capturedAt: 100, energy: 2, stress: 5 },
+        };
+        const before = base({ activeWorkout: null });
+        const activeResult = compile(before, { type: 'active-workout.set', workout: active });
+        expect((activeResult.after.activeWorkout as WorkoutSession).readiness).toEqual(active.readiness);
+        expect(activeResult.operations).toContainEqual(expect.objectContaining({ path: ['activeWorkout'] }));
+
+        const completed = compile(activeResult.after, { type: 'workout.complete', workout: active, activePains: [] });
+        expect(completed.after.history?.[0].readiness).toEqual(active.readiness);
+        expect(completed.after.activeWorkout).toBeNull();
+
+        const edited = { ...completed.after.history![0], moodRating: 8 };
+        const historyResult = compile(completed.after, { type: 'history.upsert', workout: edited });
+        expect(historyResult.after.history?.[0].readiness).toEqual(active.readiness);
+    });
+
     it('rejects a non-null active workout without stable identity', () => {
         const before = base({ activeWorkout: null });
         expect(() => applyDomainOperations(before, {

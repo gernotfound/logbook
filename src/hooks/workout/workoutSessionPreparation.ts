@@ -43,7 +43,6 @@ export function buildRoutineWorkout(
         cycleName: assignedCycleName,
         ...(assignedCycleStrategy ? { cycleStrategy: assignedCycleStrategy } : {}),
         date: runtime.getLocalDateString(),
-        globalStartTime: runtime.now(),
         exercises: (routine.exercises || []).map((ex: any) => {
             const libDef = (userData?.library || []).find(l => l.id === ex.exId);
             const isCardio = libDef?.trackingType === 'cardio';
@@ -72,7 +71,6 @@ export function buildFreeWorkout(runtime: WorkoutPreparationRuntime = defaultRun
         id: runtime.generateId('w'),
         routineName: 'Allenamento libero',
         date: runtime.getLocalDateString(),
-        globalStartTime: runtime.now(),
         exercises: [],
     };
 }

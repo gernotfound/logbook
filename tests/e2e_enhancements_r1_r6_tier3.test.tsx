@@ -38,6 +38,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
 
             let localWorkout: WorkoutSession | null = {
                 id: 'w_combo_1',
+                globalStartTime: 1,
                 routineName: 'Chest Day',
                 exercises: [{ exId: 'ex_bench', sessionNote: 'Heavy', sets: [{ id: 's1', kg: '90', reps: '8' }] }]
             };
@@ -227,6 +228,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
         it('T3.5: Special Sets (Dropsets/Isometrics) + Live Reordering + Setup Note Updates', () => {
             let localWorkout: WorkoutSession | null = {
                 id: 'w1',
+                globalStartTime: 1,
                 exercises: [
                     { exId: 'ex_press', sessionNote: '', sets: [{ id: 's1', kg: '30', reps: '10' }] },
                     { exId: 'ex_lateral', sessionNote: '', sets: [{ id: 's2', kg: '12', reps: '12' }] }

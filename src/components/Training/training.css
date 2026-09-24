@@ -206,3 +206,62 @@
 @media (prefers-reduced-motion: reduce) {
   .muscle-map-container path { transition: none !important; }
 }
+
+.pre-session-checkin {
+  display: grid;
+  gap: 1rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card, 1.25rem);
+  background: var(--surface-color);
+}
+.pre-session-heading h2 { margin: .25rem 0; }
+.pre-session-heading p { margin: 0; color: var(--text-muted); }
+.pre-session-context { display: grid; gap: .5rem; }
+.pre-session-context > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .75rem;
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-light);
+}
+.pre-session-context span { color: var(--text-muted); text-align: right; overflow-wrap: anywhere; }
+.pre-session-metrics { display: grid; gap: .875rem; }
+.readiness-metric { min-width: 0; margin: 0; padding: 0; border: 0; }
+.readiness-metric legend { margin-bottom: .5rem; font-weight: 600; }
+.readiness-scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
+.readiness-value {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: .5rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-light);
+  color: var(--text-main);
+  font: inherit;
+  font-weight: 700;
+}
+.readiness-value[aria-pressed="true"] {
+  border-color: var(--primary-color);
+  background: var(--primary-soft, color-mix(in srgb, var(--primary-color) 12%, transparent));
+  color: var(--primary-color);
+}
+.readiness-scale-hints { display: flex; justify-content: space-between; gap: .75rem; margin-top: .35rem; color: var(--text-muted); font-size: .75rem; }
+.pre-session-actions { display: grid; gap: .625rem; }
+.pre-session-actions .btn { width: 100%; min-height: 2.75rem; margin: 0; }
+
+@media (max-width: 22.5rem) {
+  .pre-session-checkin { padding: .75rem; }
+  .readiness-scale { gap: .3rem; }
+  .readiness-value { min-width: 0; }
+  .pre-session-context > div { flex-direction: column; gap: .25rem; }
+  .pre-session-context span { text-align: left; }
+}
+.workout-report-phase { display: grid; gap: .75rem; }
+.workout-report-phase > h2 { margin: 0; font-size: 1rem; color: var(--text-main); }
+.workout-report-metrics { display: flex; flex-wrap: wrap; gap: .5rem; }
+.workout-report-metrics > span { padding: .5rem .75rem; border: 1px solid var(--glass-border); border-radius: var(--radius-control, .875rem); background: var(--surface-light); color: var(--text-muted); }
+.workout-report-metrics strong { color: var(--text-main); }

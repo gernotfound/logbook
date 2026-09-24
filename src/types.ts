@@ -97,6 +97,14 @@ export interface SessionExercise {
     maxReps?: number;
 }
 
+export interface WorkoutReadiness {
+    capturedAt: number;
+    energy?: number;
+    stress?: number;
+    motivation?: number;
+    muscleRecovery?: number;
+}
+
 export interface WorkoutSession {
     id?: string;
     routineId?: string;
@@ -105,6 +113,7 @@ export interface WorkoutSession {
     cycleName?: string;
     // Snapshot captured when the session starts. Absence means the historical intent was unspecified.
     cycleStrategy?: TrainingCycleStrategy;
+    readiness?: WorkoutReadiness;
     date?: string;
     globalStartTime?: number;
     globalEndTime?: number;

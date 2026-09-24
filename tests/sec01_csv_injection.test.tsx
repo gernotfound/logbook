@@ -121,12 +121,12 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
         };
 
         const workoutRecords = parseCsvForTest(workoutCsv);
-        // La riga 0 è l'header (16 colonne), la 1 è il record (16 colonne)
+        // La riga 0 è l'header (20 colonne), la 1 è il record (20 colonne)
         // La riga 2 potrebbe essere vuota se c'è un trailing newline
         const validWorkoutRecords = workoutRecords.filter(r => r.length > 1);
         
-        expect(validWorkoutRecords[0].length).toBe(16);
-        expect(validWorkoutRecords[1].length).toBe(16);
+        expect(validWorkoutRecords[0].length).toBe(20);
+        expect(validWorkoutRecords[1].length).toBe(20);
         expect(validWorkoutRecords[1][1]).toBe(`'=cmd|calc`);
         expect(validWorkoutRecords[1][2]).toBe(`'-Attacco!`);
         expect(validWorkoutRecords[1][6]).toBe("-10"); // Kg numerico intoccato!

@@ -250,6 +250,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex_special', name: 'Curl 45° con Manubri & Bilanciere (A/B) "Pro"', setsCount: 3, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     exercises: [{ exId: 'ex_special', sessionNote: '', sets: [] }]
                 };
@@ -267,6 +268,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex_sparse', name: 'Calf Raise', setsCount: 4, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     exercises: [{ exId: 'ex_sparse', sessionNote: '', sets: [] }]
                 };
@@ -285,6 +287,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex2', name: 'Squat 1', setsCount: 3, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     exercises: [
                         { exId: 'ex1', sessionNote: '', sets: [] },
@@ -322,6 +325,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                     { id: 'ex10', name: 'Exercise Ten', setsCount: 3, sets: [] }
                 ];
                 const activeSession: WorkoutSession = {
+                    globalStartTime: 1,
                     id: 'w1',
                     exercises: [{ exId: 'ex10', sessionNote: '', sets: [] }]
                 };

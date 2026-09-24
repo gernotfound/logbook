@@ -465,6 +465,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 routineId: 'routine_push',
                 routineName: 'Push Day',
                 date: '2026-08-16',
+                globalStartTime: 1,
                 exercises: [
                     { exId: 'ex_treadmill', sets: [{ id: 'st1', time: '20', distance: '3.0' }], sessionNote: '' }
                 ]
@@ -499,6 +500,11 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             });
 
             expect(useAppStore.getState().localWorkout?.routineName).toBe('Push Day');
+            expect(screen.getByRole('heading', { name: 'Come arrivi oggi?' })).toBeDefined();
+            await act(async () => {
+                fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+                await new Promise(r => setTimeout(r, 0));
+            });
             expect(screen.getByRole('heading', { name: 'Panca Piana' })).toBeDefined();
             expect(screen.getByRole('heading', { name: 'Squat' })).toBeDefined();
 
