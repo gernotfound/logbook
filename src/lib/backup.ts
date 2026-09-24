@@ -55,7 +55,7 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date || !isRecord(day)) {
             throw new Error(`Giornata nutrizione non valida: ${date}.`);
         }
-        for (const key of ['meals', 'supplementsIntake']) if (day[key] !== undefined) checkIds(day[key], `nutrition.${date}.${key}`);
+        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) if (day[key] !== undefined) checkIds(day[key], `nutrition.${date}.${key}`);
     }
 }
 

@@ -210,7 +210,8 @@ export function mergeNutritionPlanning(
  * - Dates unique to cloud or guest are preserved.
  * - For matching dates:
  *   - `meals` sub-array is merged by item ID (guest priority).
- *   - `supplementsIntake` sub-array is merged by intake ID (guest priority).
+ *   - `supplementsIntake` and `cardioSessions` are merged by stable ID (guest priority).
+ *   - Daily steps and their provenance metadata move together; an explicit guest value, including 0, wins.
  *   - Daily macros (kcal, carbs, pro, fat) are recalculated from combined meals if meals exist;
  *     otherwise guest macros take priority if non-zero, else cloud.
  *   - Body measurements and notes: guest values prioritized if present/non-empty, otherwise cloud.
@@ -250,6 +251,7 @@ export function mergeNutrition(
             };
             const mergedMeals = mergeArrayById(sanitizeMealIds(cloudDay.meals), sanitizeMealIds(guestDay.meals));
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
+            const mergedCardioSessions = mergeArrayById(cloudDay.cardioSessions, guestDay.cardioSessions);
 
             let kcal = guestDay.kcal || cloudDay.kcal || 0;
             let carbs = guestDay.carbs || cloudDay.carbs || 0;
@@ -278,7 +280,15 @@ export function mergeNutrition(
                 fat,
                 meals: mergedMeals,
                 supplementsIntake: mergedSupplementsIntake,
+                cardioSessions: mergedCardioSessions,
             };
+
+            const stepsDay = guestDay.steps !== undefined ? guestDay : cloudDay;
+            if (stepsDay.steps !== undefined) {
+                dayObj.steps = stepsDay.steps;
+                if (stepsDay.stepsSource !== undefined) dayObj.stepsSource = stepsDay.stepsSource;
+                if (stepsDay.stepsCapturedAt !== undefined) dayObj.stepsCapturedAt = stepsDay.stepsCapturedAt;
+            }
 
             const optionalFields: Record<string, any> = {
                 weight: pickVal(guestDay.weight, cloudDay.weight),

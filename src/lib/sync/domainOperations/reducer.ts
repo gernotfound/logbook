@@ -5,6 +5,7 @@ import type {
     WorkoutRoutine,
 } from '../../../types';
 import { UserDataSchema } from '../../schema';
+import { CardioSessionSchema } from '../../schemas/schema_nutrition';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
@@ -34,6 +35,17 @@ function ensureNutritionDay(data: UserData, date: string): NutritionDay {
 function withMealTotals(day: NutritionDay): NutritionDay {
     const totals = calculateLoggedMealTotals(day.meals ?? []);
     return { ...day, kcal: totals.kcal, carbs: totals.carbs, pro: totals.pro, fat: totals.fat };
+}
+
+function requireSteps(value: number): number {
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) throw new Error('Passi: valore non valido');
+    return value;
+}
+
+function requireCapturedAt(value: number | undefined): number | undefined {
+    if (value === undefined) return undefined;
+    if (!Number.isFinite(value) || value < 0) throw new Error('Attività: timestamp non valido');
+    return value;
 }
 
 function findRoutine(data: UserData, id: string): { index: number; value: WorkoutRoutine } {
@@ -77,6 +89,46 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             const nutrition = { ...(data.nutrition ?? {}) };
             delete nutrition[date];
             data.nutrition = nutrition;
+            break;
+        }
+        case 'activity-steps.set': {
+            const date = requireDate(operation.date);
+            const day = ensureNutritionDay(data, date);
+            const steps = requireSteps(operation.steps);
+            const capturedAt = requireCapturedAt(operation.capturedAt);
+            const next = { ...day, date, steps, stepsSource: operation.source ?? 'manual' as const };
+            if (capturedAt === undefined) delete next.stepsCapturedAt;
+            else next.stepsCapturedAt = capturedAt;
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: next };
+            break;
+        }
+        case 'activity-steps.clear': {
+            const date = requireDate(operation.date);
+            const day = data.nutrition?.[date];
+            if (!day) break;
+            const next = { ...day };
+            delete next.steps;
+            delete next.stepsSource;
+            delete next.stepsCapturedAt;
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: next };
+            break;
+        }
+        case 'cardio-session.upsert': {
+            const date = requireDate(operation.date);
+            const day = ensureNutritionDay(data, date);
+            const session = CardioSessionSchema.parse(operation.session);
+            const id = requireId(session.id, 'Sessione cardio');
+            const cardioSessions = upsertById(day.cardioSessions, { ...session, id }, item => requireId(item.id, 'Sessione cardio'), 'Sessioni cardio');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, cardioSessions } };
+            break;
+        }
+        case 'cardio-session.delete': {
+            const date = requireDate(operation.date);
+            const sessionId = requireId(operation.sessionId, 'Sessione cardio');
+            const day = data.nutrition?.[date];
+            if (!day) break;
+            const cardioSessions = deleteById(day.cardioSessions, sessionId, item => requireId(item.id, 'Sessione cardio'), 'Sessioni cardio');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, cardioSessions } };
             break;
         }
         case 'nutrition-meal.upsert': {

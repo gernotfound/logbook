@@ -195,6 +195,25 @@ export interface SupplementIntake {
     time: number;
 }
 
+export type ActivitySource = 'manual' | 'imported';
+export type CardioModality = 'walk' | 'treadmill' | 'bike' | 'elliptical' | 'stair' | 'run' | 'row' | 'swim' | 'other';
+export type CardioStructure = 'continuous' | 'intervals';
+export type CardioIntensity = 'low' | 'moderate' | 'high';
+
+export interface CardioSession {
+    id: string;
+    startedAt?: number;
+    modality: CardioModality;
+    structure?: CardioStructure;
+    durationMinutes: number;
+    intensity?: CardioIntensity;
+    averageHeartRate?: number;
+    distanceKm?: number;
+    notes?: string;
+    source?: ActivitySource;
+    externalId?: string;
+}
+
 export interface NutritionDay {
     date: string;
     kcal: number;
@@ -221,6 +240,10 @@ export interface NutritionDay {
     sleepLight?: number | string;
     sleepRem?: number | string;
     sleepAwake?: number | string;
+    steps?: number;
+    stepsSource?: ActivitySource;
+    stepsCapturedAt?: number;
+    cardioSessions?: CardioSession[];
 }
 
 export interface Food {
@@ -426,4 +449,4 @@ export type AppTab = 'home' | 'training' | 'nutrition' | 'data' | 'settings';
 export type MainTab = AppTab;
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';
-export type DataSubTab = 'measurements' | 'sleep' | 'biometry' | 'history';
+export type DataSubTab = 'measurements' | 'sleep' | 'activity' | 'biometry' | 'history';

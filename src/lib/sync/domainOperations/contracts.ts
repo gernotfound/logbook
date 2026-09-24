@@ -1,4 +1,5 @@
 import type {
+    CardioSession,
     Exercise,
     Food,
     FoodOverride,
@@ -19,7 +20,7 @@ import type {
 
 export type NutritionDayPatch = Partial<Omit<
     NutritionDay,
-    'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake'
+    'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake' | 'steps' | 'stepsSource' | 'stepsCapturedAt' | 'cardioSessions'
 >>;
 
 export type DomainOperation =
@@ -27,6 +28,10 @@ export type DomainOperation =
     | { type: 'nutrition-planning.replace'; value: NutritionPlanning; origin?: 'generated-default' | 'user-edited' }
     | { type: 'nutrition-day.patch'; date: string; patch: NutritionDayPatch }
     | { type: 'nutrition-day.delete'; date: string }
+    | { type: 'activity-steps.set'; date: string; steps: number; source?: 'manual' | 'imported'; capturedAt?: number }
+    | { type: 'activity-steps.clear'; date: string }
+    | { type: 'cardio-session.upsert'; date: string; session: CardioSession }
+    | { type: 'cardio-session.delete'; date: string; sessionId: string }
     | { type: 'nutrition-meal.upsert'; date: string; meal: LoggedMealItem }
     | { type: 'nutrition-meal.delete'; date: string; mealId: string }
     | { type: 'supplement-intake.upsert'; date: string; intake: SupplementIntake }

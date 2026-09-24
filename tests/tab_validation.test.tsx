@@ -71,7 +71,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         });
 
         it('validates DataSubTabSchema correctly', () => {
-            const valid = ['measurements', 'sleep', 'biometry', 'history'];
+            const valid = ['measurements', 'sleep', 'activity', 'biometry', 'history'];
             for (const sub of valid) {
                 expect(DataSubTabSchema.safeParse(sub).success).toBe(true);
             }

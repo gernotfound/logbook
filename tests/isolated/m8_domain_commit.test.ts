@@ -121,6 +121,28 @@ describe('M8 domain commit durability', () => {
         expect(cleared?.data.pendingConflicts?.nutritionPlanning).toBeUndefined();
     });
 
+    it('keeps offline activity durable with semantic operations ready for later synchronization', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const { projectDocuments, applyRemoteDocuments } = await import('../../src/lib/sync/documentProjection');
+        const { applySemanticOperations } = await import('../../src/lib/sync/semanticProjection');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+
+        await commitDomainOperations('user:a', [
+            { type: 'activity-steps.set', date: '2026-09-24', steps: 12345, source: 'manual', capturedAt: 100 },
+            { type: 'cardio-session.upsert', date: '2026-09-24', session: { id: 'cardio-1', modality: 'bike', durationMinutes: 35, intensity: 'moderate', source: 'manual' } },
+        ], initial);
+        const stored = await readLocal('user:a');
+        expect(stored?.data.nutrition?.['2026-09-24']).toMatchObject({ steps: 12345, cardioSessions: [{ id: 'cardio-1', durationMinutes: 35 }] });
+        expect(stored?.pending.some(operation => operation.path.join('/').includes('steps'))).toBe(true);
+        expect(stored?.pending.some(operation => operation.path.join('/').includes('cardioSessions/cardio-1'))).toBe(true);
+
+        const remoteBase = projectDocuments(initial, catalog);
+        const replayed = applySemanticOperations(remoteBase, stored?.pending ?? []).documents;
+        const synchronized = applyRemoteDocuments(initial, replayed, catalog);
+        expect(synchronized.nutrition?.['2026-09-24']).toMatchObject({ steps: 12345, cardioSessions: [{ id: 'cardio-1', durationMinutes: 35 }] });
+    });
+
     it('does not enqueue cloud journal operations for guest ownership', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();
