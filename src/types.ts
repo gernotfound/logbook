@@ -60,12 +60,37 @@ export interface Exercise {
     equipmentWeight?: number;
 }
 
+export type SetTechnique = 'straight' | 'dropset' | 'rest_pause' | 'cluster' | 'rep_match' | 'diminishing';
+export type ExecutionMode = 'standard' | 'stop_reps';
+
+export interface SetSegment {
+    id: string;
+    kg: string;
+    reps: string;
+    time?: string;
+    restBeforeSeconds?: number;
+}
+
+export interface SetTarget {
+    type: 'reps';
+    reps: number;
+    sourceSetId?: string;
+}
+
+export interface PlannedSetTechnique {
+    technique: SetTechnique;
+    target?: SetTarget;
+    restSeconds?: number;
+    segmentCount?: number;
+}
+
 export interface RoutineExercise {
     exId: string;
     setsCount: number | string;
     minReps?: number | string;
     maxReps?: number | string;
-    defaultTechnique?: 'none' | 'dropset' | 'isometrics';
+    defaultTechnique?: 'none' | 'dropset' | 'isometrics' | Exclude<SetTechnique, 'straight' | 'dropset'>;
+    setPlans?: PlannedSetTechnique[];
 }
 
 export interface WorkoutRoutine {
@@ -85,6 +110,10 @@ export interface SessionExerciseSet {
     incline?: string;
     kcal?: string;
     done?: boolean;
+    technique?: SetTechnique;
+    executionMode?: ExecutionMode;
+    segments?: SetSegment[];
+    target?: SetTarget;
     dropsets?: { id: string; kg: string; reps: string }[];
     isometrics?: { id: string; kg: string; time: string }[];
 }

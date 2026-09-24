@@ -144,8 +144,8 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             });
 
             act(() => {
-                sessionHook.current.updateSpecialSet(1, curlSetId, 'dropsets', 0, 'kg', '12');
-                sessionHook.current.updateSpecialSet(1, curlSetId, 'dropsets', 0, 'reps', '8');
+                sessionHook.current.updateSpecialSet(1, curlSetId, 'segments', 0, 'kg', '12');
+                sessionHook.current.updateSpecialSet(1, curlSetId, 'segments', 0, 'reps', '8');
             });
 
             // Complete session
@@ -158,7 +158,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
             const savedSession = state.userData?.history?.[0];
             expect(savedSession?.exercises.length).toBe(2);
             expect(savedSession?.exercises[1].exId).toBe('ex_curl');
-            expect(savedSession?.exercises[1].sets[0].dropsets?.[0].kg).toBe('12');
+            expect(savedSession?.exercises[1].sets[0].segments?.[0].kg).toBe('12');
 
             // Routine blueprint is untouched
             expect(state.userData?.routines?.[0].exercises.length).toBe(1);

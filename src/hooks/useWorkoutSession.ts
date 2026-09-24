@@ -105,6 +105,8 @@ export function useWorkoutSession() {
         updateSet,
         updateSpecialSet,
         removeSpecialSet,
+        addSegment,
+        updateSetTarget,
         updateSessionNote
     } = useWorkoutSetMutations({ setLocalWorkout: mutateActiveWorkout, showConfirm });
 
@@ -338,6 +340,8 @@ export function useWorkoutSession() {
         addSpecialSet,
         updateSpecialSet,
         removeSpecialSet,
+        addSegment,
+        updateSetTarget,
         updateSessionNote,
         updateSetupNote
     };

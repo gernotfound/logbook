@@ -40,12 +40,26 @@ export const ExerciseSchema = z.object({
 
 export const ExerciseLibraryItemSchema = ExerciseSchema;
 
+const SetTechniqueSchema = z.enum(['straight', 'dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing']);
+const SetTargetSchema = z.object({
+    type: z.literal('reps'),
+    reps: z.number().int().nonnegative(),
+    sourceSetId: safeOptionalString(),
+}).passthrough();
+const PlannedSetTechniqueSchema = z.object({
+    technique: SetTechniqueSchema,
+    target: SetTargetSchema.optional().catch(undefined),
+    restSeconds: z.number().int().nonnegative().optional().catch(undefined),
+    segmentCount: z.number().int().positive().optional().catch(undefined),
+}).passthrough();
+
 export const RoutineExerciseSchema = z.object({
     exId: safeString(''),
     setsCount: safeNumber(0),
     minReps: safeOptionalNumber(),
     maxReps: safeOptionalNumber(),
-    defaultTechnique: z.enum(['none', 'dropset', 'isometrics']).optional().catch(undefined),
+    defaultTechnique: z.enum(['none', 'dropset', 'isometrics', 'rest_pause', 'cluster', 'rep_match', 'diminishing']).optional().catch(undefined),
+    setPlans: z.array(PlannedSetTechniqueSchema).optional().catch(undefined),
 }).passthrough().catch({ exId: '', setsCount: 0 }).default({ exId: '', setsCount: 0 });
 
 export const WorkoutRoutineSchema = z.object({
@@ -75,6 +89,14 @@ export const SessionExerciseIsometricSchema = z.object({
     time: safeString(''),
 }).passthrough().catch({ id: '', kg: '', time: '' }).default({ id: '', kg: '', time: '' });
 
+const SessionSetSegmentSchema = z.object({
+    id: safeString(''),
+    kg: safeString(''),
+    reps: safeString(''),
+    time: safeOptionalString(),
+    restBeforeSeconds: z.number().int().nonnegative().optional().catch(undefined),
+}).passthrough();
+
 export const SessionExerciseSetSchema = z.object({
     id: safeString(''),
     kg: safeString(''),
@@ -86,6 +108,10 @@ export const SessionExerciseSetSchema = z.object({
     incline: safeOptionalString(),
     kcal: safeOptionalString(),
     done: safeOptionalBoolean(),
+    technique: SetTechniqueSchema.optional().catch(undefined),
+    executionMode: z.enum(['standard', 'stop_reps']).optional().catch(undefined),
+    segments: z.array(SessionSetSegmentSchema).optional().catch(undefined),
+    target: SetTargetSchema.optional().catch(undefined),
     dropsets: z.array(SessionExerciseDropsetSchema).optional().catch([]).default([]),
     isometrics: z.array(SessionExerciseIsometricSchema).optional().catch([]).default([]),
 }).passthrough().transform((set) => {

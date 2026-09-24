@@ -408,7 +408,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 );
 
                 expect(screen.getByText('S1')).toBeDefined();
-                const plusBtn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
+                const plusBtn = screen.getByRole('button', { name: 'Aggiungi alla serie' });
                 expect(plusBtn).toBeDefined();
                 expect(plusBtn.textContent).toBe('+');
             });
@@ -430,7 +430,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const plusBtn = screen.getByRole('button', { name: 'Aggiungi dropset o isometria' });
+                const plusBtn = screen.getByRole('button', { name: 'Aggiungi alla serie' });
                 fireEvent.click(plusBtn);
                 expect(mockToggle).toHaveBeenCalledTimes(1);
             });

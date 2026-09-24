@@ -31,14 +31,24 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                 if (i !== exIndex) return ex;
                 return {
                     ...ex,
-                    sets: ex.sets.map((s: any) => {
+                    sets: ex.sets.map((s: any, setIndex: number) => {
                         if (s.id !== setId) return s;
-                        if (type === 'dropset') {
-                            return { ...s, dropsets: [...(s.dropsets || []), { id: Logic.generateId('ds'), kg: '', reps: '' }] };
-                        } else if (type === 'isometry') {
+                        if (type === 'isometry') {
                             return { ...s, isometrics: [...(s.isometrics || []), { id: Logic.generateId('iso'), kg: '', time: '' }] };
                         }
-                        return s;
+                        if (!['dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing'].includes(type)) return s;
+                        const previous = setIndex > 0 ? ex.sets[setIndex - 1] : undefined;
+                        const previousReps = previous?.reps !== undefined && previous?.reps !== '' ? Number(previous.reps) : NaN;
+                        const target = type === 'rep_match' && Number.isFinite(previousReps)
+                            ? { type: 'reps', reps: previousReps, sourceSetId: previous.id }
+                            : undefined;
+                        const { dropsets: _legacyDropsets, technique: _oldTechnique, segments: _oldSegments, target: _oldTarget, ...base } = s;
+                        return {
+                            ...base,
+                            technique: type,
+                            segments: [{ id: Logic.generateId('seg'), kg: '', reps: '' }],
+                            ...(target ? { target } : {}),
+                        };
                     })
                 };
             });
@@ -85,7 +95,11 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                 if (i !== exIndex) return ex;
                 const newSet: any = { id: Logic.generateId('s'), kg: '', reps: '' };
                 if (ex.defaultTechnique === 'dropset') {
-                    newSet.dropsets = [{ id: Logic.generateId('ds'), kg: '', reps: '' }];
+                    newSet.technique = 'dropset';
+                    newSet.segments = [{ id: Logic.generateId('seg'), kg: '', reps: '' }];
+                } else if (['rest_pause', 'cluster', 'rep_match', 'diminishing'].includes(ex.defaultTechnique)) {
+                    newSet.technique = ex.defaultTechnique;
+                    newSet.segments = [{ id: Logic.generateId('seg'), kg: '', reps: '' }];
                 } else if (ex.defaultTechnique === 'isometrics') {
                     newSet.isometrics = [{ id: Logic.generateId('iso'), kg: '', time: '' }];
                 }
@@ -127,39 +141,77 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
-    // Special Sets
+    // Special Sets and generalized continuation segments
     const updateSpecialSet = useCallback((exIndex: number, setId: string, collection: string, specIndex: number, field: string, value: any) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
-            const updatedExercises = prev.exercises.map((ex: any, i: number) => {
-                if (i !== exIndex) return ex;
-                return {
+            return {
+                ...prev,
+                exercises: prev.exercises.map((ex: any, i: number) => i !== exIndex ? ex : ({
                     ...ex,
                     sets: ex.sets.map((s: any) => {
-                        if (s.id !== setId || !s[collection]) return s;
-                        const newColl = s[collection].map((item: any, idx: number) => idx === specIndex ? { ...item, [field]: value } : item);
-                        return { ...s, [collection]: newColl };
+                        if (s.id !== setId || !Array.isArray(s[collection])) return s;
+                        return { ...s, [collection]: s[collection].map((item: any, idx: number) => idx === specIndex ? { ...item, [field]: value } : item) };
                     })
-                };
-            });
-            return { ...prev, exercises: updatedExercises };
+                }))
+            };
         });
     }, [setLocalWorkout]);
 
     const removeSpecialSet = useCallback((exIndex: number, setId: string, collection: string, specIndex: number) => {
         setLocalWorkout((prev) => {
             if (!prev) return prev;
-            const updatedExercises = prev.exercises.map((ex: any, i: number) => {
-                if (i !== exIndex) return ex;
-                return {
+            return {
+                ...prev,
+                exercises: prev.exercises.map((ex: any, i: number) => i !== exIndex ? ex : ({
                     ...ex,
                     sets: ex.sets.map((s: any) => {
-                        if (s.id !== setId || !s[collection]) return s;
-                        return { ...s, [collection]: s[collection].filter((_: any, idx: number) => idx !== specIndex) };
+                        if (s.id !== setId || !Array.isArray(s[collection])) return s;
+                        const next = s[collection].filter((_: any, idx: number) => idx !== specIndex);
+                        if (collection === 'segments' && next.length === 0) {
+                            const { technique: _technique, segments: _segments, target: _target, ...straight } = s;
+                            return straight;
+                        }
+                        return { ...s, [collection]: next };
                     })
-                };
-            });
-            return { ...prev, exercises: updatedExercises };
+                }))
+            };
+        });
+    }, [setLocalWorkout]);
+
+    const addSegment = useCallback((exIndex: number, setId: string) => {
+        setLocalWorkout((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                exercises: prev.exercises.map((ex: any, i: number) => i !== exIndex ? ex : ({
+                    ...ex,
+                    sets: ex.sets.map((s: any) => s.id !== setId ? s : ({
+                        ...s,
+                        segments: [...(s.segments || []), { id: Logic.generateId('seg'), kg: '', reps: '' }]
+                    }))
+                }))
+            };
+        });
+    }, [setLocalWorkout]);
+
+    const updateSetTarget = useCallback((exIndex: number, setId: string, reps: number | undefined) => {
+        setLocalWorkout((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                exercises: prev.exercises.map((ex: any, i: number) => i !== exIndex ? ex : ({
+                    ...ex,
+                    sets: ex.sets.map((s: any) => {
+                        if (s.id !== setId) return s;
+                        if (reps === undefined) {
+                            const { target: _target, ...withoutTarget } = s;
+                            return withoutTarget;
+                        }
+                        return { ...s, target: { type: 'reps', reps } };
+                    })
+                }))
+            };
         });
     }, [setLocalWorkout]);
 
@@ -190,7 +242,9 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
             checkVal(lastSet.kcal) ||
             lastSet.rir !== undefined ||
             (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
-            (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds)));
+            (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds))) ||
+            (Array.isArray(lastSet.segments) && lastSet.segments.some((segment: any) => checkVal(segment.kg) || checkVal(segment.reps) || checkVal(segment.time) || segment.restBeforeSeconds !== undefined)) ||
+            lastSet.target !== undefined;
 
         if (isFilled) {
             const ok = await showConfirm("La serie contiene dei dati. Vuoi davvero rimuoverla?");
@@ -230,6 +284,8 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         updateSet,
         updateSpecialSet,
         removeSpecialSet,
+        addSegment,
+        updateSetTarget,
         updateSessionNote
     };
 }

@@ -24,8 +24,10 @@ interface SessionExerciseCardProps {
     onRemoveSet: (exIndex: number, sIndex: number) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: any) => void;
     onAddSpecialSet: (exIndex: number, type: string, setId: string) => void;
-    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number, field: string, value: any) => void;
-    onRemoveSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics', idx: number) => void;
+    onUpdateSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: any) => void;
+    onRemoveSpecialSet: (exIndex: number, setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => void;
+    onAddSegment: (exIndex: number, setId: string) => void;
+    onUpdateSetTarget: (exIndex: number, setId: string, reps: number | undefined) => void;
     onToggleSpecialMenu: (setId: string) => void;
     onRemoveLastSet?: (exIndex: number) => void;
 }
@@ -52,6 +54,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     onAddSpecialSet,
     onUpdateSpecialSet,
     onRemoveSpecialSet,
+    onAddSegment,
+    onUpdateSetTarget,
     onToggleSpecialMenu,
     onRemoveLastSet
 }) => {
@@ -345,6 +349,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                             onAddSpecialSet={(type, setId) => onAddSpecialSet(exIndex, type, setId)}
                             onUpdateSpecialSet={(setId, type, dsIdx, field, val) => onUpdateSpecialSet(exIndex, setId, type, dsIdx, field, val)}
                             onRemoveSpecialSet={(setId, type, dsIdx) => onRemoveSpecialSet(exIndex, setId, type, dsIdx)}
+                            onAddSegment={(setId) => onAddSegment(exIndex, setId)}
+                            onUpdateSetTarget={(setId, reps) => onUpdateSetTarget(exIndex, setId, reps)}
                         />
                     ))}
 

@@ -240,11 +240,11 @@ describe('RIR reale per singola serie', () => {
         await Exporter.exportToCSV([workout], {}, [{ id: 'bench', name: 'Panca' }]);
 
         const rows = csv.trim().split('\n');
-        expect(rows[0]).toContain('Ripetizioni,RIR,Tempo');
-        expect(rows[1].split(',')[5]).toBe('0');
-        expect(rows[2].split(',')[5]).toBe('""');
-        expect(rows[3].split(',')[5]).toBe('""');
-        expect(rows[4].split(',')[5]).toBe('""');
+        expect(rows[0]).toContain('Tecnica,Segmento,Ripetizioni,RIR,Tempo');
+        expect(rows[1].split(',')[7]).toBe('0');
+        expect(rows[2].split(',')[7]).toBe('""');
+        expect(rows[3].split(',')[7]).toBe('""');
+        expect(rows[4].split(',')[7]).toBe('""');
     });
 
     it('mostra RIR 0 anche nello storico completato senza inventarlo per serie legacy', () => {

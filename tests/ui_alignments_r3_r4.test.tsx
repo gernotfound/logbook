@@ -217,7 +217,7 @@ describe('UI Alignments - R3 & R4', () => {
                 />
             );
 
-            const plusButton = screen.getByLabelText('Aggiungi dropset o isometria');
+            const plusButton = screen.getByLabelText('Aggiungi alla serie');
             expect(plusButton).toBeDefined();
             expect(plusButton.style.display).toBe('inline-flex');
             expect(plusButton.style.alignItems).toBe('center');

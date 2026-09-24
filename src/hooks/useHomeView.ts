@@ -198,16 +198,13 @@ export function useHomeView(): HomeViewState {
                 const libEx = libraryMap.get(ex.exId);
                 if (!libEx) return;
 
-                // Calculate completed sets (regular sets + dropsets)
+                // A composed advanced set is still one work set.
                 let completedSets = 0;
                 (ex.sets || []).forEach((s: any) => {
                     const hasValues = (s.kg !== undefined && s.kg !== '') || (s.reps !== undefined && s.reps !== '') || (s.time !== undefined && s.time !== '');
                     const isDone = s.done === true || hasValues || s.done === undefined;
                     if (isDone) {
                         completedSets += 1;
-                        if (Array.isArray(s.dropsets)) {
-                            completedSets += s.dropsets.length;
-                        }
                     }
                 });
 

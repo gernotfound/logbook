@@ -63,7 +63,7 @@ describe('workout session preparation', () => {
         });
         expect(workout.exercises[0].sets).toHaveLength(1);
         expect(workout.exercises[1].sets).toHaveLength(2);
-        expect(workout.exercises[1].sets.every(set => set.dropsets?.length === 1)).toBe(true);
+        expect(workout.exercises[1].sets.every(set => set.technique === 'dropset' && set.segments?.length === 1)).toBe(true);
         expect(workout.exercises[1]).toMatchObject({ minReps: 6, maxReps: 8 });
     });
 
