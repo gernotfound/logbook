@@ -1,6 +1,16 @@
 import type { WorkoutSession, SessionExercise } from '../../types';
 import { calculateEffectiveSetWeight, VolumeExerciseRef } from './workout';
 
+export interface SetEffortComparison {
+    setNumber: number;
+    currentKg: string;
+    previousKg: string;
+    currentReps: string;
+    previousReps: string;
+    currentRir?: number;
+    previousRir?: number;
+}
+
 export interface ExerciseComparison {
     exId: string;
     exName: string;
@@ -14,6 +24,7 @@ export interface ExerciseComparison {
     currentAvgWeight: number;
     previousAvgWeight: number;
     weightDelta: number;
+    setEffortComparisons: SetEffortComparison[];
     isPR: boolean;
 }
 
@@ -72,6 +83,35 @@ function calculateExerciseStats(
     const avgWeight = weightCount > 0 ? Math.round((totalWeight / weightCount) * 10) / 10 : 0;
 
     return { volume, totalReps, avgWeight };
+}
+
+function validRir(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 10 ? value : undefined;
+}
+
+function buildSetEffortComparisons(current: SessionExercise, previous?: SessionExercise): SetEffortComparison[] {
+    const currentSets = current.sets || [];
+    const previousSets = previous?.sets || [];
+    const length = Math.max(currentSets.length, previousSets.length);
+    const comparisons: SetEffortComparison[] = [];
+
+    for (let index = 0; index < length; index++) {
+        const curr = currentSets[index];
+        const prev = previousSets[index];
+        const currentRir = validRir(curr?.rir);
+        const previousRir = validRir(prev?.rir);
+        if (currentRir === undefined && previousRir === undefined) continue;
+        comparisons.push({
+            setNumber: index + 1,
+            currentKg: curr?.kg ?? '',
+            previousKg: prev?.kg ?? '',
+            currentReps: curr?.reps ?? '',
+            previousReps: prev?.reps ?? '',
+            currentRir,
+            previousRir,
+        });
+    }
+    return comparisons;
 }
 
 export function computeWorkoutReport(
@@ -176,6 +216,7 @@ export function computeWorkoutReport(
                 currentAvgWeight: currStats.avgWeight,
                 previousAvgWeight: prevStats.avgWeight,
                 weightDelta,
+                setEffortComparisons: buildSetEffortComparisons(ex, prevEx),
                 isPR
             };
 
@@ -201,6 +242,7 @@ export function computeWorkoutReport(
                 currentAvgWeight: currStats.avgWeight,
                 previousAvgWeight: 0,
                 weightDelta: currStats.avgWeight,
+                setEffortComparisons: buildSetEffortComparisons(ex),
                 isPR
             };
 

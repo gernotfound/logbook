@@ -28,6 +28,13 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     onUpdateSpecialSet,
     onRemoveSpecialSet
 }) => {
+    const [isRirOpen, setIsRirOpen] = React.useState(false);
+    const hasRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
+    const selectRir = (rir: number | undefined) => {
+        onUpdateSet(s.id, 'rir', rir);
+        setIsRirOpen(false);
+    };
+
     return (
         <React.Fragment>
             <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px', border: '1px solid var(--primary-color)' }}>
@@ -88,6 +95,86 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 style={{ margin: 0, flex: 1, minWidth: 0 }} 
                             />
                         </>
+                    )}
+                    {trackingType !== 'time' && (
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                            <button
+                                type="button"
+                                className="btn-icon"
+                                style={{
+                                    minWidth: '58px',
+                                    minHeight: '44px',
+                                    padding: '4px 7px',
+                                    border: '1px solid var(--glass-border)',
+                                    background: hasRir ? 'var(--surface-light)' : 'transparent',
+                                    color: hasRir ? 'var(--primary-color)' : 'var(--text-muted)',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    whiteSpace: 'nowrap'
+                                }}
+                                onClick={() => setIsRirOpen(open => !open)}
+                                aria-label={`RIR serie ${sIndex + 1}: ${hasRir ? s.rir : 'non registrato'}`}
+                                aria-expanded={isRirOpen}
+                                aria-haspopup="menu"
+                            >
+                                RIR {hasRir ? s.rir : '—'}
+                            </button>
+                            {isRirOpen && (
+                                <>
+                                    <div style={{ position: 'fixed', inset: 0, zIndex: 55 }} onClick={() => setIsRirOpen(false)} />
+                                    <div
+                                        role="menu"
+                                        aria-label={`Seleziona RIR serie ${sIndex + 1}`}
+                                        style={{
+                                            position: 'absolute',
+                                            right: 0,
+                                            top: '48px',
+                                            zIndex: 60,
+                                            width: '212px',
+                                            padding: '8px',
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(4, 44px)',
+                                            gap: '6px',
+                                            justifyContent: 'center',
+                                            background: 'var(--surface-color)',
+                                            border: '1px solid var(--glass-border)',
+                                            borderRadius: '12px',
+                                            boxShadow: '0 8px 24px rgba(0,0,0,0.45)'
+                                        }}
+                                    >
+                                        {Array.from({ length: 11 }, (_, rir) => (
+                                            <button
+                                                key={rir}
+                                                type="button"
+                                                role="menuitemradio"
+                                                aria-checked={s.rir === rir}
+                                                className="btn-icon"
+                                                style={{
+                                                    minWidth: '44px',
+                                                    minHeight: '44px',
+                                                    padding: 0,
+                                                    background: s.rir === rir ? 'var(--primary-color)' : 'var(--surface-light)',
+                                                    color: s.rir === rir ? 'var(--on-primary)' : 'var(--text-main)',
+                                                    fontWeight: 700
+                                                }}
+                                                onClick={() => selectRir(rir)}
+                                            >
+                                                {rir}
+                                            </button>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="btn btn-small"
+                                            style={{ gridColumn: '1 / -1', minHeight: '44px', margin: 0 }}
+                                            onClick={() => selectRir(undefined)}
+                                        >
+                                            Non registrato
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     )}
                     <button 
                         className="btn-icon" 

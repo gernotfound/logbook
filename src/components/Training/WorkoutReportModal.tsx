@@ -161,6 +161,11 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
         return `${prefix}${num}${isPercent ? '%' : ''}`;
     };
 
+    const formatSetEffort = (kg: string, reps: string, rir?: number) => {
+        const output = `${kg || '?'} kg × ${reps || '?'}`;
+        return `${output} · RIR ${rir !== undefined ? rir : '—'}`;
+    };
+
     return (
         <div ref={dialogRef} className="workout-report" role="dialog" aria-modal="true" aria-labelledby={titleId}>
             <div className="workout-report-page">
@@ -329,6 +334,18 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                                     <span>Reps: {ex.currentReps} <span style={{ color: ex.repsDelta > 0 ? 'var(--success-color)' : (ex.repsDelta < 0 ? 'var(--danger-color)' : 'inherit') }}>({formatDelta(ex.repsDelta)})</span></span>
                                                     <span>Peso medio: {formatKg(ex.currentAvgWeight)} <span style={{ color: ex.weightDelta > 0 ? 'var(--success-color)' : (ex.weightDelta < 0 ? 'var(--danger-color)' : 'inherit') }}>({formatDelta(ex.weightDelta)})</span></span>
                                                 </div>
+
+                                                {ex.setEffortComparisons.length > 0 && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.8rem', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
+                                                        {ex.setEffortComparisons.map(set => (
+                                                            <div key={set.setNumber} style={{ display: 'grid', gridTemplateColumns: '30px 1fr', gap: '4px 8px', minWidth: 0 }}>
+                                                                <strong style={{ gridRow: '1 / span 2', color: 'var(--text-main)' }}>S{set.setNumber}</strong>
+                                                                <span style={{ color: 'var(--text-muted)', minWidth: 0 }}>Prec.: {formatSetEffort(set.previousKg, set.previousReps, set.previousRir)}</span>
+                                                                <span style={{ color: 'var(--text-main)', minWidth: 0 }}>Oggi: {formatSetEffort(set.currentKg, set.currentReps, set.currentRir)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}

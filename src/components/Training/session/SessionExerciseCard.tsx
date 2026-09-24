@@ -103,6 +103,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             checkVal(lastSet.speed) ||
             checkVal(lastSet.incline) ||
             checkVal(lastSet.kcal) ||
+            lastSet.rir !== undefined ||
             (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
             (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds)));
 
@@ -225,13 +226,14 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     const displayKg = s.kg !== null && s.kg !== undefined && s.kg !== '' ? s.kg : '?';
                                     const displayReps = s.reps !== null && s.reps !== undefined && s.reps !== '' ? s.reps : '?';
                                     const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
+                                    const displayRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
 
                                     return (
                                         <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
                                             S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
                                                 <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{displayTime}</b></>
                                             ) : (
-                                                <><b>{displayKg}</b> kg × <b>{displayReps}</b></>
+                                                <><b>{displayKg}</b> kg × <b>{displayReps}</b>{displayRir !== undefined && <> · <b>{displayRir} RIR</b></>}</>
                                             )}
                                         </span>
                                     );

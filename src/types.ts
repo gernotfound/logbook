@@ -78,6 +78,7 @@ export interface SessionExerciseSet {
     id: string;
     kg: string;
     reps: string;
+    rir?: number;
     time?: string;
     distance?: string;
     speed?: string;

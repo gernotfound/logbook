@@ -146,6 +146,7 @@ describe('workout session preparation', () => {
                 sets: [{
                     kg: 80,
                     reps: 8,
+                    rir: 0,
                     time: 12,
                     dropsets: [{ kg: 60, reps: 6 }],
                     isometrics: [{ kg: 40, time: 20 }],
@@ -160,7 +161,7 @@ describe('workout session preparation', () => {
         expect(editing.isEditingHistory).toBe(true);
         expect(editing.manualDurationStr).toBe('01:00:00');
         expect(editing.exercises[0].id).toBeTruthy();
-        expect(editing.exercises[0].sets[0]).toMatchObject({ kg: '80', reps: '8', time: '12' });
+        expect(editing.exercises[0].sets[0]).toMatchObject({ kg: '80', reps: '8', rir: 0, time: '12' });
         expect(editing.exercises[0].sets[0].dropsets?.[0]).toMatchObject({ kg: '60', reps: '6' });
         expect(editing.exercises[0].sets[0].isometrics?.[0]).toMatchObject({ kg: '40', time: '20' });
     });
@@ -171,7 +172,7 @@ describe('workout session preparation', () => {
             originalHistoryId: 'history-1',
             isEditingHistory: true,
             routineName: 'Storico',
-            exercises: [],
+            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8', rir: 0 }] }],
             pains: ['chest'],
             readiness: { capturedAt: 1_700_000_000_000, energy: 3, stress: 4 },
         } as WorkoutSession;
@@ -197,6 +198,7 @@ describe('workout session preparation', () => {
             readiness: { capturedAt: 1_700_000_000_000, energy: 3, stress: 4 },
             date: '2026-09-16',
         });
+        expect(saved.exercises[0].sets[0].rir).toBe(0);
         expect(saved.isEditingHistory).toBeUndefined();
         expect(saved.originalHistoryId).toBeUndefined();
     });
