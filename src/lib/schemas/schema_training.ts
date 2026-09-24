@@ -79,6 +79,7 @@ export const SessionExerciseSetSchema = z.object({
     id: safeString(''),
     kg: safeString(''),
     reps: safeString(''),
+    rir: z.number().int().min(0).max(10).optional().catch(undefined),
     time: safeOptionalString(),
     distance: safeOptionalString(),
     speed: safeOptionalString(),
@@ -87,7 +88,11 @@ export const SessionExerciseSetSchema = z.object({
     done: safeOptionalBoolean(),
     dropsets: z.array(SessionExerciseDropsetSchema).optional().catch([]).default([]),
     isometrics: z.array(SessionExerciseIsometricSchema).optional().catch([]).default([]),
-}).passthrough().catch({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] }).default({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] });
+}).passthrough().transform((set) => {
+    if (set.rir !== undefined) return set;
+    const { rir: _rir, ...withoutRir } = set;
+    return withoutRir;
+}).catch({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] }).default({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] });
 
 export const SessionExerciseSchema = z.object({
     id: safeOptionalString(),

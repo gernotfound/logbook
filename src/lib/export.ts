@@ -125,7 +125,7 @@ export const Exporter = {
 
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
-        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
+        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,RIR,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
 
         history.forEach(session => {
             const dateStr = session.globalStartTime
@@ -153,6 +153,7 @@ export const Exporter = {
                         ex.sets.forEach((set: any, idx: number) => {
                             const kg = set.kg !== undefined ? set.kg : (set.weight !== undefined ? set.weight : "");
                             const reps = set.reps !== undefined ? set.reps : "";
+                            const rir = set.rir !== undefined ? set.rir : "";
                             const time = set.time !== undefined ? set.time : "";
                             const distance = set.distance !== undefined ? set.distance : "";
                             const speed = set.speed !== undefined ? set.speed : "";
@@ -160,7 +161,7 @@ export const Exporter = {
                             const kcal = set.kcal !== undefined ? set.kcal : "";
 
                             workoutCsv += this.formatCsvRow([
-                                dateStr, routineName, exName, idx + 1, reps, time, kg, distance, speed, incline, kcal,
+                                dateStr, routineName, exName, idx + 1, reps, rir, time, kg, distance, speed, incline, kcal,
                                 sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                             ]);
 
@@ -170,7 +171,7 @@ export const Exporter = {
                                     const dsReps = ds.reps !== undefined ? ds.reps : "";
                                     const label = set.dropsets.length > 1 ? `${idx + 1} (Dropset ${dsIdx + 1})` : `${idx + 1} (Dropset)`;
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, label, dsReps, "", dsKg, "", "", "", "",
+                                        dateStr, routineName, exName, label, dsReps, "", "", dsKg, "", "", "", "",
                                         sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -182,7 +183,7 @@ export const Exporter = {
                                     const isoTime = iso.time ? `${iso.time}s` : "";
                                     const label = set.isometrics.length > 1 ? `${idx + 1} (Isometria ${isoIdx + 1})` : `${idx + 1} (Isometria)`;
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, label, "", isoTime, isoKg, "", "", "", "",
+                                        dateStr, routineName, exName, label, "", "", isoTime, isoKg, "", "", "", "",
                                         sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -210,7 +211,7 @@ export const Exporter = {
             ]);
         });
 
-        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
+        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Ripetizioni,RIR,Tempo,Peso (kg),Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
         if (workoutCsv !== workoutHeader) {
             this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
         } else {

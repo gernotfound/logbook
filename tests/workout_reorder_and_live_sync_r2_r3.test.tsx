@@ -174,7 +174,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 id: 'w_legacy',
                 routineName: 'Legacy',
                 exercises: [
-                    { exId: 'ex_bench', sessionNote: '', sets: [] },
+                    { exId: 'ex_bench', sessionNote: '', sets: [{ id: 's-rir', kg: '80', reps: '8', rir: 0 }] },
                     { id: 'se_preserved', exId: 'ex_squat', sessionNote: '', sets: [] }
                 ]
             };
@@ -185,6 +185,7 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(initial?.exercises[0].id).toBeDefined();
             expect(initial?.exercises[0].id).toMatch(/^se_/);
             expect(initial?.exercises[1].id).toBe('se_preserved');
+            expect(initial?.exercises[0].sets[0].rir).toBe(0);
         });
     });
 

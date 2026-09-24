@@ -113,7 +113,14 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
                 if (i !== exIndex) return ex;
                 return {
                     ...ex,
-                    sets: ex.sets.map((s: any) => s.id === setId ? { ...s, [field]: value } : s)
+                    sets: ex.sets.map((s: any) => {
+                        if (s.id !== setId) return s;
+                        if (field === 'rir' && value === undefined) {
+                            const { rir: _removedRir, ...withoutRir } = s;
+                            return withoutRir;
+                        }
+                        return { ...s, [field]: value };
+                    })
                 };
             });
             return { ...prev, exercises: updatedExercises };
@@ -181,6 +188,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
             checkVal(lastSet.speed) ||
             checkVal(lastSet.incline) ||
             checkVal(lastSet.kcal) ||
+            lastSet.rir !== undefined ||
             (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
             (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds)));
 
