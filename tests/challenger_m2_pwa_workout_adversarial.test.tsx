@@ -222,6 +222,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       });
 
       expect(useAppStore.getState().localWorkout).toBeNull();
+      expect(useAppStore.getState().userData?.activePains).toEqual(['petto']);
 
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
@@ -381,7 +382,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // =========================================================================
   // 3. Historical Workout Editing Stress & Resilience
   // =========================================================================
-  describe('3. Historical Workout Editing & Pain Auto-Healing Stress', () => {
+  describe('3. Historical Workout Editing & Pain Persistence Stress', () => {
     it('handles startEditHistoricalWorkout with missing sets/dropsets/isometrics safely', async () => {
       const { result } = renderHook(() => useWorkoutSession());
 
@@ -431,6 +432,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
           history: [],
           routines: [],
           library: [],
+          activePains: ['petto'],
         } as unknown as UserData,
         localWorkout: {
           id: 'w_orphan',
