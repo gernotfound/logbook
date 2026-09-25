@@ -240,4 +240,19 @@ describe('M8 Domain Operations V4', () => {
             workout: { date: '2026-09-15', exercises: [] },
         })).toThrow(/identificativo non valido/i);
     });
+    it('syncs contextual events by stable identity inside a nutrition shard', () => {
+        const before = base({ nutrition: {} });
+        const event = { id: 'ctx-1', type: 'reentry' as const, label: 'Rientro dopo pausa', note: 'Prima settimana di riacclimatazione', createdAt: 123 };
+        const created = compile(before, { type: 'context-event.upsert', date: '2026-09-25', event });
+
+        expect(created.after.nutrition?.['2026-09-25']?.contextEvents).toEqual([event]);
+        expect(created.operations.every(op => op.docPath === 'nutrition_months/2026-09')).toBe(true);
+        expect(created.operations.some(op => op.path.join('/') === '2026-09-25/contextEvents/ctx-1')).toBe(true);
+        expect((created.replay.get('nutrition_months/2026-09')?.['2026-09-25'] as any).contextEvents).toEqual([event]);
+
+        const removed = compile(created.after, { type: 'context-event.delete', date: '2026-09-25', eventId: 'ctx-1' });
+        expect(removed.after.nutrition?.['2026-09-25']?.contextEvents).toEqual([]);
+        expect(removed.operations.some(op => op.path.join('/') === '2026-09-25/contextEvents/ctx-1' && op.isDelete)).toBe(true);
+    });
+
 });

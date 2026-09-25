@@ -5,7 +5,7 @@ import {
     calculateSetVolume,
     calculateWorkoutVolume,
     searchMuscles,
-    autoHealPains
+    mergeActivePains
 } from '../src/lib/calc/workout';
 import {
     formatDuration,
@@ -179,9 +179,9 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
     });
 
     /* =========================================================================
-     * R5 & R6: DOMS FUZZY SEARCH & AUTO-HEALING STATE MACHINE STRESS
+     * R5 & R6: DOMS FUZZY SEARCH & EXPLICIT PERSISTENCE STATE STRESS
      * ========================================================================= */
-    describe('R5 & R6 Stress: Search Benchmarks & Auto-Healing State Invariants', () => {
+    describe('R5 & R6 Stress: Search Benchmarks & Pain Persistence State Invariants', () => {
 
         it('searchMuscles fuzzing with 50 arbitrary strings does not crash or throw', () => {
             const queries = [
@@ -202,7 +202,7 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
             }
         });
 
-        it('autoHealPains State Invariants across 200 randomized workout transitions', () => {
+        it('mergeActivePains State Invariants across 200 randomized workout transitions', () => {
             const allMuscles = ['chest', 'latissimus_dorsi', 'trapezius', 'deltoid_anterior', 'deltoid_lateral', 'biceps', 'triceps', 'quadriceps', 'hamstrings', 'calves', 'abs'];
             const allExercises = [
                 { id: 'ex_1', muscles: ['chest', 'triceps'] },
@@ -219,28 +219,20 @@ describe('EMPIRICAL CHALLENGER: Pure Math, State & Schema Adversarial Stress Sui
                 // Random session pains (user might report soreness or none)
                 const sessionPains = (i % 2 === 0) ? [exChoice.muscles[0]] : [];
 
-                const healedPains = autoHealPains(initialPains, [{ exId: exChoice.id }], allExercises, sessionPains);
+                const healedPains = mergeActivePains(initialPains, [{ exId: exChoice.id }], allExercises, sessionPains);
 
                 // INVARIANT 1: Result is always a string array
                 expect(Array.isArray(healedPains)).toBe(true);
 
-                // INVARIANT 2: Untrained muscles are NEVER removed
+                // INVARIANT 2: Existing active pains are never removed implicitly.
                 for (const p of initialPains) {
-                    if (!exChoice.muscles.includes(p)) {
-                        expect(healedPains).toContain(p);
-                    }
+                    expect(healedPains).toContain(p);
                 }
 
-                // INVARIANT 3: If trained muscle was NOT in session pains, it MUST be removed
-                for (const m of exChoice.muscles) {
-                    if (initialPains.includes(m) && !sessionPains.includes(m)) {
-                        expect(healedPains).not.toContain(m);
-                    }
-                }
-
-                // INVARIANT 4: If session pain was reported, it MUST be present in output
+                // INVARIANT 3: A reported session pain is appended and deduplicated.
                 for (const sp of sessionPains) {
                     expect(healedPains).toContain(sp);
+                    expect(healedPains.filter(p => p === sp)).toHaveLength(1);
                 }
             }
         });

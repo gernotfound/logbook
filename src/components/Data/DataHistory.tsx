@@ -54,7 +54,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                                 </div>
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                     {day.weight && <span>⚖️ <strong>{day.weight} kg</strong></span>}
-                                    {day.bf && <span>📊 BF: <strong>{day.bf}%</strong></span>}
+                                    {day.bf !== undefined && day.bf !== null && <span>📊 BF: <strong>{day.bf}%</strong>{day.bfProvenance?.method === 'manual' ? ' · manuale' : day.bfProvenance?.method === 'us_navy' ? ' · US Navy' : ' · origine non disponibile'}</span>}
                                     {day.waist && <span>| Vita: {day.waist}cm</span>}
                                     {day.neck && <span>| Collo: {day.neck}cm</span>}
                                     {day.hip && <span>| Fianchi: {day.hip}cm</span>}

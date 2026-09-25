@@ -113,6 +113,17 @@ describe('Nutrition Section Style & Color Refactoring Suite', () => {
             }
         ];
 
+        it('renders an unspecified legacy day type without misclassifying it as OFF', () => {
+            render(
+                <NutritionHistory
+                    nutritionHistory={[{ ...historyData[0], isDayOn: undefined }]}
+                    onDayClick={vi.fn()}
+                />
+            );
+            expect(screen.getByText(/Non specificato/i)).toBeDefined();
+            expect(screen.queryByText('🛋️ OFF')).toBeNull();
+        });
+
         it('renders macro labels in var(--text-muted) and numeric values in var(--text-main)', () => {
 render(
                 <NutritionHistory 

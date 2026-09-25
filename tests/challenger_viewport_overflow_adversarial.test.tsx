@@ -213,7 +213,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
             renderWithProviders(<HomeView onNavigate={vi.fn()} />);
 
             const bfCard = screen.getByText(/Massa grassa/i).closest('.card') as HTMLElement;
-            const recoveryCard = screen.getByText(/Recupero e Dolori/i).closest('.card') as HTMLElement;
+            const recoveryCard = screen.getByText(/Esposizione recente e dolori/i).closest('.card') as HTMLElement;
 
             expect(bfCard).not.toBeNull();
             expect(recoveryCard).not.toBeNull();

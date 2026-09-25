@@ -6,7 +6,7 @@ import {
     getLatestUserWeightContract,
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
-    autoHealPainsContract
+    mergeActivePainsContract
 } from './requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
@@ -67,7 +67,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             // Session completion with ratings and sore triceps
             const activePainsBefore = ['spalle'];
             const sessionPains = ['tricipiti'];
-            const activePainsAfter = autoHealPainsContract(activePainsBefore, session.exercises, library, sessionPains);
+            const activePainsAfter = mergeActivePainsContract(activePainsBefore, session.exercises, library, sessionPains);
             expect(activePainsAfter).toContain('spalle');
             expect(activePainsAfter).toContain('tricipiti');
         });
@@ -97,7 +97,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(lunchKcal).toBe(749); // 79*4 + 69*4 + 17.49*9 = 316 + 276 + 157.41 = 749.41 -> 749
         });
 
-        it('T4.3: Scenario 3 — "Leg Day Recovery & DOMS Auto-Healing Life Cycle"', () => {
+        it('T4.3: Scenario 3 — "Leg Day Recovery & Explicit DOMS Life Cycle"', () => {
             // Day 1: User does heavy squats. Next day logs 'quadricipiti' DOMS in Home card.
             let userActivePains = ['quadricipiti'];
             const library = [
@@ -107,15 +107,15 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
 
             // Day 3: Upper body workout (Panca Piana). Session completes.
             const upperSession = [{ exId: 'ex_bench' }];
-            userActivePains = autoHealPainsContract(userActivePains, upperSession, library, []);
+            userActivePains = mergeActivePainsContract(userActivePains, upperSession, library, []);
             // Quadricipiti was not trained -> remains in pain
             expect(userActivePains).toEqual(['quadricipiti']);
 
             // Day 5: Legs workout again (Squat). Session completes with no pain re-selected.
             const legSession = [{ exId: 'ex_squat' }];
-            userActivePains = autoHealPainsContract(userActivePains, legSession, library, []);
-            // Quadricipiti was trained and not re-selected -> auto-healed!
-            expect(userActivePains).toEqual([]);
+            userActivePains = mergeActivePainsContract(userActivePains, legSession, library, []);
+            // Quadricipiti was trained and not re-selected -> kept active!
+            expect(userActivePains).toEqual(['quadricipiti']);
         });
 
         it('T4.4: Scenario 4 — "Athlete Multi-Day Training, Recovery & Nutrition Integration"', () => {
@@ -156,14 +156,14 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             const vol = calculateWorkoutVolumeContract(backSession, library, latestWeight);
             expect(vol).toBe(700);
 
-            // Auto-heal 'dorso' on completion
-            const resolvedPains = autoHealPainsContract(
+            // Completing the session must not imply that the existing pain resolved.
+            const resolvedPains = mergeActivePainsContract(
                 useAppStore.getState().userData?.activePains,
                 backSession.exercises,
                 library,
                 []
             );
-            expect(resolvedPains).toEqual([]);
+            expect(resolvedPains).toEqual(['dorso']);
         });
 
         it('T4.5: Scenario 5 — "Rehabilitation & Pain Recovery Tracking through Deload Week"', () => {
@@ -175,12 +175,12 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             ];
 
             // Deload Day 1: Light overhead press only
-            pains = autoHealPainsContract(pains, [{ exId: 'ex_ohp' }], library, []);
-            expect(pains).toEqual(['tricipiti']); // Shoulder recovered!
+            pains = mergeActivePainsContract(pains, [{ exId: 'ex_ohp' }], library, []);
+            expect(pains).toEqual(['spalle', 'tricipiti']); // Nessun recupero implicito.
 
             // Deload Day 2: Light triceps extensions
-            pains = autoHealPainsContract(pains, [{ exId: 'ex_pushdown' }], library, []);
-            expect(pains).toEqual([]); // All recovered!
+            pains = mergeActivePainsContract(pains, [{ exId: 'ex_pushdown' }], library, []);
+            expect(pains).toEqual(['spalle', 'tricipiti']); // I dolori restano finché rimossi esplicitamente.
         });
     });
 });

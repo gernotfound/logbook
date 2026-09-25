@@ -3,7 +3,7 @@ import { Trash2, Save } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
-import { computeProgressionEngine, formatProgressionReference, progressionQualityLabel } from '../../lib/calc/progression';
+import { computeProgressionEngine, formatProgressionReference, progressionBaselineStateLabel, progressionQualityLabel } from '../../lib/calc/progression';
 import { useAppStore } from '../../store/useAppStore';
 import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
@@ -60,7 +60,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet, addSegment, updateSetTarget,
-        updateSetupNote, updateSessionNote
+        updateSetupNote, updateSessionNote, updateTechnicalStandard
     } = useWorkoutSession();
     const nutrition = useAppStore(state => state.userData?.nutrition);
 
@@ -126,6 +126,10 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     const handleUpdateSessionNote = useCallback((exIndex: number, note: string) => {
         updateSessionNote(exIndex, note);
     }, [updateSessionNote]);
+
+    const handleUpdateTechnicalStandard = useCallback((exIndex: number, value: string) => {
+        updateTechnicalStandard(exIndex, value);
+    }, [updateTechnicalStandard]);
 
     const handleAddSet = useCallback((exIndex: number) => {
         addSet(exIndex);
@@ -225,10 +229,16 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                         const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
                         const progression = progressionMap.get(exItem.exId);
-                        const progressionHint = progression?.previousComparable ? {
-                            previousDate: progression.previousComparable.date,
-                            previousReference: formatProgressionReference(progression.previousComparable),
+                        const progressionHint = progression ? {
+                            previousDate: progression.previousComparable?.date,
+                            previousReference: progression.previousComparable ? formatProgressionReference(progression.previousComparable) : undefined,
                             quality: progressionQualityLabel(progression.quality),
+                            comparisonStatus: progression.comparisonStatus,
+                            comparisonReasons: progression.comparison.reasons,
+                            baselineState: progressionBaselineStateLabel(progression.baselineState),
+                            baselineVersion: progression.baselineVersion,
+                            contractTarget: progression.progressionContract?.target,
+                            nextAction: progression.progressionContract?.nextAction,
                         } : undefined;
 
                         return (
@@ -250,6 +260,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 onRemoveExercise={handleRemoveExercise}
                                 onUpdateSetupNote={handleUpdateSetupNote}
                                 onUpdateSessionNote={handleUpdateSessionNote}
+                                onUpdateTechnicalStandard={handleUpdateTechnicalStandard}
                                 onAddSet={handleAddSet}
                                 onRemoveSet={handleRemoveSet}
                                 onRemoveLastSet={handleRemoveLastSet}

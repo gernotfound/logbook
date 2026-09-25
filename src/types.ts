@@ -63,12 +63,19 @@ export interface Exercise {
 export type SetTechnique = 'straight' | 'dropset' | 'rest_pause' | 'cluster' | 'rep_match' | 'diminishing';
 export type ExecutionMode = 'standard' | 'stop_reps';
 
+export type SegmentHoldPosition = 'stretched' | 'mid' | 'shortened' | 'custom';
+export type SegmentAssistance = 'none' | 'self' | 'partner' | 'machine';
+
 export interface SetSegment {
     id: string;
     kg: string;
     reps: string;
     time?: string;
     restBeforeSeconds?: number;
+    eccentricSeconds?: number;
+    holdPosition?: SegmentHoldPosition;
+    assistance?: SegmentAssistance;
+    negativeOnly?: boolean;
 }
 
 export interface SetTarget {
@@ -84,6 +91,22 @@ export interface PlannedSetTechnique {
     segmentCount?: number;
 }
 
+export type ProgressionRole = 'primary' | 'secondary' | 'support';
+export type ProgressionMetric = 'performance' | 'volume' | 'density' | 'execution';
+export type ProgressionBaselineState = 'historical' | 'active' | 'suspended' | 'reacclimation' | 'reactivated' | 'replaced';
+
+export interface ProgressionContract {
+    context?: string;
+    role?: ProgressionRole;
+    metric?: ProgressionMetric;
+    target?: string;
+    successRule?: string;
+    failureRule?: string;
+    nextAction?: string;
+    baselineState?: ProgressionBaselineState;
+    baselineVersion?: number;
+}
+
 export interface RoutineExercise {
     exId: string;
     setsCount: number | string;
@@ -91,6 +114,8 @@ export interface RoutineExercise {
     maxReps?: number | string;
     defaultTechnique?: 'none' | 'dropset' | 'isometrics' | Exclude<SetTechnique, 'straight' | 'dropset'>;
     setPlans?: PlannedSetTechnique[];
+    technicalStandard?: string;
+    progressionContract?: ProgressionContract;
 }
 
 export interface WorkoutRoutine {
@@ -125,6 +150,8 @@ export interface SessionExercise {
     sets: SessionExerciseSet[];
     minReps?: number;
     maxReps?: number;
+    technicalStandard?: string;
+    progressionContract?: ProgressionContract;
 }
 
 export interface WorkoutReadiness {
@@ -216,6 +243,27 @@ export interface CardioSession {
     externalId?: string;
 }
 
+export interface BodyFatProvenance {
+    method: 'manual' | 'us_navy';
+    inputs?: {
+        heightCm?: number;
+        waistCm?: number;
+        neckCm?: number;
+        hipCm?: number;
+        gender?: 'M' | 'F' | string;
+    };
+}
+
+export type ContextEventType = 'training' | 'nutrition' | 'recovery' | 'schedule' | 'travel' | 'reentry' | 'deload' | 'other';
+
+export interface ContextEvent {
+    id: string;
+    type: ContextEventType;
+    label: string;
+    note?: string;
+    createdAt?: number;
+}
+
 export interface NutritionDay {
     date: string;
     kcal: number;
@@ -224,6 +272,7 @@ export interface NutritionDay {
     fat: number;
     weight?: number | string;
     bf?: number | string;
+    bfProvenance?: BodyFatProvenance;
     neck?: number | string;
     waist?: number | string;
     hip?: number | string;
@@ -246,6 +295,7 @@ export interface NutritionDay {
     stepsSource?: ActivitySource;
     stepsCapturedAt?: number;
     cardioSessions?: CardioSession[];
+    contextEvents?: ContextEvent[];
 }
 
 export interface Food {
@@ -451,4 +501,4 @@ export type AppTab = 'home' | 'training' | 'nutrition' | 'data' | 'settings';
 export type MainTab = AppTab;
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';
-export type DataSubTab = 'measurements' | 'sleep' | 'activity' | 'biometry' | 'history';
+export type DataSubTab = 'measurements' | 'sleep' | 'activity' | 'context' | 'biometry' | 'history';

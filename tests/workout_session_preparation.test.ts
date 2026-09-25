@@ -239,6 +239,36 @@ describe('workout session preparation', () => {
         expect(prepared.finishedWorkout.originalHistoryId).toBeUndefined();
     });
 
+    it('keeps unreported water missing instead of converting it to zero liters', () => {
+        const active = {
+            id: 'active-no-water',
+            routineName: 'Routine A',
+            globalStartTime: 1_000,
+            waterLiters: '' as any,
+            exercises: [],
+        } as WorkoutSession;
+        const completed = prepareCompletedWorkout(active, 61_000, createRuntime()).finishedWorkout;
+        expect(completed.waterLiters).toBeUndefined();
+
+        const editing = {
+            id: 'history-no-water',
+            originalHistoryId: 'history-no-water',
+            isEditingHistory: true,
+            routineName: 'Storico',
+            waterLiters: 2,
+            exercises: [],
+        } as WorkoutSession;
+        const saved = prepareHistoricalWorkoutForSave(
+            editing,
+            'history-no-water',
+            { mood: '', pump: '', fatigue: '' },
+            '',
+            '00:30:00',
+            createRuntime(),
+        );
+        expect(saved.waterLiters).toBeUndefined();
+    });
+
     it('marks new sessions as 1-5 while preserving legacy 1-10 historical ratings', () => {
         const runtime = createRuntime();
         expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
@@ -288,6 +318,39 @@ describe('workout session preparation', () => {
         expect(savedNew.moodRating).toBeNull();
         expect(savedNew.pumpRating).toBe(5);
         expect(savedNew.fatigueRating).toBe(4);
+    });
+
+    it('snapshots technical standards and progression contracts so later routine edits do not rewrite history', () => {
+        const routine = {
+            id: 'routine-contract',
+            name: 'Routine contratto',
+            exercises: [{
+                exId: 'bench',
+                setsCount: 1,
+                technicalStandard: 'ROM completo · fermo 1 s',
+                progressionContract: {
+                    role: 'primary' as const,
+                    metric: 'performance' as const,
+                    target: '8-10 rep a RIR 1-2',
+                    nextAction: 'Aumenta il carico minimo disponibile',
+                    baselineState: 'active' as const,
+                    baselineVersion: 3,
+                },
+            }],
+        } as WorkoutRoutine;
+        const userData = {
+            library: [{ id: 'bench', name: 'Bench', trackingType: 'weight_reps' }],
+        } as unknown as UserData;
+
+        const first = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+        routine.exercises[0].technicalStandard = 'ROM parziale';
+        routine.exercises[0].progressionContract = { baselineState: 'reacclimation', baselineVersion: 4 };
+        const second = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(first.exercises[0].technicalStandard).toBe('ROM completo · fermo 1 s');
+        expect(first.exercises[0].progressionContract).toMatchObject({ baselineState: 'active', baselineVersion: 3, metric: 'performance' });
+        expect(second.exercises[0].technicalStandard).toBe('ROM parziale');
+        expect(second.exercises[0].progressionContract).toEqual({ baselineState: 'reacclimation', baselineVersion: 4 });
     });
 
 });

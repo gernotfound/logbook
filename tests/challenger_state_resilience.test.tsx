@@ -8,7 +8,7 @@ import {
 
     calculateWorkoutVolume,
     getLatestUserWeight,
-    autoHealPains,
+    mergeActivePains,
     searchMuscles,
     getMuscleName
 } from '../src/lib/calc/workout';
@@ -234,7 +234,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
         });
     });
 
-    describe('3. Pure Calculation & DOMS Auto-Healing Logic Stress (R1, R5, R6)', () => {
+    describe('3. Pure Calculation & DOMS Persistence Logic Stress (R1, R5, R6)', () => {
         it('3.1 calculateEffectiveSetWeight properly handles bodyweight, equipment, ballasts, and string commas', () => {
             const userWeight = 75;
 
@@ -318,40 +318,36 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             expect(getLatestUserWeight({}, {})).toBe(80);
         });
 
-        it('3.4 autoHealPains: Lateral variant, base variant, and secondary muscle auto-healing rules', () => {
+        it('3.4 mergeActivePains: preserves active pains regardless of trained muscle mapping', () => {
             const library = [
                 { id: 'ex_bench', muscles: ['chest'], secondaryMuscles: ['triceps', 'deltoids_front'] },
                 { id: 'ex_squat', muscles: ['quadriceps', 'glutes'], secondaryMuscles: ['hamstrings'] },
                 { id: 'ex_lat_raise', muscles: ['shoulders_left', 'shoulders_right'] }
             ];
 
-            // Scenario A: Active pain has lateral variant 'chest_left'. Workout trains 'ex_bench' (muscles: ['chest']).
-            // Session pains is empty -> 'chest_left' should heal!
+            // Scenario A: training the related base muscle does not imply recovery.
             const activeA = ['chest_left', 'back_lats'];
-            const resA = autoHealPains(activeA, [{ exId: 'ex_bench' }], library, []);
-            expect(resA).toEqual(['back_lats']); // chest_left healed!
+            const resA = mergeActivePains(activeA, [{ exId: 'ex_bench' }], library, []);
+            expect(resA).toEqual(['chest_left', 'back_lats']);
 
-            // Scenario B: Active pain has base 'shoulders'. Workout trains 'ex_lat_raise' (muscles: ['shoulders_left', 'shoulders_right']).
-            // Session pains is empty -> 'shoulders' should heal!
+            // Scenario B: unilateral exercise metadata does not clear a base pain.
             const activeB = ['shoulders', 'biceps'];
-            const resB = autoHealPains(activeB, [{ exId: 'ex_lat_raise' }], library, []);
-            expect(resB).toEqual(['biceps']); // shoulders healed!
+            const resB = mergeActivePains(activeB, [{ exId: 'ex_lat_raise' }], library, []);
+            expect(resB).toEqual(['shoulders', 'biceps']);
 
-            // Scenario C: Active pain is on secondary muscle ('triceps'). Workout trains 'ex_bench' where triceps is ONLY secondary.
-            // Session pains is empty -> 'triceps' MUST NOT heal (remains active)!
+            // Scenario C: primary/secondary metadata is irrelevant to recovery state.
             const activeC = ['triceps'];
-            const resC = autoHealPains(activeC, [{ exId: 'ex_bench' }], library, []);
-            expect(resC).toEqual(['triceps']); // NOT healed because it was only secondary!
+            const resC = mergeActivePains(activeC, [{ exId: 'ex_bench' }], library, []);
+            expect(resC).toEqual(['triceps']);
 
-            // Scenario D: Active pain on 'chest'. Workout trains 'ex_bench', but user explicitly re-selects 'chest' in session pains.
-            // Result: 'chest' remains active.
+            // Scenario D: re-reporting an active pain is deduplicated.
             const activeD = ['chest'];
-            const resD = autoHealPains(activeD, [{ exId: 'ex_bench' }], library, ['chest']);
+            const resD = mergeActivePains(activeD, [{ exId: 'ex_bench' }], library, ['chest']);
             expect(resD).toEqual(['chest']);
 
-            // Scenario E: Untrained pain stays, new pain added in session is saved.
+            // Scenario E: existing pains stay and new session pains are appended.
             const activeE = ['legs'];
-            const resE = autoHealPains(activeE, [{ exId: 'ex_bench' }], library, ['abs']);
+            const resE = mergeActivePains(activeE, [{ exId: 'ex_bench' }], library, ['abs']);
             expect(resE).toContain('legs');
             expect(resE).toContain('abs');
         });
@@ -509,7 +505,7 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             );
 
             // Should display the Dolori / DOMS card
-            const painHeading = screen.getByText(/Recupero e Dolori/i);
+            const painHeading = screen.getByText(/Esposizione recente e dolori/i);
             expect(painHeading).toBeDefined();
 
             // Petto badge should be displayed

@@ -44,6 +44,41 @@ export default function DataActivity() {
                 )}
             </section>
 
+            <section className="section-divider" aria-labelledby="activity-context-title">
+                <div className="activity-heading-row">
+                    <div>
+                        <h2 id="activity-context-title">Contesto attività + allenamento</h2>
+                        <p>Co-visualizzazione descrittiva delle ultime 8 settimane. Passi, cardio e allenamento non vengono convertiti in un unico punteggio di fatica.</p>
+                    </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: '0.82rem' }}>
+                        <thead>
+                            <tr>
+                                <th style={{ textAlign: 'left', padding: '8px 6px' }}>Settimana</th>
+                                <th style={{ textAlign: 'right', padding: '8px 6px' }}>Workout</th>
+                                <th style={{ textAlign: 'right', padding: '8px 6px' }}>Volume</th>
+                                <th style={{ textAlign: 'right', padding: '8px 6px' }}>Passi medi</th>
+                                <th style={{ textAlign: 'right', padding: '8px 6px' }}>Copertura passi</th>
+                                <th style={{ textAlign: 'right', padding: '8px 6px' }}>Cardio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {activity.trainingActivityContext.map(point => (
+                                <tr key={point.weekStart} style={{ borderTop: '1px solid var(--glass-border)' }}>
+                                    <td style={{ padding: '8px 6px' }}>{point.label}</td>
+                                    <td style={{ textAlign: 'right', padding: '8px 6px' }}>{point.workoutCount}</td>
+                                    <td style={{ textAlign: 'right', padding: '8px 6px' }}>{point.volumeKg > 0 ? `${(point.volumeKg / 1000).toFixed(1)} t` : '—'}</td>
+                                    <td style={{ textAlign: 'right', padding: '8px 6px' }}>{point.averageSteps === null ? '—' : integerFormatter.format(point.averageSteps)}</td>
+                                    <td style={{ textAlign: 'right', padding: '8px 6px' }}>{point.stepDaysCount}/{point.daysConsidered}</td>
+                                    <td style={{ textAlign: 'right', padding: '8px 6px' }}>{decimalFormatter.format(point.cardioMinutes)} min</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <nav className="activity-date-nav" aria-label="Giorno attività">
                 <button type="button" className="btn btn-small" onClick={previousDay} disabled={dateNavigationLocked}>◀ Prec.</button>
                 <button type="button" className="data-day-current" onClick={() => activity.setSelectedDate(activity.today)} aria-label="Torna a oggi" disabled={dateNavigationLocked}>

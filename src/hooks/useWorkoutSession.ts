@@ -107,7 +107,8 @@ export function useWorkoutSession() {
         removeSpecialSet,
         addSegment,
         updateSetTarget,
-        updateSessionNote
+        updateSessionNote,
+        updateTechnicalStandard
     } = useWorkoutSetMutations({ setLocalWorkout: mutateActiveWorkout, showConfirm });
 
     const startWorkout = useCallback(async (routineIdToStart?: string, cycleInfo?: { cycleId?: string; cycleName?: string }) => {
@@ -200,19 +201,9 @@ export function useWorkoutSession() {
         try {
             const currentData = useAppStore.getState().userData;
             if (!currentData) throw new Error('Dati utente non caricati');
-            const isMostRecent = Boolean(currentData.history?.length && currentData.history[0].id === targetId);
-            const finalActivePains = isMostRecent
-                ? Logic.autoHealPains(
-                    currentData.activePains || [],
-                    updatedWorkout.exercises || [],
-                    currentData.library || [],
-                    updatedWorkout.pains || []
-                )
-                : (currentData.activePains || []);
             await dispatchDomainOperation([
                 { type: 'history.upsert', workout: updatedWorkout },
                 { type: 'active-workout.set', workout: null },
-                { type: 'active-pains.set', pains: finalActivePains },
             ]);
             setLocalWorkout(null);
             resetGlobalWorkoutTimer();
@@ -258,10 +249,8 @@ export function useWorkoutSession() {
         try {
             const currentData = useAppStore.getState().userData;
             if (!currentData) throw new Error('Dati utente non caricati');
-            const finalActivePains = Logic.autoHealPains(
+            const finalActivePains = Logic.mergeActivePains(
                 currentData.activePains || [],
-                finishedWorkout.exercises || [],
-                currentData.library || [],
                 sessionPains
             );
             await dispatchDomainOperation({
@@ -344,6 +333,7 @@ export function useWorkoutSession() {
         addSegment,
         updateSetTarget,
         updateSessionNote,
+        updateTechnicalStandard,
         updateSetupNote
     };
 }

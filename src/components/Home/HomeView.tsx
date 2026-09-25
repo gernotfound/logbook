@@ -7,6 +7,7 @@ import HomeNutritionWidget from './widgets/HomeNutritionWidget';
 import HeaderDashboard from './widgets/HeaderDashboard';
 import BiometryBentoCard from './widgets/BiometryBentoCard';
 import RecoveryBentoCard from './widgets/RecoveryBentoCard';
+import ReadinessTrendCard from './widgets/ReadinessTrendCard';
 import './home.css';
 
 const WeightChart = lazy(() => import('./WeightChart'));
@@ -38,7 +39,7 @@ const HomeView = ({ onNavigate }: any) => {
   const {
       isRestDay, todaysWorkout,
       kcalEaten, carbs, pro, fat, kcalTarget,
-      bf, streak, totalWorkouts,
+      bf, bfSource, streak, totalWorkouts,
       chartData,
       weightPeriod, setWeightPeriod, weightStats,
       activePains, painColors, muscleColors, toggleActivePain,
@@ -78,7 +79,7 @@ const HomeView = ({ onNavigate }: any) => {
 
         {/* Biometria + Recovery - Half Width Each */}
         <div className="card home-biometry-card">
-            <BiometryBentoCard weightStats={weightStats} bf={bf} />
+            <BiometryBentoCard weightStats={weightStats} bf={bf} bfSource={bfSource} />
         </div>
 
         <div className="card home-recovery-card">
@@ -108,6 +109,8 @@ const HomeView = ({ onNavigate }: any) => {
                     userWeight={userWeight}
                 />
             </Suspense>
+
+            <ReadinessTrendCard history={history} />
             
             {/* Trend Peso Corporeo */}
             <section className="card home-chart-card" id="home-chart-widget">
@@ -147,6 +150,22 @@ const HomeView = ({ onNavigate }: any) => {
                         </div>
                     )}
                 </div>
+                {weightStats?.recentWeeklyAverages?.length > 0 && (
+                    <div style={{ marginTop: '12px' }}>
+                        <p className="text-sm home-muted" style={{ margin: '0 0 8px' }}>
+                            Medie settimanali calcolate solo sui giorni registrati; i giorni mancanti non vengono interpolati.
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                            {weightStats.recentWeeklyAverages.map((point: any) => (
+                                <div key={point.weekStart} style={{ padding: '10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)' }}>
+                                    <span className="text-xs home-muted">{point.label}</span>
+                                    <strong style={{ display: 'block' }}>{point.averageWeightKg.toFixed(1)} kg</strong>
+                                    <span className="text-xs home-muted">{point.recordedDaysCount}/{point.daysConsidered} giorni</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </section>
         </div>
 

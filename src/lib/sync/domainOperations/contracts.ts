@@ -1,5 +1,6 @@
 import type {
     CardioSession,
+    ContextEvent,
     Exercise,
     Food,
     FoodOverride,
@@ -20,7 +21,7 @@ import type {
 
 export type NutritionDayPatch = Partial<Omit<
     NutritionDay,
-    'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake' | 'steps' | 'stepsSource' | 'stepsCapturedAt' | 'cardioSessions'
+    'date' | 'kcal' | 'carbs' | 'pro' | 'fat' | 'meals' | 'supplementsIntake' | 'steps' | 'stepsSource' | 'stepsCapturedAt' | 'cardioSessions' | 'contextEvents'
 >>;
 
 export type DomainOperation =
@@ -32,6 +33,8 @@ export type DomainOperation =
     | { type: 'activity-steps.clear'; date: string }
     | { type: 'cardio-session.upsert'; date: string; session: CardioSession }
     | { type: 'cardio-session.delete'; date: string; sessionId: string }
+    | { type: 'context-event.upsert'; date: string; event: ContextEvent }
+    | { type: 'context-event.delete'; date: string; eventId: string }
     | { type: 'nutrition-meal.upsert'; date: string; meal: LoggedMealItem }
     | { type: 'nutrition-meal.delete'; date: string; mealId: string }
     | { type: 'supplement-intake.upsert'; date: string; intake: SupplementIntake }

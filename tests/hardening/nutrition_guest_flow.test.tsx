@@ -79,6 +79,7 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
         expect(day?.carbs).toBe(40);
         expect(day?.pro).toBe(10);
         expect(day?.fat).toBe(2);
+        expect(day?.isDayOn).toBeUndefined();
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual(calculateLoggedMealTotals(day?.meals ?? []));
 
         const added = day!.meals![0] as any;
@@ -99,6 +100,20 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
         expect({ kcal: day?.kcal, carbs: day?.carbs, pro: day?.pro, fat: day?.fat }).toEqual({ kcal: 0, carbs: 0, pro: 0, fat: 0 });
         expect(calculateLoggedMealTotals(day?.meals ?? [])).toEqual({ kcal: 0, carbs: 0, pro: 0, fat: 0 });
         expect(DB.saveUserData).toHaveBeenCalledTimes(3);
+    });
+
+    it('keeps an unspecified day type missing until the user explicitly selects ON or OFF', async () => {
+        const { result } = renderHook(() => useNutritionMeals(DATE));
+        expect(result.current.isDayOn).toBeUndefined();
+
+        await runMutation(() => result.current.setDayType(false));
+
+        let day = useAppStore.getState().userData?.nutrition?.[DATE];
+        expect(day?.isDayOn).toBe(false);
+
+        await runMutation(() => result.current.setDayType(undefined));
+        day = useAppStore.getState().userData?.nutrition?.[DATE];
+        expect(day?.isDayOn).toBeUndefined();
     });
 
     it('persists quick-add nutrition with per-serving semantics', async () => {

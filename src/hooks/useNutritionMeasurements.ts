@@ -5,6 +5,7 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import type { BodyFatProvenance } from '../types';
 
 const EMPTY_NUTRITION = {};
 const EMPTY_PROFILE = {};
@@ -23,7 +24,8 @@ export function useNutritionMeasurements(selectedDate?: string) {
     const field = (name: string) => targetDayData?.[name]?.toString() ?? '';
     const draft = useDatedDraft('measurement', targetDateStr, {
         weight: field('weight'), waist: field('waist'), neck: field('neck'), hip: field('hip'),
-        manualBf: field('bf'), chest: field('chest'), shoulders: field('shoulders'), biceps: field('biceps'),
+        manualBf: targetDayData?.bfProvenance?.method === 'manual' ? field('bf') : '',
+        chest: field('chest'), shoulders: field('shoulders'), biceps: field('biceps'),
         thighs: field('thighs'), calves: field('calves'), measureTime: field('measurementTime') || new Date().toTimeString().substring(0, 5)
     });
     const { weight, waist, neck, hip, manualBf, chest, shoulders, biceps, thighs, calves, measureTime } = draft.values;
@@ -67,6 +69,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
                 patch: {
                     weight: undefined,
                     bf: undefined,
+                    bfProvenance: undefined,
                     waist: undefined,
                     neck: undefined,
                     hip: undefined,
@@ -104,9 +107,14 @@ export function useNutritionMeasurements(selectedDate?: string) {
             }
             const height = Number(profile.height);
             let bf: number | null = null;
+            let bfProvenance: BodyFatProvenance | undefined;
 
             if (manualBf && !isNaN(Number(manualBf))) {
                 bf = Number(manualBf);
+                bfProvenance = { method: 'manual' };
+            } else if (targetDayData?.bf !== undefined && targetDayData?.bf !== null && !targetDayData?.bfProvenance) {
+                const legacyBf = Number(targetDayData.bf);
+                if (Number.isFinite(legacyBf)) bf = legacyBf;
             } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
                 if (Number.isFinite(height) && height > 0) {
                     bf = Logic.calculateBodyFatByMethod(profile.gender === 'F' ? 'navy_female' : 'navy_male', {
@@ -122,6 +130,16 @@ export function useNutritionMeasurements(selectedDate?: string) {
                         await showAlert("Impossibile calcolare la massa grassa con i dati forniti. Verifica che vita > collo.");
                         return;
                     }
+                    bfProvenance = {
+                        method: 'us_navy',
+                        inputs: {
+                            heightCm: height,
+                            waistCm: Number(waist),
+                            neckCm: Number(neck),
+                            ...(hip && profile.gender === 'F' ? { hipCm: Number(hip) } : {}),
+                            gender: profile.gender || 'M',
+                        },
+                    };
                 } else {
                     await showAlert("Attenzione: imposta la tua altezza nelle Impostazioni per calcolare la massa grassa dai perimetri corporei.");
                     return;
@@ -145,6 +163,7 @@ export function useNutritionMeasurements(selectedDate?: string) {
                         thighs: thighs ? Number(thighs) : undefined,
                         calves: calves ? Number(calves) : undefined,
                         bf: bf !== null && !isNaN(bf) ? Math.round(bf * 10) / 10 : undefined,
+                        bfProvenance,
                         measurementTime: measureTime,
                     },
                 });

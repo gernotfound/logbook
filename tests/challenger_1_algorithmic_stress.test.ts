@@ -394,7 +394,7 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             };
             const resPos = computeVolumeCaloriesCorrelation(history, nutritionPos, testLibrary, 80, 4, '2026-08-22');
             expect(resPos.stats.correlationCoefficient).toBe(1.0);
-            expect(resPos.stats.correlationInsight).toContain('Forte correlazione positiva');
+            expect(resPos.stats.correlationInsight).toContain('Associazione positiva forte');
 
             const nutritionInv: Record<string, NutritionDay> = {
                 '2026-08-04': { date: '2026-08-04', kcal: 3000, carbs: 0, pro: 0, fat: 0 },
@@ -403,7 +403,7 @@ describe('Challenger 1: Algorithmic & Mathematical Stress Test Suite', () => {
             };
             const resInv = computeVolumeCaloriesCorrelation(history, nutritionInv, testLibrary, 80, 4, '2026-08-22');
             expect(resInv.stats.correlationCoefficient).toBe(-1.0);
-            expect(resInv.stats.correlationInsight).toContain('Forte correlazione inversa');
+            expect(resInv.stats.correlationInsight).toContain('Associazione inversa forte');
         });
     });
 });

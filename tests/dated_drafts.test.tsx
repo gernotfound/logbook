@@ -106,3 +106,44 @@ it('retains a newer edit and rejects double submission while a save is pending',
     expect(dispatch).toHaveBeenCalledTimes(1); expect(hook.result.current.weight).toBe('76');
     expect(localStorage.getItem(deviceKey('draft:measurement:2026-09-11', storageOwner()))).toContain('76');
 });
+it('records body-fat provenance for manual and derived measurements', async () => {
+    const dispatch = vi.spyOn(useAppStore.getState(), 'dispatchDomainOperation')
+        .mockResolvedValue({ ok: true, status: 'synced' } as SyncResult);
+
+    const manual = renderHook(() => useNutritionMeasurements('2026-09-11'));
+    act(() => {
+        manual.result.current.setWeight('80');
+        manual.result.current.setManualBf('14.2');
+    });
+    await act(async () => { await manual.result.current.calculateAndSave(); });
+    expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
+        type: 'nutrition-day.patch',
+        date: '2026-09-11',
+        patch: expect.objectContaining({
+            bf: 14.2,
+            bfProvenance: { method: 'manual' },
+        }),
+    }));
+    manual.unmount();
+
+    dispatch.mockClear();
+    const derived = renderHook(() => useNutritionMeasurements('2026-09-12'));
+    act(() => {
+        derived.result.current.setWeight('80');
+        derived.result.current.setWaist('85');
+        derived.result.current.setNeck('40');
+    });
+    await act(async () => { await derived.result.current.calculateAndSave(); });
+
+    expect(dispatch).toHaveBeenLastCalledWith(expect.objectContaining({
+        type: 'nutrition-day.patch',
+        date: '2026-09-12',
+        patch: expect.objectContaining({
+            bfProvenance: expect.objectContaining({
+                method: 'us_navy',
+                inputs: expect.objectContaining({ heightCm: 180, waistCm: 85, neckCm: 40, gender: 'M' }),
+            }),
+        }),
+    }));
+});
+

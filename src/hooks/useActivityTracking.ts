@@ -6,10 +6,12 @@ import { useDialogStore } from '../store/useDialogStore';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { Logic } from '../lib/logic';
 import { localDateTimeToTimestamp, timestampToLocalTime } from '../lib/activity';
-import { computeWeeklyActivitySeries } from '../lib/calc/analytics';
+import { computeWeeklyActivitySeries, computeWeeklyTrainingActivityContext } from '../lib/calc/analytics';
 import type { CardioSession } from '../types';
 
 const EMPTY_NUTRITION = {};
+const EMPTY_HISTORY: any[] = [];
+const EMPTY_LIBRARY: any[] = [];
 const NEW_CARDIO_ID = '/new';
 
 const EMPTY_CARDIO_DRAFT = {
@@ -25,6 +27,8 @@ const EMPTY_CARDIO_DRAFT = {
 
 export function useActivityTracking() {
     const nutrition = useAppStore(state => state.userData?.nutrition || EMPTY_NUTRITION);
+    const history = useAppStore(state => state.userData?.history || EMPTY_HISTORY);
+    const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
@@ -64,6 +68,21 @@ export function useActivityTracking() {
         const result = computeWeeklyActivitySeries(nutrition as any, 1, today);
         return result.points[0];
     }, [nutrition, today]);
+
+    const trainingActivityContext = useMemo(() => {
+        const dates = Object.keys(nutrition as Record<string, any>).sort((a, b) => b.localeCompare(a));
+        const latestWeight = dates
+            .map(date => Number((nutrition as Record<string, any>)[date]?.weight))
+            .find(value => Number.isFinite(value) && value > 0) ?? 80;
+        return computeWeeklyTrainingActivityContext(
+            history,
+            nutrition as any,
+            library,
+            latestWeight,
+            8,
+            today,
+        );
+    }, [history, nutrition, library, today]);
 
     const saveSteps = async () => {
         if (savingSteps.current) return false;
@@ -208,5 +227,6 @@ export function useActivityTracking() {
         saveCardio,
         deleteCardio,
         currentWeek,
+        trainingActivityContext,
     };
 }

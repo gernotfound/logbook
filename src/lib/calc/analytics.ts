@@ -62,6 +62,23 @@ export interface WeeklyActivityStats {
     cardioSessionsCount: number;
 }
 
+export interface WeeklyWeightPoint {
+    weekIndex: number;
+    weekStart: string;
+    weekEnd: string;
+    label: string;
+    averageWeightKg: number | null;
+    recordedDaysCount: number;
+    daysConsidered: number;
+}
+
+export interface WeeklyWeightStats {
+    hasData: boolean;
+    latestAverageWeightKg: number | null;
+    latestRecordedDaysCount: number;
+    latestDaysConsidered: number;
+}
+
 export interface VolumeCaloriesPoint {
     weekIndex: number;
     weekStart: string;
@@ -363,6 +380,133 @@ export function computeWeeklyActivitySeries(
     return { points, stats };
 }
 
+export function computeWeeklyWeightSeries(
+    nutrition: Record<string, NutritionDay> | null | undefined = {},
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date()
+): { points: WeeklyWeightPoint[]; stats: WeeklyWeightStats } {
+    const safeNutrition = nutrition && typeof nutrition === 'object' ? nutrition : {};
+    const intervals = generateWeekIntervals(numWeeks, referenceDate);
+    const parsedReference = typeof referenceDate === 'string' ? parseISO(referenceDate) : referenceDate;
+    const safeReference = isValid(parsedReference) ? parsedReference : new Date();
+    const referenceDateStr = format(safeReference, 'yyyy-MM-dd');
+
+    const points = intervals.map((interval, weekIndex): WeeklyWeightPoint => {
+        const effectiveEnd = interval.weekEnd < referenceDateStr ? interval.weekEnd : referenceDateStr;
+        let sumWeight = 0;
+        let recordedDaysCount = 0;
+        let daysConsidered = 0;
+
+        if (effectiveEnd >= interval.weekStart) {
+            let cur = parseISO(interval.weekStart);
+            const end = parseISO(effectiveEnd);
+            while (cur <= end) {
+                daysConsidered++;
+                const dateStr = format(cur, 'yyyy-MM-dd');
+                const raw = safeNutrition[dateStr]?.weight;
+                const weight = typeof raw === 'number' ? raw : Number.parseFloat(String(raw ?? ''));
+                if (Number.isFinite(weight) && weight > 0) {
+                    sumWeight += weight;
+                    recordedDaysCount++;
+                }
+                cur = addDays(cur, 1);
+            }
+        }
+
+        return {
+            weekIndex,
+            weekStart: interval.weekStart,
+            weekEnd: interval.weekEnd,
+            label: interval.label,
+            averageWeightKg: recordedDaysCount > 0 ? Math.round((sumWeight / recordedDaysCount) * 100) / 100 : null,
+            recordedDaysCount,
+            daysConsidered,
+        };
+    });
+
+    const latest = [...points].reverse().find(point => point.recordedDaysCount > 0);
+    return {
+        points,
+        stats: {
+            hasData: Boolean(latest),
+            latestAverageWeightKg: latest?.averageWeightKg ?? null,
+            latestRecordedDaysCount: latest?.recordedDaysCount ?? 0,
+            latestDaysConsidered: latest?.daysConsidered ?? 0,
+        },
+    };
+}
+
+export interface ReadinessTrendDimension {
+    average: number | null;
+    latest: number | null;
+    previous: number | null;
+    deltaFromPrevious: number | null;
+    count: number;
+}
+
+export interface ReadinessTrendStats {
+    energy: ReadinessTrendDimension;
+    stress: ReadinessTrendDimension;
+    motivation: ReadinessTrendDimension;
+    muscleRecovery: ReadinessTrendDimension;
+    sessionsWithReadiness: number;
+}
+
+export function computeReadinessTrends(
+    history: WorkoutSession[] | null | undefined = [],
+    maxSessions: number = 12
+): ReadinessTrendStats {
+    const sessions = (Array.isArray(history) ? history : [])
+        .filter(session => session?.readiness)
+        .sort((a, b) => (getWorkoutDateString(b) || '').localeCompare(getWorkoutDateString(a) || ''))
+        .slice(0, Math.max(1, maxSessions));
+
+    const dimension = (key: 'energy' | 'stress' | 'motivation' | 'muscleRecovery'): ReadinessTrendDimension => {
+        const values = sessions
+            .map(session => session.readiness?.[key])
+            .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 1 && value <= 5);
+        const latest = values[0] ?? null;
+        const previous = values[1] ?? null;
+        return {
+            average: values.length ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 : null,
+            latest,
+            previous,
+            deltaFromPrevious: latest !== null && previous !== null ? Math.round((latest - previous) * 10) / 10 : null,
+            count: values.length,
+        };
+    };
+
+    return {
+        energy: dimension('energy'),
+        stress: dimension('stress'),
+        motivation: dimension('motivation'),
+        muscleRecovery: dimension('muscleRecovery'),
+        sessionsWithReadiness: sessions.length,
+    };
+}
+
+export interface WeeklyTrainingActivityPoint extends WeeklyActivityPoint {
+    workoutCount: number;
+    volumeKg: number;
+}
+
+export function computeWeeklyTrainingActivityContext(
+    history: WorkoutSession[] | null | undefined,
+    nutrition: Record<string, NutritionDay> | null | undefined,
+    library: Exercise[] | null | undefined,
+    userWeight: number,
+    numWeeks: number = 8,
+    referenceDate: Date | string = new Date()
+): WeeklyTrainingActivityPoint[] {
+    const volume = computeWeeklyVolumeSeries(history, library, userWeight, numWeeks, referenceDate).points;
+    const activity = computeWeeklyActivitySeries(nutrition, numWeeks, referenceDate).points;
+    return activity.map((point, index) => ({
+        ...point,
+        workoutCount: volume[index]?.workoutCount ?? 0,
+        volumeKg: volume[index]?.volumeKg ?? 0,
+    }));
+}
+
 export function calculatePearsonCorrelation(x: number[], y: number[]): number | null {
     if (!Array.isArray(x) || !Array.isArray(y) || x.length !== y.length || x.length < 3) {
         return null;
@@ -436,18 +580,18 @@ export function computeVolumeCaloriesCorrelation(
 
     if (correlation !== null && validPairs.length >= 3) {
         if (correlation >= 0.6) {
-            correlationInsight = 'Forte correlazione positiva: l\'apporto energetico supporta l\'aumento dei carichi e del volume di lavoro.';
+            correlationInsight = 'Associazione positiva forte osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         } else if (correlation >= 0.2) {
-            correlationInsight = 'Moderata correlazione positiva: il volume tende a salire nelle settimane con maggior introito calorico.';
+            correlationInsight = 'Associazione positiva moderata osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         } else if (correlation > -0.2) {
-            correlationInsight = 'Correlazione neutra: il volume di allenamento è indipendente dalle oscillazioni caloriche registrate.';
+            correlationInsight = 'Nessuna associazione lineare evidente nelle settimane disponibili.';
         } else if (correlation > -0.6) {
-            correlationInsight = 'Moderata correlazione inversa: il volume di allenamento si è mantenuto alto anche con apporto calorico contenuto.';
+            correlationInsight = 'Associazione inversa moderata osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         } else {
-            correlationInsight = 'Forte correlazione inversa: marcata discrepanza tra volume di allenamento ed apporto calorico.';
+            correlationInsight = 'Associazione inversa forte osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         }
     } else if (hasData) {
-        correlationInsight = 'Registra più settimane con allenamenti e nutrizione per sbloccare l\'analisi predittiva della correlazione.';
+        correlationInsight = 'Servono almeno 3 settimane confrontabili con allenamento e nutrizione registrati per stimare l\'associazione lineare.';
     }
 
     const totalVol = points.reduce((sum, p) => sum + p.volumeKg, 0);

@@ -1,6 +1,8 @@
 import type {
     Exercise,
     NutritionDay,
+    ProgressionContract,
+    ProgressionBaselineState,
     SessionExercise,
     SessionExerciseSet,
     SetSegment,
@@ -55,6 +57,10 @@ export interface NormalizedSet {
         reps?: number;
         timeSeconds?: number;
         restBeforeSeconds?: number;
+        eccentricSeconds?: number;
+        holdPosition?: SetSegment['holdPosition'];
+        assistance?: SetSegment['assistance'];
+        negativeOnly?: boolean;
     }>;
     targetReps?: number;
 }
@@ -66,6 +72,8 @@ export interface NormalizedExposure {
     cycleId?: string;
     intent?: TrainingCycleIntent;
     focus?: TrainingCycleProgressionFocus;
+    technicalStandard?: string;
+    progressionContract?: ProgressionContract;
     exId: string;
     exName: string;
     trackingType: Exercise['trackingType'];
@@ -97,6 +105,10 @@ export interface ExerciseProgressionAnalysis {
     bestHistorical?: NormalizedExposure;
     recentComparable: NormalizedExposure[];
     comparison: ExposureComparison;
+    comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
+    baselineState?: ProgressionBaselineState;
+    baselineVersion?: number;
+    progressionContract?: ProgressionContract;
     quality: ProgressionQuality;
     qualityReasons: string[];
     classification: ProgressionClassification;
@@ -196,6 +208,10 @@ function normalizeSegment(
         ...(reps !== undefined ? { reps } : {}),
         ...(timeSeconds !== undefined ? { timeSeconds } : {}),
         ...(segment.restBeforeSeconds !== undefined ? { restBeforeSeconds: segment.restBeforeSeconds } : {}),
+        ...(segment.eccentricSeconds !== undefined ? { eccentricSeconds: segment.eccentricSeconds } : {}),
+        ...(segment.holdPosition ? { holdPosition: segment.holdPosition } : {}),
+        ...(segment.assistance ? { assistance: segment.assistance } : {}),
+        ...(segment.negativeOnly !== undefined ? { negativeOnly: segment.negativeOnly } : {}),
     };
 }
 
@@ -275,7 +291,11 @@ export function normalizeExerciseExposure(
         ...(session.routineId ? { routineId: session.routineId } : {}),
         ...(session.cycleId ? { cycleId: session.cycleId } : {}),
         ...(session.cycleStrategy?.intent ? { intent: session.cycleStrategy.intent } : {}),
-        ...(session.cycleStrategy?.progressionFocus ? { focus: session.cycleStrategy.progressionFocus } : {}),
+        ...((sessionExercise.progressionContract?.metric ?? session.cycleStrategy?.progressionFocus)
+            ? { focus: (sessionExercise.progressionContract?.metric ?? session.cycleStrategy?.progressionFocus) as TrainingCycleProgressionFocus }
+            : {}),
+        ...(sessionExercise.technicalStandard?.trim() ? { technicalStandard: sessionExercise.technicalStandard.trim() } : {}),
+        ...(sessionExercise.progressionContract ? { progressionContract: structuredClone(sessionExercise.progressionContract) } : {}),
         exId: sessionExercise.exId,
         exName: exercise?.name ?? 'Esercizio',
         trackingType,
@@ -301,6 +321,12 @@ function setShape(set?: NormalizedSet): string {
         set.segments.length,
         set.targetReps === undefined ? 'no-target' : `target:${set.targetReps}`,
         `rests:${rests}`,
+        `segments:${set.segments.map(segment => [
+            segment.eccentricSeconds ?? '?',
+            segment.holdPosition ?? '?',
+            segment.assistance ?? '?',
+            segment.negativeOnly === undefined ? '?' : String(segment.negativeOnly),
+        ].join(':')).join(',')}`,
     ].join('|');
 }
 
@@ -316,6 +342,27 @@ export function compareExposureCompatibility(
     if (current.exId !== previous.exId) return { level: 'none', reasons: ['Esercizio diverso.'] };
     if (current.trackingType !== previous.trackingType) return { level: 'none', reasons: ['Tipo di tracciamento diverso.'] };
     if (!current.referenceSet || !previous.referenceSet) return { level: 'none', reasons: ['Manca un set di riferimento osservabile.'] };
+
+    const currentStandard = current.technicalStandard?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('it');
+    const previousStandard = previous.technicalStandard?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('it');
+    if (currentStandard && previousStandard && currentStandard !== previousStandard) {
+        return { level: 'none', reasons: ['Standard tecnico registrato diverso.'] };
+    }
+    if (Boolean(currentStandard) !== Boolean(previousStandard)) reasons.push('Standard tecnico registrato solo in una delle esposizioni.');
+
+    const currentVersion = current.progressionContract?.baselineVersion;
+    const previousVersion = previous.progressionContract?.baselineVersion;
+    if ((currentVersion !== undefined || previousVersion !== undefined) && currentVersion !== previousVersion) {
+        return {
+            level: 'none',
+            reasons: [`Versione baseline diversa: ${previousVersion ?? 'legacy'} → ${currentVersion ?? 'legacy'}.`],
+        };
+    }
+
+    const currentMetric = current.progressionContract?.metric;
+    const previousMetric = previous.progressionContract?.metric;
+    if (currentMetric && previousMetric && currentMetric !== previousMetric) reasons.push('Metrica del contratto di progressione diversa.');
+
     const currentRef = current.referenceSet;
     const previousRef = previous.referenceSet;
     if (currentRef.technique !== previousRef.technique) {
@@ -335,6 +382,18 @@ export function compareExposureCompatibility(
         }
         if ((currentRest === undefined) !== (previousRest === undefined)) {
             reasons.push('Manca parte dei recuperi strutturati dei segmenti.');
+        }
+        const currentSegment = currentRef.segments[index];
+        const previousSegment = previousRef.segments[index];
+        for (const key of ['eccentricSeconds', 'holdPosition', 'assistance', 'negativeOnly'] as const) {
+            const currentValue = currentSegment?.[key];
+            const previousValue = previousSegment?.[key];
+            if (currentValue !== undefined && previousValue !== undefined && currentValue !== previousValue) {
+                return { level: 'none', reasons: ['Parametri tecnici dei segmenti diversi.'] };
+            }
+            if ((currentValue === undefined) !== (previousValue === undefined)) {
+                reasons.push('Metadati tecnici dei segmenti incompleti in una delle esposizioni.');
+            }
         }
     }
     if (currentRef.targetReps !== previousRef.targetReps) reasons.push('Target strutturato diverso o non disponibile in entrambe le esposizioni.');
@@ -517,7 +576,7 @@ function describe(
         case 'deload_change':
             return { headline: 'Deload: variazione descrittiva', detail: `Set di riferimento: ${previousRef} → ${currentRef}. Dose osservata: ${previous?.workSets ?? 0} → ${current.workSets} serie. Le riduzioni programmate non vengono classificate come regressione.` };
         case 'execution_baseline':
-            return { headline: 'Esecuzione: baseline registrata stabile', detail: 'LogBook confronta solo modalità e tecnica registrate; non misura ROM, tempo, setup o qualità tecnica.' };
+            return { headline: 'Esecuzione: baseline registrata', detail: 'LogBook usa modalità, standard tecnico e parametri registrati. Non deduce la qualità tecnica da dati non inseriti.' };
         case 'density_limited':
             return { headline: 'Densità: confronto limitato alla sessione', detail: 'Non sono disponibili timestamp per attribuire una densità precisa al singolo esercizio.' };
         case 'new_baseline':
@@ -545,7 +604,13 @@ function trendFor(exposures: NormalizedExposure[]): TrendDirection {
     return 'mixed';
 }
 
-function priorityFor(exercise: ProgressionExerciseRef | undefined, session: WorkoutSession): ExerciseProgressionAnalysis['priority'] {
+function priorityFor(
+    exercise: ProgressionExerciseRef | undefined,
+    session: WorkoutSession,
+    contractRole?: ProgressionContract['role'],
+): ExerciseProgressionAnalysis['priority'] {
+    if (contractRole === 'primary') return 'primary';
+    if (contractRole === 'secondary') return 'secondary';
     const muscles = new Set([...(exercise?.muscles ?? []), ...(exercise?.secondaryMuscles ?? [])]);
     if ((session.cycleStrategy?.primaryMuscles ?? []).some(muscle => muscles.has(muscle))) return 'primary';
     if ((session.cycleStrategy?.secondaryMuscles ?? []).some(muscle => muscles.has(muscle))) return 'secondary';
@@ -699,7 +764,7 @@ export function computeProgressionEngine(
             exName: current.exName,
             ...(current.intent ? { intent: current.intent } : {}),
             ...(current.focus ? { focus: current.focus } : {}),
-            priority: priorityFor(exercise, currentWorkout),
+            priority: priorityFor(exercise, currentWorkout, current.progressionContract?.role),
             current,
             ...(latestExposure ? { latestExposure } : {}),
             ...(previousComparable ? { previousComparable } : {}),
@@ -707,6 +772,10 @@ export function computeProgressionEngine(
             ...(bestHistorical ? { bestHistorical } : {}),
             recentComparable,
             comparison,
+            comparisonStatus: comparison.level === 'high' ? 'comparable' : comparison.level === 'medium' ? 'limited' : 'not_comparable',
+            ...(current.progressionContract?.baselineState ? { baselineState: current.progressionContract.baselineState } : {}),
+            ...(current.progressionContract?.baselineVersion !== undefined ? { baselineVersion: current.progressionContract.baselineVersion } : {}),
+            ...(current.progressionContract ? { progressionContract: current.progressionContract } : {}),
             quality,
             qualityReasons,
             classification,
@@ -727,6 +796,18 @@ export function progressionQualityLabel(quality: ProgressionQuality): string {
     if (quality === 'clear') return 'Trend chiaro';
     if (quality === 'preliminary') return 'Indicazione preliminare';
     return 'Confronto limitato';
+}
+
+export function progressionBaselineStateLabel(state?: ProgressionBaselineState): string | undefined {
+    if (!state) return undefined;
+    return ({
+        historical: 'storica',
+        active: 'attiva',
+        suspended: 'sospesa',
+        reacclimation: 'riacclimatazione',
+        reactivated: 'riattivata',
+        replaced: 'sostituita',
+    } as const)[state];
 }
 
 export function progressionTrendLabel(

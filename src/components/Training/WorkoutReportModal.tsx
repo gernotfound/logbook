@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
-import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
+import { formatProgressionReference, progressionBaselineStateLabel, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
 import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
 import { getRoutineSetPlan } from '../../lib/advancedSets';
 import { Logic } from '../../lib/logic';
@@ -240,9 +240,9 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
                     {report.isFirstSession && (
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '6px' }}>
-                            <strong style={{ color: 'var(--primary-color)' }}>Baseline iniziale registrata</strong>
+                            <strong style={{ color: 'var(--primary-color)' }}>Nuova baseline registrata</strong>
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                Non ci sono ancora esposizioni precedenti sufficientemente confrontabili. Questa sessione diventa il riferimento per i confronti successivi.
+                                Non ci sono esposizioni precedenti sufficientemente confrontabili per questo contesto e standard registrato. Questa sessione diventa il riferimento per i confronti successivi.
                             </span>
                         </div>
                     )}
@@ -306,11 +306,26 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             </span>
                                         </div>
 
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                            Confrontabilità: <strong style={{ color: 'var(--text-main)' }}>
+                                                {progression.comparisonStatus === 'comparable' ? 'confrontabile' : progression.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
+                                            </strong>
+                                            {progression.baselineVersion ? ` · baseline v${progression.baselineVersion}` : ''}
+                                            {progression.baselineState ? ` · ${progressionBaselineStateLabel(progression.baselineState)}` : ''}
+                                        </div>
+
                                         {progression.previousComparable && (
                                             <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                                                 Ultima esposizione confrontabile · {progression.previousComparable.date || 'data non disponibile'} ·{' '}
                                                 <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.previousComparable)}</strong>
                                             </div>
+                                        )}
+
+                                        {progression.progressionContract?.target && (
+                                            <div style={{ fontSize: '0.82rem' }}><strong>Target:</strong> {progression.progressionContract.target}</div>
+                                        )}
+                                        {progression.progressionContract?.nextAction && (
+                                            <div style={{ fontSize: '0.82rem' }}><strong>Prossima azione prevista:</strong> {progression.progressionContract.nextAction}</div>
                                         )}
 
                                         {progression.cycleBaseline && progression.cycleBaseline.sessionId !== progression.previousComparable?.sessionId && (

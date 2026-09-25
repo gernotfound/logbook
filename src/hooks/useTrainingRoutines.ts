@@ -3,7 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
 import { readBrowserValue, tryRemoveBrowserValue, writeBrowserJson } from '../lib/sync/browserStorage';
-import { PlannedSetTechnique, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
+import { PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: any[] = [];
@@ -239,6 +239,36 @@ export function useTrainingRoutines() {
         });
     };
 
+    const handleUpdateExerciseMetadata = (
+        index: number,
+        field: 'technicalStandard' | keyof ProgressionContract,
+        value: string,
+    ) => {
+        setRoutineExercises(prev => {
+            const exercises = [...prev];
+            const exercise = { ...exercises[index] };
+            if (field === 'technicalStandard') {
+                const normalized = value.trim();
+                if (normalized) exercise.technicalStandard = value;
+                else delete exercise.technicalStandard;
+            } else {
+                const contract: ProgressionContract = { ...(exercise.progressionContract || {}) };
+                if (field === 'baselineVersion') {
+                    const parsed = value.trim() === '' ? undefined : Number.parseInt(value, 10);
+                    if (parsed && parsed > 0) contract.baselineVersion = parsed;
+                    else delete contract.baselineVersion;
+                } else {
+                    const normalized = value.trim();
+                    if (normalized) (contract as Record<string, unknown>)[field] = value;
+                    else delete (contract as Record<string, unknown>)[field];
+                }
+                exercise.progressionContract = Object.keys(contract).length ? contract : undefined;
+            }
+            exercises[index] = exercise;
+            return exercises;
+        });
+    };
+
     const handleRemoveExerciseFromRoutine = (indexToRemove: number) => {
         setRoutineExercises(prev => prev.filter((_, idx) => idx !== indexToRemove));
     };
@@ -264,6 +294,7 @@ export function useTrainingRoutines() {
         handleSave, handleCancelEdit, handleEditClick, handleDelete, handleDuplicate,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
         handleUpdateTechnique, handleUpdateSetPlan, handleUpdateSetPlanField,
+        handleUpdateExerciseMetadata,
         handleRemoveExerciseFromRoutine, moveExercise
     };
 }

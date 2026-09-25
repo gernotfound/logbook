@@ -171,7 +171,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 </div>
                 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>BF % (Bilancia)</label>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px', textAlign: 'center' }}>BF % manuale</label>
                     <input 
                         id="measure-bf" 
                         type="number" 

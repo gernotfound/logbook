@@ -31,7 +31,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '8px'}}>
                     <Activity size={18} color="var(--danger-color)" />
-                    Recupero e Dolori
+                    Esposizione recente e dolori
                 </h2>
                 <button
                     type="button"
@@ -227,8 +227,8 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px', fontSize: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--muscle-fatigue)' }}></div>
-                        <span style={{ color: 'var(--text-muted)' }}>Affaticato</span>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--muscle-recent)' }}></div>
+                        <span style={{ color: 'var(--text-muted)' }}>Allenato di recente</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--muscle-pain)' }}></div>

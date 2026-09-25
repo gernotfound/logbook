@@ -63,21 +63,32 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
 
             <section className="tracking-panel" aria-label="Riepilogo alimentazione">
                 <div className="tracking-row tracking-row--wrap mb-15">
-                    <h2 className={`tracking-heading ${isDayOn ? 'tracking-accent' : ''}`}>
-                        {isDayOn ? 'Giorno ON' : 'Giorno OFF'}
+                    <h2 className={`tracking-heading ${isDayOn === true ? 'tracking-accent' : ''}`}>
+                        {isDayOn === true ? 'Giorno ON' : isDayOn === false ? 'Giorno OFF' : 'Giorno non specificato'}
                     </h2>
-                    <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={async () => {
-                            const confirmed = await showConfirm(`Sei sicuro di voler cambiare il giorno in ${isDayOn ? 'OFF' : 'ON'}?`);
-                            if (confirmed) {
-                                setDayType(!isDayOn);
-                            }
-                        }}
-                    >
-                        Cambia giorno
-                    </button>
+                    <div className="tracking-row" role="group" aria-label="Tipo di giornata">
+                        {([
+                            { label: 'ON', value: true },
+                            { label: 'OFF', value: false },
+                            { label: 'Non specificato', value: undefined },
+                        ] as const).map(option => (
+                            <button
+                                key={option.label}
+                                type="button"
+                                className="btn btn-secondary"
+                                aria-pressed={isDayOn === option.value}
+                                onClick={async () => {
+                                    if (isDayOn === option.value) return;
+                                    const needsConfirm = isDayOn !== undefined;
+                                    if (!needsConfirm || await showConfirm(`Sei sicuro di voler cambiare il giorno in ${option.label}?`)) {
+                                        await setDayType(option.value);
+                                    }
+                                }}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="tracking-row mb-15">

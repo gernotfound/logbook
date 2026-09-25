@@ -335,8 +335,8 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(hookResult.volumeChartData.datasets[0].data[pettoIndex]).toBe(3);
 
       // Fatigue / MuscleColors: 24h passed -> baseFatigue = 1 - 24/72 = 0.667 (> 0.35) -> #f97316 (orange)
-      expect(hookResult.muscleColors['chest-lower-left']).toBe('var(--muscle-fatigue)');
-      expect(hookResult.muscleColors['chest_lower']).toBe('var(--muscle-fatigue)');
+      expect(hookResult.muscleColors['chest-lower-left']).toBe('var(--muscle-recent)');
+      expect(hookResult.muscleColors['chest_lower']).toBe('var(--muscle-recent)');
     });
 
     test('useHomeView correctly exposes estimated BF from recent nutrition measurements', () => {

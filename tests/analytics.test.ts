@@ -255,7 +255,7 @@ describe('Analytics Engine: src/lib/calc/analytics.ts', () => {
             expect(result.points).toHaveLength(4);
             expect(result.stats.hasData).toBe(true);
             expect(result.stats.correlationCoefficient).not.toBeNull();
-            expect(result.stats.correlationInsight).toMatch(/correlazione/i);
+            expect(result.stats.correlationInsight).toMatch(/associazione/i);
         });
     });
 });

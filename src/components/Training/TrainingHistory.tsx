@@ -111,7 +111,7 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                 <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
                                     <div>
                                         {wo.exercises?.length || 0} esercizi completati
-                                        {(wo.waterLiters || 0) > 0 && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
+                                        {wo.waterLiters !== undefined && wo.waterLiters !== null && <span style={{ marginLeft: '15px', color: 'var(--primary-color)' }}>💧 {wo.waterLiters}L</span>}
                                     </div>
                                 </div>
 

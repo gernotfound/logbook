@@ -45,7 +45,7 @@ describe('post-redesign UI hardening', () => {
     ]) {
       expect(read(path), path).not.toMatch(/#(?:ff4d6d|ff6b81|ef4444|f97316)/i);
     }
-    expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-fatigue)');
+    expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-recent)');
     expect(read('src/hooks/useHomeView.ts')).toContain('var(--muscle-pain)');
   });
   it('keeps the cycle duration compact and muscle search results in document flow', () => {

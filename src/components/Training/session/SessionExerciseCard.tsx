@@ -11,9 +11,15 @@ interface SessionExerciseCardProps {
     libDef: any;
     pastWorkouts: Array<{ date: string; sets: any[]; note: string }>;
     progressionHint?: {
-        previousDate: string;
-        previousReference: string;
+        previousDate?: string;
+        previousReference?: string;
         quality: string;
+        comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
+        comparisonReasons: string[];
+        baselineState?: string;
+        baselineVersion?: number;
+        contractTarget?: string;
+        nextAction?: string;
     };
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
@@ -25,6 +31,7 @@ interface SessionExerciseCardProps {
     onRemoveExercise: (exIndex: number) => void;
     onUpdateSetupNote: (exId: string, note: string) => void;
     onUpdateSessionNote: (exIndex: number, note: string) => void;
+    onUpdateTechnicalStandard: (exIndex: number, value: string) => void;
     onAddSet: (exIndex: number) => void;
     onRemoveSet: (exIndex: number, sIndex: number) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: any) => void;
@@ -54,6 +61,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     onRemoveExercise,
     onUpdateSetupNote,
     onUpdateSessionNote,
+    onUpdateTechnicalStandard,
     onAddSet,
     onRemoveSet,
     onUpdateSet,
@@ -153,12 +161,28 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
                 {progressionHint && (
-                    <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '3px' }}>
+                    <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '4px' }}>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            Ultima esposizione confrontabile · {progressionHint.previousDate || 'data non disponibile'}
+                            Confrontabilità: {progressionHint.comparisonStatus === 'comparable' ? 'confrontabile' : progressionHint.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
+                            {progressionHint.baselineVersion ? ` · baseline v${progressionHint.baselineVersion}` : ''}
+                            {progressionHint.baselineState ? ` · ${progressionHint.baselineState}` : ''}
                         </span>
-                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{progressionHint.previousReference}</strong>
+                        {progressionHint.previousReference ? (
+                            <>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    Ultima esposizione confrontabile · {progressionHint.previousDate || 'data non disponibile'}
+                                </span>
+                                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{progressionHint.previousReference}</strong>
+                            </>
+                        ) : (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessun riferimento precedente direttamente confrontabile.</span>
+                        )}
                         <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.quality}</span>
+                        {progressionHint.comparisonReasons.length > 0 && (
+                            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.comparisonReasons.join(' ')}</span>
+                        )}
+                        {progressionHint.contractTarget && <span style={{ fontSize: '0.78rem' }}><strong>Target:</strong> {progressionHint.contractTarget}</span>}
+                        {progressionHint.nextAction && <span style={{ fontSize: '0.78rem' }}><strong>Azione prevista:</strong> {progressionHint.nextAction}</span>}
                     </div>
                 )}
             </div>
@@ -265,14 +289,27 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Modifica setup (globale):</h3>
+                    <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Setup e standard tecnico</h3>
+                    <label className="text-xs text-muted" htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
+                    <BufferedInput
+                        id={`technical-standard-${exItem.exId}`}
+                        type="text"
+                        value={exItem.technicalStandard || ''}
+                        placeholder="Es. stesso macchinario, ROM completo, fermo 1 s"
+                        onChange={value => onUpdateTechnicalStandard(exIndex, value)}
+                        style={{ margin: '4px 0 10px', width: '100%', fontSize: '16px' }}
+                    />
+                    <p className="text-xs text-muted" style={{ margin: '0 0 10px' }}>
+                        Se cambia rispetto allo storico, LogBook limita il confronto diretto senza modificare il programma.
+                    </p>
+                    <label className="text-xs text-muted" htmlFor={`setup-${exItem.exId}`}>Nota setup libreria (globale)</label>
                     <input
                         id={`setup-${exItem.exId}`}
                         type="text"
                         defaultValue={exNotes}
-                        placeholder="Note di setup (es. altezza sedile...)"
+                        placeholder="Es. altezza sedile abituale"
                         onBlur={(e) => onUpdateSetupNote(exItem.exId, e.target.value)}
-                        style={{ margin: 0, width: '100%' }}
+                        style={{ margin: '4px 0 0', width: '100%', fontSize: '16px' }}
                     />
                 </div>
             )}

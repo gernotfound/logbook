@@ -113,6 +113,8 @@ Per nutrition/history, la DomainOperation individua esplicitamente data/ID e qui
 
 **MUST:** i totali nutrizionali `kcal/carbs/pro/fat` restano derivati dai pasti; non sono intenti indipendenti. Il normalizzatore semantico continua a ricalcolarli.
 
+`meals`, `supplementsIntake`, `cardioSessions` e `contextEvents` restano collezioni mensili identificate da ID stabile; edit concorrenti su entità diverse non devono collassare l'intero array.
+
 ## Patch
 
 Per operazioni `*.patch`:

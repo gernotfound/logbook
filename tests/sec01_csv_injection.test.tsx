@@ -121,12 +121,12 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
         };
 
         const workoutRecords = parseCsvForTest(workoutCsv);
-        // La riga 0 è l'header (21 colonne), la 1 è il record (21 colonne).
+        // La riga 0 è l'header, la 1 è il record; il numero di colonne deve restare coerente anche con i nuovi metadati.
         // La riga 2 potrebbe essere vuota se c'è un trailing newline.
         const validWorkoutRecords = workoutRecords.filter(r => r.length > 1);
         
-        expect(validWorkoutRecords[0].length).toBe(25);
-        expect(validWorkoutRecords[1].length).toBe(25);
+        expect(validWorkoutRecords[0].length).toBe(30);
+        expect(validWorkoutRecords[1].length).toBe(30);
         expect(validWorkoutRecords[1][1]).toBe(`'=cmd|calc`);
         expect(validWorkoutRecords[1][2]).toBe(`'-Attacco!`);
         expect(validWorkoutRecords[1][7]).toBe(''); // RIR assente resta una cella vuota.
@@ -134,12 +134,12 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
 
         // Test espliciti su Nutrition per LF, CRLF, escaped quotes e virgole interne
         const nutritionRecords = parseCsvForTest(nutritionCsv).filter(r => r.length > 1);
-        expect(nutritionRecords[0].length).toBe(21);
-        expect(nutritionRecords[1].length).toBe(21);
+        expect(nutritionRecords[0].length).toBe(22);
+        expect(nutritionRecords[1].length).toBe(22);
         
         // Verifica multiriga (RFC 4180 garantisce che questo non spezzi la riga se i quotes sono corretti)
         // Dimostra LF dentro cella, escaped quote ("") se ci fossero
-        expect(nutritionRecords[1][20]).toBe(`'+SUM(B2:B5)\nAltra riga`);
+        expect(nutritionRecords[1][21]).toBe(`'+SUM(B2:B5)\nAltra riga`);
         
         // Ulteriore test per casi speciali
         const testCsv = Exporter.formatCsvRow(['cella con, virgola', 'cella con\nLF', 'cella con\r\nCRLF', 'cella con "quote"', '']);

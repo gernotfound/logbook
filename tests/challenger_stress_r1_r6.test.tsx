@@ -7,7 +7,7 @@ import {
     calculateSetVolume,
     calculateWorkoutVolume,
     searchMuscles,
-    autoHealPains,
+    mergeActivePains,
     searchExerciseLibrary
 } from '../src/lib/calc/workout';
 import {
@@ -194,7 +194,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 expect((parsed as any).isBodyweight).toBe(true);
                 expect((parsed as any).equipmentWeight).toBe(0);
 
-                // Auto-healing fallback for invalid types
+                // Persistence fallback for invalid types
                 const badEx = {
                     id: 'ex_bad',
                     name: 'Bad Ex',
@@ -532,9 +532,9 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
     });
 
     /* =========================================================================
-     * REQUIREMENT R6: DOMS AUTO-HEALING LOGIC ADVERSARIAL STRESS
+     * REQUIREMENT R6: DOMS EXPLICIT PERSISTENCE LOGIC ADVERSARIAL STRESS
      * ========================================================================= */
-    describe('R6: DOMS Auto-Healing Logic - Complex Exercise & Symmetry Scenarios', () => {
+    describe('R6: DOMS Explicit Persistence Logic - Complex Exercise & Symmetry Scenarios', () => {
 
         const library = [
             { id: 'ex_bench', muscles: ['chest', 'triceps', 'shoulders_anterior'] },
@@ -543,15 +543,11 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             { id: 'ex_unilateral_curl', muscles: ['biceps_left'] }
         ];
 
-        it('heals single trained primary muscle if not re-selected in session pains', () => {
+        it('preserves a trained active pain when it is not re-selected in session pains', () => {
             const activePains = ['chest', 'quadriceps'];
             const sessionExercises = [{ exId: 'ex_bench' }];
-            const sessionPains: string[] = []; // user did not report chest pain
-
-            const result = autoHealPains(activePains, sessionExercises, library, sessionPains);
-            // 'chest' was trained as primary and not re-selected -> healed!
-            // 'quadriceps' was not trained -> preserved!
-            expect(result).toEqual(['quadriceps']);
+            const result = mergeActivePains(activePains, sessionExercises, library, []);
+            expect(result).toEqual(['chest', 'quadriceps']);
         });
 
         it('preserves trained muscle if explicitly re-selected in session pains', () => {
@@ -559,7 +555,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             const sessionExercises = [{ exId: 'ex_bench' }];
             const sessionPains = ['chest']; // user still feels chest pain
 
-            const result = autoHealPains(activePains, sessionExercises, library, sessionPains);
+            const result = mergeActivePains(activePains, sessionExercises, library, sessionPains);
             expect(result).toContain('chest');
             expect(result).toContain('quadriceps');
         });
@@ -569,49 +565,37 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
             const sessionExercises = [{ exId: 'ex_lat' }];
             const sessionPains = ['latissimus_dorsi', 'shoulders']; // new soreness
 
-            const result = autoHealPains(activePains, sessionExercises, library, sessionPains);
+            const result = mergeActivePains(activePains, sessionExercises, library, sessionPains);
             expect(result).toContain('quadriceps'); // preserved
             expect(result).toContain('latissimus_dorsi'); // new/re-selected
             expect(result).toContain('shoulders'); // new
         });
 
-        it('resolves bilateral and unilateral symmetry: training base muscle heals lateral pain if not re-selected', () => {
-            // Active pain is unilateral: chest_left
-            // Exercise trains base: chest
+        it('does not infer bilateral recovery from training a related base muscle', () => {
             const activePains = ['chest_left', 'biceps'];
-            const sessionExercises = [{ exId: 'ex_bench' }]; // trains chest
-            const sessionPains: string[] = [];
+            const sessionExercises = [{ exId: 'ex_bench' }];
+            const result = mergeActivePains(activePains, sessionExercises, library, []);
+            expect(result).toEqual(['chest_left', 'biceps']);
+        });
 
-            const result = autoHealPains(activePains, sessionExercises, library, sessionPains);
-            // chest_left is healed because chest was trained and chest_left wasn't re-selected
+        it('does not infer base-muscle recovery from unilateral training', () => {
+            const activePains = ['biceps'];
+            const sessionExercises = [{ exId: 'ex_unilateral_curl' }];
+            const result = mergeActivePains(activePains, sessionExercises, library, []);
             expect(result).toEqual(['biceps']);
         });
 
-        it('resolves inverse symmetry: training unilateral muscle heals base pain if not re-selected', () => {
-            const activePains = ['biceps'];
-            const sessionExercises = [{ exId: 'ex_unilateral_curl' }]; // trains biceps_left
-            const sessionPains: string[] = [];
-
-            const result = autoHealPains(activePains, sessionExercises, library, sessionPains);
-            expect(result).toEqual([]);
-        });
-
-        it('multi-muscle compound exercises auto-heal all trained primary muscles', () => {
+        it('multi-muscle compound exercises preserve all active pains and deduplicate reported ones', () => {
             const activePains = ['chest', 'triceps', 'shoulders_anterior', 'calves'];
-            const sessionExercises = [{ exId: 'ex_bench' }]; // trains chest, triceps, shoulders_anterior
-            const sessionPains = ['triceps']; // only triceps re-selected
-
-            const result = autoHealPains(activePains, sessionExercises, library, sessionPains);
-            expect(result).toContain('triceps');
-            expect(result).toContain('calves');
-            expect(result).not.toContain('chest');
-            expect(result).not.toContain('shoulders_anterior');
+            const sessionExercises = [{ exId: 'ex_bench' }];
+            const result = mergeActivePains(activePains, sessionExercises, library, ['triceps']);
+            expect(result).toEqual(['chest', 'triceps', 'shoulders_anterior', 'calves']);
         });
 
         it('handles boundary conditions: empty active pains, empty library, corrupt entries', () => {
-            expect(autoHealPains([], [], [], [])).toEqual([]);
-            expect(autoHealPains(undefined as any, null as any, null as any, undefined as any)).toEqual([]);
-            expect(autoHealPains(['chest', '', null as any], [{ exId: 'missing' }], [], [])).toEqual(['chest']);
+            expect(mergeActivePains([], [], [], [])).toEqual([]);
+            expect(mergeActivePains(undefined as any, null as any, null as any, undefined as any)).toEqual([]);
+            expect(mergeActivePains(['chest', '', null as any], [{ exId: 'missing' }], [], [])).toEqual(['chest']);
         });
     });
 });

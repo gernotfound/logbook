@@ -75,6 +75,8 @@ export function buildRoutineWorkout(
             if (ex.setPlans) result.setPlans = structuredClone(ex.setPlans);
             if (ex.minReps) result.minReps = ex.minReps;
             if (ex.maxReps) result.maxReps = ex.maxReps;
+            if (ex.technicalStandard) result.technicalStandard = ex.technicalStandard;
+            if (ex.progressionContract) result.progressionContract = structuredClone(ex.progressionContract);
             return result;
         }),
     };
@@ -164,11 +166,12 @@ export function prepareHistoricalWorkoutForSave(
         moodRating: valRes.mood,
         pumpRating: valRes.pump,
         fatigueRating: valRes.fatigue,
-        waterLiters: water ? parseFloat(String(water).replace(',', '.')) : 0,
+        waterLiters: water ? parseFloat(String(water).replace(',', '.')) : undefined,
         pains: Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [],
         date: currentWorkout.date || runtime.getLocalDateString(),
     };
 
+    if (updatedWorkout.waterLiters === undefined) delete updatedWorkout.waterLiters;
     delete updatedWorkout.isEditingHistory;
     delete updatedWorkout.originalHistoryId;
     return updatedWorkout;
@@ -203,11 +206,12 @@ export function prepareCompletedWorkout(
         moodRating: valRes.mood,
         pumpRating: valRes.pump,
         fatigueRating: valRes.fatigue,
-        waterLiters: currentWorkout.waterLiters ? parseFloat(String(currentWorkout.waterLiters).replace(',', '.')) : 0,
+        waterLiters: currentWorkout.waterLiters !== undefined && currentWorkout.waterLiters !== null && String(currentWorkout.waterLiters).trim() !== '' ? parseFloat(String(currentWorkout.waterLiters).replace(',', '.')) : undefined,
         pains: sessionPains,
         date: currentWorkout.date || runtime.getLocalDateString(),
     };
 
+    if (finishedWorkout.waterLiters === undefined) delete finishedWorkout.waterLiters;
     delete finishedWorkout.isEditingHistory;
     delete finishedWorkout.originalHistoryId;
 
