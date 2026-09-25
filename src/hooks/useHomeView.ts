@@ -321,6 +321,9 @@ export function useHomeView(): HomeViewState {
             recordedDays: weeklyWeight.stats.latestRecordedDaysCount,
             daysConsidered: weeklyWeight.stats.latestDaysConsidered,
         };
+        const recentWeeklyAverages = weeklyWeight.points
+            .filter(point => point.averageWeightKg !== null)
+            .slice(-4);
 
         const labels = dateRange.map(d => {
             const parts = d.split('-');
@@ -365,7 +368,8 @@ export function useHomeView(): HomeViewState {
                 minWeight,
                 maxWeight,
                 latestWeeklyAverage,
-                latestWeeklyCoverage
+                latestWeeklyCoverage,
+                recentWeeklyAverages
             }
         };
     }, [nutrition, weightPeriod, homeClockNow]);
