@@ -64,6 +64,41 @@ describe('mergeNutrition', () => {
         expect(merged['2025-01-01'].meals![0].name).toBe('Apple (Guest)');
         expect(merged['2025-01-01'].kcal).toBe(60);
     });
+
+    it('merges contextual events by ID and keeps BF provenance attached to the selected BF value', () => {
+        const cloud = {
+            '2026-09-25': {
+                date: '2026-09-25',
+                bf: 18,
+                bfProvenance: { method: 'us_navy', inputs: { waistCm: 90, neckCm: 40 } },
+                contextEvents: [
+                    { id: 'ctx-cloud', type: 'training', label: 'Blocco precedente' },
+                    { id: 'ctx-shared', type: 'other', label: 'Cloud' },
+                ],
+            },
+        } as any;
+        const guest = {
+            '2026-09-25': {
+                date: '2026-09-25',
+                bf: 16,
+                bfProvenance: { method: 'manual' },
+                contextEvents: [
+                    { id: 'ctx-shared', type: 'reentry', label: 'Rientro guest' },
+                    { id: 'ctx-guest', type: 'deload', label: 'Deload' },
+                ],
+            },
+        } as any;
+
+        const merged = mergeNutrition(cloud, guest)['2026-09-25'];
+
+        expect(merged.bf).toBe(16);
+        expect(merged.bfProvenance).toEqual({ method: 'manual' });
+        expect(new Map((merged.contextEvents ?? []).map(event => [event.id, event.label]))).toEqual(new Map([
+            ['ctx-cloud', 'Blocco precedente'],
+            ['ctx-shared', 'Rientro guest'],
+            ['ctx-guest', 'Deload'],
+        ]));
+    });
 });
 
 describe('mergeUserData', () => {
