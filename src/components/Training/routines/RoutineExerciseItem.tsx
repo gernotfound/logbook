@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity } from 'lucide-react';
-import { ExerciseLibraryItem, PlannedSetTechnique, SetTechnique } from '../../../types';
+import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechnique } from '../../../types';
 import { techniqueLabel } from '../../../lib/advancedSets';
 
 interface RoutineExerciseItemProps {
@@ -14,6 +14,7 @@ interface RoutineExerciseItemProps {
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
     onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: SetTechnique) => void;
     onUpdateSetPlanField: (exerciseIndex: number, setIndex: number, field: 'restSeconds' | 'segmentCount' | 'targetReps', value: string) => void;
+    onUpdateExerciseMetadata: (exerciseIndex: number, field: 'technicalStandard' | keyof ProgressionContract, value: string) => void;
 }
 
 export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
@@ -26,7 +27,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     onUpdateSetsCount,
     onUpdateReps,
     onUpdateSetPlan,
-    onUpdateSetPlanField
+    onUpdateSetPlanField,
+    onUpdateExerciseMetadata
 }) => {
     const isCardio = libDef?.trackingType === 'cardio';
     const fieldId = useId();
@@ -262,6 +264,107 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
 
                 </>
             )}
+
+            <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
+                <summary style={{ cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
+                    Standard tecnico e contratto di progressione
+                </summary>
+                <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
+                    <label className="text-sm">
+                        Standard tecnico
+                        <input
+                            type="text"
+                            value={exercise.technicalStandard ?? ''}
+                            placeholder="Es. ROM completo, fermo 1 s al petto, stesso macchinario"
+                            onChange={event => onUpdateExerciseMetadata(index, 'technicalStandard', event.target.value)}
+                            style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                        />
+                    </label>
+                    <p className="text-xs text-muted" style={{ margin: 0 }}>
+                        Se lo standard cambia, LogBook limita o interrompe il confronto diretto con le esposizioni precedenti.
+                    </p>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                        <label className="text-sm">
+                            Ruolo
+                            <select
+                                value={exercise.progressionContract?.role ?? ''}
+                                onChange={event => onUpdateExerciseMetadata(index, 'role', event.target.value)}
+                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                            >
+                                <option value="">Non specificato</option>
+                                <option value="primary">Primario</option>
+                                <option value="secondary">Secondario</option>
+                                <option value="support">Supporto</option>
+                            </select>
+                        </label>
+                        <label className="text-sm">
+                            Metrica
+                            <select
+                                value={exercise.progressionContract?.metric ?? ''}
+                                onChange={event => onUpdateExerciseMetadata(index, 'metric', event.target.value)}
+                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                            >
+                                <option value="">Non specificata</option>
+                                <option value="performance">Performance</option>
+                                <option value="volume">Volume</option>
+                                <option value="density">Densità</option>
+                                <option value="execution">Esecuzione</option>
+                            </select>
+                        </label>
+                        <label className="text-sm">
+                            Stato baseline
+                            <select
+                                value={exercise.progressionContract?.baselineState ?? ''}
+                                onChange={event => onUpdateExerciseMetadata(index, 'baselineState', event.target.value)}
+                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                            >
+                                <option value="">Non specificato</option>
+                                <option value="historical">Storica</option>
+                                <option value="active">Attiva</option>
+                                <option value="suspended">Sospesa</option>
+                                <option value="reacclimation">Riacclimatazione</option>
+                                <option value="reactivated">Riattivata</option>
+                                <option value="replaced">Sostituita</option>
+                            </select>
+                        </label>
+                        <label className="text-sm">
+                            Versione baseline
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={exercise.progressionContract?.baselineVersion ?? ''}
+                                placeholder="1"
+                                onChange={event => onUpdateExerciseMetadata(index, 'baselineVersion', event.target.value)}
+                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                            />
+                        </label>
+                    </div>
+
+                    {([
+                        ['context', 'Contesto', 'Es. rientro dopo pausa, blocco forza, priorità tecnica'],
+                        ['target', 'Target', 'Es. 8-10 rep mantenendo RIR 1-2'],
+                        ['successRule', 'Regola di successo', 'Es. tutte le serie al limite alto del range'],
+                        ['failureRule', 'Regola di cambio', 'Es. due esposizioni senza raggiungere il minimo'],
+                        ['nextAction', 'Prossima azione', 'Es. aumenta il carico minimo disponibile'],
+                    ] as const).map(([field, label, placeholder]) => (
+                        <label key={field} className="text-sm">
+                            {label}
+                            <input
+                                type="text"
+                                value={exercise.progressionContract?.[field] ?? ''}
+                                placeholder={placeholder}
+                                onChange={event => onUpdateExerciseMetadata(index, field, event.target.value)}
+                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                            />
+                        </label>
+                    ))}
+                    <p className="text-xs text-muted" style={{ margin: 0 }}>
+                        Questi campi descrivono il contratto. Non modificano automaticamente carichi, volume o recuperi.
+                    </p>
+                </div>
+            </details>
         </div>
     );
 };
