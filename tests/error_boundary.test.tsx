@@ -62,7 +62,7 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
         consoleErrorSpy.mockRestore();
     });
 
-    it('reloads page when "Ricarica pagina" button is clicked', () => {
+    it('reloads page safely when "Ricarica pagina" button is clicked', async () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         render(
@@ -71,7 +71,9 @@ describe('R2: ErrorBoundary & Dialog Hardening Suite', () => {
             </ErrorBoundary>
         );
 
-        fireEvent.click(screen.getByText(/Ricarica pagina/i));
+        await act(async () => {
+            fireEvent.click(screen.getByText(/Ricarica pagina/i));
+        });
         expect(window.location.reload).toHaveBeenCalledTimes(1);
 
         consoleErrorSpy.mockRestore();

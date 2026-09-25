@@ -2,6 +2,7 @@ import { Component, ErrorInfo, ReactNode } from 'react';
 import { useDialogStore } from '../../store/useDialogStore';
 import { GlobalDialog } from './GlobalDialog';
 import { DB } from '../../lib/db';
+import { safeHardReload } from '../../lib/sync/safeReload';
 
 interface Props {
   children?: ReactNode;
@@ -24,6 +25,17 @@ class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
   }
+
+  private handleSafeReload = async () => {
+    try {
+      await safeHardReload();
+    } catch (error) {
+      console.error('Ricaricamento sicuro non completato:', error);
+      await useDialogStore.getState().showAlert(
+        'Impossibile ricaricare in sicurezza: alcune modifiche locali potrebbero non essere ancora state salvate. Riprova tra qualche secondo.'
+      );
+    }
+  };
 
   private handleLocalReset = async () => {
     const dialogs = useDialogStore.getState();
@@ -63,7 +75,7 @@ class ErrorBoundary extends Component<Props, State> {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem", alignItems: "center" }}>
             <button
               className="btn btn-primary"
-              onClick={() => window.location.reload()}
+              onClick={this.handleSafeReload}
             >
               <span aria-hidden="true">🔄</span> Ricarica pagina
             </button>

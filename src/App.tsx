@@ -23,6 +23,7 @@ import type {
 } from './types';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
+import { safeHardReload } from './lib/sync/safeReload';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
@@ -235,7 +236,7 @@ function App() {
           <p className="text-muted">
             {compatibilityError ?? 'Aggiorna LogBook alla versione più recente prima di continuare.'}
           </p>
-          <button type="button" onClick={() => window.location.reload()} className="btn btn-primary">
+          <button type="button" onClick={() => { void safeHardReload().catch(() => {}); }} className="btn btn-primary">
             Ricarica LogBook
           </button>
         </div>
