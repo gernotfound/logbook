@@ -25,7 +25,7 @@ import {
     calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
-    autoHealPainsContract
+    mergeActivePainsContract
 } from './requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
@@ -475,7 +475,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const library = [{ id: 'ex_custom_no_muscles' }]; // muscles is undefined
                 const sessionPains: string[] = [];
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
                 expect(updated).toEqual(['petto']); // Petto was not trained, so retained
             });
 
@@ -484,11 +484,11 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const sessionExercises: any[] = [];
                 const library = [{ id: 'ex1', muscles: ['dorso'] }];
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, []);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, []);
                 expect(updated).toEqual(['dorso', 'bicipiti']);
             });
 
-            it('T2.6.3: when all active pains are trained and none are reselected, returns empty array', () => {
+            it('T2.6.3: trained active pains remain active when not reselected', () => {
                 const activePains = ['quadricipiti', 'polpacci'];
                 const sessionExercises = [{ exId: 'ex_squat' }, { exId: 'ex_calves' }];
                 const library = [
@@ -496,17 +496,17 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     { id: 'ex_calves', muscles: ['polpacci'] }
                 ];
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, []);
-                expect(updated).toEqual([]);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, []);
+                expect(updated).toEqual(['quadricipiti', 'polpacci']);
             });
 
-            it('T2.6.4: exercise with multiple primary muscles heals all of them if not reselected', () => {
+            it('T2.6.4: exercise with multiple primary muscles does not imply recovery', () => {
                 const activePains = ['petto', 'deltoidi_ant'];
                 const sessionExercises = [{ exId: 'ex_incline_press' }];
                 const library = [{ id: 'ex_incline_press', muscles: ['petto', 'deltoidi_ant'] }];
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, []);
-                expect(updated).toEqual([]);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, []);
+                expect(updated).toEqual(['petto', 'deltoidi_ant']);
             });
 
             it('T2.6.5: session exercise pointing to non-existent library ID fails safely without throwing', () => {
@@ -514,8 +514,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const sessionExercises = [{ exId: 'missing_id_999' }];
                 const library = [{ id: 'ex1', muscles: ['dorso'] }];
 
-                expect(() => autoHealPainsContract(activePains, sessionExercises, library, [])).not.toThrow();
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, []);
+                expect(() => mergeActivePainsContract(activePains, sessionExercises, library, [])).not.toThrow();
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, []);
                 expect(updated).toEqual(['petto']);
             });
 
@@ -525,14 +525,14 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const library = [{ id: 'ex1', muscles: ['dorso'] }];
                 const sessionPains = ['tricipiti', 'tricipiti', 'spalle'];
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
                 expect(updated).toContain('petto');
                 expect(updated).toContain('tricipiti');
                 expect(updated).toContain('spalle');
             });
 
-            it('T2.6.7: autoHealPains contract handles null/undefined arguments without throwing', () => {
-                expect(() => autoHealPainsContract(undefined, undefined, undefined, undefined)).not.toThrow();
+            it('T2.6.7: mergeActivePains contract handles null/undefined arguments without throwing', () => {
+                expect(() => mergeActivePainsContract(undefined, undefined, undefined, undefined)).not.toThrow();
             });
         });
     });
