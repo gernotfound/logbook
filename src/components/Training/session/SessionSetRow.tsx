@@ -275,11 +275,69 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         </div>
                     )}
                     {(s.segments || []).map((segment: any, segmentIndex: number) => (
-                        <div key={segment.id || segmentIndex} style={{ display: 'grid', gridTemplateColumns: s.technique === 'dropset' ? '1fr 1fr 44px' : '76px 1fr 1fr 44px', gap: '5px', alignItems: 'center', marginBottom: '5px' }}>
-                            {s.technique !== 'dropset' && <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />}
-                            <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
-                            <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
-                            <button className="btn-icon" aria-label={`Rimuovi segmento ${segmentIndex + 1}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
+                        <div key={segment.id || segmentIndex} style={{ marginBottom: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: s.technique === 'dropset' ? '1fr 1fr 44px' : '76px 1fr 1fr 44px', gap: '5px', alignItems: 'center' }}>
+                                {s.technique !== 'dropset' && <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />}
+                                <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
+                                <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
+                                <button className="btn-icon" aria-label={`Rimuovi segmento ${segmentIndex + 1}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
+                            </div>
+                            <details style={{ marginTop: '4px' }}>
+                                <summary style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                                    Dettagli tecnici segmento
+                                </summary>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', padding: '4px 0 6px' }}>
+                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                        Eccentrica (s)
+                                        <BufferedInput
+                                            id={`seg-ecc-${s.id}-${segmentIndex}`}
+                                            type="number"
+                                            min="0"
+                                            max="60"
+                                            step="0.1"
+                                            value={segment.eccentricSeconds ?? ''}
+                                            onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'eccentricSeconds', val === '' ? undefined : Math.max(0, Number(val) || 0))}
+                                            style={{ margin: '4px 0 0', minWidth: 0 }}
+                                        />
+                                    </label>
+                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                        Posizione tenuta
+                                        <select
+                                            value={segment.holdPosition ?? ''}
+                                            onChange={event => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'holdPosition', event.target.value || undefined)}
+                                            style={{ margin: '4px 0 0', width: '100%', minHeight: '44px', fontSize: '16px' }}
+                                        >
+                                            <option value="">Non specificata</option>
+                                            <option value="stretched">Allungamento</option>
+                                            <option value="mid">Intermedia</option>
+                                            <option value="shortened">Accorciamento</option>
+                                            <option value="custom">Personalizzata</option>
+                                        </select>
+                                    </label>
+                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                        Assistenza
+                                        <select
+                                            value={segment.assistance ?? ''}
+                                            onChange={event => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'assistance', event.target.value || undefined)}
+                                            style={{ margin: '4px 0 0', width: '100%', minHeight: '44px', fontSize: '16px' }}
+                                        >
+                                            <option value="">Non specificata</option>
+                                            <option value="none">Nessuna</option>
+                                            <option value="self">Autonoma</option>
+                                            <option value="partner">Partner</option>
+                                            <option value="machine">Macchina</option>
+                                        </select>
+                                    </label>
+                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px', minHeight: '44px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={segment.negativeOnly === true}
+                                            onChange={event => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'negativeOnly', event.target.checked || undefined)}
+                                        />
+                                        Solo negative
+                                    </label>
+                                </div>
+                            </details>
                         </div>
                     ))}
                     <button className="btn btn-small" style={{ minHeight: '44px', margin: 0 }} onClick={() => onAddSegment(s.id)}>+ Segmento</button>
