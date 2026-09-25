@@ -686,10 +686,10 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const activePains = ['gambe', 'spalle'];
                 const sessionExercises = [{ exId: 'ex_squat' }];
                 const library = [{ id: 'ex_squat', muscles: ['gambe'] }];
-                const sessionPains: string[] = []; // Squat trained gambe -> gambe healed, spalle untrained -> retained
+                const sessionPains: string[] = []; // Training does not imply that either active pain resolved.
 
                 const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
-                expect(updated).toEqual(['spalle']);
+                expect(updated).toEqual(['gambe', 'spalle']);
             });
 
             it('T1.6.4: adds brand new pains selected during workout session evaluation', () => {
