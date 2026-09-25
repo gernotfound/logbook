@@ -33,7 +33,8 @@ test('completed workout report has a reachable close control on a narrow viewpor
   await page.getByRole('button', { name: 'Allenamento libero' }).click();
   await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
   await page.getByRole('button', { name: /Termina/ }).click();
-  await page.getByRole('button', { name: 'Conferma' }).click();
+  await expect(page.getByRole('heading', { name: /andato l.allenamento/i })).toBeVisible();
+  await page.getByRole('button', { name: 'Salva e termina' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   const close = dialog.getByRole('button', { name: 'Chiudi', exact: true });

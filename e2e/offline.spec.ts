@@ -72,7 +72,8 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 11. Termina l'allenamento
     await newPage.click('button:has-text("Termina")');
-    await newPage.click('button:has-text("Conferma")');
+    await expect(newPage.getByRole('heading', { name: /andato l.allenamento/i })).toBeVisible();
+    await newPage.getByRole('button', { name: 'Salva e termina' }).click();
     await expect(newPage.getByRole('dialog', { name: /Scheda E2E Offline/ })).toBeVisible();
     await newPage.getByRole('dialog').getByRole('button', { name: 'Chiudi', exact: true }).click();
     await newPage.click('button[aria-label="Allenamento"]');
