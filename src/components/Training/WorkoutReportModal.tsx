@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
-import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
+import { formatProgressionReference, progressionBaselineStateLabel, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
 import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
 import { getRoutineSetPlan } from '../../lib/advancedSets';
 import { Logic } from '../../lib/logic';
@@ -311,7 +311,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                                 {progression.comparisonStatus === 'comparable' ? 'confrontabile' : progression.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
                                             </strong>
                                             {progression.baselineVersion ? ` · baseline v${progression.baselineVersion}` : ''}
-                                            {progression.baselineState ? ` · ${progression.baselineState}` : ''}
+                                            {progression.baselineState ? ` · ${progressionBaselineStateLabel(progression.baselineState)}` : ''}
                                         </div>
 
                                         {progression.previousComparable && (
