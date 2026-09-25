@@ -114,6 +114,45 @@ export const CardioSessionSchema = z.object({
     externalId: safeOptionalString(),
 }).passthrough();
 
+export const BodyFatProvenanceSchema = z.object({
+    method: z.enum(['manual', 'us_navy']),
+    inputs: z.object({
+        heightCm: safeOptionalNumber(),
+        waistCm: safeOptionalNumber(),
+        neckCm: safeOptionalNumber(),
+        hipCm: safeOptionalNumber(),
+        gender: safeOptionalString(),
+    }).passthrough().optional().catch(undefined),
+}).passthrough();
+
+export const ContextEventSchema = z.object({
+    id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo contesto non valido'),
+    type: z.enum(['training', 'nutrition', 'recovery', 'schedule', 'travel', 'illness', 'reentry', 'deload', 'other']),
+    label: z.string().trim().min(1).max(160),
+    note: safeOptionalString(),
+    createdAt: z.number().finite().nonnegative().optional().catch(undefined),
+}).passthrough();
+
+function sanitizeContextEvents(value: unknown): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        reportZodSchemaFallback({ schema: 'NutritionDaySchema', field: 'contextEvents', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
+        return [];
+    }
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = ContextEventSchema.safeParse(raw);
+        if (!parsed.success || seen.has(parsed.data.id)) {
+            reportZodSchemaFallback({ schema: 'ContextEventSchema', field: 'id', fallbackUsed: 'record_quarantined', issueCode: parsed.success ? 'duplicate_id' : 'invalid_record', error: parsed.success ? undefined : parsed.error });
+            continue;
+        }
+        seen.add(parsed.data.id);
+        result.push(parsed.data);
+    }
+    return result;
+}
+
 function sanitizeCardioSessions(value: unknown): unknown[] {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
@@ -141,6 +180,7 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
             ...val,
             hip: hip !== undefined ? hip : undefined,
             cardioSessions: sanitizeCardioSessions(val.cardioSessions),
+            contextEvents: sanitizeContextEvents(val.contextEvents),
         };
     }
     return val;
@@ -152,6 +192,7 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     fat: safeNumber(0),
     weight: safeOptionalNumber(),
     bf: safeOptionalNumber(),
+    bfProvenance: BodyFatProvenanceSchema.optional().catch(undefined),
     neck: safeOptionalNumber(),
     waist: safeOptionalNumber(),
     hip: safeOptionalNumber(),
@@ -174,6 +215,7 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     stepsSource: z.enum(['manual', 'imported']).optional().catch(undefined),
     stepsCapturedAt: z.number().finite().nonnegative().optional().catch(undefined),
     cardioSessions: z.array(CardioSessionSchema).optional().default([]),
+    contextEvents: z.array(ContextEventSchema).optional().default([]),
 }).passthrough().transform((day) => {
     if (day.steps !== undefined) return day;
     const { stepsSource: _source, stepsCapturedAt: _capturedAt, ...withoutStepMetadata } = day;
@@ -184,8 +226,8 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
         fallbackUsed: 'default_empty_day',
         error: ctx?.error,
     });
-    return { date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [], cardioSessions: [] };
-}).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [], cardioSessions: [] });
+    return { date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [], cardioSessions: [], contextEvents: [] };
+}).default({ date: '', kcal: 0, carbs: 0, pro: 0, fat: 0, meals: [], supplementsIntake: [], cardioSessions: [], contextEvents: [] });
 
 export const FoodSchema = z.object({
     id: z.union([z.string(), z.number()]).optional().catch(undefined),
