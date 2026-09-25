@@ -254,7 +254,7 @@ export interface BodyFatProvenance {
     };
 }
 
-export type ContextEventType = 'training' | 'nutrition' | 'recovery' | 'schedule' | 'travel' | 'illness' | 'reentry' | 'deload' | 'other';
+export type ContextEventType = 'training' | 'nutrition' | 'recovery' | 'schedule' | 'travel' | 'reentry' | 'deload' | 'other';
 
 export interface ContextEvent {
     id: string;
