@@ -166,7 +166,7 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
             userData: mockUserData
         });
 
-        const insight = await screen.findByText(/Forte correlazione positiva/i, {}, { timeout: 10000 });
+        const insight = await screen.findByText(/Associazione positiva forte/i, {}, { timeout: 10000 });
         expect(insight).toBeDefined();
     });
 
