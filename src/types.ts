@@ -99,7 +99,6 @@ export interface ProgressionContract {
     context?: string;
     role?: ProgressionRole;
     metric?: ProgressionMetric;
-    technicalStandard?: string;
     target?: string;
     successRule?: string;
     failureRule?: string;
