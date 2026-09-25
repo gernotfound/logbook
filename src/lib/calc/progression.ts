@@ -1,6 +1,8 @@
 import type {
     Exercise,
     NutritionDay,
+    ProgressionContract,
+    ProgressionBaselineState,
     SessionExercise,
     SessionExerciseSet,
     SetSegment,
@@ -55,6 +57,10 @@ export interface NormalizedSet {
         reps?: number;
         timeSeconds?: number;
         restBeforeSeconds?: number;
+        eccentricSeconds?: number;
+        holdPosition?: SetSegment['holdPosition'];
+        assistance?: SetSegment['assistance'];
+        negativeOnly?: boolean;
     }>;
     targetReps?: number;
 }
@@ -66,6 +72,8 @@ export interface NormalizedExposure {
     cycleId?: string;
     intent?: TrainingCycleIntent;
     focus?: TrainingCycleProgressionFocus;
+    technicalStandard?: string;
+    progressionContract?: ProgressionContract;
     exId: string;
     exName: string;
     trackingType: Exercise['trackingType'];
@@ -97,6 +105,10 @@ export interface ExerciseProgressionAnalysis {
     bestHistorical?: NormalizedExposure;
     recentComparable: NormalizedExposure[];
     comparison: ExposureComparison;
+    comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
+    baselineState?: ProgressionBaselineState;
+    baselineVersion?: number;
+    progressionContract?: ProgressionContract;
     quality: ProgressionQuality;
     qualityReasons: string[];
     classification: ProgressionClassification;
@@ -196,6 +208,10 @@ function normalizeSegment(
         ...(reps !== undefined ? { reps } : {}),
         ...(timeSeconds !== undefined ? { timeSeconds } : {}),
         ...(segment.restBeforeSeconds !== undefined ? { restBeforeSeconds: segment.restBeforeSeconds } : {}),
+        ...(segment.eccentricSeconds !== undefined ? { eccentricSeconds: segment.eccentricSeconds } : {}),
+        ...(segment.holdPosition ? { holdPosition: segment.holdPosition } : {}),
+        ...(segment.assistance ? { assistance: segment.assistance } : {}),
+        ...(segment.negativeOnly !== undefined ? { negativeOnly: segment.negativeOnly } : {}),
     };
 }
 
@@ -276,6 +292,8 @@ export function normalizeExerciseExposure(
         ...(session.cycleId ? { cycleId: session.cycleId } : {}),
         ...(session.cycleStrategy?.intent ? { intent: session.cycleStrategy.intent } : {}),
         ...(session.cycleStrategy?.progressionFocus ? { focus: session.cycleStrategy.progressionFocus } : {}),
+        ...(sessionExercise.technicalStandard?.trim() ? { technicalStandard: sessionExercise.technicalStandard.trim() } : {}),
+        ...(sessionExercise.progressionContract ? { progressionContract: structuredClone(sessionExercise.progressionContract) } : {}),
         exId: sessionExercise.exId,
         exName: exercise?.name ?? 'Esercizio',
         trackingType,
