@@ -28,7 +28,7 @@
     --muscle-base: #49494f;
     --muscle-outline: #9b9ba4;
     --muscle-active: #00e5ff;
-    --muscle-fatigue: #ffad57;
+    --muscle-recent: #ffad57;
     --muscle-pain: #ff8392;
     --glass-bg: var(--surface-color);
     --bg-card: var(--surface-color);
@@ -73,7 +73,7 @@
     --muscle-base: #d1d5dc;
     --muscle-outline: #59616c;
     --muscle-active: #006978;
-    --muscle-fatigue: #a55400;
+    --muscle-recent: #a55400;
     --muscle-pain: #b3263d;
 }
 
@@ -107,7 +107,7 @@
         --muscle-base: #d1d5dc;
         --muscle-outline: #59616c;
         --muscle-active: #006978;
-        --muscle-fatigue: #a55400;
+        --muscle-recent: #a55400;
         --muscle-pain: #b3263d;
     }
 }
