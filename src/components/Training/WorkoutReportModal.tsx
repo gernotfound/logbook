@@ -306,11 +306,26 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             </span>
                                         </div>
 
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                            Confrontabilità: <strong style={{ color: 'var(--text-main)' }}>
+                                                {progression.comparisonStatus === 'comparable' ? 'confrontabile' : progression.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
+                                            </strong>
+                                            {progression.baselineVersion ? ` · baseline v${progression.baselineVersion}` : ''}
+                                            {progression.baselineState ? ` · ${progression.baselineState}` : ''}
+                                        </div>
+
                                         {progression.previousComparable && (
                                             <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                                                 Ultima esposizione confrontabile · {progression.previousComparable.date || 'data non disponibile'} ·{' '}
                                                 <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.previousComparable)}</strong>
                                             </div>
+                                        )}
+
+                                        {progression.progressionContract?.target && (
+                                            <div style={{ fontSize: '0.82rem' }}><strong>Target:</strong> {progression.progressionContract.target}</div>
+                                        )}
+                                        {progression.progressionContract?.nextAction && (
+                                            <div style={{ fontSize: '0.82rem' }}><strong>Prossima azione prevista:</strong> {progression.progressionContract.nextAction}</div>
                                         )}
 
                                         {progression.cycleBaseline && progression.cycleBaseline.sessionId !== progression.previousComparable?.sessionId && (
