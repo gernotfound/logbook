@@ -42,7 +42,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                                 <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date}
                                     <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-                                        {day.isDayOn ? '🔥 ON' : '🛋️ OFF'}
+                                        {day.isDayOn === true ? '🔥 ON' : day.isDayOn === false ? '🛋️ OFF' : '— Non specificato'}
                                     </span>
                                 </div>
                                 
