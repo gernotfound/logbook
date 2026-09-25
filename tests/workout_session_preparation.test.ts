@@ -320,4 +320,37 @@ describe('workout session preparation', () => {
         expect(savedNew.fatigueRating).toBe(4);
     });
 
+    it('snapshots technical standards and progression contracts so later routine edits do not rewrite history', () => {
+        const routine = {
+            id: 'routine-contract',
+            name: 'Routine contratto',
+            exercises: [{
+                exId: 'bench',
+                setsCount: 1,
+                technicalStandard: 'ROM completo · fermo 1 s',
+                progressionContract: {
+                    role: 'primary' as const,
+                    metric: 'performance' as const,
+                    target: '8-10 rep a RIR 1-2',
+                    nextAction: 'Aumenta il carico minimo disponibile',
+                    baselineState: 'active' as const,
+                    baselineVersion: 3,
+                },
+            }],
+        } as WorkoutRoutine;
+        const userData = {
+            library: [{ id: 'bench', name: 'Bench', trackingType: 'weight_reps' }],
+        } as unknown as UserData;
+
+        const first = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+        routine.exercises[0].technicalStandard = 'ROM parziale';
+        routine.exercises[0].progressionContract = { baselineState: 'reacclimation', baselineVersion: 4 };
+        const second = buildRoutineWorkout(userData, routine, undefined, createRuntime());
+
+        expect(first.exercises[0].technicalStandard).toBe('ROM completo · fermo 1 s');
+        expect(first.exercises[0].progressionContract).toMatchObject({ baselineState: 'active', baselineVersion: 3, metric: 'performance' });
+        expect(second.exercises[0].technicalStandard).toBe('ROM parziale');
+        expect(second.exercises[0].progressionContract).toEqual({ baselineState: 'reacclimation', baselineVersion: 4 });
+    });
+
 });
