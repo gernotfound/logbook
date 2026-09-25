@@ -556,4 +556,36 @@ describe('contextual progression engine', () => {
         expect(analysis).not.toHaveProperty('stimulusScore');
     });
 
+    it('lets the exercise progression contract refine role and metric without changing the programmed work', () => {
+        const current = workout({
+            id: 'contract-current',
+            date: '2026-09-15',
+            focus: 'performance',
+            exercises: [{
+                exId: 'bench',
+                sessionNote: '',
+                progressionContract: { role: 'primary', metric: 'volume', target: '3 serie da 10' },
+                sets: [set(100, 10, 2), set(100, 10, 2), set(100, 10, 2)],
+            }],
+        });
+        const previous = workout({
+            id: 'contract-previous',
+            date: '2026-09-08',
+            focus: 'performance',
+            exercises: [{
+                exId: 'bench',
+                sessionNote: '',
+                progressionContract: { role: 'primary', metric: 'volume', target: '3 serie da 10' },
+                sets: [set(100, 8, 2), set(100, 8, 2)],
+            }],
+        });
+
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.priority).toBe('primary');
+        expect(analysis.focus).toBe('volume');
+        expect(analysis.classification).toBe('volume_progression');
+        expect(current.exercises[0].sets).toHaveLength(3);
+    });
+
 });
