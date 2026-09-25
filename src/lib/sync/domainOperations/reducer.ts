@@ -5,7 +5,7 @@ import type {
     WorkoutRoutine,
 } from '../../../types';
 import { UserDataSchema } from '../../schema';
-import { CardioSessionSchema } from '../../schemas/schema_nutrition';
+import { CardioSessionSchema, ContextEventSchema } from '../../schemas/schema_nutrition';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
 import { getLocalDateString } from '../../utils/date';
 import type { DomainOperation, DomainOperationBatch } from './contracts';
@@ -129,6 +129,24 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             if (!day) break;
             const cardioSessions = deleteById(day.cardioSessions, sessionId, item => requireId(item.id, 'Sessione cardio'), 'Sessioni cardio');
             data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, cardioSessions } };
+            break;
+        }
+        case 'context-event.upsert': {
+            const date = requireDate(operation.date);
+            const day = ensureNutritionDay(data, date);
+            const event = ContextEventSchema.parse(operation.event);
+            const id = requireId(event.id, 'Evento di contesto');
+            const contextEvents = upsertById(day.contextEvents, { ...event, id }, item => requireId(item.id, 'Evento di contesto'), 'Eventi di contesto');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, contextEvents } };
+            break;
+        }
+        case 'context-event.delete': {
+            const date = requireDate(operation.date);
+            const eventId = requireId(operation.eventId, 'Evento di contesto');
+            const day = data.nutrition?.[date];
+            if (!day) break;
+            const contextEvents = deleteById(day.contextEvents, eventId, item => requireId(item.id, 'Evento di contesto'), 'Eventi di contesto');
+            data.nutrition = { ...(data.nutrition ?? {}), [date]: { ...day, date, contextEvents } };
             break;
         }
         case 'nutrition-meal.upsert': {
