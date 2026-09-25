@@ -1,7 +1,7 @@
 import { Logic } from '../src/lib/logic';
 
 /* =========================================================================
- * PURE CALCULATION & AUTO-HEALING CONTRACT HELPERS (R1, R2, R6)
+ * PURE CALCULATION & PAIN PERSISTENCE CONTRACT HELPERS (R1, R2, R6)
  * ========================================================================= */
 
 export function getLatestUserWeightContract(
@@ -96,46 +96,11 @@ export function calculateRealtimeKcalContract(carbs: any, pro: any, fat: any): n
     return Math.round(c * 4 + p * 4 + f * 9);
 }
 
-export function autoHealPainsContract(
+export function mergeActivePainsContract(
     activePains: string[] = [],
-    sessionExercises: Array<{ exId?: string }> = [],
-    library: Array<{ id: string; muscles?: string[] }> = [],
+    _sessionExercises: Array<{ exId?: string }> = [],
+    _library: Array<{ id: string; muscles?: string[] }> = [],
     sessionPains: string[] = []
 ): string[] {
-    if ((Logic as any).autoHealPains) {
-        return (Logic as any).autoHealPains(activePains, sessionExercises, library, sessionPains);
-    }
-    const libMap = new Map(library.map(ex => [ex.id, ex]));
-    const trainedPrimaryMuscles = new Set<string>();
-    for (const se of sessionExercises) {
-        const ex = libMap.get(se.exId || '');
-        if (Array.isArray(ex?.muscles)) {
-            ex.muscles.forEach(m => trainedPrimaryMuscles.add(m));
-        }
-    }
-
-    const sessionPainsSet = new Set(sessionPains);
-    const resultPains: string[] = [];
-
-    // Evaluate active pains
-    for (const pain of activePains) {
-        if (trainedPrimaryMuscles.has(pain)) {
-            // Trained as primary: keep only if explicitly selected in session pains
-            if (sessionPainsSet.has(pain)) {
-                resultPains.push(pain);
-            }
-        } else {
-            // Untrained: preserve
-            resultPains.push(pain);
-        }
-    }
-
-    // Add new session pains
-    for (const pain of sessionPains) {
-        if (!resultPains.includes(pain)) {
-            resultPains.push(pain);
-        }
-    }
-
-    return resultPains;
+    return Logic.mergeActivePains(activePains, sessionPains);
 }
