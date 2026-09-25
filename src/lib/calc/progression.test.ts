@@ -484,4 +484,76 @@ describe('contextual progression engine', () => {
         expect(density?.headline).toContain('lavoro diverso');
     });
 
+    it('marks a changed technical standard as not comparable and starts a new baseline', () => {
+        const previous = workout({
+            id: 'std-prev',
+            date: '2026-09-01',
+            exercises: [{ exId: 'bench', sessionNote: '', technicalStandard: 'ROM completo · fermo 1 s', sets: [set(100, 8, 2)] }],
+        });
+        const current = workout({
+            id: 'std-current',
+            date: '2026-09-08',
+            exercises: [{ exId: 'bench', sessionNote: '', technicalStandard: 'ROM parziale', sets: [set(100, 9, 2)] }],
+        });
+
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.comparisonStatus).toBe('not_comparable');
+        expect(analysis.comparison.reasons.join(' ')).toContain('Standard tecnico');
+        expect(analysis.classification).toBe('new_baseline');
+        expect(analysis.isRecord).toBe(false);
+    });
+
+    it('partitions progression history by explicit baseline version', () => {
+        const previous = workout({
+            id: 'base-v1',
+            date: '2026-09-01',
+            exercises: [{
+                exId: 'bench',
+                sessionNote: '',
+                technicalStandard: 'ROM completo',
+                progressionContract: { baselineVersion: 1, baselineState: 'historical', metric: 'performance' },
+                sets: [set(100, 8, 2)],
+            }],
+        });
+        const current = workout({
+            id: 'base-v2',
+            date: '2026-09-08',
+            exercises: [{
+                exId: 'bench',
+                sessionNote: '',
+                technicalStandard: 'ROM completo',
+                progressionContract: { baselineVersion: 2, baselineState: 'reacclimation', metric: 'performance' },
+                sets: [set(90, 8, 3)],
+            }],
+        });
+
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.comparisonStatus).toBe('not_comparable');
+        expect(analysis.baselineState).toBe('reacclimation');
+        expect(analysis.baselineVersion).toBe(2);
+        expect(analysis.progressionContract?.metric).toBe('performance');
+        expect(analysis.comparison.reasons.join(' ')).toContain('Versione baseline');
+    });
+
+    it('uses advanced segment execution metadata as part of comparability without assigning stimulus scores', () => {
+        const previousSet = set(80, 8, 2, {
+            technique: 'cluster',
+            segments: [{ id: 'seg-1', kg: '80', reps: '4', restBeforeSeconds: 20, eccentricSeconds: 2, holdPosition: 'stretched', assistance: 'none' }],
+        });
+        const currentSet = set(80, 8, 2, {
+            technique: 'cluster',
+            segments: [{ id: 'seg-2', kg: '80', reps: '4', restBeforeSeconds: 20, eccentricSeconds: 4, holdPosition: 'stretched', assistance: 'none' }],
+        });
+        const previous = workout({ id: 'seg-prev', date: '2026-09-01', sets: [previousSet] });
+        const current = workout({ id: 'seg-current', date: '2026-09-08', sets: [currentSet] });
+
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.comparisonStatus).toBe('not_comparable');
+        expect(analysis.comparison.reasons.join(' ')).toContain('Parametri tecnici');
+        expect(analysis).not.toHaveProperty('stimulusScore');
+    });
+
 });
