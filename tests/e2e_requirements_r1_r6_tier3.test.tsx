@@ -25,7 +25,7 @@ import {
     calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
-    autoHealPainsContract
+    mergeActivePainsContract
 } from './requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
@@ -126,7 +126,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             expect(updatedDay.fat).toBe(6);
         });
 
-        it('T3.3: DOMS Pain Tracking in Home -> Workout Session with Muscle -> Auto-healing on Completion -> State Updated (R5 + R6)', () => {
+        it('T3.3: DOMS Pain Tracking in Home -> Workout Session -> Explicit Persistence on Completion (R5 + R6)', () => {
             // Initial state: User has DOMS in 'petto' and 'bicipiti'
             const initialUserData: any = {
                 ...defaultMockUserData,
@@ -140,15 +140,15 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             const sessionExercises = [{ exId: 'ex_bench' }];
             const sessionRatingsPains: string[] = []; // User notes chest pain is gone!
 
-            const newActivePains = autoHealPainsContract(
+            const newActivePains = mergeActivePainsContract(
                 initialUserData.activePains,
                 sessionExercises,
                 initialUserData.library,
                 sessionRatingsPains
             );
 
-            // 'petto' was trained and not re-selected -> auto-healed. 'bicipiti' was untrained -> retained.
-            expect(newActivePains).toEqual(['bicipiti']);
+            // 'petto' was trained and not re-selected -> preserved explicitly. 'bicipiti' was untrained -> retained.
+            expect(newActivePains).toEqual(['petto', 'bicipiti']);
 
             // Update Zustand store
             useAppStore.setState({
@@ -158,7 +158,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 }
             });
 
-            expect(useAppStore.getState().userData?.activePains).toEqual(['bicipiti']);
+            expect(useAppStore.getState().userData?.activePains).toEqual(['petto', 'bicipiti']);
         });
 
         it('T3.4: Past Date Measurement Logging -> Affects Bodyweight Workout Volume Calculation for Past Workout (R1 + R3)', () => {
@@ -192,18 +192,18 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             const sessionVol = calculateWorkoutVolumeContract(session, library, userWeight);
             expect(sessionVol).toBe(1390);
 
-            // 2. DOMS auto-healing: initial pain was 'dorso', user experienced new 'bicipiti' pump
+            // 2. DOMS persistence: initial pain was 'dorso', user experienced new 'bicipiti' soreness
             const initialPains = ['dorso'];
             const sessionPains = ['bicipiti']; // Dorso unselected, bicipiti selected
-            const updatedPains = autoHealPainsContract(initialPains, session.exercises, library, sessionPains);
-            expect(updatedPains).toEqual(['bicipiti']);
+            const updatedPains = mergeActivePainsContract(initialPains, session.exercises, library, sessionPains);
+            expect(updatedPains).toEqual(['dorso', 'bicipiti']);
 
             // 3. Post-workout snack auto-calculated kcal
             const postWorkoutSnackKcal = calculateRealtimeKcalContract(45, 30, 2); // 45*4 + 30*4 + 2*9 = 180 + 120 + 18 = 318
             expect(postWorkoutSnackKcal).toBe(318);
         });
 
-        it('T3.6: Multi-Muscle Complex Session with Equipment Base + Bodyweight Ballast + DOMS Partial Auto-Healing (R1 + R4 + R5 + R6)', () => {
+        it('T3.6: Multi-Muscle Complex Session with Equipment Base + Bodyweight Ballast + DOMS Persistence (R1 + R4 + R5 + R6)', () => {
             const library = [
                 { id: 'ex_dip', name: 'Dip alle parallele', isBodyweight: true, equipmentWeight: 3, muscles: ['petto', 'tricipiti'] },
                 { id: 'ex_squat', name: 'Squat con bilanciere', isBodyweight: false, equipmentWeight: 20, muscles: ['quadricipiti'] }
@@ -238,14 +238,14 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
             const totalVol = calculateWorkoutVolumeContract(session, library, userWeight);
             expect(totalVol).toBe(1556);
 
-            // Auto-healing: active pains were 'petto', 'quadricipiti', 'polpacci'
+            // Explicit persistence: active pains were 'petto', 'quadricipiti', 'polpacci'
             // User re-selected 'petto' in session pains, left 'quadricipiti' empty
             const activePains = ['petto', 'quadricipiti', 'polpacci'];
-            const resolvedPains = autoHealPainsContract(activePains, session.exercises, library, ['petto']);
+            const resolvedPains = mergeActivePainsContract(activePains, session.exercises, library, ['petto']);
             // 'petto' retained because reselected
             // 'quadricipiti' healed because trained as primary and not reselected
             // 'polpacci' retained because untrained
-            expect(resolvedPains).toEqual(['petto', 'polpacci']);
+            expect(resolvedPains).toEqual(['petto', 'quadricipiti', 'polpacci']);
         });
     });
 });
