@@ -58,7 +58,7 @@ export function useNutritionMeals(dateStr?: string) {
         }
     }
 
-    const persistDayType = async (value: boolean) => {
+    const persistDayType = async (value: boolean | undefined) => {
         await dispatchDomainOperation({ type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: value } });
     };
 
@@ -72,7 +72,7 @@ export function useNutritionMeals(dateStr?: string) {
         }
     };
 
-    const setDayType = async (isOn: boolean) => {
+    const setDayType = async (isOn: boolean | undefined) => {
         if (isDayOn === isOn) return;
         setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: isOn }));
         try { await persistDayType(isOn); }
