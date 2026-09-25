@@ -319,6 +319,12 @@ function setShape(set?: NormalizedSet): string {
         set.segments.length,
         set.targetReps === undefined ? 'no-target' : `target:${set.targetReps}`,
         `rests:${rests}`,
+        `segments:${set.segments.map(segment => [
+            segment.eccentricSeconds ?? '?',
+            segment.holdPosition ?? '?',
+            segment.assistance ?? '?',
+            segment.negativeOnly === undefined ? '?' : String(segment.negativeOnly),
+        ].join(':')).join(',')}`,
     ].join('|');
 }
 
@@ -334,6 +340,25 @@ export function compareExposureCompatibility(
     if (current.exId !== previous.exId) return { level: 'none', reasons: ['Esercizio diverso.'] };
     if (current.trackingType !== previous.trackingType) return { level: 'none', reasons: ['Tipo di tracciamento diverso.'] };
     if (!current.referenceSet || !previous.referenceSet) return { level: 'none', reasons: ['Manca un set di riferimento osservabile.'] };
+
+    const currentStandard = current.technicalStandard?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('it');
+    const previousStandard = previous.technicalStandard?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('it');
+    if (currentStandard && previousStandard && currentStandard !== previousStandard) {
+        return { level: 'none', reasons: ['Standard tecnico registrato diverso.'] };
+    }
+    if (Boolean(currentStandard) !== Boolean(previousStandard)) reasons.push('Standard tecnico registrato solo in una delle esposizioni.');
+
+    const currentVersion = current.progressionContract?.baselineVersion;
+    const previousVersion = previous.progressionContract?.baselineVersion;
+    if (currentVersion !== undefined && previousVersion !== undefined && currentVersion !== previousVersion) {
+        return { level: 'none', reasons: [`Versione baseline diversa: ${previousVersion} → ${currentVersion}.`] };
+    }
+    if ((currentVersion === undefined) !== (previousVersion === undefined)) reasons.push('Versione baseline disponibile solo in una delle esposizioni.');
+
+    const currentMetric = current.progressionContract?.metric;
+    const previousMetric = previous.progressionContract?.metric;
+    if (currentMetric && previousMetric && currentMetric !== previousMetric) reasons.push('Metrica del contratto di progressione diversa.');
+
     const currentRef = current.referenceSet;
     const previousRef = previous.referenceSet;
     if (currentRef.technique !== previousRef.technique) {
@@ -353,6 +378,18 @@ export function compareExposureCompatibility(
         }
         if ((currentRest === undefined) !== (previousRest === undefined)) {
             reasons.push('Manca parte dei recuperi strutturati dei segmenti.');
+        }
+        const currentSegment = currentRef.segments[index];
+        const previousSegment = previousRef.segments[index];
+        for (const key of ['eccentricSeconds', 'holdPosition', 'assistance', 'negativeOnly'] as const) {
+            const currentValue = currentSegment?.[key];
+            const previousValue = previousSegment?.[key];
+            if (currentValue !== undefined && previousValue !== undefined && currentValue !== previousValue) {
+                return { level: 'none', reasons: ['Parametri tecnici dei segmenti diversi.'] };
+            }
+            if ((currentValue === undefined) !== (previousValue === undefined)) {
+                reasons.push('Metadati tecnici dei segmenti incompleti in una delle esposizioni.');
+            }
         }
     }
     if (currentRef.targetReps !== previousRef.targetReps) reasons.push('Target strutturato diverso o non disponibile in entrambe le esposizioni.');
@@ -535,7 +572,7 @@ function describe(
         case 'deload_change':
             return { headline: 'Deload: variazione descrittiva', detail: `Set di riferimento: ${previousRef} → ${currentRef}. Dose osservata: ${previous?.workSets ?? 0} → ${current.workSets} serie. Le riduzioni programmate non vengono classificate come regressione.` };
         case 'execution_baseline':
-            return { headline: 'Esecuzione: baseline registrata stabile', detail: 'LogBook confronta solo modalità e tecnica registrate; non misura ROM, tempo, setup o qualità tecnica.' };
+            return { headline: 'Esecuzione: baseline registrata', detail: 'LogBook usa modalità, standard tecnico e parametri registrati. Non deduce la qualità tecnica da dati non inseriti.' };
         case 'density_limited':
             return { headline: 'Densità: confronto limitato alla sessione', detail: 'Non sono disponibili timestamp per attribuire una densità precisa al singolo esercizio.' };
         case 'new_baseline':
@@ -725,6 +762,10 @@ export function computeProgressionEngine(
             ...(bestHistorical ? { bestHistorical } : {}),
             recentComparable,
             comparison,
+            comparisonStatus: comparison.level === 'high' ? 'comparable' : comparison.level === 'medium' ? 'limited' : 'not_comparable',
+            ...(current.progressionContract?.baselineState ? { baselineState: current.progressionContract.baselineState } : {}),
+            ...(current.progressionContract?.baselineVersion !== undefined ? { baselineVersion: current.progressionContract.baselineVersion } : {}),
+            ...(current.progressionContract ? { progressionContract: current.progressionContract } : {}),
             quality,
             qualityReasons,
             classification,
