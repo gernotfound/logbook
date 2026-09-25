@@ -112,6 +112,9 @@ export function useNutritionMeasurements(selectedDate?: string) {
             if (manualBf && !isNaN(Number(manualBf))) {
                 bf = Number(manualBf);
                 bfProvenance = { method: 'manual' };
+            } else if (targetDayData?.bf !== undefined && targetDayData?.bf !== null && !targetDayData?.bfProvenance) {
+                const legacyBf = Number(targetDayData.bf);
+                if (Number.isFinite(legacyBf)) bf = legacyBf;
             } else if (waist && neck && !isNaN(Number(waist)) && !isNaN(Number(neck))) {
                 if (Number.isFinite(height) && height > 0) {
                     bf = Logic.calculateBodyFatByMethod(profile.gender === 'F' ? 'navy_female' : 'navy_male', {
@@ -141,9 +144,6 @@ export function useNutritionMeasurements(selectedDate?: string) {
                     await showAlert("Attenzione: imposta la tua altezza nelle Impostazioni per calcolare la massa grassa dai perimetri corporei.");
                     return;
                 }
-            } else if (targetDayData?.bf !== undefined && targetDayData?.bf !== null && !targetDayData?.bfProvenance) {
-                const legacyBf = Number(targetDayData.bf);
-                if (Number.isFinite(legacyBf)) bf = legacyBf;
             }
 
             const targetDate = targetDateStr;
