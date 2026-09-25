@@ -788,6 +788,18 @@ export function progressionQualityLabel(quality: ProgressionQuality): string {
     return 'Confronto limitato';
 }
 
+export function progressionBaselineStateLabel(state?: ProgressionBaselineState): string | undefined {
+    if (!state) return undefined;
+    return ({
+        historical: 'storica',
+        active: 'attiva',
+        suspended: 'sospesa',
+        reacclimation: 'riacclimatazione',
+        reactivated: 'riattivata',
+        replaced: 'sostituita',
+    } as const)[state];
+}
+
 export function progressionTrendLabel(
     direction: ExerciseProgressionAnalysis['trendDirection'],
     intent?: TrainingCycleIntent,
