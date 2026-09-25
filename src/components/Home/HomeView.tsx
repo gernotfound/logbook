@@ -150,6 +150,22 @@ const HomeView = ({ onNavigate }: any) => {
                         </div>
                     )}
                 </div>
+                {weightStats?.recentWeeklyAverages?.length > 0 && (
+                    <div style={{ marginTop: '12px' }}>
+                        <p className="text-sm home-muted" style={{ margin: '0 0 8px' }}>
+                            Medie settimanali calcolate solo sui giorni registrati; i giorni mancanti non vengono interpolati.
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                            {weightStats.recentWeeklyAverages.map((point: any) => (
+                                <div key={point.weekStart} style={{ padding: '10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)' }}>
+                                    <span className="text-xs home-muted">{point.label}</span>
+                                    <strong style={{ display: 'block' }}>{point.averageWeightKg.toFixed(1)} kg</strong>
+                                    <span className="text-xs home-muted">{point.recordedDaysCount}/{point.daysConsidered} giorni</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </section>
         </div>
 
