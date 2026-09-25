@@ -108,8 +108,12 @@ describe('M5 nutrition guest flow through useNutritionMeals', () => {
 
         await runMutation(() => result.current.setDayType(false));
 
-        const day = useAppStore.getState().userData?.nutrition?.[DATE];
+        let day = useAppStore.getState().userData?.nutrition?.[DATE];
         expect(day?.isDayOn).toBe(false);
+
+        await runMutation(() => result.current.setDayType(undefined));
+        day = useAppStore.getState().userData?.nutrition?.[DATE];
+        expect(day?.isDayOn).toBeUndefined();
     });
 
     it('persists quick-add nutrition with per-serving semantics', async () => {
