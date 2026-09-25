@@ -39,7 +39,7 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
         if (path.length === 1) return 'property';
         const prop = path[1];
         if (path.length === 2 && ['kcal', 'carbs', 'pro', 'fat'].includes(String(prop))) return 'ignore';
-        if (prop === 'meals' || prop === 'supplementsIntake' || prop === 'cardioSessions') {
+        if (prop === 'meals' || prop === 'supplementsIntake' || prop === 'cardioSessions' || prop === 'contextEvents') {
             if (path.length === 2) return 'keyed';
             return 'property';
         }
