@@ -23,7 +23,7 @@ export default function ReadinessTrendCard({ history }: { history: WorkoutSessio
                 <div>
                     <h2 id="readiness-trends-title">Trend readiness</h2>
                     <p className="text-sm home-muted" style={{ margin: '4px 0 0' }}>
-                        Ultime {stats.sessionsWithReadiness} sessioni con check-in. Le dimensioni restano separate: LogBook non crea un punteggio readiness unico.
+                        Ultimi {stats.sessionsWithReadiness} check-in readiness. Le dimensioni restano separate e non vengono combinate in un punteggio unico.
                     </p>
                 </div>
             </div>
