@@ -60,7 +60,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
         addSpecialSet, updateSpecialSet, removeSpecialSet, addSegment, updateSetTarget,
-        updateSetupNote, updateSessionNote
+        updateSetupNote, updateSessionNote, updateTechnicalStandard
     } = useWorkoutSession();
     const nutrition = useAppStore(state => state.userData?.nutrition);
 
@@ -126,6 +126,10 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     const handleUpdateSessionNote = useCallback((exIndex: number, note: string) => {
         updateSessionNote(exIndex, note);
     }, [updateSessionNote]);
+
+    const handleUpdateTechnicalStandard = useCallback((exIndex: number, value: string) => {
+        updateTechnicalStandard(exIndex, value);
+    }, [updateTechnicalStandard]);
 
     const handleAddSet = useCallback((exIndex: number) => {
         addSet(exIndex);
@@ -250,6 +254,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 onRemoveExercise={handleRemoveExercise}
                                 onUpdateSetupNote={handleUpdateSetupNote}
                                 onUpdateSessionNote={handleUpdateSessionNote}
+                                onUpdateTechnicalStandard={handleUpdateTechnicalStandard}
                                 onAddSet={handleAddSet}
                                 onRemoveSet={handleRemoveSet}
                                 onRemoveLastSet={handleRemoveLastSet}
