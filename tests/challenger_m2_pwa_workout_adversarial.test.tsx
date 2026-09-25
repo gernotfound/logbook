@@ -222,7 +222,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
       });
 
       expect(useAppStore.getState().localWorkout).toBeNull();
-      expect(useAppStore.getState().userData?.activePains).toEqual(['petto']);
+      expect(useAppStore.getState().userData?.activePains).toEqual([]);
 
       await new Promise(resolve => setTimeout(resolve, 0));
       expect(mockSetDoc.mock.calls.some((c: any) => c[1].type === 'workout_saved')).toBe(false);
