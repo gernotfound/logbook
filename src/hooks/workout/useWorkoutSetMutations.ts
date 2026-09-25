@@ -272,6 +272,20 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         });
     }, [setLocalWorkout]);
 
+    const updateTechnicalStandard = useCallback((exIndex: number, value: string) => {
+        setLocalWorkout((prev) => {
+            if (!prev) return prev;
+            const updatedExercises = prev.exercises.map((ex: any, i: number) => {
+                if (i !== exIndex) return ex;
+                const next = { ...ex };
+                if (value.trim()) next.technicalStandard = value;
+                else delete next.technicalStandard;
+                return next;
+            });
+            return { ...prev, exercises: updatedExercises };
+        });
+    }, [setLocalWorkout]);
+
     return {
         addExtraExercise,
         addSpecialSet,
@@ -286,6 +300,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         removeSpecialSet,
         addSegment,
         updateSetTarget,
-        updateSessionNote
+        updateSessionNote,
+        updateTechnicalStandard
     };
 }
