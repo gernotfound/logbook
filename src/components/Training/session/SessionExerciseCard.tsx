@@ -25,6 +25,7 @@ interface SessionExerciseCardProps {
     onRemoveExercise: (exIndex: number) => void;
     onUpdateSetupNote: (exId: string, note: string) => void;
     onUpdateSessionNote: (exIndex: number, note: string) => void;
+    onUpdateTechnicalStandard: (exIndex: number, value: string) => void;
     onAddSet: (exIndex: number) => void;
     onRemoveSet: (exIndex: number, sIndex: number) => void;
     onUpdateSet: (exIndex: number, setId: string, field: string, value: any) => void;
@@ -54,6 +55,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     onRemoveExercise,
     onUpdateSetupNote,
     onUpdateSessionNote,
+    onUpdateTechnicalStandard,
     onAddSet,
     onRemoveSet,
     onUpdateSet,
@@ -265,14 +267,27 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Modifica setup (globale):</h3>
+                    <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Setup e standard tecnico</h3>
+                    <label className="text-xs text-muted" htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
+                    <BufferedInput
+                        id={`technical-standard-${exItem.exId}`}
+                        type="text"
+                        value={exItem.technicalStandard || ''}
+                        placeholder="Es. stesso macchinario, ROM completo, fermo 1 s"
+                        onChange={value => onUpdateTechnicalStandard(exIndex, value)}
+                        style={{ margin: '4px 0 10px', width: '100%', fontSize: '16px' }}
+                    />
+                    <p className="text-xs text-muted" style={{ margin: '0 0 10px' }}>
+                        Se cambia rispetto allo storico, LogBook limita il confronto diretto senza modificare il programma.
+                    </p>
+                    <label className="text-xs text-muted" htmlFor={`setup-${exItem.exId}`}>Nota setup libreria (globale)</label>
                     <input
                         id={`setup-${exItem.exId}`}
                         type="text"
                         defaultValue={exNotes}
-                        placeholder="Note di setup (es. altezza sedile...)"
+                        placeholder="Es. altezza sedile abituale"
                         onBlur={(e) => onUpdateSetupNote(exItem.exId, e.target.value)}
-                        style={{ margin: 0, width: '100%' }}
+                        style={{ margin: '4px 0 0', width: '100%', fontSize: '16px' }}
                     />
                 </div>
             )}
