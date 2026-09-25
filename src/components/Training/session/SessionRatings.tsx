@@ -13,6 +13,7 @@ interface SessionRatingsProps {
     setPump: (val: string) => void;
     fatigue: string | number;
     setFatigue: (val: string) => void;
+    ratingScale?: 5 | 10;
     pains?: string[];
     onTogglePain?: (muscleId: string) => void;
     onSetPains?: (pains: string[]) => void;
@@ -27,6 +28,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
     setPump,
     fatigue,
     setFatigue,
+    ratingScale = 5,
     pains = [],
     onTogglePain,
     onSetPains
@@ -88,61 +90,22 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 />
             </div>
 
-            <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                <h3 style={{marginTop: 0, marginBottom: '12px'}}>Valuta sessione (1-10)</h3>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <label htmlFor="mood-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                            Umore
-                        </label>
-                        <BufferedInput 
-                            id="mood-rating" 
-                            type="number" 
-                            inputMode="decimal"
-                            step="0.1"
-                            min="1" 
-                            max="10" 
-                            value={mood} 
-                            onChange={setMood} 
-                            onFocus={e => e.target.select()}
-                            style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
-                        />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <label htmlFor="pump-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                            Pump
-                        </label>
-                        <BufferedInput 
-                            id="pump-rating" 
-                            type="number" 
-                            inputMode="decimal"
-                            step="0.1"
-                            min="1" 
-                            max="10" 
-                            value={pump} 
-                            onChange={setPump} 
-                            onFocus={e => e.target.select()}
-                            style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
-                        />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <label htmlFor="fatigue-rating" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                            Stanchezza
-                        </label>
-                        <BufferedInput 
-                            id="fatigue-rating" 
-                            type="number" 
-                            inputMode="decimal"
-                            step="0.1"
-                            min="1" 
-                            max="10" 
-                            value={fatigue} 
-                            onChange={setFatigue} 
-                            onFocus={e => e.target.select()}
-                            style={{ margin: 0, textAlign: 'center', fontSize: '16px' }} 
-                        />
-                    </div>
-                </div>
+            <div className="post-session-ratings">
+                <h3>Valuta sessione</h3>
+                {[
+                    { label: 'Umore', value: mood, setter: setMood },
+                    { label: 'Pump', value: pump, setter: setPump },
+                    { label: 'Stanchezza', value: fatigue, setter: setFatigue },
+                ].map(metric => (
+                    <fieldset className="readiness-metric" key={metric.label}>
+                        <legend>{metric.label}</legend>
+                        <div className="readiness-scale" role="group" aria-label={`${metric.label}, scala da 1 a ${ratingScale}`}>
+                            {Array.from({ length: ratingScale }, (_, index) => index + 1).map(value => (
+                                <button key={value} type="button" className="readiness-value" aria-pressed={String(metric.value) === String(value)} aria-label={`${metric.label}: ${value} su ${ratingScale}`} onClick={() => metric.setter(String(value))}>{value}</button>
+                            ))}
+                        </div>
+                    </fieldset>
+                ))}
             </div>
 
             {/* DOMS Muscle Pain Tracking Accordion */}

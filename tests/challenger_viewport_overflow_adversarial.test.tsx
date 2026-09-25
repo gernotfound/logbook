@@ -130,7 +130,7 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
      * SECTION 2: ADVERSARIAL MULTI-ITEM FLEX ROWS & MIN-WIDTH: 0 VERIFICATION
      * ========================================================================= */
     describe('2. Multi-Item Flex Children minWidth: 0 Defense', () => {
-        it('2.1: SessionRatings mood, pump, fatigue columns all have flex: 1 and minWidth: 0', () => {
+        it('2.1: SessionRatings exposes compact 1-5 controls for mood, pump and fatigue', () => {
             const { container } = render(
                 <SessionRatings
                     water="1.5"
@@ -144,25 +144,9 @@ describe('EMPIRICAL CHALLENGER: Viewport & Overflow Adversarial Stress Suite (m2
                 />
             );
 
-            const moodInput = container.querySelector('#mood-rating');
-            const pumpInput = container.querySelector('#pump-rating');
-            const fatigueInput = container.querySelector('#fatigue-rating');
-
-            expect(moodInput).not.toBeNull();
-            expect(pumpInput).not.toBeNull();
-            expect(fatigueInput).not.toBeNull();
-
-            const moodCol = moodInput!.parentElement!;
-            const pumpCol = pumpInput!.parentElement!;
-            const fatigueCol = fatigueInput!.parentElement!;
-
-            // Verify minWidth: 0 on each column wrapper
-            expect(moodCol.style.minWidth).toBe('0px');
-            expect(moodCol.style.flex).toMatch(/^1/);
-            expect(pumpCol.style.minWidth).toBe('0px');
-            expect(pumpCol.style.flex).toMatch(/^1/);
-            expect(fatigueCol.style.minWidth).toBe('0px');
-            expect(fatigueCol.style.flex).toMatch(/^1/);
+            expect(container.querySelector('[aria-label="Umore, scala da 1 a 5"]')).not.toBeNull();
+            expect(container.querySelector('[aria-label="Pump, scala da 1 a 5"]')).not.toBeNull();
+            expect(container.querySelector('[aria-label="Stanchezza, scala da 1 a 5"]')).not.toBeNull();
         });
 
         it('2.2: NutritionSupplements form fields row has flex: 1 and minWidth: 0 on all 3 columns', () => {
@@ -519,9 +503,9 @@ render(
                         <SessionRatings
                             water="2.0"
                             setWater={vi.fn()}
-                            mood="9"
+                            mood="4"
                             setMood={vi.fn()}
-                            pump="8"
+                            pump="5"
                             setPump={vi.fn()}
                             fatigue="4"
                             setFatigue={vi.fn()}
@@ -543,9 +527,9 @@ render(
                 );
 
                 expect(wrapper.querySelector('#water-intake')).not.toBeNull();
-                expect(wrapper.querySelector('#mood-rating')).not.toBeNull();
-                expect(wrapper.querySelector('#pump-rating')).not.toBeNull();
-                expect(wrapper.querySelector('#fatigue-rating')).not.toBeNull();
+                expect(wrapper.querySelector('[aria-label="Umore, scala da 1 a 5"]')).not.toBeNull();
+                expect(wrapper.querySelector('[aria-label="Pump, scala da 1 a 5"]')).not.toBeNull();
+                expect(wrapper.querySelector('[aria-label="Stanchezza, scala da 1 a 5"]')).not.toBeNull();
 
                 unmount();
                 document.body.removeChild(wrapper);

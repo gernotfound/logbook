@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
-import { formatAdvancedSetSummary, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
+import { formatAdvancedSetSummary, getRoutineSetPlan, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
 import { calculateSetVolume } from '../src/lib/calc/workout';
 import { buildRoutineWorkout, prepareHistoricalWorkoutForEditing } from '../src/hooks/workout/workoutSessionPreparation';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
@@ -58,4 +58,35 @@ describe('advanced set segments', () => {
         const editing = prepareHistoricalWorkoutForEditing(workout, runtime);
         expect(editing.exercises[0].sets[0].segments?.[0]).toMatchObject({ kg: '90', reps: '4', time: '12', restBeforeSeconds: 15 });
     });
+
+    it('quarantines malformed or duplicate segment identities at the schema boundary', () => {
+        const parsed = UserDataSchema.parse({ history: [{ id: 'w1', exercises: [{ exId: 'bench', sets: [{
+            id: 's1', kg: '100', reps: '8', technique: 'cluster',
+            segments: [
+                { id: 'seg1', kg: '90', reps: '4' },
+                { id: 'seg1', kg: '80', reps: '3' },
+                { id: '', kg: '70', reps: '2' },
+            ],
+        }] }] }] }) as UserData;
+        expect(parsed.history?.[0].exercises[0].sets[0].segments).toEqual([
+            expect.objectContaining({ id: 'seg1', kg: '90', reps: '4' }),
+        ]);
+    });
+
+    it('round-trips generalized set plans with segment count, rest and targets', () => {
+        const plan = getRoutineSetPlan({
+            id: 's1', kg: '100', reps: '8', technique: 'rest_pause',
+            target: { type: 'reps', reps: 12 },
+            segments: [
+                { id: 'seg1', kg: '100', reps: '3', restBeforeSeconds: 20 },
+                { id: 'seg2', kg: '100', reps: '2', restBeforeSeconds: 20 },
+            ],
+        });
+        expect(plan).toEqual({ technique: 'rest_pause', target: { type: 'reps', reps: 12 }, segmentCount: 3, restSeconds: 20 });
+        const routine = { id: 'r2', name: 'R2', exercises: [{ exId: 'bench', setsCount: 1, setPlans: [plan] }] } as WorkoutRoutine;
+        const workout = buildRoutineWorkout({ library: [{ id: 'bench', name: 'Bench', setsCount: 3, sets: [] }] }, routine, undefined, runtime);
+        expect(workout.exercises[0].sets[0].segments).toHaveLength(2);
+        expect(workout.exercises[0].sets[0].target?.reps).toBe(12);
+    });
+
 });

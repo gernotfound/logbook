@@ -221,4 +221,23 @@ describe('R2: Workout Report Volume & PR Calculation (FNC-REPORT-01)', () => {
             expect(report.newPRs).toHaveLength(0);
         });
     });
+
+    it('computes overall volume delta only across exercises that have a comparable previous exposure', () => {
+        const previous: WorkoutSession = {
+            id: 'delta-prev', date: '2026-09-01', exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'b1', kg: '80', reps: '10', rir: 2 }] },
+            ],
+        };
+        const current: WorkoutSession = {
+            id: 'delta-current', date: '2026-09-08', exercises: [
+                { exId: 'ex-bench', sessionNote: '', sets: [{ id: 'b2', kg: '80', reps: '10', rir: 2 }] },
+                { exId: 'ex-pullup', sessionNote: '', sets: [{ id: 'p1', kg: '0', reps: '10', rir: 2 }] },
+            ],
+        };
+        const report = computeWorkoutReport(current, [previous], libraryMap, userWeight);
+        expect(report.totalVolume).toBe(1600);
+        expect(report.previousTotalVolume).toBe(800);
+        expect(report.volumeDeltaPercent).toBe(0);
+    });
+
 });

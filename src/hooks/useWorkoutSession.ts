@@ -154,6 +154,7 @@ export function useWorkoutSession() {
         const hasReadiness = readiness && Object.values(readiness).some(value => value !== undefined);
         const startedWorkout: WorkoutSession = {
             ...currentWorkout,
+            date: Logic.getLocalDateString(startedAt),
             globalStartTime: startedAt,
             ...(hasReadiness ? { readiness: { capturedAt: startedAt, ...readiness } } : {}),
         };
@@ -240,18 +241,18 @@ export function useWorkoutSession() {
         return false;
     }, [showConfirm, setLocalWorkout]);
 
-    const endWorkout = useCallback(async (): Promise<WorkoutSession | null> => {
+    const endWorkout = useCallback(async (confirmEnd = true, requestedEndTime?: number): Promise<WorkoutSession | null> => {
         if (endingRef.current) return null;
         endingRef.current = true;
         const expectedUid = auth.currentUser?.uid;
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
-        if (!expectedId || !(await showConfirm("Terminare l'allenamento?"))) return null;
+        if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
         draftRegistry.flushAll();
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
-        const endTime = new Date().getTime();
+        const endTime = requestedEndTime ?? new Date().getTime();
         const { finishedWorkout, sessionPains } = prepareCompletedWorkout(currentWorkout, endTime);
 
         try {

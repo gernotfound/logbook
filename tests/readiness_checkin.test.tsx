@@ -57,7 +57,7 @@ describe('pre-session readiness contract', () => {
 
     it('renders large 1-5 controls, canonical sleep and active pains without starting automatically', async () => {
         const onStart = vi.fn(async () => true);
-        render(<PreSessionCheckIn routineName="Push" date="2026-09-24" onStart={onStart} />);
+        render(<PreSessionCheckIn routineName="Push" date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => {})} />);
 
         expect(screen.getByText('Registrato: 6 h 18 min')).toBeTruthy();
         expect(screen.getByText(/Spalle/)).toBeTruthy();
@@ -79,9 +79,25 @@ describe('pre-session readiness contract', () => {
         expect(screen.queryByText('Durata Totale')).toBeNull();
     });
 
+    it('anchors the workout date to the actual local start time when check-in crosses midnight', async () => {
+        const startedAt = new Date(2026, 8, 25, 0, 0, 5).getTime();
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+        useAppStore.setState({
+            localWorkout: { id: 'pending-midnight', date: '2026-09-24', routineName: 'Push', ratingScale: 5, exercises: [] },
+        });
+        render(<TrainingSession />);
+        fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
+        await waitFor(() => {
+            const started = useAppStore.getState().localWorkout;
+            expect(started?.globalStartTime).toBe(startedAt);
+            expect(started?.date).toBe('2026-09-25');
+        });
+        nowSpy.mockRestore();
+    });
+
     it('skips the check-in without inventing values', async () => {
         const onStart = vi.fn(async () => true);
-        render(<PreSessionCheckIn date="2026-09-24" onStart={onStart} />);
+        render(<PreSessionCheckIn date="2026-09-24" onStart={onStart} onCancel={vi.fn(async () => {})} />);
         fireEvent.click(screen.getByRole('button', { name: 'Salta check-in e inizia' }));
         await waitFor(() => expect(onStart).toHaveBeenCalledWith(undefined));
     });

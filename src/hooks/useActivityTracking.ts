@@ -10,6 +10,8 @@ import { computeWeeklyActivitySeries } from '../lib/calc/analytics';
 import type { CardioSession } from '../types';
 
 const EMPTY_NUTRITION = {};
+const NEW_CARDIO_ID = '/new';
+
 const EMPTY_CARDIO_DRAFT = {
     modality: '',
     durationMinutes: '',
@@ -35,7 +37,8 @@ export function useActivityTracking() {
         steps: day?.steps !== undefined ? String(day.steps) : '',
     });
     const [editingCardioId, setEditingCardioId] = useState<string | null>(null);
-    const editingCardio = editingCardioId && editingCardioId !== 'new'
+    const isCreatingCardio = editingCardioId === NEW_CARDIO_ID;
+    const editingCardio = editingCardioId && !isCreatingCardio
         ? (day?.cardioSessions ?? []).find((item: CardioSession) => item.id === editingCardioId)
         : undefined;
     const cardioSource = editingCardio ? {
@@ -100,7 +103,7 @@ export function useActivityTracking() {
         }
     };
 
-    const startNewCardio = () => setEditingCardioId('new');
+    const startNewCardio = () => setEditingCardioId(NEW_CARDIO_ID);
     const editCardio = (id: string) => setEditingCardioId(id);
     const cancelCardio = () => {
         try { cardioDraft.clear(); } catch { /* L'errore bozza è già visibile nello stato sync. */ }
@@ -135,6 +138,10 @@ export function useActivityTracking() {
             return false;
         }
         const existing = editingCardio;
+        if (editingCardioId && !isCreatingCardio && !existing) {
+            await showAlert('La sessione cardio da modificare non ? pi? disponibile per questo giorno.');
+            return false;
+        }
         const cardioSession: CardioSession = {
             id: existing?.id ?? Logic.generateId('cardio'),
             modality: form.modality as CardioSession['modality'],
@@ -192,6 +199,7 @@ export function useActivityTracking() {
         clearSteps,
         cardioSessions,
         editingCardioId,
+        isCreatingCardio,
         cardioForm: cardioDraft.values,
         setCardioField: <K extends keyof typeof cardioDraft.values>(field: K, value: (typeof cardioDraft.values)[K]) => cardioDraft.setField(field, value),
         startNewCardio,

@@ -225,7 +225,7 @@ function normalizeSet(
 function hasObservedSet(set: NormalizedSet, trackingType: Exercise['trackingType']): boolean {
     if (trackingType === 'time') return (set.timeSeconds ?? 0) > 0;
     if (trackingType === 'cardio') return (set.timeSeconds ?? 0) > 0 || (set.reps ?? 0) > 0;
-    return (set.reps ?? 0) > 0 && (set.kg !== undefined || set.effectiveKg !== undefined);
+    return (set.reps ?? 0) > 0;
 }
 
 function referenceSet(sets: NormalizedSet[], trackingType: Exercise['trackingType']): NormalizedSet | undefined {
@@ -345,6 +345,12 @@ export function compareExposureCompatibility(
     }
     if (current.isBodyweight && (current.bodyweightKg === undefined || previous.bodyweightKg === undefined)) {
         reasons.push('Peso corporeo storico mancante in almeno una esposizione.');
+    }
+    if (
+        current.trackingType === 'weight_reps'
+        && ((currentRef.effectiveKg ?? currentRef.kg) === undefined || (previousRef.effectiveKg ?? previousRef.kg) === undefined)
+    ) {
+        reasons.push('Carico osservato mancante in almeno una esposizione.');
     }
     if (current.trackingType === 'weight_reps' && (currentRef.rir === undefined || previousRef.rir === undefined)) {
         reasons.push(`RIR mancante in almeno una esposizione (${previous.date || 'precedente'} / ${current.date || 'corrente'}).`);
@@ -546,6 +552,41 @@ function priorityFor(exercise: ProgressionExerciseRef | undefined, session: Work
     return 'other';
 }
 
+function sessionTimestamp(session: WorkoutSession, preferEnd = false): number | undefined {
+    const candidates = preferEnd
+        ? [session.globalEndTime, session.endTime, session.globalStartTime]
+        : [session.globalStartTime, session.globalEndTime, session.endTime];
+    return candidates.find(value => typeof value === 'number' && Number.isFinite(value));
+}
+
+function isSessionEarlier(candidate: WorkoutSession, current: WorkoutSession): boolean {
+    if (candidate.id && current.id && candidate.id === current.id) return false;
+    if (candidate.date && current.date) {
+        if (candidate.date < current.date) return true;
+        if (candidate.date > current.date) return false;
+    }
+    const candidateEnd = sessionTimestamp(candidate, true);
+    const currentStart = sessionTimestamp(current, false);
+    return candidateEnd !== undefined && currentStart !== undefined && candidateEnd < currentStart;
+}
+
+function compareSessionChronology(a: WorkoutSession, b: WorkoutSession): number {
+    const dateCompare = (a.date ?? '').localeCompare(b.date ?? '');
+    if (dateCompare !== 0) return dateCompare;
+    return (sessionTimestamp(a, false) ?? 0) - (sessionTimestamp(b, false) ?? 0);
+}
+
+function observedSessionWorkSets(
+    session: WorkoutSession,
+    libraryMap: Map<string, ProgressionExerciseRef>,
+    context: ProgressionBodyweightContext,
+): number {
+    return (session.exercises ?? []).reduce((sum, exercise) => {
+        if (!exercise?.exId) return sum;
+        return sum + normalizeExerciseExposure(session, exercise, libraryMap.get(exercise.exId), context).workSets;
+    }, 0);
+}
+
 function durationSeconds(session: WorkoutSession): number | undefined {
     if (session.globalStartTime && session.globalEndTime && session.globalEndTime >= session.globalStartTime) {
         return Math.floor((session.globalEndTime - session.globalStartTime) / 1000);
@@ -553,26 +594,29 @@ function durationSeconds(session: WorkoutSession): number | undefined {
     return parseTimeSeconds(session.globalDurationStr || session.manualDurationStr);
 }
 
-function densityAnalysis(current: WorkoutSession, history: WorkoutSession[]): DensityProgressionAnalysis | undefined {
+function densityAnalysis(
+    current: WorkoutSession,
+    history: WorkoutSession[],
+    libraryMap: Map<string, ProgressionExerciseRef>,
+    context: ProgressionBodyweightContext,
+): DensityProgressionAnalysis | undefined {
     if (current.cycleStrategy?.progressionFocus !== 'density') return undefined;
     const currentDuration = durationSeconds(current);
     const previous = [...history]
         .filter(item => (
             item.id !== current.id
             && item.routineId === current.routineId
-            && item.date
-            && current.date
-            && item.date < current.date
+            && isSessionEarlier(item, current)
             && item.cycleStrategy?.progressionFocus === 'density'
             && (!current.cycleId || item.cycleId === current.cycleId)
         ))
-        .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0];
+        .sort((a, b) => compareSessionChronology(b, a))[0];
     const previousDuration = previous ? durationSeconds(previous) : undefined;
     if (!previous || currentDuration === undefined || previousDuration === undefined) {
         return { quality: 'limited', headline: 'Confronto densità limitato', detail: 'Serve la durata di due sessioni della stessa scheda; non vengono inventati tempi per esercizio.' };
     }
-    const currentSets = current.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
-    const previousSets = previous.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+    const currentSets = observedSessionWorkSets(current, libraryMap, context);
+    const previousSets = observedSessionWorkSets(previous, libraryMap, context);
     const similarWork = Math.abs(currentSets - previousSets) <= Math.max(1, Math.round(previousSets * 0.1));
     if (!similarWork) {
         return { quality: 'limited', headline: 'Durata cambiata con lavoro diverso', detail: `${Math.round(previousDuration / 60)} → ${Math.round(currentDuration / 60)} min, ma il numero di serie è cambiato: non dichiaro una progressione di densità.`, previousDurationSeconds: previousDuration, currentDurationSeconds: currentDuration };
@@ -599,12 +643,12 @@ export function computeProgressionEngine(
         const exercise = libraryMap.get(currentExercise.exId);
         const current = normalizeExerciseExposure(currentWorkout, currentExercise, exercise, context);
         const historical = history
-            .filter(session => session.id !== currentWorkout.id && session.date && (!currentWorkout.date || session.date < currentWorkout.date))
+            .filter(session => isSessionEarlier(session, currentWorkout))
+            .sort(compareSessionChronology)
             .flatMap(session => {
                 const found = (session.exercises ?? []).find(item => item.exId === currentExercise.exId);
                 return found ? [normalizeExerciseExposure(session, found, exercise, context)] : [];
-            })
-            .sort((a, b) => a.date.localeCompare(b.date));
+            });
 
         const latestExposure = historical.at(-1);
         const comparable = historical.filter(previous => compareExposureCompatibility(current, previous).level !== 'none');
@@ -675,7 +719,7 @@ export function computeProgressionEngine(
 
     const priorityOrder = { primary: 0, secondary: 1, other: 2 } as const;
     analyses.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-    const density = densityAnalysis(currentWorkout, history);
+    const density = densityAnalysis(currentWorkout, history, libraryMap, context);
     return { exercises: analyses, ...(density ? { density } : {}) };
 }
 

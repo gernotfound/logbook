@@ -155,9 +155,9 @@ const TrainingHistory = ({ onEditWorkout }: TrainingHistoryProps) => {
                                 
                                 {hasRatings && (
                                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--glass-border)', fontSize: '0.85rem' }}>
-                                        {moodVal && <span className="badge badge-primary">Umore: {moodVal}/10</span>}
-                                        {pumpVal && <span className="badge badge-primary">Pump: {pumpVal}/10</span>}
-                                        {fatigueVal && <span className="badge badge-primary">Stanchezza: {fatigueVal}/10</span>}
+                                        {moodVal && <span className="badge badge-primary">Umore: {moodVal}/{wo.ratingScale ?? 10}</span>}
+                                        {pumpVal && <span className="badge badge-primary">Pump: {pumpVal}/{wo.ratingScale ?? 10}</span>}
+                                        {fatigueVal && <span className="badge badge-primary">Stanchezza: {fatigueVal}/{wo.ratingScale ?? 10}</span>}
                                     </div>
                                 )}
                             </div>

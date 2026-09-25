@@ -180,7 +180,7 @@ describe('workout session preparation', () => {
         const saved = prepareHistoricalWorkoutForSave(
             currentWorkout,
             'history-1',
-            { mood: '8', pump: '9', fatigue: '4' },
+            { mood: '4', pump: '5', fatigue: '4' },
             '1,5',
             '00:45:00',
             createRuntime(),
@@ -190,8 +190,8 @@ describe('workout session preparation', () => {
             id: 'history-1',
             globalDurationStr: '00:45:00',
             manualDurationStr: '00:45:00',
-            moodRating: 8,
-            pumpRating: 9,
+            moodRating: 4,
+            pumpRating: 5,
             fatigueRating: 4,
             waterLiters: 1.5,
             pains: ['chest'],
@@ -208,8 +208,8 @@ describe('workout session preparation', () => {
             id: 'active-1',
             routineName: 'Routine A',
             globalStartTime: 1_000,
-            moodRating: 7,
-            pumpRating: 8,
+            moodRating: 4,
+            pumpRating: 5,
             fatigueRating: 5,
             waterLiters: '1,5',
             pains: ['back'],
@@ -228,8 +228,8 @@ describe('workout session preparation', () => {
             id: 'active-1',
             globalEndTime: 3_601_000,
             globalDurationStr: '01:00:00',
-            moodRating: 7,
-            pumpRating: 8,
+            moodRating: 4,
+            pumpRating: 5,
             fatigueRating: 5,
             waterLiters: 1.5,
             pains: ['back'],
@@ -238,4 +238,56 @@ describe('workout session preparation', () => {
         expect(prepared.finishedWorkout.isEditingHistory).toBeUndefined();
         expect(prepared.finishedWorkout.originalHistoryId).toBeUndefined();
     });
+
+    it('marks new sessions as 1-5 while preserving legacy 1-10 historical ratings', () => {
+        const runtime = createRuntime();
+        expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
+
+        const legacy = {
+            id: 'legacy-rating',
+            date: '2026-09-01',
+            exercises: [],
+            isEditingHistory: true,
+            originalHistoryId: 'legacy-rating',
+            moodRating: 8,
+            pumpRating: 7,
+            fatigueRating: 6,
+        } as WorkoutSession;
+        const savedLegacy = prepareHistoricalWorkoutForSave(
+            legacy,
+            'legacy-rating',
+            { mood: '8', pump: '7', fatigue: '6' },
+            '',
+            '00:45:00',
+            runtime,
+        );
+        expect(savedLegacy.moodRating).toBe(8);
+        expect(savedLegacy.pumpRating).toBe(7);
+        expect(savedLegacy.fatigueRating).toBe(6);
+        expect(savedLegacy.ratingScale).toBeUndefined();
+
+        const savedLegacyDecimal = prepareHistoricalWorkoutForSave(
+            { ...legacy, moodRating: 7.5 },
+            'legacy-rating',
+            { mood: '7.5', pump: '', fatigue: '' },
+            '',
+            '00:45:00',
+            runtime,
+        );
+        expect(savedLegacyDecimal.moodRating).toBe(7.5);
+
+        const invalidNew = { ...legacy, id: 'new-rating', originalHistoryId: 'new-rating', ratingScale: 5 as const };
+        const savedNew = prepareHistoricalWorkoutForSave(
+            invalidNew,
+            'new-rating',
+            { mood: '8', pump: '5', fatigue: '4' },
+            '',
+            '00:45:00',
+            runtime,
+        );
+        expect(savedNew.moodRating).toBeNull();
+        expect(savedNew.pumpRating).toBe(5);
+        expect(savedNew.fatigueRating).toBe(4);
+    });
+
 });

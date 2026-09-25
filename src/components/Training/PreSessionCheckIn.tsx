@@ -7,6 +7,7 @@ interface PreSessionCheckInProps {
     routineName?: string;
     date?: string;
     onStart: (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => Promise<boolean>;
+    onCancel: () => Promise<void>;
 }
 
 type ReadinessKey = 'energy' | 'stress' | 'motivation' | 'muscleRecovery';
@@ -28,7 +29,7 @@ function formatSleep(value: string | number | undefined): string | null {
     return `${hours} h ${minutes} min`;
 }
 
-export default function PreSessionCheckIn({ routineName, date, onStart }: PreSessionCheckInProps) {
+export default function PreSessionCheckIn({ routineName, date, onStart, onCancel }: PreSessionCheckInProps) {
     const nutrition = useAppStore(state => state.userData?.nutrition);
     const activePains = useAppStore(state => state.userData?.activePains || []);
     const [values, setValues] = useState<ReadinessDraft>({});
@@ -88,12 +89,11 @@ export default function PreSessionCheckIn({ routineName, date, onStart }: PreSes
             </div>
 
             <div className="pre-session-actions">
-                <button type="button" className="btn btn-primary" disabled={starting} onClick={() => void start(true)}>
-                    {starting ? 'Avvio…' : 'Inizia allenamento'}
-                </button>
-                <button type="button" className="btn btn-secondary" disabled={starting} onClick={() => void start(false)}>
-                    Salta check-in e inizia
-                </button>
+                <div className="pre-session-primary-actions">
+                    <button type="button" className="btn btn-primary" disabled={starting} onClick={() => void start(true)}>{starting ? 'Avvio…' : 'Inizia allenamento'}</button>
+                    <button type="button" className="btn btn-danger" disabled={starting} onClick={() => void onCancel()}>Annulla allenamento</button>
+                </div>
+                <button type="button" className="btn btn-secondary" disabled={starting} onClick={() => void start(false)}>Salta check-in e inizia</button>
             </div>
         </section>
     );

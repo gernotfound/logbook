@@ -3,6 +3,7 @@ import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
 import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
 import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
+import { getRoutineSetPlan } from '../../lib/advancedSets';
 import { Logic } from '../../lib/logic';
 import type { WorkoutSession, Exercise, RoutineExercise, WorkoutRoutine } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
@@ -107,12 +108,8 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 const finalMinReps = minReps !== Infinity ? minReps : undefined;
                 const finalMaxReps = maxReps !== -Infinity ? maxReps : undefined;
                 
-                let defaultTechnique: 'none' | 'dropset' | 'isometrics' | undefined;
-                const hasDropsets = ex.sets.some(s => s.dropsets && s.dropsets.length > 0);
                 const hasIsometrics = ex.sets.some(s => s.isometrics && s.isometrics.length > 0);
-                
-                if (hasDropsets) defaultTechnique = 'dropset';
-                else if (hasIsometrics) defaultTechnique = 'isometrics';
+                const setPlans = hasIsometrics ? undefined : ex.sets.map(getRoutineSetPlan);
                 
                 const result: RoutineExercise = {
                     exId: ex.exId,
@@ -120,7 +117,8 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 };
                 if (finalMinReps !== undefined) result.minReps = finalMinReps;
                 if (finalMaxReps !== undefined) result.maxReps = finalMaxReps;
-                if (defaultTechnique) result.defaultTechnique = defaultTechnique;
+                if (hasIsometrics) result.defaultTechnique = 'isometrics';
+                else if (setPlans?.some(plan => plan.technique !== 'straight')) result.setPlans = setPlans;
                 
                 return result;
             });
@@ -349,9 +347,9 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                         <section className="workout-report-phase" aria-labelledby={`${titleId}-after`}>
                             <h2 id={`${titleId}-after`}>Dopo la sessione</h2>
                             <div className="workout-report-metrics">
-                                {workout.moodRating !== undefined && workout.moodRating !== null && <span>Umore <strong>{workout.moodRating}/10</strong></span>}
-                                {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/10</strong></span>}
-                                {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/10</strong></span>}
+                                {workout.moodRating !== undefined && workout.moodRating !== null && <span>Umore <strong>{workout.moodRating}/{workout.ratingScale ?? 10}</strong></span>}
+                                {workout.pumpRating !== undefined && workout.pumpRating !== null && <span>Pump <strong>{workout.pumpRating}/{workout.ratingScale ?? 10}</strong></span>}
+                                {workout.fatigueRating !== undefined && workout.fatigueRating !== null && <span>Fatica <strong>{workout.fatigueRating}/{workout.ratingScale ?? 10}</strong></span>}
                                 {workout.waterLiters !== undefined && <span>Acqua <strong>{workout.waterLiters} L</strong></span>}
                             </div>
                         </section>

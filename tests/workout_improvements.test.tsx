@@ -44,9 +44,9 @@ describe('Workout Improvements & History Edit Suite', () => {
     });
 
     test('validateWorkoutRatings allows partial ratings', () => {
-      const res = Logic.validateWorkoutRatings(8, '', null);
+      const res = Logic.validateWorkoutRatings(4, '', null);
       expect(res.isValid).toBe(true);
-      expect(res.mood).toBe(8);
+      expect(res.mood).toBe(4);
       expect(res.pump).toBeNull();
       expect(res.fatigue).toBeNull();
     });
@@ -59,12 +59,12 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(res.errors.fatigue).not.toBeNull();
     });
 
-    test('validateWorkoutRatings parses valid strings from 1 to 10', () => {
-      const res = Logic.validateWorkoutRatings('1', '10', '5');
+    test('validateWorkoutRatings parses valid strings from 1 to 5', () => {
+      const res = Logic.validateWorkoutRatings('1', '5', '3');
       expect(res.isValid).toBe(true);
       expect(res.mood).toBe(1);
-      expect(res.pump).toBe(10);
-      expect(res.fatigue).toBe(5);
+      expect(res.pump).toBe(5);
+      expect(res.fatigue).toBe(3);
     });
   });
 
