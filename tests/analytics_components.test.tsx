@@ -125,7 +125,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
 
             // Existing elements
             expect(screen.getByText('LogBook')).toBeDefined();
-            expect(screen.getByText(/Recupero e Dolori/i)).toBeDefined();
+            expect(screen.getByText(/Esposizione recente e dolori/i)).toBeDefined();
             expect(screen.getByText('Trend peso corporeo')).toBeDefined();
 
             // Lazy loaded analytics charts
