@@ -11,9 +11,15 @@ interface SessionExerciseCardProps {
     libDef: any;
     pastWorkouts: Array<{ date: string; sets: any[]; note: string }>;
     progressionHint?: {
-        previousDate: string;
-        previousReference: string;
+        previousDate?: string;
+        previousReference?: string;
         quality: string;
+        comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
+        comparisonReasons: string[];
+        baselineState?: string;
+        baselineVersion?: number;
+        contractTarget?: string;
+        nextAction?: string;
     };
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
@@ -155,12 +161,28 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
                 {progressionHint && (
-                    <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '3px' }}>
+                    <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '4px' }}>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            Ultima esposizione confrontabile · {progressionHint.previousDate || 'data non disponibile'}
+                            Confrontabilità: {progressionHint.comparisonStatus === 'comparable' ? 'confrontabile' : progressionHint.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
+                            {progressionHint.baselineVersion ? ` · baseline v${progressionHint.baselineVersion}` : ''}
+                            {progressionHint.baselineState ? ` · ${progressionHint.baselineState}` : ''}
                         </span>
-                        <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{progressionHint.previousReference}</strong>
+                        {progressionHint.previousReference ? (
+                            <>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                    Ultima esposizione confrontabile · {progressionHint.previousDate || 'data non disponibile'}
+                                </span>
+                                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{progressionHint.previousReference}</strong>
+                            </>
+                        ) : (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessun riferimento precedente direttamente confrontabile.</span>
+                        )}
                         <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.quality}</span>
+                        {progressionHint.comparisonReasons.length > 0 && (
+                            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.comparisonReasons.join(' ')}</span>
+                        )}
+                        {progressionHint.contractTarget && <span style={{ fontSize: '0.78rem' }}><strong>Target:</strong> {progressionHint.contractTarget}</span>}
+                        {progressionHint.nextAction && <span style={{ fontSize: '0.78rem' }}><strong>Azione prevista:</strong> {progressionHint.nextAction}</span>}
                     </div>
                 )}
             </div>
