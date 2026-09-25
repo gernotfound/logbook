@@ -31,7 +31,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{margin: 0, display: 'flex', alignItems: 'center', gap: '8px'}}>
                     <Activity size={18} color="var(--danger-color)" />
-                    Recupero e Dolori
+                    Esposizione recente e dolori
                 </h2>
                 <button
                     type="button"
