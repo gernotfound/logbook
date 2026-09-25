@@ -177,7 +177,7 @@ export function useHomeView(): HomeViewState {
         const now = homeClockNow;
         const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
         
-        const fatigue = new Map<string, number>();
+        const recentExposure = new Map<string, number>();
         const volume = new Map<string, number>();
 
         history.forEach((w: any) => {
@@ -192,7 +192,7 @@ export function useHomeView(): HomeViewState {
             
             if (!isRecent72h && !isRecent7d) return;
 
-            const baseFatigue = Math.max(0, 1 - (hoursPassed / MAX_HOURS));
+            const recencyWeight = Math.max(0, 1 - (hoursPassed / MAX_HOURS));
 
             (w.exercises || []).forEach((ex: any) => {
                 const libEx = libraryMap.get(ex.exId);
@@ -226,26 +226,26 @@ export function useHomeView(): HomeViewState {
                         if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
                         atomicPaths.forEach((path: string) => {
-                            fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue));
+                            recentExposure.set(path, Math.max(recentExposure.get(path) || 0, recencyWeight));
                         });
-                        fatigue.set(mId, Math.max(fatigue.get(mId) || 0, baseFatigue));
+                        recentExposure.set(mId, Math.max(recentExposure.get(mId) || 0, recencyWeight));
                     });
                     // Secondary muscles (50% fatigue)
                     (libEx.secondaryMuscles || []).forEach((mId: string) => {
                         if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
                         atomicPaths.forEach((path: string) => {
-                            fatigue.set(path, Math.max(fatigue.get(path) || 0, baseFatigue * 0.5));
+                            recentExposure.set(path, Math.max(recentExposure.get(path) || 0, recencyWeight * 0.5));
                         });
-                        fatigue.set(mId, Math.max(fatigue.get(mId) || 0, baseFatigue * 0.5));
+                        recentExposure.set(mId, Math.max(recentExposure.get(mId) || 0, recencyWeight * 0.5));
                     });
                 }
             });
         });
 
         const colors: Record<string, string> = {};
-        fatigue.forEach((val, pathOrId) => {
-            if (val > 0.3) colors[pathOrId] = 'var(--muscle-fatigue)'; // Affaticamento semanticamente coerente con il tema
+        recentExposure.forEach((val, pathOrId) => {
+            if (val > 0.3) colors[pathOrId] = 'var(--muscle-recent)';
         });
 
         const sortedVolume = Array.from(volume.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);
