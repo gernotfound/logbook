@@ -229,10 +229,16 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                         const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
                         const progression = progressionMap.get(exItem.exId);
-                        const progressionHint = progression?.previousComparable ? {
-                            previousDate: progression.previousComparable.date,
-                            previousReference: formatProgressionReference(progression.previousComparable),
+                        const progressionHint = progression ? {
+                            previousDate: progression.previousComparable?.date,
+                            previousReference: progression.previousComparable ? formatProgressionReference(progression.previousComparable) : undefined,
                             quality: progressionQualityLabel(progression.quality),
+                            comparisonStatus: progression.comparisonStatus,
+                            comparisonReasons: progression.comparison.reasons,
+                            baselineState: progression.baselineState,
+                            baselineVersion: progression.baselineVersion,
+                            contractTarget: progression.progressionContract?.target,
+                            nextAction: progression.progressionContract?.nextAction,
                         } : undefined;
 
                         return (
