@@ -13,7 +13,6 @@ export const CONTEXT_EVENT_TYPES: ReadonlyArray<{ value: ContextEventType; label
     { value: 'recovery', label: 'Recupero' },
     { value: 'schedule', label: 'Programmazione' },
     { value: 'travel', label: 'Viaggio' },
-    { value: 'illness', label: 'Malessere' },
     { value: 'reentry', label: 'Rientro / riacclimatazione' },
     { value: 'deload', label: 'Deload' },
     { value: 'other', label: 'Altro' },
