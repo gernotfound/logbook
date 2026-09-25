@@ -75,6 +75,11 @@ export function useContextTimeline() {
             return false;
         }
         const existing = editingId ? eventsForSelectedDate.find(event => event.id === editingId) : undefined;
+        if (editingId && !existing) {
+            resetForm();
+            await showAlert('L’evento che stavi modificando non è più disponibile in questo giorno.');
+            return false;
+        }
         const event: ContextEvent = {
             id: existing?.id ?? Logic.generateId('ctx'),
             type,
