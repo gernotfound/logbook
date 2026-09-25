@@ -436,18 +436,18 @@ export function computeVolumeCaloriesCorrelation(
 
     if (correlation !== null && validPairs.length >= 3) {
         if (correlation >= 0.6) {
-            correlationInsight = 'Forte correlazione positiva: l\'apporto energetico supporta l\'aumento dei carichi e del volume di lavoro.';
+            correlationInsight = 'Associazione positiva forte osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         } else if (correlation >= 0.2) {
-            correlationInsight = 'Moderata correlazione positiva: il volume tende a salire nelle settimane con maggior introito calorico.';
+            correlationInsight = 'Associazione positiva moderata osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         } else if (correlation > -0.2) {
-            correlationInsight = 'Correlazione neutra: il volume di allenamento è indipendente dalle oscillazioni caloriche registrate.';
+            correlationInsight = 'Nessuna associazione lineare evidente nelle settimane disponibili.';
         } else if (correlation > -0.6) {
-            correlationInsight = 'Moderata correlazione inversa: il volume di allenamento si è mantenuto alto anche con apporto calorico contenuto.';
+            correlationInsight = 'Associazione inversa moderata osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         } else {
-            correlationInsight = 'Forte correlazione inversa: marcata discrepanza tra volume di allenamento ed apporto calorico.';
+            correlationInsight = 'Associazione inversa forte osservata nelle settimane disponibili. Non indica un rapporto di causa-effetto.';
         }
     } else if (hasData) {
-        correlationInsight = 'Registra più settimane con allenamenti e nutrizione per sbloccare l\'analisi predittiva della correlazione.';
+        correlationInsight = 'Servono almeno 3 settimane confrontabili con allenamento e nutrizione registrati per stimare l\'associazione lineare.';
     }
 
     const totalVol = points.reduce((sum, p) => sum + p.volumeKg, 0);
