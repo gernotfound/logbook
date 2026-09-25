@@ -28,7 +28,9 @@ export function useContextTimeline() {
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
     const today = useLocalToday();
-    const [selectedDate, setSelectedDate] = useState(today);
+    const [chosenDate, setChosenDate] = useState<string | null>(null);
+    const selectedDate = chosenDate ?? today;
+    const setSelectedDate = (date: string) => setChosenDate(date === today ? null : date);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [type, setType] = useState<ContextEventType>('training');
     const [label, setLabel] = useState('');
