@@ -77,6 +77,7 @@ export default function DataContext() {
                             key={date + ':' + event.id}
                             className="card"
                             onClick={() => context.setSelectedDate(date)}
+                            disabled={context.editingId !== null}
                             style={{ margin: 0, padding: '12px', textAlign: 'left', color: 'inherit', width: '100%' }}
                         >
                             <span className="text-xs text-muted">{Logic.formatItalianDate(date)} · {contextEventTypeLabel(event.type)}</span>
