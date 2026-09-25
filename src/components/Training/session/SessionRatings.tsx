@@ -139,7 +139,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                 {isDomsOpen && (
                     <div style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
                         <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            Seleziona i muscoli doloranti dopo l&apos;allenamento. I muscoli primari allenati non selezionati guariranno automaticamente.
+                            Seleziona i muscoli doloranti dopo l&apos;allenamento. I dolori già attivi restano tali finché non li rimuovi esplicitamente dalla schermata Recupero.
                         </p>
 
                         {/* Search Input */}
