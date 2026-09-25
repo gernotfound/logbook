@@ -352,10 +352,12 @@ export function compareExposureCompatibility(
 
     const currentVersion = current.progressionContract?.baselineVersion;
     const previousVersion = previous.progressionContract?.baselineVersion;
-    if (currentVersion !== undefined && previousVersion !== undefined && currentVersion !== previousVersion) {
-        return { level: 'none', reasons: [`Versione baseline diversa: ${previousVersion} → ${currentVersion}.`] };
+    if ((currentVersion !== undefined || previousVersion !== undefined) && currentVersion !== previousVersion) {
+        return {
+            level: 'none',
+            reasons: [`Versione baseline diversa: ${previousVersion ?? 'legacy'} → ${currentVersion ?? 'legacy'}.`],
+        };
     }
-    if ((currentVersion === undefined) !== (previousVersion === undefined)) reasons.push('Versione baseline disponibile solo in una delle esposizioni.');
 
     const currentMetric = current.progressionContract?.metric;
     const previousMetric = previous.progressionContract?.metric;
