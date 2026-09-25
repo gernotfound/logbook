@@ -3,6 +3,9 @@ import {
     computeWeeklyVolumeSeries,
     computeWeeklyNutritionSeries,
     computeVolumeCaloriesCorrelation,
+    computeWeeklyWeightSeries,
+    computeReadinessTrends,
+    computeWeeklyTrainingActivityContext,
     calculatePearsonCorrelation,
     generateWeekIntervals,
     getWorkoutDateString
@@ -290,7 +293,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                 };
                 const { stats } = computeVolumeCaloriesCorrelation(history, nutrition, mockLibrary, 80, 4, '2026-08-22');
                 expect(stats.correlationCoefficient).toBe(1);
-                expect(stats.correlationInsight).toContain('Forte correlazione positiva');
+                expect(stats.correlationInsight).toContain('Associazione positiva forte');
             });
         });
     });
@@ -654,7 +657,7 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(points[0].avgDailyKcal).toBeLessThan(points[11].avgDailyKcal);
             expect(stats.validDataPointsCount).toBe(12);
             expect(stats.correlationCoefficient).toBeGreaterThanOrEqual(0.9);
-            expect(stats.correlationInsight).toContain('Forte correlazione positiva');
+            expect(stats.correlationInsight).toContain('Associazione positiva forte');
         });
 
         it('T4.2_cutting_phase: 8-week cutting phase with dynamic bodyweight decay and caloric deficit', () => {
@@ -707,5 +710,46 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
             expect(stats.activeWeeksCount).toBe(2);
             expect(stats.totalVolumeKg).toBe(1800);
         });
+        it('T4.4_weekly_weight_mean: averages only recorded days and exposes coverage', () => {
+            const nutrition: Record<string, NutritionDay> = {
+                '2026-08-17': { date: '2026-08-17', weight: 80, kcal: 0, carbs: 0, pro: 0, fat: 0 },
+                '2026-08-19': { date: '2026-08-19', weight: 81, kcal: 0, carbs: 0, pro: 0, fat: 0 },
+                '2026-08-21': { date: '2026-08-21', weight: 82, kcal: 0, carbs: 0, pro: 0, fat: 0 },
+            };
+            const result = computeWeeklyWeightSeries(nutrition, 1, '2026-08-23');
+            expect(result.points[0].averageWeightKg).toBe(81);
+            expect(result.points[0].recordedDaysCount).toBe(3);
+            expect(result.points[0].daysConsidered).toBe(7);
+            expect(result.stats.latestAverageWeightKg).toBe(81);
+            expect(result.stats.latestRecordedDaysCount).toBe(3);
+        });
+
+        it('T4.5_readiness_dimensions: keeps readiness dimensions separate instead of producing one score', () => {
+            const history: WorkoutSession[] = [
+                { id: 'r1', date: '2026-08-20', readiness: { capturedAt: 1, energy: 2, stress: 5, motivation: 4, muscleRecovery: 3 }, exercises: [] },
+                { id: 'r2', date: '2026-08-21', readiness: { capturedAt: 2, energy: 4, stress: 3, motivation: 2, muscleRecovery: 5 }, exercises: [] },
+            ];
+            const result = computeReadinessTrends(history, 12);
+            expect(result.energy).toEqual({ average: 3, count: 2 });
+            expect(result.stress).toEqual({ average: 4, count: 2 });
+            expect(result.motivation).toEqual({ average: 3, count: 2 });
+            expect(result.muscleRecovery).toEqual({ average: 4, count: 2 });
+            expect(result).not.toHaveProperty('score');
+        });
+
+        it('T4.6_training_activity_context: co-visualizes independent weekly metrics without collapsing them into fatigue', () => {
+            const history: WorkoutSession[] = [{
+                id: 'ctx-w1',
+                date: '2026-08-18',
+                exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10' }] }],
+            }];
+            const nutrition: Record<string, NutritionDay> = {
+                '2026-08-18': { date: '2026-08-18', steps: 9000, cardioSessions: [{ id: 'c1', modality: 'bike', durationMinutes: 30, intensity: 'moderate', source: 'manual' }], kcal: 0, carbs: 0, pro: 0, fat: 0 },
+            };
+            const points = computeWeeklyTrainingActivityContext(history, nutrition, mockLibrary, 80, 1, '2026-08-23');
+            expect(points[0]).toMatchObject({ workoutCount: 1, volumeKg: 1000, averageSteps: 9000, cardioMinutes: 30 });
+            expect(points[0]).not.toHaveProperty('fatigue');
+        });
+
     });
 });
