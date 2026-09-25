@@ -36,9 +36,9 @@ describe('Audit regression: React time boundaries', () => {
         expect(screen.getByText('00:01').textContent).toBe(pausedDisplay);
     });
 
-    test('useHomeView expires fatigue as wall-clock time advances without store mutations', () => {
+    test('useHomeView expires recent exposure at the factual 72-hour boundary without store mutations', () => {
         const now = Date.now();
-        const workoutTime = now - (((50 * 60 + 23) * 60 + 30) * 1000);
+        const workoutTime = now - (((71 * 60 + 59) * 60 + 30) * 1000);
         let hookResult: ReturnType<typeof useHomeView> | null = null;
 
         function TestHomeConsumer() {
