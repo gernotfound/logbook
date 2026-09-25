@@ -53,6 +53,18 @@ const PlannedSetTechniqueSchema = z.object({
     segmentCount: z.number().int().positive().optional().catch(undefined),
 }).passthrough();
 
+export const ProgressionContractSchema = z.object({
+    context: safeOptionalString(),
+    role: z.enum(['primary', 'secondary', 'support']).optional().catch(undefined),
+    metric: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
+    target: safeOptionalString(),
+    successRule: safeOptionalString(),
+    failureRule: safeOptionalString(),
+    nextAction: safeOptionalString(),
+    baselineState: z.enum(['historical', 'active', 'suspended', 'reacclimation', 'reactivated', 'replaced']).optional().catch(undefined),
+    baselineVersion: z.number().int().positive().optional().catch(undefined),
+}).passthrough();
+
 export const RoutineExerciseSchema = z.object({
     exId: safeString(''),
     setsCount: safeNumber(0),
@@ -60,6 +72,8 @@ export const RoutineExerciseSchema = z.object({
     maxReps: safeOptionalNumber(),
     defaultTechnique: z.enum(['none', 'dropset', 'isometrics', 'rest_pause', 'cluster', 'rep_match', 'diminishing']).optional().catch(undefined),
     setPlans: z.array(PlannedSetTechniqueSchema).optional().catch(undefined),
+    technicalStandard: safeOptionalString(),
+    progressionContract: ProgressionContractSchema.optional().catch(undefined),
 }).passthrough().catch({ exId: '', setsCount: 0 }).default({ exId: '', setsCount: 0 });
 
 export const WorkoutRoutineSchema = z.object({
@@ -95,6 +109,10 @@ const SessionSetSegmentSchema = z.object({
     reps: safeString(''),
     time: safeOptionalString(),
     restBeforeSeconds: z.number().int().nonnegative().optional().catch(undefined),
+    eccentricSeconds: z.number().finite().nonnegative().max(60).optional().catch(undefined),
+    holdPosition: z.enum(['stretched', 'mid', 'shortened', 'custom']).optional().catch(undefined),
+    assistance: z.enum(['none', 'self', 'partner', 'machine']).optional().catch(undefined),
+    negativeOnly: safeOptionalBoolean(),
 }).passthrough();
 
 function sanitizeSetSegments(value: unknown): unknown[] {
@@ -149,6 +167,8 @@ export const SessionExerciseSchema = z.object({
     sets: z.array(SessionExerciseSetSchema).catch([]).default([]),
     minReps: safeOptionalNumber(),
     maxReps: safeOptionalNumber(),
+    technicalStandard: safeOptionalString(),
+    progressionContract: ProgressionContractSchema.optional().catch(undefined),
 }).passthrough().catch({ exId: '', sessionNote: '', sets: [] }).default({ exId: '', sessionNote: '', sets: [] });
 
 export const TrainingCycleStrategySchema = z.object({
