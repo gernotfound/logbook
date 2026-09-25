@@ -16,12 +16,12 @@ export default function DataContext() {
                 </p>
 
                 <nav className="activity-date-nav" aria-label="Giorno contesto">
-                    <button type="button" className="btn btn-small" onClick={() => context.setSelectedDate(shiftDateString(context.selectedDate, -1))}>◀ Prec.</button>
-                    <button type="button" className="data-day-current" onClick={() => context.setSelectedDate(context.today)} aria-label="Torna a oggi">
+                    <button type="button" className="btn btn-small" onClick={() => context.setSelectedDate(shiftDateString(context.selectedDate, -1))} disabled={context.editingId !== null}>◀ Prec.</button>
+                    <button type="button" className="data-day-current" onClick={() => context.setSelectedDate(context.today)} aria-label="Torna a oggi" disabled={context.editingId !== null}>
                         <strong>{Logic.formatItalianDate(context.selectedDate)}</strong>
                         {isToday && <span>OGGI</span>}
                     </button>
-                    <button type="button" className="btn btn-small" onClick={() => !isToday && context.setSelectedDate(shiftDateString(context.selectedDate, 1))} disabled={isToday}>Succ. ▶</button>
+                    <button type="button" className="btn btn-small" onClick={() => !isToday && context.setSelectedDate(shiftDateString(context.selectedDate, 1))} disabled={isToday || context.editingId !== null}>Succ. ▶</button>
                 </nav>
 
                 <div className="card" style={{ margin: '12px 0 0', padding: '14px', display: 'grid', gap: '10px' }}>
