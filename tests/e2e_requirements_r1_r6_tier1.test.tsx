@@ -25,7 +25,7 @@ import {
     calculateSetVolumeContract,
     calculateWorkoutVolumeContract,
     calculateRealtimeKcalContract,
-    autoHealPainsContract
+    mergeActivePainsContract
 } from './requirements_r1_r6_contracts';
 
 describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
@@ -659,17 +659,17 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
         });
 
         // ---------------------------------------------------------------------
-        // Requirement R6: DOMS Auto-healing Logic
+        // Requirement R6: Persistenza esplicita dei dolori
         // ---------------------------------------------------------------------
         describe('R6: DOMS Auto-healing Logic', () => {
-            it('T1.6.1: auto-heals and removes trained primary muscle when not re-selected in session pains', () => {
+            it('T1.6.1: preserves trained primary muscle until explicitly cleared', () => {
                 const activePains = ['petto'];
                 const sessionExercises = [{ exId: 'ex_bench' }];
                 const library = [{ id: 'ex_bench', muscles: ['petto'] }];
                 const sessionPains: string[] = []; // User did not re-select petto
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
-                expect(updated).toEqual([]); // Petto auto-healed!
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                expect(updated).toEqual(['petto']); // Il dolore resta attivo finché l'utente non lo rimuove.
             });
 
             it('T1.6.2: preserves active pain if user explicitly re-selects it in session ratings', () => {
@@ -678,7 +678,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const library = [{ id: 'ex_bench', muscles: ['petto'] }];
                 const sessionPains = ['petto']; // User re-selected petto
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
                 expect(updated).toEqual(['petto']);
             });
 
@@ -688,7 +688,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const library = [{ id: 'ex_squat', muscles: ['gambe'] }];
                 const sessionPains: string[] = []; // Squat trained gambe -> gambe healed, spalle untrained -> retained
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
                 expect(updated).toEqual(['spalle']);
             });
 
@@ -698,12 +698,12 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const library = [{ id: 'ex_curls', muscles: ['bicipiti'] }];
                 const sessionPains = ['bicipiti']; // Newly experienced pain
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
                 expect(updated).toContain('dorso');
                 expect(updated).toContain('bicipiti');
             });
 
-            it('T1.6.5: multi-exercise session auto-heals multiple trained primary muscles if unselected', () => {
+            it('T1.6.5: multi-exercise session preserves all pre-existing active pains', () => {
                 const activePains = ['petto', 'tricipiti', 'spalle'];
                 const sessionExercises = [
                     { exId: 'ex_bench' }, // muscles: ['petto']
@@ -715,8 +715,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 ];
                 const sessionPains: string[] = []; // Neither petto nor tricipiti reselected
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
-                expect(updated).toEqual(['spalle']); // Only untrained spalle remains
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
+                expect(updated).toEqual(['petto', 'tricipiti', 'spalle']); // Training does not imply that an active pain resolved.
             });
 
             it('T1.6.6: WorkoutSessionSchema validates pains array on workout session history', () => {
@@ -735,7 +735,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 const library = [{ id: 'ex_deadlift', muscles: ['femorali', 'schiena'] }];
                 const sessionPains = ['femorali'];
 
-                const updated = autoHealPainsContract(activePains, sessionExercises, library, sessionPains);
+                const updated = mergeActivePainsContract(activePains, sessionExercises, library, sessionPains);
                 expect(updated).toEqual(['femorali']);
             });
         });
