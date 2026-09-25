@@ -75,6 +75,8 @@ export function buildRoutineWorkout(
             if (ex.setPlans) result.setPlans = structuredClone(ex.setPlans);
             if (ex.minReps) result.minReps = ex.minReps;
             if (ex.maxReps) result.maxReps = ex.maxReps;
+            if (ex.technicalStandard) result.technicalStandard = ex.technicalStandard;
+            if (ex.progressionContract) result.progressionContract = structuredClone(ex.progressionContract);
             return result;
         }),
     };
