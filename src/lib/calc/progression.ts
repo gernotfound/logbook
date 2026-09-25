@@ -291,7 +291,9 @@ export function normalizeExerciseExposure(
         ...(session.routineId ? { routineId: session.routineId } : {}),
         ...(session.cycleId ? { cycleId: session.cycleId } : {}),
         ...(session.cycleStrategy?.intent ? { intent: session.cycleStrategy.intent } : {}),
-        ...(session.cycleStrategy?.progressionFocus ? { focus: session.cycleStrategy.progressionFocus } : {}),
+        ...((sessionExercise.progressionContract?.metric ?? session.cycleStrategy?.progressionFocus)
+            ? { focus: (sessionExercise.progressionContract?.metric ?? session.cycleStrategy?.progressionFocus) as TrainingCycleProgressionFocus }
+            : {}),
         ...(sessionExercise.technicalStandard?.trim() ? { technicalStandard: sessionExercise.technicalStandard.trim() } : {}),
         ...(sessionExercise.progressionContract ? { progressionContract: structuredClone(sessionExercise.progressionContract) } : {}),
         exId: sessionExercise.exId,
@@ -600,7 +602,13 @@ function trendFor(exposures: NormalizedExposure[]): TrendDirection {
     return 'mixed';
 }
 
-function priorityFor(exercise: ProgressionExerciseRef | undefined, session: WorkoutSession): ExerciseProgressionAnalysis['priority'] {
+function priorityFor(
+    exercise: ProgressionExerciseRef | undefined,
+    session: WorkoutSession,
+    contractRole?: ProgressionContract['role'],
+): ExerciseProgressionAnalysis['priority'] {
+    if (contractRole === 'primary') return 'primary';
+    if (contractRole === 'secondary') return 'secondary';
     const muscles = new Set([...(exercise?.muscles ?? []), ...(exercise?.secondaryMuscles ?? [])]);
     if ((session.cycleStrategy?.primaryMuscles ?? []).some(muscle => muscles.has(muscle))) return 'primary';
     if ((session.cycleStrategy?.secondaryMuscles ?? []).some(muscle => muscles.has(muscle))) return 'secondary';
@@ -754,7 +762,7 @@ export function computeProgressionEngine(
             exName: current.exName,
             ...(current.intent ? { intent: current.intent } : {}),
             ...(current.focus ? { focus: current.focus } : {}),
-            priority: priorityFor(exercise, currentWorkout),
+            priority: priorityFor(exercise, currentWorkout, current.progressionContract?.role),
             current,
             ...(latestExposure ? { latestExposure } : {}),
             ...(previousComparable ? { previousComparable } : {}),
