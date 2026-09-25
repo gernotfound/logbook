@@ -107,7 +107,8 @@ export function useWorkoutSession() {
         removeSpecialSet,
         addSegment,
         updateSetTarget,
-        updateSessionNote
+        updateSessionNote,
+        updateTechnicalStandard
     } = useWorkoutSetMutations({ setLocalWorkout: mutateActiveWorkout, showConfirm });
 
     const startWorkout = useCallback(async (routineIdToStart?: string, cycleInfo?: { cycleId?: string; cycleName?: string }) => {
@@ -332,6 +333,7 @@ export function useWorkoutSession() {
         addSegment,
         updateSetTarget,
         updateSessionNote,
+        updateTechnicalStandard,
         updateSetupNote
     };
 }
