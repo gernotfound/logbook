@@ -727,7 +727,7 @@ describe('Logic Library Tests', () => {
             });
         });
 
-        describe('DOMS Muscle Pain Tracking & Auto-Healing (R5 & R6)', () => {
+        describe('DOMS Muscle Pain Tracking & Explicit Persistence (R5 & R6)', () => {
             it('getMuscleName: returns Italian localized name for valid ID and falls back to ID if not found', () => {
                 expect(Logic.getMuscleName('chest')).toBe('Petto');
                 expect(Logic.getMuscleName('biceps')).toBe('Bicipiti');
@@ -749,51 +749,34 @@ describe('Logic Library Tests', () => {
                 expect(emptyMatches).toEqual([]);
             });
 
-            it('autoHealPains: heals trained primary muscle if left unselected in session pains', () => {
+            it('mergeActivePains: preserves active pains until the user explicitly clears them', () => {
                 const activePains = ['chest', 'quads'];
-                const sessionExercises = [{ exId: 'ex_bench' }];
-                const library = [{ id: 'ex_bench', muscles: ['chest'] }];
-                const sessionPains: string[] = []; // Not re-selected
-
-                const result = Logic.autoHealPains(activePains, sessionExercises, library, sessionPains);
-                expect(result).toEqual(['quads']); // Chest healed, quads preserved
-            });
-
-            it('autoHealPains: preserves trained primary muscle if re-selected in session pains', () => {
-                const activePains = ['chest', 'quads'];
-                const sessionExercises = [{ exId: 'ex_bench' }];
-                const library = [{ id: 'ex_bench', muscles: ['chest'] }];
-                const sessionPains = ['chest']; // Explicitly re-selected
-
-                const result = Logic.autoHealPains(activePains, sessionExercises, library, sessionPains);
+                const result = Logic.mergeActivePains(activePains, []);
                 expect(result).toEqual(['chest', 'quads']);
             });
 
-            it('autoHealPains: handles lateral muscle symmetry during auto-healing', () => {
+            it('mergeActivePains: deduplicates pains reported again after a session', () => {
+                const activePains = ['chest', 'quads'];
+                const sessionPains = ['chest'];
+                const result = Logic.mergeActivePains(activePains, sessionPains);
+                expect(result).toEqual(['chest', 'quads']);
+            });
+
+            it('mergeActivePains: does not infer recovery from trained muscles or laterality', () => {
                 const activePains = ['biceps_left'];
-                const sessionExercises = [{ exId: 'ex_curls' }];
-                const library = [{ id: 'ex_curls', muscles: ['biceps'] }];
-                const sessionPains: string[] = [];
-
-                const result = Logic.autoHealPains(activePains, sessionExercises, library, sessionPains);
-                expect(result).toEqual([]); // Healed
+                const result = Logic.mergeActivePains(activePains, []);
+                expect(result).toEqual(['biceps_left']);
             });
 
-            it('autoHealPains: appends newly reported post-workout pains', () => {
-                const activePains = ['lats'];
-                const sessionExercises = [{ exId: 'ex_squat' }];
-                const library = [{ id: 'ex_squat', muscles: ['quads'] }];
-                const sessionPains = ['quads', 'glutes'];
-
-                const result = Logic.autoHealPains(activePains, sessionExercises, library, sessionPains);
-                expect(result).toContain('lats');   // Untrained, preserved
-                expect(result).toContain('quads');  // Trained but re-selected
-                expect(result).toContain('glutes'); // Brand new pain
+            it('mergeActivePains: appends newly reported post-workout pains', () => {
+                const result = Logic.mergeActivePains(['lats'], ['quads', 'glutes']);
+                expect(result).toEqual(['lats', 'quads', 'glutes']);
             });
 
-            it('autoHealPains: safely handles null and empty inputs without crashing', () => {
-                expect(Logic.autoHealPains()).toEqual([]);
-                expect(Logic.autoHealPains(null as any, null as any, null as any, null as any)).toEqual([]);
+            it('mergeActivePains: safely handles null, duplicates and empty values', () => {
+                expect(Logic.mergeActivePains()).toEqual([]);
+                expect(Logic.mergeActivePains(null as any, null as any)).toEqual([]);
+                expect(Logic.mergeActivePains(['chest', '', 'chest'], ['chest', 'quads'])).toEqual(['chest', 'quads']);
             });
         });
     });
