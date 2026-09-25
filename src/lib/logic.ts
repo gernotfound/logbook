@@ -48,7 +48,7 @@ import {
     calculateWorkoutVolume,
     getMuscleName,
     searchMuscles,
-    autoHealPains
+    mergeActivePains
 } from './calc/workout';
 import {
     calculateCycleVolume,
@@ -124,7 +124,7 @@ export {
     getNextScheduledRoutine,
     getMuscleName,
     searchMuscles,
-    autoHealPains
+    mergeActivePains
 };
 
 // Aggregated Logic object for full backward compatibility
@@ -186,7 +186,7 @@ export const Logic = {
     getNextScheduledRoutine,
     getMuscleName,
     searchMuscles,
-    autoHealPains
+    mergeActivePains
 };
 
 
