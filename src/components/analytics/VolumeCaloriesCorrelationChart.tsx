@@ -238,7 +238,12 @@ export default function VolumeCaloriesCorrelationChart({
       <div className="home-chart-header">
         <div>
           <h2>Correlazione volume vs calorie</h2>
-          {stats.correlationCoefficient !== null && <div className="analytics-stat-line"><span>r = {stats.correlationCoefficient > 0 ? '+' : ''}{stats.correlationCoefficient.toFixed(2)}</span></div>}
+          {stats.correlationCoefficient !== null && (
+            <div className="analytics-stat-line">
+              <span>r = {stats.correlationCoefficient > 0 ? '+' : ''}{stats.correlationCoefficient.toFixed(2)}</span>
+              <span>{stats.validDataPointsCount} settimane confrontabili</span>
+            </div>
+          )}
           <p className="analytics-insight">{stats.correlationInsight}</p>
         </div>
         <div className="chart-period-control" role="group" aria-label="Periodo della correlazione volume e calorie">
