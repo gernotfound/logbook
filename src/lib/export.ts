@@ -223,8 +223,10 @@ export const Exporter = {
 
         let stepsCsv = "Data,Passi,Fonte,Rilevato il\n";
         let cardioCsv = "Data,ID,Ora inizio,Modalità,Struttura,Durata (min),Intensità,FC media (bpm),Distanza (km),Note,Fonte,ID esterno\n";
+        let contextCsv = "Data,ID,Tipo,Titolo,Nota,Creato il\n";
         let stepsRows = 0;
         let cardioRows = 0;
+        let contextRows = 0;
         nutritionDates.forEach(date => {
             const day = nutrition[date];
             if (typeof day?.steps === 'number' && Number.isFinite(day.steps) && day.steps >= 0) {
@@ -247,9 +249,19 @@ export const Exporter = {
                     cardioRows++;
                 });
             }
+            if (Array.isArray(day?.contextEvents)) {
+                day.contextEvents.forEach((event: any) => {
+                    if (!event?.id) return;
+                    const createdAt = typeof event.createdAt === 'number' && Number.isFinite(event.createdAt)
+                        ? new Date(event.createdAt).toISOString()
+                        : "";
+                    contextCsv += this.formatCsvRow([date, event.id, event.type || "", event.label || "", event.note || "", createdAt]);
+                    contextRows++;
+                });
+            }
         });
 
-        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
+        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Eccentrica (s),Posizione tenuta,Assistenza,Solo negative,Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Standard tecnico,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
         if (workoutCsv !== workoutHeader) {
             this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
         } else {
@@ -269,6 +281,11 @@ export const Exporter = {
             setTimeout(() => {
                 this.downloadFile("cardio.csv", cardioCsv, "text/csv;charset=utf-8;");
             }, 1500);
+        }
+        if (contextRows > 0) {
+            setTimeout(() => {
+                this.downloadFile("contesto.csv", contextCsv, "text/csv;charset=utf-8;");
+            }, 2000);
         }
     },
 
