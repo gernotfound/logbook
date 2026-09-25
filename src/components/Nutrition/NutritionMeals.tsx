@@ -67,7 +67,11 @@ export default function NutritionMeals({ mealsHook, selectedDate, setSelectedDat
                         {isDayOn === true ? 'Giorno ON' : isDayOn === false ? 'Giorno OFF' : 'Giorno non specificato'}
                     </h2>
                     <div className="tracking-row" role="group" aria-label="Tipo di giornata">
-                        {[{ label: 'ON', value: true }, { label: 'OFF', value: false }].map(option => (
+                        {([
+                            { label: 'ON', value: true },
+                            { label: 'OFF', value: false },
+                            { label: 'Non specificato', value: undefined },
+                        ] as const).map(option => (
                             <button
                                 key={option.label}
                                 type="button"
