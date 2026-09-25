@@ -47,7 +47,14 @@ export function formatAdvancedSetSummary(set: SessionExerciseSet): string | null
     if (technique === 'straight') return null;
     const segments = getSetSegments(set);
     const parts = [techniqueLabel(technique)];
-    if (segments.length) parts.push(segments.map(s => [s.kg && s.reps ? s.kg + 'kg×' + s.reps : s.reps ? s.reps + ' rep' : s.time ? s.time + 's' : 'segmento', s.restBeforeSeconds !== undefined ? 'rec ' + s.restBeforeSeconds + 's' : ''].filter(Boolean).join(' · ')).join(' → '));
+    if (segments.length) parts.push(segments.map(s => [
+        s.kg && s.reps ? s.kg + 'kg×' + s.reps : s.reps ? s.reps + ' rep' : s.time ? s.time + 's' : 'segmento',
+        s.restBeforeSeconds !== undefined ? 'rec ' + s.restBeforeSeconds + 's' : '',
+        s.eccentricSeconds !== undefined ? 'ecc ' + s.eccentricSeconds + 's' : '',
+        s.holdPosition ? 'hold ' + ({ stretched: 'allungamento', mid: 'intermedia', shortened: 'accorciamento', custom: 'custom' } as const)[s.holdPosition] : '',
+        s.assistance && s.assistance !== 'none' ? 'assist ' + s.assistance : '',
+        s.negativeOnly ? 'solo negative' : '',
+    ].filter(Boolean).join(' · ')).join(' → '));
     if (set.target?.type === 'reps') parts.push('target ' + set.target.reps + ' rep');
     return parts.join(' · ');
 }
