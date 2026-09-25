@@ -7,6 +7,7 @@ import HomeNutritionWidget from './widgets/HomeNutritionWidget';
 import HeaderDashboard from './widgets/HeaderDashboard';
 import BiometryBentoCard from './widgets/BiometryBentoCard';
 import RecoveryBentoCard from './widgets/RecoveryBentoCard';
+import ReadinessTrendCard from './widgets/ReadinessTrendCard';
 import './home.css';
 
 const WeightChart = lazy(() => import('./WeightChart'));
@@ -108,6 +109,8 @@ const HomeView = ({ onNavigate }: any) => {
                     userWeight={userWeight}
                 />
             </Suspense>
+
+            <ReadinessTrendCard history={history} />
             
             {/* Trend Peso Corporeo */}
             <section className="card home-chart-card" id="home-chart-widget">
