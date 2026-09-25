@@ -730,10 +730,10 @@ describe('Analytics Engine 4-Tier Test Suite (src/lib/calc/analytics.ts)', () =>
                 { id: 'r2', date: '2026-08-21', readiness: { capturedAt: 2, energy: 4, stress: 3, motivation: 2, muscleRecovery: 5 }, exercises: [] },
             ];
             const result = computeReadinessTrends(history, 12);
-            expect(result.energy).toEqual({ average: 3, count: 2 });
-            expect(result.stress).toEqual({ average: 4, count: 2 });
-            expect(result.motivation).toEqual({ average: 3, count: 2 });
-            expect(result.muscleRecovery).toEqual({ average: 4, count: 2 });
+            expect(result.energy).toEqual({ average: 3, latest: 4, previous: 2, deltaFromPrevious: 2, count: 2 });
+            expect(result.stress).toEqual({ average: 4, latest: 3, previous: 5, deltaFromPrevious: -2, count: 2 });
+            expect(result.motivation).toEqual({ average: 3, latest: 2, previous: 4, deltaFromPrevious: -2, count: 2 });
+            expect(result.muscleRecovery).toEqual({ average: 4, latest: 5, previous: 3, deltaFromPrevious: 2, count: 2 });
             expect(result).not.toHaveProperty('score');
         });
 
