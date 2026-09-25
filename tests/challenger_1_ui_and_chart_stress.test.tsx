@@ -118,6 +118,6 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
 
         expect(screen.getByText('Correlazione volume vs calorie')).toBeDefined();
         expect(await screen.findByText(/r = \+1\.00/i)).toBeDefined();
-        expect(await screen.findByText(/Forte correlazione positiva/i)).toBeDefined();
+        expect(await screen.findByText(/Associazione positiva forte/i)).toBeDefined();
     });
 });
