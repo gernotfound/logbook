@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
+import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { z } from 'zod';
 import { useLocalStorage } from '../src/hooks/useLocalStorage';
@@ -336,7 +336,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             errorSpy.mockRestore();
         });
 
-        it('reloads page when "Ricarica pagina" button is clicked', () => {
+        it('reloads page safely when "Ricarica pagina" button is clicked', async () => {
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             const reloadMock = vi.fn();
             Object.defineProperty(window, 'location', {
@@ -351,7 +351,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             );
 
             fireEvent.click(screen.getByText(/Ricarica pagina/i));
-            expect(reloadMock).toHaveBeenCalledTimes(1);
+            await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));
 
             errorSpy.mockRestore();
         });
@@ -384,7 +384,7 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
             );
             expect(DB.purgeAllLocalUserData).toHaveBeenCalledTimes(1);
             expect(window.localStorage.clear).not.toHaveBeenCalled();
-            expect(reloadMock).toHaveBeenCalledTimes(1);
+            await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));
 
             errorSpy.mockRestore();
         });
