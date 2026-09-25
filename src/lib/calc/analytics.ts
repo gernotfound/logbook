@@ -438,6 +438,9 @@ export function computeWeeklyWeightSeries(
 
 export interface ReadinessTrendDimension {
     average: number | null;
+    latest: number | null;
+    previous: number | null;
+    deltaFromPrevious: number | null;
     count: number;
 }
 
@@ -462,8 +465,13 @@ export function computeReadinessTrends(
         const values = sessions
             .map(session => session.readiness?.[key])
             .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 1 && value <= 5);
+        const latest = values[0] ?? null;
+        const previous = values[1] ?? null;
         return {
             average: values.length ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 : null,
+            latest,
+            previous,
+            deltaFromPrevious: latest !== null && previous !== null ? Math.round((latest - previous) * 10) / 10 : null,
             count: values.length,
         };
     };
