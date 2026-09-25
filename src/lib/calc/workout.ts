@@ -420,88 +420,30 @@ export function searchMuscles(query: string, limit: number = 10): Array<{ id: st
     return merged.slice(0, limit);
 }
 
-export function autoHealPains(
+export function mergeActivePains(
     activePains: string[] = [],
-    sessionExercises: Array<{ exId?: string }> = [],
-    library: Array<{ id: string; muscles?: string[] }> = [],
-    sessionPains: string[] = []
+    sessionPainsOrLegacyExercises: string[] | Array<{ exId?: string }> = [],
+    _legacyLibrary: Array<{ id: string; muscles?: string[] }> = [],
+    legacySessionPains?: string[]
 ): string[] {
-    const safeActivePains = Array.isArray(activePains) ? activePains.filter((p): p is string => typeof p === 'string' && Boolean(p.trim())) : [];
-    const safeSessionExercises = Array.isArray(sessionExercises) ? sessionExercises.filter(Boolean) : [];
-    const safeLibrary = Array.isArray(library) ? library.filter(Boolean) : [];
-    const safeSessionPains = Array.isArray(sessionPains) ? sessionPains.filter((p): p is string => typeof p === 'string' && Boolean(p.trim())) : [];
-
-    const libMap = new Map<string, { id: string; muscles?: string[] }>();
-    safeLibrary.forEach(ex => {
-        if (ex && ex.id) libMap.set(ex.id, ex);
-    });
-
-    const trainedPrimaryMuscles = new Set<string>();
-    for (const se of safeSessionExercises) {
-        if (!se || !se.exId) continue;
-        const ex = libMap.get(se.exId);
-        if (Array.isArray(ex?.muscles)) {
-            ex.muscles.forEach(m => {
-                if (m && typeof m === 'string') {
-                    trainedPrimaryMuscles.add(m);
-                    // Add lateral and base variants
-                    if (!m.endsWith('_left') && !m.endsWith('_right')) {
-                        trainedPrimaryMuscles.add(`${m}_left`);
-                        trainedPrimaryMuscles.add(`${m}_right`);
-                    } else {
-                        const base = m.replace(/_(left|right)$/, '');
-                        trainedPrimaryMuscles.add(base);
-                    }
-                }
-            });
-        }
-    }
-
-    const sessionPainsSet = new Set<string>();
-    safeSessionPains.forEach(p => {
-        if (p && typeof p === 'string') {
-            sessionPainsSet.add(p);
-            if (!p.endsWith('_left') && !p.endsWith('_right')) {
-                sessionPainsSet.add(`${p}_left`);
-                sessionPainsSet.add(`${p}_right`);
-            } else {
-                const base = p.replace(/_(left|right)$/, '');
-                sessionPainsSet.add(base);
-            }
-        }
-    });
-
-    const resultPains: string[] = [];
+    const active = Array.isArray(activePains) ? activePains : [];
+    const sessionPains = legacySessionPains !== undefined
+        ? (Array.isArray(legacySessionPains) ? legacySessionPains : [])
+        : (Array.isArray(sessionPainsOrLegacyExercises)
+            ? sessionPainsOrLegacyExercises.filter((pain): pain is string => typeof pain === 'string')
+            : []);
+    const result: string[] = [];
     const seen = new Set<string>();
 
-    // Evaluate active pains
-    for (const pain of safeActivePains) {
-        if (trainedPrimaryMuscles.has(pain)) {
-            // Trained as primary: keep only if explicitly selected in session pains
-            if (sessionPainsSet.has(pain)) {
-                if (!seen.has(pain)) {
-                    seen.add(pain);
-                    resultPains.push(pain);
-                }
-            }
-        } else {
-            // Untrained: preserve
-            if (!seen.has(pain)) {
-                seen.add(pain);
-                resultPains.push(pain);
-            }
-        }
+    for (const pain of [...active, ...sessionPains]) {
+        if (typeof pain !== 'string') continue;
+        const normalized = pain.trim();
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        result.push(normalized);
     }
 
-    // Add new session pains
-    for (const pain of safeSessionPains) {
-        if (!seen.has(pain)) {
-            seen.add(pain);
-            resultPains.push(pain);
-        }
-    }
-
-    return resultPains;
+    return result;
 }
 
 
