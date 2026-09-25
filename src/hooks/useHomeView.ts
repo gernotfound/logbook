@@ -114,7 +114,6 @@ export function useHomeView(): HomeViewState {
     const activePains = useAppStore(state => state.userData?.activePains || EMPTY_PAINS);
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const nutritionPlanning = useAppStore(state => state.userData?.nutritionPlanning);
-    const profile = useAppStore(state => state.userData?.profile);
     const [homeClockNow, setHomeClockNow] = useState(() => Date.now());
 
     useEffect(() => {
