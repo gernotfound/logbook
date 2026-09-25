@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { subDays, format } from 'date-fns';
 import { useAppStore } from '../store/useAppStore';
 import { Logic } from '../lib/logic';
+import { computeWeeklyWeightSeries } from '../lib/calc/analytics';
 
 const HOME_CLOCK_REFRESH_MS = 60 * 1000;
 
@@ -80,6 +81,7 @@ export type HomeViewState =
         fat: number;
         kcalTarget: number;
         bf: string;
+        bfSource: string | null;
         streak: number;
         totalWorkouts: number;
         tdeeCalc: any;
@@ -230,7 +232,7 @@ export function useHomeView(): HomeViewState {
                         });
                         recentExposure.set(mId, Math.max(recentExposure.get(mId) || 0, recencyWeight));
                     });
-                    // Secondary muscles (50% fatigue)
+                    // Secondary muscles receive half the recency weight; this is exposure, not inferred fatigue.
                     (libEx.secondaryMuscles || []).forEach((mId: string) => {
                         if (!mId || typeof mId !== 'string') return;
                         const atomicPaths = (Logic.GROUP_MAP as any)[mId] || [mId];
@@ -312,6 +314,13 @@ export function useHomeView(): HomeViewState {
             : null;
         const minWeight = hasDataInPeriod ? Math.min(...validWeights) : null;
         const maxWeight = hasDataInPeriod ? Math.max(...validWeights) : null;
+        const weeksMap: Record<string, number> = { '7d': 1, '30d': 5, '180d': 26, '365d': 52 };
+        const weeklyWeight = computeWeeklyWeightSeries(nutrition, weeksMap[weightPeriod] || 1, today);
+        const latestWeeklyAverage = weeklyWeight.stats.latestAverageWeightKg;
+        const latestWeeklyCoverage = {
+            recordedDays: weeklyWeight.stats.latestRecordedDaysCount,
+            daysConsidered: weeklyWeight.stats.latestDaysConsidered,
+        };
 
         const labels = dateRange.map(d => {
             const parts = d.split('-');
@@ -354,7 +363,9 @@ export function useHomeView(): HomeViewState {
                 firstWeight,
                 weightDelta,
                 minWeight,
-                maxWeight
+                maxWeight,
+                latestWeeklyAverage,
+                latestWeeklyCoverage
             }
         };
     }, [nutrition, weightPeriod, homeClockNow]);
@@ -383,7 +394,7 @@ export function useHomeView(): HomeViewState {
     let kcalTarget = nutritionPlanning?.normocalorica?.kcal || 2500;
     
     if (nutritionPlanning) {
-        const isDayOn = todayNutrition.isDayOn ?? true;
+        const isDayOn = todayNutrition.isDayOn;
         
         // Find latest weight
         const sortedDates = Object.keys(nutrition).sort((a, b) => b.localeCompare(a));
@@ -396,7 +407,11 @@ export function useHomeView(): HomeViewState {
         }
         
         const w = nutritionPlanning.weight || latestWeight;
-        const targetMacros = isDayOn ? nutritionPlanning.onMacros : nutritionPlanning.offMacros;
+        const targetMacros = isDayOn === true
+            ? nutritionPlanning.onMacros
+            : isDayOn === false
+                ? nutritionPlanning.offMacros
+                : undefined;
         
         if (targetMacros) {
             const calc = Logic.calculateMacrosFromKg(w, targetMacros.carbsPerKg, targetMacros.proPerKg, targetMacros.fatPerKg);
@@ -413,33 +428,24 @@ export function useHomeView(): HomeViewState {
     const resolvedUserWeight = typeof currentWeight === 'number' ? currentWeight : (parseFloat(String(currentWeight)) || 80);
     
     let bf = "--";
-    const recentNutritionWithBf = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
-    const directBf = (todayNutrition.bf !== undefined && todayNutrition.bf !== null && todayNutrition.bf !== '')
-        ? todayNutrition.bf
-        : recentNutritionWithBf?.bf;
+    let bfSource: string | null = null;
+    const recentNutritionWithBf = sortedNutritionDates
+        .map(d => nutrition[d])
+        .find(n => n?.bf !== undefined && n?.bf !== null && n?.bf !== '');
+    const selectedBfDay = (todayNutrition.bf !== undefined && todayNutrition.bf !== null && todayNutrition.bf !== '')
+        ? todayNutrition
+        : recentNutritionWithBf;
+    const directBf = selectedBfDay?.bf;
 
     if (directBf !== undefined && directBf !== null && directBf !== '') {
         const num = parseFloat(String(directBf));
         if (!isNaN(num)) {
             bf = num.toFixed(1);
-        }
-    } else {
-        // Calcola da circonferenze recenti o profilo se bf non precalcolato
-        const recentMeasurement = sortedNutritionDates.map(d => nutrition[d]).find(n => n?.waist && n?.neck);
-        if (recentMeasurement?.waist && recentMeasurement?.neck && profile?.height) {
-            const calc = Logic.calculateUsNavyBodyFat({
-                gender: profile.gender || 'M',
-                height: parseFloat(String(profile.height)),
-                waist: parseFloat(String(recentMeasurement.waist)),
-                neck: parseFloat(String(recentMeasurement.neck)),
-                hip: recentMeasurement.hip ? parseFloat(String(recentMeasurement.hip)) : undefined
-            });
-            if (calc !== null && !isNaN(calc)) {
-                bf = Number(calc).toFixed(1);
-            }
-        } else if (profile && Object.keys(profile).length > 0) {
-            const calcBf = Logic.calculateBodyFat(currentWeight, profile);
-            if (calcBf) bf = Number(calcBf).toFixed(1);
+            bfSource = selectedBfDay?.bfProvenance?.method === 'manual'
+                ? 'Manuale'
+                : selectedBfDay?.bfProvenance?.method === 'us_navy'
+                    ? 'US Navy'
+                    : 'Origine non disponibile';
         }
     }
 
@@ -447,7 +453,7 @@ export function useHomeView(): HomeViewState {
         loading: false,
         isRestDay, todaysWorkout,
         kcalEaten, carbs, pro, fat, kcalTarget,
-        bf, streak, totalWorkouts,
+        bf, bfSource, streak, totalWorkouts,
         tdeeCalc, recentDates, chartData,
         weightPeriod, setWeightPeriod, weightStats,
         muscleColors, volumeChartData,
