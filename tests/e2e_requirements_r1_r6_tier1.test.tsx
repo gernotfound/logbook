@@ -661,7 +661,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
         // ---------------------------------------------------------------------
         // Requirement R6: Persistenza esplicita dei dolori
         // ---------------------------------------------------------------------
-        describe('R6: DOMS Auto-healing Logic', () => {
+        describe('R6: Persistenza esplicita dei dolori', () => {
             it('T1.6.1: preserves trained primary muscle until explicitly cleared', () => {
                 const activePains = ['petto'];
                 const sessionExercises = [{ exId: 'ex_bench' }];
