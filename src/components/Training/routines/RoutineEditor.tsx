@@ -20,6 +20,7 @@ interface RoutineEditorProps {
     onUpdateReps: (index: number, field: 'minReps' | 'maxReps', value: string) => void;
     onUpdateSetPlan: (exerciseIndex: number, setIndex: number, tech: import('../../../types').SetTechnique) => void;
     onUpdateSetPlanField: (exerciseIndex: number, setIndex: number, field: 'restSeconds' | 'segmentCount' | 'targetReps', value: string) => void;
+    onUpdateExerciseMetadata: (exerciseIndex: number, field: 'technicalStandard' | keyof import('../../../types').ProgressionContract, value: string) => void;
     onSave: () => void;
     onCancel: () => void;
     isSaving?: boolean;
@@ -40,6 +41,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     onUpdateReps,
     onUpdateSetPlan,
     onUpdateSetPlanField,
+    onUpdateExerciseMetadata,
     onSave,
     onCancel,
     isSaving
@@ -99,6 +101,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                                     onUpdateReps={onUpdateReps}
                                     onUpdateSetPlan={onUpdateSetPlan}
                                     onUpdateSetPlanField={onUpdateSetPlanField}
+                                    onUpdateExerciseMetadata={onUpdateExerciseMetadata}
                                 />
                             );
                         })}
