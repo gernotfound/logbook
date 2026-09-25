@@ -266,8 +266,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
             )}
 
             <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                <summary style={{ cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
-                    Standard tecnico e contratto di progressione
+                <summary className="btn btn-secondary btn-small" style={{ cursor: 'pointer' }}>
+                    Tecnica
                 </summary>
                 <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
                     <label className="text-sm">
