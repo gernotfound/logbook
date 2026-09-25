@@ -3,7 +3,7 @@ import { Trash2, Save } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
-import { computeProgressionEngine, formatProgressionReference, progressionQualityLabel } from '../../lib/calc/progression';
+import { computeProgressionEngine, formatProgressionReference, progressionBaselineStateLabel, progressionQualityLabel } from '../../lib/calc/progression';
 import { useAppStore } from '../../store/useAppStore';
 import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
@@ -235,7 +235,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                             quality: progressionQualityLabel(progression.quality),
                             comparisonStatus: progression.comparisonStatus,
                             comparisonReasons: progression.comparison.reasons,
-                            baselineState: progression.baselineState,
+                            baselineState: progressionBaselineStateLabel(progression.baselineState),
                             baselineVersion: progression.baselineVersion,
                             contractTarget: progression.progressionContract?.target,
                             nextAction: progression.progressionContract?.nextAction,
