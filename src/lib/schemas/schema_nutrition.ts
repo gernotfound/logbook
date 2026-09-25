@@ -127,7 +127,7 @@ export const BodyFatProvenanceSchema = z.object({
 
 export const ContextEventSchema = z.object({
     id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo contesto non valido'),
-    type: z.enum(['training', 'nutrition', 'recovery', 'schedule', 'travel', 'illness', 'reentry', 'deload', 'other']),
+    type: z.enum(['training', 'nutrition', 'recovery', 'schedule', 'travel', 'reentry', 'deload', 'other']),
     label: z.string().trim().min(1).max(160),
     note: safeOptionalString(),
     createdAt: z.number().finite().nonnegative().optional().catch(undefined),
