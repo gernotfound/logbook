@@ -239,6 +239,36 @@ describe('workout session preparation', () => {
         expect(prepared.finishedWorkout.originalHistoryId).toBeUndefined();
     });
 
+    it('keeps unreported water missing instead of converting it to zero liters', () => {
+        const active = {
+            id: 'active-no-water',
+            routineName: 'Routine A',
+            globalStartTime: 1_000,
+            waterLiters: '' as any,
+            exercises: [],
+        } as WorkoutSession;
+        const completed = prepareCompletedWorkout(active, 61_000, createRuntime()).finishedWorkout;
+        expect(completed.waterLiters).toBeUndefined();
+
+        const editing = {
+            id: 'history-no-water',
+            originalHistoryId: 'history-no-water',
+            isEditingHistory: true,
+            routineName: 'Storico',
+            waterLiters: 2,
+            exercises: [],
+        } as WorkoutSession;
+        const saved = prepareHistoricalWorkoutForSave(
+            editing,
+            'history-no-water',
+            { mood: '', pump: '', fatigue: '' },
+            '',
+            '00:30:00',
+            createRuntime(),
+        );
+        expect(saved.waterLiters).toBeUndefined();
+    });
+
     it('marks new sessions as 1-5 while preserving legacy 1-10 historical ratings', () => {
         const runtime = createRuntime();
         expect(buildFreeWorkout(runtime).ratingScale).toBe(5);
