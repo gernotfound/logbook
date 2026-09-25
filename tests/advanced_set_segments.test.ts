@@ -31,6 +31,25 @@ describe('advanced set segments', () => {
         expect(set.rir).toBe(0);
     });
 
+    it('preserves optional advanced execution metadata without converting it into a score', () => {
+        const parsed = UserDataSchema.parse({ history: [{ id: 'w-meta', exercises: [{ exId: 'bench', sessionNote: '', sets: [{
+            id: 's-meta', kg: '100', reps: '8', technique: 'cluster',
+            segments: [{
+                id: 'seg-meta', kg: '90', reps: '4', restBeforeSeconds: 20,
+                eccentricSeconds: 4, holdPosition: 'stretched', assistance: 'partner', negativeOnly: true,
+            }],
+        }]}]}] }) as UserData;
+        const segment = parsed.history![0].exercises[0].sets[0].segments?.[0];
+        expect(segment).toMatchObject({
+            eccentricSeconds: 4,
+            holdPosition: 'stretched',
+            assistance: 'partner',
+            negativeOnly: true,
+        });
+        expect(formatAdvancedSetSummary(parsed.history![0].exercises[0].sets[0])).toContain('ecc 4s');
+        expect(parsed.history![0].exercises[0].sets[0]).not.toHaveProperty('stimulusScore');
+    });
+
     it('applies per-set routine plans without forcing one technique on the exercise', () => {
         const routine = { id: 'r1', name: 'R', exercises: [{ exId: 'bench', setsCount: 3, setPlans: [
             { technique: 'straight' }, { technique: 'cluster', restSeconds: 15, segmentCount: 3 },
