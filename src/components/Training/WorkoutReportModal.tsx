@@ -240,9 +240,9 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
                     {report.isFirstSession && (
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '6px' }}>
-                            <strong style={{ color: 'var(--primary-color)' }}>Baseline iniziale registrata</strong>
+                            <strong style={{ color: 'var(--primary-color)' }}>Nuova baseline registrata</strong>
                             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                Non ci sono ancora esposizioni precedenti sufficientemente confrontabili. Questa sessione diventa il riferimento per i confronti successivi.
+                                Non ci sono esposizioni precedenti sufficientemente confrontabili per questo contesto e standard registrato. Questa sessione diventa il riferimento per i confronti successivi.
                             </span>
                         </div>
                     )}
