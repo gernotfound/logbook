@@ -125,7 +125,7 @@ export const Exporter = {
 
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
-        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
+        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Eccentrica (s),Posizione tenuta,Assistenza,Solo negative,Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Standard tecnico,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
 
         history.forEach(session => {
             const dateStr = session.globalStartTime
@@ -161,7 +161,7 @@ export const Exporter = {
                             const kcal = set.kcal !== undefined ? set.kcal : "";
 
                             workoutCsv += this.formatCsvRow([
-                                dateStr, routineName, exName, idx + 1, set.technique || (set.dropsets?.length ? 'dropset' : 'straight'), 0, reps, rir, time, kg, '', set.target?.reps ?? '', distance, speed, incline, kcal,
+                                dateStr, routineName, exName, idx + 1, set.technique || (set.dropsets?.length ? 'dropset' : 'straight'), 0, reps, rir, time, kg, '', '', '', '', '', set.target?.reps ?? '', distance, speed, incline, kcal, ex.technicalStandard ?? '',
                                 sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                             ]);
 
@@ -169,8 +169,8 @@ export const Exporter = {
                                 set.segments.forEach((segment: any, segmentIndex: number) => {
                                     workoutCsv += this.formatCsvRow([
                                         dateStr, routineName, exName, idx + 1, set.technique || 'straight', segmentIndex + 1,
-                                        segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '', segment.restBeforeSeconds ?? '', set.target?.reps ?? '',
-                                        '', '', '', '', sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
+                                        segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '', segment.restBeforeSeconds ?? '', segment.eccentricSeconds ?? '', segment.holdPosition ?? '', segment.assistance ?? '', segment.negativeOnly === true ? 'true' : segment.negativeOnly === false ? 'false' : '', set.target?.reps ?? '',
+                                        '', '', '', '', ex.technicalStandard ?? '', sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
                             }
@@ -181,7 +181,7 @@ export const Exporter = {
                                     const dsReps = ds.reps !== undefined ? ds.reps : "";
                                     const label = set.dropsets.length > 1 ? `${idx + 1} (Dropset ${dsIdx + 1})` : `${idx + 1} (Dropset)`;
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, label, 'dropset', dsIdx + 1, dsReps, "", "", dsKg, "", "", "", "", "", "",
+                                        dateStr, routineName, exName, label, 'dropset', dsIdx + 1, dsReps, "", "", dsKg, "", "", "", "", "", "", "", "", "", "", ex.technicalStandard ?? '',
                                         sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -193,7 +193,7 @@ export const Exporter = {
                                     const isoTime = iso.time ? `${iso.time}s` : "";
                                     const label = set.isometrics.length > 1 ? `${idx + 1} (Isometria ${isoIdx + 1})` : `${idx + 1} (Isometria)`;
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, label, 'isometry', isoIdx + 1, "", "", isoTime, isoKg, "", "", "", "", "", "",
+                                        dateStr, routineName, exName, label, 'isometry', isoIdx + 1, "", "", isoTime, isoKg, "", "", "", "", "", "", "", "", "", "", ex.technicalStandard ?? '',
                                         sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -204,7 +204,7 @@ export const Exporter = {
             }
         });
 
-        let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Ore sonno,Sonno profondo,Sonno leggero,Sonno REM,Tempo sveglio,Note\n";
+        let nutritionCsv = "Data,Peso (kg),Kcal,Carbo (g),Pro (g),Grassi (g),BF (%),Fonte BF,Collo (cm),Torace (cm),Spalle (cm),Braccia (cm),Vita (cm),Fianchi (cm),Cosce (cm),Polpacci (cm),Ore sonno,Sonno profondo,Sonno leggero,Sonno REM,Tempo sveglio,Note\n";
         const nutritionDates = Object.keys(nutrition).sort();
         nutritionDates.forEach(date => {
             const n = nutrition[date];
@@ -215,7 +215,7 @@ export const Exporter = {
             const sAwake = Logic.formatSleepTime(n.sleepAwake);
 
             nutritionCsv += this.formatCsvRow([
-                date, n.weight, n.kcal, n.carbs, n.pro, n.fat, n.bf,
+                date, n.weight, n.kcal, n.carbs, n.pro, n.fat, n.bf, n.bfProvenance?.method || '',
                 n.neck, n.chest, n.shoulders, n.biceps, n.waist, n.hips || n.hip, n.thighs, n.calves,
                 sHours, sDeep, sLight, sRem, sAwake, n.notes
             ]);
