@@ -37,9 +37,13 @@ export default function ReadinessTrendCard({ history }: { history: WorkoutSessio
                         <div key={key} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--surface-light)' }}>
                             <dt className="text-sm home-muted">{label}</dt>
                             <dd style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 700 }}>
-                                {value.average === null ? '—' : `${value.average.toFixed(1)}/5`}
+                                {value.latest === null ? '—' : `${value.latest.toFixed(1)}/5`}
                             </dd>
-                            <span className="text-xs home-muted">{value.count} valori</span>
+                            <span className="text-xs home-muted">
+                                Media {value.average === null ? '—' : value.average.toFixed(1)}
+                                {value.deltaFromPrevious !== null ? ` · Δ ultima/precedente ${value.deltaFromPrevious > 0 ? '+' : ''}${value.deltaFromPrevious.toFixed(1)}` : ''}
+                                {' · '}{value.count} valori
+                            </span>
                         </div>
                     ))}
                 </dl>
