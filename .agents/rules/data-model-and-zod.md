@@ -15,7 +15,7 @@
 
 `library` e `customFoods` sono campi legacy del modello applicativo; la projection corrente li normalizza rispetto al catalogo globale prima della write root.
 
-Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`.
+Le misurazioni corporee non sono un array root `bodyMeasurements`: peso, BF, provenienza BF, circonferenze e sonno sono campi di `NutritionDay`, quindi seguono la persistenza mensilizzata di `nutrition`. Anche gli eventi descrittivi di contesto (`contextEvents`) vivono nel giorno nutrizione e sono sincronizzati per identità stabile, senza diventare punteggi fisiologici o prescrizioni.
 
 ## Zod Gateway — difesa runtime
 
