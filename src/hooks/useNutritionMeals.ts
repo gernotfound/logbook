@@ -28,9 +28,9 @@ export function useNutritionMeals(dateStr?: string) {
     const planning = useAppStore(state => state.userData?.nutritionPlanning);
     const nutritionMap = useAppStore(state => state.userData?.nutrition);
 
-    const [localDayOnMap, setLocalDayOnMap] = useState<Record<string, boolean>>({});
+    const [localDayOnMap, setLocalDayOnMap] = useState<Record<string, boolean | undefined>>({});
     const dbIsDayOn = todayNutrition.isDayOn;
-    const isDayOn = localDayOnMap[targetDateStr] !== undefined ? localDayOnMap[targetDateStr] : (dbIsDayOn ?? true);
+    const isDayOn = Object.prototype.hasOwnProperty.call(localDayOnMap, targetDateStr) ? localDayOnMap[targetDateStr] : dbIsDayOn;
 
     let latestWeight = 80;
     if (nutritionMap) {
@@ -46,7 +46,7 @@ export function useNutritionMeals(dateStr?: string) {
     let dailyTarget = { kcal: 0, carbs: 0, pro: 0, fat: 0 };
     if (planning) {
         const w = planning.weight || latestWeight;
-        const targetMacros = isDayOn ? planning.onMacros : planning.offMacros;
+        const targetMacros = isDayOn === true ? planning.onMacros : isDayOn === false ? planning.offMacros : undefined;
         if (targetMacros) {
             const calc = Logic.calculateMacrosFromKg(w, targetMacros.carbsPerKg, targetMacros.proPerKg, targetMacros.fatPerKg);
             dailyTarget = {
@@ -63,20 +63,22 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const toggleDayType = async () => {
-        const newIsOn = !isDayOn;
+        const newIsOn = isDayOn === true ? false : true;
         setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: newIsOn }));
-        if ((todayNutrition.meals && todayNutrition.meals.length > 0) || dbIsDayOn !== undefined || todayNutrition.weight) {
-            try { await persistDayType(newIsOn); }
-            catch { showAlert("Errore durante il salvataggio."); }
+        try { await persistDayType(newIsOn); }
+        catch {
+            setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: dbIsDayOn }));
+            showAlert("Errore durante il salvataggio.");
         }
     };
 
     const setDayType = async (isOn: boolean) => {
         if (isDayOn === isOn) return;
         setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: isOn }));
-        if ((todayNutrition.meals && todayNutrition.meals.length > 0) || dbIsDayOn !== undefined || todayNutrition.weight) {
-            try { await persistDayType(isOn); }
-            catch { showAlert("Errore durante il salvataggio."); }
+        try { await persistDayType(isOn); }
+        catch {
+            setLocalDayOnMap(prev => ({ ...prev, [targetDateStr]: dbIsDayOn }));
+            showAlert("Errore durante il salvataggio.");
         }
     };
 
@@ -104,13 +106,7 @@ export function useNutritionMeals(dateStr?: string) {
     };
 
     const saveMeal = async (meal: LoggedMealItem) => {
-        const currentIsDayOn = localDayOnMap[targetDateStr] !== undefined
-            ? localDayOnMap[targetDateStr]
-            : (todayNutrition.isDayOn ?? true);
-        await dispatchDomainOperation([
-            { type: 'nutrition-meal.upsert', date: targetDateStr, meal },
-            { type: 'nutrition-day.patch', date: targetDateStr, patch: { isDayOn: currentIsDayOn } },
-        ]);
+        await dispatchDomainOperation({ type: 'nutrition-meal.upsert', date: targetDateStr, meal });
     };
 
     const handleQuickAdd = async (quickData: any) => {
