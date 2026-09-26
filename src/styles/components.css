@@ -109,6 +109,15 @@ details[open] > .disclosure-summary {
     background: var(--primary-soft);
 }
 details[open] > .disclosure-summary::after { transform: rotate(180deg); }
+.technique-summary::after {
+    content: '+';
+    transform: none;
+    font-weight: 700;
+}
+details[open] > .technique-summary::after {
+    content: '-';
+    transform: none;
+}
 .disclosure-summary:hover { border-color: var(--border-strong, var(--glass-border)); }
 .disclosure-summary:active { transform: scale(0.98); }
 .disclosure-summary:focus-visible {
