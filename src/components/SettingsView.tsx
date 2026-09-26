@@ -99,8 +99,6 @@ const SettingsView = () => {
 
     return (
         <div id="view-settings" className="view-section active settings-view">
-            <h1 className="settings-title">Impostazioni</h1>
-
             <SubNav id="settings" label="Sotto-menu Impostazioni" items={SETTINGS_TABS} value={activeTab} onChange={setActiveTab} />
 
             {activeTab === 'account' && (

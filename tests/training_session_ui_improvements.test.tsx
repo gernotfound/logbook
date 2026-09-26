@@ -88,6 +88,7 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
                     onAddSpecialSet={() => {}}
                     onUpdateSpecialSet={() => {}}
                     onRemoveSpecialSet={() => {}}
+                    onUpdateSetTarget={() => {}}
                 />
             );
 
@@ -97,6 +98,35 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             const styleAttr = row?.getAttribute('style') || '';
             expect(styleAttr).toContain('var(--primary-color)');
         });
+
+    });
+
+    it('R1.3: advanced techniques are an ordered queue without a generic segment control', () => {
+        const { container } = render(
+            <SessionSetRow
+                set={{ id: 's-tech', kg: '100', reps: '8', technique: 'dropset', segments: [
+                    { id: 'seg1', kg: '', reps: '', technique: 'dropset' },
+                    { id: 'seg2', kg: '', reps: '', technique: 'dropset' },
+                    { id: 'seg3', kg: '', reps: '', technique: 'rest_pause' },
+                ] }}
+                sIndex={0}
+                exIndex={0}
+                trackingType="weight_reps"
+                isOpenMenu={false}
+                onToggleMenu={() => {}}
+                onRemoveSet={() => {}}
+                onUpdateSet={() => {}}
+                onAddSpecialSet={() => {}}
+                onUpdateSpecialSet={() => {}}
+                onRemoveSpecialSet={() => {}}
+                onUpdateSetTarget={() => {}}
+            />
+        );
+        expect(screen.getByText('↳ Dropset 1')).toBeDefined();
+        expect(screen.getByText('↳ Dropset 2')).toBeDefined();
+        expect(screen.getByText('↳ Rest-pause 1')).toBeDefined();
+        expect(screen.queryByText('+ Segmento')).toBeNull();
+        expect(container.textContent?.toLocaleLowerCase('it')).not.toContain('segmento');
     });
 
     describe('R2: Set Button Layout & Functionality', () => {

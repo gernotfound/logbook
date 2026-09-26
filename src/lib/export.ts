@@ -168,8 +168,8 @@ export const Exporter = {
                             if (set.segments && set.segments.length > 0) {
                                 set.segments.forEach((segment: any, segmentIndex: number) => {
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, idx + 1, set.technique || 'straight', segmentIndex + 1,
-                                        segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '', segment.restBeforeSeconds ?? '', set.target?.reps ?? '',
+                                        dateStr, routineName, exName, idx + 1, segment.technique || set.technique || 'straight', segmentIndex + 1,
+                                        segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '', segment.restBeforeSeconds ?? '', segment.target?.reps ?? set.target?.reps ?? '',
                                         '', '', '', '', ex.technicalStandard ?? '', sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });

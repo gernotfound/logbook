@@ -61,7 +61,14 @@ export interface Exercise {
 }
 
 export type SetTechnique = 'straight' | 'dropset' | 'rest_pause' | 'cluster' | 'rep_match' | 'diminishing';
+export type SetContinuationTechnique = Exclude<SetTechnique, 'straight'> | 'isometry';
 export type ExecutionMode = 'standard' | 'stop_reps';
+
+export interface SetTarget {
+    type: 'reps';
+    reps: number;
+    sourceSetId?: string;
+}
 
 export interface SetSegment {
     id: string;
@@ -69,12 +76,8 @@ export interface SetSegment {
     reps: string;
     time?: string;
     restBeforeSeconds?: number;
-}
-
-export interface SetTarget {
-    type: 'reps';
-    reps: number;
-    sourceSetId?: string;
+    technique?: SetContinuationTechnique;
+    target?: SetTarget;
 }
 
 export interface PlannedSetTechnique {

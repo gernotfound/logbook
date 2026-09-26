@@ -105,7 +105,6 @@ export function useWorkoutSession() {
         updateSet,
         updateSpecialSet,
         removeSpecialSet,
-        addSegment,
         updateSetTarget,
         updateSessionNote,
         updateTechnicalStandard
@@ -330,7 +329,6 @@ export function useWorkoutSession() {
         addSpecialSet,
         updateSpecialSet,
         removeSpecialSet,
-        addSegment,
         updateSetTarget,
         updateSessionNote,
         updateTechnicalStandard,

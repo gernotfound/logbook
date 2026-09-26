@@ -243,29 +243,41 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 useWorkoutSetMutations({ setLocalWorkout, showConfirm: vi.fn().mockResolvedValue(true) })
             );
 
-            // 1. Add dropset to ex_lateral (index 1)
+            // 1. Repeated technique additions append instead of replacing the existing chain.
             act(() => {
                 result.current.addSpecialSet(1, 's2', 'dropset');
+                result.current.addSpecialSet(1, 's2', 'dropset');
+                result.current.addSpecialSet(1, 's2', 'rest_pause');
+                result.current.addSpecialSet(1, 's2', 'rest_pause');
+                result.current.addSpecialSet(1, 's2', 'isometry');
             });
-            expect(localWorkout?.exercises[1].sets[0].segments?.length).toBe(1);
+            expect(localWorkout?.exercises[1].sets[0].segments?.map(segment => segment.technique)).toEqual([
+                'dropset',
+                'dropset',
+                'rest_pause',
+                'rest_pause',
+                'isometry',
+            ]);
+            expect(localWorkout?.exercises[1].sets[0].technique).toBe('dropset');
+            expect(localWorkout?.exercises[1].sets[0].dropsets).toBeUndefined();
+            expect(localWorkout?.exercises[1].sets[0].isometrics).toBeUndefined();
 
-            // 2. Add isometry to ex_press (index 0)
-            act(() => {
-                result.current.addSpecialSet(0, 's1', 'isometry');
-            });
-            expect(localWorkout?.exercises[0].sets[0].isometrics?.length).toBe(1);
-
-            // 3. Reorder exercises: ex_lateral becomes index 0, ex_press becomes index 1
+            // 2. Reorder exercises: ex_lateral becomes index 0, ex_press becomes index 1
             act(() => {
                 result.current.reorderExercises(1, 0);
             });
 
             expect(localWorkout?.exercises[0].exId).toBe('ex_lateral');
-            expect(localWorkout?.exercises[0].sets[0].segments?.length).toBe(1);
+            expect(localWorkout?.exercises[0].sets[0].segments?.map(segment => segment.technique)).toEqual([
+                'dropset',
+                'dropset',
+                'rest_pause',
+                'rest_pause',
+                'isometry',
+            ]);
             expect(localWorkout?.exercises[1].exId).toBe('ex_press');
-            expect(localWorkout?.exercises[1].sets[0].isometrics?.length).toBe(1);
 
-            // 4. Update note
+            // 3. Update note
             act(() => {
                 result.current.updateSessionNote(0, 'Ottimo bruciore con dropset');
             });
