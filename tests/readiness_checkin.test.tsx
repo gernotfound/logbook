@@ -90,7 +90,7 @@ describe('pre-session readiness contract', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
 
         await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTruthy());
-        expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
+        await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' }));
         scrollToSpy.mockRestore();
     });
 
