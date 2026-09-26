@@ -3,7 +3,7 @@
   top: var(--sticky-top, env(safe-area-inset-top, 0rem));
   z-index: 100;
   margin-bottom: 1.25rem;
-  padding: .75rem 0;
+  padding: 4px 0;
   border-bottom: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--bg-color) 94%, transparent);
   backdrop-filter: blur(1rem);
@@ -18,7 +18,11 @@
   min-width: 0;
 }
 
-.workout-timer-readout { min-width: 0; }
+.workout-timer-readout {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 .workout-timer .timer-display {
   display: block;
   color: var(--primary-color);

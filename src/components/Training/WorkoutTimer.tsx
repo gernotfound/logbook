@@ -117,7 +117,6 @@ function OwnerWorkoutTimer({ owner }: { owner: string }) {
     return (
         <div className="workout-timer" aria-label="Cronometro recupero">
             <div className="workout-timer-readout">
-                <span className="text-sm text-muted">Recupero</span>
                 <output className="timer-display" aria-live="off" aria-label="Tempo di recupero">
                     {restDisplay}
                 </output>
