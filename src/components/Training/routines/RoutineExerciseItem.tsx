@@ -1,7 +1,57 @@
 import React, { useId } from 'react';
-import { ArrowUp, ArrowDown, Trash2, Activity } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
 import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechnique } from '../../../types';
 import { techniqueLabel } from '../../../lib/advancedSets';
+import { useDialogStore } from '../../../store/useDialogStore';
+
+const TECHNIQUE_HELP = {
+    setTechnique: {
+        title: 'Tecnica per serie',
+        message: 'Definisce come è strutturata ciascuna serie della scheda: normale, dropset, rest-pause, cluster, rep-match o diminishing. Tecniche diverse rendono le prestazioni meno direttamente confrontabili. La scelta non assegna automaticamente un punteggio di stimolo o fatica.',
+    },
+    technicalStandard: {
+        title: 'Esecuzione da mantenere',
+        message: 'Descrive le condizioni che vuoi mantenere stabili per confrontare le prestazioni nel tempo: ROM, setup, macchina, pause, tempo o altri dettagli esecutivi. Se lo standard cambia, LogBook evita di trattare la nuova prestazione come direttamente equivalente alla precedente.',
+    },
+    role: {
+        title: 'Ruolo nella scheda',
+        message: 'Indica quanto questo esercizio conta nella progressione di questa scheda. Primario = riferimento principale; Secondario = importante ma non centrale; Supporto = lavoro complementare. Non cambia automaticamente serie o carichi.',
+    },
+    metric: {
+        title: 'Cosa vuoi migliorare',
+        message: 'Indica quale tipo di progresso vuoi interpretare in questo esercizio: performance, volume, densità o qualità dell’esecuzione. Serve al Progression Engine per leggere correttamente i dati; non modifica da solo il programma.',
+    },
+    context: {
+        title: 'Contesto',
+        message: 'Annota perché l’esercizio è impostato così in questa scheda, per esempio rientro dopo una pausa, blocco di forza o priorità tecnica. È informativo e non applica modifiche automatiche.',
+    },
+    target: {
+        title: 'Target',
+        message: 'Descrive il risultato che vuoi raggiungere in questo contesto, per esempio 8–10 ripetizioni mantenendo RIR 1–2. LogBook può mostrarlo come riferimento, ma non cambia automaticamente il programma quando lo raggiungi.',
+    },
+    successRule: {
+        title: 'Regola di successo',
+        message: 'Descrive quando considerare raggiunto il target, per esempio tutte le serie al limite alto del range. Al momento è una regola descrittiva: LogBook non la esegue automaticamente.',
+    },
+    failureRule: {
+        title: 'Regola di cambio',
+        message: 'Descrive quando rivalutare la strategia, per esempio dopo due esposizioni senza raggiungere il minimo. Al momento è una regola descrittiva e non modifica automaticamente carichi, volume o recuperi.',
+    },
+    nextAction: {
+        title: 'Prossima azione',
+        message: 'Annota cosa vuoi fare dopo che si verifica la condizione prevista, per esempio aumentare il carico minimo disponibile. È una guida visualizzata da LogBook, non un comando automatico.',
+    },
+    baselineState: {
+        title: 'Stato del riferimento storico',
+        message: 'Campo avanzato che descrive se il riferimento storico è attivo, sospeso, in riacclimatazione o sostituito. Serve a documentare lo stato della baseline; non altera da solo il programma.',
+    },
+    baselineVersion: {
+        title: 'Versione del riferimento storico',
+        message: 'Campo avanzato che separa periodi di confronto diversi. Versioni differenti non vengono confrontate direttamente. Usalo solo quando vuoi dichiarare esplicitamente che è iniziato un nuovo riferimento storico.',
+    },
+} as const;
+
+type TechniqueHelpKey = keyof typeof TECHNIQUE_HELP;
 
 interface RoutineExerciseItemProps {
     exercise: any;
@@ -35,6 +85,29 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     const setsId = `${fieldId}-sets`;
     const minRepsId = `${fieldId}-min-reps`;
     const maxRepsId = `${fieldId}-max-reps`;
+    const showAlert = useDialogStore(state => state.showAlert);
+    const showTechniqueHelp = (key: TechniqueHelpKey) => {
+        const help = TECHNIQUE_HELP[key];
+        void showAlert(help.message, help.title);
+    };
+    const helpButton = (key: TechniqueHelpKey) => (
+        <button
+            type="button"
+            className="btn-icon"
+            onClick={() => showTechniqueHelp(key)}
+            aria-label={`Spiega: ${TECHNIQUE_HELP[key].title}`}
+            title={`Spiega ${TECHNIQUE_HELP[key].title}`}
+            style={{ flexShrink: 0 }}
+        >
+            <CircleHelp size={18} aria-hidden="true" />
+        </button>
+    );
+    const fieldHeader = (label: string, key: TechniqueHelpKey, htmlFor: string) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <label htmlFor={htmlFor}>{label}</label>
+            {helpButton(key)}
+        </div>
+    );
 
     return (
         <div className="flex-col bg-card-inner p-12 rounded-8 gap-10" style={{ border: '1px solid var(--glass-border)' }}>
@@ -193,8 +266,11 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     )}
 
                     <div style={{ paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>
-                            Tecnica per serie:
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                Tecnica per serie:
+                            </span>
+                            {helpButton('setTechnique')}
                         </div>
                         {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
                             const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
@@ -270,24 +346,27 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     Tecnica
                 </summary>
                 <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
-                    <label className="text-sm">
-                        Standard tecnico
+                    <p className="text-xs text-muted" style={{ margin: 0 }}>
+                        Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda. Lo stesso esercizio può avere impostazioni diverse in un’altra scheda.
+                    </p>
+
+                    <div className="text-sm">
+                        {fieldHeader('Esecuzione da mantenere', 'technicalStandard', `${fieldId}-technical-standard`)}
                         <input
+                            id={`${fieldId}-technical-standard`}
                             type="text"
                             value={exercise.technicalStandard ?? ''}
                             placeholder="Es. ROM completo, fermo 1 s al petto, stesso macchinario"
                             onChange={event => onUpdateExerciseMetadata(index, 'technicalStandard', event.target.value)}
                             style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
                         />
-                    </label>
-                    <p className="text-xs text-muted" style={{ margin: 0 }}>
-                        Se lo standard cambia, LogBook limita o interrompe il confronto diretto con le esposizioni precedenti.
-                    </p>
+                    </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-                        <label className="text-sm">
-                            Ruolo
+                        <div className="text-sm">
+                            {fieldHeader('Ruolo nella scheda', 'role', `${fieldId}-progression-role`)}
                             <select
+                                id={`${fieldId}-progression-role`}
                                 value={exercise.progressionContract?.role ?? ''}
                                 onChange={event => onUpdateExerciseMetadata(index, 'role', event.target.value)}
                                 style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
@@ -297,49 +376,22 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 <option value="secondary">Secondario</option>
                                 <option value="support">Supporto</option>
                             </select>
-                        </label>
-                        <label className="text-sm">
-                            Metrica
+                        </div>
+                        <div className="text-sm">
+                            {fieldHeader('Cosa vuoi migliorare', 'metric', `${fieldId}-progression-metric`)}
                             <select
+                                id={`${fieldId}-progression-metric`}
                                 value={exercise.progressionContract?.metric ?? ''}
                                 onChange={event => onUpdateExerciseMetadata(index, 'metric', event.target.value)}
                                 style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
                             >
-                                <option value="">Non specificata</option>
+                                <option value="">Non specificato</option>
                                 <option value="performance">Performance</option>
                                 <option value="volume">Volume</option>
                                 <option value="density">Densità</option>
                                 <option value="execution">Esecuzione</option>
                             </select>
-                        </label>
-                        <label className="text-sm">
-                            Stato baseline
-                            <select
-                                value={exercise.progressionContract?.baselineState ?? ''}
-                                onChange={event => onUpdateExerciseMetadata(index, 'baselineState', event.target.value)}
-                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
-                            >
-                                <option value="">Non specificato</option>
-                                <option value="historical">Storica</option>
-                                <option value="active">Attiva</option>
-                                <option value="suspended">Sospesa</option>
-                                <option value="reacclimation">Riacclimatazione</option>
-                                <option value="reactivated">Riattivata</option>
-                                <option value="replaced">Sostituita</option>
-                            </select>
-                        </label>
-                        <label className="text-sm">
-                            Versione baseline
-                            <input
-                                type="number"
-                                min="1"
-                                step="1"
-                                value={exercise.progressionContract?.baselineVersion ?? ''}
-                                placeholder="1"
-                                onChange={event => onUpdateExerciseMetadata(index, 'baselineVersion', event.target.value)}
-                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
-                            />
-                        </label>
+                        </div>
                     </div>
 
                     {([
@@ -348,20 +400,63 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         ['successRule', 'Regola di successo', 'Es. tutte le serie al limite alto del range'],
                         ['failureRule', 'Regola di cambio', 'Es. due esposizioni senza raggiungere il minimo'],
                         ['nextAction', 'Prossima azione', 'Es. aumenta il carico minimo disponibile'],
-                    ] as const).map(([field, label, placeholder]) => (
-                        <label key={field} className="text-sm">
-                            {label}
-                            <input
-                                type="text"
-                                value={exercise.progressionContract?.[field] ?? ''}
-                                placeholder={placeholder}
-                                onChange={event => onUpdateExerciseMetadata(index, field, event.target.value)}
-                                style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
-                            />
-                        </label>
-                    ))}
+                    ] as const).map(([field, label, placeholder]) => {
+                        const inputId = `${fieldId}-progression-${field}`;
+                        return (
+                            <div key={field} className="text-sm">
+                                {fieldHeader(label, field, inputId)}
+                                <input
+                                    id={inputId}
+                                    type="text"
+                                    value={exercise.progressionContract?.[field] ?? ''}
+                                    placeholder={placeholder}
+                                    onChange={event => onUpdateExerciseMetadata(index, field, event.target.value)}
+                                    style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                                />
+                            </div>
+                        );
+                    })}
+
+                    <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
+                        <summary style={{ cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
+                            Riferimento storico (avanzato)
+                        </summary>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', paddingTop: '8px' }}>
+                            <div className="text-sm">
+                                {fieldHeader('Stato del riferimento', 'baselineState', `${fieldId}-baseline-state`)}
+                                <select
+                                    id={`${fieldId}-baseline-state`}
+                                    value={exercise.progressionContract?.baselineState ?? ''}
+                                    onChange={event => onUpdateExerciseMetadata(index, 'baselineState', event.target.value)}
+                                    style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                                >
+                                    <option value="">Non specificato</option>
+                                    <option value="historical">Storico</option>
+                                    <option value="active">Attivo</option>
+                                    <option value="suspended">Sospeso</option>
+                                    <option value="reacclimation">Riacclimatazione</option>
+                                    <option value="reactivated">Riattivato</option>
+                                    <option value="replaced">Sostituito</option>
+                                </select>
+                            </div>
+                            <div className="text-sm">
+                                {fieldHeader('Versione del riferimento', 'baselineVersion', `${fieldId}-baseline-version`)}
+                                <input
+                                    id={`${fieldId}-baseline-version`}
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={exercise.progressionContract?.baselineVersion ?? ''}
+                                    placeholder="1"
+                                    onChange={event => onUpdateExerciseMetadata(index, 'baselineVersion', event.target.value)}
+                                    style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
+                                />
+                            </div>
+                        </div>
+                    </details>
+
                     <p className="text-xs text-muted" style={{ margin: 0 }}>
-                        Questi campi descrivono il contratto. Non modificano automaticamente carichi, volume o recuperi.
+                        I campi descrittivi non modificano automaticamente carichi, volume o recuperi. Il Progression Engine usa invece esecuzione, ruolo, metrica e riferimenti per interpretare i confronti.
                     </p>
                 </div>
             </details>
