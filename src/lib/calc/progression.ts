@@ -340,6 +340,12 @@ export function compareExposureCompatibility(
 ): ExposureComparison {
     const reasons: string[] = [];
     if (current.exId !== previous.exId) return { level: 'none', reasons: ['Esercizio diverso.'] };
+    if (current.routineId !== previous.routineId) {
+        return {
+            level: 'none',
+            reasons: ['Scheda diversa: la progressione viene confrontata nello stesso utilizzo dell’esercizio nella scheda.'],
+        };
+    }
     if (current.trackingType !== previous.trackingType) return { level: 'none', reasons: ['Tipo di tracciamento diverso.'] };
     if (!current.referenceSet || !previous.referenceSet) return { level: 'none', reasons: ['Manca un set di riferimento osservabile.'] };
 
