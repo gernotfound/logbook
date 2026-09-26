@@ -406,6 +406,9 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 const setupInput = container.querySelector('#setup-ex_lat') as HTMLInputElement;
                 expect(setupInput).not.toBeNull();
                 expect(setupInput.defaultValue).toBe('Altezza cuscino 3, presa prona');
+                expect(container.textContent).toContain('Note esercizio');
+                expect(container.textContent).not.toContain('Setup e standard tecnico');
+                expect(container.textContent).not.toContain('Se cambia rispetto allo storico');
             });
 
             it('T1.3.4: Deleted or missing library item gracefully falls back to "Esercizio rimosso"', () => {

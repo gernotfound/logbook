@@ -91,14 +91,14 @@ describe('RIR reale per singola serie', () => {
         expect(CURRENT_BACKUP_SCHEMA).toBe(3);
     });
 
-    it('permette selezione rapida inclusi 0 e 10 e cancellazione senza tastiera', () => {
+    it('permette selezione rapida del RIR dal menu della serie, inclusi 0 e 10 e cancellazione senza tastiera', () => {
         const onUpdateSet = vi.fn();
         const props = {
             set: { id: 's1', kg: '100', reps: '8' },
             sIndex: 0,
             exIndex: 0,
             trackingType: 'weight_reps',
-            isOpenMenu: false,
+            isOpenMenu: true,
             onToggleMenu: vi.fn(),
             onRemoveSet: vi.fn(),
             onUpdateSet,
@@ -108,22 +108,23 @@ describe('RIR reale per singola serie', () => {
         };
 
         const { rerender } = render(<SessionSetRow {...props} />);
-        const trigger = screen.getByRole('button', { name: 'RIR serie 1: non registrato' });
+        const trigger = screen.getByRole('button', { name: 'Imposta RIR serie 1: non registrato' });
         expect((trigger as HTMLElement).style.minHeight).toBe('44px');
         fireEvent.click(trigger);
+        const menu = screen.getByRole('menu', { name: 'Seleziona RIR serie 1' });
         const choices = screen.getAllByRole('menuitemradio');
         expect(choices).toHaveLength(11);
         expect((choices[0] as HTMLElement).style.minHeight).toBe('44px');
         expect(document.activeElement).toBe(choices[0]);
-        fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+        fireEvent.keyDown(menu, { key: 'Escape' });
         expect(document.activeElement).toBe(trigger);
-        expect(screen.queryByRole('menu')).toBeNull();
+        expect(screen.queryByRole('menu', { name: 'Seleziona RIR serie 1' })).toBeNull();
         fireEvent.click(trigger);
         fireEvent.click(screen.getByRole('menuitemradio', { name: '0' }));
         expect(onUpdateSet).toHaveBeenLastCalledWith('s1', 'rir', 0);
 
         rerender(<SessionSetRow {...props} set={{ ...props.set, rir: 10 }} />);
-        fireEvent.click(screen.getByRole('button', { name: 'RIR serie 1: 10' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Imposta RIR serie 1: 10' }));
         fireEvent.click(screen.getByRole('menuitem', { name: 'Non registrato' }));
         expect(onUpdateSet).toHaveBeenLastCalledWith('s1', 'rir', undefined);
     });
@@ -131,11 +132,11 @@ describe('RIR reale per singola serie', () => {
     it('non propone RIR sulle serie tracciate a tempo', () => {
         render(<SessionSetRow
             set={{ id: 'time-set', kg: '20', reps: '', time: '60' }}
-            sIndex={0} exIndex={0} trackingType="time" isOpenMenu={false}
+            sIndex={0} exIndex={0} trackingType="time" isOpenMenu={true}
             onToggleMenu={vi.fn()} onRemoveSet={vi.fn()} onUpdateSet={vi.fn()}
             onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()}
         />);
-        expect(screen.queryByRole('button', { name: /RIR serie/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Imposta RIR serie/ })).toBeNull();
     });
 
     it('rimuove semanticamente RIR senza perdere kg/reps e non assegna RIR ai segmenti speciali', () => {
@@ -156,11 +157,11 @@ describe('RIR reale per singola serie', () => {
 
         render(<SessionSetRow
             set={{ id: 'special', kg: '80', reps: '10', rir: 1, dropsets: [{ id: 'd1', kg: '60', reps: '8' }], isometrics: [{ id: 'i1', kg: '40', time: '20' }] }}
-            sIndex={1} exIndex={0} trackingType="weight_reps" isOpenMenu={false}
+            sIndex={1} exIndex={0} trackingType="weight_reps" isOpenMenu={true}
             onToggleMenu={vi.fn()} onRemoveSet={vi.fn()} onUpdateSet={vi.fn()}
             onAddSpecialSet={vi.fn()} onUpdateSpecialSet={vi.fn()} onRemoveSpecialSet={vi.fn()}
         />);
-        expect(screen.getAllByRole('button', { name: /RIR serie/ })).toHaveLength(1);
+        expect(screen.getAllByRole('button', { name: /Imposta RIR serie/ })).toHaveLength(1);
     });
 
     it('persiste RIR nel draft locale e lo recupera senza convertire 0 in assenza', () => {

@@ -10,13 +10,6 @@ interface SessionExerciseCardProps {
     totalExercises?: number;
     libDef: any;
     pastWorkouts: Array<{ date: string; sets: any[]; note: string }>;
-    progressionHint?: {
-        previousDate?: string;
-        previousReference?: string;
-        quality: string;
-        comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
-        comparisonReasons: string[];
-    };
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
     openSpecialMenuId: string | null;
@@ -46,7 +39,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     totalExercises,
     libDef,
     pastWorkouts,
-    progressionHint,
     isHistoryOpen,
     isSetupOpen,
     openSpecialMenuId,
@@ -156,27 +148,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         <div className="section-divider">
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
-                {progressionHint && (
-                    <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '4px' }}>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            Confrontabilità: {progressionHint.comparisonStatus === 'comparable' ? 'confrontabile' : progressionHint.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
-                        </span>
-                        {progressionHint.previousReference ? (
-                            <>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    Ultima esposizione confrontabile · {progressionHint.previousDate || 'data non disponibile'}
-                                </span>
-                                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>{progressionHint.previousReference}</strong>
-                            </>
-                        ) : (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Nessun riferimento precedente direttamente confrontabile.</span>
-                        )}
-                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.quality}</span>
-                        {progressionHint.comparisonReasons.length > 0 && (
-                            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.comparisonReasons.join(' ')}</span>
-                        )}
-                    </div>
-                )}
             </div>
             <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
                 {/* Position dropdown */}
@@ -243,7 +214,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isHistoryOpen && (
                 <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{marginBottom: '8px', marginTop: 0}}>Ultimi 2 allenamenti:</h3>
+                    <div style={{ marginBottom: '8px', fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>Ultimi 2 allenamenti:</div>
                     {pastWorkouts.length === 0 ? (
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
                     ) : (
@@ -281,8 +252,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{marginBottom: '8px', marginTop: 0, color: 'var(--text-muted)'}}>Setup e standard tecnico</h3>
-                    <label className="text-xs text-muted" htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
+                    <label className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 400 }} htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
                     <BufferedInput
                         id={`technical-standard-${exItem.exId}`}
                         type="text"
@@ -291,10 +261,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         onChange={value => onUpdateTechnicalStandard(exIndex, value)}
                         style={{ margin: '4px 0 10px', width: '100%', fontSize: '16px' }}
                     />
-                    <p className="text-xs text-muted" style={{ margin: '0 0 10px' }}>
-                        Se cambia rispetto allo storico, LogBook limita il confronto diretto senza modificare il programma.
-                    </p>
-                    <label className="text-xs text-muted" htmlFor={`setup-${exItem.exId}`}>Nota setup libreria (globale)</label>
+                    <label className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 400 }} htmlFor={`setup-${exItem.exId}`}>Note esercizio</label>
                     <input
                         id={`setup-${exItem.exId}`}
                         type="text"
@@ -441,9 +408,6 @@ export const SessionExerciseCard = React.memo(SessionExerciseCardInner, (prev, n
         prev.exItem === next.exItem &&
         prev.libDef === next.libDef &&
         prev.pastWorkouts === next.pastWorkouts &&
-        prev.progressionHint?.previousDate === next.progressionHint?.previousDate &&
-        prev.progressionHint?.previousReference === next.progressionHint?.previousReference &&
-        prev.progressionHint?.quality === next.progressionHint?.quality &&
         prev.isHistoryOpen === next.isHistoryOpen &&
         prev.isSetupOpen === next.isSetupOpen &&
         prev.openSpecialMenuId === next.openSpecialMenuId &&

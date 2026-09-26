@@ -189,7 +189,7 @@ describe('UI Alignments - R3 & R4', () => {
     });
 
     describe('R4: SessionSetRow Vertical Centering', () => {
-        it('renders input flex container with alignItems: center and circular + button with inline-flex alignment styles', () => {
+        it('renders input flex container with alignItems: center and ellipsis options button with inline-flex alignment styles', () => {
             const mockSet = {
                 id: 'set_1',
                 kg: 50,
@@ -217,16 +217,16 @@ describe('UI Alignments - R3 & R4', () => {
                 />
             );
 
-            const plusButton = screen.getByLabelText('Aggiungi alla serie');
-            expect(plusButton).toBeDefined();
-            expect(plusButton.style.display).toBe('inline-flex');
-            expect(plusButton.style.alignItems).toBe('center');
-            expect(plusButton.style.justifyContent).toBe('center');
-            expect(plusButton.style.alignSelf).toBe('center');
-            expect(plusButton.style.borderRadius).toBe('50%');
+            const optionsButton = screen.getByLabelText('Opzioni serie 1');
+            expect(optionsButton).toBeDefined();
+            expect(optionsButton.style.display).toBe('inline-flex');
+            expect(optionsButton.style.alignItems).toBe('center');
+            expect(optionsButton.style.justifyContent).toBe('center');
+            expect(optionsButton.style.alignSelf).toBe('center');
+            expect(optionsButton.style.borderRadius).toBe('12px');
 
             // Find input container
-            const inputContainer = plusButton.parentElement;
+            const inputContainer = optionsButton.parentElement;
             expect(inputContainer).toBeDefined();
             expect(inputContainer?.style.alignItems).toBe('center');
             expect(inputContainer?.style.display).toBe('flex');

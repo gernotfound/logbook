@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
 import { formatAdvancedSetSummary, techniqueLabel } from '../../../lib/advancedSets';
 
@@ -34,6 +34,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     onUpdateSetTarget
 }) => {
     const [isRirOpen, setIsRirOpen] = React.useState(false);
+    const menuTriggerRef = React.useRef<HTMLButtonElement>(null);
     const rirTriggerRef = React.useRef<HTMLButtonElement>(null);
     const firstRirOptionRef = React.useRef<HTMLButtonElement>(null);
     const hasRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
@@ -43,13 +44,20 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     }, [isRirOpen]);
 
     const closeRirMenu = (restoreFocus = false) => {
-        if (restoreFocus) rirTriggerRef.current?.focus();
         setIsRirOpen(false);
+        if (restoreFocus) rirTriggerRef.current?.focus();
     };
 
     const selectRir = (rir: number | undefined) => {
         onUpdateSet(s.id, 'rir', rir);
-        closeRirMenu(true);
+        setIsRirOpen(false);
+        onToggleMenu();
+        queueMicrotask(() => menuTriggerRef.current?.focus());
+    };
+
+    const toggleSetMenu = () => {
+        setIsRirOpen(false);
+        onToggleMenu();
     };
 
     return (
@@ -113,139 +121,136 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             />
                         </>
                     )}
-                    {trackingType !== 'time' && (
-                        <div style={{ position: 'relative', flexShrink: 0 }}>
-                            <button
-                                ref={rirTriggerRef}
-                                type="button"
-                                className="btn-icon"
-                                style={{
-                                    minWidth: '58px',
-                                    minHeight: '44px',
-                                    padding: '4px 7px',
-                                    border: '1px solid var(--glass-border)',
-                                    background: hasRir ? 'var(--surface-light)' : 'transparent',
-                                    color: hasRir ? 'var(--primary-color)' : 'var(--text-muted)',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    whiteSpace: 'nowrap'
-                                }}
-                                onClick={() => setIsRirOpen(open => !open)}
-                                aria-label={`RIR serie ${sIndex + 1}: ${hasRir ? s.rir : 'non registrato'}`}
-                                aria-expanded={isRirOpen}
-                                aria-haspopup="menu"
-                            >
-                                RIR {hasRir ? s.rir : '—'}
-                            </button>
-                            {isRirOpen && (
-                                <>
-                                    <div aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: 55 }} onClick={() => closeRirMenu(false)} />
-                                    <div
-                                        role="menu"
-                                        aria-label={`Seleziona RIR serie ${sIndex + 1}`}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Escape') {
-                                                event.preventDefault();
-                                                closeRirMenu(true);
-                                            }
-                                        }}
-                                        style={{
-                                            position: 'absolute',
-                                            right: 0,
-                                            top: '48px',
-                                            zIndex: 60,
-                                            width: '212px',
-                                            padding: '8px',
-                                            display: 'grid',
-                                            gridTemplateColumns: 'repeat(4, 44px)',
-                                            gap: '6px',
-                                            justifyContent: 'center',
-                                            background: 'var(--surface-color)',
-                                            border: '1px solid var(--glass-border)',
-                                            borderRadius: '12px',
-                                            boxShadow: '0 8px 24px rgba(0,0,0,0.45)'
-                                        }}
-                                    >
-                                        {Array.from({ length: 11 }, (_, rir) => (
-                                            <button
-                                                key={rir}
-                                                ref={rir === 0 ? firstRirOptionRef : undefined}
-                                                type="button"
-                                                role="menuitemradio"
-                                                aria-checked={s.rir === rir}
-                                                className="btn-icon"
-                                                style={{
-                                                    minWidth: '44px',
-                                                    minHeight: '44px',
-                                                    padding: 0,
-                                                    background: s.rir === rir ? 'var(--primary-color)' : 'var(--surface-light)',
-                                                    color: s.rir === rir ? 'var(--on-primary)' : 'var(--text-main)',
-                                                    fontWeight: 700
-                                                }}
-                                                onClick={() => selectRir(rir)}
-                                            >
-                                                {rir}
-                                            </button>
-                                        ))}
-                                        <button
-                                            type="button"
-                                            role="menuitem"
-                                            className="btn btn-small"
-                                            style={{ gridColumn: '1 / -1', minHeight: '44px', margin: 0 }}
-                                            onClick={() => selectRir(undefined)}
-                                        >
-                                            Non registrato
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
                     <button
+                        ref={menuTriggerRef}
+                        type="button"
                         className="btn-icon"
                         style={{
-                            background: 'var(--primary-color)',
-                            borderRadius: '50%',
                             width: '44px',
+                            minWidth: '44px',
                             height: '44px',
-                            color: 'var(--on-primary)',
+                            minHeight: '44px',
+                            border: '1px solid var(--glass-border)',
+                            borderRadius: '12px',
+                            background: isOpenMenu ? 'var(--surface-light)' : 'transparent',
+                            color: isOpenMenu ? 'var(--primary-color)' : 'var(--text-muted)',
                             flexShrink: 0,
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             padding: 0,
                             margin: 0,
-                            fontSize: '1.2rem',
                             lineHeight: 1,
                             alignSelf: 'center'
                         }}
-                        onClick={onToggleMenu}
-                        aria-label="Aggiungi alla serie"
+                        onClick={toggleSetMenu}
+                        aria-label={`Opzioni serie ${sIndex + 1}`}
+                        aria-expanded={isOpenMenu}
+                        aria-haspopup="menu"
                     >
-                        +
+                        <MoreHorizontal size={22} aria-hidden="true" />
                     </button>
 
                     {isOpenMenu && (
                         <>
                             <div
                                 style={{ position: 'fixed', inset: 0, zIndex: 45 }}
-                                onClick={onToggleMenu}
+                                onClick={toggleSetMenu}
                             />
                             <div
                                 className="special-menu"
                                 style={{
                                     position: 'absolute',
                                     right: 0,
-                                    top: '40px',
+                                    top: '48px',
                                     background: 'var(--surface-color)',
                                     padding: '10px',
-                                    borderRadius: '8px',
+                                    borderRadius: '10px',
                                     zIndex: 50,
-                                    minWidth: '140px',
+                                    width: 'min(220px, calc(100vw - 32px))',
                                     boxShadow: '0 8px 24px rgba(0,0,0,0.8)',
                                     border: '1px solid var(--glass-border)'
                                 }}
                             >
+                                {trackingType !== 'time' && (
+                                    <>
+                                        <button
+                                            ref={rirTriggerRef}
+                                            type="button"
+                                            className="btn btn-small"
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                width: '100%',
+                                                minHeight: '44px',
+                                                marginBottom: '6px'
+                                            }}
+                                            onClick={() => setIsRirOpen(open => !open)}
+                                            aria-label={`Imposta RIR serie ${sIndex + 1}: ${hasRir ? s.rir : 'non registrato'}`}
+                                            aria-expanded={isRirOpen}
+                                            aria-haspopup="menu"
+                                        >
+                                            <span>RIR</span>
+                                            <strong>{hasRir ? s.rir : '—'}</strong>
+                                        </button>
+                                        {isRirOpen && (
+                                            <div
+                                                role="menu"
+                                                aria-label={`Seleziona RIR serie ${sIndex + 1}`}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Escape') {
+                                                        event.preventDefault();
+                                                        closeRirMenu(true);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    marginBottom: '8px',
+                                                    padding: '8px',
+                                                    display: 'grid',
+                                                    gridTemplateColumns: 'repeat(4, minmax(44px, 1fr))',
+                                                    gap: '6px',
+                                                    background: 'var(--surface-light)',
+                                                    border: '1px solid var(--glass-border)',
+                                                    borderRadius: '10px',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            >
+                                                {Array.from({ length: 11 }, (_, rir) => (
+                                                    <button
+                                                        key={rir}
+                                                        ref={rir === 0 ? firstRirOptionRef : undefined}
+                                                        type="button"
+                                                        role="menuitemradio"
+                                                        aria-checked={s.rir === rir}
+                                                        className="btn-icon"
+                                                        style={{
+                                                            minWidth: '44px',
+                                                            minHeight: '44px',
+                                                            padding: 0,
+                                                            background: s.rir === rir ? 'var(--primary-color)' : 'var(--surface-color)',
+                                                            color: s.rir === rir ? 'var(--on-primary)' : 'var(--text-main)',
+                                                            fontWeight: 700
+                                                        }}
+                                                        onClick={() => selectRir(rir)}
+                                                    >
+                                                        {rir}
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    className="btn btn-small"
+                                                    style={{ gridColumn: '1 / -1', minHeight: '44px', margin: 0 }}
+                                                    onClick={() => selectRir(undefined)}
+                                                >
+                                                    Non registrato
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                                 {[
                                     ['dropset', 'Dropset'],
                                     ['rest_pause', 'Rest-pause'],
@@ -282,62 +287,6 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
                                 <button className="btn-icon" aria-label={`Rimuovi segmento ${segmentIndex + 1}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
                             </div>
-                            <details style={{ marginTop: '4px' }}>
-                                <summary className="disclosure-summary">
-                                    Dettagli tecnici segmento
-                                </summary>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', padding: '4px 0 6px' }}>
-                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                        Eccentrica (s)
-                                        <BufferedInput
-                                            id={`seg-ecc-${s.id}-${segmentIndex}`}
-                                            type="number"
-                                            min="0"
-                                            max="60"
-                                            step="0.1"
-                                            value={segment.eccentricSeconds ?? ''}
-                                            onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'eccentricSeconds', val === '' ? undefined : Math.max(0, Number(val) || 0))}
-                                            style={{ margin: '4px 0 0', minWidth: 0 }}
-                                        />
-                                    </label>
-                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                        Posizione tenuta
-                                        <select
-                                            value={segment.holdPosition ?? ''}
-                                            onChange={event => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'holdPosition', event.target.value || undefined)}
-                                            style={{ margin: '4px 0 0', width: '100%', minHeight: '44px', fontSize: '16px' }}
-                                        >
-                                            <option value="">Non specificata</option>
-                                            <option value="stretched">Allungamento</option>
-                                            <option value="mid">Intermedia</option>
-                                            <option value="shortened">Accorciamento</option>
-                                            <option value="custom">Personalizzata</option>
-                                        </select>
-                                    </label>
-                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                        Assistenza
-                                        <select
-                                            value={segment.assistance ?? ''}
-                                            onChange={event => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'assistance', event.target.value || undefined)}
-                                            style={{ margin: '4px 0 0', width: '100%', minHeight: '44px', fontSize: '16px' }}
-                                        >
-                                            <option value="">Non specificata</option>
-                                            <option value="none">Nessuna</option>
-                                            <option value="self">Autonoma</option>
-                                            <option value="partner">Partner</option>
-                                            <option value="machine">Macchina</option>
-                                        </select>
-                                    </label>
-                                    <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px', minHeight: '44px' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={segment.negativeOnly === true}
-                                            onChange={event => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'negativeOnly', event.target.checked || undefined)}
-                                        />
-                                        Solo negative
-                                    </label>
-                                </div>
-                            </details>
                         </div>
                     ))}
                     <button className="btn btn-small" style={{ minHeight: '44px', margin: 0 }} onClick={() => onAddSegment(s.id)}>+ Segmento</button>

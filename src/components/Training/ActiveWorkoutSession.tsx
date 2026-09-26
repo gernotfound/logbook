@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Trash2, Save } from 'lucide-react';
+import { CheckCircle2, Trash2, Save } from 'lucide-react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { useWakeLock } from '../../hooks/useWakeLock';
 import { Logic } from '../../lib/logic';
-import { computeProgressionEngine, formatProgressionReference, progressionQualityLabel } from '../../lib/calc/progression';
-import { useAppStore } from '../../store/useAppStore';
 import SessionHeader from './SessionHeader';
 import SessionExerciseCard from './session/SessionExerciseCard';
 import SessionRatings from './session/SessionRatings';
@@ -62,7 +60,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         addSpecialSet, updateSpecialSet, removeSpecialSet, addSegment, updateSetTarget,
         updateSetupNote, updateSessionNote, updateTechnicalStandard
     } = useWorkoutSession();
-    const nutrition = useAppStore(state => state.userData?.nutrition);
 
     // Previene lo spegnimento automatico dello schermo durante la sessione attiva
     useWakeLock(true);
@@ -190,11 +187,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     }, [history]);
 
     const libraryMap = useMemo(() => new Map(library.map(l => [l.id, l])), [library]);
-    const progressionMap = useMemo(() => {
-        if (!activeWorkout) return new Map();
-        const engine = computeProgressionEngine(activeWorkout, history, libraryMap, { nutrition });
-        return new Map(engine.exercises.map(analysis => [analysis.exId, analysis]));
-    }, [activeWorkout, history, libraryMap, nutrition]);
 
     if (!activeWorkout) return null;
 
@@ -228,14 +220,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     (activeWorkout.exercises || []).map((exItem: any, exIndex: number) => {
                         const libDef = libraryMap.get(exItem.exId);
                         const pastWorkouts = exerciseHistoryMap.get(exItem.exId) || EMPTY_HISTORY_ARRAY;
-                        const progression = progressionMap.get(exItem.exId);
-                        const progressionHint = progression ? {
-                            previousDate: progression.previousComparable?.date,
-                            previousReference: progression.previousComparable ? formatProgressionReference(progression.previousComparable) : undefined,
-                            quality: progressionQualityLabel(progression.quality),
-                            comparisonStatus: progression.comparisonStatus,
-                            comparisonReasons: progression.comparison.reasons,
-                        } : undefined;
 
                         return (
                             <SessionExerciseCard
@@ -245,7 +229,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 totalExercises={(activeWorkout.exercises || []).length}
                                 libDef={libDef}
                                 pastWorkouts={pastWorkouts}
-                                progressionHint={progressionHint}
                                 isHistoryOpen={openHistoryExIndex === exIndex}
                                 isSetupOpen={openSetupExIndex === exIndex}
                                 openSpecialMenuId={openSpecialMenuId}
@@ -277,7 +260,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                     <ExerciseSearchDropdown
                         library={library}
                         onSelectExercise={addExtraExercise}
-                        placeholder="?? Cerca esercizio extra da aggiungere..."
+                        placeholder="Cerca esercizio extra da aggiungere..."
                     />
                 </div>
             </div>
@@ -302,7 +285,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
             {activeWorkout.isEditingHistory ? (
                 <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
                     <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                        ?? Durata della sessione
+                        Durata della sessione
                     </label>
                     <input 
                         id="workout-manual-duration"
@@ -343,7 +326,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
             ) : (
                 <>
                     <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={onRequestEnd}>
-                        <span aria-hidden="true">??</span> Termina sessione
+                        <CheckCircle2 size={16} aria-hidden="true" /> Termina sessione
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
                         <Trash2 size={16} aria-hidden="true" /> Elimina sessione

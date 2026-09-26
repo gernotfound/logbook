@@ -390,7 +390,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
         // Requirement R4: Session Set Dot Vertical Centering
         // ---------------------------------------------------------------------
         describe('R4: Session Set Dot Vertical Centering', () => {
-            it('T1.4.1: SessionSetRow renders S1 set index and circular "+" button with centered flex alignment', () => {
+            it('T1.4.1: SessionSetRow renders S1 set index and an ellipsis options button with centered flex alignment', () => {
                 const set = { id: 's1', kg: '80', reps: '10' };
                 render(
                     <SessionSetRow 
@@ -408,12 +408,12 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 );
 
                 expect(screen.getByText('S1')).toBeDefined();
-                const plusBtn = screen.getByRole('button', { name: 'Aggiungi alla serie' });
-                expect(plusBtn).toBeDefined();
-                expect(plusBtn.textContent).toBe('+');
+                const optionsBtn = screen.getByRole('button', { name: 'Opzioni serie 1' });
+                expect(optionsBtn).toBeDefined();
+                expect(optionsBtn.querySelector('svg')).not.toBeNull();
             });
 
-            it('T1.4.2: clicking circular "+" button triggers onToggleMenu to open menu', () => {
+            it('T1.4.2: clicking the ellipsis options button triggers onToggleMenu to open menu', () => {
                 const mockToggle = vi.fn();
                 render(
                     <SessionSetRow 
@@ -430,8 +430,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const plusBtn = screen.getByRole('button', { name: 'Aggiungi alla serie' });
-                fireEvent.click(plusBtn);
+                const optionsBtn = screen.getByRole('button', { name: 'Opzioni serie 1' });
+                fireEvent.click(optionsBtn);
                 expect(mockToggle).toHaveBeenCalledTimes(1);
             });
 
@@ -556,6 +556,48 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                 fireEvent.change(kgInput, { target: { value: '75' } });
                 fireEvent.blur(kgInput);
                 expect(mockUpdate).toHaveBeenCalledWith('s1', 'kg', '75');
+            });
+
+            it('T1.4.8: keeps core segment fields but removes the segment technical-details section', () => {
+                const set = {
+                    id: 's1',
+                    kg: '100',
+                    reps: '8',
+                    technique: 'cluster',
+                    segments: [{
+                        id: 'seg1',
+                        kg: '73',
+                        reps: '4',
+                        restBeforeSeconds: 20,
+                        eccentricSeconds: 4,
+                        holdPosition: 'stretched',
+                        assistance: 'partner',
+                        negativeOnly: true
+                    }]
+                };
+
+                const { container } = render(
+                    <SessionSetRow
+                        set={set}
+                        sIndex={0}
+                        exIndex={0}
+                        isOpenMenu={false}
+                        onToggleMenu={vi.fn()}
+                        onRemoveSet={vi.fn()}
+                        onUpdateSet={vi.fn()}
+                        onAddSpecialSet={vi.fn()}
+                        onUpdateSpecialSet={vi.fn()}
+                        onRemoveSpecialSet={vi.fn()}
+                    />
+                );
+
+                expect(container.querySelector('#seg-kg-s1-0')).not.toBeNull();
+                expect(container.querySelector('#seg-reps-s1-0')).not.toBeNull();
+                expect(screen.queryByText('Dettagli tecnici segmento')).toBeNull();
+                expect(screen.queryByText('Eccentrica (s)')).toBeNull();
+                expect(screen.queryByText('Posizione tenuta')).toBeNull();
+                expect(screen.queryByText('Assistenza')).toBeNull();
+                expect(screen.queryByText('Solo negative')).toBeNull();
             });
         });
 
