@@ -544,7 +544,7 @@ describe('contextual progression engine', () => {
             exercises: [{
                 exId: 'bench',
                 sessionNote: '',
-                progressionContract: { role: 'primary', metric: 'volume', target: '3 serie da 10' },
+                progressionContract: { role: 'primary', metric: 'volume' },
                 sets: [set(100, 10, 2), set(100, 10, 2), set(100, 10, 2)],
             }],
         });
@@ -555,7 +555,7 @@ describe('contextual progression engine', () => {
             exercises: [{
                 exId: 'bench',
                 sessionNote: '',
-                progressionContract: { role: 'primary', metric: 'volume', target: '3 serie da 10' },
+                progressionContract: { role: 'primary', metric: 'volume' },
                 sets: [set(100, 8, 2), set(100, 8, 2)],
             }],
         });
