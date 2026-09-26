@@ -131,13 +131,7 @@
   text-align: left;
 }
 .muscle-text-selection { margin-top: 1rem; text-align: left; }
-.muscle-text-selection summary {
-  display: flex;
-  align-items: center;
-  min-height: 2.75rem;
-  color: var(--primary-color);
-  cursor: pointer;
-}
+.muscle-text-selection .disclosure-summary { margin-bottom: .75rem; }
 .muscle-text-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

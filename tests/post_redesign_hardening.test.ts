@@ -70,4 +70,27 @@ describe('post-redesign UI hardening', () => {
     expect(routineItem).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
   });
 
+  it('gives every native disclosure an explicit button affordance', () => {
+    const disclosureFiles = [
+      'src/components/Data/DataActivity.tsx',
+      'src/components/Training/MuscleModel.tsx',
+      'src/components/Training/routines/RoutineExerciseItem.tsx',
+      'src/components/Training/session/SessionSetRow.tsx',
+    ];
+
+    for (const path of disclosureFiles) {
+      const source = read(path);
+      const summaries = [...source.matchAll(/<summary([^>]*)>/g)];
+      expect(summaries.length, path).toBeGreaterThan(0);
+      for (const summary of summaries) {
+        expect(summary[1], `${path}: ${summary[0]}`).toContain('disclosure-summary');
+      }
+    }
+
+    const components = read('src/styles/components.css');
+    expect(components).toMatch(/\.disclosure-summary\s*\{[^}]*min-height:\s*2\.75rem[^}]*border:\s*1px solid var\(--glass-border\)[^}]*background:\s*var\(--surface-light\)/s);
+    expect(components).toContain('.disclosure-summary:focus-visible');
+    expect(components).toContain('details[open] > .disclosure-summary');
+  });
+
 });

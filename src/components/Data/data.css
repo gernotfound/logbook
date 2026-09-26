@@ -77,7 +77,6 @@
 .activity-primary-fields,
 .activity-detail-fields { display: grid; gap: .75rem; }
 .activity-details { border-top: 1px solid var(--glass-border); padding-top: .75rem; }
-.activity-details summary { min-height: 2.75rem; display: flex; align-items: center; cursor: pointer; color: var(--text-main); font-weight: 600; }
 .activity-detail-fields { margin-top: .75rem; }
 .activity-notes-field { grid-column: 1 / -1; }
 .activity-editor-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: .65rem; }
