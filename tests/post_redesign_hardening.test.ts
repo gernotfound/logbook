@@ -73,6 +73,12 @@ describe('post-redesign UI hardening', () => {
     expect(routineItem).toContain("fieldHeader('Esecuzione da mantenere', 'technicalStandard'");
     expect(routineItem).toContain("fieldHeader('Ruolo nella scheda', 'role'");
     expect(routineItem).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
+    expect(routineItem).toContain('Tecnica per serie:');
+    expect(routineItem).toContain('disclosure-summary technique-summary');
+    expect(routineItem).not.toContain('Riferimento storico (avanzato)');
+    expect(routineItem).not.toContain('Regola di successo');
+    expect(routineItem).not.toContain('Regola di cambio');
+    expect(routineItem).not.toContain('Prossima azione');
   });
 
   it('gives every native disclosure an explicit button affordance', () => {
@@ -91,6 +97,8 @@ describe('post-redesign UI hardening', () => {
     expect(components).toMatch(/\.disclosure-summary\s*\{[^}]*min-height:\s*2\.75rem[^}]*border:\s*1px solid var\(--glass-border\)[^}]*background:\s*var\(--surface-light\)/s);
     expect(components).toContain('.disclosure-summary:focus-visible');
     expect(components).toContain('details[open] > .disclosure-summary');
+    expect(components).toMatch(/\.technique-summary::after\s*\{[^}]*content:\s*'\+'/s);
+    expect(components).toMatch(/details\[open\] > \.technique-summary::after\s*\{[^}]*content:\s*'-'/s);
   });
 
 });
