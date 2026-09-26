@@ -47,7 +47,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
     isSaving
 }) => {
     return (
-        <div className="section-divider">
+        <div>
             <h2 style={{marginTop: 0}}>{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
 
             <div className="mb-15">
