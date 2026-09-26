@@ -173,7 +173,7 @@ export default function DataActivity() {
                             </label>
                         </div>
                         <details className="activity-details">
-                            <summary>Dettagli opzionali</summary>
+                            <summary className="disclosure-summary">Dettagli opzionali</summary>
                             <div className="activity-detail-fields">
                                 <label>Struttura
                                     <select value={form.structure} onChange={event => activity.setCardioField('structure', event.target.value)}>

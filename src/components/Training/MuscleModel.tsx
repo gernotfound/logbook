@@ -181,7 +181,7 @@ export default function MuscleModel({
 
             {interactive && onToggleMuscle ? (
                 <details className="muscle-text-selection">
-                    <summary>Seleziona muscoli dall’elenco</summary>
+                    <summary className="disclosure-summary">Seleziona muscoli dall’elenco</summary>
                     <div className="muscle-text-options">
                         {Logic.MUSCLES.map(muscle => {
                             const isSelected = selectedMuscles.includes(muscle.id)

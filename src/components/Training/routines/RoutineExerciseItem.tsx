@@ -342,7 +342,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
             )}
 
             <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                <summary className="btn btn-secondary btn-small" style={{ cursor: 'pointer' }}>
+                <summary className="disclosure-summary">
                     Tecnica
                 </summary>
                 <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
@@ -418,7 +418,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     })}
 
                     <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                        <summary style={{ cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center', fontWeight: 600 }}>
+                        <summary className="disclosure-summary">
                             Riferimento storico (avanzato)
                         </summary>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', paddingTop: '8px' }}>

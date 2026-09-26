@@ -283,7 +283,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 <button className="btn-icon" aria-label={`Rimuovi segmento ${segmentIndex + 1}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
                             </div>
                             <details style={{ marginTop: '4px' }}>
-                                <summary style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+                                <summary className="disclosure-summary">
                                     Dettagli tecnici segmento
                                 </summary>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '6px', padding: '4px 0 6px' }}>

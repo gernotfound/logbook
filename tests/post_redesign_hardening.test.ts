@@ -1,8 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(resolve(path), 'utf8');
+const listTsxFiles = (dir: string): string[] => readdirSync(resolve(dir), { withFileTypes: true }).flatMap(entry => {
+  const path = join(dir, entry.name);
+  if (entry.isDirectory()) return listTsxFiles(path);
+  return entry.isFile() && entry.name.endsWith('.tsx') ? [path] : [];
+});
 
 const adaptiveSurfaceFiles = [
   'src/components/Data/DataMeasurements.tsx',
@@ -68,6 +73,24 @@ describe('post-redesign UI hardening', () => {
     expect(routineItem).toContain("fieldHeader('Esecuzione da mantenere', 'technicalStandard'");
     expect(routineItem).toContain("fieldHeader('Ruolo nella scheda', 'role'");
     expect(routineItem).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
+  });
+
+  it('gives every native disclosure an explicit button affordance', () => {
+    const disclosureFiles = listTsxFiles('src/components').filter(path => read(path).includes('<summary'));
+    expect(disclosureFiles.length).toBeGreaterThan(0);
+
+    for (const path of disclosureFiles) {
+      const source = read(path);
+      const summaries = [...source.matchAll(/<summary([^>]*)>/g)];
+      for (const summary of summaries) {
+        expect(summary[1], `${path}: ${summary[0]}`).toContain('disclosure-summary');
+      }
+    }
+
+    const components = read('src/styles/components.css');
+    expect(components).toMatch(/\.disclosure-summary\s*\{[^}]*min-height:\s*2\.75rem[^}]*border:\s*1px solid var\(--glass-border\)[^}]*background:\s*var\(--surface-light\)/s);
+    expect(components).toContain('.disclosure-summary:focus-visible');
+    expect(components).toContain('details[open] > .disclosure-summary');
   });
 
 });
