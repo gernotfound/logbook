@@ -62,6 +62,12 @@ describe('post-redesign UI hardening', () => {
     expect(routineItem).not.toMatch(/rgba\(255\s*,\s*255\s*,\s*255/);
     expect(routineItem).not.toContain('#00e5ff');
     expect(routineItem).toContain("background: 'var(--primary-soft)'");
+    expect(routineItem).toContain('CircleHelp');
+    expect(routineItem).toContain('Spiega:');
+    expect(routineItem).toContain('Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda.');
+    expect(routineItem).toContain("fieldHeader('Esecuzione da mantenere', 'technicalStandard'");
+    expect(routineItem).toContain("fieldHeader('Ruolo nella scheda', 'role'");
+    expect(routineItem).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
   });
 
 });
