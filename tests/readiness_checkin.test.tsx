@@ -79,6 +79,21 @@ describe('pre-session readiness contract', () => {
         expect(screen.queryByText('Durata Totale')).toBeNull();
     });
 
+    it('scrolls to the top after confirming the pre-session check-in', async () => {
+        const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+        useAppStore.setState({
+            localWorkout: { id: 'pending-scroll', date: '2026-09-24', routineName: 'Push', exercises: [] },
+        });
+
+        render(<TrainingSession />);
+        fireEvent.click(screen.getByRole('button', { name: 'Energia: 4 su 5' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Inizia allenamento' }));
+
+        await waitFor(() => expect(useAppStore.getState().localWorkout?.globalStartTime).toBeTruthy());
+        await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' }));
+        scrollToSpy.mockRestore();
+    });
+
     it('anchors the workout date to the actual local start time when check-in crosses midnight', async () => {
         const startedAt = new Date(2026, 8, 25, 0, 0, 5).getTime();
         const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
