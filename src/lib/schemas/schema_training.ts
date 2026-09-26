@@ -54,15 +54,8 @@ const PlannedSetTechniqueSchema = z.object({
 }).passthrough();
 
 export const ProgressionContractSchema = z.object({
-    context: safeOptionalString(),
     role: z.enum(['primary', 'secondary', 'support']).optional().catch(undefined),
     metric: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
-    target: safeOptionalString(),
-    successRule: safeOptionalString(),
-    failureRule: safeOptionalString(),
-    nextAction: safeOptionalString(),
-    baselineState: z.enum(['historical', 'active', 'suspended', 'reacclimation', 'reactivated', 'replaced']).optional().catch(undefined),
-    baselineVersion: z.number().int().positive().optional().catch(undefined),
 }).passthrough();
 
 export const RoutineExerciseSchema = z.object({

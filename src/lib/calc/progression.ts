@@ -2,7 +2,6 @@ import type {
     Exercise,
     NutritionDay,
     ProgressionContract,
-    ProgressionBaselineState,
     SessionExercise,
     SessionExerciseSet,
     SetSegment,
@@ -106,8 +105,6 @@ export interface ExerciseProgressionAnalysis {
     recentComparable: NormalizedExposure[];
     comparison: ExposureComparison;
     comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
-    baselineState?: ProgressionBaselineState;
-    baselineVersion?: number;
     progressionContract?: ProgressionContract;
     quality: ProgressionQuality;
     qualityReasons: string[];
@@ -355,15 +352,6 @@ export function compareExposureCompatibility(
         return { level: 'none', reasons: ['Standard tecnico registrato diverso.'] };
     }
     if (Boolean(currentStandard) !== Boolean(previousStandard)) reasons.push('Standard tecnico registrato solo in una delle esposizioni.');
-
-    const currentVersion = current.progressionContract?.baselineVersion;
-    const previousVersion = previous.progressionContract?.baselineVersion;
-    if ((currentVersion !== undefined || previousVersion !== undefined) && currentVersion !== previousVersion) {
-        return {
-            level: 'none',
-            reasons: [`Versione baseline diversa: ${previousVersion ?? 'legacy'} → ${currentVersion ?? 'legacy'}.`],
-        };
-    }
 
     const currentMetric = current.progressionContract?.metric;
     const previousMetric = previous.progressionContract?.metric;
@@ -779,8 +767,6 @@ export function computeProgressionEngine(
             recentComparable,
             comparison,
             comparisonStatus: comparison.level === 'high' ? 'comparable' : comparison.level === 'medium' ? 'limited' : 'not_comparable',
-            ...(current.progressionContract?.baselineState ? { baselineState: current.progressionContract.baselineState } : {}),
-            ...(current.progressionContract?.baselineVersion !== undefined ? { baselineVersion: current.progressionContract.baselineVersion } : {}),
             ...(current.progressionContract ? { progressionContract: current.progressionContract } : {}),
             quality,
             qualityReasons,
@@ -802,18 +788,6 @@ export function progressionQualityLabel(quality: ProgressionQuality): string {
     if (quality === 'clear') return 'Trend chiaro';
     if (quality === 'preliminary') return 'Indicazione preliminare';
     return 'Confronto limitato';
-}
-
-export function progressionBaselineStateLabel(state?: ProgressionBaselineState): string | undefined {
-    if (!state) return undefined;
-    return ({
-        historical: 'storica',
-        active: 'attiva',
-        suspended: 'sospesa',
-        reacclimation: 'riacclimatazione',
-        reactivated: 'riattivata',
-        replaced: 'sostituita',
-    } as const)[state];
 }
 
 export function progressionTrendLabel(

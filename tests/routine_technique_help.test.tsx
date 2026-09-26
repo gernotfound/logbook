@@ -52,14 +52,23 @@ describe('routine technique help', () => {
         expect(dialog.message).toContain('confrontare le prestazioni');
     });
 
-    it('explains that descriptive progression rules are not automatic actions', () => {
+    it('keeps per-set techniques inside the Tecnica panel and removes retired controls', () => {
         renderItem();
 
-        fireEvent.click(screen.getByText('Tecnica'));
-        fireEvent.click(screen.getByRole('button', { name: 'Spiega: Regola di successo' }));
+        const summary = screen.getByText('Tecnica').closest('summary');
+        const details = summary?.parentElement;
+        expect(details?.textContent).toContain('Tecnica per serie:');
+        expect(details?.textContent).toContain('Esecuzione da mantenere');
+        expect(details?.textContent).toContain('Ruolo nella scheda');
+        expect(details?.textContent).toContain('Cosa vuoi migliorare');
+        expect(details?.textContent).not.toContain('Contesto');
+        expect(details?.textContent).not.toContain('Target');
+        expect(details?.textContent).not.toContain('Regola di successo');
+        expect(details?.textContent).not.toContain('Regola di cambio');
+        expect(details?.textContent).not.toContain('Prossima azione');
+        expect(details?.textContent).not.toContain('Riferimento storico (avanzato)');
 
-        const dialog = useDialogStore.getState();
-        expect(dialog.title).toBe('Regola di successo');
-        expect(dialog.message).toContain('non la esegue automaticamente');
+        fireEvent.click(screen.getByText('Tecnica'));
+        expect(screen.getByLabelText('Tecnica serie 1')).toBeTruthy();
     });
 });

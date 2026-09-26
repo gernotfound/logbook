@@ -16,10 +16,6 @@ interface SessionExerciseCardProps {
         quality: string;
         comparisonStatus: 'comparable' | 'limited' | 'not_comparable';
         comparisonReasons: string[];
-        baselineState?: string;
-        baselineVersion?: number;
-        contractTarget?: string;
-        nextAction?: string;
     };
     isHistoryOpen: boolean;
     isSetupOpen: boolean;
@@ -164,8 +160,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <div style={{ marginTop: '6px', padding: '8px 10px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', display: 'grid', gap: '4px' }}>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                             Confrontabilità: {progressionHint.comparisonStatus === 'comparable' ? 'confrontabile' : progressionHint.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
-                            {progressionHint.baselineVersion ? ` · baseline v${progressionHint.baselineVersion}` : ''}
-                            {progressionHint.baselineState ? ` · ${progressionHint.baselineState}` : ''}
                         </span>
                         {progressionHint.previousReference ? (
                             <>
@@ -181,8 +175,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         {progressionHint.comparisonReasons.length > 0 && (
                             <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{progressionHint.comparisonReasons.join(' ')}</span>
                         )}
-                        {progressionHint.contractTarget && <span style={{ fontSize: '0.78rem' }}><strong>Target:</strong> {progressionHint.contractTarget}</span>}
-                        {progressionHint.nextAction && <span style={{ fontSize: '0.78rem' }}><strong>Azione prevista:</strong> {progressionHint.nextAction}</span>}
                     </div>
                 )}
             </div>

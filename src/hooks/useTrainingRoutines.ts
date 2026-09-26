@@ -253,15 +253,9 @@ export function useTrainingRoutines() {
                 else delete exercise.technicalStandard;
             } else {
                 const contract: ProgressionContract = { ...(exercise.progressionContract || {}) };
-                if (field === 'baselineVersion') {
-                    const parsed = value.trim() === '' ? undefined : Number.parseInt(value, 10);
-                    if (parsed && parsed > 0) contract.baselineVersion = parsed;
-                    else delete contract.baselineVersion;
-                } else {
-                    const normalized = value.trim();
-                    if (normalized) (contract as Record<string, unknown>)[field] = value;
-                    else delete (contract as Record<string, unknown>)[field];
-                }
+                const normalized = value.trim();
+                if (normalized) (contract as Record<string, unknown>)[field] = value;
+                else delete (contract as Record<string, unknown>)[field];
                 exercise.progressionContract = Object.keys(contract).length ? contract : undefined;
             }
             exercises[index] = exercise;

@@ -21,34 +21,6 @@ const TECHNIQUE_HELP = {
         title: 'Cosa vuoi migliorare',
         message: 'Indica quale tipo di progresso vuoi interpretare in questo esercizio: performance, volume, densità o qualità dell’esecuzione. Serve al Progression Engine per leggere correttamente i dati; non modifica da solo il programma.',
     },
-    context: {
-        title: 'Contesto',
-        message: 'Annota perché l’esercizio è impostato così in questa scheda, per esempio rientro dopo una pausa, blocco di forza o priorità tecnica. È informativo e non applica modifiche automatiche.',
-    },
-    target: {
-        title: 'Target',
-        message: 'Descrive il risultato che vuoi raggiungere in questo contesto, per esempio 8–10 ripetizioni mantenendo RIR 1–2. LogBook può mostrarlo come riferimento, ma non cambia automaticamente il programma quando lo raggiungi.',
-    },
-    successRule: {
-        title: 'Regola di successo',
-        message: 'Descrive quando considerare raggiunto il target, per esempio tutte le serie al limite alto del range. Al momento è una regola descrittiva: LogBook non la esegue automaticamente.',
-    },
-    failureRule: {
-        title: 'Regola di cambio',
-        message: 'Descrive quando rivalutare la strategia, per esempio dopo due esposizioni senza raggiungere il minimo. Al momento è una regola descrittiva e non modifica automaticamente carichi, volume o recuperi.',
-    },
-    nextAction: {
-        title: 'Prossima azione',
-        message: 'Annota cosa vuoi fare dopo che si verifica la condizione prevista, per esempio aumentare il carico minimo disponibile. È una guida visualizzata da LogBook, non un comando automatico.',
-    },
-    baselineState: {
-        title: 'Stato del riferimento storico',
-        message: 'Campo avanzato che descrive se il riferimento storico è attivo, sospeso, in riacclimatazione o sostituito. Serve a documentare lo stato della baseline; non altera da solo il programma.',
-    },
-    baselineVersion: {
-        title: 'Versione del riferimento storico',
-        message: 'Campo avanzato che separa periodi di confronto diversi. Versioni differenti non vengono confrontate direttamente. Usalo solo quando vuoi dichiarare esplicitamente che è iniziato un nuovo riferimento storico.',
-    },
 } as const;
 
 type TechniqueHelpKey = keyof typeof TECHNIQUE_HELP;
@@ -265,90 +237,94 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </div>
                     )}
 
-                    <div style={{ paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                Tecnica per serie:
-                            </span>
-                            {helpButton('setTechnique')}
-                        </div>
-                        {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
-                            const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
-                            const technique: SetTechnique = plan?.technique || 'straight';
-                            return (
-                                <div key={setIndex} style={{ display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr)', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                                    <strong style={{ fontSize: '0.8rem' }}>S{setIndex + 1}</strong>
-                                    <div style={{ minWidth: 0 }}>
-                                        <select
-                                            aria-label={`Tecnica serie ${setIndex + 1}`}
-                                            value={technique}
-                                            onChange={event => onUpdateSetPlan(index, setIndex, event.target.value as SetTechnique)}
-                                            style={{ margin: 0, width: '100%', minHeight: '44px', fontSize: '16px' }}
-                                        >
-                                            <option value="straight">Serie normale</option>
-                                            <option value="dropset">Dropset</option>
-                                            <option value="rest_pause">Rest-pause</option>
-                                            <option value="cluster">Cluster</option>
-                                            <option value="rep_match">Rep-match</option>
-                                            <option value="diminishing">Diminishing set</option>
-                                        </select>
-                                        {technique !== 'straight' && (
-                                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                                {technique !== 'dropset' && (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        aria-label={`Recupero serie ${setIndex + 1}`}
-                                                        placeholder="Rec s"
-                                                        value={plan?.restSeconds ?? ''}
-                                                        onChange={event => onUpdateSetPlanField(index, setIndex, 'restSeconds', event.target.value)}
-                                                        style={{ margin: 0, width: '88px', minHeight: '44px', fontSize: '16px' }}
-                                                    />
-                                                )}
-                                                {technique === 'cluster' && (
-                                                    <input
-                                                        type="number"
-                                                        min="2"
-                                                        aria-label={`Segmenti serie ${setIndex + 1}`}
-                                                        placeholder="Segmenti"
-                                                        value={plan?.segmentCount ?? ''}
-                                                        onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}
-                                                        style={{ margin: 0, width: '105px', minHeight: '44px', fontSize: '16px' }}
-                                                    />
-                                                )}
-                                                {(technique === 'rep_match' || technique === 'diminishing') && (
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        aria-label={`Target ripetizioni serie ${setIndex + 1}`}
-                                                        placeholder="Target reps"
-                                                        value={plan?.target?.reps ?? ''}
-                                                        onChange={event => onUpdateSetPlanField(index, setIndex, 'targetReps', event.target.value)}
-                                                        style={{ margin: 0, width: '112px', minHeight: '44px', fontSize: '16px' }}
-                                                    />
-                                                )}
-                                                <span style={{ alignSelf: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                    {techniqueLabel(technique)}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+
 
                 </>
             )}
 
             <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                <summary className="disclosure-summary">
+                <summary className="disclosure-summary technique-summary">
                     Tecnica
                 </summary>
                 <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
                     <p className="text-xs text-muted" style={{ margin: 0 }}>
                         Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda. Lo stesso esercizio può avere impostazioni diverse in un’altra scheda.
                     </p>
+
+                    {!isCardio && (
+                        <div style={{ paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    Tecnica per serie:
+                                </span>
+                                {helpButton('setTechnique')}
+                            </div>
+                            {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
+                                const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
+                                const technique: SetTechnique = plan?.technique || 'straight';
+                                return (
+                                    <div key={setIndex} style={{ display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr)', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                                        <strong style={{ fontSize: '0.8rem' }}>S{setIndex + 1}</strong>
+                                        <div style={{ minWidth: 0 }}>
+                                            <select
+                                                aria-label={`Tecnica serie ${setIndex + 1}`}
+                                                value={technique}
+                                                onChange={event => onUpdateSetPlan(index, setIndex, event.target.value as SetTechnique)}
+                                                style={{ margin: 0, width: '100%', minHeight: '44px', fontSize: '16px' }}
+                                            >
+                                                <option value="straight">Serie normale</option>
+                                                <option value="dropset">Dropset</option>
+                                                <option value="rest_pause">Rest-pause</option>
+                                                <option value="cluster">Cluster</option>
+                                                <option value="rep_match">Rep-match</option>
+                                                <option value="diminishing">Diminishing set</option>
+                                            </select>
+                                            {technique !== 'straight' && (
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                                    {technique !== 'dropset' && (
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            aria-label={`Recupero serie ${setIndex + 1}`}
+                                                            placeholder="Rec s"
+                                                            value={plan?.restSeconds ?? ''}
+                                                            onChange={event => onUpdateSetPlanField(index, setIndex, 'restSeconds', event.target.value)}
+                                                            style={{ margin: 0, width: '88px', minHeight: '44px', fontSize: '16px' }}
+                                                        />
+                                                    )}
+                                                    {technique === 'cluster' && (
+                                                        <input
+                                                            type="number"
+                                                            min="2"
+                                                            aria-label={`Segmenti serie ${setIndex + 1}`}
+                                                            placeholder="Segmenti"
+                                                            value={plan?.segmentCount ?? ''}
+                                                            onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}
+                                                            style={{ margin: 0, width: '105px', minHeight: '44px', fontSize: '16px' }}
+                                                        />
+                                                    )}
+                                                    {(technique === 'rep_match' || technique === 'diminishing') && (
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            aria-label={`Target ripetizioni serie ${setIndex + 1}`}
+                                                            placeholder="Target reps"
+                                                            value={plan?.target?.reps ?? ''}
+                                                            onChange={event => onUpdateSetPlanField(index, setIndex, 'targetReps', event.target.value)}
+                                                            style={{ margin: 0, width: '112px', minHeight: '44px', fontSize: '16px' }}
+                                                        />
+                                                    )}
+                                                    <span style={{ alignSelf: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                        {techniqueLabel(technique)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     <div className="text-sm">
                         {fieldHeader('Esecuzione da mantenere', 'technicalStandard', `${fieldId}-technical-standard`)}
@@ -394,69 +370,10 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </div>
                     </div>
 
-                    {([
-                        ['context', 'Contesto', 'Es. rientro dopo pausa, blocco forza, priorità tecnica'],
-                        ['target', 'Target', 'Es. 8-10 rep mantenendo RIR 1-2'],
-                        ['successRule', 'Regola di successo', 'Es. tutte le serie al limite alto del range'],
-                        ['failureRule', 'Regola di cambio', 'Es. due esposizioni senza raggiungere il minimo'],
-                        ['nextAction', 'Prossima azione', 'Es. aumenta il carico minimo disponibile'],
-                    ] as const).map(([field, label, placeholder]) => {
-                        const inputId = `${fieldId}-progression-${field}`;
-                        return (
-                            <div key={field} className="text-sm">
-                                {fieldHeader(label, field, inputId)}
-                                <input
-                                    id={inputId}
-                                    type="text"
-                                    value={exercise.progressionContract?.[field] ?? ''}
-                                    placeholder={placeholder}
-                                    onChange={event => onUpdateExerciseMetadata(index, field, event.target.value)}
-                                    style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
-                                />
-                            </div>
-                        );
-                    })}
 
-                    <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
-                        <summary className="disclosure-summary">
-                            Riferimento storico (avanzato)
-                        </summary>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', paddingTop: '8px' }}>
-                            <div className="text-sm">
-                                {fieldHeader('Stato del riferimento', 'baselineState', `${fieldId}-baseline-state`)}
-                                <select
-                                    id={`${fieldId}-baseline-state`}
-                                    value={exercise.progressionContract?.baselineState ?? ''}
-                                    onChange={event => onUpdateExerciseMetadata(index, 'baselineState', event.target.value)}
-                                    style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
-                                >
-                                    <option value="">Non specificato</option>
-                                    <option value="historical">Storico</option>
-                                    <option value="active">Attivo</option>
-                                    <option value="suspended">Sospeso</option>
-                                    <option value="reacclimation">Riacclimatazione</option>
-                                    <option value="reactivated">Riattivato</option>
-                                    <option value="replaced">Sostituito</option>
-                                </select>
-                            </div>
-                            <div className="text-sm">
-                                {fieldHeader('Versione del riferimento', 'baselineVersion', `${fieldId}-baseline-version`)}
-                                <input
-                                    id={`${fieldId}-baseline-version`}
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={exercise.progressionContract?.baselineVersion ?? ''}
-                                    placeholder="1"
-                                    onChange={event => onUpdateExerciseMetadata(index, 'baselineVersion', event.target.value)}
-                                    style={{ width: '100%', minHeight: '44px', fontSize: '16px', marginTop: '4px' }}
-                                />
-                            </div>
-                        </div>
-                    </details>
 
                     <p className="text-xs text-muted" style={{ margin: 0 }}>
-                        I campi descrittivi non modificano automaticamente carichi, volume o recuperi. Il Progression Engine usa invece esecuzione, ruolo, metrica e riferimenti per interpretare i confronti.
+                        Il Progression Engine usa esecuzione, ruolo, metrica e tecnica per interpretare i confronti, senza modificare automaticamente carichi, volume o recuperi.
                     </p>
                 </div>
             </details>
