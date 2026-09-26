@@ -93,18 +93,10 @@ export interface PlannedSetTechnique {
 
 export type ProgressionRole = 'primary' | 'secondary' | 'support';
 export type ProgressionMetric = 'performance' | 'volume' | 'density' | 'execution';
-export type ProgressionBaselineState = 'historical' | 'active' | 'suspended' | 'reacclimation' | 'reactivated' | 'replaced';
 
 export interface ProgressionContract {
-    context?: string;
     role?: ProgressionRole;
     metric?: ProgressionMetric;
-    target?: string;
-    successRule?: string;
-    failureRule?: string;
-    nextAction?: string;
-    baselineState?: ProgressionBaselineState;
-    baselineVersion?: number;
 }
 
 export interface RoutineExercise {
