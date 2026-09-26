@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
-import { formatProgressionReference, progressionBaselineStateLabel, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
+import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
 import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
 import { getRoutineSetPlan } from '../../lib/advancedSets';
 import { Logic } from '../../lib/logic';
@@ -310,8 +310,6 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             Confrontabilità: <strong style={{ color: 'var(--text-main)' }}>
                                                 {progression.comparisonStatus === 'comparable' ? 'confrontabile' : progression.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
                                             </strong>
-                                            {progression.baselineVersion ? ` · baseline v${progression.baselineVersion}` : ''}
-                                            {progression.baselineState ? ` · ${progressionBaselineStateLabel(progression.baselineState)}` : ''}
                                         </div>
 
                                         {progression.previousComparable && (
@@ -321,12 +319,6 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             </div>
                                         )}
 
-                                        {progression.progressionContract?.target && (
-                                            <div style={{ fontSize: '0.82rem' }}><strong>Target:</strong> {progression.progressionContract.target}</div>
-                                        )}
-                                        {progression.progressionContract?.nextAction && (
-                                            <div style={{ fontSize: '0.82rem' }}><strong>Prossima azione prevista:</strong> {progression.progressionContract.nextAction}</div>
-                                        )}
 
                                         {progression.cycleBaseline && progression.cycleBaseline.sessionId !== progression.previousComparable?.sessionId && (
                                             <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
