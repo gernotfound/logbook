@@ -9,10 +9,10 @@ import { useDialogStore } from '../src/store/useDialogStore';
 
 const noop = vi.fn();
 
-function renderItem() {
-    render(
+function renderItem(exercise: any = { exId: 'bench', setsCount: 1 }) {
+    return render(
         <RoutineExerciseItem
-            exercise={{ exId: 'bench', setsCount: 1 }}
+            exercise={exercise}
             index={0}
             totalExercises={1}
             libDef={{
@@ -52,8 +52,18 @@ describe('routine technique help', () => {
         expect(dialog.message).toContain('confrontare le prestazioni');
     });
 
-    it('keeps per-set techniques inside the Tecnica panel and removes retired controls', () => {
-        renderItem();
+    it('keeps per-set techniques inside the Tecnica panel and lays multiple techniques out as ordered cards', () => {
+        const view = renderItem({
+            exId: 'bench',
+            setsCount: 5,
+            setPlans: [
+                { technique: 'dropset' },
+                { technique: 'rest_pause', restSeconds: 20 },
+                { technique: 'cluster', restSeconds: 15, segmentCount: 3 },
+                { technique: 'rep_match', restSeconds: 20, target: { reps: 10 } },
+                { technique: 'diminishing', restSeconds: 20, target: { reps: 8 } },
+            ],
+        });
 
         const summary = screen.getByText('Tecnica').closest('summary');
         const details = summary?.parentElement;
@@ -62,13 +72,16 @@ describe('routine technique help', () => {
         expect(details?.textContent).toContain('Ruolo nella scheda');
         expect(details?.textContent).toContain('Cosa vuoi migliorare');
         expect(details?.textContent).not.toContain('Contesto');
-        expect(details?.textContent).not.toContain('Target');
         expect(details?.textContent).not.toContain('Regola di successo');
         expect(details?.textContent).not.toContain('Regola di cambio');
         expect(details?.textContent).not.toContain('Prossima azione');
         expect(details?.textContent).not.toContain('Riferimento storico (avanzato)');
 
         fireEvent.click(screen.getByText('Tecnica'));
-        expect(screen.getByLabelText('Tecnica serie 1')).toBeTruthy();
+        expect(view.container.querySelectorAll('.routine-technique-set')).toHaveLength(5);
+        expect(screen.getByLabelText('Tecnica serie 5')).toBeTruthy();
+        expect(screen.getByLabelText('Recupero serie 2')).toBeTruthy();
+        expect(screen.getByLabelText('Segmenti serie 3')).toBeTruthy();
+        expect(screen.getByLabelText('Target ripetizioni serie 4')).toBeTruthy();
     });
 });

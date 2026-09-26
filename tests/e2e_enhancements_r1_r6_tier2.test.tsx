@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, renderHook } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { useDialogStore } from '../src/store/useDialogStore';
 import { Logic } from '../src/lib/logic';
 import { Exporter } from '../src/lib/export';
 import { SessionExerciseSchema } from '../src/lib/schema';
@@ -455,7 +456,7 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
                 expect(input.value).toBe(longName);
             });
 
-            it('T2.4.5: Removing an exercise from RoutineEditor calls onRemove callback', () => {
+            it('T2.4.5: Removing an exercise from RoutineEditor requires confirmation before onRemove', async () => {
                 const onRemoveExercise = vi.fn();
                 const routineExercises = [{ exId: 'ex1', setsCount: 3 }];
                 const library: Exercise[] = [{ id: 'ex1', name: 'Squat', setsCount: 3, sets: [] }];
@@ -482,7 +483,24 @@ describe('LogBook PWA Enhancements E2E Suite (Requirements R1 - R6)', () => {
 
                 const deleteBtn = container.querySelector('button[aria-label="Rimuovi esercizio"]');
                 expect(deleteBtn).not.toBeNull();
-                fireEvent.click(deleteBtn!);
+
+                const showConfirm = vi.mocked(useDialogStore.getState().showConfirm);
+                showConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+                await act(async () => {
+                    fireEvent.click(deleteBtn!);
+                    await Promise.resolve();
+                });
+                expect(showConfirm).toHaveBeenCalledWith(
+                    expect.stringContaining('Squat'),
+                    'Rimuovi esercizio',
+                );
+                expect(onRemoveExercise).not.toHaveBeenCalled();
+
+                await act(async () => {
+                    fireEvent.click(deleteBtn!);
+                    await Promise.resolve();
+                });
                 expect(onRemoveExercise).toHaveBeenCalledWith(0);
             });
         });
