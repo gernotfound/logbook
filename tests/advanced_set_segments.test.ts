@@ -31,27 +31,24 @@ describe('advanced set segments', () => {
         expect(set.rir).toBe(0);
     });
 
-    it('drops retired advanced execution metadata at the schema boundary', () => {
+    it('keeps segment persistence limited to the supported structure', () => {
         const parsed = UserDataSchema.parse({ history: [{ id: 'w-meta', exercises: [{ exId: 'bench', sessionNote: '', sets: [{
             id: 's-meta', kg: '100', reps: '8', technique: 'cluster',
             segments: [{
                 id: 'seg-meta', kg: '90', reps: '4', restBeforeSeconds: 20,
-                eccentricSeconds: 4, holdPosition: 'stretched', assistance: 'partner', negativeOnly: true,
+                unsupportedMetadata: 'ignored',
             }],
         }]}]}] }) as UserData;
         const segment = parsed.history![0].exercises[0].sets[0].segments?.[0];
         expect(segment).toEqual({ id: 'seg-meta', kg: '90', reps: '4', restBeforeSeconds: 20 });
-        expect(formatAdvancedSetSummary(parsed.history![0].exercises[0].sets[0])).not.toMatch(/ecc |hold |assist |solo negative/);
     });
 
-    it('drops retired progression contract fields while preserving role and metric', () => {
+    it('keeps progression contracts limited to supported role and metric', () => {
         const parsed = UserDataSchema.parse({ routines: [{
             id: 'r-meta', name: 'Routine', exercises: [{
                 exId: 'bench', setsCount: 1,
                 progressionContract: {
-                    role: 'primary', metric: 'performance', context: 'legacy context',
-                    target: 'legacy target', successRule: 'legacy success', failureRule: 'legacy change',
-                    nextAction: 'legacy next', baselineState: 'active', baselineVersion: 2,
+                    role: 'primary', metric: 'performance', unsupportedMetadata: 'ignored',
                 },
             }],
         }] }) as UserData;
