@@ -575,7 +575,6 @@ render(
                 'src/components/Data/DataMeasurements.tsx',
                 'src/components/Data/DataSleep.tsx',
                 'src/components/Data/DataBiometry.tsx',
-                'src/components/Training/routines/RoutineEditor.tsx',
                 'src/components/Training/session/SessionExerciseCard.tsx'
             ];
 

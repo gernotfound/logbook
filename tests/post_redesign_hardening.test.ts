@@ -59,6 +59,12 @@ describe('post-redesign UI hardening', () => {
     expect(components).toMatch(/\.muscle-priority-results\s*\{[^}]*position:\s*static/);
   });
 
+  it('keeps the routine editor actions flush with the form bottom', () => {
+    const routineEditor = read('src/components/Training/routines/RoutineEditor.tsx');
+    expect(routineEditor).toMatch(/return\s*\(\s*<div>\s*<h2/);
+    expect(routineEditor).not.toMatch(/return\s*\(\s*<div className="section-divider">/);
+  });
+
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
     const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
     expect(routineItem).toContain('htmlFor={setsId}');
