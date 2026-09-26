@@ -125,7 +125,7 @@ export const Exporter = {
 
     async exportToCSV(history: any[], nutrition: Record<string, any>, library: any[] = []) {
         const libMap = new Map<string, any>(library.map(l => [l.id, l]));
-        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Eccentrica (s),Posizione tenuta,Assistenza,Solo negative,Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Standard tecnico,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
+        let workoutCsv = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Standard tecnico,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
 
         history.forEach(session => {
             const dateStr = session.globalStartTime
@@ -161,7 +161,7 @@ export const Exporter = {
                             const kcal = set.kcal !== undefined ? set.kcal : "";
 
                             workoutCsv += this.formatCsvRow([
-                                dateStr, routineName, exName, idx + 1, set.technique || (set.dropsets?.length ? 'dropset' : 'straight'), 0, reps, rir, time, kg, '', '', '', '', '', set.target?.reps ?? '', distance, speed, incline, kcal, ex.technicalStandard ?? '',
+                                dateStr, routineName, exName, idx + 1, set.technique || (set.dropsets?.length ? 'dropset' : 'straight'), 0, reps, rir, time, kg, '', set.target?.reps ?? '', distance, speed, incline, kcal, ex.technicalStandard ?? '',
                                 sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                             ]);
 
@@ -169,7 +169,7 @@ export const Exporter = {
                                 set.segments.forEach((segment: any, segmentIndex: number) => {
                                     workoutCsv += this.formatCsvRow([
                                         dateStr, routineName, exName, idx + 1, set.technique || 'straight', segmentIndex + 1,
-                                        segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '', segment.restBeforeSeconds ?? '', segment.eccentricSeconds ?? '', segment.holdPosition ?? '', segment.assistance ?? '', segment.negativeOnly === true ? 'true' : segment.negativeOnly === false ? 'false' : '', set.target?.reps ?? '',
+                                        segment.reps ?? '', '', segment.time ?? '', segment.kg ?? '', segment.restBeforeSeconds ?? '', set.target?.reps ?? '',
                                         '', '', '', '', ex.technicalStandard ?? '', sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -181,7 +181,7 @@ export const Exporter = {
                                     const dsReps = ds.reps !== undefined ? ds.reps : "";
                                     const label = set.dropsets.length > 1 ? `${idx + 1} (Dropset ${dsIdx + 1})` : `${idx + 1} (Dropset)`;
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, label, 'dropset', dsIdx + 1, dsReps, "", "", dsKg, "", "", "", "", "", "", "", "", "", "", ex.technicalStandard ?? '',
+                                        dateStr, routineName, exName, label, 'dropset', dsIdx + 1, dsReps, "", "", dsKg, "", "", "", "", "", "", ex.technicalStandard ?? '',
                                         sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -193,7 +193,7 @@ export const Exporter = {
                                     const isoTime = iso.time ? `${iso.time}s` : "";
                                     const label = set.isometrics.length > 1 ? `${idx + 1} (Isometria ${isoIdx + 1})` : `${idx + 1} (Isometria)`;
                                     workoutCsv += this.formatCsvRow([
-                                        dateStr, routineName, exName, label, 'isometry', isoIdx + 1, "", "", isoTime, isoKg, "", "", "", "", "", "", "", "", "", "", ex.technicalStandard ?? '',
+                                        dateStr, routineName, exName, label, 'isometry', isoIdx + 1, "", "", isoTime, isoKg, "", "", "", "", "", "", ex.technicalStandard ?? '',
                                         sessionDuration, mood, pump, fatigue, water, energy, stress, motivation, muscleRecovery
                                     ]);
                                 });
@@ -261,7 +261,7 @@ export const Exporter = {
             }
         });
 
-        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Eccentrica (s),Posizione tenuta,Assistenza,Solo negative,Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Standard tecnico,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
+        const workoutHeader = "Data,Nome allenamento,Esercizio,Serie,Tecnica,Segmento,Ripetizioni,RIR,Tempo,Peso (kg),Recupero precedente (s),Target reps,Distanza (km),Velocità (km/h),Inclinazione,Kcal bruciate,Standard tecnico,Durata Sessione,Umore,Pump,Fatica,Acqua (L),Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione\n";
         if (workoutCsv !== workoutHeader) {
             this.downloadFile("allenamenti.csv", workoutCsv, "text/csv;charset=utf-8;");
         } else {

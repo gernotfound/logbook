@@ -517,25 +517,6 @@ describe('contextual progression engine', () => {
         expect(analysis.isRecord).toBe(false);
     });
 
-    it('uses advanced segment execution metadata as part of comparability without assigning stimulus scores', () => {
-        const previousSet = set(80, 8, 2, {
-            technique: 'cluster',
-            segments: [{ id: 'seg-1', kg: '80', reps: '4', restBeforeSeconds: 20, eccentricSeconds: 2, holdPosition: 'stretched', assistance: 'none' }],
-        });
-        const currentSet = set(80, 8, 2, {
-            technique: 'cluster',
-            segments: [{ id: 'seg-2', kg: '80', reps: '4', restBeforeSeconds: 20, eccentricSeconds: 4, holdPosition: 'stretched', assistance: 'none' }],
-        });
-        const previous = workout({ id: 'seg-prev', date: '2026-09-01', sets: [previousSet] });
-        const current = workout({ id: 'seg-current', date: '2026-09-08', sets: [currentSet] });
-
-        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
-
-        expect(analysis.comparisonStatus).toBe('not_comparable');
-        expect(analysis.comparison.reasons.join(' ')).toContain('Parametri tecnici');
-        expect(analysis).not.toHaveProperty('stimulusScore');
-    });
-
     it('lets the exercise progression contract refine role and metric without changing the programmed work', () => {
         const current = workout({
             id: 'contract-current',

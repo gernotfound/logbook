@@ -125,8 +125,8 @@ describe('SEC-01: CSV Formula Injection Mitigation in Export', () => {
         // La riga 2 potrebbe essere vuota se c'è un trailing newline.
         const validWorkoutRecords = workoutRecords.filter(r => r.length > 1);
         
-        expect(validWorkoutRecords[0].length).toBe(30);
-        expect(validWorkoutRecords[1].length).toBe(30);
+        expect(validWorkoutRecords[0].length).toBe(26);
+        expect(validWorkoutRecords[1].length).toBe(26);
         expect(validWorkoutRecords[1][1]).toBe(`'=cmd|calc`);
         expect(validWorkoutRecords[1][2]).toBe(`'-Attacco!`);
         expect(validWorkoutRecords[1][7]).toBe(''); // RIR assente resta una cella vuota.

@@ -568,11 +568,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                         id: 'seg1',
                         kg: '73',
                         reps: '4',
-                        restBeforeSeconds: 20,
-                        eccentricSeconds: 4,
-                        holdPosition: 'stretched',
-                        assistance: 'partner',
-                        negativeOnly: true
+                        restBeforeSeconds: 20
                     }]
                 };
 

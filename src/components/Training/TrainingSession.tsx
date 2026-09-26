@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { TrainingSessionSetup } from './TrainingSessionSetup';
 import { ActiveWorkoutSession } from './ActiveWorkoutSession';
 import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
-import type { WorkoutReadiness, WorkoutSession } from '../../types';
+import type { WorkoutSession } from '../../types';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
@@ -20,19 +20,20 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
     const [pendingEndTime, setPendingEndTime] = useState<number | null>(null);
+    const wasStartedRef = useRef(Boolean(activeWorkout?.globalStartTime));
     const isPostSession = pendingEndTime !== null;
+
+    useEffect(() => {
+        const isStarted = Boolean(activeWorkout?.globalStartTime);
+        if (!wasStartedRef.current && isStarted) {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+        wasStartedRef.current = isStarted;
+    }, [activeWorkout?.globalStartTime]);
     const handleCloseReport = useCallback(() => {
         setReportWorkout(null);
         window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
     }, []);
-    const handleWorkoutStart = useCallback(async (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => {
-        const started = await confirmWorkoutStart(readiness);
-        if (started) {
-            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-        }
-        return started;
-    }, [confirmWorkoutStart]);
-
     // Il report appartiene al contenitore della sessione: deve sopravvivere alla
     // cancellazione del workout locale che segue un salvataggio riuscito.
     if (isPostSession && activeWorkout && !activeWorkout.isEditingHistory) {
@@ -83,7 +84,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             <PreSessionCheckIn
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
-                onStart={handleWorkoutStart}
+                onStart={confirmWorkoutStart}
                 onCancel={deleteWorkout}
             />
         );

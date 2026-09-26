@@ -179,16 +179,6 @@ export function useTrainingRoutines() {
         });
     };
 
-    const handleUpdateTechnique = (index: number, technique: 'dropset' | 'isometrics' | 'none') => {
-        setRoutineExercises(prev => {
-            const newExs = [...prev];
-            const current = newExs[index]?.defaultTechnique;
-            const updated = current === technique ? 'none' : technique;
-            newExs[index] = { ...newExs[index], defaultTechnique: updated === 'none' ? undefined : updated };
-            return newExs;
-        });
-    };
-
     const handleUpdateSetPlan = (
         exerciseIndex: number,
         setIndex: number,
@@ -287,7 +277,7 @@ export function useTrainingRoutines() {
         routines, library,
         handleSave, handleCancelEdit, handleEditClick, handleDelete, handleDuplicate,
         handleAddExerciseToRoutine, handleUpdateSetsCount, handleUpdateReps,
-        handleUpdateTechnique, handleUpdateSetPlan, handleUpdateSetPlanField,
+        handleUpdateSetPlan, handleUpdateSetPlanField,
         handleUpdateExerciseMetadata,
         handleRemoveExerciseFromRoutine, moveExercise
     };
