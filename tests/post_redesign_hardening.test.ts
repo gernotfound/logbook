@@ -61,8 +61,8 @@ describe('post-redesign UI hardening', () => {
 
   it('keeps the routine editor actions flush with the form bottom', () => {
     const routineEditor = read('src/components/Training/routines/RoutineEditor.tsx');
-    expect(routineEditor).toContain('return (\\n        <div>\\n            <h2');
-    expect(routineEditor).not.toContain('<div className="section-divider">\\n            <h2');
+    expect(routineEditor).toMatch(/return\s*\(\s*<div>\s*<h2/);
+    expect(routineEditor).not.toMatch(/return\s*\(\s*<div className="section-divider">/);
   });
 
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
