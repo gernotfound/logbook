@@ -378,7 +378,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
         });
 
         // 2.3 PR Invariant: First Session NEVER awards PRs, regardless of weight/volume
-        it('R2.3: Treats first exercise exposures as baselines and continues history across routines', () => {
+        it('R2.3: Treats first exercise exposures as baselines within the same routine context', () => {
             const firstSession: WorkoutSession = {
                 id: 'sess-first',
                 routineId: 'routine-legs',
@@ -394,7 +394,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             expect(reportEmptyHistory.newPRs).toHaveLength(0);
             expect(reportEmptyHistory.exerciseComparisons).toHaveLength(2);
 
-            // A different routine does not break the same exercise's exposure history.
+            // The same exercise in a different routine is a distinct progression context.
             const unmatchingHistory: WorkoutSession[] = [
                 {
                     id: 'sess-other-1',
@@ -405,7 +405,7 @@ describe('EMPIRICAL ADVERSARIAL SUITE — R1 (TDEE Calculation) & R2 (Workout Vo
             ];
 
             const reportUnmatching = computeWorkoutReport(firstSession, unmatchingHistory, libraryMap, 80);
-            expect(reportUnmatching.isFirstSession).toBe(false);
+            expect(reportUnmatching.isFirstSession).toBe(true);
             expect(reportUnmatching.newPRs).toHaveLength(0);
         });
 
