@@ -53,27 +53,10 @@ const PlannedSetTechniqueSchema = z.object({
     segmentCount: z.number().int().positive().optional().catch(undefined),
 }).passthrough();
 
-const REMOVED_PROGRESSION_CONTRACT_FIELDS = [
-    'context', 'target', 'successRule', 'failureRule', 'nextAction', 'baselineState', 'baselineVersion',
-] as const;
-const REMOVED_SEGMENT_METADATA_FIELDS = [
-    'eccentricSeconds', 'holdPosition', 'assistance', 'negativeOnly',
-] as const;
-
-function stripRemovedFields(value: unknown, fields: readonly string[]): unknown {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-    const cleaned = { ...(value as Record<string, unknown>) };
-    fields.forEach(field => delete cleaned[field]);
-    return cleaned;
-}
-
-export const ProgressionContractSchema = z.preprocess(
-    value => stripRemovedFields(value, REMOVED_PROGRESSION_CONTRACT_FIELDS),
-    z.object({
-        role: z.enum(['primary', 'secondary', 'support']).optional().catch(undefined),
-        metric: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
-    }).passthrough(),
-);
+export const ProgressionContractSchema = z.object({
+    role: z.enum(['primary', 'secondary', 'support']).optional().catch(undefined),
+    metric: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
+});
 
 export const RoutineExerciseSchema = z.object({
     exId: safeString(''),
@@ -113,16 +96,13 @@ export const SessionExerciseIsometricSchema = z.object({
     time: safeString(''),
 }).passthrough().catch({ id: '', kg: '', time: '' }).default({ id: '', kg: '', time: '' });
 
-const SessionSetSegmentSchema = z.preprocess(
-    value => stripRemovedFields(value, REMOVED_SEGMENT_METADATA_FIELDS),
-    z.object({
-        id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo segmento non valido'),
-        kg: safeString(''),
-        reps: safeString(''),
-        time: safeOptionalString(),
-        restBeforeSeconds: z.number().int().nonnegative().optional().catch(undefined),
-    }).passthrough(),
-);
+const SessionSetSegmentSchema = z.object({
+    id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo segmento non valido'),
+    kg: safeString(''),
+    reps: safeString(''),
+    time: safeOptionalString(),
+    restBeforeSeconds: z.number().int().nonnegative().optional().catch(undefined),
+});
 
 function sanitizeSetSegments(value: unknown): unknown[] {
     if (!Array.isArray(value)) return [];
