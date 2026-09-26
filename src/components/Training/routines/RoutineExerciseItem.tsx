@@ -1,7 +1,6 @@
 import React, { useId } from 'react';
 import { ArrowUp, ArrowDown, Trash2, Activity, CircleHelp } from 'lucide-react';
 import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechnique } from '../../../types';
-import { techniqueLabel } from '../../../lib/advancedSets';
 import { useDialogStore } from '../../../store/useDialogStore';
 
 const TECHNIQUE_HELP = {
@@ -58,6 +57,15 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
     const minRepsId = `${fieldId}-min-reps`;
     const maxRepsId = `${fieldId}-max-reps`;
     const showAlert = useDialogStore(state => state.showAlert);
+    const showConfirm = useDialogStore(state => state.showConfirm);
+    const requestRemove = async () => {
+        const exerciseName = libDef?.name || 'questo esercizio';
+        const confirmed = await showConfirm(
+            `Vuoi rimuovere “${exerciseName}” da questa scheda? L’esercizio resterà disponibile nella libreria.`,
+            'Rimuovi esercizio',
+        );
+        if (confirmed) onRemove(index);
+    };
     const showTechniqueHelp = (key: TechniqueHelpKey) => {
         const help = TECHNIQUE_HELP[key];
         void showAlert(help.message, help.title);
@@ -111,7 +119,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     <button
                         type="button"
                         className="btn-icon text-danger"
-                        onClick={() => onRemove(index)}
+                        onClick={() => void requestRemove()}
                         aria-label="Rimuovi esercizio"
                     >
                         <Trash2 size={18} aria-hidden="true" />
@@ -259,18 +267,21 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                 </span>
                                 {helpButton('setTechnique')}
                             </div>
-                            {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
-                                const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
-                                const technique: SetTechnique = plan?.technique || 'straight';
-                                return (
-                                    <div key={setIndex} style={{ display: 'grid', gridTemplateColumns: '44px minmax(0, 1fr)', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                                        <strong style={{ fontSize: '0.8rem' }}>S{setIndex + 1}</strong>
-                                        <div style={{ minWidth: 0 }}>
+                            <div className="routine-technique-set-list">
+                                {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
+                                    const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
+                                    const technique: SetTechnique = plan?.technique || 'straight';
+                                    const hasParameters = technique !== 'straight' && technique !== 'dropset';
+                                    return (
+                                        <div key={setIndex} className="routine-technique-set">
+                                            <div className="routine-technique-set-header">
+                                                <strong>Serie {setIndex + 1}</strong>
+                                            </div>
                                             <select
+                                                className="routine-technique-select"
                                                 aria-label={`Tecnica serie ${setIndex + 1}`}
                                                 value={technique}
                                                 onChange={event => onUpdateSetPlan(index, setIndex, event.target.value as SetTechnique)}
-                                                style={{ margin: 0, width: '100%', minHeight: '44px', fontSize: '16px' }}
                                             >
                                                 <option value="straight">Serie normale</option>
                                                 <option value="dropset">Dropset</option>
@@ -279,50 +290,48 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                                 <option value="rep_match">Rep-match</option>
                                                 <option value="diminishing">Diminishing set</option>
                                             </select>
-                                            {technique !== 'straight' && (
-                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                                                    {technique !== 'dropset' && (
+                                            {hasParameters && (
+                                                <div className="routine-technique-params">
+                                                    <label className="routine-technique-param">
+                                                        <span>Recupero (s)</span>
                                                         <input
                                                             type="number"
                                                             min="0"
                                                             aria-label={`Recupero serie ${setIndex + 1}`}
-                                                            placeholder="Rec s"
                                                             value={plan?.restSeconds ?? ''}
                                                             onChange={event => onUpdateSetPlanField(index, setIndex, 'restSeconds', event.target.value)}
-                                                            style={{ margin: 0, width: '88px', minHeight: '44px', fontSize: '16px' }}
                                                         />
-                                                    )}
+                                                    </label>
                                                     {technique === 'cluster' && (
-                                                        <input
-                                                            type="number"
-                                                            min="2"
-                                                            aria-label={`Segmenti serie ${setIndex + 1}`}
-                                                            placeholder="Segmenti"
-                                                            value={plan?.segmentCount ?? ''}
-                                                            onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}
-                                                            style={{ margin: 0, width: '105px', minHeight: '44px', fontSize: '16px' }}
-                                                        />
+                                                        <label className="routine-technique-param">
+                                                            <span>Segmenti</span>
+                                                            <input
+                                                                type="number"
+                                                                min="2"
+                                                                aria-label={`Segmenti serie ${setIndex + 1}`}
+                                                                value={plan?.segmentCount ?? ''}
+                                                                onChange={event => onUpdateSetPlanField(index, setIndex, 'segmentCount', event.target.value)}
+                                                            />
+                                                        </label>
                                                     )}
                                                     {(technique === 'rep_match' || technique === 'diminishing') && (
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            aria-label={`Target ripetizioni serie ${setIndex + 1}`}
-                                                            placeholder="Target reps"
-                                                            value={plan?.target?.reps ?? ''}
-                                                            onChange={event => onUpdateSetPlanField(index, setIndex, 'targetReps', event.target.value)}
-                                                            style={{ margin: 0, width: '112px', minHeight: '44px', fontSize: '16px' }}
-                                                        />
+                                                        <label className="routine-technique-param">
+                                                            <span>Target reps</span>
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                aria-label={`Target ripetizioni serie ${setIndex + 1}`}
+                                                                value={plan?.target?.reps ?? ''}
+                                                                onChange={event => onUpdateSetPlanField(index, setIndex, 'targetReps', event.target.value)}
+                                                            />
+                                                        </label>
                                                     )}
-                                                    <span style={{ alignSelf: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                                        {techniqueLabel(technique)}
-                                                    </span>
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
 
