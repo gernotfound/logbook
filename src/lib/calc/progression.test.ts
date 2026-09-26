@@ -279,9 +279,22 @@ describe('contextual progression engine', () => {
         expect(analysis.qualityReasons.join(' ')).toContain('mix di tecniche');
     });
 
-    it('keeps exercise progression continuous when the exercise moves to another routine', () => {
+    it('starts an independent progression context when the same exercise is used in another routine', () => {
         const previous = workout({ id: 'w1', date: '2026-09-01', routineId: 'push-a', sets: [set(100, 8, 2)] });
         const current = workout({ id: 'w2', date: '2026-09-08', routineId: 'torso', sets: [set(100, 9, 2)] });
+
+        const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
+
+        expect(analysis.previousComparable).toBeUndefined();
+        expect(analysis.comparisonStatus).toBe('not_comparable');
+        expect(analysis.comparison.reasons.join(' ')).toContain('Scheda diversa');
+        expect(analysis.classification).toBe('new_baseline');
+        expect(analysis.isRecord).toBe(false);
+    });
+
+    it('keeps progression continuous inside the same routine context', () => {
+        const previous = workout({ id: 'w1', date: '2026-09-01', routineId: 'push-a', sets: [set(100, 8, 2)] });
+        const current = workout({ id: 'w2', date: '2026-09-08', routineId: 'push-a', sets: [set(100, 9, 2)] });
 
         const analysis = computeProgressionEngine(current, [previous], library).exercises[0];
 
