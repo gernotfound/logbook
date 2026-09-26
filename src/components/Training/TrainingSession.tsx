@@ -5,7 +5,7 @@ import { ActiveWorkoutSession } from './ActiveWorkoutSession';
 import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
-import type { WorkoutSession } from '../../types';
+import type { WorkoutReadiness, WorkoutSession } from '../../types';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
@@ -25,6 +25,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         setReportWorkout(null);
         window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'home' }));
     }, []);
+    const handleWorkoutStart = useCallback(async (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => {
+        const started = await confirmWorkoutStart(readiness);
+        if (started) {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+        }
+        return started;
+    }, [confirmWorkoutStart]);
 
     // Il report appartiene al contenitore della sessione: deve sopravvivere alla
     // cancellazione del workout locale che segue un salvataggio riuscito.
@@ -76,7 +83,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             <PreSessionCheckIn
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
-                onStart={confirmWorkoutStart}
+                onStart={handleWorkoutStart}
                 onCancel={deleteWorkout}
             />
         );
