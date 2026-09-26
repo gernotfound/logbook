@@ -102,6 +102,8 @@ const SessionSetSegmentSchema = z.object({
     reps: safeString(''),
     time: safeOptionalString(),
     restBeforeSeconds: z.number().int().nonnegative().optional().catch(undefined),
+    technique: z.enum(['dropset', 'rest_pause', 'cluster', 'rep_match', 'diminishing', 'isometry']).optional().catch(undefined),
+    target: SetTargetSchema.optional().catch(undefined),
 });
 
 function sanitizeSetSegments(value: unknown): unknown[] {

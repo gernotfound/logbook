@@ -3,7 +3,7 @@ import { X, Trophy, Activity, Clock, Layers } from 'lucide-react';
 import { computeWorkoutReport } from '../../lib/calc/workoutReport';
 import { formatProgressionReference, progressionQualityLabel, progressionTrendLabel } from '../../lib/calc/progression';
 import { getCycleStrategyLabel } from '../../lib/trainingCycleStrategy';
-import { getRoutineSetPlan } from '../../lib/advancedSets';
+import { canRepresentSetAsRoutinePlan, getContinuationTechnique, getRoutineSetPlan, getSetSegments } from '../../lib/advancedSets';
 import { Logic } from '../../lib/logic';
 import type { WorkoutSession, Exercise, RoutineExercise, WorkoutRoutine } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
@@ -108,8 +108,12 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 const finalMinReps = minReps !== Infinity ? minReps : undefined;
                 const finalMaxReps = maxReps !== -Infinity ? maxReps : undefined;
                 
-                const hasIsometrics = ex.sets.some(s => s.isometrics && s.isometrics.length > 0);
-                const setPlans = hasIsometrics ? undefined : ex.sets.map(getRoutineSetPlan);
+                const hasOnlyIsometry = ex.sets.length > 0 && ex.sets.every(set => {
+                    const segments = getSetSegments(set);
+                    return segments.length > 0 && segments.every(segment => getContinuationTechnique(set, segment) === 'isometry');
+                });
+                const hasMixedTechniqueChain = ex.sets.some(s => !canRepresentSetAsRoutinePlan(s));
+                const setPlans = hasOnlyIsometry || hasMixedTechniqueChain ? undefined : ex.sets.map(getRoutineSetPlan);
                 
                 const result: RoutineExercise = {
                     exId: ex.exId,
@@ -117,7 +121,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 };
                 if (finalMinReps !== undefined) result.minReps = finalMinReps;
                 if (finalMaxReps !== undefined) result.maxReps = finalMaxReps;
-                if (hasIsometrics) result.defaultTechnique = 'isometrics';
+                if (hasOnlyIsometry) result.defaultTechnique = 'isometrics';
                 else if (setPlans?.some(plan => plan.technique !== 'straight')) result.setPlans = setPlans;
                 
                 return result;

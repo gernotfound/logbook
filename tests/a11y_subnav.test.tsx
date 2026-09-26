@@ -95,6 +95,7 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
     it('SettingsView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
         render(<SettingsView />);
         
+        expect(screen.queryByRole('heading', { name: 'Impostazioni' })).toBeNull();
         const tablist = screen.getByRole('tablist', { name: 'Sotto-menu Impostazioni' });
         expect(tablist).not.toBeNull();
         

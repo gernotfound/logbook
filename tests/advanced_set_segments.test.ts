@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { UserDataSchema } from '../src/lib/schema';
-import { formatAdvancedSetSummary, getRoutineSetPlan, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
+import { canRepresentSetAsRoutinePlan, formatAdvancedSetSummary, getRoutineSetPlan, getSetObservedTonnage, getSetTechnique, getSetTotalReps } from '../src/lib/advancedSets';
 import { calculateSetVolume } from '../src/lib/calc/workout';
 import { buildRoutineWorkout, prepareHistoricalWorkoutForEditing } from '../src/hooks/workout/workoutSessionPreparation';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
@@ -23,11 +23,11 @@ describe('advanced set segments', () => {
     it('preserves generalized segments through schema parsing', () => {
         const parsed = UserDataSchema.parse({ history: [{ id: 'w1', exercises: [{ exId: 'bench', sessionNote: '', sets: [{
             id: 's1', kg: '100', reps: '8', rir: 0, technique: 'rest_pause',
-            segments: [{ id: 'seg1', kg: '100', reps: '3', restBeforeSeconds: 20 }],
+            segments: [{ id: 'seg1', kg: '100', reps: '3', restBeforeSeconds: 20, technique: 'rest_pause', target: { type: 'reps', reps: 3 } }],
         }]}]}] }) as UserData;
         const set = parsed.history![0].exercises[0].sets[0];
         expect(set.technique).toBe('rest_pause');
-        expect(set.segments?.[0]).toMatchObject({ kg: '100', reps: '3', restBeforeSeconds: 20 });
+        expect(set.segments?.[0]).toMatchObject({ kg: '100', reps: '3', restBeforeSeconds: 20, technique: 'rest_pause', target: { type: 'reps', reps: 3 } });
         expect(set.rir).toBe(0);
     });
 
@@ -75,6 +75,28 @@ describe('advanced set segments', () => {
             segments: [{ id: 'seg1', kg: '100', reps: '3', restBeforeSeconds: 20 }],
         };
         expect(calculateSetVolume(set, null, 80)).toBe(1100);
+    });
+
+    it('preserves an ordered chain of repeated and mixed techniques without generic segment labels', () => {
+        const set = {
+            id: 's-chain',
+            kg: '100',
+            reps: '8',
+            technique: 'dropset' as const,
+            segments: [
+                { id: 'seg1', kg: '90', reps: '5', technique: 'dropset' as const },
+                { id: 'seg2', kg: '80', reps: '4', technique: 'dropset' as const },
+                { id: 'seg3', kg: '80', reps: '3', technique: 'rest_pause' as const, restBeforeSeconds: 20 },
+                { id: 'seg4', kg: '80', reps: '2', technique: 'rest_pause' as const, restBeforeSeconds: 20 },
+            ],
+        };
+        const summary = formatAdvancedSetSummary(set);
+        expect(summary).toContain('Dropset 1');
+        expect(summary).toContain('Dropset 2');
+        expect(summary).toContain('Rest-pause 1');
+        expect(summary).toContain('Rest-pause 2');
+        expect(summary?.toLocaleLowerCase('it')).not.toContain('segmento');
+        expect(canRepresentSetAsRoutinePlan(set)).toBe(false);
     });
 
     it('normalizes advanced historical segment values for safe editing', () => {

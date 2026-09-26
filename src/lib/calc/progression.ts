@@ -4,6 +4,7 @@ import type {
     ProgressionContract,
     SessionExercise,
     SessionExerciseSet,
+    SetContinuationTechnique,
     SetSegment,
     SetTechnique,
     TrainingCycleIntent,
@@ -51,11 +52,13 @@ export interface NormalizedSet {
     rir?: number;
     timeSeconds?: number;
     segments: Array<{
+        technique?: SetContinuationTechnique;
         kg?: number;
         effectiveKg?: number;
         reps?: number;
         timeSeconds?: number;
         restBeforeSeconds?: number;
+        targetReps?: number;
     }>;
     targetReps?: number;
 }
@@ -196,11 +199,13 @@ function normalizeSegment(
     const reps = positiveInt(segment.reps);
     const timeSeconds = parseTimeSeconds(segment.time);
     return {
+        ...(segment.technique ? { technique: segment.technique } : {}),
         ...(kg !== undefined ? { kg } : {}),
         ...(effectiveKg !== undefined ? { effectiveKg } : {}),
         ...(reps !== undefined ? { reps } : {}),
         ...(timeSeconds !== undefined ? { timeSeconds } : {}),
         ...(segment.restBeforeSeconds !== undefined ? { restBeforeSeconds: segment.restBeforeSeconds } : {}),
+        ...(segment.target?.type === 'reps' ? { targetReps: segment.target.reps } : {}),
     };
 }
 
@@ -301,15 +306,19 @@ export function normalizeExerciseExposure(
 
 function setShape(set?: NormalizedSet): string {
     if (!set) return 'missing';
-    const rests = set.segments
-        .map(segment => segment.restBeforeSeconds === undefined ? '?' : String(segment.restBeforeSeconds))
+    const segmentShapes = set.segments
+        .map(segment => [
+            segment.technique ?? set.technique,
+            segment.restBeforeSeconds === undefined ? '?' : String(segment.restBeforeSeconds),
+            segment.targetReps === undefined ? 'no-target' : `target:${segment.targetReps}`,
+        ].join(':'))
         .join(',');
     return [
         set.technique,
         set.executionMode,
         set.segments.length,
         set.targetReps === undefined ? 'no-target' : `target:${set.targetReps}`,
-        `rests:${rests}`,
+        `segments:${segmentShapes}`,
     ].join('|');
 }
 
@@ -355,13 +364,23 @@ export function compareExposureCompatibility(
         return { level: 'none', reasons: ['Struttura dei segmenti diversa.'] };
     }
     for (let index = 0; index < currentRef.segments.length; index++) {
-        const currentRest = currentRef.segments[index]?.restBeforeSeconds;
-        const previousRest = previousRef.segments[index]?.restBeforeSeconds;
+        const currentSegment = currentRef.segments[index];
+        const previousSegment = previousRef.segments[index];
+        const currentTechnique = currentSegment?.technique ?? currentRef.technique;
+        const previousTechnique = previousSegment?.technique ?? previousRef.technique;
+        if (currentTechnique !== previousTechnique) {
+            return { level: 'none', reasons: ['Sequenza delle tecniche avanzate diversa.'] };
+        }
+        const currentRest = currentSegment?.restBeforeSeconds;
+        const previousRest = previousSegment?.restBeforeSeconds;
         if (currentRest !== undefined && previousRest !== undefined && currentRest !== previousRest) {
-            return { level: 'none', reasons: ['Recuperi strutturati dei segmenti diversi.'] };
+            return { level: 'none', reasons: ['Recuperi strutturati delle tecniche avanzate diversi.'] };
         }
         if ((currentRest === undefined) !== (previousRest === undefined)) {
-            reasons.push('Manca parte dei recuperi strutturati dei segmenti.');
+            reasons.push('Manca parte dei recuperi strutturati delle tecniche avanzate.');
+        }
+        if (currentSegment?.targetReps !== previousSegment?.targetReps) {
+            reasons.push('Target di una tecnica avanzata diverso o non disponibile in entrambe le esposizioni.');
         }
     }
     if (currentRef.targetReps !== previousRef.targetReps) reasons.push('Target strutturato diverso o non disponibile in entrambe le esposizioni.');

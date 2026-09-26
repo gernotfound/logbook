@@ -1,7 +1,7 @@
 import React from 'react';
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
-import { formatAdvancedSetSummary, techniqueLabel } from '../../../lib/advancedSets';
+import { continuationTechniqueLabel, getContinuationTechnique } from '../../../lib/advancedSets';
 
 interface SessionSetRowProps {
     set: any;
@@ -15,7 +15,6 @@ interface SessionSetRowProps {
     onAddSpecialSet: (type: string, setId: string) => void;
     onUpdateSpecialSet: (setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number, field: string, value: any) => void;
     onRemoveSpecialSet: (setId: string, type: 'dropsets' | 'isometrics' | 'segments', idx: number) => void;
-    onAddSegment: (setId: string) => void;
     onUpdateSetTarget: (setId: string, reps: number | undefined) => void;
 }
 
@@ -30,7 +29,6 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     onAddSpecialSet,
     onUpdateSpecialSet,
     onRemoveSpecialSet,
-    onAddSegment,
     onUpdateSetTarget
 }) => {
     const [isRirOpen, setIsRirOpen] = React.useState(false);
@@ -59,6 +57,10 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
         setIsRirOpen(false);
         onToggleMenu();
     };
+
+    const advancedSegments = Array.isArray(s.segments) ? s.segments : [];
+    const hasRootTargetTechnique = Boolean(s.target)
+        && (s.technique === 'rep_match' || s.technique === 'diminishing');
 
     return (
         <React.Fragment>
@@ -267,11 +269,10 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 </div>
             </div>
 
-            {s.technique && s.technique !== 'straight' && (
+            {(advancedSegments.length > 0 || (s.technique && s.technique !== 'straight')) && (
                 <div style={{ marginLeft: '20px', borderLeft: '2px solid var(--primary-color)', padding: '8px 0 8px 10px', marginBottom: '6px' }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px' }}>{formatAdvancedSetSummary(s) || techniqueLabel(s.technique)}</div>
-                    {(s.technique === 'rep_match' || s.technique === 'diminishing') && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                    {hasRootTargetTechnique && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target reps</span>
                             <BufferedInput id={`target-${s.id}`} type="number" placeholder="—" value={s.target?.reps ?? ''} onChange={val => {
                                 const parsed = Number(val);
@@ -279,17 +280,64 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                             }} style={{ margin: 0, width: '82px' }} />
                         </div>
                     )}
-                    {(s.segments || []).map((segment: any, segmentIndex: number) => (
-                        <div key={segment.id || segmentIndex} style={{ marginBottom: '8px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: s.technique === 'dropset' ? '1fr 1fr 44px' : '76px 1fr 1fr 44px', gap: '5px', alignItems: 'center' }}>
-                                {s.technique !== 'dropset' && <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />}
-                                <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
-                                <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
-                                <button className="btn-icon" aria-label={`Rimuovi segmento ${segmentIndex + 1}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
-                            </div>
+                    {advancedSegments.length === 0 && s.technique && s.technique !== 'straight' && (
+                        <div style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                            {continuationTechniqueLabel(s.technique)}
                         </div>
-                    ))}
-                    <button className="btn btn-small" style={{ minHeight: '44px', margin: 0 }} onClick={() => onAddSegment(s.id)}>+ Segmento</button>
+                    )}
+                    {advancedSegments.map((segment: any, segmentIndex: number) => {
+                        const technique = getContinuationTechnique(s, segment);
+                        const baseLabel = technique ? continuationTechniqueLabel(technique) : 'Tecnica';
+                        const occurrence = technique
+                            ? advancedSegments.slice(0, segmentIndex + 1).filter((candidate: any) => getContinuationTechnique(s, candidate) === technique).length
+                            : 1;
+                        const label = technique ? `${baseLabel} ${occurrence}` : baseLabel;
+                        const isIsometry = technique === 'isometry';
+                        const isDropset = technique === 'dropset';
+                        const gridTemplateColumns = isIsometry || isDropset ? '1fr 1fr 44px' : '76px 1fr 1fr 44px';
+
+                        return (
+                            <div key={segment.id || segmentIndex} style={{ marginBottom: '8px' }}>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)', fontWeight: 700, marginBottom: '4px' }}>↳ {label}</div>
+                                <div style={{ display: 'grid', gridTemplateColumns, gap: '5px', alignItems: 'center' }}>
+                                    {!isDropset && !isIsometry && (
+                                        <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />
+                                    )}
+                                    <BufferedInput id={`seg-kg-${s.id}-${segmentIndex}`} type="number" step="0.25" placeholder="Kg" value={segment.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'kg', val)} style={{ margin: 0, minWidth: 0 }} />
+                                    {isIsometry ? (
+                                        <BufferedInput id={`seg-time-${s.id}-${segmentIndex}`} type="number" placeholder="Sec" value={segment.time ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'time', val)} style={{ margin: 0, minWidth: 0 }} />
+                                    ) : (
+                                        <BufferedInput id={`seg-reps-${s.id}-${segmentIndex}`} type="number" placeholder="Reps" value={segment.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'reps', val)} style={{ margin: 0, minWidth: 0 }} />
+                                    )}
+                                    <button className="btn-icon" aria-label={`Rimuovi ${label}`} style={{ minWidth: '44px', minHeight: '44px', color: 'var(--danger-color)' }} onClick={() => onRemoveSpecialSet(s.id, 'segments', segmentIndex)}>✕</button>
+                                </div>
+                                {(technique === 'rep_match' || technique === 'diminishing') && Boolean(segment.technique) && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px' }}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target reps</span>
+                                        <BufferedInput
+                                            id={`seg-target-${s.id}-${segmentIndex}`}
+                                            type="number"
+                                            placeholder="—"
+                                            value={segment.target?.reps ?? ''}
+                                            onChange={val => {
+                                                const parsed = Number(val);
+                                                onUpdateSpecialSet(
+                                                    s.id,
+                                                    'segments',
+                                                    segmentIndex,
+                                                    'target',
+                                                    val === '' || !Number.isFinite(parsed)
+                                                        ? undefined
+                                                        : { type: 'reps', reps: Math.max(0, Math.trunc(parsed)) },
+                                                );
+                                            }}
+                                            style={{ margin: 0, width: '82px' }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

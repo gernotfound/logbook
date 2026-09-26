@@ -57,7 +57,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         saveHistoryEdit, cancelHistoryEdit,
         addExtraExercise, moveExercise, reorderExercises, removeActiveExercise,
         addSet, removeSet, removeLastSet, updateSet,
-        addSpecialSet, updateSpecialSet, removeSpecialSet, addSegment, updateSetTarget,
+        addSpecialSet, updateSpecialSet, removeSpecialSet, updateSetTarget,
         updateSetupNote, updateSessionNote, updateTechnicalStandard
     } = useWorkoutSession();
 
@@ -156,10 +156,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         removeSpecialSet(exIndex, setId, type, idx);
     }, [removeSpecialSet]);
 
-    const handleAddSegment = useCallback((exIndex: number, setId: string) => {
-        addSegment(exIndex, setId);
-    }, [addSegment]);
-
     const handleUpdateSetTarget = useCallback((exIndex: number, setId: string, reps: number | undefined) => {
         updateSetTarget(exIndex, setId, reps);
     }, [updateSetTarget]);
@@ -247,7 +243,6 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 onAddSpecialSet={handleAddSpecialSet}
                                 onUpdateSpecialSet={handleUpdateSpecialSet}
                                 onRemoveSpecialSet={handleRemoveSpecialSet}
-                                onAddSegment={handleAddSegment}
                                 onUpdateSetTarget={handleUpdateSetTarget}
                                 onToggleSpecialMenu={handleToggleSpecialMenu}
                             />
