@@ -242,6 +242,10 @@ describe('RIR reale per singola serie', () => {
 
         const rows = csv.trim().split('\n');
         expect(rows[0]).toContain('Tecnica,Segmento,Ripetizioni,RIR,Tempo');
+        expect(rows[0]).not.toContain('Eccentrica (s)');
+        expect(rows[0]).not.toContain('Posizione tenuta');
+        expect(rows[0]).not.toContain('Assistenza');
+        expect(rows[0]).not.toContain('Solo negative');
         expect(rows[1].split(',')[7]).toBe('0');
         expect(rows[2].split(',')[7]).toBe('""');
         expect(rows[3].split(',')[7]).toBe('""');

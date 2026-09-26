@@ -56,10 +56,6 @@ export interface NormalizedSet {
         reps?: number;
         timeSeconds?: number;
         restBeforeSeconds?: number;
-        eccentricSeconds?: number;
-        holdPosition?: SetSegment['holdPosition'];
-        assistance?: SetSegment['assistance'];
-        negativeOnly?: boolean;
     }>;
     targetReps?: number;
 }
@@ -205,10 +201,6 @@ function normalizeSegment(
         ...(reps !== undefined ? { reps } : {}),
         ...(timeSeconds !== undefined ? { timeSeconds } : {}),
         ...(segment.restBeforeSeconds !== undefined ? { restBeforeSeconds: segment.restBeforeSeconds } : {}),
-        ...(segment.eccentricSeconds !== undefined ? { eccentricSeconds: segment.eccentricSeconds } : {}),
-        ...(segment.holdPosition ? { holdPosition: segment.holdPosition } : {}),
-        ...(segment.assistance ? { assistance: segment.assistance } : {}),
-        ...(segment.negativeOnly !== undefined ? { negativeOnly: segment.negativeOnly } : {}),
     };
 }
 
@@ -318,12 +310,6 @@ function setShape(set?: NormalizedSet): string {
         set.segments.length,
         set.targetReps === undefined ? 'no-target' : `target:${set.targetReps}`,
         `rests:${rests}`,
-        `segments:${set.segments.map(segment => [
-            segment.eccentricSeconds ?? '?',
-            segment.holdPosition ?? '?',
-            segment.assistance ?? '?',
-            segment.negativeOnly === undefined ? '?' : String(segment.negativeOnly),
-        ].join(':')).join(',')}`,
     ].join('|');
 }
 
@@ -376,18 +362,6 @@ export function compareExposureCompatibility(
         }
         if ((currentRest === undefined) !== (previousRest === undefined)) {
             reasons.push('Manca parte dei recuperi strutturati dei segmenti.');
-        }
-        const currentSegment = currentRef.segments[index];
-        const previousSegment = previousRef.segments[index];
-        for (const key of ['eccentricSeconds', 'holdPosition', 'assistance', 'negativeOnly'] as const) {
-            const currentValue = currentSegment?.[key];
-            const previousValue = previousSegment?.[key];
-            if (currentValue !== undefined && previousValue !== undefined && currentValue !== previousValue) {
-                return { level: 'none', reasons: ['Parametri tecnici dei segmenti diversi.'] };
-            }
-            if ((currentValue === undefined) !== (previousValue === undefined)) {
-                reasons.push('Metadati tecnici dei segmenti incompleti in una delle esposizioni.');
-            }
         }
     }
     if (currentRef.targetReps !== previousRef.targetReps) reasons.push('Target strutturato diverso o non disponibile in entrambe le esposizioni.');

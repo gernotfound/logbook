@@ -63,19 +63,12 @@ export interface Exercise {
 export type SetTechnique = 'straight' | 'dropset' | 'rest_pause' | 'cluster' | 'rep_match' | 'diminishing';
 export type ExecutionMode = 'standard' | 'stop_reps';
 
-export type SegmentHoldPosition = 'stretched' | 'mid' | 'shortened' | 'custom';
-export type SegmentAssistance = 'none' | 'self' | 'partner' | 'machine';
-
 export interface SetSegment {
     id: string;
     kg: string;
     reps: string;
     time?: string;
     restBeforeSeconds?: number;
-    eccentricSeconds?: number;
-    holdPosition?: SegmentHoldPosition;
-    assistance?: SegmentAssistance;
-    negativeOnly?: boolean;
 }
 
 export interface SetTarget {
