@@ -123,7 +123,7 @@ export const getDb = () => {
 
 const auth = initializeAuth(app, {
     persistence: browserLocalPersistence,
-    popupRedirectResolver: browserPopupRedirectResolver,
+    ...(typeof window !== 'undefined' ? { popupRedirectResolver: browserPopupRedirectResolver } : {}),
 });
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
