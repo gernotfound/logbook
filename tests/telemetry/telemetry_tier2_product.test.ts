@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { getTelemetryContext } from '../../src/lib/telemetrySanitizer';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
 
@@ -155,7 +154,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
       });
 
       it('F9-B2: localStorage contains corrupted/malformed JSON under queue key', () => {
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, 'corrupted JSON string {');
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), 'corrupted JSON string {');
         telemetryHub.init();
 
         const queued = telemetryHub.getQueuedEvents();
@@ -183,7 +182,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
         telemetryHub.setUserId('user_partial_replay');
 
         localStorage.setItem(
-          TELEMETRY_QUEUE_KEY,
+          telemetryHub.getQueueStorageKey(),
           JSON.stringify([
             { id: '1', timestamp: Date.now(), itemType: 'event', payload: { type: 'item1', context: getTelemetryContext(), userId: 'user_partial_replay', timestamp: Date.now() } },
             { id: '2', timestamp: Date.now(), itemType: 'event', payload: { type: 'item2', context: getTelemetryContext(), userId: 'user_partial_replay', timestamp: Date.now() } },
@@ -203,7 +202,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
 
       it('F9-B5: flushQueue called when queue is already empty returns immediately without errors', async () => {
         telemetryHub.init();
-        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
+        localStorage.removeItem(telemetryHub.getQueueStorageKey());
 
         await expect(telemetryHub.flushQueue()).resolves.toBeUndefined();
       });
@@ -265,7 +264,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
         telemetryHub.trackEvent('hanging_event');
         await vi.advanceTimersByTimeAsync(6000);
 
-        expect(true).toBe(true);
+        expect(mockSetDoc).toHaveBeenCalled();
       });
 
       it('F11-B2: Firestore setDoc rejects with permission-denied - caught cleanly', async () => {

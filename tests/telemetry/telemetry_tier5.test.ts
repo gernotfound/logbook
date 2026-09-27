@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   DEDUP_WINDOW_MS,
   type TelemetryErrorPayload,
@@ -176,7 +175,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           },
         }));
 
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(items));
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
         // First item succeeds, subsequent items fail due to network drop
         mockSetDoc
@@ -200,7 +199,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         telemetryHub.setUserId('user_t5_7');
 
         localStorage.setItem(
-          TELEMETRY_QUEUE_KEY,
+          telemetryHub.getQueueStorageKey(),
           JSON.stringify([
             {
               id: 'queued_item_1',
@@ -266,7 +265,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         telemetryHub.setUserId('user_t5_8b');
 
         localStorage.setItem(
-          TELEMETRY_QUEUE_KEY,
+          telemetryHub.getQueueStorageKey(),
           JSON.stringify([
             {
               id: 'poison_pill_1',
@@ -388,7 +387,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
     describe('5.4: Corrupted Storage Defense & Malformed Payloads', () => {
       it('T5-12: malformed and truncated JSON in storage queue returns [] and is reset to valid array on next enqueue', () => {
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, '{ malformed [ broken JSON :');
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ malformed [ broken JSON :');
         telemetryHub.init();
 
         expect(telemetryHub.getQueuedEvents()).toEqual([]);
@@ -404,11 +403,11 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
       });
 
       it('T5-13: non-array primitives (strings, numbers, objects) under queue key are filtered safely', () => {
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify({ notAnArray: true, val: 123 }));
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify({ notAnArray: true, val: 123 }));
         telemetryHub.init();
         expect(telemetryHub.getQueuedEvents()).toEqual([]);
 
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, '42');
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), '42');
         expect(telemetryHub.getQueuedEvents()).toEqual([]);
       });
 
@@ -436,7 +435,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           },
         ];
 
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(corruptQueue));
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(corruptQueue));
 
         await telemetryHub.flushQueue();
 

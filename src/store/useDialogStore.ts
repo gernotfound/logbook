@@ -5,15 +5,17 @@ export type UnsyncedLogoutAction = 'wait' | 'export' | 'force-exit' | 'cancel' |
 
 interface DialogState {
   isOpen: boolean;
-  type: 'alert' | 'confirm' | 'unsynced-data-logout';
+  type: 'alert' | 'confirm' | 'password-prompt' | 'unsynced-data-logout';
   title: string;
   message: string;
   unsyncedReason?: UnsyncedLogoutReason;
   onConfirm: () => void;
   onCancel: () => void;
   onAction?: (action: UnsyncedLogoutAction) => void;
+  onInputConfirm?: (value: string) => void;
   showAlert: (message: string, title?: string) => Promise<void>;
   showConfirm: (message: string, title?: string) => Promise<boolean>;
+  showPasswordPrompt: (message: string, title?: string) => Promise<string | null>;
   showUnsyncedDataLogout: (reason: UnsyncedLogoutReason) => Promise<UnsyncedLogoutAction>;
   closeDialog: () => void;
 }
@@ -35,6 +37,7 @@ export const useDialogStore = create<DialogState>((set) => ({
         message,
         unsyncedReason: undefined,
         onAction: undefined,
+        onInputConfirm: undefined,
         onConfirm: () => {
           set({ isOpen: false });
           resolve();
@@ -56,6 +59,7 @@ export const useDialogStore = create<DialogState>((set) => ({
         message,
         unsyncedReason: undefined,
         onAction: undefined,
+        onInputConfirm: undefined,
         onConfirm: () => {
           set({ isOpen: false });
           resolve(true);
@@ -68,6 +72,28 @@ export const useDialogStore = create<DialogState>((set) => ({
     });
   },
 
+  showPasswordPrompt: (message, title = 'Verifica identità') => {
+    return new Promise((resolve) => {
+      set({
+        isOpen: true,
+        type: 'password-prompt',
+        title,
+        message,
+        unsyncedReason: undefined,
+        onAction: undefined,
+        onInputConfirm: (value: string) => {
+          set({ isOpen: false, onInputConfirm: undefined });
+          resolve(value);
+        },
+        onConfirm: () => {},
+        onCancel: () => {
+          set({ isOpen: false, onInputConfirm: undefined });
+          resolve(null);
+        },
+      });
+    });
+  },
+
   showUnsyncedDataLogout: (reason: UnsyncedLogoutReason) => {
     return new Promise((resolve) => {
       set({
@@ -76,6 +102,7 @@ export const useDialogStore = create<DialogState>((set) => ({
         title: 'Modifiche non sincronizzate',
         message: '', // Message managed by GlobalDialog
         unsyncedReason: reason,
+        onInputConfirm: undefined,
         onAction: (action: UnsyncedLogoutAction) => {
           // If the user clicks 'wait', we DO NOT close the dialog automatically here.
           // The AuthContext handles 'wait' state. Wait, the prompt says:

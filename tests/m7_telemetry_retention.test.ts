@@ -45,31 +45,14 @@ function userRef(uid: string) {
   };
 }
 
-function userQuery(cursor: string | null, limitCount: number) {
-  return {
-    startAfter(nextCursor: string) {
-      return userQuery(nextCursor, limitCount);
-    },
-    limit(nextLimit: number) {
-      return userQuery(cursor, nextLimit);
-    },
-    async get() {
-      const docs = [...state.users]
-        .sort((a, b) => a.id.localeCompare(b.id))
-        .filter(user => cursor === null || user.id > cursor)
-        .slice(0, limitCount)
-        .map(user => ({ id: user.id, ref: userRef(user.id) }));
-      return { empty: docs.length === 0, size: docs.length, docs };
-    },
-  };
-}
-
 const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
     if (name === 'users') {
       return {
-        orderBy() {
-          return userQuery(null, Number.MAX_SAFE_INTEGER);
+        async listDocuments() {
+          return [...state.users]
+            .sort((a, b) => a.id.localeCompare(b.id))
+            .map(user => userRef(user.id));
         },
       };
     }
@@ -164,6 +147,24 @@ describe('M7 telemetry retention sweep', () => {
     ]);
     expect(state.users[0].telemetry.telemetry_errors.map(item => item.id)).toEqual(['fresh-error']);
     expect(state.cursor).toBeNull();
+  });
+
+  it('deletes expired telemetry even when the user root document is missing', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.users = [{
+      id: 'missing-parent',
+      telemetry: telemetry(
+        [],
+        [{ id: 'expired-event', expireAt: Timestamp.fromMillis(now.toMillis() - 1) }],
+      ),
+    }];
+
+    const result = await purgeExpiredTelemetry(Date.now() + 60_000, now);
+
+    expect(result).toEqual({ usersScanned: 1, documentsDeleted: 1, completedCycle: true });
+    expect(state.deleted).toEqual([
+      'users/missing-parent/telemetry_events/expired-event',
+    ]);
   });
 
   it('resumes after the last completed user and resets the cursor after a full cycle', async () => {

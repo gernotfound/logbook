@@ -1,4 +1,5 @@
 import type { MuscleDef } from '../../lib/constants/muscles';
+import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 
 export const EXERCISE_DRAFT_KEY = 'draft_exercise';
 
@@ -14,8 +15,8 @@ export interface ExerciseDraft {
     equipmentWeight: string;
 }
 
-export function readExerciseDraft(): Record<string, any> | null {
-    const raw = localStorage.getItem(EXERCISE_DRAFT_KEY);
+export function readExerciseDraft(owner?: string): Record<string, any> | null {
+    const raw = readDeviceValue(EXERCISE_DRAFT_KEY, owner);
     if (!raw) return null;
 
     try {
@@ -25,7 +26,7 @@ export function readExerciseDraft(): Record<string, any> | null {
     }
 }
 
-export function persistExerciseDraft(draft: ExerciseDraft): void {
+export function persistExerciseDraft(draft: ExerciseDraft, owner?: string): void {
     const hasContent = Boolean(
         draft.name.trim() ||
         draft.notes.trim() ||
@@ -37,15 +38,23 @@ export function persistExerciseDraft(draft: ExerciseDraft): void {
 
     if (hasContent) {
         try {
-            localStorage.setItem(EXERCISE_DRAFT_KEY, JSON.stringify(draft));
+            writeDeviceValue(EXERCISE_DRAFT_KEY, JSON.stringify(draft), owner);
         } catch (error) {
             console.warn('Quota exceeded or error saving draft', error);
         }
     } else {
-        localStorage.removeItem(EXERCISE_DRAFT_KEY);
+        try {
+            writeDeviceValue(EXERCISE_DRAFT_KEY, null, owner);
+        } catch {
+            // Draft cleanup is best-effort.
+        }
     }
 }
 
-export function clearExerciseDraft(): void {
-    localStorage.removeItem(EXERCISE_DRAFT_KEY);
+export function clearExerciseDraft(owner?: string): void {
+    try {
+        writeDeviceValue(EXERCISE_DRAFT_KEY, null, owner);
+    } catch {
+        // Draft cleanup is best-effort.
+    }
 }

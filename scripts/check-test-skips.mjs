@@ -2,9 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const roots = ['src', 'tests'];
-const skipped = [];
+const violations = [];
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
-const skipPattern = /\b(?:it|test|describe)\.skip\s*\(/g;
+const forbiddenPatterns = [
+    { label: 'skip', pattern: /\b(?:it|test|describe)\.skip\s*\(/g },
+    { label: 'todo', pattern: /\b(?:it|test)\.todo\s*\(/g },
+    { label: 'only', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
+    { label: 'tautology', pattern: /expect\(true\)\.toBe\(true\)|expect\(false\)\.toBe\(false\)/g },
+];
 
 function walk(directory) {
     if (!fs.existsSync(directory)) return;
@@ -19,18 +24,20 @@ function walk(directory) {
         const content = fs.readFileSync(fullPath, 'utf8');
         const lines = content.split(/\r?\n/);
         lines.forEach((line, index) => {
-            if (skipPattern.test(line)) skipped.push(`${fullPath}:${index + 1}: ${line.trim()}`);
-            skipPattern.lastIndex = 0;
+            for (const { label, pattern } of forbiddenPatterns) {
+                if (pattern.test(line)) violations.push(`${fullPath}:${index + 1} [${label}]: ${line.trim()}`);
+                pattern.lastIndex = 0;
+            }
         });
     }
 }
 
 for (const root of roots) walk(root);
 
-if (skipped.length) {
-    console.error('Skipped tests are not allowed in the Milestone 0 verification gate:');
-    for (const item of skipped) console.error(`- ${item}`);
+if (violations.length) {
+    console.error('Forbidden test shortcuts are not allowed in the canonical verification gate:');
+    for (const item of violations) console.error(`- ${item}`);
     process.exit(1);
 }
 
-console.log('No skipped tests found.');
+console.log('No skipped, focused, todo, or tautological tests found.');

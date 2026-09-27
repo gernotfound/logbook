@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
@@ -59,7 +58,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.trackPWAInstallClick({ source: 'settings_banner' });
       telemetryHub.trackWorkoutSaved({ offline: true, exerciseCount: 5 });
 
-      const raw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
       expect(raw).toBeDefined();
       const queuedItems: QueuedTelemetryItem[] = JSON.parse(raw!);
       expect(queuedItems.length).toBe(4);
@@ -417,7 +416,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
     });
 
     it('5.2: Recovers gracefully if localStorage queue contains corrupted JSON or invalid data', () => {
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, '{ "corrupted": invalid_json_syntax ');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ "corrupted": invalid_json_syntax ');
       telemetryHub.init();
 
       // getQueuedEvents should catch and return empty array

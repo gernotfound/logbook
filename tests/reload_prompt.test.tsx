@@ -261,8 +261,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    // Expect no crash/exception
-    expect(true).toBe(true);
+    expect(mockGetRegistration).not.toHaveBeenCalled();
 
     unmount();
   });
@@ -414,8 +413,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     });
 
     expect(mockGetRegistration).toHaveBeenCalled();
-    // Rejection caught by .catch(() => {}) without crashing
-    expect(true).toBe(true);
+    // The rejected registration lookup is contained by the production handler.
 
     unmount();
     consoleSpy.mockRestore();

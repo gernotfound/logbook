@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import {
-    getAuth,
+    initializeAuth,
     GoogleAuthProvider,
     EmailAuthProvider,
     signInWithPopup,
@@ -17,7 +17,6 @@ import {
     getRedirectResult,
     signOut,
     onAuthStateChanged,
-    setPersistence,
     browserLocalPersistence,
     deleteUser
 } from "firebase/auth";
@@ -121,11 +120,11 @@ export const getDb = () => {
     return _db;
 };
 
-const auth = getAuth(app);
+const auth = initializeAuth(app, {
+    persistence: browserLocalPersistence,
+});
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
-setPersistence(auth, browserLocalPersistence)
-    .catch((error) => console.error("Errore impostazione persistenza Auth:", error));
 
 export {
     auth,

@@ -148,8 +148,37 @@ describe('contextual progression engine', () => {
         const analysis = computeProgressionEngine(current, [incomplete, comparable], library).exercises[0];
 
         expect(analysis.isRecord).toBe(false);
-        expect(analysis.bestHistorical).toBeUndefined();
+        expect(analysis.bestHistorical?.sessionId).toBe('w2');
         expect(analysis.quality).toBe('preliminary');
+    });
+
+    it('recovers clear record analysis after old incomplete RIR ages out of the recent comparable window', () => {
+        const incomplete = workout({ id: 'w0', date: '2026-08-01', sets: [set(120, 10)] });
+        const first = workout({ id: 'w1', date: '2026-08-15', sets: [set(100, 8, 2)] });
+        const second = workout({ id: 'w2', date: '2026-08-22', sets: [set(100, 9, 2)] });
+        const third = workout({ id: 'w3', date: '2026-08-29', sets: [set(100, 10, 2)] });
+        const current = workout({ id: 'w4', date: '2026-09-05', sets: [set(100, 11, 2)] });
+
+        const analysis = computeProgressionEngine(current, [incomplete, first, second, third], library).exercises[0];
+
+        expect(analysis.quality).toBe('clear');
+        expect(analysis.bestHistorical?.sessionId).toBe('w3');
+        expect(analysis.classification).toBe('performance_record');
+        expect(analysis.isRecord).toBe(true);
+    });
+
+    it('keeps a recent missing-RIR exposure conservative while retaining the best high-comparability reference', () => {
+        const first = workout({ id: 'w1', date: '2026-08-15', sets: [set(100, 8, 2)] });
+        const second = workout({ id: 'w2', date: '2026-08-22', sets: [set(100, 9, 2)] });
+        const incomplete = workout({ id: 'w3', date: '2026-08-29', sets: [set(105, 9)] });
+        const current = workout({ id: 'w4', date: '2026-09-05', sets: [set(100, 10, 2)] });
+
+        const analysis = computeProgressionEngine(current, [first, second, incomplete], library).exercises[0];
+
+        expect(analysis.quality).toBe('preliminary');
+        expect(analysis.bestHistorical?.sessionId).toBe('w2');
+        expect(analysis.isRecord).toBe(false);
+        expect(analysis.qualityReasons.join(' ')).toContain('RIR mancante');
     });
 
     it('qualifies more reps when the athlete also reports more effort', () => {

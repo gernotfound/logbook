@@ -24,6 +24,7 @@ import {
     writeBrowserValue,
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
+import { classifyGooglePopupFailure } from './auth/googlePopup';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -287,10 +288,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         });
 
-        const safetyTimer = setTimeout(() => {
-            if (isMounted) setLoading(false);
-        }, 3000);
-
         let isReloading = false;
         const handleVisibilityChange = async () => {
             if (isGuestRef.current || isStoredGuest()) return;
@@ -317,7 +314,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isMounted = false;
             authRunRef.current += 1;
             invalidateSession();
-            clearTimeout(safetyTimer);
             unsubscribe();
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -330,7 +326,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
             await signInWithPopup(auth, provider);
         } catch (error: any) {
-            if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed' || /popup/i.test(error.message)) {
+            const failure = classifyGooglePopupFailure(error);
+            if (failure === 'redirect') {
                 try {
                     writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
                     await signInWithRedirect(auth, provider);
@@ -338,7 +335,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     console.error("Errore login redirect", redirectError);
                     setSaveError("Accesso fallito. Riprova.");
                 }
-            } else {
+            } else if (failure === 'network') {
+                setSaveError("Connessione non disponibile. Riprova quando sei online.");
+            } else if (failure === 'error') {
                 console.error("Errore di login", error);
                 setSaveError("Errore di accesso: " + error.message);
             }
@@ -424,7 +423,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
             await signInWithPopup(auth, provider);
         } catch (error: any) {
-            if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/internal-error' || error.code === 'auth/network-request-failed' || /popup/i.test(error.message)) {
+            const failure = classifyGooglePopupFailure(error);
+            if (failure === 'redirect') {
                 try {
                     writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
                     await signInWithRedirect(auth, provider);
@@ -434,8 +434,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
                 return;
             }
-            console.error("Errore collegamento account Google:", error);
-            setSaveError("Collegamento fallito. Riprova.");
+            if (failure === 'network') {
+                setSaveError("Connessione non disponibile. Riprova quando sei online.");
+                return;
+            }
+            if (failure === 'error') {
+                console.error("Errore collegamento account Google:", error);
+                setSaveError("Collegamento fallito. Riprova.");
+            }
         }
     }, [setSaveError]);
 

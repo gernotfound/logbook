@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
-import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider, reauthenticateWithPopup } from '../../lib/firebase';
+import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePassword, EmailAuthProvider } from '../../lib/firebase';
+import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -46,20 +47,27 @@ export const AccountCard = () => {
     };
 
     const handleReauthenticate = async () => {
-        if (!currentUser || !currentUser.email) return false;
+        if (!currentUser) return false;
         try {
-            if (hasPassword && currentPasswordInput) {
-                const cred = EmailAuthProvider.credential(currentUser.email, currentPasswordInput);
-                await reauthenticateWithCredential(currentUser, cred);
-                return true;
-            } else if (hasGoogle && !hasPassword) {
-                await reauthenticateWithPopup(currentUser, provider);
-                return true;
+            if (hasPassword && !currentPasswordInput) {
+                await showAlert("Inserisci la password attuale.");
+                return false;
             }
+            const outcome = await reauthenticateForSensitiveAction(
+                currentUser,
+                hasPassword ? currentPasswordInput : undefined,
+            );
+            if (outcome === 'reauthenticated') return true;
+            if (outcome === 'password-required') {
+                await showAlert("Inserisci la password attuale.");
+                return false;
+            }
+            await showAlert("Metodo di autenticazione non supportato per questa operazione.");
             return false;
         } catch (error: any) {
+            if (isSensitiveReauthCancellation(error)) return false;
             console.error("Reauth error", error);
-            await showAlert("Autenticazione fallita. Controlla la password attuale.");
+            await showAlert("Autenticazione fallita. Controlla le credenziali e riprova.");
             return false;
         }
     };

@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
+import { storageOwner } from '../lib/sync/session';
 import { getInMemoryCatalog } from '../lib/catalog/catalogService';
 import {
     filterMuscles,
@@ -33,10 +34,11 @@ export function useTrainingExercises() {
     const [trackingType, setTrackingType] = useState<ExerciseTrackingType>('weight_reps');
     const [isBodyweight, setIsBodyweight] = useState(false);
     const [equipmentWeight, setEquipmentWeight] = useState('');
+    const [draftOwner] = useState(() => storageOwner());
 
     // Restore draft on mount
     useEffect(() => {
-        const parsed = readExerciseDraft();
+        const parsed = readExerciseDraft(draftOwner);
         if (parsed) {
             if (parsed.name) setExName(parsed.name);
             if (parsed.notes) setExNotes(parsed.notes);
@@ -61,9 +63,9 @@ export function useTrainingExercises() {
                 secondaryMuscles,
                 isBodyweight,
                 equipmentWeight
-            });
+            }, draftOwner);
         }
-    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId]);
+    }, [exName, exNotes, trackingType, selectedMuscles, secondaryMuscles, isBodyweight, equipmentWeight, editingExId, draftOwner]);
 
     const filteredMuscles = useMemo(() => filterMuscles(muscleSearch), [muscleSearch]);
 
@@ -159,7 +161,7 @@ export function useTrainingExercises() {
         setTrackingType('weight_reps');
         setIsBodyweight(false);
         setEquipmentWeight('');
-        clearExerciseDraft();
+        clearExerciseDraft(draftOwner);
     };
 
     const isDuplicateName = useMemo(() => {

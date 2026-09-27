@@ -4,6 +4,8 @@ import { UserDataSchema } from './schema';
 import { getStorageDiagnosticData } from './storageStatus';
 import { createTelemetryId } from './telemetry/id';
 import { telemetryExpiresAt } from './telemetry/retention';
+import { deviceKey } from './sync/deviceStorage';
+import { storageOwner } from './sync/session';
 
 export type DerivedPlatform = 'ios' | 'ipados' | 'other';
 
@@ -46,19 +48,34 @@ export interface CreateAnomalyPayloadOptions {
   win?: Window;
 }
 
+// Pre-v2 global keys are retained only for one-way cleanup. New diagnostic
+// state is owner-scoped so account switches cannot inherit another owner's
+// storage marker or anomaly deduplication flag.
 export const STORAGE_MARKER_KEY = 'logbook_storage_marker';
 export const STORAGE_ANOMALY_REPORTED_KEY = 'logbook_storage_anomaly_reported';
 export const STORAGE_MARKER_VERSION = 1;
 
+export function getStorageMarkerKey(owner?: string): string {
+  return deviceKey('storage_marker', owner ?? storageOwner());
+}
+
+export function getStorageAnomalyReportedKey(owner?: string): string {
+  return deviceKey('storage_anomaly_reported', owner ?? storageOwner());
+}
+
 /**
  * Retrieves the versioned storage marker from localStorage if valid.
  */
-export function getStorageMarker(customStorage?: Storage): StorageMarker | null {
+export function getStorageMarker(customStorage?: Storage, owner?: string): StorageMarker | null {
   try {
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return null;
-    const raw = storage.getItem(STORAGE_MARKER_KEY);
-    if (!raw) return null;
+    const key = getStorageMarkerKey(owner);
+    const raw = storage.getItem(key);
+    if (!raw) {
+      storage.removeItem(STORAGE_MARKER_KEY);
+      return null;
+    }
     const parsed = JSON.parse(raw);
     if (
       parsed &&
@@ -83,7 +100,7 @@ export function getStorageMarker(customStorage?: Storage): StorageMarker | null 
 /**
  * Updates or creates the versioned storage marker in localStorage.
  */
-export function updateStorageMarker(timestamp: number = Date.now(), customStorage?: Storage): StorageMarker | null {
+export function updateStorageMarker(timestamp: number = Date.now(), customStorage?: Storage, owner?: string): StorageMarker | null {
   try {
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return null;
@@ -93,7 +110,8 @@ export function updateStorageMarker(timestamp: number = Date.now(), customStorag
       timestamp: validTimestamp,
       schemaVersion: 1,
     };
-    storage.setItem(STORAGE_MARKER_KEY, JSON.stringify(marker));
+    storage.setItem(getStorageMarkerKey(owner), JSON.stringify(marker));
+    storage.removeItem(STORAGE_MARKER_KEY);
     return marker;
   } catch (e) {
     console.warn("Impossibile aggiornare lo storage marker:", e);
@@ -104,10 +122,12 @@ export function updateStorageMarker(timestamp: number = Date.now(), customStorag
 /**
  * Clears the storage marker and reporting deduplication flags (e.g. on logout or cache deletion).
  */
-export function clearStorageMarker(customStorage?: Storage): void {
+export function clearStorageMarker(customStorage?: Storage, owner?: string): void {
   try {
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return;
+    storage.removeItem(getStorageMarkerKey(owner));
+    storage.removeItem(getStorageAnomalyReportedKey(owner));
     storage.removeItem(STORAGE_MARKER_KEY);
     storage.removeItem(STORAGE_ANOMALY_REPORTED_KEY);
   } catch {
@@ -118,14 +138,14 @@ export function clearStorageMarker(customStorage?: Storage): void {
 /**
  * Checks whether an anomaly for the given marker has already been reported.
  */
-export function isAnomalyAlreadyReported(marker: StorageMarker, customStorage?: Storage): boolean {
+export function isAnomalyAlreadyReported(marker: StorageMarker, customStorage?: Storage, owner?: string): boolean {
   try {
     if (!marker || typeof marker.timestamp !== 'number' || !Number.isFinite(marker.timestamp)) {
       return false;
     }
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return false;
-    const reportedVal = storage.getItem(STORAGE_ANOMALY_REPORTED_KEY);
+    const reportedVal = storage.getItem(getStorageAnomalyReportedKey(owner));
     return reportedVal === String(marker.timestamp);
   } catch {
     return false;
@@ -135,14 +155,15 @@ export function isAnomalyAlreadyReported(marker: StorageMarker, customStorage?: 
 /**
  * Marks the anomaly for the given marker as reported to prevent duplicate telemetry sends.
  */
-export function markAnomalyReported(marker: StorageMarker, customStorage?: Storage): void {
+export function markAnomalyReported(marker: StorageMarker, customStorage?: Storage, owner?: string): void {
   try {
     if (!marker || typeof marker.timestamp !== 'number' || !Number.isFinite(marker.timestamp)) {
       return;
     }
     const storage = customStorage ?? (typeof localStorage !== 'undefined' ? localStorage : null);
     if (!storage) return;
-    storage.setItem(STORAGE_ANOMALY_REPORTED_KEY, String(marker.timestamp));
+    storage.setItem(getStorageAnomalyReportedKey(owner), String(marker.timestamp));
+    storage.removeItem(STORAGE_ANOMALY_REPORTED_KEY);
   } catch {
     // Ignore storage errors
   }

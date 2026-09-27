@@ -120,6 +120,8 @@ vi.mock('../src/store/useDialogStore', () => {
     onCancel: vi.fn(),
     showAlert: vi.fn().mockResolvedValue(undefined),
     showConfirm: vi.fn().mockResolvedValue(true),
+    showPasswordPrompt: vi.fn().mockResolvedValue(null),
+    onInputConfirm: undefined,
     showUnsyncedDataLogout: vi.fn().mockResolvedValue('cancel'),
     closeDialog: vi.fn(),
   };
@@ -231,6 +233,10 @@ vi.mock('firebase/app', () => ({
 
 vi.mock('firebase/auth', () => ({
   getAuth: vi.fn(() => ({ currentUser: { uid: 'test-user-id', email: 'test@example.com', displayName: 'Test User' } })),
+  initializeAuth: vi.fn(() => ({
+    currentUser: { uid: 'test-user-id', email: 'test@example.com', displayName: 'Test User' },
+    authStateReady: vi.fn().mockResolvedValue(undefined),
+  })),
   GoogleAuthProvider: class { setCustomParameters = vi.fn(); },
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),

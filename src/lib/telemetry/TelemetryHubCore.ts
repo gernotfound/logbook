@@ -152,7 +152,11 @@ export class TelemetryHub {
   };
 
   public setUserId(userId: string | null | undefined): void {
+    const previousUserId = this.session.getUserId();
     this.session.setUserId(userId);
+    if (previousUserId !== this.session.getUserId()) {
+      this.queue.invalidateCache();
+    }
   }
 
   public getUserId(): string | null {

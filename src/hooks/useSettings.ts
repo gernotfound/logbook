@@ -7,6 +7,10 @@ import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { collectBackupSnapshot } from '../lib/db/backupSnapshot';
 import type { ImportMode } from '../lib/backup';
 import { isAccountDeletionPending } from '../lib/sync/accountGate';
+import {
+    isSensitiveReauthCancellation,
+    reauthenticateForSensitiveAction,
+} from '../lib/auth/recentAuth';
 
 export function useSettings() {
     const { currentUser, isGuest, logout } = useAuth();
@@ -16,6 +20,7 @@ export function useSettings() {
     const dispatchDomainOperation = useAppStore(state => state.dispatchDomainOperation);
     const showAlert = useDialogStore(state => state.showAlert);
     const showConfirm = useDialogStore(state => state.showConfirm);
+    const showPasswordPrompt = useDialogStore(state => state.showPasswordPrompt);
 
     const [localProfile, setLocalProfile] = useState<any>(null);
     const profile = localProfile ?? storeProfile ?? { dob: '', height: '', gender: '' };
@@ -153,18 +158,35 @@ export function useSettings() {
             if (!(await showConfirm('Ultima conferma: eliminare definitivamente il tuo account LogBook?'))) return;
             assertCurrent();
             setDeletingAccount(true);
-            const { auth, provider, reauthenticateWithPopup } = await import('../lib/firebase');
+            const { auth } = await import('../lib/firebase');
             assertCurrent();
             const user = auth.currentUser;
             if (!user || 'user:' + user.uid !== session.owner) throw new Error('Account cambiato.');
-            if (user.providerData.some(item => item.providerId === 'google.com')) {
-                await reauthenticateWithPopup(user, provider);
+
+            let reauth = await reauthenticateForSensitiveAction(user);
+            if (reauth === 'password-required') {
+                const password = await showPasswordPrompt(
+                    'Per eliminare definitivamente l’account, inserisci la password attuale.',
+                    'Verifica identità',
+                );
+                if (password === null) return;
                 assertCurrent();
+                reauth = await reauthenticateForSensitiveAction(user, password);
             }
+            assertCurrent();
+            if (reauth !== 'reauthenticated') {
+                throw new Error('Nessun metodo di autenticazione disponibile per confermare la cancellazione.');
+            }
+
             const outcome = await DB.deleteAccount();
             if (outcome.status === 'pending') await showAlert(outcome.message);
         } catch (error) {
-            if (captureSession().owner === session.owner) void showAlert(error instanceof Error ? error.message : 'Cancellazione non riuscita.');
+            if (isSensitiveReauthCancellation(error)) return;
+            const code = (error as { code?: unknown } | null)?.code;
+            const message = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+                ? 'Password attuale non corretta.'
+                : error instanceof Error ? error.message : 'Cancellazione non riuscita.';
+            if (captureSession().owner === session.owner) void showAlert(message);
         } finally {
             deleteBusy.current = false;
             setDeletingAccount(false);

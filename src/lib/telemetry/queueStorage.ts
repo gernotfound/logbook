@@ -26,6 +26,22 @@ function minimizeQueuedItem(item: QueuedTelemetryItem): QueuedTelemetryItem {
   };
 }
 
+function parseQueuedItems(raw: string | null): QueuedTelemetryItem[] {
+  if (!raw) return [];
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .filter(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        typeof item.id === 'string' &&
+        item.payload &&
+        typeof item.payload === 'object'
+    )
+    .map((item) => minimizeQueuedItem(item as QueuedTelemetryItem));
+}
+
 export class TelemetryQueueStorage {
   private cachedQueue: QueuedTelemetryItem[] | null = null;
   private isDiskSyncScheduled = false;
@@ -46,25 +62,34 @@ export class TelemetryQueueStorage {
     try {
       if (typeof localStorage !== 'undefined') {
         const ownerKey = this.getQueueStorageKey();
-        const raw = localStorage.getItem(ownerKey) || localStorage.getItem(TELEMETRY_QUEUE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            return parsed
-              .filter(
-                (item) =>
-                  item &&
-                  typeof item === 'object' &&
-                  typeof item.id === 'string' &&
-                  item.payload &&
-                  typeof item.payload === 'object'
-              )
-              .map((item) => minimizeQueuedItem(item as QueuedTelemetryItem));
-          }
+        const ownerRaw = localStorage.getItem(ownerKey);
+        if (ownerRaw !== null) return parseQueuedItems(ownerRaw);
+
+        // One-way migration from the pre-owner-scoped queue. Telemetry is
+        // best-effort, so entries are migrated only when their embedded UID
+        // proves that they belong to the current owner. Everything else is
+        // discarded rather than attributed to another account.
+        const legacyRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+        if (legacyRaw !== null) {
+          const uid = this.getUserId();
+          const legacyItems = parseQueuedItems(legacyRaw);
+          const migrated = legacyItems.filter((item) => {
+            const payloadUid = item.payload?.userId;
+            return uid && uid !== 'anonymous'
+              ? payloadUid === uid
+              : !payloadUid || payloadUid === 'anonymous';
+          });
+          localStorage.setItem(ownerKey, JSON.stringify(migrated));
+          localStorage.removeItem(TELEMETRY_QUEUE_KEY);
+          return migrated;
         }
       }
     } catch {
-      // Corrupted JSON or unavailable storage is treated as an empty best-effort queue.
+      try {
+        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
+      } catch {
+        // Corrupted/unavailable storage remains non-blocking telemetry state.
+      }
     }
 
     return [];
@@ -83,7 +108,7 @@ export class TelemetryQueueStorage {
         const itemsToSave = this.cachedQueue ?? this.getQueuedEvents();
         const ownerKey = this.getQueueStorageKey();
         localStorage.setItem(ownerKey, JSON.stringify(itemsToSave));
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(itemsToSave));
+        localStorage.removeItem(TELEMETRY_QUEUE_KEY);
       }
     } catch {
       // QuotaExceededError and SecurityError must not block the application.

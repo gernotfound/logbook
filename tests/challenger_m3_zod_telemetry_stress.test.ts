@@ -17,7 +17,6 @@ import {
 } from '../src/lib/schema';
 import {
     telemetryHub,
-    TELEMETRY_QUEUE_KEY,
     TELEMETRY_QUEUE_CAPACITY,
     type TelemetryErrorPayload,
 
@@ -413,7 +412,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 });
             }
 
-            const rawQueue = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+            const rawQueue = localStorage.getItem(telemetryHub.getQueueStorageKey());
             expect(rawQueue).toBeDefined();
             const queue = JSON.parse(rawQueue!);
             expect(Array.isArray(queue)).toBe(true);

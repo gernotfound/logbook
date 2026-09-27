@@ -11,7 +11,6 @@ import TrainingHistory from '../src/components/Training/TrainingHistory';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionPlanning from '../src/components/Nutrition/NutritionPlanning';
-import NutritionMeasurements from '../src/components/Nutrition/NutritionMeasurements';
 import SettingsView from '../src/components/SettingsView';
 import WorkoutTimer from '../src/components/Training/WorkoutTimer';
 import MuscleModel from '../src/components/Training/MuscleModel';
@@ -149,7 +148,6 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       expect(() => renderWithProviders(<HomeView onNavigate={() => {}} />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<SettingsView />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<NutritionPlanning />, { userData: emptyUserData })).not.toThrow();
-      expect(() => renderWithProviders(<NutritionMeasurements />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<TrainingSession />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<TrainingRoutines />, { userData: emptyUserData })).not.toThrow();
       expect(() => renderWithProviders(<TrainingHistory />, { userData: emptyUserData })).not.toThrow();

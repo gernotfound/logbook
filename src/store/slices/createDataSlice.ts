@@ -42,10 +42,10 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
         if (data) {
             if (base) await commitLocal(session.owner, data, base);
             else await initializeLocal(session.owner, data);
-            if (isCurrentSession(session)) updateStorageMarker();
+            if (isCurrentSession(session)) updateStorageMarker(Date.now(), undefined, session.owner);
         } else {
             await idbDel(`logbook:v2:${session.owner}`);
-            if (isCurrentSession(session)) clearStorageMarker();
+            if (isCurrentSession(session)) clearStorageMarker(undefined, session.owner);
         }
 };
 

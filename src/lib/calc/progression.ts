@@ -450,7 +450,11 @@ function strongRecord(current: NormalizedExposure, historical: NormalizedExposur
         previous,
         comparison: compareExposureCompatibility(current, previous),
     }));
-    if (compatibility.some(item => item.comparison.level === 'medium')) return false;
+    const recentComparable = compatibility
+        .filter(item => item.comparison.level !== 'none')
+        .slice(-3);
+    if (recentComparable.some(item => item.comparison.level === 'medium')) return false;
+
     const candidates = compatibility
         .filter(item => item.comparison.level === 'high')
         .map(item => item.previous);
@@ -467,7 +471,6 @@ function selectBestHistorical(current: NormalizedExposure, historical: Normalize
         previous,
         comparison: compareExposureCompatibility(current, previous),
     }));
-    if (compatibility.some(item => item.comparison.level === 'medium')) return undefined;
     const candidates = compatibility
         .filter(item => item.comparison.level === 'high')
         .map(item => item.previous);
@@ -538,7 +541,7 @@ function describe(
     const previousRef = formatProgressionReference(previous);
     switch (classification) {
         case 'performance_record':
-            return { headline: 'Record di performance', detail: `${previousRef} → ${currentRef}, in condizioni direttamente confrontabili.` };
+            return { headline: 'Record nelle condizioni confrontabili confrontabile', detail: `${previousRef} → ${currentRef}, migliore delle esposizioni storiche direttamente confrontabili.` };
         case 'output_up_effort_up':
             return { headline: 'Output aumentato con effort maggiore', detail: `${previousRef} → ${currentRef}. L'output è salito insieme all'effort dichiarato.` };
         case 'progression':
