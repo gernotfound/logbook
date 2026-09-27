@@ -106,8 +106,9 @@ export async function purgeExpiredTelemetry(
   // orphan telemetry written before the user's root document exists.
   const userRefs = (await db.collection(USER_COLLECTION).listDocuments())
     .sort((a, b) => a.id.localeCompare(b.id));
-  let index = cursor
-    ? userRefs.findIndex(ref => ref.id > cursor)
+  const cursorId = cursor;
+  let index = cursorId
+    ? userRefs.findIndex(ref => ref.id > cursorId)
     : 0;
   if (index < 0) index = userRefs.length;
 
