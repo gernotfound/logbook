@@ -253,6 +253,7 @@ vi.mock('firebase/auth', () => ({
   }),
   setPersistence: vi.fn().mockResolvedValue(undefined),
   browserLocalPersistence: {},
+  browserPopupRedirectResolver: { name: 'browser-popup-redirect-resolver' },
   indexedDBLocalPersistence: {},
   deleteUser: vi.fn(),
 }));
