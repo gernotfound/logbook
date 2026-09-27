@@ -127,6 +127,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             }
 
             const firestore = await import('firebase/firestore');
+            const firebaseAuth = await import('firebase/auth');
             const firebaseModule = await import('../src/lib/firebase');
             const db = firebaseModule.getDb();
 
@@ -135,6 +136,13 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(firebaseModule.provider).toBeDefined();
             expect(firebaseModule.signInWithPopup).toBeDefined();
             expect(firebaseModule.signOut).toBeDefined();
+            expect(vi.mocked(firebaseAuth.initializeAuth)).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({
+                    persistence: firebaseAuth.browserLocalPersistence,
+                    popupRedirectResolver: firebaseAuth.browserPopupRedirectResolver,
+                })
+            );
             expect(vi.mocked(firestore.memoryLocalCache)).toHaveBeenCalled();
             expect(vi.mocked(firestore.initializeFirestore)).toHaveBeenCalledWith(
                 expect.anything(),
