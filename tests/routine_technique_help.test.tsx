@@ -67,10 +67,11 @@ describe('routine technique help', () => {
 
         const summary = screen.getByText('Tecnica').closest('summary');
         const details = summary?.parentElement;
-        expect(details?.textContent).toContain('Tecnica per serie:');
+        expect(details?.textContent).not.toContain('Tecnica per serie:');
         expect(details?.textContent).toContain('Esecuzione da mantenere');
         expect(details?.textContent).toContain('Ruolo nella scheda');
         expect(details?.textContent).toContain('Cosa vuoi migliorare');
+        expect(screen.queryByRole('button', { name: 'Spiega: Tecnica per serie' })).toBeNull();
         expect(details?.textContent).not.toContain('Contesto');
         expect(details?.textContent).not.toContain('Regola di successo');
         expect(details?.textContent).not.toContain('Regola di cambio');

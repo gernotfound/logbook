@@ -75,11 +75,12 @@ describe('post-redesign UI hardening', () => {
     expect(routineItem).toContain("background: 'var(--primary-soft)'");
     expect(routineItem).toContain('CircleHelp');
     expect(routineItem).toContain('Spiega:');
-    expect(routineItem).toContain('Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda.');
+    expect(routineItem).not.toContain("helpButton('setTechnique')");
+    expect(routineItem).not.toContain('Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda.');
     expect(routineItem).toContain("fieldHeader('Esecuzione da mantenere', 'technicalStandard'");
     expect(routineItem).toContain("fieldHeader('Ruolo nella scheda', 'role'");
     expect(routineItem).toContain("fieldHeader('Cosa vuoi migliorare', 'metric'");
-    expect(routineItem).toContain('Tecnica per serie:');
+    expect(routineItem).not.toContain('Tecnica per serie:');
     expect(routineItem).toContain('disclosure-summary technique-summary');
     expect(routineItem).not.toContain('Riferimento storico (avanzato)');
     expect(routineItem).not.toContain('Regola di successo');
