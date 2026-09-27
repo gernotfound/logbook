@@ -261,7 +261,8 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(mockGetRegistration).not.toHaveBeenCalled();
+    expect(mockUpdateServiceWorker).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
 
     unmount();
   });

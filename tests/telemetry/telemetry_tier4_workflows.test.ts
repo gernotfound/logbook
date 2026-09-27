@@ -129,6 +129,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
 
       telemetryHub.trackEvent('guest_offline_action', { action: 'view_catalog' });
       expect(telemetryHub.getQueuedEvents().length).toBe(1);
+      const guestQueueKey = telemetryHub.getQueueStorageKey();
 
       // 2. User signs in with Google account
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -138,8 +139,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 4', () => {
       await telemetryHub.flushQueue();
 
       expect(mockSetDoc).not.toHaveBeenCalled();
-      expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
-      expect(telemetryHub.getQueuedEvents()[0].payload.userId).toBeNull();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const guestQueue = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
+      expect(guestQueue).toHaveLength(1);
+      expect(guestQueue[0].payload.userId).toBeNull();
     });
   });
 });

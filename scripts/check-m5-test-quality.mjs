@@ -22,11 +22,6 @@ function collectTests(directory) {
 }
 
 const files = [...new Set([...fixedFiles, ...collectTests('tests/hardening')])].sort();
-const allTestFiles = [...new Set([...collectTests('tests'), ...collectTests('src')])].sort();
-const tautologies = [
-  { label: 'tautology expect(true).toBe(true)', pattern: /expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)/g },
-  { label: 'tautology expect(false).toBe(false)', pattern: /expect\s*\(\s*false\s*\)\s*\.\s*toBe\s*\(\s*false\s*\)/g },
-];
 const forbidden = [
   { label: 'skipped/todo test', pattern: /\b(?:it|test|describe)\.(?:skip|todo)\s*\(/g },
   { label: 'focused test', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
@@ -54,21 +49,10 @@ for (const file of files) {
   }
 }
 
-for (const file of allTestFiles) {
-  const content = fs.readFileSync(file, 'utf8');
-  const lines = content.split(/\r?\n/);
-  for (const { label, pattern } of tautologies) {
-    lines.forEach((line, index) => {
-      pattern.lastIndex = 0;
-      if (pattern.test(line)) failures.push(`${file}:${index + 1}: ${label}: ${line.trim()}`);
-    });
-  }
-}
-
 if (failures.length) {
   console.error('M5 test-quality gate failed:');
   failures.forEach(failure => console.error(`- ${failure}`));
   process.exit(1);
 }
 
-console.log(`M5 test-quality gate passed for ${files.length} normative files; tautology scan covered ${allTestFiles.length} test files.`);
+console.log(`M5 test-quality gate passed for ${files.length} normative files.`);

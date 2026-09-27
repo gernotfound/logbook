@@ -1,6 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useDialogStore } from '../src/store/useDialogStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authState = vi.hoisted(() => ({
   user: {
@@ -15,6 +14,12 @@ const reauth = vi.hoisted(() => ({
   run: vi.fn(),
 }));
 
+const dialog = vi.hoisted(() => ({
+  showConfirm: vi.fn(),
+  showPasswordPrompt: vi.fn(),
+  showAlert: vi.fn(),
+}));
+
 vi.mock('../src/hooks/useAuth', () => ({
   useAuth: () => ({
     currentUser: authState.user,
@@ -22,63 +27,55 @@ vi.mock('../src/hooks/useAuth', () => ({
     logout: authState.logout,
   }),
 }));
-
 vi.mock('../src/lib/auth/recentAuth', () => ({
   reauthenticateForSensitiveAction: reauth.run,
   isSensitiveReauthCancellation: () => false,
 }));
 
+vi.mock('../src/store/useDialogStore', () => ({
+  useDialogStore: (selector: (state: typeof dialog) => unknown) => selector(dialog),
+}));
+
 import { DB } from '../src/lib/db';
 import { useSettings } from '../src/hooks/useSettings';
 
-const initialDialogState = useDialogStore.getState();
 describe('account deletion recent authentication', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    useDialogStore.setState(initialDialogState);
-    vi.restoreAllMocks();
+    dialog.showConfirm.mockResolvedValue(true);
+    dialog.showAlert.mockResolvedValue(undefined);
   });
 
   it('prompts password-only users and deletes only after successful reauthentication', async () => {
-    const showConfirm = vi.fn().mockResolvedValue(true);
-    const showPasswordPrompt = vi.fn().mockResolvedValue('Secret1!');
-    useDialogStore.setState({
-      showConfirm,
-      showPasswordPrompt,
-      showAlert: vi.fn().mockResolvedValue(undefined),
-    });
-
+    dialog.showPasswordPrompt.mockResolvedValue('Secret1!');
     reauth.run
       .mockResolvedValueOnce('password-required')
       .mockResolvedValueOnce('reauthenticated');
     const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockResolvedValue({ status: 'complete' });
-
     const { result } = renderHook(() => useSettings());
     await act(async () => result.current.handleDeleteAccount());
 
-    expect(showConfirm).toHaveBeenCalledTimes(2);
-    expect(showPasswordPrompt).toHaveBeenCalledTimes(1);
+    expect(dialog.showConfirm).toHaveBeenCalledTimes(2);
+    expect(dialog.showPasswordPrompt).toHaveBeenCalledTimes(1);
     expect(reauth.run).toHaveBeenNthCalledWith(1, expect.objectContaining({ uid: 'test-user-id' }));
-    expect(reauth.run).toHaveBeenNthCalledWith(2, expect.objectContaining({ uid: 'test-user-id' }), 'Secret1!');
+    expect(reauth.run).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ uid: 'test-user-id' }),
+      'Secret1!',
+    );
     expect(deleteSpy).toHaveBeenCalledTimes(1);
   });
-  it('cancels safely when the password prompt is dismissed', async () => {
-    useDialogStore.setState({
-      showConfirm: vi.fn().mockResolvedValue(true),
-      showPasswordPrompt: vi.fn().mockResolvedValue(null),
-      showAlert: vi.fn().mockResolvedValue(undefined),
-    });
 
+  it('cancels safely when the password prompt is dismissed', async () => {
+    dialog.showPasswordPrompt.mockResolvedValue(null);
     reauth.run.mockResolvedValue('password-required');
     const deleteSpy = vi.spyOn(DB, 'deleteAccount').mockResolvedValue({ status: 'complete' });
 
     const { result } = renderHook(() => useSettings());
     await act(async () => result.current.handleDeleteAccount());
 
+    expect(dialog.showPasswordPrompt).toHaveBeenCalledTimes(1);
     expect(deleteSpy).not.toHaveBeenCalled();
     expect(result.current.deletingAccount).toBe(false);
   });

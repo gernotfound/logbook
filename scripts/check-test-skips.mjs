@@ -6,9 +6,9 @@ const violations = [];
 const testFilePattern = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const forbiddenPatterns = [
     { label: 'skip', pattern: /\b(?:it|test|describe)\.skip\s*\(/g },
-    { label: 'todo', pattern: /\b(?:it|test)\.todo\s*\(/g },
+    { label: 'todo', pattern: /\b(?:it|test|describe)\.todo\s*\(/g },
     { label: 'only', pattern: /\b(?:it|test|describe)\.only\s*\(/g },
-    { label: 'tautology', pattern: /expect\(true\)\.toBe\(true\)|expect\(false\)\.toBe\(false\)/g },
+    { label: 'tautology', pattern: /expect\s*\(\s*true\s*\)\s*\.\s*toBe\s*\(\s*true\s*\)|expect\s*\(\s*false\s*\)\s*\.\s*toBe\s*\(\s*false\s*\)/g },
 ];
 
 function walk(directory) {

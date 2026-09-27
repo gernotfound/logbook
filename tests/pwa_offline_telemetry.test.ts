@@ -505,7 +505,8 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
 
     it('automatically replays queued items upon telemetryHub.init() if online at bootstrap', async () => {
-      // Seed pre-existing queue in localStorage
+      telemetryHub.setUserId('user_boot_test');
+      // Seed a pre-existing queue for the same authenticated owner.
       localStorage.setItem(
         telemetryHub.getQueueStorageKey(),
         JSON.stringify([
@@ -525,7 +526,6 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       );
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-      telemetryHub.setUserId('user_boot_test');
       telemetryHub.init();
 
       await waitFor(() => {
@@ -535,8 +535,9 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
 
     it('does not attach the current userId to guest queued items after login', async () => {
+      const guestQueueKey = telemetryHub.getQueueStorageKey();
       localStorage.setItem(
-        telemetryHub.getQueueStorageKey(),
+        guestQueueKey,
         JSON.stringify([
           {
             id: 'item_guest_1',
@@ -558,11 +559,14 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       await telemetryHub.flushQueue();
 
       expect(mockSetDoc).not.toHaveBeenCalled();
-      expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
-      expect(telemetryHub.getQueuedEvents()[0].payload.userId).toBeNull();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const guestQueue = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
+      expect(guestQueue).toHaveLength(1);
+      expect(guestQueue[0].payload.userId).toBeNull();
     });
 
     it('retains failing items in queue if Firestore write fails during flush', async () => {
+      telemetryHub.setUserId('user_failing');
       localStorage.setItem(
         telemetryHub.getQueueStorageKey(),
         JSON.stringify([
@@ -583,7 +587,6 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
 
       mockSetDoc.mockRejectedValueOnce(new Error('Network drop during replay'));
 
-      telemetryHub.setUserId('user_failing');
       await telemetryHub.flushQueue();
 
       const remaining = telemetryHub.getQueuedEvents();

@@ -50,7 +50,7 @@ export function useTrainingExercises() {
                 setEquipmentWeight(String(parsed.equipmentWeight));
             }
         }
-    }, []);
+    }, [draftOwner]);
 
     // Save draft on change
     useEffect(() => {

@@ -22,10 +22,6 @@ export const GlobalDialog: React.FC = () => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen || type !== 'password-prompt') setPromptValue('');
-  }, [isOpen, type]);
-
 
   useEffect(() => {
     if (!isOpen || !overlayRef.current || !boxRef.current) return;
@@ -42,6 +38,7 @@ export const GlobalDialog: React.FC = () => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
+        if (type === 'password-prompt') setPromptValue('');
         onCancel();
       } else if (event.key === 'Tab') {
         const elements = focusable();
@@ -60,7 +57,7 @@ export const GlobalDialog: React.FC = () => {
       siblings.forEach((el, index) => { el.inert = previousInert[index]; });
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [isOpen, onCancel]);
+  }, [isOpen, onCancel, type]);
 
   if (!isOpen) return null;
 
@@ -92,13 +89,24 @@ export const GlobalDialog: React.FC = () => {
               style={{ width: "100%", boxSizing: "border-box", fontSize: "16px" }}
             />
             <div style={{ display: "flex", gap: "0.9375rem", justifyContent: "center" }}>
-              <button className="btn btn-secondary" onClick={onCancel} style={{ flex: 1, padding: "0.75rem" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setPromptValue('');
+                  onCancel();
+                }}
+                style={{ flex: 1, padding: "0.75rem" }}
+              >
                 Annulla
               </button>
               <button
                 className="btn btn-primary"
                 disabled={!promptValue}
-                onClick={() => onInputConfirm?.(promptValue)}
+                onClick={() => {
+                  const value = promptValue;
+                  setPromptValue('');
+                  onInputConfirm?.(value);
+                }}
                 style={{ flex: 1, padding: "0.75rem" }}
               >
                 Conferma
