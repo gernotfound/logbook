@@ -437,8 +437,8 @@ describe('Challenger 2: UI/UX Adversarial & Responsive Stress Test Suite', () =>
                 u2();
             }
 
-            // Successfully reached here with zero unhandled teardown exceptions
-            expect(true).toBe(true);
+            // Every chart was unmounted; no rendered chart SVG may leak across cycles.
+            expect(document.querySelectorAll('svg')).toHaveLength(0);
         });
 
         it('4.3: Responsive viewport resizing across mobile (320px), mobile standard (375px), tablet (768px), desktop (1024px)', async () => {

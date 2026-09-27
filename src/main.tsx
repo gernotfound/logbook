@@ -99,8 +99,8 @@ export const initApp = async () => {
     }).catch(console.error);
   }
 
-  const marker = getStorageMarker();
-
+  let marker: ReturnType<typeof getStorageMarker> = null;
+  let bootstrapOwner: string | null = isGuest ? 'guest' : null;
   let cached: UserData | undefined = undefined;
   let readError: unknown = null;
 
@@ -117,7 +117,8 @@ export const initApp = async () => {
         : currentUid
           ? readAccountDeletionMarker('user:' + currentUid)
           : findPendingAccountDeletion();
-      const bootstrapOwner = isGuest ? 'guest' : (pendingDeletion?.owner ?? storageOwner());
+      bootstrapOwner = isGuest ? 'guest' : (pendingDeletion?.owner ?? storageOwner());
+      marker = getStorageMarker(undefined, bootstrapOwner);
       cached = (await readLocal(bootstrapOwner))?.data;
       useAppStore.setState({ localWorkout: getInitialLocalWorkout() });
     } catch (err) {
@@ -150,14 +151,14 @@ export const initApp = async () => {
           useAppStore.setState({ userData: initialData });
         }
         // Update marker ONLY after complete successful read and schema validation
-        updateStorageMarker();
+        if (bootstrapOwner) updateStorageMarker(Date.now(), undefined, bootstrapOwner);
       }
     } else {
       window.__INITIAL_USER_DATA__ = null;
 
       if (shouldReportAnomaly(status, marker)) {
-        if (!isAnomalyAlreadyReported(marker!)) {
-          markAnomalyReported(marker!);
+        if (!isAnomalyAlreadyReported(marker!, undefined, bootstrapOwner ?? undefined)) {
+          markAnomalyReported(marker!, undefined, bootstrapOwner ?? undefined);
           const payload = createStorageRecoveryAnomalyPayload({
             marker: marker!,
             persisted: getStorageDiagnosticData()?.persistent ?? null,

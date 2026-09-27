@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
 import { renderHook, act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
-import { telemetryHub, TELEMETRY_QUEUE_KEY, TELEMETRY_QUEUE_CAPACITY } from '../src/lib/telemetryHub';
+import { telemetryHub, TELEMETRY_QUEUE_CAPACITY } from '../src/lib/telemetryHub';
 import { usePWAInstall } from '../src/hooks/usePWAInstall';
 import { useWorkoutSession } from '../src/hooks/useWorkoutSession';
 import { useAppStore } from '../src/store/useAppStore';
@@ -459,7 +459,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       telemetryHub.trackEvent('event_beta', { item: 2 });
       telemetryHub.trackEvent('event_gamma', { item: 3 });
 
-      const raw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
       expect(raw).not.toBeNull();
       const parsed = JSON.parse(raw!);
       expect(parsed.length).toBe(3);
@@ -505,9 +505,10 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
 
     it('automatically replays queued items upon telemetryHub.init() if online at bootstrap', async () => {
-      // Seed pre-existing queue in localStorage
+      telemetryHub.setUserId('user_boot_test');
+      // Seed a pre-existing queue for the same authenticated owner.
       localStorage.setItem(
-        TELEMETRY_QUEUE_KEY,
+        telemetryHub.getQueueStorageKey(),
         JSON.stringify([
           {
             id: 'item_boot_1',
@@ -525,7 +526,6 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       );
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
-      telemetryHub.setUserId('user_boot_test');
       telemetryHub.init();
 
       await waitFor(() => {
@@ -535,8 +535,9 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     });
 
     it('does not attach the current userId to guest queued items after login', async () => {
+      const guestQueueKey = telemetryHub.getQueueStorageKey();
       localStorage.setItem(
-        TELEMETRY_QUEUE_KEY,
+        guestQueueKey,
         JSON.stringify([
           {
             id: 'item_guest_1',
@@ -558,13 +559,16 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
       await telemetryHub.flushQueue();
 
       expect(mockSetDoc).not.toHaveBeenCalled();
-      expect(telemetryHub.getQueuedEvents()).toHaveLength(1);
-      expect(telemetryHub.getQueuedEvents()[0].payload.userId).toBeNull();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const guestQueue = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
+      expect(guestQueue).toHaveLength(1);
+      expect(guestQueue[0].payload.userId).toBeNull();
     });
 
     it('retains failing items in queue if Firestore write fails during flush', async () => {
+      telemetryHub.setUserId('user_failing');
       localStorage.setItem(
-        TELEMETRY_QUEUE_KEY,
+        telemetryHub.getQueueStorageKey(),
         JSON.stringify([
           {
             id: 'item_failing_1',
@@ -583,7 +587,6 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
 
       mockSetDoc.mockRejectedValueOnce(new Error('Network drop during replay'));
 
-      telemetryHub.setUserId('user_failing');
       await telemetryHub.flushQueue();
 
       const remaining = telemetryHub.getQueuedEvents();

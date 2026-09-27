@@ -254,7 +254,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     {report.newPRs.length > 0 && (
                         <div className="card" style={{ margin: 0, padding: '16px', background: 'rgba(234, 179, 8, 0.05)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
                             <h3 style={{ margin: '0 0 12px', color: 'var(--warning-color)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Trophy size={16} /> Record di performance
+                                <Trophy size={16} /> Record nelle condizioni confrontabili
                             </h3>
                             <div style={{ display: 'grid', gap: '8px' }}>
                                 {report.newPRs.map(pr => (

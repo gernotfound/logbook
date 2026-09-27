@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogStore } from '../../store/useDialogStore';
 import { useAppStore } from '../../store/useAppStore';
@@ -12,6 +12,8 @@ export const GlobalDialog: React.FC = () => {
   const onConfirm = useDialogStore(state => state.onConfirm);
   const onCancel = useDialogStore(state => state.onCancel);
   const onAction = useDialogStore(state => state.onAction);
+  const onInputConfirm = useDialogStore(state => state.onInputConfirm);
+  const [promptValue, setPromptValue] = useState('');
 
   const syncHealth = useAppStore(state => state.syncHealth);
   const hasConflicts = useAppStore(state => !!state.userData?.pendingConflicts);
@@ -19,6 +21,7 @@ export const GlobalDialog: React.FC = () => {
   const hasWorkout = useAppStore(state => !!state.localWorkout);
   const overlayRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     if (!isOpen || !overlayRef.current || !boxRef.current) return;
@@ -35,6 +38,7 @@ export const GlobalDialog: React.FC = () => {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
+        if (type === 'password-prompt') setPromptValue('');
         onCancel();
       } else if (event.key === 'Tab') {
         const elements = focusable();
@@ -53,7 +57,7 @@ export const GlobalDialog: React.FC = () => {
       siblings.forEach((el, index) => { el.inert = previousInert[index]; });
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [isOpen, onCancel]);
+  }, [isOpen, onCancel, type]);
 
   if (!isOpen) return null;
 
@@ -71,7 +75,45 @@ export const GlobalDialog: React.FC = () => {
       >
         <h2 id="global-dialog-title" className="ui-global-dialog-3" style={{ margin: "0 0 0.9375rem 0" }}>{title}</h2>
 
-        {type === 'unsynced-data-logout' ? (() => {
+        {type === 'password-prompt' ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem", textAlign: "left" }}>
+            <p id="global-dialog-message" style={{ margin: 0, lineHeight: "1.5" }}>{message}</p>
+            <label htmlFor="global-dialog-password" style={{ fontWeight: 600 }}>Password attuale</label>
+            <input
+              id="global-dialog-password"
+              data-dialog-initial-focus="true"
+              type="password"
+              autoComplete="current-password"
+              value={promptValue}
+              onChange={(event) => setPromptValue(event.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: "16px" }}
+            />
+            <div style={{ display: "flex", gap: "0.9375rem", justifyContent: "center" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setPromptValue('');
+                  onCancel();
+                }}
+                style={{ flex: 1, padding: "0.75rem" }}
+              >
+                Annulla
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={!promptValue}
+                onClick={() => {
+                  const value = promptValue;
+                  setPromptValue('');
+                  onInputConfirm?.(value);
+                }}
+                style={{ flex: 1, padding: "0.75rem" }}
+              >
+                Conferma
+              </button>
+            </div>
+          </div>
+        ) : type === 'unsynced-data-logout' ? (() => {
           const isSafeNow = syncHealth === 'synced' && !syncing && !hasConflicts && !hasWorkout;
 
           if (isSafeNow) {

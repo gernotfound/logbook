@@ -4,7 +4,6 @@ import {
   telemetryHub,
   RATE_LIMIT_WINDOW_MS,
   FIRESTORE_DISPATCH_TIMEOUT_MS,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
@@ -293,7 +292,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
         { id: 'item_4', timestamp: 4, itemType: 'event' as const, payload: { timestamp: 4, type: 'evt4', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
         { id: 'item_5', timestamp: 5, itemType: 'event' as const, payload: { timestamp: 5, type: 'evt5', context: {} as any, userId: 'user_flapping', sessionId: 's1' } },
       ];
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(items));
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Simulate first 2 writes succeed, 3rd fails, 4th and 5th fail
       let callCount = 0;
@@ -318,7 +317,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   // =========================================================================
   describe('5. Corrupted Storage & Extreme Payload Defense', () => {
     it('recovers gracefully from corrupted JSON in localStorage queue', () => {
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, '{ broken json syntax }!!');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ broken json syntax }!!');
       telemetryHub.init();
 
       expect(telemetryHub.getQueuedEvents()).toEqual([]);

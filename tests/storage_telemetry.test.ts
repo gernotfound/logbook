@@ -4,6 +4,8 @@ import {
   STORAGE_ANOMALY_REPORTED_KEY,
   STORAGE_MARKER_VERSION,
   getStorageMarker,
+  getStorageMarkerKey,
+  getStorageAnomalyReportedKey,
   updateStorageMarker,
   clearStorageMarker,
   isAnomalyAlreadyReported,
@@ -38,14 +40,25 @@ describe('Storage Recovery Telemetry Suite', () => {
     });
 
     it('returns null when storage marker contains corrupted JSON or invalid data', () => {
-      localStorage.setItem(STORAGE_MARKER_KEY, 'corrupted JSON string {');
+      localStorage.setItem(getStorageMarkerKey(), 'corrupted JSON string {');
       expect(getStorageMarker()).toBeNull();
 
-      localStorage.setItem(STORAGE_MARKER_KEY, JSON.stringify({ version: 'invalid', timestamp: 'not-a-number' }));
+      localStorage.setItem(getStorageMarkerKey(), JSON.stringify({ version: 'invalid', timestamp: 'not-a-number' }));
       expect(getStorageMarker()).toBeNull();
 
-      localStorage.setItem(STORAGE_MARKER_KEY, JSON.stringify({ version: 1, timestamp: NaN }));
+      localStorage.setItem(getStorageMarkerKey(), JSON.stringify({ version: 1, timestamp: NaN }));
       expect(getStorageMarker()).toBeNull();
+    });
+
+    it('drops pre-owner global markers instead of attributing them to the current account', () => {
+      localStorage.setItem(STORAGE_MARKER_KEY, JSON.stringify({ version: 1, timestamp: 1234 }));
+      localStorage.setItem(STORAGE_ANOMALY_REPORTED_KEY, '1234');
+
+      expect(getStorageMarker()).toBeNull();
+      expect(localStorage.getItem(STORAGE_MARKER_KEY)).toBeNull();
+
+      clearStorageMarker();
+      expect(localStorage.getItem(STORAGE_ANOMALY_REPORTED_KEY)).toBeNull();
     });
 
     it('creates and retrieves a valid versioned storage marker', () => {
@@ -59,7 +72,15 @@ describe('Storage Recovery Telemetry Suite', () => {
 
       const retrieved = getStorageMarker();
       expect(retrieved).toEqual(marker);
-      expect(JSON.parse(localStorage.getItem(STORAGE_MARKER_KEY)!)).toEqual(marker);
+      expect(JSON.parse(localStorage.getItem(getStorageMarkerKey())!)).toEqual(marker);
+    });
+
+    it('keeps markers isolated between local owners', () => {
+      updateStorageMarker(1000, undefined, 'user:a');
+      updateStorageMarker(2000, undefined, 'user:b');
+
+      expect(getStorageMarker(undefined, 'user:a')?.timestamp).toBe(1000);
+      expect(getStorageMarker(undefined, 'user:b')?.timestamp).toBe(2000);
     });
 
     it('updates marker timestamp when updated with a new timestamp', () => {
@@ -73,13 +94,13 @@ describe('Storage Recovery Telemetry Suite', () => {
     it('clears storage marker and reporting deduplication flags on clearStorageMarker', () => {
       const marker = updateStorageMarker(5000)!;
       markAnomalyReported(marker);
-      expect(localStorage.getItem(STORAGE_MARKER_KEY)).not.toBeNull();
-      expect(localStorage.getItem(STORAGE_ANOMALY_REPORTED_KEY)).not.toBeNull();
+      expect(localStorage.getItem(getStorageMarkerKey())).not.toBeNull();
+      expect(localStorage.getItem(getStorageAnomalyReportedKey())).not.toBeNull();
 
       clearStorageMarker();
       expect(getStorageMarker()).toBeNull();
-      expect(localStorage.getItem(STORAGE_MARKER_KEY)).toBeNull();
-      expect(localStorage.getItem(STORAGE_ANOMALY_REPORTED_KEY)).toBeNull();
+      expect(localStorage.getItem(getStorageMarkerKey())).toBeNull();
+      expect(localStorage.getItem(getStorageAnomalyReportedKey())).toBeNull();
     });
 
     it('handles localStorage exceptions gracefully without throwing', () => {
@@ -500,10 +521,10 @@ describe('Storage Recovery Telemetry Suite', () => {
     });
 
     it('rejects Infinity and -Infinity in getStorageMarker and calculateElapsedMs', () => {
-      localStorage.setItem(STORAGE_MARKER_KEY, JSON.stringify({ version: 1, timestamp: Infinity }));
+      localStorage.setItem(getStorageMarkerKey(), JSON.stringify({ version: 1, timestamp: Infinity }));
       expect(getStorageMarker()).toBeNull();
 
-      localStorage.setItem(STORAGE_MARKER_KEY, JSON.stringify({ version: Infinity, timestamp: 1000 }));
+      localStorage.setItem(getStorageMarkerKey(), JSON.stringify({ version: Infinity, timestamp: 1000 }));
       expect(getStorageMarker()).toBeNull();
 
       expect(calculateElapsedMs(Infinity, 1000)).toBe(0);

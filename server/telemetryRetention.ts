@@ -1,4 +1,4 @@
-import { FieldPath, Timestamp, type DocumentReference, type Firestore } from 'firebase-admin/firestore';
+import { Timestamp, type DocumentReference, type Firestore } from 'firebase-admin/firestore';
 import { adminDb } from './accountDeletion/firebaseAdmin.js';
 
 const USER_COLLECTION = 'users';
@@ -101,27 +101,27 @@ export async function purgeExpiredTelemetry(
   let usersScanned = 0;
   let documentsDeleted = 0;
 
-  while (hasBudget(deadlineMs)) {
-    let query = db.collection(USER_COLLECTION)
-      .orderBy(FieldPath.documentId())
-      .limit(TELEMETRY_RETENTION_USER_PAGE_SIZE);
+  // listDocuments() deliberately includes missing parent documents that still
+  // have subcollections. Querying only existing /users/{uid} documents would
+  // orphan telemetry written before the user's root document exists.
+  const userRefs = (await db.collection(USER_COLLECTION).listDocuments())
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const cursorId = cursor;
+  let index = cursorId
+    ? userRefs.findIndex(ref => ref.id > cursorId)
+    : 0;
+  if (index < 0) index = userRefs.length;
 
-    if (cursor) query = query.startAfter(cursor);
+  while (index < userRefs.length && hasBudget(deadlineMs)) {
+    const page = userRefs.slice(index, index + TELEMETRY_RETENTION_USER_PAGE_SIZE);
 
-    const users = await query.get();
-
-    if (users.empty) {
-      await writeCursor(db, null);
-      return { usersScanned, documentsDeleted, completedCycle: true };
-    }
-
-    for (const user of users.docs) {
+    for (const userRef of page) {
       if (!hasBudget(deadlineMs)) {
         await writeCursor(db, cursor);
         return { usersScanned, documentsDeleted, completedCycle: false };
       }
 
-      const result = await purgeUserTelemetry(db, user.ref, now, deadlineMs);
+      const result = await purgeUserTelemetry(db, userRef, now, deadlineMs);
       documentsDeleted += result.deleted;
 
       if (!result.complete) {
@@ -129,14 +129,15 @@ export async function purgeExpiredTelemetry(
         return { usersScanned, documentsDeleted, completedCycle: false };
       }
 
-      cursor = user.id;
+      cursor = userRef.id;
       usersScanned += 1;
+      index += 1;
     }
+  }
 
-    if (users.size < TELEMETRY_RETENTION_USER_PAGE_SIZE) {
-      await writeCursor(db, null);
-      return { usersScanned, documentsDeleted, completedCycle: true };
-    }
+  if (index >= userRefs.length) {
+    await writeCursor(db, null);
+    return { usersScanned, documentsDeleted, completedCycle: true };
   }
 
   await writeCursor(db, cursor);

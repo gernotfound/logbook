@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useDialogStore } from '../store/useDialogStore';
 import { Logic } from '../lib/logic';
-import { readBrowserValue, tryRemoveBrowserValue, writeBrowserJson } from '../lib/sync/browserStorage';
+import { readDeviceValue, writeDeviceValue } from '../lib/sync/deviceStorage';
+import { storageOwner } from '../lib/sync/session';
 import { PlannedSetTechnique, ProgressionContract, RoutineExercise, SetTechnique, WorkoutRoutine } from '../types';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
@@ -20,9 +21,10 @@ export function useTrainingRoutines() {
     const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
     const [routineExercises, setRoutineExercises] = useState<RoutineExercise[]>([]);
     const [expandedRoutineId, setExpandedRoutineId] = useState<string | null>(null);
+    const [draftOwner] = useState(() => storageOwner());
 
     useEffect(() => {
-        const draft = readBrowserValue(ROUTINE_DRAFT_KEY);
+        const draft = readDeviceValue(ROUTINE_DRAFT_KEY, draftOwner);
         if (draft) {
             try {
                 const parsed = JSON.parse(draft);
@@ -32,23 +34,29 @@ export function useTrainingRoutines() {
                 // Invalid drafts remain non-authoritative and are ignored.
             }
         }
-    }, []);
+    }, [draftOwner]);
 
     useEffect(() => {
         if (editingRoutineId) return;
         if (routineName.trim() !== '' || routineExercises.length > 0) {
             try {
-                writeBrowserJson(ROUTINE_DRAFT_KEY, { name: routineName, exercises: routineExercises });
+                writeDeviceValue(ROUTINE_DRAFT_KEY, JSON.stringify({ name: routineName, exercises: routineExercises }), draftOwner);
             } catch {
                 setSaveError('Bozza scheda conservata solo in memoria: archivio del dispositivo non disponibile.');
             }
-        } else if (!tryRemoveBrowserValue(ROUTINE_DRAFT_KEY)) {
-            setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
+        } else {
+            try {
+                writeDeviceValue(ROUTINE_DRAFT_KEY, null, draftOwner);
+            } catch {
+                setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
+            }
         }
-    }, [routineName, routineExercises, editingRoutineId, setSaveError]);
+    }, [routineName, routineExercises, editingRoutineId, setSaveError, draftOwner]);
 
     const clearRoutineDraft = () => {
-        if (!tryRemoveBrowserValue(ROUTINE_DRAFT_KEY)) {
+        try {
+            writeDeviceValue(ROUTINE_DRAFT_KEY, null, draftOwner);
+        } catch {
             setSaveError('Impossibile rimuovere la bozza della scheda dal dispositivo.');
         }
     };

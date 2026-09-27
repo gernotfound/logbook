@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   FIRESTORE_DISPATCH_TIMEOUT_MS,
   type QueuedTelemetryItem,
@@ -56,7 +55,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         }
       }
 
-      const raw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
       expect(raw).not.toBeNull();
       const queued = JSON.parse(raw!) as QueuedTelemetryItem[];
 
@@ -96,7 +95,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   // =========================================================================
   describe('2. Corrupted Queue in localStorage Resilience', () => {
     it('recovers gracefully from syntactically invalid JSON in localStorage', () => {
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, '{ invalid json corrupted @#$! %^&*');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ invalid json corrupted @#$! %^&*');
 
       // getQueuedEvents should not crash and return empty array
       const items = telemetryHub.getQueuedEvents();
@@ -118,7 +117,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       const badValues = ['null', '"string_value"', '12345', 'true', '{"not":"an_array"}'];
 
       for (const badVal of badValues) {
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, badVal);
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), badVal);
         expect(telemetryHub.getQueuedEvents()).toEqual([]);
       }
     });
@@ -131,8 +130,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'bad_2', timestamp: Date.now(), itemType: 'event', payload: { id: 'evt_valid_2', type: 'valid_after', context: {}, sessionId: 's1', userId: 'user_malformed_test', timestamp: Date.now() } },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(malformedQueue));
       telemetryHub.setUserId('user_malformed_test');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(malformedQueue));
 
       // Should not throw unhandled exception
       await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
@@ -162,8 +161,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'valid_err_1', timestamp: 2002, itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: 2002, lastSeen: 2002 } },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(hostileQueue));
       telemetryHub.setUserId('u1');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(hostileQueue));
 
       // flushQueue must not throw or crash on any element
       await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
@@ -192,7 +191,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'corrupt_2', itemType: 'error', payload: null },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(hostileQueue));
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(hostileQueue));
 
       mockSetDoc.mockImplementation(async () => {
         await new Promise((r) => setTimeout(r, 20));
@@ -471,8 +470,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(items));
       telemetryHub.setUserId('u1');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Mock setDoc: succeed for 1 and 3, reject for 2 and 4
       mockSetDoc.mockImplementation(async (_docRef: any, payload: any) => {
@@ -598,7 +597,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(items));
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
+      const guestQueueKey = telemetryHub.getQueueStorageKey();
 
       // User signs in with UID 'authenticated_user_777'
       telemetryHub.setUserId('authenticated_user_777');
@@ -607,10 +607,11 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Under GDPR and LB-18 privacy invariants, unauthenticated/guest telemetry must never
       // be retroactively attributed to the newly authenticated user UID upon login flush.
       expect(mockSetDoc).not.toHaveBeenCalled();
-      const remaining = telemetryHub.getQueuedEvents();
-      expect(remaining.length).toBe(2);
-      expect(remaining[0].payload.userId).toBeNull();
-      expect(remaining[1].payload.userId).toBeNull();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const guestQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
+      expect(guestQueue).toHaveLength(2);
+      expect(guestQueue[0].payload.userId).toBeNull();
+      expect(guestQueue[1].payload.userId).toBeNull();
     });
   });
 });

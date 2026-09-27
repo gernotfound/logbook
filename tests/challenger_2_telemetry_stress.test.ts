@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
@@ -59,7 +58,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.trackPWAInstallClick({ source: 'settings_banner' });
       telemetryHub.trackWorkoutSaved({ offline: true, exerciseCount: 5 });
 
-      const raw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
       expect(raw).toBeDefined();
       const queuedItems: QueuedTelemetryItem[] = JSON.parse(raw!);
       expect(queuedItems.length).toBe(4);
@@ -349,6 +348,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(queueBefore[0].payload.userId).toBeNull();
       expect(queueBefore[1].payload.userId).toBeNull();
       expect(queueBefore[2].payload.userId).toBeNull();
+      const guestQueueKey = telemetryHub.getQueueStorageKey();
 
       // Step 2: User connects / logs in with Google
       localStorage.removeItem('logbook_is_guest');
@@ -361,9 +361,10 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       // Under GDPR and LB-18 invariants, anonymous guest events must never be dispatched under the user's UID
       expect(mockSetDoc).not.toHaveBeenCalled();
       expect(dispatchedDocs.length).toBe(0);
-      const remaining = telemetryHub.getQueuedEvents();
-      expect(remaining.length).toBe(3);
-      remaining.forEach((docEntry) => {
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const guestQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
+      expect(guestQueue).toHaveLength(3);
+      guestQueue.forEach((docEntry) => {
         expect(docEntry.payload.userId).toBeNull();
       });
     });
@@ -379,6 +380,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       const queue = telemetryHub.getQueuedEvents();
       expect(queue.length).toBe(2);
       expect(queue[0].payload.userId).toBe('anonymous');
+      const anonymousQueueKey = telemetryHub.getQueueStorageKey();
 
       // User authenticates
       telemetryHub.setUserId('authenticated_user_abc');
@@ -388,9 +390,10 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       expect(mockSetDoc).not.toHaveBeenCalled();
       expect(dispatchedDocs.length).toBe(0);
-      const remaining = telemetryHub.getQueuedEvents();
-      expect(remaining.length).toBe(2);
-      remaining.forEach((item) => {
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const anonymousQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(anonymousQueueKey) || '[]');
+      expect(anonymousQueue).toHaveLength(2);
+      anonymousQueue.forEach((item) => {
         expect(item.payload.userId).toBe('anonymous');
       });
     });
@@ -417,7 +420,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
     });
 
     it('5.2: Recovers gracefully if localStorage queue contains corrupted JSON or invalid data', () => {
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, '{ "corrupted": invalid_json_syntax ');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), '{ "corrupted": invalid_json_syntax ');
       telemetryHub.init();
 
       // getQueuedEvents should catch and return empty array

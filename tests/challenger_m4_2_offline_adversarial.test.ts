@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as firestoreModule from 'firebase/firestore';
 import {
   telemetryHub,
-  TELEMETRY_QUEUE_KEY,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
   type TelemetryEventPayload,
@@ -60,7 +59,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         }
       }
 
-      const raw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+      const raw = localStorage.getItem(telemetryHub.getQueueStorageKey());
       expect(raw).not.toBeNull();
       const storedQueue: QueuedTelemetryItem[] = JSON.parse(raw!);
       expect(storedQueue.length).toBe(TELEMETRY_QUEUE_CAPACITY);
@@ -115,7 +114,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           timestamp: 1724486400000 + i * 100,
         },
       }));
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(initialItems));
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(initialItems));
 
       // Mock setDoc: Item 1 succeeds, then sudden network failure for subsequent items
       mockSetDoc
@@ -190,7 +189,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(queueWithPoisonPill));
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(queueWithPoisonPill));
 
       // Configure mock: Poison pill rejects
       mockSetDoc.mockRejectedValue(new Error('Firestore write permanently rejected for poison pill'));
@@ -266,7 +265,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
         },
       ];
 
-      localStorage.setItem(TELEMETRY_QUEUE_KEY, JSON.stringify(items));
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Mock: poison fails, valid succeeds
       mockSetDoc.mockImplementation(async (_ref: any, data: any) => {
@@ -320,7 +319,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       for (const corrupt of corruptedPayloads) {
         const ownerKey = telemetryHub.getQueueStorageKey();
         localStorage.removeItem(ownerKey);
-        localStorage.setItem(TELEMETRY_QUEUE_KEY, corrupt);
+        localStorage.setItem(telemetryHub.getQueueStorageKey(), corrupt);
         telemetryHub.init();
 
         // 1. Must safely return an empty array or valid array of items without throwing
@@ -336,7 +335,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
           telemetryHub.trackEvent('recovery_event_check', { corruptPayloadTested: true });
         }).not.toThrow();
 
-        const repairedRaw = localStorage.getItem(TELEMETRY_QUEUE_KEY);
+        const repairedRaw = localStorage.getItem(telemetryHub.getQueueStorageKey());
         expect(repairedRaw).not.toBeNull();
         const parsed = JSON.parse(repairedRaw!);
         expect(Array.isArray(parsed)).toBe(true);

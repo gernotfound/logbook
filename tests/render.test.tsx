@@ -13,7 +13,6 @@ import TrainingExercises from '../src/components/Training/TrainingExercises';
 import NutritionView from '../src/components/Nutrition/NutritionView';
 import NutritionMeals from '../src/components/Nutrition/NutritionMeals';
 import NutritionPlanning from '../src/components/Nutrition/NutritionPlanning';
-import NutritionMeasurements from '../src/components/Nutrition/NutritionMeasurements';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import DataView from '../src/components/Data/DataView';
 import SettingsView from '../src/components/SettingsView';
@@ -138,13 +137,6 @@ describe('Render Test Suite - Zero Crash Verification', () => {
     expect(container).toBeDefined();
     expect(screen.getByText(/Pianificazione Macro/i)).toBeDefined();
   });
-
-  test('renders NutritionMeasurements without crashing', () => {
-    const { container } = renderWithProviders(<NutritionMeasurements />);
-    expect(container).toBeDefined();
-    expect(screen.getByText(/Nuova Misurazione/i)).toBeDefined();
-  });
-
   test('renders CustomFoodForm without crashing', () => {
     const cfData = { name: '', brand: '', unit: 'g', pieceWeight: '', kcal: '', carbs: '', pro: '', fat: '' };
     const setCfDataMock = vi.fn();

@@ -7,6 +7,7 @@ import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
+import { deviceKey } from '../src/lib/sync/deviceStorage';
 
 describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculation', () => {
 
@@ -42,7 +43,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 isBodyweight: true,
                 equipmentWeight: 5
             };
-            window.localStorage.setItem('draft_exercise', JSON.stringify(draft));
+            window.localStorage.setItem(deviceKey('draft_exercise'), JSON.stringify(draft));
 
             const { result } = renderHook(() => useTrainingExercises());
             expect(result.current.exName).toBe('Trazioni zavorrate');
@@ -98,7 +99,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(result.current.editingExId).toBeNull();
             expect(result.current.isBodyweight).toBe(false);
             expect(result.current.equipmentWeight).toBe('');
-            expect(window.localStorage.getItem('draft_exercise')).toBeNull();
+            expect(window.localStorage.getItem(deviceKey('draft_exercise'))).toBeNull();
         });
 
         it('handleSaveExercise creates new exercise with isBodyweight and equipmentWeight', async () => {
