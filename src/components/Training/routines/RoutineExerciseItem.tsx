@@ -4,10 +4,6 @@ import { ExerciseLibraryItem, PlannedSetTechnique, ProgressionContract, SetTechn
 import { useDialogStore } from '../../../store/useDialogStore';
 
 const TECHNIQUE_HELP = {
-    setTechnique: {
-        title: 'Tecnica per serie',
-        message: 'Definisce come è strutturata ciascuna serie della scheda: normale, dropset, rest-pause, cluster, rep-match o diminishing. Tecniche diverse rendono le prestazioni meno direttamente confrontabili. La scelta non assegna automaticamente un punteggio di stimolo o fatica.',
-    },
     technicalStandard: {
         title: 'Esecuzione da mantenere',
         message: 'Descrive le condizioni che vuoi mantenere stabili per confrontare le prestazioni nel tempo: ROM, setup, macchina, pause, tempo o altri dettagli esecutivi. Se lo standard cambia, LogBook evita di trattare la nuova prestazione come direttamente equivalente alla precedente.',
@@ -255,18 +251,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     Tecnica
                 </summary>
                 <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
-                    <p className="text-xs text-muted" style={{ margin: 0 }}>
-                        Queste impostazioni valgono solo per questo utilizzo dell’esercizio in questa scheda. Lo stesso esercizio può avere impostazioni diverse in un’altra scheda.
-                    </p>
-
                     {!isCardio && (
-                        <div style={{ paddingTop: '6px', borderTop: '1px solid var(--glass-border)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                                    Tecnica per serie:
-                                </span>
-                                {helpButton('setTechnique')}
-                            </div>
+                        <div>
                             <div className="routine-technique-set-list">
                                 {Array.from({ length: Math.max(1, Number.parseInt(String(exercise.setsCount || 3), 10) || 3) }, (_, setIndex) => {
                                     const plan: PlannedSetTechnique | undefined = exercise.setPlans?.[setIndex];
