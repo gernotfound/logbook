@@ -480,9 +480,9 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
         fireEvent.click(analyticsToggle);
       });
 
-      // Switch back to Account tab to access Cerca aggiornamenti
-      const accountTab = screen.getByRole('tab', { name: /Account/i });
-      fireEvent.click(accountTab);
+      // Switch to Sistema tab to access Cerca aggiornamenti
+      const systemTab = screen.getByRole('tab', { name: /Sistema/i });
+      fireEvent.click(systemTab);
 
       const updateBtn = screen.getByRole('button', { name: /Cerca aggiornamenti/i });
       await act(async () => {

@@ -8,7 +8,8 @@ describe('SettingsView decomposition parity', () => {
     it('preserves account, privacy, and export tab content', () => {
         renderWithProviders(<SettingsView />);
 
-        expect(screen.getByRole('button', { name: /Cerca aggiornamenti/i })).toBeDefined();
+        expect(screen.queryByRole('button', { name: /Cerca aggiornamenti/i })).toBeNull();
+        expect(screen.queryByText(/Diagnostica archiviazione/i)).toBeNull();
 
         fireEvent.click(screen.getByRole('tab', { name: 'Privacy' }));
         expect(screen.getByRole('button', { name: /Termini e Condizioni/i })).toBeDefined();
@@ -22,12 +23,14 @@ describe('SettingsView decomposition parity', () => {
         expect(screen.getByRole('button', { name: /Esporta dati \(CSV\)/i })).toBeDefined();
     });
 
-    it('offers a device-only appearance choice alongside the existing settings', () => {
+    it('groups appearance, updates, and storage diagnostics under Sistema', () => {
         renderWithProviders(<SettingsView />);
-        fireEvent.click(screen.getByRole('tab', { name: 'Aspetto' }));
-        expect(screen.getByRole('tabpanel', { name: 'Aspetto' })).toBeDefined();
+        fireEvent.click(screen.getByRole('tab', { name: 'Sistema' }));
+        expect(screen.getByRole('tabpanel', { name: 'Sistema' })).toBeDefined();
         expect(screen.getByRole('radio', { name: 'Sistema' })).toBeDefined();
         expect(screen.getByRole('radio', { name: 'Chiaro' })).toBeDefined();
         expect(screen.getByRole('radio', { name: 'Scuro' })).toBeDefined();
+        expect(screen.getByRole('button', { name: /Cerca aggiornamenti/i })).toBeDefined();
+        expect(screen.getByText(/Diagnostica archiviazione/i)).toBeDefined();
     });
 });
