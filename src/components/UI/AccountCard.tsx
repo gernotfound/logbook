@@ -194,7 +194,7 @@ export const AccountCard = () => {
 
                                 <div style={{ position: "relative" }}>
                                     <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" className="ui-account-card-10" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
-                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-11" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                                    <button type="button" aria-label={showNewPassword ? "Nascondi nuova password" : "Mostra nuova password"} onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-11" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
                                         {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
@@ -280,7 +280,7 @@ export const AccountCard = () => {
                             {(showReauthModal === 'password' || showReauthModal === 'linkEmail') && (
                                 <div style={{ position: "relative" }}>
                                     <input type={showNewPassword ? "text" : "password"} placeholder="Nuova Password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} autoComplete="new-password" className="ui-account-card-30" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
-                                    <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-31" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                                    <button type="button" aria-label={showNewPassword ? "Nascondi nuova password" : "Mostra nuova password"} onClick={() => setShowNewPassword(!showNewPassword)} className="ui-account-card-31" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
                                         {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>
@@ -289,7 +289,7 @@ export const AccountCard = () => {
                             {hasPassword && (
                                 <div style={{ position: "relative" }}>
                                     <input type={showCurrentPassword ? "text" : "password"} placeholder="Password Attuale" value={currentPasswordInput} onChange={e => setCurrentPasswordInput(e.target.value)} autoComplete="current-password" className="ui-account-card-32" style={{ padding: "0.625rem", paddingRight: "2.5rem", width: "100%", boxSizing: "border-box" }} />
-                                    <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="ui-account-card-33" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                                    <button type="button" aria-label={showCurrentPassword ? "Nascondi password attuale" : "Mostra password attuale"} onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="ui-account-card-33" style={{ position: "absolute", right: "0.625rem", top: "50%", transform: "translateY(-50%)", cursor: "pointer", display: "flex", alignItems: "center" }}>
                                         {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                     </button>
                                 </div>

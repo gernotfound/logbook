@@ -105,13 +105,23 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         expect(scrubbed).toContain('[REDACTED_PATH]');
       });
 
-      it('F2-B4: handles empty string, null, or undefined stack traces cleanly', () => {
+      it('F2-B4: scrubs PII before truncation even when the sensitive token crosses the boundary', () => {
+        const crossingBoundary = 'x'.repeat(979) + ' athlete@example.com ' + 'y'.repeat(100);
+        const truncated = truncateStack(crossingBoundary, 1000);
+
+        expect(truncated).toContain('...[TRUNCATED]');
+        expect(truncated).not.toContain('athlete@example.com');
+        expect(truncated).not.toContain('athlet');
+        expect(truncated!.length).toBeLessThanOrEqual(1000);
+      });
+
+      it('F2-B5: handles empty string, null, or undefined stack traces cleanly', () => {
         expect(truncateStack(undefined)).toBeUndefined();
         expect(truncateStack('')).toBe('');
         expect(scrubPII('')).toBe('');
       });
 
-      it('F2-B5: handles non-string error messages (numbers, objects, symbols, circular references)', () => {
+      it('F2-B6: handles non-string error messages (numbers, objects, symbols, circular references)', () => {
         const circularObj: any = { message: 'Circular error' };
         circularObj.self = circularObj;
 

@@ -172,6 +172,13 @@ describe('Training Session UI Improvements Suite (R1, R2, R3)', () => {
             expect(removeBtn).toBeDefined();
             expect(addBtn).toBeDefined();
 
+            const historyBtn = screen.getByRole('button', { name: /storico/i });
+            const setupBtn = screen.getByRole('button', { name: /setup/i });
+            expect(historyBtn.getAttribute('aria-expanded')).toBe('false');
+            expect(historyBtn.getAttribute('aria-controls')).toBe('session-history-0');
+            expect(setupBtn.getAttribute('aria-expanded')).toBe('false');
+            expect(setupBtn.getAttribute('aria-controls')).toBe('session-setup-0');
+
             // Check that they share the same parent flex container
             expect(removeBtn.parentElement).toBe(addBtn.parentElement);
             const parentStyle = removeBtn.parentElement?.getAttribute('style') || '';

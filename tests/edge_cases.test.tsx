@@ -50,6 +50,12 @@ describe('Empirical Challenger Suite: Edge Cases & Stress Verification', () => {
       const zeroWeight = Logic.calculateMacrosFromKg(0, 3.5, 2.0, 1.0);
       expect(zeroWeight.totalKcal).toBe(0);
       expect(zeroWeight.carbsGrams).toBe(0);
+      expect(zeroWeight.fatG).toBe(0);
+      expect(zeroWeight.fat).toBe(0);
+
+      const positive = Logic.calculateMacrosFromKg(80, 3.5, 2.0, 1.0);
+      expect(positive.fatG).toBe(positive.fatGrams);
+      expect(positive.fat).toBe(positive.fatGrams);
 
       const zeroRatios = Logic.calculateMacrosFromKg(80, 0, 0, 0);
       expect(zeroRatios.totalKcal).toBe(0);

@@ -30,7 +30,7 @@ export const GlobalDialog: React.FC = () => {
     siblings.forEach(el => { el.inert = true; });
     const focusable = () => Array.from(box.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]'));
     const buttons = focusable();
-    (buttons.find(el => el.textContent?.startsWith('Annulla')) ?? buttons[0] ?? box).focus();
+    (box.querySelector<HTMLElement>('[data-dialog-initial-focus="true"]') ?? buttons[0] ?? box).focus();
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -88,6 +88,7 @@ export const GlobalDialog: React.FC = () => {
                   Esci in sicurezza
                 </button>
                 <button
+                  data-dialog-initial-focus="true"
                   className="btn ui-global-dialog-6"
 
                   onClick={() => onAction?.('cancel')}
@@ -123,6 +124,7 @@ export const GlobalDialog: React.FC = () => {
                 Esci comunque (Perdi modifiche)
               </button>
               <button
+                data-dialog-initial-focus="true"
                 className="btn ui-global-dialog-10"
 
                 onClick={() => onAction?.('cancel')}
@@ -140,6 +142,7 @@ export const GlobalDialog: React.FC = () => {
             <div style={{ display: "flex", gap: "0.9375rem", justifyContent: "center" }}>
               {type === 'confirm' && (
                 <button
+                  data-dialog-initial-focus="true"
                   className="btn btn-secondary ui-global-dialog-12"
                   onClick={onCancel}
                   style={{ flex: 1, padding: "0.75rem" }}

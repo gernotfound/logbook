@@ -538,11 +538,15 @@ describe('Challenger 2: Adversarial State Management, Schemas, Guest Merge & UI 
             // Find "Dolori" button
             const doloriBtn = screen.getByRole('button', { name: /dolori muscolari/i });
             expect(doloriBtn).toBeDefined();
+            expect(doloriBtn.getAttribute('aria-expanded')).toBe('false');
+            expect(doloriBtn.getAttribute('aria-controls')).toBe('post-session-doms-panel');
 
             act(() => {
                 fireEvent.click(doloriBtn);
             });
 
+            expect(doloriBtn.getAttribute('aria-expanded')).toBe('true');
+            expect(document.getElementById('post-session-doms-panel')).not.toBeNull();
             // Verify search input is displayed after expanding
             expect(screen.getByPlaceholderText(/cerca muscolo/i)).toBeDefined();
         });

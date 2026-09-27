@@ -67,7 +67,7 @@ export function calculateMacrosFromKg(weight: any, carbsPerKg?: any, proPerKg?: 
         f = parseFloat(fatPerKg) || 0;
     }
     if (w <= 0 || c < 0 || p < 0 || f < 0) {
-        return { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsG: 0, proG: 0, fat: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
+        return { carbsGrams: 0, proGrams: 0, fatGrams: 0, carbsG: 0, proG: 0, fatG: 0, fat: 0, carbsKcal: 0, proKcal: 0, fatKcal: 0, totalKcal: 0 };
     }
     const carbsGrams = Math.round(w * c * 10) / 10;
     const proGrams = Math.round(w * p * 10) / 10;
@@ -78,7 +78,7 @@ export function calculateMacrosFromKg(weight: any, carbsPerKg?: any, proPerKg?: 
     const totalKcal = carbsKcal + proKcal + fatKcal;
     return {
         carbsGrams, proGrams, fatGrams,
-        carbsG: carbsGrams, proG: proGrams, fatG: fatGrams,
+        carbsG: carbsGrams, proG: proGrams, fatG: fatGrams, fat: fatGrams,
         carbsKcal, proKcal, fatKcal, totalKcal
     };
 }

@@ -41,6 +41,15 @@ export type LocalEnvelope = LocalEnvelopeV4;
 export type CloudCoverageMode = 'window' | 'all';
 export type LocalWriteGuard = () => boolean;
 
+export class InvalidCloudSyncMetadataError extends Error {
+    readonly code = 'invalid-cloud-sync-metadata';
+
+    constructor(readonly documentPath: string, readonly originalError: unknown) {
+        super(`Metadati di sincronizzazione cloud non validi per ${documentPath || 'root'}.`);
+        this.name = 'InvalidCloudSyncMetadataError';
+    }
+}
+
 const currentEnvelopeVersions = () => ({
     version: CURRENT_LOCAL_ENVELOPE,
     dataSchemaVersion: CURRENT_DATA_SCHEMA,
@@ -52,6 +61,14 @@ const keyFor = (owner: string) => {
     return `logbook:v2:${canonicalOwner}`;
 };
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
+
+function parseCloudSyncMeta(documentPath: string, raw: unknown): SyncMeta {
+    try {
+        return parseSyncMeta(raw);
+    } catch (error) {
+        throw new InvalidCloudSyncMetadataError(documentPath, error);
+    }
+}
 
 function validate(value: any, owner: string): LocalEnvelope | undefined {
     if (!value) return undefined;
@@ -193,7 +210,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const syncMetaByDocument: Record<string, SyncMeta> = {};
             const clock: Record<string, number> = {};
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
-                const meta = parseSyncMeta(doc._sync);
+                const meta = parseCloudSyncMeta(path, doc._sync);
                 syncMetaByDocument[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) clock[actor] = Math.max(clock[actor] || 0, seq);
             }
@@ -204,7 +221,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
-                const meta = parseSyncMeta(doc._sync);
+                const meta = parseCloudSyncMeta(path, doc._sync);
                 syncMeta[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
             }

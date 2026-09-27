@@ -32,16 +32,22 @@ export const NutritionConflictDialog: React.FC<Props> = ({
   const globalDialogOpen = useDialogStore(state => state.isOpen);
   const globalDialogOpenRef = useRef(globalDialogOpen);
 
-  onCloseRef.current = onClose;
-  syncingRef.current = !!isSyncing;
-  globalDialogOpenRef.current = globalDialogOpen;
   useScrollLock(isOpen);
 
   useEffect(() => {
-    if (!isOpen) {
-      setView('compare');
-      return;
-    }
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    syncingRef.current = !!isSyncing;
+  }, [isSyncing]);
+
+  useEffect(() => {
+    globalDialogOpenRef.current = globalDialogOpen;
+  }, [globalDialogOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
 
     const overlay = overlayRef.current;
     const box = boxRef.current;
@@ -103,6 +109,11 @@ export const NutritionConflictDialog: React.FC<Props> = ({
     if (isSyncing) return;
     setView('compare');
     onClose();
+  };
+
+  const handleResolve = (resolution: 'cloud' | 'local') => {
+    setView('compare');
+    onResolve(resolution);
   };
 
   const handleExport = async () => {
@@ -200,7 +211,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
           {view === 'compare' ? (
             <>
               <button
-                onClick={() => onResolve('local')}
+                onClick={() => handleResolve('local')}
                 disabled={isSyncing}
                 className="btn btn-warning"
               >
@@ -233,7 +244,7 @@ export const NutritionConflictDialog: React.FC<Props> = ({
             <>
               <button
                 className="btn btn-danger"
-                onClick={() => onResolve('cloud')}
+                onClick={() => handleResolve('cloud')}
                 disabled={isSyncing}
               >
                 Elimina bozza e mantieni account
