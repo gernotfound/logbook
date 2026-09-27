@@ -168,6 +168,61 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             }
         });
 
+        it('Hydration fail-closed: malformed cloud sync metadata preserves local state and surfaces a recovery error', async () => {
+            (auth as any).currentUser = { uid: 'user123' };
+            const initialLocal = getEmptyUserData();
+            initialLocal.profile = { name: 'Valid Local' } as any;
+            useAppStore.setState({ userData: initialLocal });
+            await initializeLocal('user:user123', initialLocal);
+
+            const cloudResponse = getEmptyUserData();
+            cloudResponse.profile = { name: 'Cloud Name' } as any;
+            const loadSpy = vi.spyOn(DB, 'loadCloudPayload').mockResolvedValue({
+                data: cloudResponse,
+                completeMonths: [],
+                cloudDocuments: new Map([['', {
+                    profile: cloudResponse.profile,
+                    _sync: { protocolVersion: 1, clock: { broken: -1 }, fields: {} }
+                } as any]])
+            });
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            let authCallback: any = null;
+            const { onAuthStateChanged } = await import('firebase/auth');
+            (onAuthStateChanged as any).mockImplementation((_auth: any, cb: any) => {
+                authCallback = cb;
+                return () => {};
+            });
+
+            const rendered = renderHook(() => useContext(AuthContext), { wrapper: AuthProvider });
+
+            try {
+                await act(async () => {
+                    await new Promise(r => setTimeout(r, 10));
+                });
+
+                if (!authCallback) throw new Error("authCallback was not set by renderHook!");
+
+                await act(async () => {
+                    (auth as any).currentUser = { uid: 'user123' };
+                    await authCallback({ uid: 'user123' });
+                    await new Promise(r => setTimeout(r, 10));
+                });
+
+                const state = useAppStore.getState();
+                expect(state.userData?.profile?.name).toBe('Valid Local');
+                expect(state.saveError).toContain('metadati di sincronizzazione remoti non sono validi');
+                expect(consoleSpy).toHaveBeenCalledWith(
+                    'Metadati di sincronizzazione cloud non validi; stato locale preservato:',
+                    expect.objectContaining({ code: 'invalid-cloud-sync-metadata' })
+                );
+            } finally {
+                rendered.unmount();
+                loadSpy.mockRestore();
+                consoleSpy.mockRestore();
+            }
+        });
+
         it('Hydration fallback: invalid projected cloud data preserves local state', async () => {
             (auth as any).currentUser = { uid: 'user123' };
             const initialLocal = getEmptyUserData();

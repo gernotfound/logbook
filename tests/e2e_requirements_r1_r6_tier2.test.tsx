@@ -365,8 +365,8 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     />
                 );
 
-                const removeBtns = screen.getAllByRole('button', { name: '✕' });
-                fireEvent.click(removeBtns[0]);
+                const removeBtn = screen.getByRole('button', { name: 'Rimuovi dropset 1' });
+                fireEvent.click(removeBtn);
                 expect(mockRemove).toHaveBeenCalledWith('s1', 'dropsets', 0);
             });
 

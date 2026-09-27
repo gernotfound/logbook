@@ -158,21 +158,16 @@ export function truncateStack(stack?: string, maxLength: number = 1000): string 
   }
 
   const marker = '...[TRUNCATED]';
-  const stackLen = stack.length;
-  if (maxLength <= 14) {
-    return scrubPII(stack.slice(0, maxLength)).slice(0, maxLength);
+  const scrubbed = scrubPII(stack);
+  if (maxLength <= marker.length) {
+    return scrubbed.slice(0, maxLength);
+  }
+  if (scrubbed.length <= maxLength) {
+    return scrubbed;
   }
 
-  const isTruncated = stackLen > maxLength;
-  const targetLength = maxLength - 14;
-  const rawChunk = isTruncated ? stack.slice(0, targetLength) : stack;
-  const scrubbed = scrubPII(rawChunk);
-
-  if (isTruncated) {
-    return scrubbed.length > targetLength ? scrubbed.slice(0, targetLength) + marker : scrubbed + marker;
-  }
-
-  return scrubbed.length <= maxLength ? scrubbed : scrubbed.slice(0, targetLength) + marker;
+  const targetLength = maxLength - marker.length;
+  return scrubbed.slice(0, targetLength) + marker;
 }
 
 /**

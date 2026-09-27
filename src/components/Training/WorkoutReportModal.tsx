@@ -384,8 +384,9 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             flexDirection: 'column',
                             gap: '12px'
                         }}>
-                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome nuova scheda</label>
-                            <input 
+                            <label htmlFor="new-routine-name" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome nuova scheda</label>
+                            <input
+                                id="new-routine-name"
                                 type="text" 
                                 className="form-control"
                                 value={newRoutineName}

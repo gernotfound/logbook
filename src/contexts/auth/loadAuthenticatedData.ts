@@ -63,7 +63,12 @@ export async function loadAuthenticatedData({
                 setUserData(hydratedEnv.data);
             } catch (mergeError) {
                 if (!isCurrent()) return;
-                console.error('Zod parse failed during hydration merge, preserving local valid state:', mergeError);
+                if ((mergeError as { code?: unknown })?.code === 'invalid-cloud-sync-metadata') {
+                    setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e LogBook non sovrascriverà il cloud finché il problema non viene risolto.');
+                    console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
+                } else {
+                    console.error('Zod parse failed during hydration merge, preserving local valid state:', mergeError);
+                }
             }
         }
     } catch (error: any) {

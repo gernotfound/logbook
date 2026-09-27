@@ -103,6 +103,28 @@ afterEach(async () => {
 });
 
 describe('M3 journal crash consistency', () => {
+    it('classifies malformed cloud sync metadata and preserves the durable local envelope', async () => {
+        const before = await readLocal(owner);
+        const malformedCloudDocuments = cloudDocumentsWithSync();
+        malformedCloudDocuments.set('', {
+            ...(malformedCloudDocuments.get('') ?? {}),
+            _sync: { protocolVersion: 1, clock: { broken: -1 }, fields: {} },
+        });
+
+        await expect(
+            hydrateLocal(owner, data(170), [], malformedCloudDocuments),
+        ).rejects.toMatchObject({
+            code: 'invalid-cloud-sync-metadata',
+            documentPath: '',
+        });
+
+        const after = await readLocal(owner);
+        expect(after?.data).toEqual(before?.data);
+        expect(after?.baseline).toEqual(before?.baseline);
+        expect(after?.pending).toEqual(before?.pending);
+        expect(after?.clock).toEqual(before?.clock);
+    });
+
     it('recovers a durable local commit after a new session epoch before any remote delivery', async () => {
         await commitLocal(owner, data(171), data(170));
         const beforeRestart = await readLocal(owner);

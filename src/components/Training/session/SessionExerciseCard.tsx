@@ -190,6 +190,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     className={`btn-small toggle-btn ${isHistoryOpen ? 'active-highlight' : ''}`}
                     style={isHistoryOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
                     onClick={() => onToggleHistory(exIndex)}
+                    aria-expanded={isHistoryOpen}
+                    aria-controls={`session-history-${exIndex}`}
                 >
                     🕒 Storico
                 </button>
@@ -198,6 +200,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     className={`btn-small toggle-btn ${isSetupOpen ? 'active-highlight' : ''}`}
                     style={isSetupOpen ? { background: 'var(--primary-color)', color: 'var(--on-primary)' } : {}}
                     onClick={() => onToggleSetup(exIndex)}
+                    aria-expanded={isSetupOpen}
+                    aria-controls={`session-setup-${exIndex}`}
                 >
                     <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup
                 </button>
@@ -211,7 +215,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             {!(exItem.minReps || exItem.maxReps) && <div style={{ marginBottom: '15px' }}></div>}
 
             {isHistoryOpen && (
-                <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
+                <div id={`session-history-${exIndex}`} style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <div style={{ marginBottom: '8px', fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>Ultimi 2 allenamenti:</div>
                     {pastWorkouts.length === 0 ? (
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
@@ -249,7 +253,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {isSetupOpen && (
-                <div style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
+                <div id={`session-setup-${exIndex}`} style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
                     <label className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 400 }} htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
                     <BufferedInput
                         id={`technical-standard-${exItem.exId}`}
