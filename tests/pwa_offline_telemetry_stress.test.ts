@@ -130,8 +130,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'bad_2', timestamp: Date.now(), itemType: 'event', payload: { id: 'evt_valid_2', type: 'valid_after', context: {}, sessionId: 's1', userId: 'user_malformed_test', timestamp: Date.now() } },
       ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(malformedQueue));
       telemetryHub.setUserId('user_malformed_test');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(malformedQueue));
 
       // Should not throw unhandled exception
       await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
@@ -161,8 +161,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         { id: 'valid_err_1', timestamp: 2002, itemType: 'error', payload: { id: 'err_real_1', type: 'TypeError', message: 'real_error_1', source: 'custom', context: {}, sessionId: 's1', userId: 'u1', count: 1, firstSeen: 2002, lastSeen: 2002 } },
       ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(hostileQueue));
       telemetryHub.setUserId('u1');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(hostileQueue));
 
       // flushQueue must not throw or crash on any element
       await expect(telemetryHub.flushQueue()).resolves.not.toThrow();
@@ -470,8 +470,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         },
       ];
 
-      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
       telemetryHub.setUserId('u1');
+      localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Mock setDoc: succeed for 1 and 3, reject for 2 and 4
       mockSetDoc.mockImplementation(async (_docRef: any, payload: any) => {
@@ -598,6 +598,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       ];
 
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
+      const guestQueueKey = telemetryHub.getQueueStorageKey();
 
       // User signs in with UID 'authenticated_user_777'
       telemetryHub.setUserId('authenticated_user_777');
@@ -606,10 +607,11 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Under GDPR and LB-18 privacy invariants, unauthenticated/guest telemetry must never
       // be retroactively attributed to the newly authenticated user UID upon login flush.
       expect(mockSetDoc).not.toHaveBeenCalled();
-      const remaining = telemetryHub.getQueuedEvents();
-      expect(remaining.length).toBe(2);
-      expect(remaining[0].payload.userId).toBeNull();
-      expect(remaining[1].payload.userId).toBeNull();
+      expect(telemetryHub.getQueuedEvents()).toHaveLength(0);
+      const guestQueue: QueuedTelemetryItem[] = JSON.parse(localStorage.getItem(guestQueueKey) || '[]');
+      expect(guestQueue).toHaveLength(2);
+      expect(guestQueue[0].payload.userId).toBeNull();
+      expect(guestQueue[1].payload.userId).toBeNull();
     });
   });
 });
