@@ -1,6 +1,5 @@
 import { Trash2 } from 'lucide-react';
 import { AccountCard } from '../UI/AccountCard';
-import { StorageDiagnostics } from './StorageDiagnostics';
 
 interface AccountSettingsTabProps {
     pendingAccountDeletion: boolean;
@@ -10,7 +9,6 @@ interface AccountSettingsTabProps {
     isGuest: boolean;
     deletingAccount: boolean;
     onPromptInstall: () => void | Promise<void>;
-    onCheckUpdate: () => void | Promise<void>;
     onDeleteAccount: () => void | Promise<void>;
 }
 
@@ -22,7 +20,6 @@ export function AccountSettingsTab({
     isGuest,
     deletingAccount,
     onPromptInstall,
-    onCheckUpdate,
     onDeleteAccount,
 }: AccountSettingsTabProps) {
     return (
@@ -48,14 +45,6 @@ export function AccountSettingsTab({
                     </p>
                 </div>
             )}
-
-            <div className="section-divider">
-                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={onCheckUpdate}>
-                    <span aria-hidden="true">🔄</span> Cerca aggiornamenti
-                </button>
-            </div>
-
-            <StorageDiagnostics />
 
             {isOffline && (
                 <div className="section-divider">

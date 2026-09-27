@@ -9,6 +9,7 @@ import { TermsAndConditions } from '../pages/TermsAndConditions';
 import { getAnalyticsConsent, setAnalyticsConsent } from '../lib/analyticsConsent';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
+import { StorageDiagnostics } from './Settings/StorageDiagnostics';
 import { PrivacySettingsTab } from './Settings/PrivacySettingsTab';
 import { ExportSettingsTab } from './Settings/ExportSettingsTab';
 import SubNav from './UI/SubNav';
@@ -20,7 +21,7 @@ const SETTINGS_TABS: readonly { id: SettingsTab; label: string }[] = [
     { id: 'account', label: 'Account' },
     { id: 'privacy', label: 'Privacy' },
     { id: 'export', label: 'Esporta' },
-    { id: 'appearance', label: 'Aspetto' },
+    { id: 'appearance', label: 'Sistema' },
 ];
 const APPEARANCE_OPTIONS: readonly { id: ThemePreference; label: string }[] = [
     { id: 'system', label: 'Sistema' },
@@ -111,7 +112,6 @@ const SettingsView = () => {
                     isGuest={isGuest}
                     deletingAccount={deletingAccount}
                     onPromptInstall={promptInstall}
-                    onCheckUpdate={handleCheckUpdate}
                     onDeleteAccount={handleDeleteAccount}
                 />
                 </div>
@@ -152,8 +152,8 @@ const SettingsView = () => {
 
             {activeTab === 'appearance' && (
                 <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" className="settings-group">
-                    <h2>Aspetto</h2>
-                    <p className="settings-help">Scegli il tema di questo dispositivo. La scelta non modifica i dati del tuo account.</p>
+                    <h2>Sistema</h2>
+                    <p className="settings-help">Tema e strumenti tecnici di questo dispositivo.</p>
                     <fieldset className="appearance-options" aria-label="Tema dell'app">
                         {APPEARANCE_OPTIONS.map(option => (
                             <label key={option.id} className={`appearance-option ${appearance === option.id ? 'is-selected' : ''}`}>
@@ -168,7 +168,15 @@ const SettingsView = () => {
                             </label>
                         ))}
                     </fieldset>
-                    {appearanceNotSaved && <p role="status" className="settings-help settings-help-last">Il tema è attivo ora, ma il browser non ha potuto conservarlo per i prossimi avvii.</p>}
+                    {appearanceNotSaved && <p role="status" className="settings-help">Il tema è attivo ora, ma il browser non ha potuto conservarlo per i prossimi avvii.</p>}
+
+                    <div className="section-divider">
+                        <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleCheckUpdate}>
+                            <span aria-hidden="true">🔄</span> Cerca aggiornamenti
+                        </button>
+                    </div>
+
+                    <StorageDiagnostics />
                 </section>
             )}
 
