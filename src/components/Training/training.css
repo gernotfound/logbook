@@ -333,7 +333,7 @@
   background: var(--primary-color);
   color: var(--on-primary);
   font-size: .8125rem;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -675,7 +675,7 @@
 .history-workout-name {
   color: var(--text-main);
   font-size: .875rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .history-workout-info {
@@ -781,8 +781,8 @@
   min-width: 0;
   margin: 0;
   color: var(--text-main);
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1.4375rem;
+  font-weight: 500;
   line-height: 1.15;
   letter-spacing: -.02em;
 }
@@ -794,6 +794,7 @@
   margin: 0;
   padding: 0 .875rem;
   gap: .375rem;
+  font-weight: 500;
 }
 
 .exercise-library-list,
@@ -891,7 +892,7 @@
   margin: 0;
   color: var(--text-main);
   font-size: .9375rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-section-head span {
@@ -943,6 +944,11 @@
   border-radius: .6875rem;
   background: var(--surface-light);
   color: var(--primary-color);
+}
+
+.exercise-compact-icon.cardio {
+  background: color-mix(in srgb, var(--accent-color) 16%, var(--surface-color));
+  color: var(--accent-color);
 }
 
 .exercise-compact-copy {
@@ -998,7 +1004,7 @@
   overflow-wrap: anywhere;
   color: var(--text-main);
   font-size: 1.1875rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-icon-button {
@@ -1109,7 +1115,7 @@
   overflow-wrap: anywhere;
   color: var(--text-main);
   font-size: .8125rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-detail-notes {
@@ -1176,7 +1182,7 @@
   margin: 0;
   color: var(--primary-color);
   font-size: 1.0625rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-field {
@@ -1276,7 +1282,7 @@
 
 .exercise-setting-copy strong {
   font-size: .8125rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-setting-copy span {
@@ -1373,7 +1379,7 @@
   margin: 0;
   color: var(--text-main);
   font-size: .8125rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-muscle-mode {
