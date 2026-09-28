@@ -57,7 +57,7 @@ test('Schede stays inside a 320px viewport and keeps the full muscle model in bo
   await page.emulateMedia({ colorScheme: 'light' });
   await continueAsGuest(page);
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
-  await page.getByRole('button', { name: 'Schede', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Schede' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Crea scheda' })).toBeVisible();
@@ -93,7 +93,7 @@ test('Schede stays inside a 320px viewport and keeps the full muscle model in bo
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
-  await page.getByRole('button', { name: 'Schede', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
   await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
 });
