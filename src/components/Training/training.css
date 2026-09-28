@@ -761,8 +761,28 @@
 }
 
 
+/* Training sub-navigation follows the compact proposal rhythm without overlapping edge affordances. */
+#view-training > .sub-nav-shell .sub-nav {
+  scrollbar-width: none;
+}
+
+#view-training > .sub-nav-shell .sub-nav::-webkit-scrollbar {
+  display: none;
+}
+
+#view-training > .sub-nav-shell .sub-nav-btn {
+  padding-inline: .875rem;
+  font-size: .75rem;
+  font-weight: 500;
+}
+
+#view-training > .sub-nav-shell .sub-nav-edge {
+  display: none;
+}
+
 /* Exercise library — proposal 5 */
-.exercise-library {
+.exercise-library,
+.training-sub-view.active.exercise-library {
   display: grid;
   min-width: 0;
   gap: .75rem;
@@ -847,7 +867,18 @@
 
 .exercise-search-input,
 .exercise-muscle-search-wrap input {
+  -webkit-appearance: none;
+  appearance: none;
   padding: .625rem 2.75rem .625rem 2.5rem;
+}
+
+.exercise-search-input::-webkit-search-decoration,
+.exercise-search-input::-webkit-search-cancel-button,
+.exercise-muscle-search-wrap input::-webkit-search-decoration,
+.exercise-muscle-search-wrap input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
 }
 
 .exercise-search-input::placeholder,
@@ -974,12 +1005,12 @@
 .exercise-compact-name {
   color: var(--text-main);
   font-size: .875rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-compact-meta {
   color: var(--text-muted);
-  font-size: .75rem;
+  font-size: .6875rem;
 }
 
 .exercise-compact-chevron {
@@ -1180,14 +1211,23 @@
 }
 
 .exercise-editor-head h2 {
-  display: inline-flex;
   min-width: 0;
-  align-items: center;
-  gap: .4375rem;
   margin: 0;
   color: var(--primary-color);
   font-size: 1.0625rem;
   font-weight: 500;
+}
+
+.exercise-editor-close {
+  width: auto;
+  max-width: none;
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0 .875rem;
+  font-size: .75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .exercise-field {
@@ -1583,6 +1623,7 @@
 }
 
 .exercise-create-button:focus-visible,
+.exercise-editor-close:focus-visible,
 .exercise-search-clear:focus-visible,
 .exercise-compact-row:focus-visible,
 .exercise-icon-button:focus-visible,
