@@ -62,22 +62,57 @@ else requirePattern('push main target', pushBlock, /^      - main\s*$/m);
 
 forbidPattern('privileged PR trigger', workflow, /^\s*pull_request_target:\s*$/m);
 forbidPattern('secret references', workflow, /\$\{\{\s*secrets\./);
+forbidPattern('continue-on-error', workflow, /^\s+continue-on-error\s*:/m);
+
+if (pullRequestBlock) {
+  forbidPattern('PR trigger event-type filter', pullRequestBlock, /^    types\s*:/m);
+  forbidPattern('PR trigger path filter', pullRequestBlock, /^    paths\s*:/m);
+  forbidPattern('PR trigger path-ignore filter', pullRequestBlock, /^    paths-ignore\s*:/m);
+  forbidPattern('PR trigger obsolete integration target', pullRequestBlock, /^      - feat\/ui-workout-guest-flow\s*$/m);
+}
+if (pushBlock) {
+  forbidPattern('push obsolete M8 branch target', pushBlock, /^      - feat\/m8-domain-operations-v4\s*$/m);
+  forbidPattern('push obsolete M7 branch target', pushBlock, /^      - feat\/m7-server-account-deletion\s*$/m);
+}
+
+const permissionDeclarations = workflow.match(/^\s*permissions\s*:/gm) ?? [];
+if (permissionDeclarations.length !== 1) {
+  failures.push(`repository permissions: expected exactly one declaration, found ${permissionDeclarations.length}`);
+}
 requirePattern('read-only permissions', workflow, /^permissions:\s*\n  contents: read\s*$/m);
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s*$/m);
 requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
+requirePattern('checkout action', workflow, /^        uses: actions\/checkout@v7\s*$/m);
+requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
+requirePattern('Node setup action', workflow, /^        uses: actions\/setup-node@v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
+requirePattern('dependency install', workflow, /^        run: npm ci\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
+const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
+if (actualShaAssignments.length !== 1) failures.push(`runtime SHA guard: expected one assignment, found ${actualShaAssignments.length}`);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
 requirePattern('Java setup action', workflow, /^        uses: actions\/setup-java@v6\s*$/m);
+requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('conditional Playwright setup', workflow, /^        if: matrix\.playwright == true\s*$/m);
 requirePattern('Playwright Chromium install', workflow, /^        run: npx playwright install --with-deps chromium\s*$/m);
 requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.command \}\} 2>&1 \| tee "verification-\$\{\{ matrix\.id \}\}\.log"\s*$/m);
+
+const allowedIfLines = new Set([
+  'if: matrix.java == true',
+  'if: matrix.playwright == true',
+  'if: failure()',
+  'if: ${{ always() }}',
+]);
+for (const line of workflow.match(/^\s+if:\s*.+$/gm) ?? []) {
+  const normalized = line.trim();
+  if (!allowedIfLines.has(normalized)) failures.push(`unexpected conditional gate: ${normalized}`);
+}
 
 const includeMatch = workflow.match(/^        include:\s*\n([\s\S]*?)(?=^    env:)/m);
 if (!includeMatch) {
