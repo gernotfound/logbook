@@ -25,6 +25,12 @@ const adaptiveSurfaceFiles = [
 ];
 
 describe('post-redesign UI hardening', () => {
+  it('keeps the exercise header title and create action compact on mobile', () => {
+    const training = read('src/components/Training/training.css');
+    expect(training).toMatch(/\.exercise-library-header h2\s*\{[^}]*flex:\s*1 1 auto[^}]*white-space:\s*nowrap/);
+    expect(training).toMatch(/\.exercise-create-button\s*\{[^}]*width:\s*auto[^}]*max-width:\s*none[^}]*flex:\s*0 0 auto[^}]*white-space:\s*nowrap/);
+  });
+
   it('does not render an automatic installation popup', () => {
     expect(existsSync(resolve('src/components/UI/InstallPrompt.tsx'))).toBe(false);
     expect(read('src/App.tsx')).not.toContain('InstallPrompt');
