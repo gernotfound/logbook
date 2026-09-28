@@ -248,7 +248,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
 
             <details style={{ borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
                 <summary className="disclosure-summary technique-summary">
-                    Tecnica
+                    Tecnica e progressione
                 </summary>
                 <div style={{ display: 'grid', gap: '10px', paddingTop: '8px' }}>
                     {!isCardio && (
