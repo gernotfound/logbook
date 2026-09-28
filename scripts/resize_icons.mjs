@@ -2,10 +2,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
-const source = 'public/favicon.svg';
-const appBackground = '#171719';
+const source = 'assets/pwa-icon-source.webp';
+const appBackground = '#000000';
 const pngTargets = [
-  { output: 'public/favicon.png', size: 64, opaque: false },
+  { output: 'public/favicon.png', size: 64, opaque: true },
   { output: 'public/apple-touch-icon.png', size: 180, opaque: true },
   { output: 'public/icon-192.png', size: 192, opaque: true },
   { output: 'public/icon-512.png', size: 512, opaque: true },
@@ -13,7 +13,7 @@ const pngTargets = [
 const faviconIcoOutput = 'public/favicon.ico';
 const maskableOutput = 'public/icon-maskable-512.png';
 const maskableSize = 512;
-const maskableArtworkScale = 0.8;
+const maskableArtworkScale = 0.72;
 const socialOutput = 'public/social-share.jpg';
 
 async function validateRaster(output, width, height, format, { opaque = false } = {}) {
@@ -29,21 +29,23 @@ async function validateRaster(output, width, height, format, { opaque = false } 
   if (opaque && !stats.isOpaque) throw new Error(`${output} must be fully opaque for launcher compatibility.`);
 }
 
-async function validateSource(svg) {
-  const text = svg.toString('utf8');
-  if (!/<svg\b/i.test(text)) throw new Error(`${source} is not valid SVG markup.`);
-  if (/<image\b[^>]*\bhref=(['"])data:image\//i.test(text)) {
-    throw new Error(`${source} must remain a true vector source without embedded raster artwork.`);
+async function validateSource(image) {
+  const [metadata, stats] = await Promise.all([sharp(image).metadata(), sharp(image).stats()]);
+  if (!['jpeg', 'png', 'webp'].includes(metadata.format ?? '')) {
+    throw new Error(`${source} must be a supported raster image (JPEG, PNG or WebP).`);
   }
-  const metadata = await sharp(svg).metadata();
-  if (metadata.format !== 'svg' || !metadata.width || !metadata.height || metadata.width !== metadata.height || metadata.width < 1024) {
-    throw new Error(`${source} must be a square vector artwork at least 1024x1024.`);
+  if (!metadata.width || !metadata.height || metadata.width !== metadata.height || metadata.width < 1024) {
+    throw new Error(`${source} must be square raster artwork at least 1024x1024.`);
+  }
+  const visibleVariation = Math.max(...stats.channels.slice(0, 3).map(channel => channel.stdev));
+  if (!Number.isFinite(visibleVariation) || visibleVariation < 5) {
+    throw new Error(`${source} appears blank or visually degenerate.`);
   }
 }
 
-async function createMaskableIcon(svg) {
+async function createMaskableIcon(image) {
   const artworkSize = Math.round(maskableSize * maskableArtworkScale);
-  const artwork = await sharp(svg)
+  const artwork = await sharp(image)
     .resize(artworkSize, artworkSize, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
     .png({ compressionLevel: 9 })
     .toBuffer();
@@ -87,14 +89,14 @@ async function validateMaskableSafeZone(image) {
   }
 
   if (markedPixels < 1000 || maxX < minX || maxY < minY) {
-    throw new Error(`${source} does not expose a sufficiently large light LB mark for maskable safe-zone validation.`);
+    throw new Error(`${source} does not expose sufficiently large light artwork for maskable safe-zone validation.`);
   }
 
   const center = maskableSize / 2;
   const safeRadius = maskableSize * 0.4;
   for (const [x, y] of [[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]]) {
     if (Math.hypot(x + 0.5 - center, y + 0.5 - center) > safeRadius) {
-      throw new Error(`${maskableOutput} would place the primary LB mark outside the standard maskable safe circle.`);
+      throw new Error(`${maskableOutput} would place the primary artwork outside the standard maskable safe circle.`);
     }
   }
 }
@@ -131,37 +133,25 @@ async function validateIco(output) {
   if (sizes[0] !== 16 || sizes[1] !== 32) throw new Error(`${output} must contain 16x16 and 32x32 entries.`);
 }
 
-function createSocialBackground() {
-  return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-      <defs>
-        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#07111f"/>
-          <stop offset="0.55" stop-color="#070b18"/>
-          <stop offset="1" stop-color="#09081c"/>
-        </linearGradient>
-        <radialGradient id="cyan" cx="15%" cy="20%" r="70%">
-          <stop offset="0" stop-color="#00d7ff" stop-opacity="0.24"/>
-          <stop offset="1" stop-color="#00d7ff" stop-opacity="0"/>
-        </radialGradient>
-        <radialGradient id="violet" cx="85%" cy="80%" r="65%">
-          <stop offset="0" stop-color="#6e00ff" stop-opacity="0.20"/>
-          <stop offset="1" stop-color="#6e00ff" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <rect width="1200" height="630" fill="url(#bg)"/>
-      <rect width="1200" height="630" fill="url(#cyan)"/>
-      <rect width="1200" height="630" fill="url(#violet)"/>
-    </svg>
-  `);
+async function createSocialBackground() {
+  return sharp({
+    create: {
+      width: 1200,
+      height: 630,
+      channels: 3,
+      background: appBackground,
+    },
+  })
+    .jpeg({ quality: 100, chromaSubsampling: '4:4:4' })
+    .toBuffer();
 }
 
 export async function generateIcons() {
-  const svg = await readFile(source);
-  await validateSource(svg);
+  const image = await readFile(source);
+  await validateSource(image);
 
   for (const { output, size, opaque } of pngTargets) {
-    let pipeline = sharp(svg).resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 });
+    let pipeline = sharp(image).resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 });
     if (opaque) pipeline = pipeline.flatten({ background: appBackground });
     await pipeline.png({ compressionLevel: 9 }).toFile(output);
     await validateRaster(output, size, size, 'png', { opaque });
@@ -169,18 +159,18 @@ export async function generateIcons() {
 
   const icoImages = await Promise.all([16, 32].map(async size => ({
     size,
-    buffer: await sharp(svg).resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 }).png().toBuffer(),
+    buffer: await sharp(image).resize(size, size, { fit: 'fill', kernel: sharp.kernel.lanczos3 }).png().toBuffer(),
   })));
   await writeFile(faviconIcoOutput, createIco(icoImages));
   await validateIco(faviconIcoOutput);
 
-  const maskableIcon = await createMaskableIcon(svg);
+  const maskableIcon = await createMaskableIcon(image);
   await validateMaskableSafeZone(maskableIcon);
   await writeFile(maskableOutput, maskableIcon);
   await validateRaster(maskableOutput, maskableSize, maskableSize, 'png', { opaque: true });
 
-  const socialIcon = await sharp(svg).resize(430, 430, { fit: 'contain' }).png().toBuffer();
-  await sharp(createSocialBackground())
+  const socialIcon = await sharp(image).resize(430, 430, { fit: 'contain' }).png().toBuffer();
+  await sharp(await createSocialBackground())
     .composite([{ input: socialIcon, gravity: 'centre' }])
     .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
     .toFile(socialOutput);
