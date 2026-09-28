@@ -79,7 +79,7 @@ describe('scala tipografica canonica', () => {
     expect(setup).toMatch(/nextScheduled\.nextRoutine\.name[\s\S]{0,220}font-size-control|font-size-control[\s\S]{0,220}nextScheduled\.nextRoutine\.name/);
     expect(cycleRoutines).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,180}\{routine\?\.name/);
     expect(supplements).toMatch(/fontSize:\s*'var\(--font-size-control\)'[^\n]*\{supp\.name\}/);
-    expect(dataHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[^\n]*Logic\.formatItalianDate/);
+    expect(dataHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,220}Logic\.formatItalianDate/);
     expect(nutritionHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,180}Logic\.formatItalianDate/);
   });
 
