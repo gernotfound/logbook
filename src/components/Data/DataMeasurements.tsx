@@ -121,7 +121,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
                 <h2 style={{color: isEditing ? 'var(--primary-color)' : 'var(--text-main)',marginBottom: '10px', marginTop: 0}}>
                     {isEditing ? <><Pencil size={18} aria-hidden="true" /> Modifica misurazione</> : <><Plus size={18} aria-hidden="true" /> Nuova misurazione</>}
                 </h2>
-                <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '20px' }}>
                     Registra il tuo peso, la massa grassa e le circonferenze corporee.
                 </p>
 
@@ -188,7 +188,7 @@ const DataMeasurements: React.FC<DataMeasurementsProps> = ({
 
             {/* SEZIONE 2: Circonferenze opzionali */}
             <h3 style={{color: 'var(--text-main)', margin: '0 0 10px 0', borderBottom: '1px solid var(--glass-border)', paddingBottom: '5px'}}>Misure circonferenze (opzionali)</h3>
-            <p style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Se inserisci questi dati ma non la BF % dalla bilancia, la massa grassa verrà calcolata automaticamente (Metodo US Navy).
             </p>
 

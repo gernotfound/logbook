@@ -311,7 +311,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
 
             {activeWorkout.isEditingHistory ? (
                 <>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: 'var(--font-size-section)', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
+                    <button className="btn btn-primary" style={{ width: '100%', fontSize: 'var(--font-size-control)', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
                         <Save size={16} aria-hidden="true" /> Salva modifiche
                     </button>
                     <button className="btn btn-danger" style={{ width: '100%', fontSize: 'var(--font-size-control)', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>

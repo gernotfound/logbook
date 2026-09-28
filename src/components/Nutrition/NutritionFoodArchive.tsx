@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Search, Utensils } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useDialogStore } from '../../store/useDialogStore';
 import { Logic } from '../../lib/logic';
@@ -150,7 +150,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                 <div className="flex-between mb-15 items-center">
                     <div>
                         <h1 className="m-0" style={{color: 'var(--text-main)'}}>🥗 Alimenti</h1>
-                        <p className="text-muted text-xs m-0 mt-4">
+                        <p className="text-muted text-base m-0 mt-4">
                             Gestisci, crea e consulta i tuoi alimenti personalizzati
                         </p>
                     </div>
@@ -197,7 +197,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
                 {customFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '8px' }}>🥗</div>
+                        <Utensils size={32} aria-hidden="true" style={{ marginBottom: '8px' }} />
                         <p className="m-0 text-sm font-semibold text-white">Nessun alimento presente.</p>
                         <p className="m-0 text-xs text-muted mt-4">
                             Clicca su <strong>+ Crea alimento</strong> in alto per iniziare a inserire i tuoi alimenti.
@@ -205,7 +205,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     </div>
                 ) : filteredFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '8px' }}>🔍</div>
+                        <Search size={32} aria-hidden="true" style={{ marginBottom: '8px' }} />
                         <p className="m-0 text-sm">Nessun alimento trovato per "{searchQuery}".</p>
                     </div>
                 ) : (

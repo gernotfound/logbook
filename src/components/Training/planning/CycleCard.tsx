@@ -60,7 +60,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
             className="card mb-15"
             style={{
                 border: isActive ? '1px solid var(--primary-color)' : '1px solid var(--glass-border)',
-                background: isActive ? 'rgba(14, 165, 233, 0.05)' : 'var(--glass-bg)'
+                background: isActive ? 'var(--primary-soft)' : 'var(--glass-bg)'
             }}
         >
             <div className="flex-between items-start mb-8 gap-10">
@@ -180,8 +180,8 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                                 key={sess.globalSessionIndex}
                                                 style={{
                                                     padding: '2px 6px',
-                                                    background: 'rgba(14, 165, 233, 0.1)',
-                                                    border: '1px solid rgba(14, 165, 233, 0.25)',
+                                                    background: 'var(--primary-soft)',
+                                                    border: '1px solid var(--primary-color)',
                                                     borderRadius: '4px',
                                                     color: 'var(--text-main)',
                                                     fontSize: 'var(--font-size-micro)'

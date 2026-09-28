@@ -1,4 +1,5 @@
 import React from 'react';
+import { Utensils } from 'lucide-react';
 import { Logic } from '../../lib/logic';
 
 interface NutritionHistoryProps {
@@ -12,13 +13,13 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <h1 style={{margin: 0,color: 'var(--text-main)'}}>Storico pasti ({nutritionHistory.length})</h1>
             </div>
-            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Tutti i pasti registrati in ordine cronologico.
             </p>
 
             {nutritionHistory.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '10px' }}>🍽️</div>
+                    <Utensils size={32} aria-hidden="true" style={{ marginBottom: '10px' }} />
                     <p style={{ margin: 0 }}>Nessun pasto registrato finora.</p>
                 </div>
             ) : (
@@ -39,7 +40,7 @@ const NutritionHistory: React.FC<NutritionHistoryProps> = ({ nutritionHistory, o
                             }}
                         >
                             <div style={{ width: '100%' }}>
-                                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date}
                                     <span style={{ fontSize: 'var(--font-size-meta)', opacity: 0.8 }}>
                                         {day.isDayOn === true ? '🔥 ON' : day.isDayOn === false ? '🛋️ OFF' : '— Non specificato'}

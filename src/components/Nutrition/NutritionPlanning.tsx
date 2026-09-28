@@ -71,7 +71,7 @@ const NutritionPlanning = () => {
                 {/* 2. VARIAZIONI GIORNI ON */}
                 <div className="card" style={{ marginBottom: 0 }}>
                     <h2 style={{marginTop: 0, marginBottom: '5px', color: 'var(--text-main)'}}>🚀 Variazioni giorni ON</h2>
-                    <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>Varia in percentuale i macro nei giorni di allenamento.</p>
+                    <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>Varia in percentuale i macro nei giorni di allenamento.</p>
                     
                     <div className="input-row flex-between" style={{ marginBottom: '10px' }}>
                         <span style={{ color: 'var(--text-muted)' }}>Variazione pro (%)</span>
@@ -93,7 +93,7 @@ const NutritionPlanning = () => {
                     
                     {/* GIORNO ON */}
                     <div className="card" style={{ marginBottom: 0, padding: '15px' }}>
-                        <div style={{ fontSize: 'var(--font-size-body)', color: 'var(--primary-color)', fontWeight: 'bold', marginBottom: '10px' }}>🔥 Giorno ON (Allenamento)</div>
+                        <div style={{ fontSize: 'var(--font-size-control)', color: 'var(--primary-color)', fontWeight: 'bold', marginBottom: '10px' }}>🔥 Giorno ON (Allenamento)</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Pro: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.proPerKg).toFixed(2)} g/kg</span></div>
                             <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Car: <span style={{ color: 'var(--text-main)' }}>{Number(currentOnMacros.carbsPerKg).toFixed(2)} g/kg</span></div>
@@ -109,7 +109,7 @@ const NutritionPlanning = () => {
 
                     {/* GIORNO OFF */}
                     <div className="card" style={{ marginBottom: 0, padding: '15px' }}>
-                        <div style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-main)', fontWeight: 'bold', marginBottom: '10px' }}>🛋️ Giorno OFF (Riposo)</div>
+                        <div style={{ fontSize: 'var(--font-size-control)', color: 'var(--text-main)', fontWeight: 'bold', marginBottom: '10px' }}>🛋️ Giorno OFF (Riposo)</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Pro: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.proPerKg).toFixed(2)} g/kg</span></div>
                             <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Car: <span style={{ color: 'var(--text-main)' }}>{Number(currentOffMacros.carbsPerKg).toFixed(2)} g/kg</span></div>

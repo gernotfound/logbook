@@ -76,7 +76,7 @@ const DataSleep: React.FC<DataSleepProps> = ({ sleepHook, selectedDate, setSelec
                 <h2 style={{color: isEditing ? 'var(--primary-color)' : 'var(--text-main)',marginBottom: '10px', marginTop: 0}}>
                     {isEditing ? <><Pencil size={18} aria-hidden="true" /> Modifica sonno ({activeDateStr})</> : <>🌙 Dati sonno ({activeDateStr})</>}
                 </h2>
-                <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '20px' }}>
+                <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '20px' }}>
                     Registra la durata e la qualità del tuo sonno.
                 </p>
 

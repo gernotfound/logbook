@@ -15,7 +15,7 @@ export const NutritionConflictBanner: React.FC<Props> = ({ onResolveClick }) => 
         <AlertTriangle size={24} style={{ color: 'var(--warning-color)' }} />
         <div>
           <h3 className="text-sm font-bold m-0" style={{ color: 'var(--warning-color)' }}>Bozza locale rilevata</h3>
-          <p className="text-xs text-muted m-0 mt-1">
+          <p className="text-base text-muted m-0 mt-1">
             Hai una bozza del piano nutrizionale salvata sul dispositivo in conflitto con l'account.
           </p>
         </div>

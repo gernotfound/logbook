@@ -100,16 +100,16 @@ export default function MuscleModel({
         const isPrimary = primaryIds.has(id);
         const isSecondary = secondaryIds.has(id);
         
-        let fill = 'var(--surface-light, #1a1a1a)';
+        let fill = 'var(--surface-light)';
         if (isPrimary) {
-            fill = 'var(--primary-color, #00e5ff)';
+            fill = 'var(--primary-color)';
         } else if (isSecondary) {
             fill = 'var(--accent-color)';
         }
 
         return {
             fill,
-            stroke: 'var(--text-muted, #9ba3af)',
+            stroke: 'var(--text-muted)',
             strokeWidth: '0.3',
             cursor: interactive ? 'pointer' : 'default',
         };
@@ -167,7 +167,7 @@ export default function MuscleModel({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             >
-                <g id={`${instanceId}-figures`} stroke="var(--text-muted, #9ba3af)" strokeWidth="0.3" fill="var(--surface-light, #1a1a1a)">
+                <g id={`${instanceId}-figures`} stroke="var(--text-muted)" strokeWidth="0.3" fill="var(--surface-light)">
                     <MuscleModelPaths getPathStyle={getPathStyle} getPathId={getPathId} />
                 </g>
             </svg>
@@ -213,14 +213,14 @@ export default function MuscleModel({
                     position: 'fixed',
                     left: tooltip.x + 15,
                     top: tooltip.y + 15,
-                    backgroundColor: 'var(--surface-color, #0d0d0d)',
-                    color: 'var(--text-main, #f0f0f0)',
+                    backgroundColor: 'var(--surface-color)',
+                    color: 'var(--text-main)',
                     padding: '6px 12px',
                     borderRadius: '6px',
                     fontWeight: 'bold',
                     pointerEvents: 'none',
                     zIndex: 9999,
-                    border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
+                    border: '1px solid var(--glass-border)',
                     whiteSpace: 'nowrap'
                 }} className="text-sm">
                     {tooltip.text}

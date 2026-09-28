@@ -7,7 +7,7 @@ export function StorageDiagnostics() {
     return (
         <div className="settings-system-card">
             <h3><HardDrive size={18} aria-hidden="true" /> Diagnostica archiviazione</h3>
-            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
+            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
             {!storageDiag ? (
                 <span style={{ fontSize: 'var(--font-size-meta)' }}>Caricamento...</span>
             ) : !storageDiag.supported ? (

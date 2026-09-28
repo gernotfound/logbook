@@ -3,7 +3,7 @@
 // Effetti: chiama onSave col nuovo ciclo validato; usa lo state di dialogStore per gli alert.
 
 import React, { useCallback, useMemo } from 'react';
-import { Pencil, Save, Plus } from 'lucide-react';
+import { CalendarDays, Pencil, Save, Plus } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
@@ -156,7 +156,6 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     width: '100%',
                                     height: '100%',
                                     padding: 0,
-                                    fontSize: 'var(--font-size-display-sm)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -167,7 +166,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     cursor: 'pointer'
                                 }}
                             >
-                                📅
+                                <CalendarDays size={20} aria-hidden="true" />
                             </button>
                             <input
                                 ref={startDatePickerRef}
@@ -226,7 +225,6 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     width: '100%',
                                     height: '100%',
                                     padding: 0,
-                                    fontSize: 'var(--font-size-display-sm)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -237,7 +235,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     cursor: 'pointer'
                                 }}
                             >
-                                📅
+                                <CalendarDays size={20} aria-hidden="true" />
                             </button>
                             <input
                                 ref={endDatePickerRef}
@@ -288,8 +286,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     style={{
                         padding: '8px 12px',
                         borderRadius: '6px',
-                        background: 'rgba(14, 165, 233, 0.08)',
-                        border: '1px solid rgba(14, 165, 233, 0.2)',
+                        background: 'var(--primary-soft)',
+                        border: '1px solid var(--primary-color)',
                         fontSize: 'var(--font-size-meta)',
                         color: 'var(--primary-color)',
                         display: 'flex',
@@ -338,7 +336,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     required
                     style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                 />
-                <p className="text-xs text-muted mt-4 mb-0">
+                <p className="text-base text-muted mt-4 mb-0">
                     Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
                 </p>
             </div>

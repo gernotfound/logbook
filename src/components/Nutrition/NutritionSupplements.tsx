@@ -218,7 +218,7 @@ export default function NutritionSupplements({ selectedDate, setSelectedDate }: 
                         <div key={supp.id} className="card mb-15">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                                 <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-section)', color: 'var(--text-main)' }}>{supp.name}</div>
+                                    <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)' }}>{supp.name}</div>
                                     <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                         Assunto: <strong style={{ color: 'var(--text-main)' }}>{Math.round(totalAssunto * 10) / 10}</strong> {supp.unit} 
                                         {supp.target ? ` / ${supp.target} ${supp.unit}` : ''}

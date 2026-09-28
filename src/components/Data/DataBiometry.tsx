@@ -12,7 +12,7 @@ const DataBiometry = () => {
     return (
         <div className="section-divider-last">
             <h1 style={{marginTop: 0}}>Dati biometrici</h1>
-            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
             </p>
             

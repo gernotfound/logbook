@@ -1,7 +1,7 @@
 import React from 'react';
 import { Logic } from '../../lib/logic';
 import { ContextMenu } from '../UI/ContextMenu';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Ruler, Trash2 } from 'lucide-react';
 
 interface DataHistoryProps {
     measurementsHistory: any[];
@@ -21,13 +21,13 @@ const DataHistory: React.FC<DataHistoryProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <h1 style={{margin: 0}}>Storico misurazioni ({measurementsHistory.length})</h1>
             </div>
-            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Tutte le misurazioni registrate in ordine cronologico. Usa le opzioni per modificare o eliminare una misurazione.
             </p>
 
             {measurementsHistory.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '10px' }}>📏</div>
+                    <Ruler size={32} aria-hidden="true" style={{ marginBottom: '10px' }} />
                     <p style={{ margin: 0 }}>Nessuna misurazione registrata finora.</p>
                 </div>
             ) : (
@@ -49,7 +49,7 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                             onClick={() => onSelectEdit(day)}
                         >
                             <div>
-                                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: editingDate === day.date ? 'var(--primary-color)' : 'var(--text-main)' }}>
+                                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: editingDate === day.date ? 'var(--primary-color)' : 'var(--text-main)' }}>
                                     📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date} {day.measurementTime ? `alle ${day.measurementTime}` : ''}
                                 </div>
                                 <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>

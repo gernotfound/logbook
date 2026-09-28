@@ -166,7 +166,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
                                     style={{
                                         display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
-                                        background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
+                                        background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
                                         border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
                                         cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
                                     }}
@@ -178,7 +178,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <button
                     type="button"
                     className="btn-small"
-                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
+                    style={{ background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
                     onClick={() => onRemoveExercise(exIndex)}
                     aria-label="Rimuovi esercizio dalla sessione"
                 >
@@ -276,7 +276,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {lastNote && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: '#fca5a5' }}>
+                <div style={{ background: 'var(--danger-soft)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: 'var(--danger-color)' }}>
                     <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Note scorsa volta:</b> {lastNote}
                 </div>
             )}

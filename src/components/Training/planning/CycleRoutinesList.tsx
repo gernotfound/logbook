@@ -67,7 +67,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
 
             {cycleRoutines.length === 0 ? (
                 <div style={{ padding: '15px', background: 'var(--surface-light)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <p className="m-0 text-xs">Nessuna scheda aggiunta al ciclo. Seleziona una scheda dal menu in alto per iniziare la sequenza.</p>
+                    <p className="m-0 text-base">Nessuna scheda aggiunta al ciclo. Seleziona una scheda dal menu in alto per iniziare la sequenza.</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -94,7 +94,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '50%',
-                                            background: 'rgba(14, 165, 233, 0.15)',
+                                            background: 'var(--primary-soft)',
                                             border: '1px solid var(--primary-color)',
                                             color: 'var(--primary-color)',
                                             display: 'flex',
@@ -108,7 +108,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                         {letterIndex}
                                     </div>
                                     <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {routine?.name || 'Scheda'}
                                         </div>
                                         <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
