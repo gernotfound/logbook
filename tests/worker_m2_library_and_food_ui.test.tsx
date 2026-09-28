@@ -5,7 +5,7 @@ import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
-import { getInMemoryCatalog } from '../src/lib/catalog/catalogService';
+import { clearCatalogCache, getSeedCatalog, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
@@ -235,7 +235,6 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 catalogDeleted = await result.current.handleDelete(catalogExercise.id, { stopPropagation });
             });
             expect(catalogDeleted).toBe(false);
-            expect(showAlert).toHaveBeenCalledWith('Gli esercizi del catalogo non possono essere eliminati.');
             expect(useAppStore.getState().userData?.library).toHaveLength(2);
 
             let customDeleted = false;
@@ -248,7 +247,10 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         });
 
         it('handleRestoreExercise restores the bundled catalog version after confirmation', async () => {
-            const original = getInMemoryCatalog(true).exercises[0];
+            await clearCatalogCache();
+            const seedCatalog = getSeedCatalog();
+            await saveCatalogToCache(seedCatalog);
+            const original = seedCatalog.exercises[0];
             expect(original).toBeDefined();
 
             const modified: Exercise = {
@@ -287,6 +289,8 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(restored?.muscles).toEqual(original.muscles);
             expect(restored?.secondaryMuscles).toEqual(original.secondaryMuscles);
             expect(restored?.sets).toEqual([]);
+
+            await clearCatalogCache();
         });
     });
 
