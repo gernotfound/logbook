@@ -76,7 +76,8 @@ describe('TrainingExercises proposal 5', () => {
     expect(container.querySelectorAll('.exercise-muscle-tag.secondary').length).toBe(0);
 
     fireEvent.click(secondaryMode);
-    fireEvent.click(options[0]);
+    const refreshedOptions = container.querySelectorAll('.exercise-muscle-option');
+    fireEvent.click(refreshedOptions[0]);
     expect(container.querySelectorAll('.exercise-muscle-tag.primary').length).toBe(0);
     expect(container.querySelectorAll('.exercise-muscle-tag.secondary').length).toBeGreaterThan(0);
 
