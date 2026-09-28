@@ -174,7 +174,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
         it('renders isBodyweight checkbox and equipmentWeight input when trackingType is weight_reps', () => {
             renderWithProviders(<TrainingExercises />, { userData: emptyUserData });
 
-            const createBtn = screen.getByText(/Crea esercizio/i);
+            const createBtn = screen.getByRole('button', { name: /Crea esercizio/i });
             fireEvent.click(createBtn);
 
             const bwCheckbox = screen.getByLabelText(/Esercizio a corpo libero/i) as HTMLInputElement;
@@ -187,7 +187,7 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(eqInput.type).toBe('number');
         });
 
-        it('displays badges in the exercise list for isBodyweight and equipmentWeight', () => {
+        it('renders the compact proposal-5 exercise list without legacy badges', () => {
             const initialLibrary: Exercise[] = [
                 {
                     id: 'ex-1',
@@ -214,11 +214,13 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 }
             });
 
-            expect(screen.getByText('Corpo libero')).toBeDefined();
-            expect(screen.getByText('Attrezzo: 20 kg')).toBeDefined();
+            expect(screen.getByRole('heading', { name: 'La tua libreria' })).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Apri dettaglio di Trazioni alla sbarra' })).toBeDefined();
+            expect(screen.queryByText('Corpo libero')).toBeNull();
+            expect(screen.queryByText('Attrezzo: 20 kg')).toBeNull();
         });
 
-        it('shows expanded exercise details for bodyweight and equipment weight', () => {
+        it('opens the dedicated detail page with real exercise metadata', () => {
             const initialLibrary: Exercise[] = [
                 {
                     id: 'ex-dips',
@@ -226,23 +228,30 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                     setsCount: 3,
                     sets: [],
                     trackingType: 'weight_reps',
+                    muscles: ['chest'],
+                    secondaryMuscles: ['triceps'],
+                    notes: 'Scapole stabili',
+                    isDefault: false,
                     isBodyweight: true,
                     equipmentWeight: 5
                 }
             ];
 
-            renderWithProviders(<TrainingExercises />, {
+            const { container } = renderWithProviders(<TrainingExercises />, {
                 userData: {
                     ...emptyUserData,
                     library: initialLibrary
                 }
             });
 
-            const exerciseItem = screen.getByText('Dip alle parallele zavorrate');
-            fireEvent.click(exerciseItem);
+            fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Dip alle parallele zavorrate' }));
 
-            expect(screen.getByText(/Sì \(peso corporeo incluso nel volume\)/i)).toBeDefined();
-            expect(screen.getByText('5 kg')).toBeDefined();
+            expect(screen.getByRole('region', { name: 'Dettaglio esercizio' })).toBeDefined();
+            expect(screen.getByText('Peso e ripetizioni')).toBeDefined();
+            expect(screen.getByText('Personale')).toBeDefined();
+            expect(screen.getByText('Scapole stabili')).toBeDefined();
+            expect(screen.getByRole('button', { name: 'Torna all’elenco' })).toBeDefined();
+            expect(container.querySelector('.muscle-map-container')).not.toBeNull();
         });
     });
 
