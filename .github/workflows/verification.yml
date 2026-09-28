@@ -17,10 +17,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verification:
-    name: "Canonical Verification"
+  shards:
+    name: "Verification / ${{ matrix.label }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: core
+            label: Static, isolated and recovery
+            command: "npm audit --audit-level=high && npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
+            java: false
+            playwright: false
+          - id: unit-1
+            label: Unit and integration 1/2
+            command: "npm run test -- --shard=1/2"
+            java: false
+            playwright: false
+          - id: unit-2
+            label: Unit and integration 2/2
+            command: "npm run test -- --shard=2/2"
+            java: false
+            playwright: false
+          - id: hardening-stress
+            label: Hardening and stress
+            command: "npm run test:hardening && npm run test:stress"
+            java: false
+            playwright: false
+          - id: rules
+            label: Firestore Rules
+            command: "npm run test:rules"
+            java: true
+            playwright: false
+          - id: e2e
+            label: Playwright E2E
+            command: "npm run test:e2e"
+            java: false
+            playwright: true
+          - id: m7-m8
+            label: Build and M7-M8
+            command: "npm run build && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
+            java: false
+            playwright: false
     env:
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
@@ -50,6 +89,7 @@ jobs:
           cache: npm
 
       - name: Setup Java for Firebase Emulator
+        if: matrix.java == true
         uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -59,29 +99,44 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Chromium
+        if: matrix.playwright == true
         run: npx playwright install --with-deps chromium
 
-      - name: Run security audit
-        run: npm audit --audit-level=high
-
-      - name: Run canonical M8 verification
+      - name: Run verification shard
         shell: bash
         run: |
           set -o pipefail
-          npm run verify:m8 2>&1 | tee m8-verification.log
+          ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: m8-verification-failure-${{ github.run_id }}
+          name: verification-failure-${{ matrix.id }}-${{ github.run_id }}
           if-no-files-found: ignore
           retention-days: 7
           path: |
-            m8-verification.log
+            verification-${{ matrix.id }}.log
             playwright-report/
             test-results/
             firestore-debug.log
             firebase-debug.log
             dist/sw.js
             dist/manifest.webmanifest
+
+  canonical:
+    name: "Canonical Verification"
+    runs-on: ubuntu-24.04
+    needs: shards
+    if: ${{ always() }}
+    steps:
+      - name: Require all verification shards
+        env:
+          SHARD_RESULT: ${{ needs.shards.result }}
+        shell: bash
+        run: |
+          echo "Parallel verification result: ${SHARD_RESULT}"
+          if [ "${SHARD_RESULT}" != "success" ]; then
+            echo "At least one verification shard failed or was cancelled" >&2
+            exit 1
+          fi

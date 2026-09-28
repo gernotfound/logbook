@@ -12,141 +12,190 @@ const workflow = readFileSync(workflowPath, 'utf8');
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 
 function requirePattern(label, source, pattern) {
-  if (!pattern.test(source)) failures.push(`${label}: missing active workflow structure matching ${pattern}`);
+  if (!pattern.test(source)) failures.push(`${label}: missing structure matching ${pattern}`);
 }
 
 function forbidPattern(label, source, pattern) {
-  if (pattern.test(source)) failures.push(`${label}: forbidden active workflow structure matching ${pattern}`);
+  if (pattern.test(source)) failures.push(`${label}: forbidden structure matching ${pattern}`);
 }
 
-function stepBlock(name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return workflow.match(new RegExp(`^      - name: ${escaped}\\s*\\n([\\s\\S]*?)(?=^      - name:|(?![\\s\\S]))`, 'm'))?.[0] ?? '';
+function splitChain(command) {
+  return command.split(/\s*&&\s*/).map(part => part.trim()).filter(Boolean);
 }
 
-function forbidCriticalStepBypasses(label, block) {
-  forbidPattern(`${label} conditional skip`, block, /^        if\s*:/m);
-  forbidPattern(`${label} continue-on-error`, block, /^        continue-on-error\s*:/m);
+function expandScript(name, stack = []) {
+  if (stack.includes(name)) throw new Error(`recursive npm script chain: ${[...stack, name].join(' -> ')}`);
+  const command = packageJson.scripts?.[name];
+  if (!command) throw new Error(`missing npm script: ${name}`);
+
+  const leaves = [];
+  for (const part of splitChain(command)) {
+    const match = part.match(/^npm run ([A-Za-z0-9:_-]+)$/);
+    if (match && packageJson.scripts?.[match[1]]) {
+      leaves.push(...expandScript(match[1], [...stack, name]));
+    } else {
+      leaves.push(part);
+    }
+  }
+  return leaves;
+}
+
+function multiset(items) {
+  const result = new Map();
+  for (const item of items) result.set(item, (result.get(item) ?? 0) + 1);
+  return result;
+}
+
+function sameMultiset(left, right) {
+  if (left.size !== right.size) return false;
+  for (const [key, count] of left) if (right.get(key) !== count) return false;
+  return true;
 }
 
 const pullRequestBlock = workflow.match(/^  pull_request:\s*\n([\s\S]*?)(?=^  (?:push|workflow_dispatch):|^[^\s])/m)?.[1];
-if (!pullRequestBlock) {
-  failures.push('PR trigger: missing pull_request block under on');
-} else {
-  requirePattern('PR trigger main target', pullRequestBlock, /^      - main\s*$/m);
-  forbidPattern('PR trigger obsolete integration target', pullRequestBlock, /^      - feat\/ui-workout-guest-flow\s*$/m);
+if (!pullRequestBlock) failures.push('PR trigger: missing pull_request block');
+else requirePattern('PR trigger main target', pullRequestBlock, /^      - main\s*$/m);
+
+const pushBlock = workflow.match(/^  push:\s*\n([\s\S]*?)(?=^  (?:pull_request|workflow_dispatch):|^[^\s])/m)?.[1];
+if (!pushBlock) failures.push('push trigger: missing push block');
+else requirePattern('push main target', pushBlock, /^      - main\s*$/m);
+
+forbidPattern('privileged PR trigger', workflow, /^\s*pull_request_target:\s*$/m);
+forbidPattern('secret references', workflow, /\$\{\{\s*secrets\./);
+forbidPattern('continue-on-error', workflow, /^\s+continue-on-error\s*:/m);
+
+if (pullRequestBlock) {
   forbidPattern('PR trigger event-type filter', pullRequestBlock, /^    types\s*:/m);
   forbidPattern('PR trigger path filter', pullRequestBlock, /^    paths\s*:/m);
   forbidPattern('PR trigger path-ignore filter', pullRequestBlock, /^    paths-ignore\s*:/m);
+  forbidPattern('PR trigger obsolete integration target', pullRequestBlock, /^      - feat\/ui-workout-guest-flow\s*$/m);
 }
-
-const pushBlock = workflow.match(/^  push:\s*\n([\s\S]*?)(?=^  (?:pull_request|workflow_dispatch):|^[^\s])/m)?.[1];
-if (!pushBlock) failures.push('push trigger: missing push block under on');
-else {
-  requirePattern('push main target', pushBlock, /^      - main\s*$/m);
+if (pushBlock) {
   forbidPattern('push obsolete M8 branch target', pushBlock, /^      - feat\/m8-domain-operations-v4\s*$/m);
   forbidPattern('push obsolete M7 branch target', pushBlock, /^      - feat\/m7-server-account-deletion\s*$/m);
 }
 
-forbidPattern('privileged PR trigger', workflow, /^\s*pull_request_target:\s*$/m);
-forbidPattern('secret references', workflow, /\$\{\{\s*secrets\./);
-forbidPattern('job-level conditional skip', workflow, /^    if\s*:/m);
-forbidPattern('continue-on-error', workflow, /^\s+continue-on-error\s*:/m);
-
 const permissionDeclarations = workflow.match(/^\s*permissions\s*:/gm) ?? [];
 if (permissionDeclarations.length !== 1) {
-  failures.push(`repository permissions: expected exactly one permissions declaration, found ${permissionDeclarations.length}`);
+  failures.push(`repository permissions: expected exactly one declaration, found ${permissionDeclarations.length}`);
 }
-requirePattern(
-  'read-only repository permission',
-  workflow,
-  /^permissions:\s*\n  contents: read\s*\n(?=\S)/m,
-);
-
-requirePattern('stable canonical job identity', workflow, /^    name: ["']Canonical Verification["']\s*$/m);
-requirePattern('pinned Ubuntu runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
+requirePattern('read-only permissions', workflow, /^permissions:\s*\n  contents: read\s*$/m);
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
-requirePattern(
-  'expected SHA binding',
-  workflow,
-  /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m,
-);
+requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s*$/m);
+requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
+requirePattern('checkout action', workflow, /^        uses: actions\/checkout@v7\s*$/m);
+requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
+requirePattern('Node setup action', workflow, /^        uses: actions\/setup-node@v7\s*$/m);
+requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
+requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
+requirePattern('dependency install', workflow, /^        run: npm ci\s*$/m);
+requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
+requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
+requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
+requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
+const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
+if (actualShaAssignments.length !== 1) failures.push(`runtime SHA guard: expected one assignment, found ${actualShaAssignments.length}`);
+requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
+requirePattern('Java setup action', workflow, /^        uses: actions\/setup-java@v6\s*$/m);
+requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
+requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
+requirePattern('conditional Playwright setup', workflow, /^        if: matrix\.playwright == true\s*$/m);
+requirePattern('Playwright Chromium install', workflow, /^        run: npx playwright install --with-deps chromium\s*$/m);
+requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.command \}\} 2>&1 \| tee "verification-\$\{\{ matrix\.id \}\}\.log"\s*$/m);
 
-const checkoutStep = stepBlock('Checkout exact event head');
-if (!checkoutStep) failures.push('exact PR-head checkout: named checkout step is missing');
-else {
-  forbidCriticalStepBypasses('exact PR-head checkout', checkoutStep);
-  requirePattern('checkout action', checkoutStep, /^        uses: actions\/checkout@v7\s*$/m);
-  requirePattern(
-    'exact PR-head checkout ref',
-    checkoutStep,
-    /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m,
-  );
-  requirePattern('full checkout history', checkoutStep, /^          fetch-depth: 0\s*$/m);
+const allowedIfLines = new Set([
+  'if: matrix.java == true',
+  'if: matrix.playwright == true',
+  'if: failure()',
+  'if: ${{ always() }}',
+]);
+for (const line of workflow.match(/^\s+if:\s*.+$/gm) ?? []) {
+  const normalized = line.trim();
+  if (!allowedIfLines.has(normalized)) failures.push(`unexpected conditional gate: ${normalized}`);
 }
 
-const verifyStep = stepBlock('Verify exact checkout');
-if (!verifyStep) failures.push('runtime SHA guard: named verification step is missing');
-else {
-  forbidCriticalStepBypasses('runtime SHA guard', verifyStep);
-  forbidPattern('runtime SHA guard step env override', verifyStep, /^        env\s*:/m);
-  requirePattern('runtime SHA read', verifyStep, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
-  const actualShaAssignments = verifyStep.match(/^\s*actual_sha=/gm) ?? [];
-  if (actualShaAssignments.length !== 1) {
-    failures.push(`runtime SHA guard: expected exactly one actual_sha assignment, found ${actualShaAssignments.length}`);
+const includeMatch = workflow.match(/^        include:\s*\n([\s\S]*?)(?=^    env:)/m);
+if (!includeMatch) {
+  failures.push('parallel matrix: include block missing');
+} else {
+  const shardBlocks = includeMatch[1].trim().split(/\n(?=          - id: )/);
+  const shards = shardBlocks.map(block => {
+    const id = block.match(/^- id: ([A-Za-z0-9-]+)/)?.[1] ?? block.match(/^          - id: ([A-Za-z0-9-]+)/)?.[1];
+    const command = block.match(/^            command: "([^"]+)"\s*$/m)?.[1];
+    const java = block.match(/^            java: (true|false)\s*$/m)?.[1];
+    const playwright = block.match(/^            playwright: (true|false)\s*$/m)?.[1];
+    return { id, command, java, playwright };
+  });
+
+  const expectedIds = ['core', 'unit-1', 'unit-2', 'hardening-stress', 'rules', 'e2e', 'm7-m8'];
+  const ids = shards.map(shard => shard.id);
+  if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {
+    failures.push(`parallel matrix: expected shard ids ${expectedIds.join(', ')}, got ${ids.join(', ')}`);
   }
-  forbidPattern('runtime expected SHA reassignment', verifyStep, /^\s*EXPECTED_SHA=/m);
-  requirePattern(
-    'runtime SHA comparison',
-    verifyStep,
-    /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m,
-  );
-  requirePattern('runtime SHA mismatch failure', verifyStep, /^            exit 1\s*$/m);
+
+  const ciLeaves = [];
+  const unitShardCommands = [];
+  for (const shard of shards) {
+    if (!shard.id || !shard.command || !shard.java || !shard.playwright) {
+      failures.push(`parallel matrix: malformed shard ${JSON.stringify(shard)}`);
+      continue;
+    }
+    if (/npm run verify:m\d/.test(shard.command)) {
+      failures.push(`${shard.id}: shard must use leaf commands, not a serial milestone umbrella`);
+    }
+    for (const part of splitChain(shard.command)) {
+      if (part === 'npm audit --audit-level=high') continue;
+      if (/^npm run test -- --shard=[12]\/2$/.test(part)) {
+        unitShardCommands.push(part);
+        continue;
+      }
+      const scriptMatch = part.match(/^npm run ([A-Za-z0-9:_-]+)$/);
+      if (scriptMatch && packageJson.scripts?.[scriptMatch[1]]) {
+        ciLeaves.push(...expandScript(scriptMatch[1]));
+      } else {
+        ciLeaves.push(part);
+      }
+    }
+  }
+
+  const expectedUnitShardCommands = [
+    'npm run test -- --shard=1/2',
+    'npm run test -- --shard=2/2',
+  ];
+  if (JSON.stringify([...unitShardCommands].sort()) !== JSON.stringify(expectedUnitShardCommands)) {
+    failures.push(`unit suite: expected deterministic 1/2 + 2/2 Vitest shards exactly once, got ${unitShardCommands.join(', ')}`);
+  } else {
+    ciLeaves.push(...expandScript('test'));
+  }
+
+  let canonicalLeaves = [];
+  try {
+    canonicalLeaves = expandScript('verify:m8');
+  } catch (error) {
+    failures.push(`package verification expansion failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (!sameMultiset(multiset(ciLeaves), multiset(canonicalLeaves))) {
+    const missing = canonicalLeaves.filter(item => !ciLeaves.includes(item));
+    const extra = ciLeaves.filter(item => !canonicalLeaves.includes(item));
+    failures.push(`parallel matrix must be leaf-equivalent to npm run verify:m8; missing=[${missing.join(', ')}], extra=[${extra.join(', ')}]`);
+  }
+
+  if (shards.find(shard => shard.id === 'rules')?.java !== 'true') failures.push('rules shard must enable Java');
+  if (shards.find(shard => shard.id === 'e2e')?.playwright !== 'true') failures.push('e2e shard must enable Playwright');
+  if (shards.filter(shard => shard.java === 'true').map(shard => shard.id).join(',') !== 'rules') failures.push('Java must be limited to the rules shard');
+  if (shards.filter(shard => shard.playwright === 'true').map(shard => shard.id).join(',') !== 'e2e') failures.push('Playwright must be limited to the e2e shard');
 }
 
-const nodeStep = stepBlock('Setup Node.js');
-if (!nodeStep) failures.push('Node setup: named setup step is missing');
-else {
-  requirePattern('Node setup action', nodeStep, /^        uses: actions\/setup-node@v7\s*$/m);
-  requirePattern('Node 24 runtime', nodeStep, /^          node-version: ['"]?24['"]?\s*$/m);
-}
+const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
+if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
 
-const javaStep = stepBlock('Setup Java for Firebase Emulator');
-if (!javaStep) failures.push('Java setup: named setup step is missing');
-else {
-  requirePattern('Java setup action', javaStep, /^        uses: actions\/setup-java@v6\s*$/m);
-  requirePattern('Temurin distribution', javaStep, /^          distribution: temurin\s*$/m);
-  requirePattern('Java 21 runtime', javaStep, /^          java-version: ['"]?21['"]?\s*$/m);
-}
-
-const playwrightStep = stepBlock('Install Playwright Chromium');
-if (!playwrightStep) failures.push('Playwright setup: named install step is missing');
-else {
-  requirePattern(
-    'Playwright Chromium install',
-    playwrightStep,
-    /^        run: npx playwright install --with-deps chromium\s*$/m,
-  );
-}
-
-const auditStep = stepBlock('Run security audit');
-if (!auditStep) failures.push('security audit: named audit step is missing');
-else {
-  forbidCriticalStepBypasses('security audit', auditStep);
-  requirePattern('security audit command', auditStep, /^        run: npm audit --audit-level=high\s*$/m);
-}
-
-const verificationStep = stepBlock('Run canonical M8 verification');
-if (!verificationStep) failures.push('canonical M8 gate: named verification step is missing');
-else {
-  forbidCriticalStepBypasses('canonical M8 gate', verificationStep);
-  requirePattern(
-    'canonical M8 gate command',
-    verificationStep,
-    /^          npm run verify:m8 2>&1 \| tee m8-verification\.log\s*$/m,
-  );
-  requirePattern('pipeline failure propagation', verificationStep, /^          set -o pipefail\s*$/m);
-}
+const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
+if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
+requirePattern('canonical needs all shards', workflow, /^    needs: shards\s*$/m);
+requirePattern('canonical always evaluates', workflow, /^    if: \$\{\{ always\(\) \}\}\s*$/m);
+requirePattern('canonical result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
+requirePattern('canonical rejects failed shards', workflow, /^          if \[ "\$\{SHARD_RESULT\}" != "success" \]; then\s*$/m);
 
 for (const legacy of [
   '.github/workflows/test.yml',
@@ -159,20 +208,10 @@ for (const legacy of [
   if (existsSync(legacy)) failures.push(`legacy/divergent workflow still exists: ${legacy}`);
 }
 
-if (packageJson.scripts?.['verify:m6'] !== 'npm run test:repo-hygiene && npm run test:ci-contract && npm run verify:m5') {
-  failures.push('package.json verify:m6 must preserve the validated M6 composition exactly');
-}
-if (packageJson.scripts?.['verify:m7'] !== 'npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7') {
-  failures.push('package.json verify:m7 must preserve the validated M7 composition exactly');
-}
-if (packageJson.scripts?.['verify:m8'] !== 'npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8') {
-  failures.push('package.json verify:m8 must compose verify:m7, targeted M8 tests and Domain Operation boundary contract exactly');
-}
-
 if (failures.length > 0) {
   console.error('M8 CI contract check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: main PRs and pushes, exact-head guard, stable Canonical Verification job, pinned Ubuntu 24.04 runner, canonical M8 gate, transitive M7 contract, failure propagation, read-only permissions and temporary workflow removal verified.');
+console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
