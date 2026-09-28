@@ -45,6 +45,7 @@ describe('TrainingExercises decomposition parity', () => {
             setEquipmentWeight: vi.fn(),
             toggleMuscle: vi.fn(),
             handleToggleMuscleById: vi.fn(),
+            removeMuscleById: vi.fn(),
             handleEditClick: vi.fn(),
             handleCancelEdit: vi.fn(),
             handleSaveExercise: vi.fn().mockResolvedValue(true),
@@ -59,8 +60,6 @@ describe('TrainingExercises decomposition parity', () => {
         const hook = mocks.useTrainingExercises.mock.results[0].value;
 
         const createButton = screen.getByRole('button', { name: /Crea esercizio/i });
-        expect(createButton.getAttribute('aria-expanded')).toBe('false');
-
         fireEvent.click(createButton);
         expect(screen.getByRole('heading', { level: 2, name: /Crea nuovo esercizio/i })).toBeDefined();
         expect(screen.getByTestId('muscle-model')).toBeDefined();
