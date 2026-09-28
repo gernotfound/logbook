@@ -37,6 +37,11 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
   });
 
+  it('keeps Schede grid spacing active instead of being overridden by the generic sub-view rule', () => {
+    const routines = read('src/components/Training/routines/routines.css');
+    expect(routines).toMatch(/\.training-sub-view\.active\.training-routines-page\s*\{[^}]*display:\s*grid[^}]*gap:\s*\.75rem/);
+  });
+
   it('keeps consistent grid spacing throughout the history page', () => {
     const training = read('src/components/Training/training.css');
     expect(training).toMatch(/\.training-sub-view\.active\.training-history\s*\{[^}]*display:\s*grid[^}]*gap:\s*\.75rem/);
