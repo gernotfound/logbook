@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useSettings } from '../hooks/useSettings';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -151,32 +152,43 @@ const SettingsView = () => {
             )}
 
             {activeTab === 'appearance' && (
-                <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" className="settings-group">
-                    <h2>Sistema</h2>
-                    <p className="settings-help">Tema e strumenti tecnici di questo dispositivo.</p>
-                    <fieldset className="appearance-options" aria-label="Tema dell'app">
-                        {APPEARANCE_OPTIONS.map(option => (
-                            <label key={option.id} className={`appearance-option ${appearance === option.id ? 'is-selected' : ''}`}>
-                                <input
-                                    type="radio"
-                                    name="appearance"
-                                    value={option.id}
-                                    checked={appearance === option.id}
-                                    onChange={() => setAppearanceNotSaved(!setAppearance(option.id))}
-                                />
-                                {option.label}
-                            </label>
-                        ))}
-                    </fieldset>
-                    {appearanceNotSaved && <p role="status" className="settings-help">Il tema è attivo ora, ma il browser non ha potuto conservarlo per i prossimi avvii.</p>}
+                <section id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" className="settings-system">
+                    <header className="settings-system-header">
+                        <h2>Sistema</h2>
+                        <p className="settings-help">Tema e strumenti tecnici di questo dispositivo.</p>
+                    </header>
 
-                    <div className="section-divider">
-                        <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', marginBottom: 0 }} onClick={handleCheckUpdate}>
-                            <span aria-hidden="true">🔄</span> Cerca aggiornamenti
+                    <div className="settings-system-card">
+                        <h3>Tema</h3>
+                        <fieldset className="appearance-options" aria-label="Tema dell'app">
+                            {APPEARANCE_OPTIONS.map(option => (
+                                <label key={option.id} className={`appearance-option ${appearance === option.id ? 'is-selected' : ''}`}>
+                                    <input
+                                        type="radio"
+                                        name="appearance"
+                                        value={option.id}
+                                        checked={appearance === option.id}
+                                        onChange={() => setAppearanceNotSaved(!setAppearance(option.id))}
+                                    />
+                                    {option.label}
+                                </label>
+                            ))}
+                        </fieldset>
+                        {appearanceNotSaved && <p role="status" className="settings-help settings-help-last">Il tema è attivo ora, ma il browser non ha potuto conservarlo per i prossimi avvii.</p>}
+                    </div>
+
+                    <div className="settings-system-card">
+                        <h3><RefreshCw size={18} aria-hidden="true" /> Aggiornamenti</h3>
+                        <button className="btn settings-full settings-system-action" onClick={handleCheckUpdate}>
+                            <RefreshCw size={18} aria-hidden="true" /> Cerca aggiornamenti
                         </button>
                     </div>
 
                     <StorageDiagnostics />
+
+                    <p className="settings-version">
+                        Versione {__APP_VERSION__} &middot; build {__BUILD_HASH__} &middot; {new Intl.DateTimeFormat('it-IT', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(__BUILD_TIME__))}
+                    </p>
                 </section>
             )}
 

@@ -62,7 +62,10 @@ export function ExerciseMuscleSelector({
                     <Search size={18} aria-hidden="true" />
                     <input
                         id="exercise-muscle-search"
-                        type="search"
+                        className="exercise-muscle-search-input"
+                        type="text"
+                        inputMode="search"
+                        role="searchbox"
                         placeholder="Cerca muscolo"
                         value={muscleSearch}
                         onChange={event => setMuscleSearch(event.target.value)}

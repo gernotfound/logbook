@@ -209,7 +209,9 @@ export function ExerciseArchive({
                 <Search size={18} aria-hidden="true" />
                 <input
                     className="exercise-search-input"
-                    type="search"
+                    type="text"
+                    inputMode="search"
+                    role="searchbox"
                     value={query}
                     onChange={event => setQuery(event.target.value)}
                     placeholder="Cerca esercizio"

@@ -31,8 +31,7 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/\.exercise-create-button\s*\{[^}]*width:\s*auto[^}]*max-width:\s*none[^}]*flex:\s*0 0 auto[^}]*white-space:\s*nowrap/);
     expect(training).toMatch(/\.training-sub-view\.active\.exercise-library\s*\{[^}]*display:\s*grid/);
     expect(training).toMatch(/\.exercise-editor-close\s*\{[^}]*width:\s*auto[^}]*min-height:\s*2\.75rem/);
-    expect(training).toMatch(/\.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap input\s*\{[^}]*-webkit-appearance:\s*none[^}]*appearance:\s*none/);
-    expect(training).toMatch(/::-webkit-search-decoration,[\s\S]*?::-webkit-search-cancel-button[\s\S]*?\{[^}]*display:\s*none/);
+    expect(training).toMatch(/\.exercise-search-wrap > \.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap > \.exercise-muscle-search-input\s*\{[^}]*margin:\s*0[^}]*padding:\s*\.625rem 2\.75rem \.625rem 2\.875rem/);
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-btn\s*\{[^}]*font-size:\s*\.75rem/);
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
   });
