@@ -103,6 +103,28 @@ describe('post-redesign UI hardening', () => {
     expect(ratings).not.toMatch(/background:\s*pains\.length[^\n]*rgba\(255\s*,\s*255\s*,\s*255/);
   });
 
+  it('keeps state surfaces on semantic theme tokens', () => {
+    const paths = [
+      'src/components/Settings/AccountSettingsTab.tsx',
+      'src/components/Nutrition/InlineEditMealItem.tsx',
+      'src/components/Training/TrainingSessionSetup.tsx',
+      'src/components/Training/planning/CycleCard.tsx',
+      'src/components/Training/planning/CycleEditor.tsx',
+      'src/components/Training/planning/CycleRoutinesList.tsx',
+      'src/components/Training/planning/CycleSchedulePreview.tsx',
+      'src/components/Training/session/SessionExerciseCard.tsx',
+      'src/components/Training/session/SessionRatings.tsx',
+      'src/pages/TermsAndConditions.tsx',
+    ];
+    for (const path of paths) {
+      const source = read(path);
+      expect(source, path).not.toMatch(/rgba\((?:14\s*,\s*165\s*,\s*233|239\s*,\s*68\s*,\s*68|255\s*,\s*77\s*,\s*109)/);
+    }
+
+    const muscleModel = read('src/components/Training/MuscleModel.tsx');
+    expect(muscleModel).not.toMatch(/var\(--(?:surface-color|text-main|glass-border),/);
+  });
+
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
     const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
     expect(routineItem).toContain('htmlFor={setsId}');
