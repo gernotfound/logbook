@@ -268,36 +268,30 @@ describe('Empirical Adversarial Stress Suite: ContextMenu & Integrations', () =>
       beforeEach(() => {
         const initialUserData: any = {
           library: [
-            { id: 'lib-1', name: 'Croci ai cavi', muscles: ['chest'], trackingType: 'weight_reps', isDefault: false },
-            { id: 'lib-2', name: 'Panca piana', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true },
+            { id: 'lib-1', name: 'Croci ai cavi', muscles: ['chest'], trackingType: 'weight_reps', isDefault: false, setsCount: 3, sets: [] },
+            { id: 'lib-2', name: 'Panca piana', muscles: ['chest'], trackingType: 'weight_reps', isDefault: true, setsCount: 3, sets: [] },
           ],
           routines: [],
         };
         useAppStore.setState({ userData: initialUserData });
       });
 
-      it('isolates ContextMenu trigger and item clicks from exercise row expansion in TrainingExercises', () => {
+      it('moves exercise actions to the dedicated detail surface and keeps catalog items non-deletable', () => {
         render(<TrainingExercises />);
 
-        // Find the options trigger for the first exercise ("Croci ai cavi")
-        const triggers = screen.getAllByRole('button', { name: 'Opzioni' });
-        expect(triggers.length).toBe(2);
+        expect(screen.queryByRole('button', { name: 'Opzioni' })).toBeNull();
 
-        // Click trigger on first item
-        fireEvent.click(triggers[0]);
-        expect(screen.getByRole('menu')).not.toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Croci ai cavi' }));
+        expect(screen.getByRole('button', { name: 'Modifica' })).not.toBeNull();
+        expect(screen.getByRole('button', { name: 'Duplica' })).not.toBeNull();
+        expect(screen.getByRole('button', { name: 'Elimina' })).not.toBeNull();
 
-        // Check menu item labels conform to sentence case
-        const editItem = screen.getByRole('menuitem', { name: /Modifica/i });
-        const deleteItem = screen.getByRole('menuitem', { name: /Elimina/i });
-        expect(editItem).not.toBeNull();
-        expect(deleteItem).not.toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Torna all’elenco' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Panca piana' }));
 
-        // Default exercise (lib-2) should NOT show "Elimina" when opened
-        fireEvent.mouseDown(triggers[1]);
-        fireEvent.click(triggers[1]); // Opens second menu, closes first
-        expect(screen.getByRole('menuitem', { name: /Modifica/i })).not.toBeNull();
-        expect(screen.queryByRole('menuitem', { name: /Elimina/i })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Modifica' })).not.toBeNull();
+        expect(screen.getByRole('button', { name: 'Duplica' })).not.toBeNull();
+        expect(screen.queryByRole('button', { name: 'Elimina' })).toBeNull();
       });
     });
 
