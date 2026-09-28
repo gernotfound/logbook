@@ -104,12 +104,14 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                             {(routine.exercises || []).length} esercizi
                             {focusSummary ? ` · ${focusSummary}` : ''}
                         </span>
+                        <span className="routine-card-count-assistive" aria-hidden="true">
+                            {(routine.exercises || []).length} esercizi
+                        </span>
                     </span>
                     <ChevronDown className="routine-card-chevron" size={20} aria-hidden="true" />
                 </button>
                 <ContextMenu
                     items={menuItems}
-                    ariaLabel={`Azioni per ${routine.name}`}
                     className="routine-card-menu"
                 />
             </div>
@@ -159,7 +161,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                             />
                         </div>
                         <details className="routine-muscle-details">
-                            <summary className="routine-muscle-summary">
+                            <summary className="disclosure-summary routine-muscle-summary">
                                 <span>Muscoli coinvolti</span>
                                 <ChevronDown size={18} aria-hidden="true" />
                             </summary>
