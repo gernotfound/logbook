@@ -865,20 +865,10 @@
   font-size: 16px !important;
 }
 
-.exercise-search-input,
-.exercise-muscle-search-wrap input {
-  -webkit-appearance: none;
-  appearance: none;
-  padding: .625rem 2.75rem .625rem 2.5rem;
-}
-
-.exercise-search-input::-webkit-search-decoration,
-.exercise-search-input::-webkit-search-cancel-button,
-.exercise-muscle-search-wrap input::-webkit-search-decoration,
-.exercise-muscle-search-wrap input::-webkit-search-cancel-button {
-  -webkit-appearance: none;
-  appearance: none;
-  display: none;
+.exercise-search-wrap > .exercise-search-input,
+.exercise-muscle-search-wrap > .exercise-muscle-search-input {
+  margin: 0;
+  padding: .625rem 2.75rem .625rem 2.875rem;
 }
 
 .exercise-search-input::placeholder,
