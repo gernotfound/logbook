@@ -36,7 +36,7 @@ export const ExportSelector = memo(function ExportSelector({
                 {title}
             </legend>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.95rem', color: 'var(--text-main)', minWidth: 0 }}>{title}</span>
+                <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-main)', minWidth: 0 }}>{title}</span>
                 <select
                     aria-label={`Modalità selezione ${title}`}
                     value={selection === 'all' ? 'all' : selection === 'none' ? 'none' : 'custom'}
@@ -56,7 +56,7 @@ export const ExportSelector = memo(function ExportSelector({
             {isCustom && (
                 <div style={{ border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'var(--surface-light)', padding: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
                             {selectedIds.length} selezionati su {items.length}
                         </span>
                         {items.length > 5 && (
@@ -73,9 +73,9 @@ export const ExportSelector = memo(function ExportSelector({
 
                     <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {filteredItems.length === 0 ? (
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', padding: '8px 0' }}>Nessun elemento</span>
+                            <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', padding: '8px 0' }}>Nessun elemento</span>
                         ) : filteredItems.map(item => (
-                            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '44px', fontSize: '0.9rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+                            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: '44px', fontSize: 'var(--font-size-secondary)', color: 'var(--text-main)', cursor: 'pointer' }}>
                                 <input
                                     type="checkbox"
                                     aria-label={item.name}

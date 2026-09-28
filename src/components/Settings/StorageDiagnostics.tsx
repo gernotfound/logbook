@@ -7,13 +7,13 @@ export function StorageDiagnostics() {
     return (
         <div className="settings-system-card">
             <h3><HardDrive size={18} aria-hidden="true" /> Diagnostica archiviazione</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
+            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
             {!storageDiag ? (
-                <span style={{ fontSize: '0.85rem' }}>Caricamento...</span>
+                <span style={{ fontSize: 'var(--font-size-meta)' }}>Caricamento...</span>
             ) : !storageDiag.supported ? (
-                <span style={{ fontSize: '0.85rem', color: 'var(--danger-color)' }}>Persistenza non supportata (Storage API mancante).</span>
+                <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--danger-color)' }}>Persistenza non supportata (Storage API mancante).</span>
             ) : (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-main)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                         <span>Stato:</span>
                         <span style={{ color: storageDiag.persistent ? 'var(--success-color)' : 'var(--warning-color)', fontWeight: 'bold' }}>

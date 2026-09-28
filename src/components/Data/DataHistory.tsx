@@ -21,13 +21,13 @@ const DataHistory: React.FC<DataHistoryProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <h1 style={{margin: 0}}>Storico misurazioni ({measurementsHistory.length})</h1>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 Tutte le misurazioni registrate in ordine cronologico. Usa le opzioni per modificare o eliminare una misurazione.
             </p>
 
             {measurementsHistory.length === 0 ? (
                 <div className="card" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '10px' }}>📏</div>
+                    <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '10px' }}>📏</div>
                     <p style={{ margin: 0 }}>Nessuna misurazione registrata finora.</p>
                 </div>
             ) : (
@@ -49,10 +49,10 @@ const DataHistory: React.FC<DataHistoryProps> = ({
                             onClick={() => onSelectEdit(day)}
                         >
                             <div>
-                                <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: editingDate === day.date ? 'var(--primary-color)' : 'var(--text-main)' }}>
+                                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: editingDate === day.date ? 'var(--primary-color)' : 'var(--text-main)' }}>
                                     📅 {Logic.formatItalianDate ? Logic.formatItalianDate(day.date) : day.date} {day.measurementTime ? `alle ${day.measurementTime}` : ''}
                                 </div>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                     {day.weight && <span>⚖️ <strong>{day.weight} kg</strong></span>}
                                     {day.bf !== undefined && day.bf !== null && <span>📊 BF: <strong>{day.bf}%</strong>{day.bfProvenance?.method === 'manual' ? ' · manuale' : day.bfProvenance?.method === 'us_navy' ? ' · US Navy' : ' · origine non disponibile'}</span>}
                                     {day.waist && <span>| Vita: {day.waist}cm</span>}

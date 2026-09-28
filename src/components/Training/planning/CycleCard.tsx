@@ -72,7 +72,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         {isActive && (
                             <span
                                 style={{
-                                    fontSize: '0.75rem',
+                                    fontSize: 'var(--font-size-micro)',
                                     fontWeight: 'bold',
                                     padding: '2px 8px',
                                     borderRadius: '12px',
@@ -84,7 +84,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                             </span>
                         )}
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginTop: '4px' }}>
                         {cycle.startDate ? (
                             <>
                                 <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
@@ -119,7 +119,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         <span
                             key={`${item.routineId}-${idx}`}
                             style={{
-                                fontSize: '0.75rem',
+                                fontSize: 'var(--font-size-micro)',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
                                 background: 'var(--surface-light)',
@@ -145,7 +145,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                         className="btn btn-secondary btn-small"
                         style={{
                             width: '100%',
-                            fontSize: '0.75rem',
+                            fontSize: 'var(--font-size-micro)',
                             padding: '4px 8px',
                             background: 'var(--surface-light)',
                             border: '1px dashed var(--glass-border)',
@@ -166,7 +166,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                         padding: '6px 8px',
                                         background: 'var(--surface-light)',
                                         borderRadius: '6px',
-                                        fontSize: '0.75rem'
+                                        fontSize: 'var(--font-size-micro)'
                                     }}
                                 >
                                     <div className="flex-between mb-4">
@@ -184,7 +184,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                                                     border: '1px solid rgba(14, 165, 233, 0.25)',
                                                     borderRadius: '4px',
                                                     color: 'var(--text-main)',
-                                                    fontSize: '0.75rem'
+                                                    fontSize: 'var(--font-size-micro)'
                                                 }}
                                             >
                                                 #{sess.globalSessionIndex} {sess.routineName}
@@ -226,7 +226,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}
+                        style={{ width: '100%', marginBottom: 0, fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}
                         onClick={() => onDeactivate(cycle.id)}
                     >
                         <span aria-hidden="true">⏸️</span> Disattiva ciclo
@@ -235,7 +235,7 @@ export const CycleCard: React.FC<CycleCardProps> = ({
                     <button
                         type="button"
                         className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: '0.85rem' }}
+                        style={{ width: '100%', marginBottom: 0, fontSize: 'var(--font-size-meta)' }}
                         onClick={() => onSetActive(cycle.id)}
                     >
                         <span aria-hidden="true">⭐</span> Imposta come ciclo attivo
