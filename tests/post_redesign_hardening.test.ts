@@ -25,10 +25,16 @@ const adaptiveSurfaceFiles = [
 ];
 
 describe('post-redesign UI hardening', () => {
-  it('keeps the exercise header title and create action compact on mobile', () => {
+  it('keeps the exercise proposal compact and iOS-safe on mobile', () => {
     const training = read('src/components/Training/training.css');
     expect(training).toMatch(/\.exercise-library-header h2\s*\{[^}]*flex:\s*1 1 auto[^}]*white-space:\s*nowrap/);
     expect(training).toMatch(/\.exercise-create-button\s*\{[^}]*width:\s*auto[^}]*max-width:\s*none[^}]*flex:\s*0 0 auto[^}]*white-space:\s*nowrap/);
+    expect(training).toMatch(/\.training-sub-view\.active\.exercise-library\s*\{[^}]*display:\s*grid/);
+    expect(training).toMatch(/\.exercise-editor-close\s*\{[^}]*width:\s*auto[^}]*min-height:\s*2\.75rem/);
+    expect(training).toMatch(/\.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap input\s*\{[^}]*-webkit-appearance:\s*none[^}]*appearance:\s*none/);
+    expect(training).toMatch(/::-webkit-search-decoration,[\s\S]*?::-webkit-search-cancel-button[\s\S]*?\{[^}]*display:\s*none/);
+    expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-btn\s*\{[^}]*font-size:\s*\.75rem/);
+    expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
   });
 
   it('does not render an automatic installation popup', () => {
