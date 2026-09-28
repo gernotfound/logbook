@@ -506,6 +506,8 @@ describe('Workout Improvements & History Edit Suite', () => {
 
       act(() => {
         fireEvent.click(screen.getByRole('button', { name: 'Torna all’elenco' }));
+      });
+      act(() => {
         fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Panca Inclinata Custom' }));
       });
 
