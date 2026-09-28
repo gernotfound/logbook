@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 const source = 'public/favicon.svg';
-const appBackground = '#070b18';
+const appBackground = '#171719';
 const pngTargets = [
   { output: 'public/favicon.png', size: 64, opaque: false },
   { output: 'public/apple-touch-icon.png', size: 180, opaque: true },
