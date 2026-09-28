@@ -110,8 +110,8 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                                 <div
                                     style={{
                                         padding: '12px',
-                                        background: 'rgba(14, 165, 233, 0.1)',
-                                        border: '1px solid rgba(14, 165, 233, 0.3)',
+                                        background: 'var(--primary-soft)',
+                                        border: '1px solid var(--primary-color)',
                                         borderRadius: '8px',
                                         marginBottom: '15px'
                                     }}
