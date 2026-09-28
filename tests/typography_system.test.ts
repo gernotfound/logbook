@@ -49,6 +49,40 @@ describe('scala tipografica canonica', () => {
     expect(violations).toEqual([]);
   });
 
+  it('riserva i token display a valori numerici e timer', () => {
+    const allowed = new Set([
+      'src/styles/tokens.css',
+      'src/styles/components.css',
+      'src/components/Home/widgets/ReadinessTrendCard.tsx',
+      'src/components/Home/widgets/HomeTdeeWidget.tsx',
+      'src/components/Home/home.css',
+      'src/components/Nutrition/NutritionPlanning.tsx',
+      'src/components/Nutrition/TrackingViews.css',
+      'src/components/Training/ActiveWorkoutSession.tsx',
+      'src/components/Training/training.css',
+    ]);
+    const files = walk(path.join(ROOT, 'src')).filter(file => /\.(?:css|tsx?)$/.test(file));
+    const violations = files
+      .filter(file => fs.readFileSync(file, 'utf8').includes('--font-size-display-'))
+      .map(file => path.relative(ROOT, file).replaceAll('\\', '/'))
+      .filter(file => !allowed.has(file));
+    expect(violations).toEqual([]);
+  });
+
+  it('mantiene nomi principali di righe e card sul token control', () => {
+    const setup = fs.readFileSync(path.join(ROOT, 'src/components/Training/TrainingSessionSetup.tsx'), 'utf8');
+    const cycleRoutines = fs.readFileSync(path.join(ROOT, 'src/components/Training/planning/CycleRoutinesList.tsx'), 'utf8');
+    const supplements = fs.readFileSync(path.join(ROOT, 'src/components/Nutrition/NutritionSupplements.tsx'), 'utf8');
+    const dataHistory = fs.readFileSync(path.join(ROOT, 'src/components/Data/DataHistory.tsx'), 'utf8');
+    const nutritionHistory = fs.readFileSync(path.join(ROOT, 'src/components/Nutrition/NutritionHistory.tsx'), 'utf8');
+
+    expect(setup).toMatch(/nextScheduled\.nextRoutine\.name[\s\S]{0,220}font-size-control|font-size-control[\s\S]{0,220}nextScheduled\.nextRoutine\.name/);
+    expect(cycleRoutines).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,180}\{routine\?\.name/);
+    expect(supplements).toMatch(/fontSize:\s*'var\(--font-size-control\)'[^\n]*\{supp\.name\}/);
+    expect(dataHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[^\n]*Logic\.formatItalianDate/);
+    expect(nutritionHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,180}Logic\.formatItalianDate/);
+  });
+
   it('mantiene a 16px i controlli di input per Safari iOS', () => {
     const base = fs.readFileSync(path.join(ROOT, 'src/styles/base.css'), 'utf8');
     expect(base).toMatch(/input,\s*select,\s*textarea\s*\{[\s\S]*?font-size:\s*16px\s*!important/);
