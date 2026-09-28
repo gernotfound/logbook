@@ -252,7 +252,7 @@ export function ExerciseArchive({
                                 onClick={() => onSelectedExIdChange(exercise.id)}
                                 aria-label={`Apri dettaglio di ${exercise.name}`}
                             >
-                                <span className="exercise-compact-icon">
+                                <span className={`exercise-compact-icon ${exercise.trackingType === 'cardio' ? 'cardio' : ''}`}>
                                     <TrackingIcon exercise={exercise} />
                                 </span>
                                 <span className="exercise-compact-copy">
