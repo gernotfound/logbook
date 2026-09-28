@@ -78,7 +78,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           </Section>
 
           <Section title="2. Disclaimer medico (importante)">
-            <div style={{ padding: '16px', backgroundColor: 'rgba(255, 77, 109, 0.1)', border: '1px solid var(--danger-color)', borderRadius: '8px', color: 'var(--text-main)' }}>
+            <div style={{ padding: '16px', backgroundColor: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '8px', color: 'var(--text-main)' }}>
               <strong>LogBook non fornisce consulenza medica.</strong>
               <p style={{ marginTop: '8px', marginBottom: 0 }}>
                 L'Applicazione è progettata unicamente per tracciare e monitorare l'allenamento fisico e l'alimentazione a scopo informativo e personale. Nessuna informazione fornita dall'Applicazione costituisce parere medico, diagnosi o trattamento.
