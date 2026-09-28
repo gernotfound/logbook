@@ -15,6 +15,7 @@ const adaptiveSurfaceFiles = [
   'src/components/ExportSelector.tsx',
   'src/components/Nutrition/NutritionSupplements.tsx',
   'src/components/Training/ActiveWorkoutSession.tsx',
+  'src/components/Training/ExerciseSearchDropdown.tsx',
   'src/components/Training/exercises/ExerciseEditorForm.tsx',
   'src/components/Training/planning/CycleEditor.tsx',
   'src/components/Training/planning/TrainingPlanning.tsx',
@@ -80,6 +81,26 @@ describe('post-redesign UI hardening', () => {
     const routineEditor = read('src/components/Training/routines/RoutineEditor.tsx');
     expect(routineEditor).toMatch(/return\s*\(\s*<div>\s*<h2/);
     expect(routineEditor).not.toMatch(/return\s*\(\s*<div className="section-divider">/);
+  });
+
+  it('keeps compact interactive controls at the 44px minimum target', () => {
+    const routineItem = read('src/components/Training/routines/RoutineExerciseItem.tsx');
+    const training = read('src/components/Training/training.css');
+    expect(routineItem).not.toContain("height: '42px'");
+    expect(routineItem).not.toContain("minHeight: '42px'");
+    expect(training).toMatch(/\.exercise-muscle-tag\s*\{[^}]*min-height:\s*2\.75rem/);
+  });
+
+  it('keeps exercise search and session callouts theme-semantic', () => {
+    const search = read('src/components/Training/ExerciseSearchDropdown.tsx');
+    const setCard = read('src/components/Training/session/SessionExerciseCard.tsx');
+    const ratings = read('src/components/Training/session/SessionRatings.tsx');
+    expect(search).toContain("color: isHighlighted ? 'var(--on-primary)' : 'var(--text-main)'");
+    expect(search).not.toMatch(/rgba\(255\s*,\s*255\s*,\s*255/);
+    expect(search).not.toContain('#000000');
+    expect(setCard).toContain("background: 'var(--danger-soft)'");
+    expect(setCard).not.toContain('#fca5a5');
+    expect(ratings).not.toMatch(/background:\s*pains\.length[^\n]*rgba\(255\s*,\s*255\s*,\s*255/);
   });
 
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
