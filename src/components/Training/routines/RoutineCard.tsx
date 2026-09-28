@@ -20,7 +20,7 @@ const formatExerciseTarget = (exercise: RoutineExercise, libraryItem?: ExerciseL
     const parsedSets = Number.parseInt(String(exercise.setsCount ?? 3), 10);
     const sets = Number.isFinite(parsedSets) && parsedSets > 0 ? parsedSets : 3;
 
-    if (libraryItem?.trackingType === 'cardio') return 'Cardio';
+    if (libraryItem?.trackingType === 'cardio') return `${sets} serie · cardio`;
     if (libraryItem?.trackingType === 'time') return `${sets} serie · a tempo`;
 
     const minReps = exercise.minReps;
@@ -53,8 +53,8 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
 
     const primaryMuscleIds = Array.from(primaryMuscles);
     const secondaryMuscleIds = Array.from(secondaryMuscles);
-    const primaryMuscleNames = primaryMuscleIds.map(Logic.getMuscleName);
-    const secondaryMuscleNames = secondaryMuscleIds.map(Logic.getMuscleName);
+    const primaryMuscleNames = primaryMuscleIds.map(muscleId => Logic.getMuscleName(muscleId));
+    const secondaryMuscleNames = secondaryMuscleIds.map(muscleId => Logic.getMuscleName(muscleId));
     const focusSummary = primaryMuscleNames.length > 0
         ? `${primaryMuscleNames.slice(0, 2).join(', ')}${primaryMuscleNames.length > 2 ? ` +${primaryMuscleNames.length - 2}` : ''}`
         : '';
