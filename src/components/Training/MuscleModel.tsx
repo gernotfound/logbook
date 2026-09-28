@@ -27,14 +27,18 @@ interface MuscleModelProps {
     muscleColors?: Record<string, string>;
     interactive?: boolean;
     onToggleMuscle?: (muscleId: string) => void;
+    showLegend?: boolean;
+    showTextSelection?: boolean;
 }
 
 export default function MuscleModel({ 
     selectedMuscles = EMPTY_MUSCLES,
     secondaryMuscles = EMPTY_MUSCLES,
     muscleColors,
-    interactive = false, 
-    onToggleMuscle 
+    interactive = false,
+    onToggleMuscle,
+    showLegend = true,
+    showTextSelection = true,
 }: MuscleModelProps) {
     const [tooltip, setTooltip] = useState({ visible: false, text: '', x: 0, y: 0 });
     const descriptionId = useId();
@@ -100,7 +104,7 @@ export default function MuscleModel({
         if (isPrimary) {
             fill = 'var(--primary-color, #00e5ff)';
         } else if (isSecondary) {
-            fill = 'var(--secondary-color, rgba(0, 229, 255, 0.3))';
+            fill = 'var(--accent-color)';
         }
 
         return {
@@ -152,12 +156,12 @@ export default function MuscleModel({
     }, [interactive, onToggleMuscle]);
 
     return (
-        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: '100%', padding: '30px 0 10px 0', margin: '0 auto', overflow: 'hidden', textAlign: 'center' }}>
+        <div className={`muscle-map-container ${interactive ? 'interactive' : ''}`} style={{ position: 'relative', width: '100%', padding: '8px 0 10px 0', margin: '0 auto', overflow: 'hidden', textAlign: 'center' }}>
             <svg
                 role="img"
                 aria-label="Mappa dei muscoli, vista anteriore e posteriore"
                 aria-describedby={descriptionId}
-                viewBox="0 5 70 89"
+                viewBox="0 0 70 94"
                 style={{ width: '100%', height: 'auto', backgroundColor: 'transparent', borderRadius: 0, overflow: 'visible' }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
@@ -168,18 +172,20 @@ export default function MuscleModel({
                 </g>
             </svg>
 
-            <p id={descriptionId} className="muscle-legend">
-                {selectedMuscles.length === 0 && secondaryMuscles.length === 0
-                    ? 'Nessun muscolo evidenziato.'
-                    : (
-                        <>
-                            {selectedMuscles.length > 0 ? `Primari: ${selectedMuscles.map(Logic.getMuscleName).join(', ')}. ` : ''}
-                            {secondaryMuscles.length > 0 ? `Secondari: ${secondaryMuscles.map(Logic.getMuscleName).join(', ')}.` : ''}
-                        </>
-                    )}
-            </p>
+            {showLegend && (
+                <p id={descriptionId} className="muscle-legend">
+                    {selectedMuscles.length === 0 && secondaryMuscles.length === 0
+                        ? 'Nessun muscolo evidenziato.'
+                        : (
+                            <>
+                                {selectedMuscles.length > 0 ? `Primari: ${selectedMuscles.map(Logic.getMuscleName).join(', ')}. ` : ''}
+                                {secondaryMuscles.length > 0 ? `Secondari: ${secondaryMuscles.map(Logic.getMuscleName).join(', ')}.` : ''}
+                            </>
+                        )}
+                </p>
+            )}
 
-            {interactive && onToggleMuscle ? (
+            {interactive && onToggleMuscle && showTextSelection ? (
                 <details className="muscle-text-selection">
                     <summary className="disclosure-summary">Seleziona muscoli dall’elenco</summary>
                     <div className="muscle-text-options">
