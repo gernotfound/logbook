@@ -35,6 +35,7 @@ async function validateSource(image) {
     throw new Error(`${source} must be a square PNG raster artwork at least 1024x1024.`);
   }
 }
+
 async function createMaskableIcon(image) {
   const artworkSize = Math.round(maskableSize * maskableArtworkScale);
   const artwork = await sharp(image)
@@ -88,7 +89,7 @@ async function validateMaskableSafeZone(image) {
   const safeRadius = maskableSize * 0.4;
   for (const [x, y] of [[minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]]) {
     if (Math.hypot(x + 0.5 - center, y + 0.5 - center) > safeRadius) {
-      throw new Error(`${maskableOutput} would place the primary LB mark outside the standard maskable safe circle.`);
+      throw new Error(`${maskableOutput} would place the primary artwork outside the standard maskable safe circle.`);
     }
   }
 }
