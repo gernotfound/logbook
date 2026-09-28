@@ -286,8 +286,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     style={{
                         padding: '8px 12px',
                         borderRadius: '6px',
-                        background: 'rgba(14, 165, 233, 0.08)',
-                        border: '1px solid rgba(14, 165, 233, 0.2)',
+                        background: 'var(--primary-soft)',
+                        border: '1px solid var(--primary-color)',
                         fontSize: 'var(--font-size-meta)',
                         color: 'var(--primary-color)',
                         display: 'flex',
