@@ -52,7 +52,7 @@ export function ExportSettingsTab({
         <>
             <div className="section-divider">
                 <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">🤝</span> Condividi con altri atleti</h3>
-                <p style={{ margin: '0 0 15px 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Esporta o importa Esercizi, Schede e Pianificazioni per condividerli.</p>
+                <p style={{ margin: '0 0 15px 0', fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>Esporta o importa Esercizi, Schede e Pianificazioni per condividerli.</p>
 
                 <ExportSelector title="Esercizi (Libreria)" items={library || EMPTY_EXPORT_ITEMS} selection={exportLibrary} onChange={onLibrarySelectionChange} />
                 <ExportSelector title="Schede (Routines)" items={routines || EMPTY_EXPORT_ITEMS} selection={exportRoutines} onChange={onRoutinesSelectionChange} />
@@ -80,9 +80,9 @@ export function ExportSettingsTab({
 
             <div className="section-divider">
                 <h3 style={{margin: '0 0 10px 0',color: 'var(--text-main)'}}><span aria-hidden="true">🔐</span> Backup personale (solo tuo uso)</h3>
-                <p style={{ margin: '0 0 5px 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Il backup legge tutto lo storico disponibile nel cloud e include la copia locale. Senza connessione puoi scegliere una copia parziale del dispositivo.</p>
-                <p style={{ margin: '0 0 5px 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>“Importa JSON” aggiunge i dati mancanti. “Ripristina” sostituisce i campi presenti nel file, dopo un’anteprima. Le modifiche su altri dispositivi durante l’esportazione possono richiedere un nuovo backup.</p>
-                <p style={{ margin: '0 0 15px 0', fontSize: 'var(--font-size-micro)', color: 'var(--warning-color)' }}>L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>
+                <p style={{ margin: '0 0 5px 0', fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>Il backup legge tutto lo storico disponibile nel cloud e include la copia locale. Senza connessione puoi scegliere una copia parziale del dispositivo.</p>
+                <p style={{ margin: '0 0 5px 0', fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>“Importa JSON” aggiunge i dati mancanti. “Ripristina” sostituisce i campi presenti nel file, dopo un’anteprima. Le modifiche su altri dispositivi durante l’esportazione possono richiedere un nuovo backup.</p>
+                <p style={{ margin: '0 0 15px 0', fontSize: 'var(--font-size-body)', color: 'var(--warning-color)' }}>L'importazione da altri utenti non ripristinerà cronologie personali per sicurezza.</p>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <button className="btn" style={{ flex: 1, background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', margin: 0 }} onClick={onExportBackup} disabled={exportingData}>
