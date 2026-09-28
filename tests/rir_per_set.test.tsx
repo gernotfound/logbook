@@ -252,16 +252,22 @@ describe('RIR reale per singola serie', () => {
         expect(rows[4].split(',')[7]).toBe('""');
     });
 
-    it('mostra RIR 0 anche nello storico completato senza inventarlo per serie legacy', () => {
+    it('mantiene RIR 0 nei dati dello storico anche con la nuova tessera compatta', () => {
+        const current = session(0);
+        const legacy = { ...session(), id: 'legacy', date: '2026-09-20' };
         useAppStore.setState({
             userData: parseUserData({
                 library: [{ id: 'bench', name: 'Panca', setsCount: 3, sets: [] }],
-                history: [session(0), { ...session(), id: 'legacy', date: '2026-09-20' }],
+                history: [current, legacy],
             }),
         });
+
         render(<TrainingHistory />);
-        expect(screen.getByText(/100kg×8 · 0 RIR/)).toBeTruthy();
-        expect(screen.getByText(/100kg×8(?! · 0 RIR)/)).toBeTruthy();
+
+        expect(useAppStore.getState().userData?.history?.find(workout => workout.id === current.id)?.exercises[0].sets[0].rir).toBe(0);
+        expect(useAppStore.getState().userData?.history?.find(workout => workout.id === legacy.id)?.exercises[0].sets[0]).not.toHaveProperty('rir');
+        expect(screen.getByRole('button', { name: /Apri il dettaglio di Sessione test/i })).toBeTruthy();
+        expect(screen.queryByText(/100kg×8/)).toBeNull();
     });
 
     it('mostra RIR nello storico esercizio e mantiene il dato effort separato dal confronto output', () => {
