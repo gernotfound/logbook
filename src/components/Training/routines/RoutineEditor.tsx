@@ -77,6 +77,9 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
             <div className="routine-editor-section-head">
                 <h3>Esercizi nella scheda</h3>
                 <span>{routineExercises.length}</span>
+                <span className="routine-editor-count-assistive" aria-hidden="true">
+                    Esercizi nella scheda ({routineExercises.length})
+                </span>
             </div>
 
             <div className="routine-editor-muscle-map">
@@ -88,7 +91,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
 
             <div className="routine-editor-list">
                 {routineExercises.length === 0 ? (
-                    <div className="routine-empty-state">Nessun esercizio. Cercane uno nella libreria.</div>
+                    <div className="routine-empty-state">Nessun esercizio presente.</div>
                 ) : (
                     routineExercises.map((exercise: any, index: number) => {
                         const libraryItem = library.find(item => item.id === exercise.exId);
