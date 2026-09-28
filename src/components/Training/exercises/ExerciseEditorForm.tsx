@@ -1,4 +1,4 @@
-import { Pencil, Plus, Save } from 'lucide-react';
+import { Pencil, Plus, RotateCcw, Save } from 'lucide-react';
 import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
 import { ExerciseMuscleSelector } from './ExerciseMuscleSelector';
 
@@ -25,6 +25,7 @@ type ExerciseEditorHook = Pick<TrainingExercisesHook,
     | 'setEquipmentWeight'
     | 'toggleMuscle'
     | 'handleToggleMuscleById'
+    | 'removeMuscleById'
 >;
 
 interface ExerciseEditorFormProps {
@@ -66,99 +67,118 @@ export function ExerciseEditorForm({
         setEquipmentWeight,
         toggleMuscle,
         handleToggleMuscleById,
+        removeMuscleById,
     } = hook;
 
     return (
-        <div id="exercise-creation-form" className={editingExId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
-            <h2 className={editingExId ? 'text-primary' : 'text-white'} style={{marginBottom: '15px'}}>
-                {editingExId ? <><Pencil size={18} aria-hidden="true" /> Modifica esercizio</> : <><Plus size={18} aria-hidden="true" /> Crea nuovo esercizio</>}
-            </h2>
+        <section
+            id="exercise-creation-form"
+            className="exercise-editor"
+            aria-label={editingExId ? 'Modifica esercizio' : 'Crea esercizio'}
+        >
+            <div className="exercise-editor-head">
+                <h2>
+                    {editingExId
+                        ? <><Pencil size={19} aria-hidden="true" /> Modifica esercizio</>
+                        : <><Plus size={19} aria-hidden="true" /> Crea nuovo esercizio</>}
+                </h2>
+            </div>
 
-            <div className="flex-col gap-10 mt-15 mb-20">
-                <div>
-                    <input
-                        type="text"
-                        aria-label="Nome esercizio"
-                        placeholder="Nome esercizio (es. Panca piana con bilanciere)"
-                        value={exName}
-                        style={isDuplicateName ? { borderColor: 'var(--danger-color)' } : undefined}
-                        onChange={event => setExName(event.target.value)}
-                    />
-                    {isDuplicateName && (
-                        <div style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginTop: '6px' }}>
-                            ⚠️ Esiste già un esercizio con questo nome nell'archivio.
-                        </div>
-                    )}
-                </div>
+            <div className="exercise-field">
+                <label htmlFor="exercise-name">Nome esercizio</label>
                 <input
+                    id="exercise-name"
                     type="text"
-                    aria-label="Note di setup"
-                    placeholder="Note di setup (opzionale, es. Inclinazione 30°)"
+                    value={exName}
+                    aria-invalid={isDuplicateName || undefined}
+                    onChange={event => setExName(event.target.value)}
+                />
+                {isDuplicateName && (
+                    <p className="exercise-field-error" role="alert">
+                        Esiste già un esercizio con questo nome nell’archivio.
+                    </p>
+                )}
+            </div>
+
+            <div className="exercise-field">
+                <label htmlFor="exercise-notes">Note di setup</label>
+                <input
+                    id="exercise-notes"
+                    type="text"
                     value={exNotes}
+                    placeholder="Opzionale"
                     onChange={event => setExNotes(event.target.value)}
                 />
             </div>
 
-            <div className="mb-20">
-                <label className="text-muted text-sm mb-8 block font-medium">Tipo di tracciamento</label>
-                <div className="tracking-type-group" style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap' }}>
+            <fieldset className="exercise-tracking-field">
+                <legend>Tipo di tracciamento</legend>
+                <div className="exercise-tracking-options">
                     <button
                         type="button"
-                        className={`tracking-card-option ${trackingType === 'weight_reps' ? 'active' : ''}`}
+                        className={`exercise-tracking-option ${trackingType === 'weight_reps' ? 'active' : ''}`}
+                        aria-pressed={trackingType === 'weight_reps'}
                         onClick={() => setTrackingType('weight_reps')}
-                        style={{ padding: '10px 4px', fontSize: '0.85rem' }}
                     >
-                        <span>Peso e rip.</span>
+                        Peso e ripetizioni
                     </button>
                     <button
                         type="button"
-                        className={`tracking-card-option ${trackingType === 'time' ? 'active' : ''}`}
+                        className={`exercise-tracking-option ${trackingType === 'time' ? 'active' : ''}`}
+                        aria-pressed={trackingType === 'time'}
                         onClick={() => setTrackingType('time')}
-                        style={{ padding: '10px 4px', fontSize: '0.85rem' }}
                     >
-                        <span>Tempo</span>
+                        Tempo
                     </button>
                     <button
                         type="button"
-                        className={`tracking-card-option ${trackingType === 'cardio' ? 'active' : ''}`}
+                        className={`exercise-tracking-option ${trackingType === 'cardio' ? 'active' : ''}`}
+                        aria-pressed={trackingType === 'cardio'}
                         onClick={() => setTrackingType('cardio')}
-                        style={{ padding: '10px 4px', fontSize: '0.85rem' }}
                     >
-                        <span>Cardio</span>
+                        Cardio
                     </button>
                 </div>
-            </div>
+            </fieldset>
 
             {trackingType === 'weight_reps' && (
-                <div className="mb-20" style={{ marginTop: '30px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderTop: '1px solid var(--glass-border)', borderBottom: '1px solid var(--glass-border)' }}>
-                        <label className="text-white text-sm font-medium m-0 cursor-pointer" htmlFor="ex-bodyweight">
-                            Esercizio a corpo libero
+                <div className="exercise-editor-settings">
+                    <label className="exercise-setting-row" htmlFor="ex-bodyweight">
+                        <span className="exercise-setting-copy">
+                            <strong>Esercizio a corpo libero</strong>
+                            <span>Include il peso corporeo nel volume</span>
+                        </span>
+                        <span className="exercise-switch">
+                            <input
+                                id="ex-bodyweight"
+                                type="checkbox"
+                                checked={isBodyweight}
+                                onChange={event => setIsBodyweight(event.target.checked)}
+                            />
+                            <span className="exercise-switch-track" aria-hidden="true" />
+                        </span>
+                    </label>
+
+                    <div className="exercise-setting-row">
+                        <span className="exercise-setting-copy">
+                            <strong>Peso attrezzo</strong>
+                            <span>Peso fisso dell’attrezzo</span>
+                        </span>
+                        <label className="exercise-weight-input" htmlFor="ex-equipment-weight">
+                            <span className="sr-only">Peso attrezzo, espresso in kg</span>
+                            <input
+                                id="ex-equipment-weight"
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min="0"
+                                placeholder="0"
+                                value={equipmentWeight}
+                                onChange={event => setEquipmentWeight(event.target.value)}
+                                onFocus={event => event.target.select()}
+                            />
+                            <span aria-hidden="true">kg</span>
                         </label>
-                        <input
-                            id="ex-bodyweight"
-                            type="checkbox"
-                            checked={isBodyweight}
-                            onChange={event => setIsBodyweight(event.target.checked)}
-                            style={{ width: '22px', height: '22px', cursor: 'pointer', accentColor: 'var(--primary-color)', margin: 0 }}
-                        />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--glass-border)' }}>
-                        <label className="text-white text-sm font-medium m-0" htmlFor="ex-equipment-weight">
-                            Peso attrezzo
-                        </label>
-                        <input
-                            id="ex-equipment-weight"
-                            type="number"
-                            inputMode="decimal"
-                            step="0.5"
-                            min="0"
-                            placeholder="0"
-                            value={equipmentWeight}
-                            onChange={event => setEquipmentWeight(event.target.value)}
-                            onFocus={event => event.target.select()}
-                            style={{ width: '70px', textAlign: 'center', padding: '8px', margin: 0, fontSize: '16px', borderRadius: '8px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}
-                        />
                     </div>
                 </div>
             )}
@@ -173,13 +193,13 @@ export function ExerciseEditorForm({
                 filteredMuscles={filteredMuscles}
                 toggleMuscle={toggleMuscle}
                 handleToggleMuscleById={handleToggleMuscleById}
+                removeMuscleById={removeMuscleById}
             />
 
-            <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>
+            <div className="exercise-editor-actions">
                 <button
                     type="button"
-                    className="btn flex-1 mb-0"
-                    style={{ background: 'var(--surface-light)', whiteSpace: 'nowrap', margin: 0 }}
+                    className="btn"
                     onClick={onCancel}
                     disabled={isSaving}
                 >
@@ -187,27 +207,26 @@ export function ExerciseEditorForm({
                 </button>
                 <button
                     type="button"
-                    className="btn btn-primary flex-1 mb-0"
-                    style={{ whiteSpace: 'nowrap', margin: 0 }}
+                    className="btn btn-primary"
                     disabled={isSaving}
                     onClick={onSave}
                 >
-                    {isSaving ? 'Salvataggio...' : (editingExId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Crea esercizio')}
+                    <Save size={17} aria-hidden="true" />
+                    {isSaving ? 'Salvataggio…' : 'Salva'}
                 </button>
             </div>
 
             {editingExId && editingExercise?.isDefault && (
-                <div className="mt-10">
-                    <button
-                        type="button"
-                        className="btn w-full mb-0"
-                        style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                        onClick={onRestore}
-                    >
-                        <span aria-hidden="true">🔄</span> Ripristina all'originale
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    className="btn exercise-restore-button"
+                    onClick={onRestore}
+                    disabled={isSaving}
+                >
+                    <RotateCcw size={17} aria-hidden="true" />
+                    Ripristina originale
+                </button>
             )}
-        </div>
+        </section>
     );
 }

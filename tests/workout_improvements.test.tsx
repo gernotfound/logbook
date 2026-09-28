@@ -476,7 +476,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       expect(edited).toEqual(mockHistory[0]);
     });
 
-    test('TrainingExercises ContextMenu behaves correctly for default vs custom exercises without toggling accordion', () => {
+    test('TrainingExercises detail actions preserve default vs custom exercise rules', () => {
       const mockLibrary = [
         {
           id: 'ex_default',
@@ -496,39 +496,30 @@ describe('Workout Improvements & History Edit Suite', () => {
         userData: { ...emptyUserData, library: mockLibrary, routines: [] } as any
       });
 
-      const triggers = screen.getAllByRole('button', { name: /opzioni/i });
-      expect(triggers.length).toBe(2);
-
-      // Open first (default) exercise's context menu
       act(() => {
-        fireEvent.click(triggers[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Panca Piana Catalogo' }));
       });
 
-      // Default exercise should have "Modifica esercizio" but NOT "Elimina esercizio"
-      expect(screen.getByRole('menuitem', { name: /modifica/i })).not.toBeNull();
-      expect(screen.queryByRole('menuitem', { name: /elimina/i })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Modifica' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Duplica' })).not.toBeNull();
+      expect(screen.queryByRole('button', { name: 'Elimina' })).toBeNull();
 
-      // Close menu by clicking trigger again
       act(() => {
-        fireEvent.click(triggers[0]);
+        fireEvent.click(screen.getByRole('button', { name: 'Torna all’elenco' }));
+      });
+      act(() => {
+        fireEvent.click(screen.getByRole('button', { name: 'Apri dettaglio di Panca Inclinata Custom' }));
       });
 
-      // Open second (custom) exercise's context menu
+      expect(screen.getByRole('button', { name: 'Modifica' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Duplica' })).not.toBeNull();
+      expect(screen.getByRole('button', { name: 'Elimina' })).not.toBeNull();
+
       act(() => {
-        fireEvent.click(triggers[1]);
+        fireEvent.click(screen.getByRole('button', { name: 'Modifica' }));
       });
 
-      // Custom exercise should have both "Modifica esercizio" and "Elimina esercizio"
-      expect(screen.getByRole('menuitem', { name: /modifica/i })).not.toBeNull();
-      expect(screen.getByRole('menuitem', { name: /elimina/i })).not.toBeNull();
-
-      // Click "Modifica esercizio"
-      act(() => {
-        fireEvent.click(screen.getByRole('menuitem', { name: /modifica/i }));
-      });
-
-      // Form header shows editing title
-      expect(screen.getByText(/Modifica esercizio/i)).not.toBeNull();
+      expect(screen.getByRole('heading', { name: /Modifica esercizio/i })).not.toBeNull();
     });
 
     test('FoodItemRow ContextMenu renders "Modifica alimento" and "Elimina alimento", preserving quick add', () => {
