@@ -42,7 +42,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        fontSize: '0.75rem',
+                        fontSize: 'var(--font-size-micro)',
                         fontWeight: 600,
                         padding: '3px 8px',
                         borderRadius: '6px',
@@ -93,7 +93,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                             background: 'transparent',
                             border: 'none',
                             color: 'var(--text-muted)',
-                            fontSize: '1rem',
+                            fontSize: 'var(--font-size-control)',
                             cursor: 'pointer',
                             padding: '6px',
                             display: 'flex',
@@ -123,7 +123,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                     }}
                 >
                     {searchResults.length === 0 ? (
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', textAlign: 'center' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)', padding: '10px', textAlign: 'center' }}>
                             Nessun muscolo trovato
                         </div>
                     ) : (
@@ -141,7 +141,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                         width: '100%',
                                         padding: '8px 12px',
                                         borderRadius: '6px',
-                                        fontSize: '0.85rem',
+                                        fontSize: 'var(--font-size-meta)',
                                         cursor: 'pointer',
                                         textAlign: 'left',
                                         background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
@@ -151,7 +151,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                     }}
                                 >
                                     <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)' }}>
+                                    <span style={{ fontSize: 'var(--font-size-micro)', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)' }}>
                                         {isPain ? '✓ Dolorante' : '+ Aggiungi'}
                                     </span>
                                 </button>
@@ -188,7 +188,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                     color: 'var(--danger-color)',
                                     padding: '4px 10px',
                                     borderRadius: '8px',
-                                    fontSize: '0.85rem',
+                                    fontSize: 'var(--font-size-meta)',
                                     fontWeight: 600
                                 }}
                             >
@@ -201,7 +201,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                                         border: 'none',
                                         color: 'var(--danger-color)',
                                         fontWeight: 'bold',
-                                        fontSize: '0.85rem',
+                                        fontSize: 'var(--font-size-meta)',
                                         cursor: 'pointer',
                                         padding: '0 2px',
                                         display: 'inline-flex',
@@ -225,7 +225,7 @@ const RecoveryBentoCard: React.FC<RecoveryBentoCardProps> = ({ activePains = [],
                         interactive={false} 
                     />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px', fontSize: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px', fontSize: 'var(--font-size-micro)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--muscle-recent)' }}></div>
                         <span style={{ color: 'var(--text-muted)' }}>Allenato di recente</span>

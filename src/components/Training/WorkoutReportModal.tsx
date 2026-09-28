@@ -168,17 +168,17 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <span className="text-sm text-primary font-bold">Allenamento completato</span>
                         <h1 id={titleId}>{report.workoutName}</h1>
-                        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <p style={{ margin: 0, fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                             {Logic.formatItalianDate ? Logic.formatItalianDate(report.date) : report.date}
                         </p>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
                         <div style={{ display: 'flex', gap: '10px' }}>
-                            <span style={{ fontSize: '0.75rem', background: 'var(--surface-light)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: 'var(--font-size-micro)', background: 'var(--surface-light)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Clock size={12} />
                                 {Logic.formatDuration ? Logic.formatDuration(report.durationSeconds) : report.durationSeconds}
                             </span>
-                            <span style={{ fontSize: '0.75rem', background: 'var(--surface-light)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: 'var(--font-size-micro)', background: 'var(--surface-light)', padding: '4px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <Layers size={12} />
                                 {workout.exercises?.length || 0} Esercizi
                             </span>
@@ -229,7 +229,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             <span>Esercizi analizzati <strong>{report.exerciseComparisons.length}</strong></span>
                         </div>
                         {!report.totalVolumeIsComplete && (
-                            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            <p style={{ margin: 0, fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                 Il tonnellaggio totale non viene stimato quando manca il peso corporeo storico necessario per esercizi bodyweight.
                             </p>
                         )}
@@ -238,14 +238,14 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                     {report.density && (
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '6px' }}>
                             <strong>{report.density.headline}</strong>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{report.density.detail}</span>
+                            <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>{report.density.detail}</span>
                         </div>
                     )}
 
                     {report.isFirstSession && (
                         <div className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '6px' }}>
                             <strong style={{ color: 'var(--primary-color)' }}>Nuova baseline registrata</strong>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                 Non ci sono esposizioni precedenti sufficientemente confrontabili per questo contesto e standard registrato. Questa sessione diventa il riferimento per i confronti successivi.
                             </span>
                         </div>
@@ -284,13 +284,13 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                     <div key={ex.exId} className="card" style={{ margin: 0, padding: '16px', display: 'grid', gap: '10px' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
                                             <div style={{ minWidth: 0 }}>
-                                                <strong style={{ display: 'block', fontSize: '0.98rem' }}>{ex.exName}</strong>
-                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                <strong style={{ display: 'block', fontSize: 'var(--font-size-body)' }}>{ex.exName}</strong>
+                                                <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                                     {progressionTrendLabel(progression.trendDirection, progression.intent)} · {progressionQualityLabel(progression.quality)}
                                                 </span>
                                             </div>
                                             {ex.isPR && (
-                                                <span style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', fontSize: '0.75rem', padding: '3px 7px', borderRadius: '6px', fontWeight: 700, flexShrink: 0 }}>
+                                                <span style={{ background: 'var(--warning-color)', color: 'var(--on-warning)', fontSize: 'var(--font-size-micro)', padding: '3px 7px', borderRadius: '6px', fontWeight: 700, flexShrink: 0 }}>
                                                     PR
                                                 </span>
                                             )}
@@ -298,7 +298,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
                                         <div style={{ display: 'grid', gap: '4px' }}>
                                             <strong>{progression.headline}</strong>
-                                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{progression.detail}</span>
+                                            <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>{progression.detail}</span>
                                         </div>
 
                                         <div className="workout-report-metrics">
@@ -310,14 +310,14 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                                             </span>
                                         </div>
 
-                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                        <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                             Confrontabilità: <strong style={{ color: 'var(--text-main)' }}>
                                                 {progression.comparisonStatus === 'comparable' ? 'confrontabile' : progression.comparisonStatus === 'limited' ? 'limitata' : 'non confrontabile'}
                                             </strong>
                                         </div>
 
                                         {progression.previousComparable && (
-                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                                 Ultima esposizione confrontabile · {progression.previousComparable.date || 'data non disponibile'} ·{' '}
                                                 <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.previousComparable)}</strong>
                                             </div>
@@ -325,27 +325,27 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
 
 
                                         {progression.cycleBaseline && progression.cycleBaseline.sessionId !== progression.previousComparable?.sessionId && (
-                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                                 Baseline del ciclo · {progression.cycleBaseline.date || 'data non disponibile'} ·{' '}
                                                 <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.cycleBaseline)}</strong>
                                             </div>
                                         )}
 
                                         {progression.bestHistorical && (
-                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                                 Miglior riferimento storico comparabile · {progression.bestHistorical.date || 'data non disponibile'} ·{' '}
                                                 <strong style={{ color: 'var(--text-main)' }}>{formatProgressionReference(progression.bestHistorical)}</strong>
                                             </div>
                                         )}
 
                                         {progression.recentComparable.length >= 2 && (
-                                            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
                                                 Ultime esposizioni confrontabili: <strong style={{ color: 'var(--text-main)' }}>{recentChain}</strong>
                                             </div>
                                         )}
 
                                         {progression.qualityReasons.length > 0 && (
-                                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
+                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', borderTop: '1px solid var(--glass-border)', paddingTop: '8px' }}>
                                                 {progression.qualityReasons.join(' ')}
                                             </div>
                                         )}
@@ -370,7 +370,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                 {/* Footer */}
                 <footer className="workout-report-footer">
                     {canSaveAsRoutine && !isSavingAsRoutine && (
-                        <button className="btn btn-secondary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: '1rem', fontWeight: 'bold' }} onClick={() => setIsSavingAsRoutine(true)}>
+                        <button className="btn btn-secondary" style={{ width: '100%', margin: 0, padding: '16px', fontSize: 'var(--font-size-control)', fontWeight: 'bold' }} onClick={() => setIsSavingAsRoutine(true)}>
                             Salva come scheda
                         </button>
                     )}
@@ -384,7 +384,7 @@ const WorkoutReportModal: React.FC<WorkoutReportModalProps> = ({ workout, histor
                             flexDirection: 'column',
                             gap: '12px'
                         }}>
-                            <label htmlFor="new-routine-name" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome nuova scheda</label>
+                            <label htmlFor="new-routine-name" style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Nome nuova scheda</label>
                             <input
                                 id="new-routine-name"
                                 type="text" 

@@ -33,11 +33,11 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                 <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span>{food.name}</span>
                     </div>
                     {food.brand && (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginTop: '2px' }}>
                             {food.brand}
                         </div>
                     )}
@@ -68,7 +68,7 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
             </div>
 
             {/* Macro details */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>
                     {food.kcal} kcal
                 </span>
@@ -81,13 +81,13 @@ export const FoodItemRow: React.FC<FoodItemRowProps> = ({
 
             {/* Quick Add buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>+ Aggiungi a:</span>
+                <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>+ Aggiungi a:</span>
                 {mealTypes.map(mt => (
                     <button 
                         key={mt}
                         type="button"
                         className="btn-link"
-                        style={{ fontSize: '0.85rem' }}
+                        style={{ fontSize: 'var(--font-size-meta)' }}
                         onClick={() => onQuickAddToMeal(food, mt)}
                     >
                         {mt}

@@ -60,18 +60,18 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     type="button" 
                     className="btn-icon" 
                     onClick={onClose}
-                    style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}
+                    style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-section)' }}
                 >
                     ✕
                 </button>
             </div>
 
             <div style={{ marginBottom: '15px' }}>
-                <div style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--text-main)', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', marginBottom: '4px' }}>
                     {item.name}
                 </div>
                 {item.brand && (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                         {item.brand}
                     </div>
                 )}
@@ -101,7 +101,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                     value={quantity} 
                     onChange={e => setQuantity(e.target.value)}
                     onFocus={e => e.target.select()}
-                    style={{ marginBottom: 0, fontSize: '1.1rem', fontWeight: 'bold' }}
+                    style={{ marginBottom: 0, fontSize: 'var(--font-size-section)', fontWeight: 'bold' }}
                     autoFocus
                 />
             </div>
@@ -121,20 +121,20 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                 }}
             >
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KCAL</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentKcal}</div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>KCAL</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentKcal}</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PRO</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentPro}g</div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>PRO</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentPro}g</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CARBO</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentCarbs}g</div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>CARBO</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentCarbs}g</div>
                 </div>
                 <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>GRASSI</div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: '0.95rem' }}>{currentFat}g</div>
+                    <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>GRASSI</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-main)', fontSize: 'var(--font-size-body)' }}>{currentFat}g</div>
                 </div>
             </div>
 

@@ -38,14 +38,14 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                     <span className="text-xs text-primary font-bold uppercase tracking-wider block">
                         Programmazione rotazione
                     </span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                    <span style={{ fontSize: 'var(--font-size-body)', fontWeight: 'bold', color: 'var(--text-main)' }}>
                         🔄 Calendario rotazione schede ({schedule.totalSessions} sedute)
                     </span>
                 </div>
                 <button
                     type="button"
                     className="btn btn-secondary btn-small"
-                    style={{ padding: '2px 8px', fontSize: '0.75rem', marginBottom: 0 }}
+                    style={{ padding: '2px 8px', fontSize: 'var(--font-size-micro)', marginBottom: 0 }}
                     onClick={(e) => {
                         e.stopPropagation();
                         onTogglePreview();
@@ -72,10 +72,10 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                             }}
                         >
                             <div className="flex-between items-center mb-6">
-                                <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: 'var(--primary-color)' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-meta)', color: 'var(--primary-color)' }}>
                                     Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
                                 </span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
                                     {week.sessions.length} {week.sessions.length === 1 ? 'seduta' : 'sedute'}
                                 </span>
                             </div>
@@ -89,7 +89,7 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                                             background: 'rgba(14, 165, 233, 0.1)',
                                             border: '1px solid rgba(14, 165, 233, 0.3)',
                                             borderRadius: '4px',
-                                            fontSize: '0.75rem',
+                                            fontSize: 'var(--font-size-micro)',
                                             color: 'var(--text-main)',
                                             display: 'flex',
                                             alignItems: 'center',

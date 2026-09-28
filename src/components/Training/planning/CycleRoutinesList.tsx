@@ -101,17 +101,17 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             fontWeight: 'bold',
-                                            fontSize: '0.85rem',
+                                            fontSize: 'var(--font-size-meta)',
                                             flexShrink: 0
                                         }}
                                     >
                                         {letterIndex}
                                     </div>
                                     <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {routine?.name || 'Scheda'}
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
                                             Posizione {idx + 1} di {cycleRoutines.length} • {routine?.exercises?.length || 0} esercizi
                                         </div>
                                     </div>
@@ -121,7 +121,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                     <button
                                         type="button"
                                         className="btn btn-secondary btn-small"
-                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: '0.85rem' }}
+                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: 'var(--font-size-meta)' }}
                                         onClick={() => onMove(idx, -1)}
                                         disabled={idx === 0}
                                         aria-label="Sposta su nella sequenza"
@@ -132,7 +132,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                     <button
                                         type="button"
                                         className="btn btn-secondary btn-small"
-                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: '0.85rem' }}
+                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: 'var(--font-size-meta)' }}
                                         onClick={() => onMove(idx, 1)}
                                         disabled={idx === cycleRoutines.length - 1}
                                         aria-label="Sposta giù nella sequenza"
@@ -143,7 +143,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                     <button
                                         type="button"
                                         className="btn-icon"
-                                        style={{ color: 'var(--danger-color)', fontSize: '1rem', padding: '4px', marginLeft: '4px' }}
+                                        style={{ color: 'var(--danger-color)', fontSize: 'var(--font-size-control)', padding: '4px', marginLeft: '4px' }}
                                         onClick={() => onRemove(idx)}
                                         aria-label="Rimuovi scheda dalla sequenza"
                                         title="Rimuovi scheda dalla sequenza"
