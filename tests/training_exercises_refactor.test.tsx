@@ -61,11 +61,16 @@ describe('TrainingExercises decomposition parity', () => {
 
         const createButton = screen.getByRole('button', { name: /Crea esercizio/i });
         fireEvent.click(createButton);
-        expect(screen.getByRole('heading', { level: 2, name: /Crea nuovo esercizio/i })).toBeDefined();
+        expect(screen.getByRole('heading', { level: 2, name: /Nuovo esercizio/i })).toBeDefined();
         expect(screen.getByTestId('muscle-model')).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Chiudi' })).toBeDefined();
 
-        fireEvent.click(screen.getByRole('button', { name: /Annulla/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
         expect(hook.handleCancelEdit).toHaveBeenCalledTimes(1);
-        expect(screen.queryByRole('heading', { level: 2, name: /Crea nuovo esercizio/i })).toBeNull();
+        expect(screen.queryByRole('heading', { level: 2, name: /Nuovo esercizio/i })).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: /Crea esercizio/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Annulla/i }));
+        expect(hook.handleCancelEdit).toHaveBeenCalledTimes(2);
     });
 });
