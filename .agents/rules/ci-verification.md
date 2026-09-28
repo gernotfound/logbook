@@ -2,26 +2,29 @@
 
 ## Scope
 
-Questa regola disciplina il gate canonico di verifica automatica corrente dopo M8. Le milestone M0–M8 restano composte transitivamente nel gate; i rispettivi documenti possono descrivere subgate storici senza sostituire il gate umbrella corrente.
+Questa regola disciplina il gate canonico di verifica automatica corrente dopo M8. Le milestone M0–M8 restano composte transitivamente nel comando repository; GitHub Actions può distribuire i leaf command equivalenti su runner indipendenti senza ridurre la copertura.
 
 Gerarchia corrente:
 
 - **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`);
-- **job/check stabile:** `Canonical Verification`;
-- **comando repository umbrella:** `npm run verify:m8`.
+- **check aggregato stabile:** `Canonical Verification`;
+- **comando repository umbrella:** `npm run verify:m8`;
+- **orchestrazione CI:** matrice di shard exact-SHA verificata da `scripts/check-ci-contract.mjs`.
 
-Un solo workflow di orchestrazione non significa che unit, integration, isolated, fuzz, recovery, GC, stress, Firestore Rules emulator o Playwright siano state eliminate: continuano a essere eseguite transitivamente tramite `verify:m8`.
+La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit, integration, isolated, fuzz, recovery, GC, hardening, stress, Firestore Rules emulator, Playwright, build e controlli M7/M8 restano obbligatori.
 
 ## Exact HEAD
 
-- MUST: su `pull_request`, il workflow deve fare checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.
-- MUST: prima dei test, `git rev-parse HEAD` deve essere confrontato con lo SHA atteso e una divergenza deve terminare il job.
+- MUST: ogni shard che esegue codice della PR fa checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.
+- MUST: in ogni shard, prima dei test, `git rev-parse HEAD` viene confrontato con lo SHA atteso; una divergenza termina lo shard.
+- MUST: tutti gli shard della stessa run verificano lo stesso exact SHA.
 - MUST: ogni report di validazione indica lo SHA esatto realmente verificato.
-- MUST: ogni revisione indipendente citata come evidenza deve riferirsi allo stesso SHA candidato o dichiarare esplicitamente una baseline diversa.
+- MUST: ogni revisione indipendente citata come evidenza si riferisce allo stesso SHA candidato o dichiara esplicitamente una baseline diversa.
 
 ## Clean worktree
 
 - MUST: `verify:m8` include transitivamente `verify:m7` → `verify:m6` → `test:repo-hygiene`.
+- MUST: la CI parallela include lo stesso `test:repo-hygiene` tra i leaf command obbligatori.
 - MUST: modifiche tracciate o file non tracciati non ignorati presenti prima della verifica rendono il risultato non autorevole e fanno fallire il gate.
 - MUST: i file testuali controllati dal gate sono UTF-8 valido senza BOM.
 - MUST: il gate non riscrive automaticamente file malformati.
@@ -35,11 +38,22 @@ Un solo workflow di orchestrazione non significa che unit, integration, isolated
 
 ## Single source of truth
 
-- MUST: GitHub Actions invoca `npm run verify:m8`; non ricostruisce manualmente un sottoinsieme alternativo.
-- MUST: `verify:m8` include integralmente `verify:m7`, che include M6/M5 e quindi i gate precedenti richiesti.
+- MUST: `npm run verify:m8` resta il comando repository umbrella e continua a comporre integralmente `verify:m7`, quindi M6/M5 e i gate precedenti richiesti.
+- MUST: GitHub Actions può appiattire quella composizione in shard paralleli soltanto se `test:ci-contract` prova meccanicamente che il multiset dei leaf command della matrice è equivalente all'espansione corrente di `verify:m8`.
+- MUST: gli shard non invocano umbrella `verify:mN` seriali; eseguono leaf command per ottenere parallelismo reale.
+- MUST: `npm audit --audit-level=high` resta bloccante nella CI ma non appartiene alla semantica deterministica di `verify:m8`.
 - MUST: M8 aggiunge test Domain Operations V4 e il boundary checker che impedisce nuovi consumer UI/hook snapshot-based fuori dall'allowlist documentata.
 - MUST: workflow temporanei di migrazione non devono esistere nell'HEAD candidato.
 - MUST: workflow legacy che duplicano test/E2E non restano attivi in parallelo.
+
+## Parallelizzazione e isolamento
+
+- MUST: la matrice usa `fail-fast: false` per raccogliere l'esito di tutti gli shard dello stesso SHA.
+- MUST: Java viene installato solo nello shard Firestore Rules salvo nuova dipendenza documentata.
+- MUST: Chromium Playwright viene installato solo nello shard E2E salvo nuova dipendenza documentata.
+- MUST: suite intenzionalmente single-worker, incluse recovery/fuzz/GC/hardening dove configurato, mantengono i propri limiti interni; la CI parallelizza tra suite, non forza concorrenza dentro scenari che richiedono isolamento.
+- MUST: il contract PWA M7 che legge `dist/` deve essere eseguito nello stesso shard che produce il build richiesto, oppure ricevere artefatti verificati dello stesso exact SHA.
+- SHOULD: gli shard vanno bilanciati usando durate osservate in GitHub Actions; evitare micro-shard il cui overhead di setup supera il beneficio.
 
 ## Workflow security
 
@@ -78,21 +92,22 @@ Il checker automatico M8 protegge direttamente i consumer sotto `src/hooks` e `s
 
 ## Semantica del failure
 
-Il workflow esegue:
+Ogni shard esegue il proprio comando con:
 
 ```bash
 set -o pipefail
-npm run verify:m8 2>&1 | tee m8-verification.log
+${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 ```
 
-`pipefail` preserva il codice di uscita non-zero del comando; `2>&1` unisce stdout e stderr nel log. Non esiste un controllo generico che renda rosso il job per la sola presenza di output su stderr o della parola `warning`.
+`pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice non usa `continue-on-error`. Il job `Canonical Verification` usa `needs: shards` e fallisce se il risultato aggregato non è `success`.
 
+- MUST: il check aggregato resta denominato esattamente `Canonical Verification` finché required checks/Vercel esterni dipendono da quel nome.
 - MUST: nessun documento può affermare che “qualsiasi stderr” è automaticamente bloccante finché tale controllo non viene implementato.
 - SHOULD: warning inattesi, React `act(...)`, unhandled rejection e framework warning nelle suite candidate vanno corretti o spiegati; non sopprimerli indiscriminatamente per ottenere silenzio.
 
 ## External checks
 
-- NOTE: il workflow GitHub esegue `npm audit --audit-level=high` come step separato prima di `verify:m8`. È registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
+- NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
 - VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.
 - VERIFY: Vercel Deployment Checks è configurazione esterna; non assumere che blocchi il deploy solo perché il job GitHub si chiama `Canonical Verification`.
 - VERIFY: Vercel Preview verifica build/routing ma non sostituisce il gate repository.
@@ -100,6 +115,6 @@ npm run verify:m8 2>&1 | tee m8-verification.log
 
 ## Acceptance
 
-Un candidato è tecnicamente validato dal gate repository soltanto quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. Se si usa GitHub Actions come evidenza, deve essere il job `Canonical Verification` del workflow `Milestone Verification` sullo stesso SHA.
+Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui tutti gli shard sono verdi e il check aggregato `Canonical Verification` è `success`.
 
 Per revisioni indipendenti richieste dal livello di rischio del task, congelare lo SHA candidato e far revisionare/testare quello stesso SHA. Non sostituire evidenza eseguibile con il solo consenso tra agenti.

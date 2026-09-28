@@ -242,7 +242,8 @@ npm run verify:m8
 `verify:m8` include transitivamente M7 → M6 → M5 e le suite/gate precedenti: lint, typecheck/hardening, unit/integration/isolated/fuzz/recovery/GC/stress, Firebase Rules emulator, Playwright E2E, no-skips, build e controlli M7/M8.
 
 - `npm run lint`, `npm run test`, `npm run build` e `npm run test:e2e` sono diagnostici/sotto-gate; non sostituiscono M8 per il candidato finale.
-- `.github/workflows/verification.yml` usa il job stabile **Canonical Verification**, checkout dell'exact event HEAD, Node 24 e `npm audit --audit-level=high` prima di M8.
+- `.github/workflows/verification.yml` distribuisce i leaf command di M8 su shard exact-SHA paralleli e mantiene **Canonical Verification** come check aggregato stabile; `scripts/check-ci-contract.mjs` deve provare che la matrice CI è leaf-equivalente a `npm run verify:m8`.
+- Java/Firebase Emulator e Chromium Playwright vengono predisposti solo negli shard che li richiedono; i limiti single-worker delle suite sensibili restano invariati.
 - **MUST:** non dichiarare verde un gate non realmente eseguito.
 - **MUST:** warning inattesi, `act(...)`, unhandled rejection e framework warning nel candidato vanno corretti o spiegati, non soppressi cosmeticamente.
 - **MUST:** test normativi devono attraversare il boundary di produzione che dichiarano di verificare; mock e oracle non possono reimplementare il comportamento sotto test.
