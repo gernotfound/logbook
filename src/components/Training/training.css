@@ -1568,7 +1568,7 @@
 .exercise-muscle-tag {
   display: inline-flex;
   max-width: 100%;
-  min-height: 2rem;
+  min-height: 2.75rem;
   align-items: center;
   gap: .3125rem;
   padding: 0 .5625rem;
