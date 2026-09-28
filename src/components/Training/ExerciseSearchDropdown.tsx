@@ -158,7 +158,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             padding: '2px 6px', 
                             borderRadius: '4px', 
                             background: 'rgba(255, 183, 3, 0.15)', 
-                            color: 'var(--warning-color, #ffb703)',
+                            color: 'var(--warning-color)',
                             fontWeight: 500
                         }}
                     >
@@ -199,9 +199,9 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                         padding: '10px 38px 10px 14px',
                         fontSize: '16px',
                         borderRadius: '8px',
-                        background: 'var(--surface-color, #0d0d0d)',
-                        color: 'var(--text-main, #f0f0f0)',
-                        border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.1))',
+                        background: 'var(--surface-color)',
+                        color: 'var(--text-main)',
+                        border: '1px solid var(--glass-border)',
                         boxSizing: 'border-box'
                     }}
                 />
@@ -260,10 +260,10 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                         width: '100%',
                         maxHeight: '260px',
                         overflowY: 'auto',
-                        background: 'var(--surface-color, #0d0d0d)',
+                        background: 'var(--surface-color)',
                         backdropFilter: 'blur(12px)',
                         WebkitBackdropFilter: 'blur(12px)',
-                        border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.15))',
+                        border: '1px solid var(--glass-border)',
                         borderRadius: '12px',
                         boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)',
                         zIndex: 100,
@@ -309,7 +309,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                         <div 
                                             style={{ 
                                                 fontWeight: 600, 
-                                                color: 'var(--text-main, #f0f0f0)', 
+                                                color: 'var(--text-main)', 
                                                 fontSize: 'var(--font-size-body)',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
@@ -328,8 +328,8 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '6px',
-                                            background: isHighlighted ? 'var(--primary-color)' : 'rgba(255, 255, 255, 0.08)',
-                                            color: isHighlighted ? '#000000' : 'var(--text-main, #f0f0f0)',
+                                            background: isHighlighted ? 'var(--primary-color)' : 'var(--surface-light)',
+                                            color: isHighlighted ? 'var(--on-primary)' : 'var(--text-main)',
                                             flexShrink: 0
                                         }}
                                     >
