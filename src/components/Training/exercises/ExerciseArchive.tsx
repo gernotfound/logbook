@@ -120,25 +120,41 @@ export function ExerciseArchive({
                     <h3>{selectedExercise.name}</h3>
                 </div>
 
-                <div className="exercise-detail-muscle-map">
-                    <MuscleModel
-                        selectedMuscles={selectedExercise.muscles || []}
-                        secondaryMuscles={selectedExercise.secondaryMuscles || []}
-                    />
-                </div>
+                <section className="exercise-detail-muscle-section" aria-label="Muscoli coinvolti">
+                    <strong className="exercise-detail-muscle-title">Muscoli coinvolti</strong>
+                    <div className="exercise-detail-muscle-map">
+                        <MuscleModel
+                            selectedMuscles={selectedExercise.muscles || []}
+                            secondaryMuscles={selectedExercise.secondaryMuscles || []}
+                            showLegend={false}
+                            showTextSelection={false}
+                        />
+                    </div>
+                    <div className="exercise-detail-muscle-legend">
+                        <span>
+                            <i className="primary" aria-hidden="true" />
+                            Primari: {muscleList(selectedExercise.muscles)}
+                        </span>
+                        <span>
+                            <i className="secondary" aria-hidden="true" />
+                            Secondari: {muscleList(selectedExercise.secondaryMuscles)}
+                        </span>
+                    </div>
+                </section>
 
                 <div className="exercise-detail-facts">
                     <div className="exercise-detail-fact">
-                        <span>Muscoli primari</span>
-                        <strong>{muscleList(selectedExercise.muscles)}</strong>
-                    </div>
-                    <div className="exercise-detail-fact">
-                        <span>Muscoli secondari</span>
-                        <strong>{muscleList(selectedExercise.secondaryMuscles)}</strong>
-                    </div>
-                    <div className="exercise-detail-fact">
                         <span>Tracciamento</span>
                         <strong>{trackingLabel(selectedExercise)}</strong>
+                    </div>
+                    <div className="exercise-detail-fact">
+                        <span>Muscoli</span>
+                        <strong>
+                            {muscleList(selectedExercise.muscles)}
+                            {selectedExercise.secondaryMuscles?.length
+                                ? ` + ${muscleList(selectedExercise.secondaryMuscles)}`
+                                : ''}
+                        </strong>
                     </div>
                     <div className="exercise-detail-fact">
                         <span>Utilizzo</span>
