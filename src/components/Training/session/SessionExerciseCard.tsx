@@ -178,7 +178,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <button
                     type="button"
                     className="btn-small"
-                    style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
+                    style={{ background: 'var(--danger-soft)', border: '1px solid var(--danger-color)', color: 'var(--danger-color)', borderRadius: '8px' }}
                     onClick={() => onRemoveExercise(exIndex)}
                     aria-label="Rimuovi esercizio dalla sessione"
                 >
