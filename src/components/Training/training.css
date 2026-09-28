@@ -271,7 +271,8 @@
 
 
 /* Training history calendar */
-.training-history {
+.training-history,
+.training-sub-view.active.training-history {
   display: grid;
   gap: .75rem;
   padding-bottom: 5.625rem;
@@ -282,7 +283,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: .75rem;
-  margin-bottom: .5rem;
+  margin-bottom: 0;
 }
 
 .history-heading {
@@ -292,7 +293,8 @@
 .history-heading h2 {
   margin: 0;
   color: var(--text-main);
-  font-size: var(--font-size-display-md);
+  font-size: var(--font-size-page);
+  font-weight: 500;
   line-height: 1.15;
   letter-spacing: -.02em;
 }
