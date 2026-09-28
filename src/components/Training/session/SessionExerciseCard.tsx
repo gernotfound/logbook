@@ -166,7 +166,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
                                     style={{
                                         display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
-                                        background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
+                                        background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
                                         border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
                                         cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
                                     }}
