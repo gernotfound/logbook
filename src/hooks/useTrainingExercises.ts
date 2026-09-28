@@ -101,6 +101,21 @@ export function useTrainingExercises() {
         }
     };
 
+    const removeMuscleById = (muscleId: string) => {
+        const muscle = Logic.MUSCLES.find(candidate => candidate.id === muscleId);
+        if (!muscle) return;
+
+        const idsToRemove = getExpandedMuscleIds([muscle]);
+        const removeFromSelection = (selection: any[]) => {
+            const expanded = getExpandedMuscleIds(selection);
+            idsToRemove.forEach(id => expanded.delete(id));
+            return toggleSmartMuscleSelection(Array.from(expanded).map(id => ({ id })));
+        };
+
+        setSelectedMuscles(current => removeFromSelection(current));
+        setSecondaryMuscles(current => removeFromSelection(current));
+    };
+
     const handleDuplicate = async (ex: any) => {
         const newName = Logic.generateUniqueName(ex.name, library.map(l => l.name));
         const duplicated = {
@@ -248,9 +263,14 @@ export function useTrainingExercises() {
     };
 
     const handleDelete = async (id: string, e: any) => {
-        e.stopPropagation(); // prevent triggering edit when clicking delete
+        e.stopPropagation();
 
-        // Check if exercise is used in routines
+        const exercise = library.find(item => item.id === id);
+        if (exercise?.isDefault) {
+            await showAlert("Gli esercizi del catalogo non possono essere eliminati.");
+            return false;
+        }
+
         const usedInRoutines = routines.filter(rtn =>
             (rtn.exercises || []).some((ex: any) => ex.exId === id)
         );
@@ -260,13 +280,15 @@ export function useTrainingExercises() {
             confirmMsg = `Attenzione: questo esercizio è usato in ${usedInRoutines.length} scheda/e. Se lo elimini scomparirà da quelle schede. Procedere comunque?`;
         }
 
-        if (await showConfirm(confirmMsg)) {
-            try {
-                await dispatchDomainOperation({ type: 'exercise.delete', id });
-                if (editingExId === id) handleCancelEdit();
-            } catch {
-                showAlert("Errore durante l'eliminazione dell'esercizio.");
-            }
+        if (!(await showConfirm(confirmMsg))) return false;
+
+        try {
+            await dispatchDomainOperation({ type: 'exercise.delete', id });
+            if (editingExId === id) handleCancelEdit();
+            return true;
+        } catch {
+            await showAlert("Errore durante l'eliminazione dell'esercizio.");
+            return false;
         }
     };
 
@@ -304,7 +326,7 @@ export function useTrainingExercises() {
         selectionMode, setSelectionMode, isDuplicateName,
         library, routines, filteredMuscles, trackingType, setTrackingType,
         isBodyweight, setIsBodyweight, equipmentWeight, setEquipmentWeight,
-        toggleMuscle, handleToggleMuscleById, handleEditClick, handleCancelEdit,
+        toggleMuscle, handleToggleMuscleById, removeMuscleById, handleEditClick, handleCancelEdit,
         handleSaveExercise, handleDelete, handleRestoreExercise, handleDuplicate
     };
 }
