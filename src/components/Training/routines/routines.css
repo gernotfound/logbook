@@ -36,7 +36,9 @@
   white-space: nowrap;
 }
 
-.routine-create-assistive {
+.routine-create-assistive,
+.routine-card-count-assistive,
+.routine-editor-count-assistive {
   position: absolute;
   width: 1px;
   height: 1px;
