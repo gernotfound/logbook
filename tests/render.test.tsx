@@ -115,7 +115,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders TrainingExercises without crashing', () => {
     const { container } = renderWithProviders(<TrainingExercises />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Crea esercizio/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /Crea esercizio/i })).toBeDefined();
   });
 
   test('renders NutritionView with meals subtab', () => {
