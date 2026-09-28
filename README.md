@@ -69,7 +69,7 @@ La cancellazione account non è una semplice delete client-side: è gestita da V
 - update protetti da un reload barrier che blocca l'aggiornamento quando la persistenza locale non è in uno stato sicuro;
 - pipeline icone dedicata con asset standard, Apple touch e `maskable`.
 
-La sorgente approvata dell'icona [LB] viene processata da `scripts/resize_icons.mjs`; il manifest mantiene un solo asset standard 512×512 e un asset maskable 512×512 dedicato.
+La sorgente raster approvata `public/icon-source.png` viene processata da `scripts/resize_icons.mjs`; il manifest mantiene gli asset standard 192×192 e 512×512 e un asset maskable 512×512 dedicato.
 
 ## Analytics e telemetria
 
