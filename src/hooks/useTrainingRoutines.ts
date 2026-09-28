@@ -162,12 +162,30 @@ export function useTrainingRoutines() {
     const handleUpdateSetsCount = (index: number, count: string | number) => {
         setRoutineExercises(prev => {
             const newExs = [...prev];
+            const currentExercise = newExs[index];
+
             if (count === '' || count === undefined || count === null) {
-                newExs[index] = { ...newExs[index], setsCount: '' };
-            } else {
-                const parsed = parseInt(count.toString(), 10);
-                newExs[index] = { ...newExs[index], setsCount: isNaN(parsed) ? '' : parsed };
+                newExs[index] = { ...currentExercise, setsCount: '' };
+                return newExs;
             }
+
+            const parsed = parseInt(count.toString(), 10);
+            if (isNaN(parsed)) {
+                newExs[index] = { ...currentExercise, setsCount: '' };
+                return newExs;
+            }
+
+            const normalizedCount = Math.max(1, Math.min(20, parsed));
+            const currentPlans = Array.isArray(currentExercise.setPlans) ? currentExercise.setPlans : [];
+            const setPlans: PlannedSetTechnique[] = Array.from({ length: normalizedCount }, (_, setIndex) => ({
+                ...(currentPlans[setIndex] || { technique: 'straight' as const }),
+            }));
+
+            newExs[index] = {
+                ...currentExercise,
+                setsCount: normalizedCount,
+                setPlans,
+            };
             return newExs;
         });
     };
