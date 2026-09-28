@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import {
     Activity,
     ChevronLeft,
@@ -25,7 +25,7 @@ interface ExerciseArchiveProps {
     onSelectedExIdChange: (id: string | null) => void;
     onEditItem: (exercise: ExerciseItem) => void;
     onDuplicate: TrainingExercisesHook['handleDuplicate'];
-    onDelete: (id: string, event: React.MouseEvent) => void | Promise<void>;
+    onDelete: (id: string, event: MouseEvent) => void | Promise<void>;
 }
 
 function normalizeSearch(value: string): string {
