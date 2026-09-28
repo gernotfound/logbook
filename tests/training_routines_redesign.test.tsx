@@ -78,7 +78,7 @@ describe('Schede redesign', () => {
         });
 
         const card = screen.getByText('Upper body A').closest('.routine-library-card');
-        fireEvent.click(screen.getByRole('button', { name: 'Azioni per Upper body A' }));
+        fireEvent.click(screen.getAllByRole('button', { name: 'Opzioni' })[0]);
 
         expect(screen.getByRole('menuitem', { name: 'Modifica' })).toBeTruthy();
         expect(screen.getByRole('menuitem', { name: 'Duplica' })).toBeTruthy();
