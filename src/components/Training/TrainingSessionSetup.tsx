@@ -127,7 +127,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
 
                                     <div className="flex-between items-center mb-10">
                                         <div>
-                                            <div style={{ fontSize: 'var(--font-size-display-sm)', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                                            <div style={{ fontSize: 'var(--font-size-control)', fontWeight: 'bold', color: 'var(--text-main)' }}>
                                                 {nextScheduled.nextRoutine.name}
                                             </div>
                                             <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
