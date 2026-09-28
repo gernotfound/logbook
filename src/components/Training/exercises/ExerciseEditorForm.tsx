@@ -1,4 +1,4 @@
-import { Pencil, Plus, RotateCcw, Save } from 'lucide-react';
+import { RotateCcw, Save } from 'lucide-react';
 import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
 import { ExerciseMuscleSelector } from './ExerciseMuscleSelector';
 
@@ -77,11 +77,15 @@ export function ExerciseEditorForm({
             aria-label={editingExId ? 'Modifica esercizio' : 'Crea esercizio'}
         >
             <div className="exercise-editor-head">
-                <h2>
-                    {editingExId
-                        ? <><Pencil size={19} aria-hidden="true" /> Modifica esercizio</>
-                        : <><Plus size={19} aria-hidden="true" /> Crea nuovo esercizio</>}
-                </h2>
+                <h2>{editingExId ? 'Modifica esercizio' : 'Nuovo esercizio'}</h2>
+                <button
+                    type="button"
+                    className="btn exercise-editor-close"
+                    onClick={onCancel}
+                    disabled={isSaving}
+                >
+                    Chiudi
+                </button>
             </div>
 
             <div className="exercise-field">
