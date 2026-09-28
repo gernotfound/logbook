@@ -266,7 +266,7 @@ describe('RIR reale per singola serie', () => {
 
         expect(useAppStore.getState().userData?.history?.find(workout => workout.id === current.id)?.exercises[0].sets[0].rir).toBe(0);
         expect(useAppStore.getState().userData?.history?.find(workout => workout.id === legacy.id)?.exercises[0].sets[0]).not.toHaveProperty('rir');
-        expect(screen.getByRole('button', { name: /Apri il dettaglio di Sessione test/i })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /Apri il dettaglio di Push/i })).toBeTruthy();
         expect(screen.queryByText(/100kg×8/)).toBeNull();
     });
 
