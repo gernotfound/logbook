@@ -925,7 +925,7 @@
 .exercise-section-head span {
   flex: none;
   color: var(--text-muted);
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-meta);
 }
 
 .exercise-compact-list {
@@ -1001,7 +1001,7 @@
 
 .exercise-compact-meta {
   color: var(--text-muted);
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-meta);
 }
 
 .exercise-compact-chevron {
@@ -1141,7 +1141,7 @@
   margin-top: .1875rem;
   overflow-wrap: anywhere;
   color: var(--text-main);
-  font-size: var(--font-size-meta);
+  font-size: var(--font-size-secondary);
   font-weight: 500;
 }
 
@@ -1161,7 +1161,7 @@
 .exercise-detail-notes p {
   margin: .25rem 0 0;
   color: var(--text-main);
-  font-size: var(--font-size-meta);
+  font-size: var(--font-size-body);
   overflow-wrap: anywhere;
 }
 
@@ -1216,7 +1216,7 @@
   min-height: 2.75rem;
   margin: 0;
   padding: 0 .875rem;
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-secondary);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1231,7 +1231,7 @@
 .exercise-tracking-field legend,
 .exercise-muscle-search-area label {
   color: var(--text-main);
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-secondary);
   font-weight: 500;
 }
 
@@ -1276,7 +1276,7 @@
   background: var(--surface-light);
   color: var(--text-muted);
   font: inherit;
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-secondary);
   overflow-wrap: anywhere;
 }
 
@@ -1317,7 +1317,7 @@
 }
 
 .exercise-setting-copy strong {
-  font-size: var(--font-size-meta);
+  font-size: var(--font-size-secondary);
   font-weight: 500;
 }
 
@@ -1436,7 +1436,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-meta);
 }
 
 .exercise-muscle-mode-button.primary.active {
@@ -1479,7 +1479,7 @@
   background: var(--surface-color);
   color: var(--text-main);
   font: inherit;
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-secondary);
   text-align: left;
   overflow-wrap: anywhere;
 }
@@ -1511,7 +1511,7 @@
   border-radius: .6875rem;
   background: var(--surface-color);
   color: var(--text-muted);
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-secondary);
   text-align: center;
 }
 
@@ -1597,7 +1597,7 @@
 
 .exercise-selected-empty {
   color: var(--text-muted);
-  font-size: var(--font-size-micro);
+  font-size: var(--font-size-secondary);
 }
 
 .exercise-editor-actions {

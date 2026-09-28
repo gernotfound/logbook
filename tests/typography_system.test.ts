@@ -53,4 +53,13 @@ describe('scala tipografica canonica', () => {
     const base = fs.readFileSync(path.join(ROOT, 'src/styles/base.css'), 'utf8');
     expect(base).toMatch(/input,\s*select,\s*textarea\s*\{[\s\S]*?font-size:\s*16px\s*!important/);
   });
+
+  it('allinea Schede ed Esercizi alla stessa gerarchia tipografica', () => {
+    const training = fs.readFileSync(path.join(ROOT, 'src/components/Training/training.css'), 'utf8');
+    const routineCard = fs.readFileSync(path.join(ROOT, 'src/components/Training/routines/RoutineCard.tsx'), 'utf8');
+    expect(training).toMatch(/\.exercise-compact-name\s*\{[\s\S]*?font-size:\s*var\(--font-size-control\)/);
+    expect(training).toMatch(/\.exercise-compact-meta\s*\{[\s\S]*?font-size:\s*var\(--font-size-meta\)/);
+    expect(routineCard).toContain('font-bold text-md');
+    expect(routineCard).toContain('text-muted text-xs mt-4');
+  });
 });
