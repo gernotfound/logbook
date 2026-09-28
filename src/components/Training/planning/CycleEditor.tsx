@@ -3,7 +3,7 @@
 // Effetti: chiama onSave col nuovo ciclo validato; usa lo state di dialogStore per gli alert.
 
 import React, { useCallback, useMemo } from 'react';
-import { Pencil, Save, Plus } from 'lucide-react';
+import { CalendarDays, Pencil, Save, Plus } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
@@ -156,7 +156,6 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     width: '100%',
                                     height: '100%',
                                     padding: 0,
-                                    fontSize: 'var(--font-size-display-sm)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -167,7 +166,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     cursor: 'pointer'
                                 }}
                             >
-                                📅
+                                <CalendarDays size={20} aria-hidden="true" />
                             </button>
                             <input
                                 ref={startDatePickerRef}
@@ -226,7 +225,6 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     width: '100%',
                                     height: '100%',
                                     padding: 0,
-                                    fontSize: 'var(--font-size-display-sm)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -237,7 +235,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                                     cursor: 'pointer'
                                 }}
                             >
-                                📅
+                                <CalendarDays size={20} aria-hidden="true" />
                             </button>
                             <input
                                 ref={endDatePickerRef}
