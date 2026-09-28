@@ -71,7 +71,11 @@ export function ExerciseArchive({
     const routineCounts = useMemo(() => {
         const counts = new Map<string, number>();
         routines.forEach(routine => {
-            const exerciseIds = new Set((routine.exercises || []).map((exercise: any) => exercise.exId));
+            const exerciseIds = new Set<string>(
+                (routine.exercises || [])
+                    .map((exercise: any) => exercise.exId)
+                    .filter((id: unknown): id is string => typeof id === 'string')
+            );
             exerciseIds.forEach(id => counts.set(id, (counts.get(id) || 0) + 1));
         });
         return counts;
