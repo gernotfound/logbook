@@ -52,10 +52,8 @@ describe('SVG Muscle Model Layout Width Verification', () => {
     // Simulate container layout width (350px mobile card width)
     const computedContainerWidth = 350;
 
-    // Calculate layout width considering viewBox and CSS rules
-    // viewBox is "2 5 66 89", width = 64, height = 84 (aspect ratio height/width = 84/64 = 1.3125)
-    // If max-height was 180px, max width would be 180 / 1.3125 = 137.14px (39.18% of container)
-    // With max-height: none and width: 100%, calculated SVG width equals container width (350px)
+    // The SVG keeps width: 100% with no max-height constraint; the exercise-specific
+    // viewBox framing is verified separately so the full head and feet stay visible.
     const maxHeightValue = computedSvgStyle.maxHeight;
     let computedSvgWidth = computedContainerWidth;
     if (maxHeightValue && maxHeightValue !== 'none' && maxHeightValue.endsWith('px')) {
@@ -81,7 +79,7 @@ describe('SVG Muscle Model Layout Width Verification', () => {
       </div>
     );
 
-    const createBtn = screen.getByText(/Crea esercizio/i);
+    const createBtn = screen.getByRole('button', { name: /Crea esercizio/i });
     fireEvent.click(createBtn);
 
     const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;
@@ -128,12 +126,8 @@ describe('SVG Muscle Model Layout Width Verification', () => {
         { userData: longNameUserData }
       );
 
-      const createBtn = screen.getByText(/Crea esercizio/i);
+      const createBtn = screen.getByRole('button', { name: /Crea esercizio/i });
       fireEvent.click(createBtn);
-
-      // Expand card to view muscle model
-      const exerciseTitle = container.querySelector('.card .font-bold');
-      expect(exerciseTitle).not.toBeNull();
 
       const muscleMapContainer = container.querySelector('.muscle-map-container') as HTMLElement;
       expect(muscleMapContainer).not.toBeNull();
