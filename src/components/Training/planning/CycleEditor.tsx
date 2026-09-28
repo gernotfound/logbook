@@ -336,7 +336,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     required
                     style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                 />
-                <p className="text-xs text-muted mt-4 mb-0">
+                <p className="text-base text-muted mt-4 mb-0">
                     Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
                 </p>
             </div>
