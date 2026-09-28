@@ -150,7 +150,7 @@ export function CycleStrategyFields({
         <section className="mb-15" aria-labelledby="cycle-strategy-title">
             <div className="mb-8">
                 <h3 id="cycle-strategy-title" className="m-0 text-sm" style={{ color: 'var(--text-main)' }}>Obiettivo</h3>
-                <p className="text-xs text-muted mt-4 mb-0">
+                <p className="text-base text-muted mt-4 mb-0">
                     Descrive l'intenzione del ciclo. Non modifica automaticamente schede, serie o frequenza.
                 </p>
             </div>
