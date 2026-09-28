@@ -73,7 +73,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
     return (
         <>
-            <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
+            <div style={{ margin: '20px 0', padding: '15px', background: 'var(--primary-soft)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
                 <label htmlFor="water-intake" style={{ fontSize: 'var(--font-size-meta)', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                     <Droplets size={16} aria-hidden="true" /> Acqua bevuta (litri)
                 </label>
