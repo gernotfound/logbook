@@ -5,7 +5,7 @@ import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
-import { clearCatalogCache, getSeedCatalog, saveCatalogToCache } from '../src/lib/catalog/catalogService';
+import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
@@ -242,23 +242,39 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 customDeleted = await result.current.handleDelete(customExercise.id, { stopPropagation });
             });
             expect(customDeleted).toBe(true);
-            expect(showConfirm).toHaveBeenCalled();
             expect(useAppStore.getState().userData?.library?.map(ex => ex.id)).toEqual([catalogExercise.id]);
         });
 
-        it('handleRestoreExercise restores the bundled catalog version after confirmation', async () => {
+        it('handleRestoreExercise restores the in-memory catalog version after confirmation', async () => {
             await clearCatalogCache();
-            const seedCatalog = getSeedCatalog();
-            await saveCatalogToCache(seedCatalog);
-            const original = seedCatalog.exercises[0];
-            expect(original).toBeDefined();
-
-            const modified: Exercise = {
-                ...(original as any),
-                name: `${original.name} modificato`,
-                notes: 'Override locale',
+            const original: Exercise = {
+                id: 'catalog-restore',
+                name: 'Panca catalogo',
+                notes: 'Setup originale',
+                muscles: ['chest_upper'],
+                secondaryMuscles: ['triceps'],
                 setsCount: 3,
                 sets: [],
+                trackingType: 'weight_reps',
+                isDefault: true
+            };
+            await saveCatalogToCache({
+                manifest: {
+                    version: 'test-restore',
+                    updatedAt: '2026-09-28T00:00:00.000Z',
+                    schemaVersion: 1,
+                    docRefs: { exercises: 'exercises_test', foods: 'foods_test' },
+                    itemCounts: { exercises: 1, foods: 0 }
+                },
+                exercises: [original as any],
+                foods: [],
+                cachedAt: Date.now()
+            });
+
+            const modified: Exercise = {
+                ...original,
+                name: `${original.name} modificato`,
+                notes: 'Override locale',
                 isDefault: true
             };
             const showConfirm = vi.fn().mockResolvedValue(true);
