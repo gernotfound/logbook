@@ -62,10 +62,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const migrationDataRef = useRef<UserData | null>(null);
     const authRunRef = useRef(0);
     const authUidRef = useRef(auth.currentUser?.uid ?? null);
+    const redirectLaunchFailedRef = useRef(false);
 
     const setUserData = useAppStore(state => state.setUserData);
     const setSyncing = useAppStore(state => state.setSyncing);
     const setSaveError = useAppStore(state => state.setSaveError);
+
+    const startGoogleRedirect = useCallback(async () => {
+        redirectLaunchFailedRef.current = false;
+        try {
+            writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
+            await signInWithRedirect(auth, provider);
+        } catch (error) {
+            redirectLaunchFailedRef.current = true;
+            if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
+                console.error('Impossibile ripulire lo stato locale dopo un redirect Google non avviato.');
+            }
+            throw error;
+        }
+    }, []);
 
     const loadData = useCallback(async (user: User) => {
         await loadAuthenticatedData({
@@ -102,6 +117,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         let isMounted = true;
         const handleAuthVisibilityChange = async () => {
+            if (redirectLaunchFailedRef.current) return;
             if (document.visibilityState !== 'visible' || readBrowserValue(AWAITING_REDIRECT_KEY) !== 'true') return;
             if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
                 setSaveError('Accesso completato, ma non riesco ad aggiornare lo stato locale del dispositivo. Riprova.');
@@ -329,8 +345,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
                 try {
-                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
-                    await signInWithRedirect(auth, provider);
+                    await startGoogleRedirect();
                 } catch (redirectError) {
                     console.error("Errore login redirect", redirectError);
                     setSaveError("Accesso fallito. Riprova.");
@@ -342,7 +357,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError("Errore di accesso: " + error.message);
             }
         }
-    }, [setSaveError]);
+    }, [setSaveError, startGoogleRedirect]);
 
     const handleAuthError = useCallback((error: any) => {
         let msg = "Errore di autenticazione.";
@@ -426,8 +441,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const failure = classifyGooglePopupFailure(error);
             if (failure === 'redirect') {
                 try {
-                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'true');
-                    await signInWithRedirect(auth, provider);
+                    await startGoogleRedirect();
                 } catch (redirectError) {
                     console.error("Errore collegamento redirect:", redirectError);
                     setSaveError("Accesso fallito. Riprova.");
@@ -443,7 +457,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setSaveError("Collegamento fallito. Riprova.");
             }
         }
-    }, [setSaveError]);
+    }, [setSaveError, startGoogleRedirect]);
 
     const retryGuestMigration = useCallback(async () => {
         setSaveError(null);
