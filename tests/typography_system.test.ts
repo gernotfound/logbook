@@ -40,10 +40,10 @@ describe('scala tipografica canonica', () => {
     for (const file of files) {
       const source = fs.readFileSync(file, 'utf8');
       for (const match of source.matchAll(/font-size\s*:\s*([0-9]*\.?[0-9]+(?:px|rem))/g)) {
-        if (match[1] !== '16px') violations.push(\`${path.relative(ROOT, file)}: ${match[0]}\`);
+        if (match[1] !== '16px') violations.push(`${path.relative(ROOT, file)}: ${match[0]}`);
       }
       for (const match of source.matchAll(/fontSize\s*:\s*['"]([0-9]*\.?[0-9]+(?:px|rem))['"]/g)) {
-        if (match[1] !== '16px') violations.push(\`${path.relative(ROOT, file)}: ${match[0]}\`);
+        if (match[1] !== '16px') violations.push(`${path.relative(ROOT, file)}: ${match[0]}`);
       }
     }
     expect(violations).toEqual([]);
