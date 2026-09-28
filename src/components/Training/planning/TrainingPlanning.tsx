@@ -298,7 +298,7 @@ export default function TrainingPlanning() {
                                 marginBottom: '0'
                             }}>
                                 {cycleVolumeData.muscleVolumes.length === 0 ? (
-                                    <p className="text-xs text-muted" style={{ padding: '4px 4px' }}>
+                                    <p className="text-base text-muted" style={{ padding: '4px 4px' }}>
                                         Nessun esercizio presente nelle schede di questo ciclo.
                                     </p>
                                 ) : (
