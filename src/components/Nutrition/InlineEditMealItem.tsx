@@ -142,7 +142,7 @@ export default function EditMealItemModal({ item, onClose, onSave, onDelete }: E
                 <button 
                     type="button" 
                     className="btn" 
-                    style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
+                    style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', flex: 1, marginBottom: 0 }}
                     onClick={handleDelete}
                 >
                     <Trash2 size={16} aria-hidden="true" style={{marginRight: '6px'}} /> Rimuovi
