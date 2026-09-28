@@ -3,7 +3,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { renderWithProviders, emptyUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
+import { useDialogStore } from '../src/store/useDialogStore';
 import { useTrainingExercises } from '../src/hooks/useTrainingExercises';
+import { clearCatalogCache, saveCatalogToCache } from '../src/lib/catalog/catalogService';
 import TrainingExercises from '../src/components/Training/TrainingExercises';
 import CustomFoodForm from '../src/components/Nutrition/CustomFoodForm';
 import type { Exercise } from '../src/types';
@@ -164,6 +166,144 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             expect(updatedLib.length).toBe(1);
             expect(updatedLib[0].id).toBe('ex-squat');
             expect(updatedLib[0].equipmentWeight).toBe(20);
+        });
+
+
+        it('handleDuplicate creates a unique personal exercise through Domain Operations', async () => {
+            const original: Exercise = {
+                id: 'ex-original',
+                name: 'Panca inclinata',
+                setsCount: 3,
+                sets: [],
+                trackingType: 'weight_reps',
+                isDefault: true
+            };
+
+            useAppStore.setState({
+                userData: {
+                    ...emptyUserData,
+                    library: [original]
+                }
+            });
+
+            const { result } = renderHook(() => useTrainingExercises());
+
+            await act(async () => {
+                await result.current.handleDuplicate(original);
+            });
+
+            const updatedLib = useAppStore.getState().userData?.library || [];
+            expect(updatedLib).toHaveLength(2);
+            const duplicate = updatedLib.find(ex => ex.id !== original.id);
+            expect(duplicate).toBeDefined();
+            expect(duplicate?.name).not.toBe(original.name);
+            expect(duplicate?.isDefault).toBe(false);
+        });
+
+        it('handleDelete blocks catalog exercises and deletes personal exercises after confirmation', async () => {
+            const catalogExercise: Exercise = {
+                id: 'ex-catalog',
+                name: 'Catalogo',
+                setsCount: 3,
+                sets: [],
+                trackingType: 'weight_reps',
+                isDefault: true
+            };
+            const customExercise: Exercise = {
+                id: 'ex-custom',
+                name: 'Personale',
+                setsCount: 3,
+                sets: [],
+                trackingType: 'weight_reps',
+                isDefault: false
+            };
+            const showAlert = vi.fn().mockResolvedValue(undefined);
+            const showConfirm = vi.fn().mockResolvedValue(true);
+            useDialogStore.setState({ showAlert, showConfirm });
+            useAppStore.setState({
+                userData: {
+                    ...emptyUserData,
+                    library: [catalogExercise, customExercise]
+                }
+            });
+
+            const { result } = renderHook(() => useTrainingExercises());
+            const stopPropagation = vi.fn();
+
+            let catalogDeleted = true;
+            await act(async () => {
+                catalogDeleted = await result.current.handleDelete(catalogExercise.id, { stopPropagation });
+            });
+            expect(catalogDeleted).toBe(false);
+            expect(useAppStore.getState().userData?.library).toHaveLength(2);
+
+            let customDeleted = false;
+            await act(async () => {
+                customDeleted = await result.current.handleDelete(customExercise.id, { stopPropagation });
+            });
+            expect(customDeleted).toBe(true);
+            expect(useAppStore.getState().userData?.library?.map(ex => ex.id)).toEqual([catalogExercise.id]);
+        });
+
+        it('handleRestoreExercise restores the in-memory catalog version after confirmation', async () => {
+            await clearCatalogCache();
+            const original: Exercise = {
+                id: 'catalog-restore',
+                name: 'Panca catalogo',
+                notes: 'Setup originale',
+                muscles: ['chest_upper'],
+                secondaryMuscles: ['triceps'],
+                setsCount: 3,
+                sets: [],
+                trackingType: 'weight_reps',
+                isDefault: true
+            };
+            await saveCatalogToCache({
+                manifest: {
+                    version: 'test-restore',
+                    updatedAt: '2026-09-28T00:00:00.000Z',
+                    schemaVersion: 1,
+                    docRefs: { exercises: 'exercises_test', foods: 'foods_test' },
+                    itemCounts: { exercises: 1, foods: 0 }
+                },
+                exercises: [original as any],
+                foods: [],
+                cachedAt: Date.now()
+            });
+
+            const modified: Exercise = {
+                ...original,
+                name: `${original.name} modificato`,
+                notes: 'Override locale',
+                isDefault: true
+            };
+            const showConfirm = vi.fn().mockResolvedValue(true);
+            useDialogStore.setState({
+                showConfirm,
+                showAlert: vi.fn().mockResolvedValue(undefined)
+            });
+            useAppStore.setState({
+                userData: {
+                    ...emptyUserData,
+                    library: [modified]
+                }
+            });
+
+            const { result } = renderHook(() => useTrainingExercises());
+
+            await act(async () => {
+                await result.current.handleRestoreExercise(String(original.id));
+            });
+
+            const restored = useAppStore.getState().userData?.library?.find(ex => String(ex.id) === String(original.id));
+            expect(restored?.name).toBe(original.name);
+            expect(restored?.notes).toBe(original.notes);
+            expect(restored?.trackingType).toBe(original.trackingType);
+            expect(restored?.muscles).toEqual(original.muscles);
+            expect(restored?.secondaryMuscles).toEqual(original.secondaryMuscles);
+            expect(restored?.sets).toEqual([]);
+
+            await clearCatalogCache();
         });
     });
 
