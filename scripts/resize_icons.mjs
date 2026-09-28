@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 const source = 'public/favicon.svg';
-const appBackground = '#070b18';
+const appBackground = '#171719';
 const pngTargets = [
   { output: 'public/favicon.png', size: 64, opaque: false },
   { output: 'public/apple-touch-icon.png', size: 180, opaque: true },
@@ -13,6 +13,7 @@ const pngTargets = [
 const faviconIcoOutput = 'public/favicon.ico';
 const maskableOutput = 'public/icon-maskable-512.png';
 const maskableSize = 512;
+const maskableArtworkScale = 0.8;
 const socialOutput = 'public/social-share.jpg';
 
 async function validateRaster(output, width, height, format, { opaque = false } = {}) {
@@ -40,9 +41,28 @@ async function validateSource(svg) {
   }
 }
 
-async function validateMaskableSafeZone(svg) {
-  const { data, info } = await sharp(svg)
-    .resize(maskableSize, maskableSize, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+async function createMaskableIcon(svg) {
+  const artworkSize = Math.round(maskableSize * maskableArtworkScale);
+  const artwork = await sharp(svg)
+    .resize(artworkSize, artworkSize, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+
+  return sharp({
+    create: {
+      width: maskableSize,
+      height: maskableSize,
+      channels: 4,
+      background: appBackground,
+    },
+  })
+    .composite([{ input: artwork, gravity: 'centre' }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+async function validateMaskableSafeZone(image) {
+  const { data, info } = await sharp(image)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -154,12 +174,9 @@ export async function generateIcons() {
   await writeFile(faviconIcoOutput, createIco(icoImages));
   await validateIco(faviconIcoOutput);
 
-  await validateMaskableSafeZone(svg);
-  await sharp(svg)
-    .resize(maskableSize, maskableSize, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
-    .flatten({ background: appBackground })
-    .png({ compressionLevel: 9 })
-    .toFile(maskableOutput);
+  const maskableIcon = await createMaskableIcon(svg);
+  await validateMaskableSafeZone(maskableIcon);
+  await writeFile(maskableOutput, maskableIcon);
   await validateRaster(maskableOutput, maskableSize, maskableSize, 'png', { opaque: true });
 
   const socialIcon = await sharp(svg).resize(430, 430, { fit: 'contain' }).png().toBuffer();

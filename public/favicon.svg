@@ -1,80 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" role="img" aria-label="LogBook LB neon icon">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#07111f"/>
-      <stop offset="0.55" stop-color="#070b18"/>
-      <stop offset="1" stop-color="#09081c"/>
-    </linearGradient>
-    <radialGradient id="cyanWash" cx="0.14" cy="0.08" r="0.76">
-      <stop offset="0" stop-color="#00d7ff" stop-opacity="0.22"/>
-      <stop offset="0.55" stop-color="#006cff" stop-opacity="0.05"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="violetWash" cx="0.90" cy="0.86" r="0.58">
-      <stop offset="0" stop-color="#6e00ff" stop-opacity="0.14"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="frameStroke" x1="95" y1="90" x2="1185" y2="1160" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#16efff"/>
-      <stop offset="0.45" stop-color="#0079ff"/>
-      <stop offset="1" stop-color="#4f36ff"/>
-    </linearGradient>
-    <linearGradient id="tlStroke" x1="176" y1="530" x2="596" y2="170" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#10e8ff"/>
-      <stop offset="0.52" stop-color="#11edff"/>
-      <stop offset="1" stop-color="#155cff"/>
-    </linearGradient>
-    <linearGradient id="brStroke" x1="660" y1="1025" x2="1080" y2="670" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#5b12ff"/>
-      <stop offset="0.55" stop-color="#c219ff"/>
-      <stop offset="1" stop-color="#7c13ff"/>
-    </linearGradient>
-    <linearGradient id="logoFill" x1="340" y1="350" x2="950" y2="880" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.55" stop-color="#fbfbff"/>
-      <stop offset="1" stop-color="#edf2ff"/>
-    </linearGradient>
-    <filter id="frameGlow" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="7" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="neonGlow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="18" result="b1"/>
-      <feGaussianBlur stdDeviation="7" result="b2"/>
-      <feMerge><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="logoSoft" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
-      <feOffset dy="1" result="off"/>
-      <feColorMatrix in="off" type="matrix" values="0 0 0 0 0.85  0 0 0 0 0.90  0 0 0 0 1  0 0 0 0.20 0" result="shadow"/>
-      <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <clipPath id="panelClip"><rect x="6" y="4" width="1242" height="1242" rx="258" ry="258"/></clipPath>
-  </defs>
-
-  <!-- Transparent outside the rounded app tile -->
-  <g filter="url(#frameGlow)">
-    <rect x="7" y="5" width="1240" height="1240" rx="257" ry="257" fill="url(#bg)" stroke="url(#frameStroke)" stroke-width="3"/>
-  </g>
-  <g clip-path="url(#panelClip)">
-    <rect x="6" y="4" width="1242" height="1242" fill="url(#cyanWash)"/>
-    <rect x="6" y="4" width="1242" height="1242" fill="url(#violetWash)"/>
-  </g>
-
-  <!-- Top-left neon bracket -->
-  <path d="M 184 522 L 184 235 Q 184 184 236 184 L 574 184"
-        fill="none" stroke="url(#tlStroke)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"
-        opacity="0.82" filter="url(#neonGlow)"/>
-  <path d="M 184 522 L 184 235 Q 184 184 236 184 L 574 184"
-        fill="none" stroke="url(#tlStroke)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- Bottom-right neon bracket -->
-  <path d="M 675 1025 L 1015 1025 Q 1079 1025 1079 961 L 1079 684"
-        fill="none" stroke="url(#brStroke)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"
-        opacity="0.84" filter="url(#neonGlow)"/>
-  <path d="M 675 1025 L 1015 1025 Q 1079 1025 1079 961 L 1079 684"
-        fill="none" stroke="url(#brStroke)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- Traced LB monogram: vector paths, no embedded bitmap -->
-  <path d="M 558 353 L 555 358 L 555 457 L 556 458 L 792 458 L 793 459 L 801 460 L 813 467 L 820 475 L 825 484 L 827 490 L 827 494 L 828 495 L 828 509 L 827 510 L 827 514 L 823 523 L 823 525 L 818 533 L 812 539 L 812 540 L 800 549 L 786 554 L 562 554 L 557 556 L 555 559 L 555 659 L 557 661 L 796 661 L 797 662 L 807 663 L 820 669 L 832 679 L 839 689 L 844 701 L 846 719 L 845 720 L 844 730 L 838 744 L 833 751 L 826 758 L 819 763 L 811 767 L 805 769 L 801 769 L 800 770 L 646 770 L 646 771 L 675 803 L 728 865 L 737 874 L 741 876 L 747 877 L 748 878 L 824 878 L 825 877 L 833 877 L 834 876 L 838 876 L 839 875 L 843 875 L 844 874 L 851 873 L 854 871 L 857 871 L 860 869 L 865 868 L 889 855 L 902 845 L 916 831 L 932 809 L 935 802 L 939 796 L 939 794 L 942 789 L 942 787 L 947 776 L 947 773 L 951 762 L 951 758 L 953 752 L 953 747 L 954 746 L 954 738 L 955 737 L 955 711 L 954 710 L 954 702 L 953 701 L 953 696 L 951 691 L 951 687 L 950 686 L 949 679 L 945 667 L 943 664 L 943 662 L 931 639 L 918 621 L 903 606 L 885 593 L 885 592 L 904 572 L 916 554 L 924 537 L 928 525 L 928 522 L 930 517 L 930 513 L 931 512 L 931 506 L 932 505 L 933 484 L 932 483 L 932 471 L 931 470 L 930 459 L 929 458 L 928 451 L 922 433 L 910 410 L 897 393 L 887 383 L 868 369 L 857 363 L 855 363 L 842 357 L 839 357 L 830 354 L 826 354 L 825 353 L 820 353 L 819 352 L 812 352 L 811 351 L 564 351 Z M 345 349 L 345 351 L 344 352 L 344 781 L 345 782 L 345 791 L 346 792 L 346 797 L 347 798 L 347 801 L 348 802 L 348 805 L 349 806 L 349 808 L 350 809 L 351 814 L 354 819 L 354 821 L 355 822 L 356 825 L 358 827 L 359 830 L 361 832 L 361 833 L 363 835 L 363 836 L 366 839 L 366 840 L 371 845 L 371 846 L 377 852 L 378 852 L 383 857 L 384 857 L 390 862 L 397 865 L 399 867 L 401 867 L 402 868 L 403 868 L 406 870 L 408 870 L 411 872 L 413 872 L 414 873 L 416 873 L 417 874 L 420 874 L 421 875 L 425 875 L 426 876 L 431 876 L 432 877 L 439 877 L 440 878 L 694 878 L 694 875 L 684 864 L 684 863 L 679 858 L 679 857 L 665 842 L 665 841 L 652 827 L 652 826 L 646 820 L 646 819 L 640 813 L 640 812 L 625 796 L 625 795 L 612 781 L 612 780 L 611 780 L 607 776 L 606 776 L 601 773 L 597 773 L 596 772 L 492 772 L 491 771 L 487 771 L 486 770 L 481 769 L 480 768 L 473 765 L 469 761 L 468 761 L 467 760 L 467 759 L 463 755 L 463 754 L 461 752 L 461 751 L 458 746 L 458 744 L 457 743 L 457 741 L 456 740 L 456 737 L 455 736 L 455 408 L 454 407 L 454 401 L 453 400 L 453 396 L 452 395 L 452 392 L 451 391 L 450 386 L 449 385 L 445 376 L 443 374 L 443 373 L 439 369 L 439 368 L 430 360 L 429 360 L 427 358 L 426 358 L 417 353 L 415 353 L 414 352 L 412 352 L 411 351 L 408 351 L 407 350 L 404 350 L 403 349 L 388 349 L 387 348 L 364 348 L 363 349 L 357 349 L 356 348 L 351 349 L 350 348 L 349 348 L 348 349 Z" fill="url(#logoFill)" filter="url(#logoSoft)"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 128 128" role="img" aria-label="LogBook LB icon">
+  <rect width="128" height="128" fill="#171719"/>
+  <text x="64" y="63"
+        text-anchor="middle"
+        dominant-baseline="central"
+        font-family="SF Pro Rounded, Avenir Next Rounded, Avenir Next, Nunito Sans, sans-serif"
+        font-size="71"
+        font-weight="800"
+        letter-spacing="-0.7"
+        fill="#F6F7F9"
+        stroke="#F6F7F9"
+        stroke-width="1"
+        stroke-linejoin="round"
+        paint-order="stroke fill">LB</text>
 </svg>
