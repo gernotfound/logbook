@@ -108,7 +108,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                         {letterIndex}
                                     </div>
                                     <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {routine?.name || 'Scheda'}
                                         </div>
                                         <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
