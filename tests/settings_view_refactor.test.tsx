@@ -21,6 +21,7 @@ describe('SettingsView decomposition parity', () => {
         expect(screen.getByRole('button', { name: /Backup JSON/i })).toBeDefined();
         expect(screen.queryByRole('button', { name: /Esporta archivio precedente/i })).toBeNull();
         expect(screen.getByRole('button', { name: /Esporta dati \(CSV\)/i })).toBeDefined();
+        expect(screen.queryByText(/Versione .* build/i)).toBeNull();
     });
 
     it('groups appearance, updates, and storage diagnostics under Sistema', () => {
@@ -30,7 +31,13 @@ describe('SettingsView decomposition parity', () => {
         expect(screen.getByRole('radio', { name: 'Sistema' })).toBeDefined();
         expect(screen.getByRole('radio', { name: 'Chiaro' })).toBeDefined();
         expect(screen.getByRole('radio', { name: 'Scuro' })).toBeDefined();
+        expect(screen.getByRole('heading', { name: 'Tema' })).toBeDefined();
+        expect(screen.getByRole('heading', { name: /Aggiornamenti/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Cerca aggiornamenti/i })).toBeDefined();
         expect(screen.getByText(/Diagnostica archiviazione/i)).toBeDefined();
+        expect(screen.getByText(/Versione .* build/i)).toBeDefined();
+
+        const systemCards = document.querySelectorAll('.settings-system-card');
+        expect(systemCards.length).toBe(3);
     });
 });
