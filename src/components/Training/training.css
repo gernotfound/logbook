@@ -1015,23 +1015,67 @@
   color: var(--text-main);
 }
 
+.exercise-detail-muscle-section {
+  display: grid;
+  min-width: 0;
+  gap: .625rem;
+  padding: .6875rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.0625rem;
+  background: var(--surface-light);
+}
+
+.exercise-detail-muscle-title {
+  color: var(--text-main);
+  font-size: .8125rem;
+  font-weight: 500;
+}
+
 .exercise-detail-muscle-map {
   display: grid;
   min-width: 0;
   place-items: center;
-  padding: .5rem .625rem .25rem;
-  border-radius: 1.375rem;
-  background: var(--primary-soft);
+  padding: .75rem .625rem .375rem;
+  overflow: hidden;
+  border-radius: .9375rem;
+  background: var(--surface-color);
 }
 
 .exercise-detail-muscle-map .muscle-map-container {
   width: 100%;
-  max-width: 16.5rem;
+  max-width: 17rem;
 }
 
-.exercise-detail-muscle-map .muscle-legend {
-  width: 100%;
+.exercise-detail-muscle-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .625rem;
   color: var(--text-muted);
+  font-size: .6875rem;
+}
+
+.exercise-detail-muscle-legend span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: .3125rem;
+  overflow-wrap: anywhere;
+}
+
+.exercise-detail-muscle-legend i {
+  display: inline-block;
+  width: .5625rem;
+  height: .5625rem;
+  flex: none;
+  border-radius: 50%;
+}
+
+.exercise-detail-muscle-legend i.primary {
+  background: var(--primary-color);
+}
+
+.exercise-detail-muscle-legend i.secondary {
+  background: var(--accent-color);
 }
 
 .exercise-detail-facts {
@@ -1050,6 +1094,9 @@
 .exercise-detail-fact span,
 .exercise-detail-fact strong {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .exercise-detail-fact span {
@@ -1141,9 +1188,9 @@
 .exercise-field label,
 .exercise-tracking-field legend,
 .exercise-muscle-search-area label {
-  color: var(--text-muted);
+  color: var(--text-main);
   font-size: .75rem;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .exercise-field input {
