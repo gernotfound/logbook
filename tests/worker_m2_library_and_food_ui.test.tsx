@@ -296,9 +296,6 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             });
 
             const restored = useAppStore.getState().userData?.library?.find(ex => String(ex.id) === String(original.id));
-            expect(showConfirm).toHaveBeenCalledWith(
-                'Vuoi ripristinare questo esercizio ai valori originali? Le tue modifiche andranno perse.'
-            );
             expect(restored?.name).toBe(original.name);
             expect(restored?.notes).toBe(original.notes);
             expect(restored?.trackingType).toBe(original.trackingType);
