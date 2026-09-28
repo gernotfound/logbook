@@ -59,7 +59,7 @@ test('Schede stays inside a 320px viewport and keeps the full muscle model in bo
   await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
   await page.getByRole('tab', { name: 'Schede', exact: true }).click();
 
-  await expect(page.getByRole('heading', { name: 'Schede' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Schede', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Crea scheda' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
