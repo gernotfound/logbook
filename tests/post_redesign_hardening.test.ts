@@ -32,7 +32,7 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/\.training-sub-view\.active\.exercise-library\s*\{[^}]*display:\s*grid/);
     expect(training).toMatch(/\.exercise-editor-close\s*\{[^}]*width:\s*auto[^}]*min-height:\s*2\.75rem/);
     expect(training).toMatch(/\.exercise-search-wrap > \.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap > \.exercise-muscle-search-input\s*\{[^}]*margin:\s*0[^}]*padding:\s*\.625rem 2\.75rem \.625rem 2\.875rem/);
-    expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-btn\s*\{[^}]*font-size:\s*\.75rem/);
+    expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-btn\s*\{[^}]*font-size:\\s*var\\(--font-size-meta\\)/);
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
   });
 

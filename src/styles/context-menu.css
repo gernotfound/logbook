@@ -4,7 +4,7 @@
 .context-menu-trigger[aria-expanded="true"] { background: var(--primary-soft); color: var(--primary-color); border-color: var(--primary-color); }
 .context-menu-dropdown { position: absolute; top: calc(100% + .375rem); min-width: 11.25rem; max-width: min(18rem, calc(100vw - 2rem)); width: max-content; background: var(--surface-color); border: 1px solid var(--border-strong); border-radius: .875rem; padding: .375rem; box-shadow: 0 .25rem 0 var(--shadow-color); z-index: 200; display: flex; flex-direction: column; gap: .125rem; }
 .context-menu-dropdown.align-right { right: 0; left: auto; } .context-menu-dropdown.align-left { left: 0; right: auto; }
-.context-menu-item { display: flex; align-items: center; gap: .625rem; width: 100%; min-height: 2.75rem; padding: .625rem .75rem; background: transparent; border: none; border-radius: .5rem; color: var(--text-main); font-size: .875rem; font-weight: 500; text-align: left; white-space: normal; }
+.context-menu-item { display: flex; align-items: center; gap: .625rem; width: 100%; min-height: 2.75rem; padding: .625rem .75rem; background: transparent; border: none; border-radius: .5rem; color: var(--text-main); font-size: var(--font-size-secondary); font-weight: 500; text-align: left; white-space: normal; }
 .context-menu-item:hover, .context-menu-item:focus-visible { background: var(--surface-light); }
 .context-menu-item.item-primary, .context-menu-item.context-menu-item-primary { color: var(--primary-color); }
 .context-menu-item.item-danger, .context-menu-item.context-menu-item-danger { color: var(--danger-color); }

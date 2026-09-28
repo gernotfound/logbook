@@ -72,10 +72,10 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                 onClick={() => onToggleExpand(routine.id)}
             >
                 <div>
-                    <div className={`font-bold text-lg ${isExpanded ? 'text-primary' : 'text-white'}`}>
+                    <div className={`font-bold text-md ${isExpanded ? 'text-primary' : 'text-white'}`}>
                         {routine.name}
                     </div>
-                    <div className="text-muted text-sm mt-4">
+                    <div className="text-muted text-xs mt-4">
                         {(routine.exercises || []).length} esercizi
                     </div>
                 </div>
@@ -103,11 +103,11 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
                                             <div className="text-md flex-1">
                                                 {index + 1}. {libDef ? libDef.name : 'Esercizio rimosso'}
                                             </div>
-                                            <div className="flex items-center gap-5 text-sm text-muted">
+                                            <div className="flex items-center gap-5 text-xs text-muted">
                                                 {ex.setsCount || 3} serie
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-10 flex-wrap text-sm text-muted">
+                                        <div className="flex items-center gap-10 flex-wrap text-xs text-muted">
                                             {(ex.minReps || ex.maxReps) && (
                                                 <span>Rep min: {ex.minReps || '-'} | Rep max: {ex.maxReps || '-'}</span>
                                             )}
