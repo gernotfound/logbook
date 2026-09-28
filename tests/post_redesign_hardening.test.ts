@@ -96,7 +96,7 @@ describe('post-redesign UI hardening', () => {
     const setCard = read('src/components/Training/session/SessionExerciseCard.tsx');
     const ratings = read('src/components/Training/session/SessionRatings.tsx');
     expect(search).toContain("color: isHighlighted ? 'var(--on-primary)' : 'var(--text-main)'");
-    expect(search).not.toMatch(/rgba\(255\s*,\s*255\s*,\s*255/);
+    expect(search).not.toMatch(/rgba\((?:255\s*,\s*255\s*,\s*255|46\s*,\s*204\s*,\s*113|255\s*,\s*183\s*,\s*3|0\s*,\s*229\s*,\s*255)/);
     expect(search).not.toContain('#000000');
     expect(setCard).toContain("background: 'var(--danger-soft)'");
     expect(setCard).not.toContain('#fca5a5');
@@ -118,11 +118,11 @@ describe('post-redesign UI hardening', () => {
     ];
     for (const path of paths) {
       const source = read(path);
-      expect(source, path).not.toMatch(/rgba\((?:14\s*,\s*165\s*,\s*233|239\s*,\s*68\s*,\s*68|255\s*,\s*77\s*,\s*109)/);
+      expect(source, path).not.toMatch(/rgba\((?:14\s*,\s*165\s*,\s*233|0\s*,\s*229\s*,\s*255|239\s*,\s*68\s*,\s*68|255\s*,\s*77\s*,\s*109)/);
     }
 
     const muscleModel = read('src/components/Training/MuscleModel.tsx');
-    expect(muscleModel).not.toMatch(/var\(--(?:surface-color|text-main|glass-border),/);
+    expect(muscleModel).not.toMatch(/var\(--(?:surface-color|surface-light|text-main|text-muted|primary-color|glass-border),/);
   });
 
   it('keeps routine editor fields explicitly named and theme-adaptive', () => {
