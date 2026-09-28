@@ -143,8 +143,8 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             fontSize: 'var(--font-size-micro)', 
                             padding: '2px 6px', 
                             borderRadius: '4px', 
-                            background: 'rgba(46, 204, 113, 0.15)', 
-                            color: 'var(--success-color, #2ecc71)',
+                            background: 'var(--success-soft)', 
+                            color: 'var(--success-color)',
                             fontWeight: 500
                         }}
                     >
@@ -157,7 +157,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             fontSize: 'var(--font-size-micro)', 
                             padding: '2px 6px', 
                             borderRadius: '4px', 
-                            background: 'rgba(255, 183, 3, 0.15)', 
+                            background: 'var(--warning-soft)', 
                             color: 'var(--warning-color)',
                             fontWeight: 500
                         }}
@@ -218,7 +218,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             transform: 'translateY(-50%)',
                             background: 'transparent',
                             border: 'none',
-                            color: 'var(--text-muted, #9ba3af)',
+                            color: 'var(--text-muted)',
                             cursor: 'pointer',
                             padding: '4px',
                             display: 'flex',
@@ -237,7 +237,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             top: '50%',
                             transform: 'translateY(-50%)',
                             pointerEvents: 'none',
-                            color: 'var(--text-muted, #9ba3af)',
+                            color: 'var(--text-muted)',
                             display: 'flex',
                             alignItems: 'center'
                         }}
@@ -276,7 +276,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                             style={{ 
                                 padding: '16px', 
                                 textAlign: 'center', 
-                                color: 'var(--text-muted, #9ba3af)', 
+                                color: 'var(--text-muted)', 
                                 fontSize: 'var(--font-size-meta)' 
                             }}
                         >
