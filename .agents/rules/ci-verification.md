@@ -52,6 +52,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: Java viene installato solo nello shard Firestore Rules salvo nuova dipendenza documentata.
 - MUST: Chromium Playwright viene installato solo nello shard E2E salvo nuova dipendenza documentata.
 - MUST: suite intenzionalmente single-worker, incluse recovery/fuzz/GC/hardening dove configurato, mantengono i propri limiti interni; la CI parallelizza tra suite, non forza concorrenza dentro scenari che richiedono isolamento.
+- MUST: la suite Vitest standard può essere divisa per file con `--shard=i/N` soltanto se tutti gli indici `1..N` sono presenti esattamente una volta e il CI contract ricompone la coppia nell'unico leaf canonico `npm run test`.
 - MUST: il contract PWA M7 che legge `dist/` deve essere eseguito nello stesso shard che produce il build richiesto, oppure ricevere artefatti verificati dello stesso exact SHA.
 - SHOULD: gli shard vanno bilanciati usando durate osservate in GitHub Actions; evitare micro-shard il cui overhead di setup supera il beneficio.
 

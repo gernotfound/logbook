@@ -25,24 +25,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - id: static
-            label: Static and contracts
-            command: "npm audit --audit-level=high && npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:no-skips"
+          - id: core
+            label: Static, isolated and recovery
+            command: "npm audit --audit-level=high && npm run lint && npm run test:typecheck:m5 && npm run test:quality:m5 && npm run test:repo-hygiene && npm run test:ci-contract && npm run test:no-skips && npm run test:isolated && npm run test:fuzz && npm run test:recovery && npm run test:gc"
             java: false
             playwright: false
-          - id: unit
-            label: Unit and integration
-            command: "npm run test"
+          - id: unit-1
+            label: Unit and integration 1/2
+            command: "npm run test -- --shard=1/2"
             java: false
             playwright: false
-          - id: distributed
-            label: Isolated and fuzz
-            command: "npm run test:isolated && npm run test:fuzz"
-            java: false
-            playwright: false
-          - id: resilience
-            label: Recovery and causal GC
-            command: "npm run test:recovery && npm run test:gc"
+          - id: unit-2
+            label: Unit and integration 2/2
+            command: "npm run test -- --shard=2/2"
             java: false
             playwright: false
           - id: hardening-stress

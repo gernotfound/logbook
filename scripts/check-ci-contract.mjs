@@ -127,13 +127,14 @@ if (!includeMatch) {
     return { id, command, java, playwright };
   });
 
-  const expectedIds = ['static', 'unit', 'distributed', 'resilience', 'hardening-stress', 'rules', 'e2e', 'm7-m8'];
+  const expectedIds = ['core', 'unit-1', 'unit-2', 'hardening-stress', 'rules', 'e2e', 'm7-m8'];
   const ids = shards.map(shard => shard.id);
   if (JSON.stringify(ids) !== JSON.stringify(expectedIds)) {
     failures.push(`parallel matrix: expected shard ids ${expectedIds.join(', ')}, got ${ids.join(', ')}`);
   }
 
   const ciLeaves = [];
+  const unitShardCommands = [];
   for (const shard of shards) {
     if (!shard.id || !shard.command || !shard.java || !shard.playwright) {
       failures.push(`parallel matrix: malformed shard ${JSON.stringify(shard)}`);
@@ -144,6 +145,10 @@ if (!includeMatch) {
     }
     for (const part of splitChain(shard.command)) {
       if (part === 'npm audit --audit-level=high') continue;
+      if (/^npm run test -- --shard=[12]\/2$/.test(part)) {
+        unitShardCommands.push(part);
+        continue;
+      }
       const scriptMatch = part.match(/^npm run ([A-Za-z0-9:_-]+)$/);
       if (scriptMatch && packageJson.scripts?.[scriptMatch[1]]) {
         ciLeaves.push(...expandScript(scriptMatch[1]));
@@ -151,6 +156,16 @@ if (!includeMatch) {
         ciLeaves.push(part);
       }
     }
+  }
+
+  const expectedUnitShardCommands = [
+    'npm run test -- --shard=1/2',
+    'npm run test -- --shard=2/2',
+  ];
+  if (JSON.stringify([...unitShardCommands].sort()) !== JSON.stringify(expectedUnitShardCommands)) {
+    failures.push(`unit suite: expected deterministic 1/2 + 2/2 Vitest shards exactly once, got ${unitShardCommands.join(', ')}`);
+  } else {
+    ciLeaves.push(...expandScript('test'));
   }
 
   let canonicalLeaves = [];
