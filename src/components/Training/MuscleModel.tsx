@@ -100,16 +100,16 @@ export default function MuscleModel({
         const isPrimary = primaryIds.has(id);
         const isSecondary = secondaryIds.has(id);
         
-        let fill = 'var(--surface-light, #1a1a1a)';
+        let fill = 'var(--surface-light)';
         if (isPrimary) {
-            fill = 'var(--primary-color, #00e5ff)';
+            fill = 'var(--primary-color)';
         } else if (isSecondary) {
             fill = 'var(--accent-color)';
         }
 
         return {
             fill,
-            stroke: 'var(--text-muted, #9ba3af)',
+            stroke: 'var(--text-muted)',
             strokeWidth: '0.3',
             cursor: interactive ? 'pointer' : 'default',
         };
@@ -167,7 +167,7 @@ export default function MuscleModel({
                 onMouseLeave={handleMouseLeave}
                 onClick={handleClick}
             >
-                <g id={`${instanceId}-figures`} stroke="var(--text-muted, #9ba3af)" strokeWidth="0.3" fill="var(--surface-light, #1a1a1a)">
+                <g id={`${instanceId}-figures`} stroke="var(--text-muted)" strokeWidth="0.3" fill="var(--surface-light)">
                     <MuscleModelPaths getPathStyle={getPathStyle} getPathId={getPathId} />
                 </g>
             </svg>
