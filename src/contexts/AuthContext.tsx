@@ -76,7 +76,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             redirectLaunchFailedRef.current = true;
             if (!tryRemoveBrowserValue(AWAITING_REDIRECT_KEY)) {
-                console.error('Impossibile ripulire lo stato locale dopo un redirect Google non avviato.');
+                try {
+                    writeBrowserValue(AWAITING_REDIRECT_KEY, 'failed');
+                } catch {
+                    console.error('Impossibile rendere non attivo lo stato locale dopo un redirect Google non avviato.');
+                }
             }
             throw error;
         }
