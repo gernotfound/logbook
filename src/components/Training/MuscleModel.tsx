@@ -213,14 +213,14 @@ export default function MuscleModel({
                     position: 'fixed',
                     left: tooltip.x + 15,
                     top: tooltip.y + 15,
-                    backgroundColor: 'var(--surface-color, #0d0d0d)',
-                    color: 'var(--text-main, #f0f0f0)',
+                    backgroundColor: 'var(--surface-color)',
+                    color: 'var(--text-main)',
                     padding: '6px 12px',
                     borderRadius: '6px',
                     fontWeight: 'bold',
                     pointerEvents: 'none',
                     zIndex: 9999,
-                    border: '1px solid var(--glass-border, rgba(255,255,255,0.1))',
+                    border: '1px solid var(--glass-border)',
                     whiteSpace: 'nowrap'
                 }} className="text-sm">
                     {tooltip.text}
