@@ -276,7 +276,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {lastNote && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: '#fca5a5' }}>
+                <div style={{ background: 'var(--danger-soft)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: 'var(--danger-color)' }}>
                     <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Note scorsa volta:</b> {lastNote}
                 </div>
             )}
