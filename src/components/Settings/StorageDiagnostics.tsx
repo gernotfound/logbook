@@ -1,11 +1,12 @@
+import { HardDrive } from 'lucide-react';
 import { getStorageDiagnosticData } from '../../lib/storageStatus';
 
 export function StorageDiagnostics() {
     const storageDiag = getStorageDiagnosticData();
 
     return (
-        <div className="section-divider">
-            <h3 style={{margin: '0 0 10px 0'}}><span aria-hidden="true">🔧</span> Diagnostica archiviazione</h3>
+        <div className="settings-system-card">
+            <h3><HardDrive size={18} aria-hidden="true" /> Diagnostica archiviazione</h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
             {!storageDiag ? (
                 <span style={{ fontSize: '0.85rem' }}>Caricamento...</span>
