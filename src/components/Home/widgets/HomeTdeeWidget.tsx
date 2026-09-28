@@ -18,7 +18,7 @@ export const HomeTdeeWidget: React.FC<HomeTdeeWidgetProps> = ({ tdeeCalc }) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <h2 style={{margin: 0, color: 'var(--success-color)'}}>TDEE reale stimato</h2>
-                    <p style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
+                    <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                     {tdeeCalc?.error ? (
