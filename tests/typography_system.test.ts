@@ -51,6 +51,7 @@ describe('scala tipografica canonica', () => {
 
   it('riserva i token display a valori numerici e timer', () => {
     const allowed = new Set([
+      'src/styles/global.css', // tests/cssReadCompat.ts expands its local imports when read
       'src/styles/tokens.css',
       'src/styles/components.css',
       'src/components/Home/widgets/ReadinessTrendCard.tsx',
