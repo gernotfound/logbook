@@ -76,7 +76,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                     {activeCycle && (
                         <span
                             style={{
-                                fontSize: '0.75rem',
+                                fontSize: 'var(--font-size-micro)',
                                 fontWeight: 'bold',
                                 padding: '3px 10px',
                                 borderRadius: '12px',
@@ -91,13 +91,13 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
 
                 {activeCycle ? (
                     plannedRoutines.length === 0 ? (
-                        <div style={{ padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        <div style={{ padding: '8px 0', color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)' }}>
                             <p className="m-0 mb-8">Nessuna scheda valida trovata nel ciclo attivo "{activeCycle.name}".</p>
                             {onNavigateToPlanning && (
                                 <button
                                     type="button"
                                     className="btn btn-secondary btn-small"
-                                    style={{ fontSize: '0.85rem', marginBottom: 0 }}
+                                    style={{ fontSize: 'var(--font-size-meta)', marginBottom: 0 }}
                                     onClick={onNavigateToPlanning}
                                 >
                                     Modifica ciclo in Pianificazione
@@ -117,20 +117,20 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                                     }}
                                 >
                                     <div className="flex-between items-center mb-6">
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--primary-color)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                             Prossima in programma
                                         </span>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                        <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
                                             Seduta #{nextScheduled.nextSessionIndex} di {nextScheduled.totalSessions}
                                         </span>
                                     </div>
 
                                     <div className="flex-between items-center mb-10">
                                         <div>
-                                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                                            <div style={{ fontSize: 'var(--font-size-display-sm)', fontWeight: 'bold', color: 'var(--text-main)' }}>
                                                 {nextScheduled.nextRoutine.name}
                                             </div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                                 Rotazione {nextScheduled.rotationNumber} • Scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle} • {(nextScheduled.nextRoutine.exercises || []).length} esercizi
                                             </div>
                                         </div>
@@ -191,7 +191,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                             <button
                                 type="button"
                                 className="btn btn-secondary btn-small"
-                                style={{ fontSize: '0.85rem', marginBottom: 0 }}
+                                style={{ fontSize: 'var(--font-size-meta)', marginBottom: 0 }}
                                 onClick={onNavigateToPlanning}
                             >
                                 <span aria-hidden="true">🎯</span> Vai a Pianificazione
@@ -226,7 +226,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </div>
 
                 {routines.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)' }}>
                         Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.
                     </p>
                 ) : (

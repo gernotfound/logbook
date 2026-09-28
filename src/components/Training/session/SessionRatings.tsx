@@ -74,7 +74,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
     return (
         <>
             <div style={{ margin: '20px 0', padding: '15px', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '12px', border: '1px solid var(--primary-color)' }}>
-                <label htmlFor="water-intake" style={{ fontSize: '0.85rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                <label htmlFor="water-intake" style={{ fontSize: 'var(--font-size-meta)', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                     <Droplets size={16} aria-hidden="true" /> Acqua bevuta (litri)
                 </label>
                 <BufferedInput 
@@ -122,7 +122,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                         <span>Dolori muscolari</span>
                         <span 
                             style={{
-                                fontSize: '0.75rem',
+                                fontSize: 'var(--font-size-micro)',
                                 padding: '2px 8px',
                                 borderRadius: '6px',
                                 background: pains.length > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.08)',
@@ -140,7 +140,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
                 {isDomsOpen && (
                     <div id="post-session-doms-panel" style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <p style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                             Seleziona i muscoli doloranti dopo l&apos;allenamento. I dolori già attivi restano tali finché non li rimuovi esplicitamente dalla schermata Recupero.
                         </p>
 
@@ -199,7 +199,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                 }}
                             >
                                 {searchResults.length === 0 ? (
-                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px', textAlign: 'center' }}>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)', padding: '10px', textAlign: 'center' }}>
                                         Nessun muscolo trovato
                                     </div>
                                 ) : (
@@ -217,7 +217,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                                     width: '100%',
                                                     padding: '8px 12px',
                                                     borderRadius: '6px',
-                                                    fontSize: '0.85rem',
+                                                    fontSize: 'var(--font-size-meta)',
                                                     cursor: 'pointer',
                                                     textAlign: 'left',
                                                     background: isPain ? 'var(--danger-soft)' : 'var(--surface-light)',
@@ -227,7 +227,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                                 }}
                                             >
                                                 <span style={{ fontWeight: 600 }}>{m.name}</span>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span style={{ fontSize: 'var(--font-size-micro)', fontWeight: 600, color: isPain ? 'var(--danger-color)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                     {isPain ? <><Check size={14} aria-hidden="true" /> Dolorante</> : <><Plus size={14} aria-hidden="true" /> Aggiungi</>}
                                                 </span>
                                             </button>
@@ -252,7 +252,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                             color: 'var(--danger-color)',
                                             padding: '4px 10px',
                                             borderRadius: '8px',
-                                            fontSize: '0.85rem',
+                                            fontSize: 'var(--font-size-meta)',
                                             fontWeight: 600
                                         }}
                                     >

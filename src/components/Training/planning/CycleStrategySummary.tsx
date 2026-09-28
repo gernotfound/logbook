@@ -20,7 +20,7 @@ export function CycleStrategySummary({ strategy }: { strategy?: TrainingCycleStr
     return (
         <div
             data-testid="cycle-strategy-summary"
-            style={{ display: 'grid', gap: '4px', fontSize: '0.85rem' }}
+            style={{ display: 'grid', gap: '4px', fontSize: 'var(--font-size-meta)' }}
         >
             <div style={{ color: 'var(--text-main)', fontWeight: 700 }}>
                 {getCycleStrategyLabel(strategy)}

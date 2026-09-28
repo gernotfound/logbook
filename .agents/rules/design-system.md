@@ -16,6 +16,15 @@ La scelta `system | light | dark` è una preferenza del dispositivo salvata best
 
 **MUST:** i token critici del tema duplicati nel CSS di bootstrap `public/appearance.css` devono restare coerenti con i corrispondenti token runtime in `src/styles/tokens.css`, sia per dark sia per light e per la preferenza di sistema. Quando cambia uno dei due file, verificare anche l'altro: sfondo, superfici, testo, colori delle azioni, bordi e `color-scheme` non devono cambiare tra il loader iniziale e l'app montata.
 
+## Tipografia
+
+La tipografia applicativa usa una scala semantica unica definita in `src/styles/tokens.css`. **MUST:** testo normale 15 px (`--font-size-body`), secondario 14 px (`--font-size-secondary`), metadati compatti 13 px (`--font-size-meta`), micro-label/badge 12 px (`--font-size-micro`), titoli di riga/controlli 16 px (`--font-size-control`), titoli sezione 18 px (`--font-size-section`) e titoli pagina 22 px (`--font-size-page`). Valori numerici in forte evidenza e timer possono usare soltanto i token display dedicati da 20/24/28/32/36 px.
+
+- **MUST:** evitare dimensioni tipografiche arbitrarie in CSS e `fontSize` numerici inline; usare i token canonici. L'unica eccezione intenzionale resta `16px` sugli input/select/textarea per la difesa dallo zoom iOS.
+- **MUST:** una stessa funzione visiva deve mantenere la stessa dimensione fra pagine: i nomi principali delle righe/card usano 16 px, il testo descrittivo 15 px e i metadati 13–14 px secondo densità.
+- **MUST:** nessun testo informativo ordinario scende sotto 12 px. Dimensioni display non vanno usate per testo discorsivo.
+- **SHOULD:** preferire classi/selector semantici e token; non introdurre nuovi valori solo per replicare una singola schermata.
+
 ## Layout, controlli e accessibilità
 
 - **MUST:** controlli principali e navigazione con area di tocco almeno 44×44 px; mantenere il rispetto delle safe area e uno spazio in fondo ai contenuti sopra la barra fissa.

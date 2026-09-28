@@ -208,6 +208,7 @@ Tema adattivo system/light/dark con superfici e controlli ispirati a iOS. `src/s
 - **MUST:** usare `GlobalDialog`/`useDialogStore` per dialoghi applicativi; niente `window.alert`/`window.confirm`.
 - **MUST:** niente `<dialog>` per form/editor complessi mobile; preferire superfici inline/full-screen/accordion.
 - **MUST:** input a `font-size: 16px !important` per prevenire zoom iOS dove applicabile.
+- **MUST:** la tipografia utente usa la scala semantica canonica in `src/styles/tokens.css`: 15 px corpo, 14 px secondario, 13 px metadati, 12 px micro-label, 16 px titoli di riga/controlli, 18 px sezioni e 22 px titoli pagina; timer e valori numerici in evidenza usano esclusivamente i token display dedicati. Evitare nuove dimensioni arbitrarie o `fontSize` numerici inline fuori dall'eccezione iOS a 16 px.
 - **MUST:** touch target principali almeno 44×44 px.
 - **SHOULD:** `min-width: 0` nei figli flex soggetti a overflow; `ContextMenu.tsx` per menu contestuali.
 - **MUST:** validare la sintassi CSS e la presenza di tutte le custom properties durante refactor dei token.

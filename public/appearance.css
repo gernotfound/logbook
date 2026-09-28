@@ -1,5 +1,18 @@
 /* Critical theme tokens used before the React bundle is available. */
 :root {
+    /* Scala tipografica normativa */
+    --font-size-micro: 0.75rem;      /* 12px: badge e micro-label */
+    --font-size-meta: 0.8125rem;     /* 13px: metadati compatti */
+    --font-size-secondary: 0.875rem; /* 14px: testo secondario */
+    --font-size-body: 0.9375rem;     /* 15px: testo normale */
+    --font-size-control: 1rem;       /* 16px: titoli di riga/controlli */
+    --font-size-section: 1.125rem;   /* 18px: titoli di sezione */
+    --font-size-page: 1.375rem;      /* 22px: titoli pagina */
+    --font-size-display-sm: 1.25rem; /* 20px: dati in evidenza */
+    --font-size-display-md: 1.5rem;  /* 24px: dati/display */
+    --font-size-display-xl: 1.75rem; /* 28px: dati/display */
+    --font-size-display-2xl: 2rem;   /* 32px: dati/display */
+    --font-size-timer: 2.25rem;      /* 36px: timer */
   color-scheme: dark;
   --bg-color: #000000;
   --surface-color: #171719;
@@ -141,13 +154,13 @@ body {
 
 .initial-loader-card h1 {
   margin: 0 0 0.75rem;
-  font-size: 2rem;
+  font-size: var(--font-size-display-2xl);
   letter-spacing: -0.04em;
 }
 
 .initial-loader-card p {
   color: var(--text-muted);
-  font-size: 1rem;
+  font-size: var(--font-size-control);
 }
 
 .initial-spinner {

@@ -40,7 +40,7 @@ export function AccountSettingsTab({
                     <h3 style={{margin: '0 0 8px 0', color: 'var(--primary-color)'}}>
                         <span aria-hidden="true">📱</span> Installa su iPhone / iPad
                     </h3>
-                    <p style={{ fontSize: '0.85rem', margin: 0, lineHeight: 1.4, color: 'var(--text-main)' }}>
+                    <p style={{ fontSize: 'var(--font-size-meta)', margin: 0, lineHeight: 1.4, color: 'var(--text-main)' }}>
                         Per installare LogBook come app a schermo intero: tocca l'icona <strong>Condividi</strong> in Safari e seleziona <strong>"Aggiungi alla schermata Home"</strong>.
                     </p>
                 </div>
@@ -49,7 +49,7 @@ export function AccountSettingsTab({
             {isOffline && (
                 <div className="section-divider">
                     <h2 style={{color: 'var(--warning-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Connessione assente</h2>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
+                    <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-main)', margin: 0 }}>
                         Sei attualmente offline. Puoi continuare a usare l'app: tutte le modifiche verranno salvate localmente e sincronizzate con il cloud non appena tornerà la connessione.
                     </p>
                 </div>
@@ -57,7 +57,7 @@ export function AccountSettingsTab({
 
             <div className="card" style={{ marginBottom: '100px' }}>
                 <h2 style={{color: 'var(--danger-color)',marginTop: 0}}><span aria-hidden="true">⚠️</span> Zona pericolosa</h2>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                     {isGuest
                         ? "Elimina permanentemente tutti i dati salvati su questo dispositivo. Questa azione è irreversibile."
                         : "Elimina permanentemente il tuo account e tutti i dati associati. Questa azione è irreversibile."

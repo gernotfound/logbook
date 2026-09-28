@@ -36,7 +36,7 @@ export default function ReadinessTrendCard({ history }: { history: WorkoutSessio
                     {entries.map(({ key, label, value }) => (
                         <div key={key} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--glass-border)', background: 'var(--surface-light)' }}>
                             <dt className="text-sm home-muted">{label}</dt>
-                            <dd style={{ margin: '4px 0 0', fontSize: '1.25rem', fontWeight: 700 }}>
+                            <dd style={{ margin: '4px 0 0', fontSize: 'var(--font-size-display-sm)', fontWeight: 700 }}>
                                 {value.latest === null ? '—' : `${value.latest.toFixed(1)}/5`}
                             </dd>
                             <span className="text-xs home-muted">

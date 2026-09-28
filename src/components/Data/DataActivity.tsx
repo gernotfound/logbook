@@ -52,7 +52,7 @@ export default function DataActivity() {
                     </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: '0.82rem' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '560px', fontSize: 'var(--font-size-meta)' }}>
                         <thead>
                             <tr>
                                 <th style={{ textAlign: 'left', padding: '8px 6px' }}>Settimana</th>

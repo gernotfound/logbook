@@ -39,7 +39,7 @@ const GlobalTimer = ({ startTime }: { startTime?: number }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [startTime]);
-    return <div style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
+    return <div style={{ fontSize: 'var(--font-size-display-2xl)', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--primary-color)', textAlign: 'center', margin: '15px 0' }}>{display}</div>;
 };
 
 export interface ActiveWorkoutSessionProps {
@@ -279,7 +279,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
 
             {activeWorkout.isEditingHistory ? (
                 <div style={{ margin: '20px 0', padding: '15px', background: 'var(--surface-light)', borderRadius: '12px', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
-                    <label htmlFor="workout-manual-duration" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
+                    <label htmlFor="workout-manual-duration" style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
                         Durata della sessione
                     </label>
                     <input 
@@ -291,7 +291,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                         onFocus={e => e.target.select()}
                         placeholder="00:00:00"
                         style={{ 
-                            fontSize: '1.8rem', 
+                            fontSize: 'var(--font-size-display-xl)', 
                             fontFamily: 'monospace', 
                             fontWeight: 'bold', 
                             color: 'var(--primary-color)', 
@@ -311,19 +311,19 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
 
             {activeWorkout.isEditingHistory ? (
                 <>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
+                    <button className="btn btn-primary" style={{ width: '100%', fontSize: 'var(--font-size-section)', padding: '15px', marginBottom: '10px' }} onClick={handleSaveHistory}>
                         <Save size={16} aria-hidden="true" /> Salva modifiche
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
+                    <button className="btn btn-danger" style={{ width: '100%', fontSize: 'var(--font-size-control)', padding: '12px', marginBottom: '20px' }} onClick={handleCancelHistory}>
                         Annulla modifica
                     </button>
                 </>
             ) : (
                 <>
-                    <button className="btn btn-success" style={{ width: '100%', fontSize: '1.1rem', padding: '15px', marginBottom: '10px' }} onClick={onRequestEnd}>
+                    <button className="btn btn-success" style={{ width: '100%', fontSize: 'var(--font-size-section)', padding: '15px', marginBottom: '10px' }} onClick={onRequestEnd}>
                         <CheckCircle2 size={16} aria-hidden="true" /> Termina sessione
                     </button>
-                    <button className="btn btn-danger" style={{ width: '100%', fontSize: '1rem', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
+                    <button className="btn btn-danger" style={{ width: '100%', fontSize: 'var(--font-size-control)', padding: '12px', marginBottom: '20px' }} onClick={deleteWorkout}>
                         <Trash2 size={16} aria-hidden="true" /> Elimina sessione
                     </button>
                 </>

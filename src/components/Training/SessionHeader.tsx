@@ -38,16 +38,16 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
                     marginBottom: '15px'
                 }}>
                     <div>
-                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: '0.95rem' }}>
+                        <div style={{ fontWeight: 'bold', color: 'var(--warning-color, #eab308)', fontSize: 'var(--font-size-body)' }}>
                             <Pencil size={16} aria-hidden="true" style={{marginRight: '8px'}} /> Modifica allenamento dello storico
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                             {routineName || 'Sessione'} • {date || ''}
                         </div>
                     </div>
                     <button 
                         className="btn btn-small" 
-                        style={{ width: 'auto', padding: '5px 12px', fontSize: '0.85rem', background: 'var(--surface-light)' }}
+                        style={{ width: 'auto', padding: '5px 12px', fontSize: 'var(--font-size-meta)', background: 'var(--surface-light)' }}
                         onClick={onCancelHistory}
                     >
                         Annulla

@@ -185,11 +185,11 @@ export default function TrainingPlanning() {
                         </h2>
                         {activeCycle && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
-                                <span style={{ fontSize: '0.95rem', color: 'var(--primary-color)', fontWeight: 'bold' }}>
+                                <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--primary-color)', fontWeight: 'bold' }}>
                                     {activeCycle.durationWeeks} settimane
                                 </span>
                                 <CycleStrategySummary strategy={activeCycle.strategy} />
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                                     {cycleVolumeData.totalWorkoutsPerWeek} sessioni • {cycleVolumeData.totalSetsPerWeek} serie / sett.
                                 </div>
                             </div>
@@ -203,7 +203,7 @@ export default function TrainingPlanning() {
                             <button
                                 type="button"
                                 className="btn btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: '0.85rem', marginBottom: 0, color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
+                                style={{ padding: '6px 12px', fontSize: 'var(--font-size-meta)', marginBottom: 0, color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                                 onClick={handleDeactivateCycle}
                                 title="Disattiva ciclo attivo"
                             >
@@ -273,15 +273,15 @@ export default function TrainingPlanning() {
                             aria-expanded={isVolumeOpen}
                         >
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>📊 Volume settimanale per muscolo</span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(serie a settimana)</span>
+                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)' }}>📊 Volume settimanale per muscolo</span>
+                                <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)', fontWeight: 'normal' }}>(serie a settimana)</span>
                             </span>
                             <span style={{
                                 display: 'inline-block',
                                 transform: isVolumeOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                                 transition: 'transform 0.25s ease',
                                 color: 'var(--text-muted)',
-                                fontSize: '0.85rem',
+                                fontSize: 'var(--font-size-meta)',
                                 lineHeight: 1
                             }}>▼</span>
                         </button>
@@ -313,10 +313,10 @@ export default function TrainingPlanning() {
                                             }}
                                         >
                                             <div className="flex-between items-center mb-4">
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--text-main)' }}>
                                                     {item.label}
                                                 </span>
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--primary-color)' }}>
+                                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--primary-color)' }}>
                                                     {item.sets} {item.sets === 1 ? 'serie' : 'serie'} / sett.
                                                 </span>
                                             </div>
@@ -362,7 +362,7 @@ export default function TrainingPlanning() {
                                                 borderRadius: '8px',
                                                 background: 'var(--surface-light)',
                                                 border: '1px solid var(--glass-border)',
-                                                fontSize: '0.85rem',
+                                                fontSize: 'var(--font-size-meta)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '6px'

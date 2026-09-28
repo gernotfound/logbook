@@ -136,7 +136,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     marginTop: '4px'
                 }}>
                     <Activity size={18} aria-hidden="true" style={{ color: 'var(--primary-color)' }} />
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
                         Esercizio cardio — le metriche verranno registrate durante la sessione.
                     </span>
                 </div>
@@ -144,7 +144,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                 <>
                     {/* Riga 1: Serie */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <label htmlFor={setsId} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                        <label htmlFor={setsId} style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                             Serie:
                         </label>
                         <input
@@ -175,7 +175,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                     {/* Riga 2: Rep min e Rep max */}
                     {libDef?.trackingType !== 'time' ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-                            <span id={`${fieldId}-reps-label`} style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                            <span id={`${fieldId}-reps-label`} style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                                 Ripetizioni:
                             </span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
@@ -204,7 +204,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                         boxSizing: 'border-box'
                                     }}
                                 />
-                                <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: '1rem' }}>-</span>
+                                <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: 'var(--font-size-control)' }}>-</span>
                                 <input
                                     id={maxRepsId}
                                     type="number"
@@ -234,7 +234,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                         </div>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
+                            <label style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', fontWeight: 600, width: '75px', flexShrink: 0 }}>
                                 Tipo:
                             </label>
                             <span className="text-muted text-xs italic">Tracciamento a tempo</span>

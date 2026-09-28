@@ -12,7 +12,7 @@ const DataBiometry = () => {
     return (
         <div className="section-divider-last">
             <h1 style={{marginTop: 0}}>Dati biometrici</h1>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+            <p style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                 I dati biometrici vengono utilizzati per calcolare accuratamente la percentuale di massa grassa (formula US Navy).
             </p>
             
@@ -38,7 +38,7 @@ const DataBiometry = () => {
             
             <div className="input-row" style={{ marginBottom: '15px', display: 'flex', gap: '12px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Altezza (cm)</label>
+                    <label style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Altezza (cm)</label>
                     <input 
                         id="biometry-height" 
                         type="number" 
@@ -50,7 +50,7 @@ const DataBiometry = () => {
                     />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sesso</label>
+                    <label style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', textAlign: 'center' }}>Sesso</label>
                     <select 
                         value={gender} 
                         onChange={e => setGender(e.target.value)}

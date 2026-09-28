@@ -109,7 +109,7 @@ export default function CustomFoodForm({
                 )}
             </div>
 
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '8px' }}>
                 Valori per 100 {cfData.unit !== 'pezzo' ? (cfData.unit || 'g') : 'g'}:
             </div>
             

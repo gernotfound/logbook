@@ -47,7 +47,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
             <h2 id={titleId} style={{margin: 0,color: 'var(--text-main)'}}>
               Termini e condizioni
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
               Aggiornati al 23 settembre 2026
             </p>
           </div>
@@ -69,7 +69,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
           padding: '24px',
           color: 'var(--text-muted)',
           lineHeight: '1.7',
-          fontSize: '0.95rem',
+          fontSize: 'var(--font-size-body)',
         }}>
           <Section title="1. Accettazione dei termini">
             <p>

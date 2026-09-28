@@ -66,10 +66,10 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
         <React.Fragment>
             <div className="set-row" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '10px', border: '1px solid var(--primary-color)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '75px' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
+                    <span style={{ fontSize: 'var(--font-size-meta)', fontWeight: 600, color: 'var(--text-main)' }}>S{sIndex + 1}</span>
                     <button
                         className="btn-icon"
-                        style={{ color: 'var(--danger-color)', fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                        style={{ color: 'var(--danger-color)', fontSize: 'var(--font-size-body)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
                         onClick={() => onRemoveSet(sIndex)}
                         aria-label={`Rimuovi serie ${sIndex + 1}`}
                     >
@@ -273,7 +273,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 <div style={{ marginLeft: '20px', borderLeft: '2px solid var(--primary-color)', padding: '8px 0 8px 10px', marginBottom: '6px' }}>
                     {hasRootTargetTechnique && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target reps</span>
+                            <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>Target reps</span>
                             <BufferedInput id={`target-${s.id}`} type="number" placeholder="—" value={s.target?.reps ?? ''} onChange={val => {
                                 const parsed = Number(val);
                                 onUpdateSetTarget(s.id, val === '' || !Number.isFinite(parsed) ? undefined : Math.max(0, Math.trunc(parsed)));
@@ -281,7 +281,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         </div>
                     )}
                     {advancedSegments.length === 0 && s.technique && s.technique !== 'straight' && (
-                        <div style={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                        <div style={{ fontSize: 'var(--font-size-meta)', fontWeight: 700 }}>
                             {continuationTechniqueLabel(s.technique)}
                         </div>
                     )}
@@ -298,7 +298,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
 
                         return (
                             <div key={segment.id || segmentIndex} style={{ marginBottom: '8px' }}>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--primary-color)', fontWeight: 700, marginBottom: '4px' }}>↳ {label}</div>
+                                <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--primary-color)', fontWeight: 700, marginBottom: '4px' }}>↳ {label}</div>
                                 <div style={{ display: 'grid', gridTemplateColumns, gap: '5px', alignItems: 'center' }}>
                                     {!isDropset && !isIsometry && (
                                         <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />
@@ -313,7 +313,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 </div>
                                 {(technique === 'rep_match' || technique === 'diminishing') && Boolean(segment.technique) && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px' }}>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target reps</span>
+                                        <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>Target reps</span>
                                         <BufferedInput
                                             id={`seg-target-${s.id}-${segmentIndex}`}
                                             type="number"
@@ -345,7 +345,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 const label = (s.dropsets && s.dropsets.length > 1) ? `↳ Dropset ${dsIdx + 1}` : '↳ Dropset';
                 return (
                     <div key={ds.id || dsIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--warning-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
+                        <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--warning-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
                             <BufferedInput id={`ds-kg-${s.id}-${dsIdx}`} type="number" step="0.25" placeholder="Kg" value={ds.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
                             <BufferedInput id={`ds-reps-${s.id}-${dsIdx}`} type="number" placeholder="Reps" value={ds.reps ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'dropsets', dsIdx, 'reps', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
@@ -359,7 +359,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                 const label = (s.isometrics && s.isometrics.length > 1) ? `↳ Isometria ${isoIdx + 1}` : '↳ Isometria';
                 return (
                     <div key={iso.id || isoIdx} style={{ marginLeft: '20px', borderLeft: '2px solid var(--accent-color)', paddingLeft: '10px', display: 'flex', alignItems: 'center', marginBottom: '5px', gap: '10px' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
+                        <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--accent-color)', minWidth: '78px', fontWeight: 600 }}>{label}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: 0 }}>
                             <BufferedInput id={`iso-kg-${s.id}-${isoIdx}`} type="number" step="0.25" placeholder="Kg" value={iso.kg ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'kg', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />
                             <BufferedInput id={`iso-time-${s.id}-${isoIdx}`} type="number" placeholder="Sec" value={iso.time ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'isometrics', isoIdx, 'time', val)} onFocus={e => e.target.select()} style={{ margin: 0, flex: 1, minWidth: 0 }} />

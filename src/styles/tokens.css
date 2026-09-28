@@ -40,6 +40,19 @@
     --spacing: 1rem;
     --font-system: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     --font-family: var(--font-system);
+    /* Scala tipografica normativa */
+    --font-size-micro: 0.75rem;      /* 12px: badge e micro-label */
+    --font-size-meta: 0.8125rem;     /* 13px: metadati compatti */
+    --font-size-secondary: 0.875rem; /* 14px: testo secondario */
+    --font-size-body: 0.9375rem;     /* 15px: testo normale */
+    --font-size-control: 1rem;       /* 16px: titoli di riga/controlli */
+    --font-size-section: 1.125rem;   /* 18px: titoli di sezione */
+    --font-size-page: 1.375rem;      /* 22px: titoli pagina */
+    --font-size-display-sm: 1.25rem; /* 20px: dati in evidenza */
+    --font-size-display-md: 1.5rem;  /* 24px: dati/display */
+    --font-size-display-xl: 1.75rem; /* 28px: dati/display */
+    --font-size-display-2xl: 2rem;   /* 32px: dati/display */
+    --font-size-timer: 2.25rem;      /* 36px: timer */
     --sticky-top: env(safe-area-inset-top, 0px);
     --nav-height: 3.25rem;
 }

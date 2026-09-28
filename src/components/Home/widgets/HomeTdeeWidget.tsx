@@ -18,18 +18,18 @@ export const HomeTdeeWidget: React.FC<HomeTdeeWidgetProps> = ({ tdeeCalc }) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                     <h2 style={{margin: 0, color: 'var(--success-color)'}}>TDEE reale stimato</h2>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
+                    <p style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Basato sull'andamento del peso</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                     {tdeeCalc?.error ? (
-                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-muted)' }}>-- kcal</span>
+                        <span style={{ fontSize: 'var(--font-size-display-sm)', fontWeight: 'bold', color: 'var(--text-muted)' }}>-- kcal</span>
                     ) : (
-                        <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--success-color)' }}>{tdeeCalc?.tdee} <span style={{fontSize:'1rem'}}>kcal</span></span>
+                        <span style={{ fontSize: 'var(--font-size-display-xl)', fontWeight: 'bold', color: 'var(--success-color)' }}>{tdeeCalc?.tdee} <span style={{fontSize: 'var(--font-size-control)'}}>kcal</span></span>
                     )}
                 </div>
             </div>
             
-            <div style={{ marginTop: '15px', padding: '10px', background: 'var(--surface-light)', borderRadius: '8px', fontSize: '0.85rem' }}>
+            <div style={{ marginTop: '15px', padding: '10px', background: 'var(--surface-light)', borderRadius: '8px', fontSize: 'var(--font-size-meta)' }}>
                 {tdeeCalc?.error ? (
                     <div style={{ color: 'var(--warning-color)', textAlign: 'center' }}>
                         ⏳ {tdeeCalc?.message}
