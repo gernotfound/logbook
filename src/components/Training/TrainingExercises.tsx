@@ -19,7 +19,6 @@ const TrainingExercises = () => {
     );
 
     const handleCreate = () => {
-        hook.handleCancelEdit();
         setSelectedExId(null);
         setIsCreating(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
