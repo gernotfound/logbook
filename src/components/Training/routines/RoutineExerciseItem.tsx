@@ -156,8 +156,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                             onFocus={e => e.target.select()}
                             style={{
                                 width: '90px',
-                                height: '42px',
-                                minHeight: '42px',
+                                height: '44px',
+                                minHeight: '44px',
                                 margin: 0,
                                 padding: '8px 12px',
                                 fontSize: '16px',
@@ -191,8 +191,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     style={{
                                         flex: 1,
                                         minWidth: 0,
-                                        height: '42px',
-                                        minHeight: '42px',
+                                        height: '44px',
+                                        minHeight: '44px',
                                         margin: 0,
                                         padding: '8px 8px',
                                         fontSize: '16px',
@@ -217,8 +217,8 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
                                     style={{
                                         flex: 1,
                                         minWidth: 0,
-                                        height: '42px',
-                                        minHeight: '42px',
+                                        height: '44px',
+                                        minHeight: '44px',
                                         margin: 0,
                                         padding: '8px 8px',
                                         fontSize: '16px',
@@ -367,7 +367,7 @@ export const RoutineExerciseItem: React.FC<RoutineExerciseItemProps> = ({
 
 
 
-                    <p className="text-xs text-muted" style={{ margin: 0 }}>
+                    <p className="text-base text-muted" style={{ margin: 0 }}>
                         Il Progression Engine usa esecuzione, ruolo, metrica e tecnica per interpretare i confronti, senza modificare automaticamente carichi, volume o recuperi.
                     </p>
                 </div>
