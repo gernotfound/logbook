@@ -184,7 +184,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                     )
                 ) : (
                     <div style={{ padding: '8px 0', color: 'var(--text-muted)' }}>
-                        <p className="text-xs m-0 mb-10">
+                        <p className="text-base m-0 mb-10">
                             Nessun ciclo di allenamento attivo al momento.
                         </p>
                         {onNavigateToPlanning && (
@@ -226,7 +226,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 </div>
 
                 {routines.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-body)' }}>
                         Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.
                     </p>
                 ) : (
