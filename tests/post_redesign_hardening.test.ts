@@ -36,6 +36,11 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
   });
 
+  it('keeps breathing room between the history header and calendar', () => {
+    const training = read('src/components/Training/training.css');
+    expect(training).toMatch(/\.history-header\s*\{[^}]*margin-bottom:\s*\.5rem/);
+  });
+
   it('does not render an automatic installation popup', () => {
     expect(existsSync(resolve('src/components/UI/InstallPrompt.tsx'))).toBe(false);
     expect(read('src/App.tsx')).not.toContain('InstallPrompt');
