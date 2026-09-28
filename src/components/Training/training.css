@@ -759,3 +759,821 @@
     padding-left: .625rem;
   }
 }
+
+
+/* Exercise library — proposal 5 */
+.exercise-library {
+  display: grid;
+  min-width: 0;
+  gap: .75rem;
+  padding-bottom: 5.625rem;
+}
+
+.exercise-library-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.exercise-library-header h2 {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-main);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+}
+
+.exercise-create-button {
+  flex: none;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0 .875rem;
+  gap: .375rem;
+}
+
+.exercise-library-list,
+.exercise-detail-page,
+.exercise-editor {
+  display: grid;
+  min-width: 0;
+  gap: .75rem;
+}
+
+.exercise-search-wrap,
+.exercise-muscle-search-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.exercise-search-wrap > svg,
+.exercise-muscle-search-wrap > svg {
+  position: absolute;
+  top: 50%;
+  left: .8125rem;
+  z-index: 1;
+  color: var(--text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.exercise-search-input,
+.exercise-field input,
+.exercise-muscle-search-wrap input,
+.exercise-weight-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.875rem;
+  box-sizing: border-box;
+  margin: 0;
+  outline: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-color);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 16px !important;
+}
+
+.exercise-search-input,
+.exercise-muscle-search-wrap input {
+  padding: .625rem 2.75rem .625rem 2.5rem;
+}
+
+.exercise-search-input::placeholder,
+.exercise-field input::placeholder,
+.exercise-muscle-search-wrap input::placeholder,
+.exercise-weight-input input::placeholder {
+  color: var(--text-muted);
+}
+
+.exercise-search-input:focus-visible,
+.exercise-field input:focus-visible,
+.exercise-muscle-search-wrap input:focus-visible,
+.exercise-weight-input input:focus-visible {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.exercise-search-clear,
+.exercise-muscle-search-clear {
+  position: absolute;
+  top: 50%;
+  right: .0625rem;
+  display: inline-grid;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control, .875rem);
+  background: transparent;
+  color: var(--text-muted);
+  transform: translateY(-50%);
+}
+
+.exercise-section-head {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .125rem .125rem 0;
+}
+
+.exercise-section-head h3 {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-main);
+  font-size: .9375rem;
+  font-weight: 600;
+}
+
+.exercise-section-head span {
+  flex: none;
+  color: var(--text-muted);
+  font-size: .75rem;
+}
+
+.exercise-compact-list {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.0625rem;
+  background: var(--surface-color);
+}
+
+.exercise-compact-row {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 1.125rem;
+  align-items: center;
+  gap: .625rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.625rem;
+  padding: .5rem .625rem;
+  border: 0;
+  border-bottom: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-main);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exercise-compact-row:last-child {
+  border-bottom: 0;
+}
+
+.exercise-compact-row:hover,
+.exercise-compact-row:focus-visible {
+  background: var(--surface-light);
+}
+
+.exercise-compact-icon {
+  display: inline-grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: .6875rem;
+  background: var(--surface-light);
+  color: var(--primary-color);
+}
+
+.exercise-compact-copy {
+  display: grid;
+  min-width: 0;
+  gap: .1875rem;
+}
+
+.exercise-compact-name,
+.exercise-compact-meta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exercise-compact-name {
+  color: var(--text-main);
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.exercise-compact-meta {
+  color: var(--text-muted);
+  font-size: .75rem;
+}
+
+.exercise-compact-chevron {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.exercise-empty-state {
+  padding: 1.25rem .75rem;
+  border-radius: 1.0625rem;
+  background: var(--surface-color);
+  color: var(--text-muted);
+  font-size: .8125rem;
+  text-align: center;
+}
+
+.exercise-detail-top {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .5rem;
+}
+
+.exercise-detail-top h3 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: 1.1875rem;
+  font-weight: 600;
+}
+
+.exercise-icon-button {
+  display: inline-grid;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--surface-color);
+  color: var(--text-main);
+}
+
+.exercise-detail-muscle-map {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  padding: .5rem .625rem .25rem;
+  border-radius: 1.375rem;
+  background: var(--primary-soft);
+}
+
+.exercise-detail-muscle-map .muscle-map-container {
+  width: 100%;
+  max-width: 16.5rem;
+}
+
+.exercise-detail-muscle-map .muscle-legend {
+  width: 100%;
+  color: var(--text-muted);
+}
+
+.exercise-detail-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4375rem;
+}
+
+.exercise-detail-fact {
+  min-width: 0;
+  padding: .625rem;
+  border-radius: .75rem;
+  background: var(--surface-light);
+}
+
+.exercise-detail-fact span,
+.exercise-detail-fact strong {
+  display: block;
+}
+
+.exercise-detail-fact span {
+  color: var(--text-muted);
+  font-size: .6875rem;
+}
+
+.exercise-detail-fact strong {
+  margin-top: .1875rem;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: .8125rem;
+  font-weight: 600;
+}
+
+.exercise-detail-notes {
+  padding: .75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: .875rem;
+  background: var(--surface-color);
+}
+
+.exercise-detail-notes > span {
+  display: block;
+  color: var(--text-muted);
+  font-size: .6875rem;
+}
+
+.exercise-detail-notes p {
+  margin: .25rem 0 0;
+  color: var(--text-main);
+  font-size: .8125rem;
+  overflow-wrap: anywhere;
+}
+
+.exercise-detail-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: .4375rem;
+}
+
+.exercise-action-button,
+.exercise-editor-actions .btn,
+.exercise-restore-button {
+  min-height: 2.75rem;
+  margin: 0;
+}
+
+.exercise-action-button {
+  gap: .375rem;
+}
+
+.exercise-action-danger {
+  color: var(--danger-color);
+}
+
+.exercise-editor {
+  padding: .8125rem;
+  border: 1px solid var(--primary-color);
+  border-radius: 1.25rem;
+  background: var(--surface-color);
+}
+
+.exercise-editor-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .625rem;
+}
+
+.exercise-editor-head h2 {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: .4375rem;
+  margin: 0;
+  color: var(--primary-color);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.exercise-field {
+  display: grid;
+  min-width: 0;
+  gap: .3125rem;
+}
+
+.exercise-field label,
+.exercise-tracking-field legend,
+.exercise-muscle-search-area label {
+  color: var(--text-muted);
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.exercise-field input {
+  padding: .625rem .75rem;
+  background: var(--surface-light);
+}
+
+.exercise-field input[aria-invalid="true"] {
+  border-color: var(--danger-color);
+}
+
+.exercise-field-error {
+  margin: 0;
+  color: var(--danger-color);
+  font-size: .75rem;
+}
+
+.exercise-tracking-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.exercise-tracking-field legend {
+  margin-bottom: .375rem;
+}
+
+.exercise-tracking-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .375rem;
+}
+
+.exercise-tracking-option {
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: .375rem;
+  border: 1px solid var(--glass-border);
+  border-radius: .75rem;
+  background: var(--surface-light);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .75rem;
+  overflow-wrap: anywhere;
+}
+
+.exercise-tracking-option.active {
+  border-color: var(--primary-color);
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.exercise-editor-settings {
+  overflow: hidden;
+  border-top: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.exercise-setting-row {
+  display: flex;
+  min-width: 0;
+  min-height: 3.375rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  color: var(--text-main);
+}
+
+.exercise-setting-row + .exercise-setting-row {
+  border-top: 1px solid var(--glass-border);
+}
+
+.exercise-setting-copy {
+  min-width: 0;
+}
+
+.exercise-setting-copy strong,
+.exercise-setting-copy span {
+  display: block;
+}
+
+.exercise-setting-copy strong {
+  font-size: .8125rem;
+  font-weight: 600;
+}
+
+.exercise-setting-copy span {
+  margin-top: .1875rem;
+  color: var(--text-muted);
+  font-size: .6875rem;
+}
+
+.exercise-switch {
+  position: relative;
+  display: inline-flex;
+  width: 3rem;
+  min-width: 3rem;
+  height: 2.75rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.exercise-switch input {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.exercise-switch-track {
+  position: relative;
+  display: block;
+  width: 3rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.exercise-switch-track::after {
+  position: absolute;
+  top: .1875rem;
+  left: .1875rem;
+  display: block;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  background: var(--surface-color);
+  content: "";
+  transition: transform .18s ease;
+}
+
+.exercise-switch input:checked + .exercise-switch-track {
+  background: var(--primary-color);
+}
+
+.exercise-switch input:checked + .exercise-switch-track::after {
+  transform: translateX(1.25rem);
+}
+
+.exercise-switch input:focus-visible + .exercise-switch-track {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.exercise-weight-input {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: .375rem;
+  color: var(--text-muted);
+  font-size: .75rem;
+}
+
+.exercise-weight-input input {
+  width: 4.75rem;
+  min-height: 2.75rem;
+  padding: .5rem .5625rem;
+  background: var(--surface-light);
+  text-align: right;
+}
+
+.exercise-muscle-selector {
+  display: grid;
+  min-width: 0;
+  gap: .625rem;
+  padding: .6875rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 1.0625rem;
+  background: var(--surface-light);
+}
+
+.exercise-muscle-selector > h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: .8125rem;
+  font-weight: 600;
+}
+
+.exercise-muscle-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .3125rem;
+  padding: .1875rem;
+  border-radius: .75rem;
+  background: var(--surface-color);
+}
+
+.exercise-muscle-mode-button {
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: .375rem .625rem;
+  border: 0;
+  border-radius: .5625rem;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .75rem;
+}
+
+.exercise-muscle-mode-button.primary.active {
+  background: var(--primary-color);
+  color: var(--on-primary);
+}
+
+.exercise-muscle-mode-button.secondary.active {
+  background: var(--accent-color);
+  color: var(--on-accent);
+}
+
+.exercise-muscle-search-area {
+  display: grid;
+  min-width: 0;
+  gap: .375rem;
+}
+
+.exercise-muscle-search-wrap input {
+  padding-left: 2.5rem;
+  background: var(--surface-color);
+}
+
+.exercise-muscle-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .375rem;
+}
+
+.exercise-muscle-option {
+  display: flex;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .375rem;
+  padding: .5rem;
+  border: 1px solid var(--glass-border);
+  border-radius: .6875rem;
+  background: var(--surface-color);
+  color: var(--text-main);
+  font: inherit;
+  font-size: .75rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.exercise-muscle-option span {
+  min-width: 0;
+}
+
+.exercise-muscle-option small {
+  flex: none;
+  font-size: .625rem;
+}
+
+.exercise-muscle-option.is-primary {
+  border-color: var(--primary-color);
+  background: var(--primary-soft);
+  color: var(--primary-color);
+}
+
+.exercise-muscle-option.is-secondary {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 16%, var(--surface-color));
+  color: var(--accent-color);
+}
+
+.exercise-muscle-empty {
+  grid-column: 1 / -1;
+  padding: .75rem;
+  border-radius: .6875rem;
+  background: var(--surface-color);
+  color: var(--text-muted);
+  font-size: .75rem;
+  text-align: center;
+}
+
+.exercise-muscle-model {
+  min-width: 0;
+  padding: .5rem .5rem .25rem;
+  overflow: hidden;
+  border-radius: .9375rem;
+  background: var(--surface-color);
+}
+
+.exercise-muscle-model .muscle-map-container {
+  max-width: 17rem;
+}
+
+.exercise-muscle-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  color: var(--text-muted);
+  font-size: .6875rem;
+}
+
+.exercise-muscle-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: .3125rem;
+}
+
+.exercise-muscle-legend i {
+  display: inline-block;
+  width: .5625rem;
+  height: .5625rem;
+  border-radius: 50%;
+}
+
+.exercise-muscle-legend i.primary {
+  background: var(--primary-color);
+}
+
+.exercise-muscle-legend i.secondary {
+  background: var(--accent-color);
+}
+
+.exercise-selected-muscles {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: .3125rem;
+}
+
+.exercise-muscle-tag {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 2rem;
+  align-items: center;
+  gap: .3125rem;
+  padding: 0 .5625rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: .6875rem;
+}
+
+.exercise-muscle-tag span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exercise-muscle-tag.primary {
+  border-color: var(--primary-color);
+  background: var(--primary-soft);
+  color: var(--primary-color);
+}
+
+.exercise-muscle-tag.secondary {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 16%, var(--surface-color));
+  color: var(--accent-color);
+}
+
+.exercise-selected-empty {
+  color: var(--text-muted);
+  font-size: .75rem;
+}
+
+.exercise-editor-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .625rem;
+}
+
+.exercise-restore-button {
+  width: 100%;
+  border-color: var(--danger-color);
+  background: var(--danger-soft);
+  color: var(--danger-color);
+}
+
+.exercise-create-button:focus-visible,
+.exercise-search-clear:focus-visible,
+.exercise-compact-row:focus-visible,
+.exercise-icon-button:focus-visible,
+.exercise-action-button:focus-visible,
+.exercise-tracking-option:focus-visible,
+.exercise-muscle-mode-button:focus-visible,
+.exercise-muscle-search-clear:focus-visible,
+.exercise-muscle-option:focus-visible,
+.exercise-muscle-tag:focus-visible,
+.exercise-restore-button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+@media (max-width: 22.5rem) {
+  .exercise-library,
+  .exercise-library-list,
+  .exercise-detail-page,
+  .exercise-editor {
+    gap: .625rem;
+  }
+
+  .exercise-editor {
+    padding: .75rem;
+  }
+
+  .exercise-library-header h2 {
+    font-size: 1.375rem;
+  }
+
+  .exercise-detail-facts {
+    gap: .375rem;
+  }
+
+  .exercise-detail-fact {
+    padding: .5625rem;
+  }
+
+  .exercise-muscle-results {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .exercise-tracking-option {
+    font-size: .6875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exercise-switch-track::after {
+    transition: none;
+  }
+}
