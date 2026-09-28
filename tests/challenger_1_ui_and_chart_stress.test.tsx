@@ -95,16 +95,27 @@ describe('Challenger 1: UI & Chart Component Stress Testing', () => {
         expect(screen.getByText('Dati insufficienti per calcolare la correlazione.')).toBeDefined();
         unmount();
 
+        const referenceDate = new Date();
+        referenceDate.setHours(12, 0, 0, 0);
+        const weeklyDate = (weeksAgo: number) => {
+            const date = new Date(referenceDate);
+            date.setDate(date.getDate() - (weeksAgo * 7));
+            return getLocalDateString(date.getTime());
+        };
+        const date3 = weeklyDate(3);
+        const date2 = weeklyDate(2);
+        const date1 = weeklyDate(1);
+
         const history: WorkoutSession[] = [
-            { id: 'w1', date: '2026-08-04', exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
-            { id: 'w2', date: '2026-08-11', exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
-            { id: 'w3', date: '2026-08-18', exercises: [{ exId: 'ex_bench', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
+            { id: 'w1', date: date3, exercises: [{ exId: 'ex_bench', sets: [{ id: 's1', kg: '100', reps: '10' }] }] },
+            { id: 'w2', date: date2, exercises: [{ exId: 'ex_bench', sets: [{ id: 's2', kg: '200', reps: '10' }] }] },
+            { id: 'w3', date: date1, exercises: [{ exId: 'ex_bench', sets: [{ id: 's3', kg: '300', reps: '10' }] }] }
         ];
 
         const nutrition: Record<string, NutritionDay> = {
-            '2026-08-04': { date: '2026-08-04', kcal: 2000, carbs: 0, pro: 0, fat: 0 },
-            '2026-08-11': { date: '2026-08-11', kcal: 2500, carbs: 0, pro: 0, fat: 0 },
-            '2026-08-18': { date: '2026-08-18', kcal: 3000, carbs: 0, pro: 0, fat: 0 }
+            [date3]: { date: date3, kcal: 2000, carbs: 0, pro: 0, fat: 0 },
+            [date2]: { date: date2, kcal: 2500, carbs: 0, pro: 0, fat: 0 },
+            [date1]: { date: date1, kcal: 3000, carbs: 0, pro: 0, fat: 0 }
         };
 
         renderWithProviders(
