@@ -53,7 +53,6 @@ describe('scala tipografica canonica', () => {
     const allowed = new Set([
       'src/styles/global.css', // tests/cssReadCompat.ts expands its local imports when read
       'src/styles/tokens.css',
-      'src/styles/global.css',
       'src/styles/components.css',
       'src/components/Home/widgets/ReadinessTrendCard.tsx',
       'src/components/Home/widgets/HomeTdeeWidget.tsx',
