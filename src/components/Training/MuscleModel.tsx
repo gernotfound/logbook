@@ -160,7 +160,7 @@ export default function MuscleModel({
             <svg
                 role="img"
                 aria-label="Mappa dei muscoli, vista anteriore e posteriore"
-                aria-describedby={descriptionId}
+                aria-describedby={showLegend ? descriptionId : undefined}
                 viewBox="0 0 70 94"
                 style={{ width: '100%', height: 'auto', backgroundColor: 'transparent', borderRadius: 0, overflow: 'visible' }}
                 onMouseMove={handleMouseMove}
