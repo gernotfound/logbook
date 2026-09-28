@@ -197,7 +197,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
 
                 {customFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🥗</div>
+                        <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '8px' }}>🥗</div>
                         <p className="m-0 text-sm font-semibold text-white">Nessun alimento presente.</p>
                         <p className="m-0 text-xs text-muted mt-4">
                             Clicca su <strong>+ Crea alimento</strong> in alto per iniziare a inserire i tuoi alimenti.
@@ -205,7 +205,7 @@ export default function NutritionFoodArchive({ onEditFood }: NutritionFoodArchiv
                     </div>
                 ) : filteredFoods.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-muted)' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🔍</div>
+                        <div style={{ fontSize: 'var(--font-size-display-2xl)', marginBottom: '8px' }}>🔍</div>
                         <p className="m-0 text-sm">Nessun alimento trovato per "{searchQuery}".</p>
                     </div>
                 ) : (

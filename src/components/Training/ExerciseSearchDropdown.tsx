@@ -126,7 +126,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                 {muscleCategory && (
                     <span 
                         style={{ 
-                            fontSize: '0.75rem', 
+                            fontSize: 'var(--font-size-micro)', 
                             padding: '2px 6px', 
                             borderRadius: '4px', 
                             background: 'rgba(0, 229, 255, 0.15)', 
@@ -140,7 +140,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                 {ex.trackingType === 'cardio' && (
                     <span 
                         style={{ 
-                            fontSize: '0.75rem', 
+                            fontSize: 'var(--font-size-micro)', 
                             padding: '2px 6px', 
                             borderRadius: '4px', 
                             background: 'rgba(46, 204, 113, 0.15)', 
@@ -154,7 +154,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                 {ex.trackingType === 'time' && (
                     <span 
                         style={{ 
-                            fontSize: '0.75rem', 
+                            fontSize: 'var(--font-size-micro)', 
                             padding: '2px 6px', 
                             borderRadius: '4px', 
                             background: 'rgba(255, 183, 3, 0.15)', 
@@ -277,7 +277,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                 padding: '16px', 
                                 textAlign: 'center', 
                                 color: 'var(--text-muted, #9ba3af)', 
-                                fontSize: '0.85rem' 
+                                fontSize: 'var(--font-size-meta)' 
                             }}
                         >
                             Nessun esercizio trovato
@@ -310,7 +310,7 @@ export const ExerciseSearchDropdown: React.FC<ExerciseSearchDropdownProps> = ({
                                             style={{ 
                                                 fontWeight: 600, 
                                                 color: 'var(--text-main, #f0f0f0)', 
-                                                fontSize: '0.95rem',
+                                                fontSize: 'var(--font-size-body)',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                                 whiteSpace: 'nowrap'

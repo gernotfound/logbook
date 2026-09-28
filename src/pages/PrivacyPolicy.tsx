@@ -47,7 +47,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <h2 id={titleId} style={{margin: 0,color: 'var(--text-main)'}}>
               Informativa sulla privacy
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
               Aggiornata al 23 settembre 2026
             </p>
           </div>
@@ -69,7 +69,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           padding: '24px',
           color: 'var(--text-muted)',
           lineHeight: '1.7',
-          fontSize: '0.95rem',
+          fontSize: 'var(--font-size-body)',
         }}>
           <Section title="Titolare del trattamento">
             <p>
@@ -213,7 +213,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
 const h3Style: React.CSSProperties = {
   color: 'var(--primary-color)',
-  fontSize: '0.95rem',
+  fontSize: 'var(--font-size-body)',
   fontWeight: 600,
   marginTop: '16px',
   marginBottom: '6px',

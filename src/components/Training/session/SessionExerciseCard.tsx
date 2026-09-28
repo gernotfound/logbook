@@ -153,7 +153,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <button
                         type="button"
                         className="btn-small"
-                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: '0.85rem', letterSpacing: '0.03em', color: 'var(--text-main)' }}
+                        style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: 'var(--font-size-meta)', letterSpacing: '0.03em', color: 'var(--text-main)' }}
                         onClick={() => setShowPositionMenu(v => !v)}
                         aria-label="Cambia posizione esercizio"
                     >#{exIndex + 1}</button>
@@ -168,7 +168,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                         display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
                                         background: targetIdx === exIndex ? 'rgba(0,229,255,0.15)' : 'transparent',
                                         border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
-                                        cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: '0.85rem', borderRadius: '6px'
+                                        cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
                                     }}
                                 >{targetIdx === exIndex ? `✓ ${targetIdx + 1}ª posizione` : `${targetIdx + 1}ª posizione`}</button>
                             ))}
@@ -208,7 +208,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             </div>
 
             {(exItem.minReps || exItem.maxReps) && (
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
                     Rep min: {exItem.minReps || '-'} | Rep max: {exItem.maxReps || '-'}
                 </div>
             )}
@@ -216,13 +216,13 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isHistoryOpen && (
                 <div id={`session-history-${exIndex}`} style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <div style={{ marginBottom: '8px', fontSize: '0.85rem', fontWeight: 400, color: 'var(--text-muted)' }}>Ultimi 2 allenamenti:</div>
+                    <div style={{ marginBottom: '8px', fontSize: 'var(--font-size-meta)', fontWeight: 400, color: 'var(--text-muted)' }}>Ultimi 2 allenamenti:</div>
                     {pastWorkouts.length === 0 ? (
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
+                        <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>Nessun dato precedente trovato.</div>
                     ) : (
                         pastWorkouts.map((pw, idx) => (
                             <div key={idx} style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed var(--glass-border)' }}>
-                                <strong style={{ fontSize: '0.85rem', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
+                                <strong style={{ fontSize: 'var(--font-size-meta)', color: 'var(--primary-color)' }}>{pw.date}</strong><br />
                                 {pw.sets.map((s: any, sIdx: number) => {
                                     // Salta la serie se entrambi i campi sono assenti (weight_reps)
                                     if (libDef?.trackingType !== 'time' && libDef?.trackingType !== 'cardio') {
@@ -237,7 +237,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     const displayRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
 
                                     return (
-                                        <span key={sIdx} style={{ fontSize: '0.85rem', marginRight: '15px', display: 'inline-block' }}>
+                                        <span key={sIdx} style={{ fontSize: 'var(--font-size-meta)', marginRight: '15px', display: 'inline-block' }}>
                                             S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
                                                 <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{displayTime}</b></>
                                             ) : (
@@ -254,7 +254,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 
             {isSetupOpen && (
                 <div id={`session-setup-${exIndex}`} style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
-                    <label className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 400 }} htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
+                    <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`technical-standard-${exItem.exId}`}>Standard tecnico di questa sessione</label>
                     <BufferedInput
                         id={`technical-standard-${exItem.exId}`}
                         type="text"
@@ -263,7 +263,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         onChange={value => onUpdateTechnicalStandard(exIndex, value)}
                         style={{ margin: '4px 0 10px', width: '100%', fontSize: '16px' }}
                     />
-                    <label className="text-muted" style={{ fontSize: '0.85rem', fontWeight: 400 }} htmlFor={`setup-${exItem.exId}`}>Note esercizio</label>
+                    <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`setup-${exItem.exId}`}>Note esercizio</label>
                     <input
                         id={`setup-${exItem.exId}`}
                         type="text"
@@ -276,7 +276,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {lastNote && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: '0.85rem', marginBottom: '15px', color: '#fca5a5' }}>
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: '#fca5a5' }}>
                     <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Note scorsa volta:</b> {lastNote}
                 </div>
             )}
