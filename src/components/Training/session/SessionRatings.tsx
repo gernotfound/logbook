@@ -125,7 +125,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
                                 fontSize: 'var(--font-size-micro)',
                                 padding: '2px 8px',
                                 borderRadius: '6px',
-                                background: pains.length > 0 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                                background: pains.length > 0 ? 'var(--danger-soft)' : 'var(--surface-color)',
                                 color: pains.length > 0 ? 'var(--danger-color)' : 'var(--text-muted)',
                                 border: pains.length > 0 ? '1px solid var(--danger-color)' : 'none'
                             }}
@@ -140,7 +140,7 @@ export const SessionRatings: React.FC<SessionRatingsProps> = ({
 
                 {isDomsOpen && (
                     <div id="post-session-doms-panel" style={{ padding: '16px', borderTop: '1px solid var(--glass-border)' }}>
-                        <p style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
+                        <p style={{ margin: '0 0 12px 0', fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>
                             Seleziona i muscoli doloranti dopo l&apos;allenamento. I dolori già attivi restano tali finché non li rimuovi esplicitamente dalla schermata Recupero.
                         </p>
 
