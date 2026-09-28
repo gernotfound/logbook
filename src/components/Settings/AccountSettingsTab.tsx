@@ -65,7 +65,7 @@ export function AccountSettingsTab({
                 </p>
                 <button
                     className="btn"
-                    style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', width: '100%', marginBottom: 0 }}
+                    style={{ background: 'var(--danger-soft)', color: 'var(--danger-color)', border: '1px solid var(--danger-color)', width: '100%', marginBottom: 0 }}
                     onClick={onDeleteAccount}
                     disabled={deletingAccount}
                 >
