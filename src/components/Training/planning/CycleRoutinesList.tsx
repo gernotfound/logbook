@@ -94,7 +94,7 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                                             width: '28px',
                                             height: '28px',
                                             borderRadius: '50%',
-                                            background: 'rgba(14, 165, 233, 0.15)',
+                                            background: 'var(--primary-soft)',
                                             border: '1px solid var(--primary-color)',
                                             color: 'var(--primary-color)',
                                             display: 'flex',
