@@ -64,6 +64,31 @@ describe('Google redirect lifecycle', () => {
       await result.current.login();
     });
 
+    expect(localStorage.getItem(REDIRECT_KEY)).toBe('failed');
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await act(async () => { await Promise.resolve(); });
+    expect(safeHardReload).not.toHaveBeenCalled();
+  });
+
+  it('mantiene il veto in-memory se falliscono sia remove sia fallback write', async () => {
+    const { result } = renderHook(() => useAuth(), { wrapper });
+    await act(async () => { await Promise.resolve(); });
+
+    const originalSetItem = localStorageMock.setItem.getMockImplementation();
+    localStorageMock.setItem
+      .mockImplementationOnce((key, value) => originalSetItem?.(key, value))
+      .mockImplementationOnce(() => {
+        throw new Error('storage write blocked');
+      });
+    localStorageMock.removeItem.mockImplementationOnce(() => {
+      throw new Error('storage remove blocked');
+    });
+
+    await act(async () => {
+      await result.current.login();
+    });
+
     expect(localStorage.getItem(REDIRECT_KEY)).toBe('true');
 
     document.dispatchEvent(new Event('visibilitychange'));
