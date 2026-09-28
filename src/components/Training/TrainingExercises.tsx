@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
 import { z } from '../../lib/zod';
@@ -9,7 +9,7 @@ import { ExerciseEditorForm } from './exercises/ExerciseEditorForm';
 const TrainingExercises = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_exercise', false, z.boolean());
     const [isSaving, setIsSaving] = useState(false);
-    const [expandedExId, setExpandedExId] = useState<string | null>(null);
+    const [selectedExId, setSelectedExId] = useState<string | null>(null);
     const hook = useTrainingExercises();
     const { editingExId, library, routines } = hook;
 
@@ -18,8 +18,16 @@ const TrainingExercises = () => {
         [library, editingExId]
     );
 
+    const handleCreate = () => {
+        hook.handleCancelEdit();
+        setSelectedExId(null);
+        setIsCreating(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const handleEditItem = (exercise: any) => {
         setIsCreating(false);
+        setSelectedExId(exercise.id);
         hook.handleEditClick(exercise);
     };
 
@@ -46,32 +54,31 @@ const TrainingExercises = () => {
         await hook.handleRestoreExercise(editingExId);
     };
 
+    const handleDelete = async (id: string, event: React.MouseEvent) => {
+        const deleted = await hook.handleDelete(id, event);
+        if (deleted) setSelectedExId(null);
+    };
+
+    const editorOpen = isCreating || Boolean(editingExId);
+
     return (
-        <div className="training-sub-view active">
-            {!editingExId && (
-                <div className="mb-20">
+        <div className="training-sub-view active exercise-library">
+            <header className="exercise-library-header">
+                <h2>Esercizi</h2>
+                {!editorOpen && (
                     <button
                         type="button"
-                        className="btn btn-primary w-full flex-center"
-                        style={{ gap: '8px' }}
-                        onClick={() => {
-                            if (isCreating) {
-                                handleCancel();
-                            } else {
-                                setIsCreating(true);
-                            }
-                        }}
-                        aria-expanded={isCreating}
-                        aria-controls="exercise-creation-form"
-                        disabled={isSaving}
+                        className="btn btn-primary exercise-create-button"
+                        onClick={handleCreate}
+                        aria-label="Crea esercizio"
                     >
-                        {isCreating ? <Minus size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
-                        Crea esercizio
+                        <Plus size={18} aria-hidden="true" />
+                        <span>Crea</span>
                     </button>
-                </div>
-            )}
+                )}
+            </header>
 
-            {(isCreating || editingExId) && (
+            {editorOpen ? (
                 <ExerciseEditorForm
                     hook={hook}
                     isSaving={isSaving}
@@ -80,19 +87,17 @@ const TrainingExercises = () => {
                     onSave={handleSave}
                     onRestore={handleRestore}
                 />
+            ) : (
+                <ExerciseArchive
+                    library={library}
+                    routines={routines}
+                    selectedExId={selectedExId}
+                    onSelectedExIdChange={setSelectedExId}
+                    onEditItem={handleEditItem}
+                    onDuplicate={hook.handleDuplicate}
+                    onDelete={handleDelete}
+                />
             )}
-
-            <ExerciseArchive
-                library={library}
-                routines={routines}
-                editingExId={editingExId}
-                isCreating={isCreating}
-                expandedExId={expandedExId}
-                onExpandedExIdChange={setExpandedExId}
-                onEditItem={handleEditItem}
-                onDuplicate={hook.handleDuplicate}
-                onDelete={hook.handleDelete}
-            />
         </div>
     );
 };
