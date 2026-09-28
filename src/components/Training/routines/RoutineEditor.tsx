@@ -48,81 +48,82 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
 }) => {
     return (
         <div>
-            <h2 style={{marginTop: 0}}>{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
+            <h2 className="routine-editor-title">{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
 
-            <div className="mb-15">
-                <input 
-                    type="text" 
-                    placeholder="Nome scheda" 
-                    value={routineName} 
-                    onChange={e => setRoutineName(e.target.value)}
-                    onFocus={e => e.target.select()}
-                    style={{ fontSize: '16px' }}
+            <div className="routine-editor-field">
+                <label htmlFor="routine-name">Nome scheda</label>
+                <input
+                    id="routine-name"
+                    className="routine-name-input"
+                    type="text"
+                    placeholder="Nome scheda"
+                    value={routineName}
+                    onChange={event => setRoutineName(event.target.value)}
+                    onFocus={event => event.target.select()}
                 />
             </div>
 
-            <div className="mb-15">
-                <ExerciseSearchDropdown
-                    library={library}
-                    onSelectExercise={onAddExercise}
-                    placeholder="Cerca esercizi da aggiungere"
+            <div className="routine-editor-field">
+                <label>Aggiungi esercizio</label>
+                <div className="routine-editor-search">
+                    <ExerciseSearchDropdown
+                        library={library}
+                        onSelectExercise={onAddExercise}
+                        placeholder="Cerca esercizi da aggiungere"
+                    />
+                </div>
+            </div>
+
+            <div className="routine-editor-section-head">
+                <h3>Esercizi nella scheda</h3>
+                <span>{routineExercises.length}</span>
+            </div>
+
+            <div className="routine-editor-muscle-map">
+                <MuscleModel
+                    selectedMuscles={Array.from(new Set(editMuscles)) as string[]}
+                    secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]}
                 />
             </div>
 
-            <div className="flex-between items-center mb-10">
-                <label className="text-muted text-xs block">Esercizi nella scheda ({routineExercises.length})</label>
-            </div>
-
-            {/* MuscleModel rimane sempre visibile anche con lista esercizi vuota */}
-            <div className="mb-15 flex-center w-full">
-                <MuscleModel 
-                    selectedMuscles={Array.from(new Set(editMuscles)) as string[]} 
-                    secondaryMuscles={Array.from(new Set(editSecMuscles)) as string[]} 
-                />
-            </div>
-
-            <div className="mb-15">
+            <div className="routine-editor-list">
                 {routineExercises.length === 0 ? (
-                    <p className="text-muted text-md mb-15">Nessun esercizio presente. Aggiungine uno dalla libreria!</p>
+                    <div className="routine-empty-state">Nessun esercizio. Cercane uno nella libreria.</div>
                 ) : (
-                    <div className="flex-col gap-10 mb-15">
-                        {routineExercises.map((ex: any, index: number) => {
-                            const libDef = library.find(l => l.id === ex.exId);
-                            return (
-                                <RoutineExerciseItem
-                                    key={index}
-                                    exercise={ex}
-                                    index={index}
-                                    totalExercises={routineExercises.length}
-                                    libDef={libDef}
-                                    onMove={onMoveExercise}
-                                    onRemove={onRemoveExercise}
-                                    onUpdateSetsCount={onUpdateSetsCount}
-                                    onUpdateReps={onUpdateReps}
-                                    onUpdateSetPlan={onUpdateSetPlan}
-                                    onUpdateSetPlanField={onUpdateSetPlanField}
-                                    onUpdateExerciseMetadata={onUpdateExerciseMetadata}
-                                />
-                            );
-                        })}
-                    </div>
+                    routineExercises.map((exercise: any, index: number) => {
+                        const libraryItem = library.find(item => item.id === exercise.exId);
+                        return (
+                            <RoutineExerciseItem
+                                key={index}
+                                exercise={exercise}
+                                index={index}
+                                totalExercises={routineExercises.length}
+                                libDef={libraryItem}
+                                onMove={onMoveExercise}
+                                onRemove={onRemoveExercise}
+                                onUpdateSetsCount={onUpdateSetsCount}
+                                onUpdateReps={onUpdateReps}
+                                onUpdateSetPlan={onUpdateSetPlan}
+                                onUpdateSetPlanField={onUpdateSetPlanField}
+                                onUpdateExerciseMetadata={onUpdateExerciseMetadata}
+                            />
+                        );
+                    })
                 )}
             </div>
 
-            <div className="flex gap-10 mt-10" style={{ width: '100%', minWidth: 0 }}>
-                <button 
-                    type="button" 
-                    className="btn flex-1 mb-0" 
-                    style={{ background: 'var(--surface-light)', whiteSpace: 'nowrap', margin: 0 }}
+            <div className="routine-editor-actions">
+                <button
+                    type="button"
+                    className="btn btn-secondary"
                     onClick={onCancel}
                     disabled={isSaving}
                 >
                     Annulla
                 </button>
-                <button 
-                    type="button" 
-                    className="btn btn-primary flex-1 mb-0" 
-                    style={{ whiteSpace: 'nowrap', margin: 0 }}
+                <button
+                    type="button"
+                    className="btn btn-primary"
                     onClick={onSave}
                     disabled={isSaving}
                 >
