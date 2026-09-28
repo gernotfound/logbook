@@ -1,4 +1,4 @@
-.training-routines-page {
+.training-sub-view.active.training-routines-page {
   display: grid;
   min-width: 0;
   gap: .75rem;
@@ -533,7 +533,7 @@
 }
 
 @media (max-width: 22.5rem) {
-  .training-routines-page {
+  .training-sub-view.active.training-routines-page {
     gap: .625rem;
   }
 
