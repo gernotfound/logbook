@@ -35,6 +35,8 @@ describe('TrainingExercises proposal 5', () => {
     });
 
     const search = screen.getByRole('searchbox', { name: 'Cerca esercizio' });
+    expect(search.getAttribute('type')).toBe('text');
+    expect(search.getAttribute('inputmode')).toBe('search');
     fireEvent.change(search, { target: { value: 'squat' } });
 
     expect(screen.getByRole('button', { name: 'Apri dettaglio di Squat' })).toBeDefined();
@@ -64,6 +66,8 @@ describe('TrainingExercises proposal 5', () => {
     expect(secondaryMode.getAttribute('aria-pressed')).toBe('false');
 
     const muscleSearch = screen.getByRole('searchbox', { name: 'Seleziona muscoli dall’elenco' });
+    expect(muscleSearch.getAttribute('type')).toBe('text');
+    expect(muscleSearch.getAttribute('inputmode')).toBe('search');
     expect(container.querySelector('.exercise-muscle-results')).toBeNull();
     expect(container.querySelector('details')).toBeNull();
 
