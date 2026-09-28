@@ -86,8 +86,8 @@ export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
                                         key={sess.globalSessionIndex}
                                         style={{
                                             padding: '4px 8px',
-                                            background: 'rgba(14, 165, 233, 0.1)',
-                                            border: '1px solid rgba(14, 165, 233, 0.3)',
+                                            background: 'var(--primary-soft)',
+                                            border: '1px solid var(--primary-color)',
                                             borderRadius: '4px',
                                             fontSize: 'var(--font-size-micro)',
                                             color: 'var(--text-main)',
