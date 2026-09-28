@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import { Plus } from 'lucide-react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useTrainingExercises } from '../../hooks/useTrainingExercises';
@@ -54,7 +54,7 @@ const TrainingExercises = () => {
         await hook.handleRestoreExercise(editingExId);
     };
 
-    const handleDelete = async (id: string, event: React.MouseEvent) => {
+    const handleDelete = async (id: string, event: MouseEvent) => {
         const deleted = await hook.handleDelete(id, event);
         if (deleted) setSelectedExId(null);
     };
