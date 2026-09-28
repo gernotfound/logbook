@@ -53,6 +53,51 @@ test('completed workout report has a reachable close control on a narrow viewpor
 });
 
 
+test('Schede stays inside a 320px viewport and keeps the full muscle model in both themes', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await continueAsGuest(page);
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+
+  await expect(page.getByRole('heading', { name: 'Schede', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Crea scheda' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+  await page.getByRole('button', { name: 'Crea scheda' }).click();
+  await page.getByPlaceholder('Nome scheda').fill('Scheda mobile');
+  const muscleSvg = page.locator('.routine-editor-muscle-map svg');
+  await expect(muscleSvg).toBeVisible();
+
+  const muscleFitsViewBox = await muscleSvg.evaluate((svgElement) => {
+    const svg = svgElement as SVGSVGElement;
+    const group = svg.querySelector('g') as SVGGElement | null;
+    if (!group) return false;
+    const contentBounds = group.getBBox();
+    const viewBox = svg.viewBox.baseVal;
+    return contentBounds.x >= viewBox.x
+      && contentBounds.y >= viewBox.y
+      && contentBounds.x + contentBounds.width <= viewBox.x + viewBox.width
+      && contentBounds.y + contentBounds.height <= viewBox.y + viewBox.height;
+  });
+  expect(muscleFitsViewBox).toBe(true);
+
+  await page.locator('#routine-creation-form').getByRole('button', { name: 'Crea scheda' }).click();
+  await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Apri scheda Scheda mobile' }).click();
+  await expect(page.getByText('Muscoli coinvolti')).toBeVisible();
+
+  const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(hasOverflow).toBe(false);
+
+  await page.evaluate(() => localStorage.setItem('logbook:appearance:v1', 'dark'));
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Allenamento', exact: true }).click();
+  await page.getByRole('tab', { name: 'Schede', exact: true }).click();
+  await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+});
+
 test('adaptive appearance resolves system light and explicit dark on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.emulateMedia({ colorScheme: 'light' });

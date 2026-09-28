@@ -1,14 +1,16 @@
 import React from 'react';
+import { Search, X } from 'lucide-react';
 import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
 import { RoutineEditor } from './routines/RoutineEditor';
 import { RoutineCard } from './routines/RoutineCard';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { z } from '../../lib/zod';
-import { Plus, Minus } from 'lucide-react';
+import './routines/routines.css';
 
 const TrainingRoutines: React.FC = () => {
     const [isCreating, setIsCreating] = useLocalStorage<boolean>('logbook_creating_routine', false, z.boolean());
     const [isSaving, setIsSaving] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState('');
     const {
         routineName, setRoutineName,
         editingRoutineId,
@@ -35,39 +37,42 @@ const TrainingRoutines: React.FC = () => {
         }
     });
 
+    const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
+    const filteredRoutines = React.useMemo(
+        () => routines.filter(routine => (
+            !normalizedQuery || routine.name.toLocaleLowerCase('it').includes(normalizedQuery)
+        )),
+        [normalizedQuery, routines],
+    );
+
+    const editorOpen = isCreating || Boolean(editingRoutineId);
+
     const handleEditItem = (rtn: any) => {
         setIsCreating(false);
         handleEditClick(rtn);
     };
 
     return (
-        <div className="training-sub-view active">
-            {!editingRoutineId && (
-                <div className="mb-20">
-                    <button 
-                        type="button" 
-                        className="btn btn-primary w-full flex-center"
-                        style={{ gap: '8px' }}
-                        onClick={() => {
-                            if (isCreating) {
-                                handleCancelEdit();
-                                setIsCreating(false);
-                            } else {
-                                setIsCreating(true);
-                            }
-                        }}
-                        aria-expanded={isCreating}
+        <div className="training-sub-view active training-routines-page">
+            <header className="routine-library-header">
+                <h2>Schede</h2>
+                {!editorOpen && (
+                    <button
+                        type="button"
+                        className="btn btn-primary routine-create-button"
+                        onClick={() => setIsCreating(true)}
+                        aria-label="Crea scheda"
                         aria-controls="routine-creation-form"
                         disabled={isSaving}
                     >
-                        {isCreating ? <Minus size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
-                        Crea scheda
+                        <span className="routine-create-assistive">Crea scheda</span>
+                        <span aria-hidden="true">+ Crea</span>
                     </button>
-                </div>
-            )}
+                )}
+            </header>
 
-            {(isCreating || editingRoutineId) && (
-                <div id="routine-creation-form" className={editingRoutineId ? 'border-primary' : 'border-glass p-15 rounded-12 mb-20'}>
+            {editorOpen ? (
+                <section id="routine-creation-form" className="routine-editor-shell">
                     <RoutineEditor
                         routineName={routineName}
                         setRoutineName={setRoutineName}
@@ -84,6 +89,7 @@ const TrainingRoutines: React.FC = () => {
                         onUpdateSetPlan={handleUpdateSetPlan}
                         onUpdateSetPlanField={handleUpdateSetPlanField}
                         onUpdateExerciseMetadata={handleUpdateExerciseMetadata}
+                        isSaving={isSaving}
                         onSave={async () => {
                             if (isSaving) return;
                             setIsSaving(true);
@@ -99,29 +105,57 @@ const TrainingRoutines: React.FC = () => {
                             setIsCreating(false);
                         }}
                     />
-                </div>
-            )}
-
-            <h2 className="mt-20">Archivio schede ({routines.length})</h2>
-            <p className="text-muted text-sm">Clicca su una scheda per vederne i dettagli.</p>
-            {routines.length === 0 ? (
-                <p className="text-muted">Nessuna scheda creata.</p>
+                </section>
             ) : (
-                <div className="flex-col gap-8">
-                    {routines.map(rtn => (
-                        <RoutineCard
-                            key={rtn.id}
-                            routine={rtn}
-                            isExpanded={expandedRoutineId === rtn.id}
-                            library={library}
-                            isCreating={isCreating}
-                            onToggleExpand={handleRoutineClick}
-                            onEdit={handleEditItem}
-                            onDuplicate={handleDuplicate}
-                            onDelete={handleDelete}
+                <>
+                    <div className="routine-library-search">
+                        <Search size={18} aria-hidden="true" />
+                        <input
+                            type="search"
+                            value={searchQuery}
+                            onChange={event => setSearchQuery(event.target.value)}
+                            placeholder="Cerca scheda per nome"
+                            aria-label="Cerca scheda per nome"
                         />
-                    ))}
-                </div>
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                className="routine-search-clear"
+                                onClick={() => setSearchQuery('')}
+                                aria-label="Cancella ricerca"
+                            >
+                                <X size={18} aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="routine-section-head">
+                        <h3>Libreria schede</h3>
+                        <span>{filteredRoutines.length} {filteredRoutines.length === 1 ? 'scheda' : 'schede'}</span>
+                    </div>
+
+                    {routines.length === 0 ? (
+                        <div className="routine-empty-state">Nessuna scheda creata.</div>
+                    ) : filteredRoutines.length === 0 ? (
+                        <div className="routine-empty-state">Nessuna scheda trovata.</div>
+                    ) : (
+                        <div className="routine-library-list" aria-live="polite">
+                            {filteredRoutines.map(rtn => (
+                                <RoutineCard
+                                    key={rtn.id}
+                                    routine={rtn}
+                                    isExpanded={expandedRoutineId === rtn.id}
+                                    library={library}
+                                    isCreating={isCreating}
+                                    onToggleExpand={handleRoutineClick}
+                                    onEdit={handleEditItem}
+                                    onDuplicate={handleDuplicate}
+                                    onDelete={handleDelete}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

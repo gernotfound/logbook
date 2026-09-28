@@ -42,7 +42,7 @@ describe('routine technique help', () => {
     it('opens contextual help from the question-mark control beside a technical field', () => {
         renderItem();
 
-        fireEvent.click(screen.getByText('Tecnica'));
+        fireEvent.click(screen.getByText('Tecnica e progressione'));
         fireEvent.click(screen.getByRole('button', { name: 'Spiega: Esecuzione da mantenere' }));
 
         const dialog = useDialogStore.getState();
@@ -65,7 +65,7 @@ describe('routine technique help', () => {
             ],
         });
 
-        const summary = screen.getByText('Tecnica').closest('summary');
+        const summary = screen.getByText('Tecnica e progressione').closest('summary');
         const details = summary?.parentElement;
         expect(details?.textContent).not.toContain('Tecnica per serie:');
         expect(details?.textContent).toContain('Esecuzione da mantenere');
@@ -78,7 +78,7 @@ describe('routine technique help', () => {
         expect(details?.textContent).not.toContain('Prossima azione');
         expect(details?.textContent).not.toContain('Riferimento storico (avanzato)');
 
-        fireEvent.click(screen.getByText('Tecnica'));
+        fireEvent.click(screen.getByText('Tecnica e progressione'));
         expect(view.container.querySelectorAll('.routine-technique-set')).toHaveLength(5);
         expect(screen.getByLabelText('Tecnica serie 5')).toBeTruthy();
         expect(screen.getByLabelText('Recupero serie 2')).toBeTruthy();
