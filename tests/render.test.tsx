@@ -70,7 +70,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
 
   test('renders TrainingSession with no active workout', () => {
     const { container } = renderWithProviders(<TrainingSession />);
-    expect(container.textContent).toContain('Avvia nuova sessione');
+    expect(container.textContent).toContain('Scegli dall’archivio');
   });
 
   test('renders TrainingSession with active workout', () => {
