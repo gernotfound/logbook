@@ -1,4 +1,4 @@
-import { RotateCcw, Save } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import type { useTrainingExercises } from '../../../hooks/useTrainingExercises';
 import { ExerciseMuscleSelector } from './ExerciseMuscleSelector';
 
@@ -215,7 +215,6 @@ export function ExerciseEditorForm({
                     disabled={isSaving}
                     onClick={onSave}
                 >
-                    <Save size={17} aria-hidden="true" />
                     {isSaving ? 'Salvataggio…' : 'Salva'}
                 </button>
             </div>
