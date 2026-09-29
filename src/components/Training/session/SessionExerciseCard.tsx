@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Trash2, Settings, MessageSquareText } from 'lucide-react';
+import { Trash2, Settings, MessageSquareText, History } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
@@ -152,7 +152,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     disabled={targetIdx === exIndex}
                                     aria-current={targetIdx === exIndex ? 'true' : undefined}
                                     style={{
-                                        display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                                        display: 'block', width: '100%', minHeight: '44px', padding: '8px 12px', textAlign: 'left',
                                         background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
                                         border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
                                         cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
@@ -180,7 +180,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     aria-expanded={isHistoryOpen}
                     aria-controls={`session-history-${exIndex}`}
                 >
-                    🕒 Storico
+                    <History size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Storico
                 </button>
                 <button
                     type="button"
