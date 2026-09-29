@@ -2,7 +2,12 @@ import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsHarness = vi.hoisted(() => ({ consent: false }));
+const analyticsHarness = vi.hoisted(() => ({
+    consent: false,
+    listeners: new Set<(consent: boolean) => void>(),
+    analyticsBeforeSend: null as ((event: unknown) => unknown) | null,
+    speedBeforeSend: null as ((event: unknown) => unknown) | null,
+}));
 
 const storeState = vi.hoisted(() => ({
     syncing: false,
@@ -33,10 +38,24 @@ vi.mock('../src/store/useAppStore', () => {
 
 vi.mock('../src/lib/analyticsConsent', () => ({
     getAnalyticsConsent: () => analyticsHarness.consent,
+    subscribeAnalyticsConsent: (listener: (consent: boolean) => void) => {
+        analyticsHarness.listeners.add(listener);
+        return () => analyticsHarness.listeners.delete(listener);
+    },
 }));
 
-vi.mock('@vercel/analytics/react', () => ({ Analytics: () => <div data-testid="vercel-analytics" /> }));
-vi.mock('@vercel/speed-insights/react', () => ({ SpeedInsights: () => <div data-testid="vercel-speed-insights" /> }));
+vi.mock('@vercel/analytics/react', () => ({
+    Analytics: ({ beforeSend }: { beforeSend?: (event: unknown) => unknown }) => {
+        analyticsHarness.analyticsBeforeSend = beforeSend ?? null;
+        return <div data-testid="vercel-analytics" />;
+    },
+}));
+vi.mock('@vercel/speed-insights/react', () => ({
+    SpeedInsights: ({ beforeSend }: { beforeSend?: (event: unknown) => unknown }) => {
+        analyticsHarness.speedBeforeSend = beforeSend ?? null;
+        return <div data-testid="vercel-speed-insights" />;
+    },
+}));
 vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('../src/components/UI/BottomNav', () => ({ default: () => null }));
 vi.mock('../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
@@ -54,6 +73,9 @@ import App from '../src/App';
 describe('App optional analytics consent', () => {
     beforeEach(() => {
         analyticsHarness.consent = false;
+        analyticsHarness.listeners.clear();
+        analyticsHarness.analyticsBeforeSend = null;
+        analyticsHarness.speedBeforeSend = null;
         localStorage.clear();
         sessionStorage.clear();
     });
@@ -65,13 +87,30 @@ describe('App optional analytics consent', () => {
         expect(screen.queryByTestId('vercel-speed-insights')).toBeNull();
     });
 
-    it('enables only the Vercel analytics components after opt-in changes', async () => {
+    it('mounts and unmounts the Vercel analytics components when consent changes', async () => {
         render(<App />);
         await screen.findByText('Home');
+
         analyticsHarness.consent = true;
-        act(() => window.dispatchEvent(new Event('analytics_consent_changed')));
+        act(() => {
+            for (const listener of analyticsHarness.listeners) listener(true);
+        });
 
         await waitFor(() => expect(screen.getByTestId('vercel-analytics')).toBeDefined());
         expect(screen.getByTestId('vercel-speed-insights')).toBeDefined();
+
+        const event = { type: 'pageview' };
+        expect(analyticsHarness.analyticsBeforeSend?.(event)).toBe(event);
+        expect(analyticsHarness.speedBeforeSend?.(event)).toBe(event);
+
+        analyticsHarness.consent = false;
+        act(() => {
+            for (const listener of analyticsHarness.listeners) listener(false);
+        });
+
+        await waitFor(() => expect(screen.queryByTestId('vercel-analytics')).toBeNull());
+        expect(screen.queryByTestId('vercel-speed-insights')).toBeNull();
+        expect(analyticsHarness.analyticsBeforeSend?.(event)).toBeNull();
+        expect(analyticsHarness.speedBeforeSend?.(event)).toBeNull();
     });
 });

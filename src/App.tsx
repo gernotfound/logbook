@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { getAnalyticsConsent } from './lib/analyticsConsent';
+import { getAnalyticsConsent, subscribeAnalyticsConsent } from './lib/analyticsConsent';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -64,6 +64,10 @@ function persistGuestLoginOverlayState(visible: boolean): void {
   }
 }
 
+function allowOptionalAnalyticsEvent<T>(event: T): T | null {
+  return getAnalyticsConsent() ? event : null;
+}
+
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
   const syncing = useAppStore(state => state.syncing);
@@ -96,11 +100,7 @@ function App() {
     setShowGuestLogin(false);
   };
 
-  useEffect(() => {
-    const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
-    window.addEventListener('analytics_consent_changed', handler);
-    return () => window.removeEventListener('analytics_consent_changed', handler);
-  }, []);
+  useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
 
   useEffect(() => {
     if (showGuestLogin && currentUser && !isGuest && guestMigrationStatus === 'idle' && !syncing) {
@@ -365,8 +365,8 @@ function App() {
       </main>
 
       {!hideBottomNav && <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />}
-      {analyticsEnabled && <Analytics />}
-      {analyticsEnabled && <SpeedInsights />}
+      {analyticsEnabled && <Analytics beforeSend={allowOptionalAnalyticsEvent} />}
+      {analyticsEnabled && <SpeedInsights beforeSend={allowOptionalAnalyticsEvent} />}
     </>
   );
 }
