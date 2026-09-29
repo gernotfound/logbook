@@ -60,8 +60,13 @@ export const NutritionPlanningSchema = z.object({
     return {};
 }).default({});
 
+const NutritionEntityIdSchema = z.string().trim().min(1).max(160).refine(
+    id => id !== 'undefined' && id !== 'null' && !id.includes('/'),
+    'Identificativo nutrizione non valido',
+);
+
 export const LoggedMealItemSchema = z.object({
-    id: safeString(''),
+    id: NutritionEntityIdSchema,
     name: safeString(''),
     meal: safeString(''),
     quantity: safeNumber(0),
@@ -74,7 +79,7 @@ export const LoggedMealItemSchema = z.object({
     time: safeOptionalNumber(),
     foodId: z.union([z.string(), z.number()]).optional().catch(undefined),
     brand: safeOptionalString(),
-}).passthrough().catch({ id: '', name: '', meal: '', quantity: 0, kcal: 0, carbs: 0, pro: 0, fat: 0 }).default({ id: '', name: '', meal: '', quantity: 0, kcal: 0, carbs: 0, pro: 0, fat: 0 });
+}).passthrough();
 
 export const MealSchema = LoggedMealItemSchema;
 
@@ -94,11 +99,63 @@ export const SupplementSchema = z.object({
 }).default({ id: '', name: '', unit: '' });
 
 export const SupplementIntakeSchema = z.object({
-    id: safeString(''),
-    supplementId: safeString(''),
+    id: NutritionEntityIdSchema,
+    supplementId: NutritionEntityIdSchema,
     amount: safeNumber(0),
     time: safeNumber(0),
-}).passthrough().catch({ id: '', supplementId: '', amount: 0, time: 0 }).default({ id: '', supplementId: '', amount: 0, time: 0 });
+}).passthrough();
+
+function sanitizeLoggedMeals(value: unknown): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        reportZodSchemaFallback({ schema: 'NutritionDaySchema', field: 'meals', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
+        return [];
+    }
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = LoggedMealItemSchema.safeParse(raw);
+        if (!parsed.success || seen.has(parsed.data.id)) {
+            reportZodSchemaFallback({
+                schema: 'LoggedMealItemSchema',
+                field: 'id',
+                fallbackUsed: 'record_quarantined',
+                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
+                error: parsed.success ? undefined : parsed.error,
+            });
+            continue;
+        }
+        seen.add(parsed.data.id);
+        result.push(parsed.data);
+    }
+    return result;
+}
+
+function sanitizeSupplementIntakes(value: unknown): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        reportZodSchemaFallback({ schema: 'NutritionDaySchema', field: 'supplementsIntake', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
+        return [];
+    }
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = SupplementIntakeSchema.safeParse(raw);
+        if (!parsed.success || seen.has(parsed.data.id)) {
+            reportZodSchemaFallback({
+                schema: 'SupplementIntakeSchema',
+                field: 'id',
+                fallbackUsed: 'record_quarantined',
+                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
+                error: parsed.success ? undefined : parsed.error,
+            });
+            continue;
+        }
+        seen.add(parsed.data.id);
+        result.push(parsed.data);
+    }
+    return result;
+}
 
 export const CardioSessionSchema = z.object({
     id: z.string().trim().min(1).max(160).refine(id => !id.includes('/'), 'Identificativo cardio non valido'),
@@ -179,6 +236,8 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
         return {
             ...val,
             hip: hip !== undefined ? hip : undefined,
+            meals: sanitizeLoggedMeals(val.meals),
+            supplementsIntake: sanitizeSupplementIntakes(val.supplementsIntake),
             cardioSessions: sanitizeCardioSessions(val.cardioSessions),
             contextEvents: sanitizeContextEvents(val.contextEvents),
         };
@@ -204,8 +263,8 @@ export const NutritionDaySchema = z.preprocess((val: any) => {
     calves: safeOptionalNumber(),
     measurementTime: safeOptionalString(),
     isDayOn: safeOptionalBoolean(),
-    meals: z.array(LoggedMealItemSchema).optional().catch([]).default([]),
-    supplementsIntake: z.array(SupplementIntakeSchema).optional().catch([]).default([]),
+    meals: z.array(LoggedMealItemSchema).optional().default([]),
+    supplementsIntake: z.array(SupplementIntakeSchema).optional().default([]),
     sleepHours: safeOptionalSleepTime(),
     sleepDeep: safeOptionalSleepTime(),
     sleepLight: safeOptionalSleepTime(),

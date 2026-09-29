@@ -1,4 +1,4 @@
-import { UserDataSchema } from './schema';
+import { NutritionDaySchema, UserDataSchema } from './schema';
 import deepEqual from 'fast-deep-equal';
 import { getInMemoryCatalog } from './catalog/catalogService';
 import {
@@ -48,38 +48,37 @@ export function filterCustomFoods(foods?: Food[] | null): Food[] {
 /**
  * Merges two arrays of entities with an `id` field.
  * In case of ID collision, guest item takes priority over cloud item.
- * Preserves items with non-matching IDs from both cloud and guest.
- * Items without a valid ID are preserved from both.
+ * Preserves items with non-matching valid IDs and quarantines entities
+ * whose business identity is missing or invalid.
  */
 export function mergeArrayById<T extends { id?: string | number }>(
     cloudArr?: T[] | null,
     guestArr?: T[] | null
 ): T[] {
     const map = new Map<string, T>();
-    const nonIdItems: T[] = [];
+    const normalizeId = (id: unknown): string | null => {
+        if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
+        if (typeof id !== 'string') return null;
+        const normalized = id.trim();
+        if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
+        return normalized;
+    };
 
     if (Array.isArray(cloudArr)) {
         for (const item of cloudArr) {
-            if (item && item.id !== undefined && item.id !== null && item.id !== '') {
-                map.set(String(item.id), item);
-            } else if (item) {
-                nonIdItems.push(item);
-            }
+            const id = item ? normalizeId(item.id) : null;
+            if (id) map.set(id, item);
         }
     }
 
     if (Array.isArray(guestArr)) {
         for (const item of guestArr) {
-            if (item && item.id !== undefined && item.id !== null && item.id !== '') {
-                // Guest overwrites cloud on collision
-                map.set(String(item.id), item);
-            } else if (item) {
-                nonIdItems.push(item);
-            }
+            const id = item ? normalizeId(item.id) : null;
+            if (id) map.set(id, item);
         }
     }
 
-    return [...Array.from(map.values()), ...nonIdItems];
+    return Array.from(map.values());
 }
 
 /**
@@ -227,8 +226,8 @@ export function mergeNutrition(
     const allDates = Array.from(new Set([...Object.keys(cloud), ...Object.keys(guest)]));
 
     for (const date of allDates) {
-        const cloudDay = cloud[date];
-        const guestDay = guest[date];
+        const cloudDay = cloud[date] ? NutritionDaySchema.parse(cloud[date]) as NutritionDay : undefined;
+        const guestDay = guest[date] ? NutritionDaySchema.parse(guest[date]) as NutritionDay : undefined;
 
         if (cloudDay && !guestDay) {
             const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
@@ -237,19 +236,7 @@ export function mergeNutrition(
             const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
             result[date] = { ...guestDay, hip: guestHip !== undefined ? guestHip : guestDay.hip };
         } else if (cloudDay && guestDay) {
-            const sanitizeMealIds = (meals?: any[] | null): any[] => {
-                if (!Array.isArray(meals)) return [];
-                const seen = new Set<string>();
-                return meals.map((m, idx) => {
-                    const key = String(m?.id || '');
-                    if (!key || seen.has(key)) {
-                        return { ...m, id: `${key || 'meal'}_${idx}` };
-                    }
-                    seen.add(key);
-                    return m;
-                });
-            };
-            const mergedMeals = mergeArrayById(sanitizeMealIds(cloudDay.meals), sanitizeMealIds(guestDay.meals));
+            const mergedMeals = mergeArrayById(cloudDay.meals, guestDay.meals);
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
             const mergedCardioSessions = mergeArrayById(cloudDay.cardioSessions, guestDay.cardioSessions);
             const mergedContextEvents = mergeArrayById(cloudDay.contextEvents, guestDay.contextEvents);
