@@ -85,8 +85,7 @@ const sanitizePersistedActiveWorkout = (data: unknown): unknown => {
         return null;
     }
 
-    const parsed = WorkoutSessionSchema.parse(data);
-    return { ...parsed, id };
+    return { ...(data as Record<string, unknown>), id };
 };
 
 export const PersistedActiveWorkoutSchema = z.preprocess(
