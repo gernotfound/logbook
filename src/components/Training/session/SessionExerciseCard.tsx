@@ -138,7 +138,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         className="btn-small"
                         style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: 'var(--font-size-meta)', letterSpacing: '0.03em', color: 'var(--text-main)' }}
                         onClick={() => setShowPositionMenu(v => !v)}
+                        disabled={totalExercises !== undefined && totalExercises <= 1}
                         aria-label="Cambia posizione esercizio"
+                        title={totalExercises !== undefined && totalExercises <= 1 ? 'Unico esercizio nella sessione' : 'Cambia posizione esercizio'}
                     >#{exIndex + 1}</button>
                     {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
@@ -147,6 +149,8 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     key={targetIdx}
                                     type="button"
                                     onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
+                                    disabled={targetIdx === exIndex}
+                                    aria-current={targetIdx === exIndex ? 'true' : undefined}
                                     style={{
                                         display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
                                         background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
