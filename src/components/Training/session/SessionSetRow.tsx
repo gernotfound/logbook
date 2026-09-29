@@ -3,6 +3,7 @@ import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
 import { continuationTechniqueLabel, getContinuationTechnique } from '../../../lib/advancedSets';
 import { useDialogStore } from '../../../store/useDialogStore';
+import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 
 interface SessionSetRowProps {
     set: any;
@@ -39,40 +40,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     const hasRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
 
     const handleRemoveSetSafely = async () => {
-        const hasValue = (value: unknown) => {
-            if (value === undefined || value === null) return false;
-            const text = String(value).trim();
-            if (text === '' || text === '0') return false;
-            const numeric = Number(text.replace(',', '.'));
-            return Number.isNaN(numeric) || numeric !== 0;
-        };
-        const isFilled = (
-            hasValue(s.kg)
-            || hasValue(s.reps)
-            || hasValue(s.time)
-            || hasValue(s.distance)
-            || hasValue(s.speed)
-            || hasValue(s.incline)
-            || hasValue(s.kcal)
-            || s.rir !== undefined
-            || Boolean(s.target)
-            || (s.technique !== undefined && s.technique !== 'straight')
-            || (Array.isArray(s.segments) && s.segments.some((segment: any) => (
-                hasValue(segment.kg)
-                || hasValue(segment.reps)
-                || hasValue(segment.time)
-                || segment.restBeforeSeconds !== undefined
-                || segment.target !== undefined
-            )))
-            || (Array.isArray(s.dropsets) && s.dropsets.some((drop: any) => (
-                hasValue(drop.kg) || hasValue(drop.reps)
-            )))
-            || (Array.isArray(s.isometrics) && s.isometrics.some((iso: any) => (
-                hasValue(iso.kg) || hasValue(iso.time)
-            )))
-        );
-
-        if (isFilled) {
+        if (sessionSetHasMeaningfulData(s)) {
             const confirmed = await useDialogStore.getState().showConfirm(
                 'La serie contiene dei dati. Vuoi davvero rimuoverla?'
             );
@@ -348,12 +316,12 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                         const label = technique ? `${baseLabel} ${occurrence}` : baseLabel;
                         const isIsometry = technique === 'isometry';
                         const isDropset = technique === 'dropset';
-                        const gridTemplateColumns = isIsometry || isDropset ? '1fr 1fr 44px' : '76px 1fr 1fr 44px';
+                        const gridVariant = isIsometry || isDropset ? 'compact' : 'with-rest';
 
                         return (
                             <div key={segment.id || segmentIndex} style={{ marginBottom: '8px' }}>
                                 <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--primary-color)', fontWeight: 700, marginBottom: '4px' }}>↳ {label}</div>
-                                <div style={{ display: 'grid', gridTemplateColumns, gap: '5px', alignItems: 'center' }}>
+                                <div className={`session-advanced-segment-grid ${gridVariant}`}>
                                     {!isDropset && !isIsometry && (
                                         <BufferedInput id={`seg-rest-${s.id}-${segmentIndex}`} type="number" placeholder="Rec s" value={segment.restBeforeSeconds ?? ''} onChange={val => onUpdateSpecialSet(s.id, 'segments', segmentIndex, 'restBeforeSeconds', val === '' ? undefined : Math.max(0, Math.trunc(Number(val) || 0)))} style={{ margin: 0, minWidth: 0 }} />
                                     )}
