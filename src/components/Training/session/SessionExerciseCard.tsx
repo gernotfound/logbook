@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Trash2, Settings, AlertTriangle } from 'lucide-react';
+import { Trash2, Settings, MessageSquareText } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
@@ -268,8 +268,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {lastNote && (
-                <div style={{ background: 'var(--danger-soft)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: 'var(--danger-color)' }}>
-                    <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Nota dall’ultima sessione:</b> {lastNote}
+                <div className="session-previous-note">
+                    <MessageSquareText size={18} aria-hidden="true" />
+                    <span><b>Nota dall’ultima sessione:</b> {lastNote}</span>
                 </div>
             )}
 
