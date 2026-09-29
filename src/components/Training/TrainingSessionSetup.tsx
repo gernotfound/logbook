@@ -30,7 +30,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const { routines, history, startWorkout, startFreeWorkout } = useWorkoutSession();
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [showRotation, setShowRotation] = useState(false);
+    const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState('');
 
     const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
         if (!activeCycle?.routines) return [];
@@ -108,6 +108,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
     const nextPlannedItem = nextRoutine
         ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
         : undefined;
+    const selectedRotationId = plannedRoutines.some(item => item.routine.id === selectedPlannedRoutine)
+        ? selectedPlannedRoutine
+        : (nextRoutine?.id || plannedRoutines[0]?.routine.id || '');
+    const selectedRotationRoutine = plannedRoutines.find(item => item.routine.id === selectedRotationId)?.routine;
 
     return (
         <div className="session-setup-page" id="train-session">
@@ -120,8 +124,10 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 <section className="session-next-card section-divider" aria-labelledby="session-next-title">
                     <div className="session-next-top">
                         <div>
-                            <p className="session-eyebrow">Prossima nel ciclo</p>
-                            <h2 id="session-next-title">{nextRoutine.name}</h2>
+                            <p className="session-eyebrow">Avvia sessione pianificata · Prossima nel ciclo</p>
+                            <h2 id="session-next-title" style={{ fontSize: 'var(--font-size-control)' }}>
+                                {nextScheduled?.nextRoutine ? nextScheduled.nextRoutine.name : nextRoutine.name}
+                            </h2>
                             <span>
                                 {activeCycle.name}
                                 {nextScheduled?.nextSessionIndex ? ` · Seduta ${nextScheduled.nextSessionIndex} di ${nextScheduled.totalSessions}` : ''}
@@ -160,25 +166,30 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                     </button>
 
                     {plannedRoutines.length > 1 && (
-                        <>
-                            <button
-                                type="button"
-                                className="btn btn-secondary session-secondary-action"
-                                onClick={() => setShowRotation(open => !open)}
-                                aria-expanded={showRotation}
+                        <div className="session-rotation-picker">
+                            <label htmlFor="rotation-routine-select">Cambia scheda della rotazione</label>
+                            <select
+                                id="rotation-routine-select"
+                                aria-label="Seleziona scheda della rotazione"
+                                value={selectedRotationId}
+                                onChange={event => setSelectedPlannedRoutine(event.target.value)}
                             >
-                                {showRotation ? 'Nascondi altre schede' : 'Cambia scheda della rotazione'}
-                            </button>
-                            <div
-                                className="session-rotation-list"
-                                style={{ display: showRotation ? 'grid' : 'none' }}
-                            >
-                                {plannedRoutines.map(item => renderRoutineRow(item.routine, {
-                                    letter: item.letter,
-                                    planned: true,
-                                }))}
-                            </div>
-                        </>
+                                {plannedRoutines.map(item => (
+                                    <option key={item.routine.id} value={item.routine.id}>
+                                        {item.letter}. {item.routine.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedRotationRoutine && selectedRotationRoutine.id !== nextRoutine.id && (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary session-secondary-action"
+                                    onClick={() => startPlannedRoutine(selectedRotationRoutine.id)}
+                                >
+                                    Avvia {selectedRotationRoutine.name}
+                                </button>
+                            )}
+                        </div>
                     )}
                 </section>
             )}
@@ -187,6 +198,22 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 <section className="session-setup-message">
                     <strong>{activeCycle.name}</strong>
                     <span>Il ciclo attivo non contiene una scheda disponibile per l’avvio.</span>
+                </section>
+            )}
+
+            {!activeCycle && (
+                <section className="session-setup-message">
+                    <strong>Nessun ciclo di allenamento attivo al momento.</strong>
+                    <span>Puoi comunque scegliere una scheda dall’archivio o iniziare un allenamento libero.</span>
+                    {onNavigateToPlanning && (
+                        <button
+                            type="button"
+                            className="btn btn-secondary session-secondary-action"
+                            onClick={onNavigateToPlanning}
+                        >
+                            Vai a Pianificazione
+                        </button>
+                    )}
                 </section>
             )}
 
@@ -226,7 +253,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                 >
                     Allenamento libero
                 </button>
-                {onNavigateToPlanning && (
+                {onNavigateToPlanning && activeCycle && (
                     <button
                         type="button"
                         className="session-planning-button"
