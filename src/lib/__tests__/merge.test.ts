@@ -36,12 +36,12 @@ describe('mergeArrayById', () => {
         expect(merged[0].sets[0].timestamp).toBe(200);
     });
 
-    it('should preserve items without valid IDs', () => {
+    it('should quarantine items without valid IDs', () => {
         const cloud = [{ name: 'No ID 1' }, { id: '1', name: 'Cloud 1' }] as any[];
         const guest = [{ name: 'No ID 2' }, { id: '1', name: 'Guest 1' }] as any[];
         const merged = mergeArrayById(cloud, guest);
-        expect(merged).toHaveLength(3);
-        expect(merged.filter(m => !m.id)).toHaveLength(2);
+        expect(merged).toHaveLength(1);
+        expect(merged.filter(m => !m.id)).toHaveLength(0);
         expect(merged.find(m => m.id === '1').name).toBe('Guest 1');
     });
 });
