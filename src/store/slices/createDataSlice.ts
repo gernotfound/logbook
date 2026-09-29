@@ -110,7 +110,10 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             .then(durable => {
                 if (!durable || !isCurrentSession(session)) return;
                 const current = get();
-                if (!current.userData || !equal(UserDataSchema.parse(current.userData), UserDataSchema.parse(nextData))) return;
+                // Only the exact state instance installed by this setUserData call may
+                // reconcile the async durable result. A later direct/store update can be
+                // structurally equal while representing a newer lifecycle decision.
+                if (current.userData !== nextData) return;
                 const aligned = UserDataSchema.parse({
                     ...durable,
                     activeWorkout: current.localWorkout ?? durable.activeWorkout ?? null,
