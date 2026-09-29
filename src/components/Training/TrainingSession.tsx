@@ -6,6 +6,7 @@ import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
 import type { WorkoutSession } from '../../types';
+import { Logic } from '../../lib/logic';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
