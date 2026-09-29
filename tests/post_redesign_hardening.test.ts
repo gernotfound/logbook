@@ -42,6 +42,7 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
     expect(training).toMatch(/\.session-routine-copy strong\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
     expect(training).toMatch(/\.session-advanced-segment-grid\.with-rest\s*\{[^}]*grid-template-columns:\s*4\.75rem minmax\(0, 1fr\) minmax\(0, 1fr\) 2\.75rem/);
+    expect(training).toMatch(/\.session-exercise-shell\s*\{[^}]*overflow:\s*visible/);
     expect(training).toMatch(/@media \(max-width:\s*24\.375rem\)[\s\S]*?\.session-advanced-segment-grid\.with-rest,[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   });
 
