@@ -515,7 +515,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(headings[0].textContent).toBe('Panca piana con bilanciere');
             expect(headings[1].textContent).toBe('Squat con bilanciere');
 
-            // Click position dropdown of first exercise and move to position 2
+            // Expand first exercise, then use its position control.
+            fireEvent.click(screen.getByRole('button', { name: /Panca piana con bilanciere/i }));
             const posBtns = screen.getAllByRole('button', { name: 'Cambia posizione esercizio' });
             fireEvent.click(posBtns[0]); // open dropdown for exercise #1
             const posOption2 = screen.getAllByRole('button', { name: /2ª posizione/i })[0];
@@ -548,7 +549,8 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
                 }
             });
 
-            // Open Setup on first exercise (Bench at index 0)
+            // Expand first exercise, then open Setup on Bench at index 0.
+            fireEvent.click(screen.getByRole('button', { name: /Panca piana con bilanciere/i }));
             const setupBtns = screen.getAllByRole('button', { name: /Setup/i });
             fireEvent.click(setupBtns[0]);
 
