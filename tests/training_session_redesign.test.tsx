@@ -154,9 +154,9 @@ describe('training session redesign', () => {
         expect((screen.getByRole('button', { name: /✓ 1ª posizione/i }) as HTMLButtonElement).disabled).toBe(true);
     });
 
-    it('treats zero and advanced-method metadata as meaningful set data', () => {
+    it('uses one consistent definition for empty and meaningful set data', () => {
         expect(sessionSetHasMeaningfulData({ id: 'blank', kg: '', reps: '' })).toBe(false);
-        expect(sessionSetHasMeaningfulData({ id: 'zero', kg: '0', reps: '' })).toBe(true);
+        expect(sessionSetHasMeaningfulData({ id: 'zero', kg: '0,0', reps: '0.00' })).toBe(false);
         expect(sessionSetHasMeaningfulData({ id: 'rir-zero', kg: '', reps: '', rir: 0 })).toBe(true);
         expect(sessionSetHasMeaningfulData({ id: 'advanced', kg: '', reps: '', technique: 'dropset' })).toBe(true);
     });
