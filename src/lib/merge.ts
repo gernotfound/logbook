@@ -1,4 +1,4 @@
-import { NutritionDaySchema, UserDataSchema } from './schema';
+import { UserDataSchema } from './schema';
 import deepEqual from 'fast-deep-equal';
 import { getInMemoryCatalog } from './catalog/catalogService';
 import {
@@ -51,31 +51,43 @@ export function filterCustomFoods(foods?: Food[] | null): Food[] {
  * Preserves items with non-matching valid IDs and quarantines entities
  * whose business identity is missing or invalid.
  */
+function normalizeBusinessId(id: unknown): string | null {
+    if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
+    if (typeof id !== 'string') return null;
+    const normalized = id.trim();
+    if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
+    return normalized;
+}
+
+function sanitizeIdentityCollection<T extends { id?: string | number }>(
+    items?: T[] | null,
+    extraIdentity?: (item: T) => unknown,
+): T[] {
+    if (!Array.isArray(items)) return [];
+    const result: T[] = [];
+    const seen = new Set<string>();
+    for (const item of items) {
+        const id = item ? normalizeBusinessId(item.id) : null;
+        if (!id || seen.has(id)) continue;
+        if (extraIdentity && !normalizeBusinessId(extraIdentity(item))) continue;
+        seen.add(id);
+        result.push(item);
+    }
+    return result;
+}
+
 export function mergeArrayById<T extends { id?: string | number }>(
     cloudArr?: T[] | null,
     guestArr?: T[] | null
 ): T[] {
     const map = new Map<string, T>();
-    const normalizeId = (id: unknown): string | null => {
-        if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
-        if (typeof id !== 'string') return null;
-        const normalized = id.trim();
-        if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
-        return normalized;
-    };
 
-    if (Array.isArray(cloudArr)) {
-        for (const item of cloudArr) {
-            const id = item ? normalizeId(item.id) : null;
-            if (id) map.set(id, item);
-        }
+    for (const item of sanitizeIdentityCollection(cloudArr)) {
+        map.set(normalizeBusinessId(item.id)!, item);
     }
 
-    if (Array.isArray(guestArr)) {
-        for (const item of guestArr) {
-            const id = item ? normalizeId(item.id) : null;
-            if (id) map.set(id, item);
-        }
+    for (const item of sanitizeIdentityCollection(guestArr)) {
+        map.set(normalizeBusinessId(item.id)!, item);
     }
 
     return Array.from(map.values());
@@ -226,8 +238,21 @@ export function mergeNutrition(
     const allDates = Array.from(new Set([...Object.keys(cloud), ...Object.keys(guest)]));
 
     for (const date of allDates) {
-        const cloudDay = cloud[date] ? NutritionDaySchema.parse(cloud[date]) as NutritionDay : undefined;
-        const guestDay = guest[date] ? NutritionDaySchema.parse(guest[date]) as NutritionDay : undefined;
+        const sanitizeDayIdentities = (day: NutritionDay | undefined): NutritionDay | undefined => {
+            if (!day) return undefined;
+            return {
+                ...day,
+                ...(day.meals !== undefined ? { meals: sanitizeIdentityCollection(day.meals) } : {}),
+                ...(day.supplementsIntake !== undefined ? {
+                    supplementsIntake: sanitizeIdentityCollection(day.supplementsIntake, item => item.supplementId),
+                } : {}),
+                ...(day.cardioSessions !== undefined ? { cardioSessions: sanitizeIdentityCollection(day.cardioSessions) } : {}),
+                ...(day.contextEvents !== undefined ? { contextEvents: sanitizeIdentityCollection(day.contextEvents) } : {}),
+            };
+        };
+
+        const cloudDay = sanitizeDayIdentities(cloud[date]);
+        const guestDay = sanitizeDayIdentities(guest[date]);
 
         if (cloudDay && !guestDay) {
             const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
