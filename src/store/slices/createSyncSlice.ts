@@ -11,6 +11,7 @@ import { findPendingAccountDeletion, readAccountDeletionMarker } from '../../lib
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync/domainOperations';
+import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 
 export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
 export type CompatibilityStatus = 'ok' | 'update-required';
@@ -120,7 +121,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                             const durable = await readLocal(session.owner);
                             if (current() && get().syncGeneration === last.generation) {
                                 if (!durable) blockLocalPersistence = true;
-                                else set({ userData: { ...durable.data, activeWorkout: get().localWorkout } });
+                                else {
+                                    const aligned = { ...durable.data, activeWorkout: get().localWorkout } as UserData;
+                                    set({ userData: aligned });
+                                    markTabSnapshotClean(session, aligned);
+                                }
                             }
                         } catch {
                             if (current() && get().syncGeneration === last.generation) blockLocalPersistence = true;
@@ -137,9 +142,21 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 if (result.ok) {
                     const saved = await readLocal(session.owner);
                     if (saved && current() && get().syncGeneration === last.generation) {
-                        set({ userData: { ...saved.data, activeWorkout: get().localWorkout } });
+                        const aligned = { ...saved.data, activeWorkout: get().localWorkout } as UserData;
+                        set({ userData: aligned });
+                        markTabSnapshotClean(session, aligned);
                     }
-                } else if (result.status !== 'local-pending') {
+                } else if (result.status === 'local-pending') {
+                    // The IndexedDB commit is already durable even when cloud replication is pending.
+                    // Reconcile Zustand only after the remote outcome is known so rejected/failed
+                    // workflows (notably legal consent) can keep their intentional rollback view.
+                    const saved = await readLocal(session.owner);
+                    if (saved && current() && get().syncGeneration === last.generation) {
+                        const aligned = { ...saved.data, activeWorkout: get().localWorkout } as UserData;
+                        set({ userData: aligned });
+                        markTabSnapshotClean(session, aligned);
+                    }
+                } else {
                     failureStatus = result.status;
                     throw result.status === 'rejected'
                         ? new Error("Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", { cause: result.error })
@@ -198,6 +215,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const data = UserDataSchema.parse({ ...next, activeWorkout: next.activeWorkout !== undefined ? next.activeWorkout : localWorkout }) as unknown as UserData;
             const generation = get().syncGeneration + 1;
             const session = captureSession();
+            if (userData) markTabSnapshotDirty(session, userData);
             set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
             // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
             const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
@@ -225,6 +243,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const data = applyDomainOperations(userData, operation);
             const generation = get().syncGeneration + 1;
             const session = captureSession();
+            markTabSnapshotDirty(session, userData);
             set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.

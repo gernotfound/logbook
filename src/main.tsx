@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { auth } from './lib/firebase'
 import { readLocal } from './lib/sync/localRepository'
 import { readBrowserValueStrict } from './lib/sync/browserStorage'
-import { storageOwner } from './lib/sync/session'
+import { captureSession, storageOwner } from './lib/sync/session'
 import { findPendingAccountDeletion, readAccountDeletionMarker } from './lib/sync/accountGate'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
@@ -30,6 +30,7 @@ import {
   dispatchStorageRecoveryAnomaly,
 } from './lib/storageTelemetry';
 import { telemetryHub } from './lib/telemetryHub';
+import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 
 const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. LogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
 
@@ -150,6 +151,8 @@ export const initApp = async () => {
         if (!useAppStore.getState().userData) {
           useAppStore.setState({ userData: initialData });
         }
+        const session = captureSession();
+        if (bootstrapOwner === session.owner) markTabSnapshotClean(session, initialData);
         // Update marker ONLY after complete successful read and schema validation
         if (bootstrapOwner) updateStorageMarker(Date.now(), undefined, bootstrapOwner);
       }

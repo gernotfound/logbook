@@ -1,14 +1,16 @@
 import type { StateCreator } from 'zustand';
 import { del as idbDel } from 'idb-keyval';
+import equal from 'fast-deep-equal';
 import { DomainParsers, UserDataSchema } from '../../lib/schema';
 import type { UserData } from '../../types';
 import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
 import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
-import { commitLocal, initializeLocal, clearNutritionConflict } from '../../lib/sync/localRepository';
+import { commitLocal, initializeLocal, clearNutritionConflict, readLocal } from '../../lib/sync/localRepository';
 import { writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 
 export interface DataSlice {
@@ -37,76 +39,93 @@ export const getInitialUserData = (): UserData | null => {
     }
 };
 
-export const saveUserDataToCache = async (data: UserData | null, base?: UserData) => {
+export const saveUserDataToCache = async (data: UserData | null, base?: UserData): Promise<UserData | null> => {
         const session = captureSession();
         if (data) {
-            if (base) await commitLocal(session.owner, data, base);
-            else await initializeLocal(session.owner, data);
+            const current = await readLocal(session.owner);
+            if (!current || !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
+                if (base) await commitLocal(session.owner, data, base);
+                else if (current) await commitLocal(session.owner, data, current.data);
+                else await initializeLocal(session.owner, data);
+            }
+            const envelope = await readLocal(session.owner);
+            if (!envelope) throw new Error('Copia locale non disponibile dopo il salvataggio.');
             if (isCurrentSession(session)) updateStorageMarker(Date.now(), undefined, session.owner);
-        } else {
-            await idbDel(`logbook:v2:${session.owner}`);
-            if (isCurrentSession(session)) clearStorageMarker(undefined, session.owner);
+            return envelope.data;
         }
-};
-
-const persistHydration = (data: UserData | null, onFailure: (error: unknown) => void) => {
-    const session = captureSession();
-    void saveUserDataToCache(data).catch(error => { if (isCurrentSession(session)) onFailure(error); });
+        await idbDel(`logbook:v2:${session.owner}`);
+        if (isCurrentSession(session)) clearStorageMarker(undefined, session.owner);
+        return null;
 };
 
 export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
     userData: getInitialUserData(),
 
     setUserData: (dataOrUpdater) => {
-        set((state) => {
-            if (state.compatibilityStatus === 'update-required') return state;
+        const state = get();
+        if (state.compatibilityStatus === 'update-required') return;
 
-            const rawNextData = typeof dataOrUpdater === 'function'
-                ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData)
-                : dataOrUpdater;
+        const rawNextData = typeof dataOrUpdater === 'function'
+            ? (dataOrUpdater as (prev: UserData | null) => UserData | null)(state.userData)
+            : dataOrUpdater;
 
-            if (!rawNextData) {
-                // Resetting the view must not erase a durable journal.
-                return { userData: null, localWorkout: state.localWorkout };
-            }
+        if (!rawNextData) {
+            // Resetting the view must not erase a durable journal.
+            set({ userData: null, localWorkout: state.localWorkout });
+            return;
+        }
 
-            let syncedLocalWorkout = state.localWorkout;
+        let syncedLocalWorkout = state.localWorkout;
 
-            // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
-            // The local device's localStorage is the source of truth for an ongoing workout.
-            if (state.localWorkout) {
-                // If we already have a local workout, KEEP IT. Ignore what comes from the network.
-                syncedLocalWorkout = state.localWorkout;
+        // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
+        // The local device's localStorage is the source of truth for an ongoing workout.
+        if (state.localWorkout) {
+            syncedLocalWorkout = state.localWorkout;
+        } else if (rawNextData.activeWorkout !== undefined) {
+            syncedLocalWorkout = DomainParsers.parseActiveWorkout(rawNextData.activeWorkout) ?? null;
+            if (syncedLocalWorkout) {
+                try {
+                    writeDeviceValue('workout', JSON.stringify(syncedLocalWorkout));
+                } catch (e) {
+                    console.error("Errore salvataggio localWorkout in localStorage:", e);
+                }
             } else {
-                // If we DON'T have a local workout, but the network gives us one, we can adopt it.
-                if (rawNextData.activeWorkout !== undefined) {
-                    syncedLocalWorkout = DomainParsers.parseActiveWorkout(rawNextData.activeWorkout) ?? null;
-                    if (syncedLocalWorkout) {
-                        try {
-                            writeDeviceValue('workout', JSON.stringify(syncedLocalWorkout));
-                        } catch (e) {
-                            console.error("Errore salvataggio localWorkout in localStorage:", e);
-                        }
-                    } else {
-                        try {
-                            writeDeviceValue('workout', null);
-                        } catch {
-                            // Ignore removal error
-                        }
-                    }
+                try {
+                    writeDeviceValue('workout', null);
+                } catch {
+                    // Ignore removal error
                 }
             }
+        }
 
-            const nextData = UserDataSchema.parse({
-                ...rawNextData,
-                activeWorkout: syncedLocalWorkout ?? null
-            }) as unknown as UserData;
-            persistHydration(nextData, error => {
+        const nextData = UserDataSchema.parse({
+            ...rawNextData,
+            activeWorkout: syncedLocalWorkout ?? null
+        }) as unknown as UserData;
+        const session = captureSession();
+        if (state.userData) markTabSnapshotDirty(session, state.userData);
+        set({ userData: nextData, localWorkout: syncedLocalWorkout });
+
+        void saveUserDataToCache(nextData, state.userData ?? undefined)
+            .then(durable => {
+                if (!durable || !isCurrentSession(session)) return;
+                const current = get();
+                // Only the exact state instance installed by this setUserData call may
+                // reconcile the async durable result. A later direct/store update can be
+                // structurally equal while representing a newer lifecycle decision.
+                if (current.userData !== nextData) return;
+                const aligned = UserDataSchema.parse({
+                    ...durable,
+                    activeWorkout: current.localWorkout ?? durable.activeWorkout ?? null,
+                }) as unknown as UserData;
+                set({ userData: aligned });
+                markTabSnapshotClean(session, aligned);
+            })
+            .catch(error => {
+                if (!isCurrentSession(session)) return;
                 if (isUpdateRequiredError(error)) get().setUpdateRequired(error);
                 else set({ saveError: 'Impossibile salvare i dati su questo dispositivo.', syncHealth: 'failed' });
             });
-            return { userData: nextData, localWorkout: syncedLocalWorkout };
-        });
     },
 
     resolveNutritionConflict: async ({ resolution, expectedUid, expectedConflictFingerprint }) => {
