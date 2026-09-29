@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { del as idbDel } from 'idb-keyval';
-import { UserDataSchema } from '../../lib/schema';
+import { DomainParsers, UserDataSchema } from '../../lib/schema';
 import type { UserData } from '../../types';
 import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
@@ -80,7 +80,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             } else {
                 // If we DON'T have a local workout, but the network gives us one, we can adopt it.
                 if (rawNextData.activeWorkout !== undefined) {
-                    syncedLocalWorkout = rawNextData.activeWorkout;
+                    syncedLocalWorkout = DomainParsers.parseActiveWorkout(rawNextData.activeWorkout) ?? null;
                     if (syncedLocalWorkout) {
                         try {
                             writeDeviceValue('workout', JSON.stringify(syncedLocalWorkout));

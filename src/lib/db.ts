@@ -89,7 +89,7 @@ export const DB = {
                 state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
                 state.supplements = DomainParsers.parseSupplements(state.supplements);
                 state.activePains = DomainParsers.parseActivePains(state.activePains);
-                if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
+                if (state.activeWorkout) state.activeWorkout = DomainParsers.parseActiveWorkout(state.activeWorkout);
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
@@ -148,7 +148,7 @@ export const DB = {
             state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
             state.supplements = DomainParsers.parseSupplements(state.supplements);
             state.activePains = DomainParsers.parseActivePains(state.activePains);
-            if (state.activeWorkout) state.activeWorkout = DomainParsers.parseWorkoutSession(state.activeWorkout);
+            if (state.activeWorkout) state.activeWorkout = DomainParsers.parseActiveWorkout(state.activeWorkout);
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 

@@ -69,6 +69,30 @@ const WorkoutHistorySchema = z.preprocess(
     z.array(WorkoutSessionSchema),
 ).default([]);
 
+const sanitizePersistedActiveWorkout = (data: unknown): unknown => {
+    if (data === undefined || data === null) return null;
+
+    const id = normalizePersistedWorkoutId(data);
+    if (!id) {
+        reportZodSchemaFallback({
+            schema: 'WorkoutSessionSchema',
+            field: 'activeWorkout.id',
+            fallbackUsed: 'record_quarantined',
+            receivedType: data === null ? 'null' : Array.isArray(data) ? 'array' : typeof data,
+            issueCode: 'invalid_identity',
+            expectedType: 'business id',
+        });
+        return null;
+    }
+
+    return { ...(data as Record<string, unknown>), id };
+};
+
+export const PersistedActiveWorkoutSchema = z.preprocess(
+    sanitizePersistedActiveWorkout,
+    WorkoutSessionSchema.nullable(),
+).catch(null).default(null);
+
 export const defaultUserDataFallback: UserData = {
     profile: {},
     library: [],
@@ -93,7 +117,7 @@ export const UserDataSchema = z.object({
     history: WorkoutHistorySchema, // Actually stored in history_months in Firebase
     nutrition: z.record(z.string(), NutritionDaySchema).optional().catch({}).default({}), // nutrition_months
     customFoods: z.array(FoodSchema).optional().catch([]).default([]),
-    activeWorkout: WorkoutSessionSchema.nullable().optional().catch(null).default(null),
+    activeWorkout: PersistedActiveWorkoutSchema,
     nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined),
     trainingCycles: z.array(TrainingCycleSchema).optional().catch([]).default([]),
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
@@ -138,6 +162,9 @@ export const DomainParsers = {
     },
     parseWorkoutSession: (data: unknown) => {
         return WorkoutSessionSchema.parse(data);
+    },
+    parseActiveWorkout: (data: unknown) => {
+        return PersistedActiveWorkoutSchema.parse(data);
     },
     parseNutritionPlanning: (data: unknown) => {
         if (data === null || data === undefined) return null;
