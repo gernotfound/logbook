@@ -37,6 +37,51 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
     const firstRirOptionRef = React.useRef<HTMLButtonElement>(null);
     const hasRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10;
 
+    const handleRemoveSetSafely = async () => {
+        const hasValue = (value: unknown) => {
+            if (value === undefined || value === null) return false;
+            const text = String(value).trim();
+            if (text === '' || text === '0') return false;
+            const numeric = Number(text.replace(',', '.'));
+            return Number.isNaN(numeric) || numeric !== 0;
+        };
+        const isFilled = (
+            hasValue(s.kg)
+            || hasValue(s.reps)
+            || hasValue(s.time)
+            || hasValue(s.distance)
+            || hasValue(s.speed)
+            || hasValue(s.incline)
+            || hasValue(s.kcal)
+            || s.rir !== undefined
+            || Boolean(s.target)
+            || (s.technique !== undefined && s.technique !== 'straight')
+            || (Array.isArray(s.segments) && s.segments.some((segment: any) => (
+                hasValue(segment.kg)
+                || hasValue(segment.reps)
+                || hasValue(segment.time)
+                || segment.restBeforeSeconds !== undefined
+                || segment.target !== undefined
+            )))
+            || (Array.isArray(s.dropsets) && s.dropsets.some((drop: any) => (
+                hasValue(drop.kg) || hasValue(drop.reps)
+            )))
+            || (Array.isArray(s.isometrics) && s.isometrics.some((iso: any) => (
+                hasValue(iso.kg) || hasValue(iso.time)
+            )))
+        );
+
+        if (isFilled) {
+            const { useDialogStore } = await import('../../../store/useDialogStore');
+            const confirmed = await useDialogStore.getState().showConfirm(
+                'La serie contiene dei dati. Vuoi davvero rimuoverla?'
+            );
+            if (!confirmed) return;
+        }
+        onRemoveSet(sIndex);
+        if (isOpenMenu) onToggleMenu();
+    };
+
     React.useEffect(() => {
         if (isRirOpen) firstRirOptionRef.current?.focus();
     }, [isRirOpen]);
@@ -70,7 +115,7 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                     <button
                         className="btn-icon"
                         style={{ color: 'var(--danger-color)', fontSize: 'var(--font-size-body)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                        onClick={() => onRemoveSet(sIndex)}
+                        onClick={() => void handleRemoveSetSafely()}
                         aria-label={`Rimuovi serie ${sIndex + 1}`}
                     >
                         <Trash2 size={16} aria-hidden="true" />
@@ -262,7 +307,16 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
                                 ].map(([value, label]) => (
                                     <button key={value} className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet(value, s.id)}>+ {label}</button>
                                 ))}
-                                <button className="btn btn-small" style={{ display: 'block', width: '100%' }} onClick={() => onAddSpecialSet('isometry', s.id)}>+ Isometria</button>
+                                <button className="btn btn-small" style={{ display: 'block', width: '100%', marginBottom: '6px' }} onClick={() => onAddSpecialSet('isometry', s.id)}>+ Isometria</button>
+                                <button
+                                    type="button"
+                                    className="btn btn-small session-set-remove-action"
+                                    style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between' }}
+                                    onClick={() => void handleRemoveSetSafely()}
+                                >
+                                    <span>Rimuovi questa serie</span>
+                                    <Trash2 size={18} aria-hidden="true" />
+                                </button>
                             </div>
                         </>
                     )}
