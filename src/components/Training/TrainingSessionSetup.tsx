@@ -117,7 +117,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
             </header>
 
             {activeCycle && nextRoutine && (
-                <section className="session-next-card" aria-labelledby="session-next-title">
+                <section className="session-next-card section-divider" aria-labelledby="session-next-title">
                     <div className="session-next-top">
                         <div>
                             <p className="session-eyebrow">Prossima nel ciclo</p>
@@ -156,7 +156,7 @@ export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSe
                         className="btn btn-primary session-primary-action"
                         onClick={() => startPlannedRoutine(nextRoutine.id)}
                     >
-                        Continua con {nextRoutine.name}
+                        Avvia {nextRoutine.name}{nextScheduled?.nextSessionIndex ? ` (Seduta #${nextScheduled.nextSessionIndex})` : ''}
                     </button>
 
                     {plannedRoutines.length > 1 && (
