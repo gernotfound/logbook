@@ -207,8 +207,8 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
         if (ok && onNavigateToHistory) onNavigateToHistory();
     };
 
-    const handleAddExtraExercise = (exercise: string | { exId: string }) => {
-        addExtraExercise(exercise);
+    const handleAddExtraExercise = (exerciseId: string) => {
+        addExtraExercise(exerciseId);
         setCurrentExerciseIndex(activeWorkout.exercises.length);
     };
 
