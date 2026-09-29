@@ -19,10 +19,6 @@ const SessionExerciseAccordion = (props: SessionExerciseAccordionProps) => {
     const { exItem, exIndex, libDef } = cardProps;
     const [expanded, setExpanded] = React.useState(initiallyExpanded);
 
-    React.useEffect(() => {
-        if (initiallyExpanded) setExpanded(true);
-    }, [initiallyExpanded]);
-
     const exerciseName = libDef?.name || 'Esercizio rimosso';
     const setsCount = Array.isArray(exItem?.sets) ? exItem.sets.length : 0;
     const range = exItem?.minReps || exItem?.maxReps
