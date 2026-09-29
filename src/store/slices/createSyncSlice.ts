@@ -137,11 +137,6 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 const envelope = await readLocal(session.owner);
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
                 if (!envelope) throw new Error('Copia locale non disponibile');
-                if (current() && get().syncGeneration === last.generation) {
-                    const aligned = { ...envelope.data, activeWorkout: get().localWorkout } as UserData;
-                    set({ userData: aligned });
-                    markTabSnapshotClean(session, aligned);
-                }
                 const result = await DB.saveUserData(envelope.data, envelope.revision);
                 if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
                 if (result.ok) {
@@ -151,7 +146,17 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                         set({ userData: aligned });
                         markTabSnapshotClean(session, aligned);
                     }
-                } else if (result.status !== 'local-pending') {
+                } else if (result.status === 'local-pending') {
+                    // The IndexedDB commit is already durable even when cloud replication is pending.
+                    // Reconcile Zustand only after the remote outcome is known so rejected/failed
+                    // workflows (notably legal consent) can keep their intentional rollback view.
+                    const saved = await readLocal(session.owner);
+                    if (saved && current() && get().syncGeneration === last.generation) {
+                        const aligned = { ...saved.data, activeWorkout: get().localWorkout } as UserData;
+                        set({ userData: aligned });
+                        markTabSnapshotClean(session, aligned);
+                    }
+                } else {
                     failureStatus = result.status;
                     throw result.status === 'rejected'
                         ? new Error("Sincronizzazione rifiutata dal server. Verifica l'accesso e riprova.", { cause: result.error })
