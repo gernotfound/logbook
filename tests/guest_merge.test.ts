@@ -106,14 +106,14 @@ describe('Deterministic Guest Merge (R5) Suite', () => {
             expect(result).toHaveLength(1);
             expect(result[0].name).toBe('Guest Food Overwrite');
         });
-        it('preserves non-ID items from both arrays', () => {
+        it('quarantines non-ID items from both arrays', () => {
             const cloud = [{ name: 'Cloud Item Without ID' } as any, { id: 'c1', name: 'Cloud 1' }];
             const guest = [{ name: 'Guest Item Without ID' } as any, { id: 'g1', name: 'Guest 1' }];
 
             const result = mergeArrayById(cloud, guest);
-            expect(result).toHaveLength(4);
-            expect(result.find(x => x.name === 'Cloud Item Without ID')).toBeDefined();
-            expect(result.find(x => x.name === 'Guest Item Without ID')).toBeDefined();
+            expect(result).toHaveLength(2);
+            expect(result.find(x => x.name === 'Cloud Item Without ID')).toBeUndefined();
+            expect(result.find(x => x.name === 'Guest Item Without ID')).toBeUndefined();
             expect(result.find(x => x.id === 'c1')).toBeDefined();
             expect(result.find(x => x.id === 'g1')).toBeDefined();
         });
