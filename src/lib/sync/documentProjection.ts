@@ -67,6 +67,7 @@ export function applyRemoteDocuments(local: UserData, documents: Map<string, Doc
     if (root) {
         const parsed = UserDataSchema.parse(root) as unknown as UserData;
         next = { ...next, ...root,
+            activeWorkout: parsed.activeWorkout,
             library: resolveEffectiveExercises(catalog.exercises, parsed.library, parsed.catalogOverrides),
             customFoods: resolveEffectiveFoods(catalog.foods, parsed.customFoods, parsed.catalogOverrides),
         } as UserData;
