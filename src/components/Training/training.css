@@ -1669,3 +1669,825 @@
     transition: none;
   }
 }
+
+
+/* Sessione allenamento — redesign mobile-first */
+.session-setup-page,
+.workout-session {
+  display: grid;
+  min-width: 0;
+  gap: .75rem;
+  padding-bottom: 5.625rem;
+}
+
+.session-setup-header,
+.session-active-heading {
+  min-width: 0;
+}
+
+.session-setup-header p,
+.session-active-heading p,
+.session-eyebrow {
+  margin: 0 0 .25rem;
+  color: var(--primary-color);
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.session-setup-header h1,
+.session-active-heading h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-main);
+  font-size: var(--font-size-page);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+}
+
+.session-next-card,
+.session-archive-section,
+.session-extra-exercise,
+.session-manual-duration,
+.session-setup-message {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  background: var(--surface-color);
+}
+
+.session-next-card {
+  border-color: var(--primary-color);
+  background: linear-gradient(145deg, var(--primary-soft), var(--surface-color));
+}
+
+.session-next-top {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.session-next-top > div {
+  min-width: 0;
+}
+
+.session-next-top h2,
+.session-section-heading h2,
+.session-extra-exercise-heading h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: var(--font-size-section);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.session-next-top > div > span,
+.session-section-heading p,
+.session-extra-exercise-heading p {
+  display: block;
+  margin: .25rem 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+  line-height: 1.4;
+}
+
+.session-next-icon {
+  display: grid;
+  width: 2.875rem;
+  height: 2.875rem;
+  flex: 0 0 2.875rem;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--primary-color);
+  color: var(--on-primary);
+}
+
+.session-setup-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr));
+  gap: .5rem;
+  margin: .875rem 0;
+}
+
+.session-setup-stats > div {
+  min-width: 0;
+  padding: .625rem;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-color) 84%, transparent);
+}
+
+.session-setup-stats strong,
+.session-setup-stats span {
+  display: block;
+}
+
+.session-setup-stats strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: var(--font-size-control);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-setup-stats span {
+  margin-top: .125rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-micro);
+}
+
+.session-primary-action,
+.session-secondary-action {
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0;
+}
+
+.session-secondary-action {
+  margin-top: .5rem;
+}
+
+.session-rotation-list,
+.session-routine-list {
+  gap: .5rem;
+  min-width: 0;
+}
+
+.session-rotation-list {
+  margin-top: .625rem;
+}
+
+.session-archive-section {
+  display: grid;
+  gap: .75rem;
+}
+
+.session-section-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.session-search-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.session-search-field > svg {
+  position: absolute;
+  top: 50%;
+  left: .8125rem;
+  z-index: 1;
+  color: var(--text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.session-search-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.875rem;
+  margin: 0;
+  padding: .625rem .875rem .625rem 2.75rem;
+  box-sizing: border-box;
+  outline: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 16px !important;
+}
+
+.session-search-field input:focus-visible {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.session-routine-list {
+  display: grid;
+}
+
+.session-routine-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.125rem;
+  align-items: center;
+  gap: .625rem;
+  padding: .625rem .6875rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.session-routine-mark {
+  display: grid;
+  width: 2.375rem;
+  height: 2.375rem;
+  flex: 0 0 2.375rem;
+  place-items: center;
+  border-radius: .75rem;
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  font-size: var(--font-size-secondary);
+  font-weight: 700;
+}
+
+.session-routine-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: .125rem;
+}
+
+.session-routine-copy strong,
+.session-routine-copy span,
+.session-routine-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-routine-copy strong {
+  color: var(--text-main);
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.session-routine-copy span {
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.session-routine-copy small {
+  color: var(--primary-color);
+  font-size: var(--font-size-micro);
+}
+
+.session-routine-row > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.session-routine-row:focus-visible,
+.session-planning-button:focus-visible,
+.session-exercise-summary:focus-visible,
+.session-next-note-toggle:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.session-free-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+  gap: .5rem;
+}
+
+.session-free-button {
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0;
+}
+
+.session-planning-button {
+  display: inline-grid;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-color);
+  color: var(--text-main);
+}
+
+.session-setup-message,
+.session-empty-state {
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.session-setup-message {
+  display: grid;
+  gap: .25rem;
+}
+
+.session-setup-message strong {
+  color: var(--text-main);
+  font-size: var(--font-size-control);
+}
+
+.session-active-heading {
+  padding-inline: .125rem;
+}
+
+.workout-sticky-timer {
+  top: var(--sticky-top, env(safe-area-inset-top, 0rem));
+  z-index: 100;
+  display: grid;
+  gap: .5rem;
+  margin: 0;
+  padding: .625rem .75rem 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  background: var(--surface-color);
+  box-shadow: 0 .5rem 1.25rem color-mix(in srgb, var(--shadow-color) 24%, transparent);
+  backdrop-filter: blur(1rem);
+}
+
+.workout-timer .timer-display {
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-size: var(--font-size-display-md);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.03em;
+}
+
+.workout-timer .timer-controls {
+  gap: .375rem;
+}
+
+.workout-timer .timer-btn {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border-color: var(--glass-border);
+  background: var(--surface-light);
+  color: var(--text-main);
+}
+
+.workout-timer .timer-btn.play,
+.workout-timer .timer-btn.pause {
+  border-color: var(--glass-border);
+  background: var(--surface-light);
+  color: var(--text-main);
+}
+
+.workout-exercise-progress {
+  height: .1875rem;
+  margin-inline: -.75rem;
+  overflow: hidden;
+  background: var(--surface-light);
+}
+
+.workout-exercise-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 180ms ease;
+}
+
+.session-history-edit-banner {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .75rem;
+  border: 1px solid var(--warning-color);
+  border-radius: var(--radius-card);
+  background: var(--warning-soft);
+}
+
+.session-history-edit-banner > div {
+  min-width: 0;
+}
+
+.session-history-edit-title {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  color: var(--warning-color);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.session-history-edit-meta {
+  margin-top: .25rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.session-history-edit-banner .btn {
+  flex: none;
+  min-height: 2.75rem;
+  margin: 0;
+}
+
+.session-exercise-list {
+  display: grid;
+  min-width: 0;
+  gap: .625rem;
+}
+
+.session-exercise-shell {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  background: var(--surface-color);
+}
+
+.session-exercise-shell.current {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.session-exercise-summary {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.25rem;
+  align-items: center;
+  gap: .6875rem;
+  padding: .75rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.session-exercise-index {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  place-items: center;
+  border-radius: .8125rem;
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  font-size: var(--font-size-secondary);
+  font-weight: 700;
+}
+
+.session-exercise-summary-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: .1875rem;
+}
+
+.session-exercise-name,
+.session-exercise-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-exercise-name {
+  color: var(--text-main);
+  font-size: var(--font-size-control);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.session-exercise-meta {
+  color: var(--text-muted);
+  font-size: var(--font-size-micro);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.session-exercise-disclosure {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 2.25rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-light);
+  color: var(--text-muted);
+}
+
+.session-exercise-shell-body {
+  border-top: 1px solid var(--glass-border);
+}
+
+.workout-session .session-exercise-card-content {
+  margin: 0;
+  padding: .75rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.session-exercise-card-content > div:first-child {
+  display: none;
+}
+
+.session-exercise-toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .375rem;
+  margin-bottom: .75rem;
+}
+
+.session-exercise-toolbar > div,
+.session-exercise-toolbar > button {
+  min-width: 0;
+}
+
+.session-exercise-toolbar > div > button,
+.session-exercise-toolbar > button {
+  width: 100%;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: .375rem;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-micro) !important;
+}
+
+.session-exercise-card-content .set-row {
+  min-width: 0;
+  gap: .5rem !important;
+  border: 0 !important;
+}
+
+.session-exercise-card-content .set-row > div:first-child {
+  min-width: 1.75rem !important;
+}
+
+.session-exercise-card-content .set-row > div:first-child .btn-icon {
+  display: none !important;
+}
+
+.session-exercise-card-content .set-row > div:nth-child(2) {
+  min-width: 0;
+}
+
+.session-exercise-card-content .set-row input {
+  min-width: 0 !important;
+  min-height: 2.75rem;
+  padding-inline: .5rem;
+  text-align: center;
+  font-size: 16px !important;
+}
+
+.session-exercise-card-content .set-row .btn-icon[aria-haspopup="menu"] {
+  width: 2.75rem !important;
+  min-width: 2.75rem !important;
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-control) !important;
+  background: transparent !important;
+}
+
+.session-exercise-card-content .set-row .btn-icon[aria-haspopup="menu"][aria-expanded="true"] {
+  background: var(--surface-light) !important;
+  color: var(--primary-color) !important;
+}
+
+.session-set-remove-action {
+  color: var(--danger-color) !important;
+}
+
+.session-exercise-card-content > div[style*="danger-soft"] {
+  border-left-color: var(--primary-color) !important;
+  background: var(--primary-soft) !important;
+  color: var(--text-muted) !important;
+}
+
+.session-next-note-toggle {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: .75rem;
+  padding: .625rem .75rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-meta);
+  font-weight: 600;
+  text-align: left;
+}
+
+.session-next-note-editor {
+  min-height: 4.5rem;
+  margin: .5rem 0 0;
+  padding: .75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  color: var(--text-main);
+}
+
+.session-extra-exercise {
+  display: grid;
+  gap: .75rem;
+}
+
+.session-extra-exercise-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .625rem;
+}
+
+.session-extra-exercise-heading > svg {
+  flex: none;
+  color: var(--primary-color);
+}
+
+.session-extra-exercise-heading > div {
+  min-width: 0;
+}
+
+.workout-total-duration {
+  margin: 0;
+  padding: .75rem;
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  font-size: var(--font-size-meta);
+}
+
+.workout-total-duration output {
+  color: var(--text-main);
+  font-size: var(--font-size-control);
+}
+
+.session-manual-duration {
+  display: grid;
+  gap: .5rem;
+  text-align: center;
+}
+
+.session-manual-duration label {
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.session-manual-duration input {
+  width: min(100%, 15rem);
+  min-height: 2.75rem;
+  margin: 0 auto;
+  padding: .5rem .75rem;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  color: var(--primary-color);
+  font-family: var(--font-family);
+  font-size: 16px !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: center;
+}
+
+.session-edit-actions,
+.session-finish-row {
+  display: grid;
+  gap: .5rem;
+}
+
+.session-edit-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.session-finish-row {
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.35fr);
+  padding-top: .75rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.session-edit-actions .btn,
+.session-finish-row .btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  margin: 0;
+  padding-inline: .625rem;
+  gap: .375rem;
+  font-size: var(--font-size-meta);
+}
+
+.pre-session-checkin {
+  gap: .875rem;
+  max-width: none;
+  padding: 1rem;
+  border-radius: var(--radius-card);
+}
+
+.pre-session-heading h2,
+.pre-session-header h2 {
+  margin: .25rem 0;
+  color: var(--text-main);
+  font-size: var(--font-size-page);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.pre-session-heading p,
+.pre-session-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+}
+
+.pre-session-header .pre-session-eyebrow {
+  color: var(--primary-color);
+  font-size: var(--font-size-micro);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.pre-session-context > div {
+  min-height: 2.75rem;
+  align-items: center;
+}
+
+.readiness-metric legend {
+  color: var(--text-main);
+  font-size: var(--font-size-secondary);
+}
+
+.readiness-value {
+  min-height: 2.75rem;
+}
+
+.post-session-checkin {
+  max-width: none;
+}
+
+@media (max-width: 24.375rem) {
+  .session-next-card,
+  .session-archive-section,
+  .session-extra-exercise,
+  .session-manual-duration,
+  .session-setup-message,
+  .pre-session-checkin {
+    padding: .75rem;
+  }
+
+  .session-exercise-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .session-exercise-summary {
+    gap: .5rem;
+    padding-inline: .625rem;
+  }
+
+  .session-exercise-index {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-basis: 2.25rem;
+  }
+
+  .session-exercise-card-content .set-row {
+    gap: .3125rem !important;
+  }
+
+  .session-exercise-card-content .set-row > div:nth-child(2) {
+    gap: .3125rem !important;
+  }
+
+  .session-finish-row {
+    grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr);
+  }
+
+  .session-edit-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pre-session-primary-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workout-exercise-progress > span {
+    transition: none;
+  }
+}
