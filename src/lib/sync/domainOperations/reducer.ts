@@ -311,9 +311,15 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
                 .sort((a, b) => a.name.localeCompare(b.name, 'it'));
             break;
         }
-        case 'exercise.delete':
-            data.library = deleteById(data.library, requireId(operation.id, 'Esercizio'), item => requireId(item.id, 'Esercizio'), 'Archivio esercizi');
+        case 'exercise.delete': {
+            const id = requireId(operation.id, 'Esercizio');
+            data.library = deleteById(data.library, id, item => requireId(item.id, 'Esercizio'), 'Archivio esercizi');
+            data.routines = (data.routines ?? []).map(routine => ({
+                ...routine,
+                exercises: (routine.exercises ?? []).filter(exercise => requireId(exercise.exId, 'Esercizio routine') !== id),
+            }));
             break;
+        }
         case 'food.upsert': {
             const id = requireId(operation.food.id, 'Alimento');
             const food = { ...operation.food, id: operation.food.id };

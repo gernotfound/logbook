@@ -196,6 +196,70 @@ describe('M8 Domain Operations V4', () => {
         expect(after.library?.map(item => item.id)).toEqual(['e-a', 'e-z']);
     });
 
+    it('cascades explicit exercise deletion through every routine while preserving workout history', () => {
+        const deletedExercise = { id: 'e-delete', name: 'Da eliminare', setsCount: 3, sets: [] };
+        const keptExercise = { id: 'e-keep', name: 'Da mantenere', setsCount: 3, sets: [] };
+        const historical: WorkoutSession = {
+            id: 'w-delete-regression',
+            date: '2026-09-20',
+            exercises: [{ exId: 'e-delete', sessionNote: '', sets: [] }],
+        };
+        const before = base({
+            library: [deletedExercise, keptExercise],
+            routines: [
+                {
+                    id: 'r1',
+                    name: 'Upper',
+                    exercises: [
+                        { exId: 'e-delete', setsCount: 3 },
+                        { exId: 'e-keep', setsCount: 4 },
+                    ],
+                },
+                {
+                    id: 'r2',
+                    name: 'Full body',
+                    exercises: [{ exId: 'e-delete', setsCount: 2 }],
+                },
+            ],
+            history: [historical],
+        });
+
+        const { after, operations, replay } = compile(before, { type: 'exercise.delete', id: 'e-delete' });
+
+        expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
+        expect(after.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))).toEqual([['e-keep'], []]);
+        expect(after.history?.[0]?.id).toBe(historical.id);
+        expect(after.history?.[0]?.exercises[0]?.exId).toBe('e-delete');
+        expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
+        expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'routines')).toBe(true);
+        expect(operations.every(operation => operation.docPath === '')).toBe(true);
+
+        const replayRoot = replay.get('');
+        expect((replayRoot?.library as Array<{ id: string }> | undefined)?.map(item => item.id)).toEqual(['e-keep']);
+        expect(
+            (replayRoot?.routines as Array<{ exercises: Array<{ exId: string }> }> | undefined)
+                ?.map(routine => routine.exercises.map(exercise => exercise.exId)),
+        ).toEqual([['e-keep'], []]);
+        expect((projectDocuments(after, catalog).get('history_months/2026-09')?.['w-delete-regression'] as WorkoutSession).exercises[0].exId)
+            .toBe('e-delete');
+    });
+
+    it('keeps an unreferenced exercise deletion scoped to the archive', () => {
+        const before = base({
+            library: [
+                { id: 'e-delete', name: 'Da eliminare', setsCount: 3, sets: [] },
+                { id: 'e-keep', name: 'Da mantenere', setsCount: 3, sets: [] },
+            ],
+            routines: [{ id: 'r1', name: 'Upper', exercises: [{ exId: 'e-keep', setsCount: 4 }] }],
+        });
+
+        const { after, operations } = compile(before, { type: 'exercise.delete', id: 'e-delete' });
+
+        expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
+        expect(after.routines?.[0]?.exercises.map(exercise => exercise.exId)).toEqual(['e-keep']);
+        expect(operations.some(operation => operation.path[0] === 'routines')).toBe(false);
+    });
+
     it('guards child mutations of the same active workout by session id', () => {
         const active: WorkoutSession = { id: 'live-1', date: '2026-09-15', moodRating: 1, exercises: [] };
         const before = base({ activeWorkout: active });
