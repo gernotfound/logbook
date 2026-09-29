@@ -185,7 +185,7 @@ describe('Training Planning & Volume Calculations', () => {
             render(<TrainingPlanning />);
 
             expect(screen.getByRole('button', { name: /Crea ciclo/i })).toBeDefined();
-            expect(screen.getAllByText('Mesociclo Massa').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText(/Mesociclo Massa/).length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText(/8 settimane/).length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText(/Focus petto e spalle/).length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText('Obiettivo non specificato').length).toBeGreaterThanOrEqual(1);
