@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Copy, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
@@ -7,14 +7,23 @@ import { CycleEditor } from './CycleEditor';
 import { CycleCard } from './CycleCard';
 import { CycleMuscleMap } from './CycleMuscleMap';
 import { CycleStrategySummary } from './CycleStrategySummary';
-import type { TrainingCycle, WorkoutRoutine, Exercise, WorkoutSession } from '../../../types';
+import { CycleVolumeAccordion } from './CycleVolumeAccordion';
+import { calculateCycleMacroVolume } from './cycleMacroVolume';
+import { ContextMenu, type ContextMenuItem } from '../../UI/ContextMenu';
+import type { DomainOperation } from '../../../lib/sync/domainOperations';
+import type { Exercise, TrainingCycle, WorkoutRoutine, WorkoutSession } from '../../../types';
+import './planning-redesign.css';
 
 const EMPTY_ROUTINES: WorkoutRoutine[] = [];
 const EMPTY_LIBRARY: Exercise[] = [];
 const EMPTY_CYCLES: TrainingCycle[] = [];
 const EMPTY_HISTORY: WorkoutSession[] = [];
 
-export default function TrainingPlanning() {
+interface TrainingPlanningProps {
+    onOpenSession?: () => void;
+}
+
+export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProps = {}) {
     const routines = useAppStore(state => state.userData?.routines || EMPTY_ROUTINES);
     const library = useAppStore(state => state.userData?.library || EMPTY_LIBRARY);
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
@@ -28,12 +37,18 @@ export default function TrainingPlanning() {
 
     const [isEditing, setIsEditing] = useState(false);
     const [editingCycle, setEditingCycle] = useState<TrainingCycle | null>(null);
-    const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-    const activeCycle = useMemo(() => {
-        if (!activeCycleId) return null;
-        return trainingCycles.find(c => c.id === activeCycleId) || null;
-    }, [trainingCycles, activeCycleId]);
+    const activeCycle = useMemo(
+        () => activeCycleId ? trainingCycles.find(cycle => cycle.id === activeCycleId) ?? null : null,
+        [activeCycleId, trainingCycles]
+    );
+    const inactiveCycles = useMemo(
+        () => trainingCycles.filter(cycle => cycle.id !== activeCycleId),
+        [activeCycleId, trainingCycles]
+    );
+
+    useEffect(() => setIsDetailsOpen(false), [activeCycleId]);
 
     const editingCycleHasRecordedSessions = useMemo(() => {
         if (!editingCycle) return false;
@@ -43,24 +58,33 @@ export default function TrainingPlanning() {
             || activeWorkout?.cycleId === cycleId;
     }, [activeWorkout, editingCycle, history, localWorkout]);
 
-    // Volume and muscle mapping for active cycle
-    const cycleVolumeData = useMemo(() => {
-        return Logic.calculateCycleVolume(activeCycle, routines, library);
-    }, [activeCycle, routines, library]);
+    const cycleVolumeData = useMemo(
+        () => Logic.calculateCycleVolume(activeCycle, routines, library),
+        [activeCycle, library, routines]
+    );
+    const macroVolume = useMemo(
+        () => calculateCycleMacroVolume(activeCycle, routines, library),
+        [activeCycle, library, routines]
+    );
+    const activeCycleTimeline = useMemo(() => Logic.calculateCycleTimeline(activeCycle), [activeCycle]);
+    const nextScheduled = useMemo(
+        () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
+        [activeCycle, history, routines]
+    );
 
-    const activeCycleTimeline = useMemo(() => {
-        return Logic.calculateCycleTimeline(activeCycle);
-    }, [activeCycle]);
+    const openEditorAtTop = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.getElementById('view-training')?.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     const handleCreateNew = () => {
         if (routines.length === 0) {
-            showAlert("Crea almeno una scheda prima di pianificare un ciclo di allenamento.");
+            void showAlert('Crea almeno una scheda prima di pianificare un ciclo di allenamento.');
             return;
         }
         setEditingCycle(null);
         setIsEditing(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        document.getElementById('view-training')?.scrollTo({ top: 0, behavior: 'smooth' });
+        openEditorAtTop();
     };
 
     const handleCancelEditor = () => {
@@ -79,21 +103,20 @@ export default function TrainingPlanning() {
     const handleEditCycle = (cycle: TrainingCycle) => {
         setEditingCycle(cycle);
         setIsEditing(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        document.getElementById('view-training')?.scrollTo({ top: 0, behavior: 'smooth' });
+        openEditorAtTop();
     };
 
     const handleSaveCycle = async (savedCycle: TrainingCycle) => {
         try {
             const isUpdate = trainingCycles.some(cycle => cycle.id === savedCycle.id);
-            const updatedCount = isUpdate ? trainingCycles.length : trainingCycles.length + 1;
-            const operations: any[] = [{ type: 'training-cycle.upsert', cycle: savedCycle }];
-            if (activeCycleId === null && updatedCount === 1) operations.push({ type: 'active-cycle.set', id: savedCycle.id });
+            const operations: DomainOperation[] = [{ type: 'training-cycle.upsert', cycle: savedCycle }];
+            if (activeCycleId === null && !isUpdate && trainingCycles.length === 0) {
+                operations.push({ type: 'active-cycle.set', id: savedCycle.id });
+            }
             await dispatchDomainOperation(operations);
-            setIsEditing(false);
-            setEditingCycle(null);
-        } catch (e) {
-            console.error("Errore salvataggio ciclo:", e);
+            handleCancelEditor();
+        } catch (error) {
+            console.error('Errore salvataggio ciclo:', error);
             await showAlert('Salvataggio del ciclo non riuscito. Le modifiche sono ancora nel form: riprova.');
         }
     };
@@ -101,19 +124,19 @@ export default function TrainingPlanning() {
     const handleSetActiveCycle = async (cycleId: string) => {
         try {
             await dispatchDomainOperation({ type: 'active-cycle.set', id: cycleId });
-        } catch (e) {
-            console.error("Errore attivazione ciclo:", e);
+        } catch (error) {
+            console.error('Errore attivazione ciclo:', error);
             await showAlert('Impossibile attivare il ciclo. Riprova.');
         }
     };
 
-    const handleDeactivateCycle = async () => {
-        const confirmed = await showConfirm("Sei sicuro di voler disattivare il ciclo corrente?");
+    const handleDeactivateCycle = async (_cycleId?: string) => {
+        const confirmed = await showConfirm('Sei sicuro di voler disattivare il ciclo corrente?');
         if (!confirmed) return;
         try {
             await dispatchDomainOperation({ type: 'active-cycle.set', id: null });
-        } catch (e) {
-            console.error("Errore disattivazione ciclo:", e);
+        } catch (error) {
+            console.error('Errore disattivazione ciclo:', error);
             await showAlert('Impossibile disattivare il ciclo. Riprova.');
         }
     };
@@ -122,50 +145,60 @@ export default function TrainingPlanning() {
         const duplicated: TrainingCycle = {
             ...cycle,
             id: Logic.generateId('cycle'),
-            name: Logic.generateUniqueName(cycle.name, trainingCycles.map(c => c.name)),
+            name: Logic.generateUniqueName(cycle.name, trainingCycles.map(item => item.name)),
             createdAt: Date.now(),
             isActive: false
         };
-
         try {
             await dispatchDomainOperation({ type: 'training-cycle.upsert', cycle: duplicated });
-        } catch (e) {
-            console.error("Errore duplicazione ciclo:", e);
+        } catch (error) {
+            console.error('Errore duplicazione ciclo:', error);
             await showAlert('Impossibile duplicare il ciclo. Riprova.');
         }
     };
 
     const handleDeleteCycle = async (cycle: TrainingCycle) => {
+        const confirmed = await showConfirm(`Eliminare il ciclo “${cycle.name}”?`);
+        if (!confirmed) return;
         try {
             const remaining = trainingCycles.filter(item => item.id !== cycle.id);
-            const operations: any[] = [{ type: 'training-cycle.delete', id: cycle.id }];
+            const operations: DomainOperation[] = [{ type: 'training-cycle.delete', id: cycle.id }];
             if (activeCycleId === cycle.id) operations.push({ type: 'active-cycle.set', id: remaining[0]?.id ?? null });
             await dispatchDomainOperation(operations);
-        } catch (e) {
-            console.error("Errore eliminazione ciclo:", e);
+        } catch (error) {
+            console.error('Errore eliminazione ciclo:', error);
             await showAlert('Impossibile eliminare il ciclo. Riprova.');
         }
     };
 
-    return (
-        <div>
-            {!editingCycle && (
-                <div className="training-planning-create">
-                    <button
-                        type="button"
-                        className="btn btn-primary w-full flex-center"
-                        onClick={handleToggleCreate}
-                        aria-expanded={isEditing}
-                        aria-controls="cycle-editor-form"
-                    >
-                        {isEditing ? <Minus size={20} aria-hidden="true" /> : <Plus size={20} aria-hidden="true" />}
-                        Crea ciclo
-                    </button>
-                </div>
-            )}
+    const activeMenuItems: ContextMenuItem[] = activeCycle ? [
+        { id: 'edit-active-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => handleEditCycle(activeCycle) },
+        { id: 'duplicate-active-cycle', label: 'Duplica', icon: <Copy size={16} />, onClick: () => void handleDuplicateCycle(activeCycle) },
+        { id: 'delete-active-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', onClick: () => void handleDeleteCycle(activeCycle) }
+    ] : [];
 
-            {/* Cycle Editor Form */}
-            {isEditing && (
+    const totalSessions = activeCycle
+        ? activeCycle.durationWeeks * (activeCycle.sessionsPerWeek || activeCycle.routines?.length || 1)
+        : 0;
+
+    return (
+        <div className="planning-page">
+            <header className="planning-page-header">
+                <h1>Pianificazione</h1>
+                <button
+                    type="button"
+                    className="planning-create-button"
+                    onClick={handleToggleCreate}
+                    aria-label="Crea ciclo"
+                    aria-expanded={isEditing}
+                    aria-controls="cycle-editor-form"
+                    hidden={isEditing}
+                >
+                    + Crea
+                </button>
+            </header>
+
+            {isEditing ? (
                 <CycleEditor
                     initialCycle={editingCycle}
                     routines={routines}
@@ -174,246 +207,121 @@ export default function TrainingPlanning() {
                     onCancel={handleCancelEditor}
                     hasRecordedSessions={editingCycleHasRecordedSessions}
                 />
-            )}
+            ) : null}
 
-            {/* Active Cycle Overview */}
-            <div className={activeCycle ? 'card training-cycle-active-card' : 'section-divider'}>
-                <div className="flex-between items-start mb-15 pb-15 border-b">
-                    <div>
-                        <h2 className="m-0 text-white">
-                            {activeCycle?.name || 'Nessun ciclo attivo'}
-                        </h2>
-                        {activeCycle && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
-                                <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                                    {activeCycle.durationWeeks} settimane
-                                </span>
-                                <CycleStrategySummary strategy={activeCycle.strategy} />
-                                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-                                    {cycleVolumeData.totalWorkoutsPerWeek} sessioni • {cycleVolumeData.totalSetsPerWeek} serie / sett.
-                                </div>
+            {activeCycle ? (
+                <article className="planning-active-card">
+                    <header className="planning-active-head">
+                        <div className="planning-active-title">
+                            <span className="planning-active-badge">Ciclo attivo</span>
+                            <h2>{activeCycle.name}</h2>
+                            <p>{activeCycleTimeline.formattedRange} · {activeCycle.durationWeeks} settimane</p>
+                            <CycleStrategySummary strategy={activeCycle.strategy} />
+                        </div>
+                        <ContextMenu items={activeMenuItems} />
+                    </header>
+
+                    {nextScheduled && !nextScheduled.isCycleCompleted ? (
+                        <div className="planning-next-session">
+                            <span className="planning-next-icon" aria-hidden="true"><Dumbbell size={24} /></span>
+                            <div>
+                                <span>Prossima seduta nella rotazione</span>
+                                <strong>{nextScheduled.nextRoutineName}</strong>
+                                <span>Seduta #{nextScheduled.nextSessionIndex} · scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle}</span>
                             </div>
-                        )}
+                        </div>
+                    ) : null}
+
+                    <div className="planning-kpis" aria-label="Metriche ciclo attivo">
+                        <div><strong>{cycleVolumeData.totalWorkoutsPerWeek}×</strong><span>Sedute / sett.</span></div>
+                        <div><strong>{cycleVolumeData.totalSetsPerWeek}</strong><span>Serie / sett.</span></div>
+                        <div><strong>{totalSessions}</strong><span>Sedute totali</span></div>
                     </div>
-                    {activeCycle && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                            <span className="text-sm text-muted font-bold uppercase tracking-wider block">
-                                Ciclo attivo
-                            </span>
-                            <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: 'var(--font-size-meta)', marginBottom: 0, color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
-                                onClick={handleDeactivateCycle}
-                                title="Disattiva ciclo attivo"
-                            >
-                                <span aria-hidden="true">⏸️</span> Disattiva
-                            </button>
-                        </div>
-                    )}
-                </div>
 
-                {activeCycle?.startDate && (
-                    <div style={{ marginBottom: '15px', padding: '10px 12px', background: 'var(--surface-light)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                        <div className="flex-between text-xs mb-6">
-                            <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                                📅 {activeCycleTimeline.formattedRange}
-                            </span>
-                            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>
-                                {activeCycleTimeline.statusLabel} ({activeCycleTimeline.progressPercent}%)
-                            </span>
-                        </div>
-                        <div style={{ height: '6px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div
-                                style={{
-                                    height: '100%',
-                                    width: `${activeCycleTimeline.progressPercent}%`,
-                                    background: 'var(--primary-color)',
-                                    transition: 'width 0.3s ease'
-                                }}
-                            />
-                        </div>
+                    <div className="planning-progress-copy">
+                        <span><strong>{activeCycleTimeline.statusLabel}</strong></span>
+                        <span>{activeCycleTimeline.progressPercent}% completato</span>
                     </div>
-                )}
+                    <div
+                        className="planning-progress"
+                        role="progressbar"
+                        aria-label="Avanzamento del ciclo"
+                        aria-valuenow={activeCycleTimeline.progressPercent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                    >
+                        <span style={{ width: `${activeCycleTimeline.progressPercent}%` }} />
+                    </div>
 
-                {activeCycle?.notes && (
-                    <p className="text-xs text-muted mb-15" style={{ fontStyle: 'italic' }}>
-                        "{activeCycle.notes}"
-                    </p>
-                )}
-
-                {activeCycle ? (
-                    <CycleMuscleMap
-                        title="Mappa muscolare del ciclo"
-                        highlightedMuscles={cycleVolumeData.highlightedMuscles}
-                        emptyMessage="Le schede di questo ciclo non contengono ancora muscoli associati."
-                    />
-                ) : null}
-
-                {/* Dettaglio Volume Muscolare per Gruppo - collassabile */}
-                {activeCycle ? (
-                    <div>
+                    <div className="planning-active-actions">
                         <button
                             type="button"
-                            onClick={() => setIsVolumeOpen(prev => !prev)}
-                            style={{
-                                width: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '10px 12px',
-                                background: 'var(--surface-light)',
-                                border: '1px solid var(--glass-border)',
-                                borderRadius: isVolumeOpen ? '8px 8px 0 0' : '8px',
-                                cursor: 'pointer',
-                                color: 'var(--text-main)',
-                                transition: 'background 0.2s ease, border-radius 0.2s ease',
-                                marginBottom: isVolumeOpen ? '0' : '0',
-                            }}
-                            aria-expanded={isVolumeOpen}
+                            className="btn"
+                            onClick={() => setIsDetailsOpen(open => !open)}
+                            aria-expanded={isDetailsOpen}
                         >
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)' }}>📊 Volume settimanale per muscolo</span>
-                                <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)', fontWeight: 'normal' }}>(serie a settimana)</span>
-                            </span>
-                            <span style={{
-                                display: 'inline-block',
-                                transform: isVolumeOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                                transition: 'transform 0.25s ease',
-                                color: 'var(--text-muted)',
-                                fontSize: 'var(--font-size-meta)',
-                                lineHeight: 1
-                            }}>▼</span>
+                            Dettagli ciclo
                         </button>
+                        <button type="button" className="btn btn-primary" onClick={onOpenSession} disabled={!onOpenSession}>
+                            Apri sessione
+                        </button>
+                        <button type="button" className="btn" onClick={() => void handleDeactivateCycle(activeCycle.id)}>
+                            Disattiva ciclo
+                        </button>
+                    </div>
 
-                        {isVolumeOpen && (
-                            <div style={{
-                                border: '1px solid var(--glass-border)',
-                                borderTop: 'none',
-                                borderRadius: '0 0 8px 8px',
-                                padding: '8px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '6px',
-                                marginBottom: '0'
-                            }}>
-                                {cycleVolumeData.muscleVolumes.length === 0 ? (
-                                    <p className="text-base text-muted" style={{ padding: '4px 4px' }}>
-                                        Nessun esercizio presente nelle schede di questo ciclo.
-                                    </p>
-                                ) : (
-                                    cycleVolumeData.muscleVolumes.map((item, idx) => (
-                                        <div
-                                            key={item.key || idx}
-                                            style={{
-                                                padding: '8px 12px',
-                                                background: 'var(--surface-light)',
-                                                borderRadius: '8px',
-                                                border: '1px solid var(--glass-border)'
-                                            }}
-                                        >
-                                            <div className="flex-between items-center mb-4">
-                                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--text-main)' }}>
-                                                    {item.label}
-                                                </span>
-                                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-body)', color: 'var(--primary-color)' }}>
-                                                    {item.sets} {item.sets === 1 ? 'serie' : 'serie'} / sett.
-                                                </span>
-                                            </div>
-                                            {/* Barra proporzionale */}
-                                            <div
-                                                style={{
-                                                    width: '100%',
-                                                    height: '6px',
-                                                    background: 'var(--surface-light)',
-                                                    borderRadius: '3px',
-                                                    overflow: 'hidden'
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        width: `${Math.min(100, Math.max(8, item.percentage * 2.5))}%`,
-                                                        height: '100%',
-                                                        background: 'linear-gradient(90deg, var(--primary-color), #38bdf8)',
-                                                        borderRadius: '3px'
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        )}
-
-                        {/* Schede del ciclo attivo */}
-                        <div className="mt-15 pt-15 border-t">
-                            <span className="text-xs text-muted font-bold block mb-8">
-                                Schede assegnate a questo ciclo
-                            </span>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                {(activeCycle.routines || []).map((item, idx) => {
-                                    const routine = routines.find(r => r.id === item.routineId);
-                                    const letterIndex = String.fromCharCode(65 + (idx % 26));
-                                    return (
-                                        <div
-                                            key={`${item.routineId}-${idx}`}
-                                            style={{
-                                                padding: '6px 10px',
-                                                borderRadius: '8px',
-                                                background: 'var(--surface-light)',
-                                                border: '1px solid var(--glass-border)',
-                                                fontSize: 'var(--font-size-meta)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px'
-                                            }}
-                                        >
-                                            <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{letterIndex}.</span>
-                                            <span style={{ fontWeight: 'bold' }}>{routine?.name || 'Scheda'}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                    <div className="planning-active-details" hidden={!isDetailsOpen}>
+                        <div className="planning-routine-chips" aria-label="Sequenza schede del ciclo attivo">
+                            {(activeCycle.routines ?? []).map((item, index) => {
+                                const routine = routines.find(candidate => candidate.id === item.routineId);
+                                return (
+                                    <span key={`${item.routineId}-${index}`}>
+                                        <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda'}
+                                    </span>
+                                );
+                            })}
                         </div>
-                    </div>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: '15px 10px', color: 'var(--text-muted)' }}>
-                        <p className="m-0 text-sm font-semibold text-white">Nessun ciclo di allenamento attivo</p>
-                        <p className="m-0 text-xs text-muted mt-4">
-                            Utilizza il pulsante &quot;Crea ciclo&quot; in alto per impostare la tua prima programmazione.
-                        </p>
-                    </div>
-                )}
-            </div>
-
-            {/* Cycles Archive */}
-            <div className="section-divider-last">
-                <div className="flex-between mb-10 pb-10 border-b items-center">
-                    <span className="text-sm font-bold text-muted">
-                        I tuoi cicli di allenamento ({trainingCycles.length})
-                    </span>
-                </div>
-
-                {trainingCycles.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '25px 10px', color: 'var(--text-muted)' }}>
-                        <p className="m-0 text-xs">Nessun ciclo salvato nell'archivio.</p>
-                    </div>
-                ) : (
-                    trainingCycles.map(cycle => (
-                        <CycleCard
-                            key={cycle.id}
-                            cycle={cycle}
-                            isActive={cycle.id === activeCycleId}
-                            routines={routines}
-                            onSetActive={handleSetActiveCycle}
-                            onDeactivate={handleDeactivateCycle}
-                            onEdit={handleEditCycle}
-                            onDuplicate={handleDuplicateCycle}
-                            onDelete={handleDeleteCycle}
+                        <CycleMuscleMap
+                            title="Mappa muscolare del ciclo"
+                            highlightedMuscles={cycleVolumeData.highlightedMuscles}
+                            emptyMessage="Le schede di questo ciclo non contengono ancora muscoli associati."
                         />
-                    ))
+                        <CycleVolumeAccordion items={macroVolume} />
+                    </div>
+                </article>
+            ) : (
+                <div className="planning-empty-state">
+                    <strong>Nessun ciclo attivo</strong>
+                    <span>Crea un nuovo ciclo oppure impostane uno salvato come attivo.</span>
+                </div>
+            )}
+
+            <section className="planning-cycle-archive" aria-labelledby="planning-cycle-archive-title">
+                <header className="planning-section-head">
+                    <h2 id="planning-cycle-archive-title">I tuoi cicli</h2>
+                    <span>{trainingCycles.length} {trainingCycles.length === 1 ? 'ciclo' : 'cicli'}</span>
+                </header>
+
+                {inactiveCycles.length === 0 ? (
+                    <div className="planning-empty-inline">Nessun altro ciclo salvato.</div>
+                ) : (
+                    <div className="planning-cycle-list">
+                        {inactiveCycles.map(cycle => (
+                            <CycleCard
+                                key={cycle.id}
+                                cycle={cycle}
+                                isActive={false}
+                                routines={routines}
+                                onSetActive={handleSetActiveCycle}
+                                onDeactivate={handleDeactivateCycle}
+                                onEdit={handleEditCycle}
+                                onDuplicate={handleDuplicateCycle}
+                                onDelete={handleDeleteCycle}
+                            />
+                        ))}
+                    </div>
                 )}
-            </div>
+            </section>
         </div>
     );
 }

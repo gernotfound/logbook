@@ -1,9 +1,5 @@
-// Responsabilità: renderizzare la preview delle rotazioni delle schede del ciclo di allenamento.
-// Props: schedule (oggetto calcolato da Logic.calculateCycleSchedule), showPreview (boolean), onTogglePreview (funzione).
-// Effetti: nessuno, puro componente visuale memoizzato.
-
-import React, { memo } from 'react';
-
+import { memo } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { CycleScheduleResult } from '../../../lib/calc/planning';
 
 interface CycleSchedulePreviewProps {
@@ -12,102 +8,53 @@ interface CycleSchedulePreviewProps {
     onTogglePreview: () => void;
 }
 
-export const CycleSchedulePreview: React.FC<CycleSchedulePreviewProps> = memo(({
+export const CycleSchedulePreview = memo(function CycleSchedulePreview({
     schedule,
     showPreview,
     onTogglePreview
-}) => {
-    if (!schedule || !schedule.weeks) return null;
+}: CycleSchedulePreviewProps) {
+    if (!schedule?.weeks) return null;
 
     return (
-        <div
-            style={{
-                padding: '12px',
-                background: 'var(--surface-light)',
-                border: '1px solid var(--glass-border)',
-                borderRadius: '8px',
-                marginBottom: '15px'
-            }}
-        >
-            <div
-                className="flex-between items-center"
-                style={{ cursor: 'pointer', userSelect: 'none' }}
+        <section className="planning-rotation-preview">
+            <button
+                type="button"
+                className="planning-accordion planning-stateful"
                 onClick={onTogglePreview}
+                aria-expanded={showPreview}
+                aria-label={`Rotazione flessibile, ${schedule.totalSessions} sedute, ${showPreview ? 'ON' : 'OFF'}`}
             >
-                <div>
-                    <span className="text-xs text-primary font-bold uppercase tracking-wider block">
-                        Programmazione rotazione
+                <span>Rotazione flessibile · {schedule.totalSessions} sedute</span>
+                <span className="planning-accordion-meta">
+                    <span className={showPreview ? 'planning-state-badge is-on' : 'planning-state-badge'}>
+                        {showPreview ? 'ON' : 'OFF'}
                     </span>
-                    <span style={{ fontSize: 'var(--font-size-control)', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                        🔄 Calendario rotazione schede ({schedule.totalSessions} sedute)
-                    </span>
-                </div>
-                <button
-                    type="button"
-                    className="btn btn-secondary btn-small"
-                    style={{ padding: '2px 8px', fontSize: 'var(--font-size-micro)', marginBottom: 0 }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onTogglePreview();
-                    }}
-                >
-                    {showPreview ? 'Nascondi' : 'Mostra'}
-                </button>
-            </div>
+                    <ChevronDown className={showPreview ? 'is-open' : ''} size={20} aria-hidden="true" />
+                </span>
+            </button>
 
-            <div className="text-xs text-muted mt-6">
-                {schedule.summaryText}
-            </div>
-
-            {showPreview && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
-                    {schedule.weeks.map((week) => (
-                        <div
-                            key={week.weekNumber}
-                            style={{
-                                padding: '8px 10px',
-                                background: 'var(--surface-light)',
-                                borderRadius: '6px',
-                                border: '1px solid var(--glass-border)'
-                            }}
-                        >
-                            <div className="flex-between items-center mb-6">
-                                <span style={{ fontWeight: 'bold', fontSize: 'var(--font-size-meta)', color: 'var(--primary-color)' }}>
-                                    Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
-                                </span>
-                                <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
-                                    {week.sessions.length} {week.sessions.length === 1 ? 'seduta' : 'sedute'}
-                                </span>
-                            </div>
-
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {week.sessions.map((sess) => (
-                                    <div
-                                        key={sess.globalSessionIndex}
-                                        style={{
-                                            padding: '4px 8px',
-                                            background: 'var(--primary-soft)',
-                                            border: '1px solid var(--primary-color)',
-                                            borderRadius: '4px',
-                                            fontSize: 'var(--font-size-micro)',
-                                            color: 'var(--text-main)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '5px'
-                                        }}
-                                    >
-                                        <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                                            #{sess.globalSessionIndex}
+            {showPreview ? (
+                <div className="planning-accordion-panel">
+                    <p className="planning-helper">Nessun giorno della settimana è assegnato: conta soltanto l'ordine delle prossime schede.</p>
+                    <div className="planning-schedule-weeks">
+                        {schedule.weeks.map(week => (
+                            <div key={week.weekNumber} className="planning-schedule-week">
+                                <div className="planning-schedule-week-head">
+                                    <strong>Settimana {week.weekNumber}</strong>
+                                    <span>{week.sessions.length} {week.sessions.length === 1 ? 'seduta' : 'sedute'}</span>
+                                </div>
+                                <div className="planning-schedule-sessions">
+                                    {week.sessions.map(session => (
+                                        <span key={session.globalSessionIndex}>
+                                            <b>#{session.globalSessionIndex}</b> {session.routineName}
                                         </span>
-                                        <span>{sess.routineName}</span>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
-            )}
-        </div>
+            ) : null}
+        </section>
     );
 });
-CycleSchedulePreview.displayName = 'CycleSchedulePreview';
