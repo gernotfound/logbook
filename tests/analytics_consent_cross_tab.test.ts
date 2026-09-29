@@ -89,7 +89,7 @@ describe('Analytics consent cross-tab synchronization', () => {
         const listener = vi.fn();
         const unsubscribe = consent.subscribeAnalyticsConsent(listener);
 
-        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
             throw new Error('blocked storage');
         });
 
