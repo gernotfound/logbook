@@ -1997,6 +1997,7 @@
 }
 
 .workout-sticky-timer {
+  position: sticky;
   top: var(--sticky-top, env(safe-area-inset-top, 0rem));
   z-index: 100;
   display: grid;
