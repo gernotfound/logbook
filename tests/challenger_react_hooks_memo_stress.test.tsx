@@ -524,7 +524,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
             vi.useFakeTimers({ shouldAdvanceTime: false });
             vi.spyOn(useDialogStore.getState(), 'showConfirm').mockResolvedValue(true);
             const dbSaveMock2 = vi.spyOn(DB, 'saveUserData').mockResolvedValue({ ok: true, status: 'synced' } as any);
-            const endBtn = screen.getByText(/Termina sessione/i);
+            const endBtn = screen.getByText(/Termina allenamento/i);
 
             await act(async () => {
                 fireEvent.click(endBtn);
