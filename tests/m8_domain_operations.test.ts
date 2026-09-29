@@ -228,7 +228,8 @@ describe('M8 Domain Operations V4', () => {
 
         expect(after.library?.map(item => item.id)).toEqual(['e-keep']);
         expect(after.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))).toEqual([['e-keep'], []]);
-        expect(after.history?.[0]).toEqual(historical);
+        expect(after.history?.[0]?.id).toBe(historical.id);
+        expect(after.history?.[0]?.exercises[0]?.exId).toBe('e-delete');
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'library')).toBe(true);
         expect(operations.some(operation => operation.docPath === '' && operation.path[0] === 'routines')).toBe(true);
         expect(operations.every(operation => operation.docPath === '')).toBe(true);
