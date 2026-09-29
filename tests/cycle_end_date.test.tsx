@@ -162,7 +162,7 @@ describe('Training Cycle End Date & Two-Way Binding (Milestone 2 - Requirement R
             expect(screen.getByLabelText('Data di inizio')).toBeDefined();
             expect(screen.getByLabelText('Data di fine')).toBeDefined();
             expect(screen.getByLabelText('Durata (settimane)')).toBeDefined();
-            expect(screen.getByText('Frequenza di allenamento (sedute a settimana)')).toBeDefined();
+            expect(screen.getByLabelText('Sedute a settimana')).toBeDefined();
         });
 
         it('two-way binding: changing durationWeeks updates endDate automatically', () => {
