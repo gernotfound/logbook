@@ -6,6 +6,7 @@ import PreSessionCheckIn from './PreSessionCheckIn';
 import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
 import type { WorkoutSession } from '../../types';
+import { Logic } from '../../lib/logic';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
@@ -37,6 +38,14 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     // Il report appartiene al contenitore della sessione: deve sopravvivere alla
     // cancellazione del workout locale che segue un salvataggio riuscito.
     if (isPostSession && activeWorkout && !activeWorkout.isEditingHistory) {
+        const durationSeconds = activeWorkout.globalStartTime
+            ? Math.max(0, Math.floor((pendingEndTime - activeWorkout.globalStartTime) / 1000))
+            : 0;
+        const totalSets = activeWorkout.exercises.reduce(
+            (sum, exercise) => sum + (exercise.sets?.length ?? 0),
+            0,
+        );
+
         const finish = async () => {
             const finished = await endWorkout(false, pendingEndTime);
             if (finished) {
@@ -51,6 +60,26 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                     <h2 id="post-session-title">Com’è andato l’allenamento?</h2>
                     <p>Registra le sensazioni finali prima di salvare la sessione.</p>
                 </header>
+                <div className="post-session-summary">
+                    <div>
+                        <h3>Riepilogo rapido</h3>
+                        <p>{activeWorkout.routineName || 'Allenamento libero'}</p>
+                    </div>
+                    <div className="post-session-summary-grid">
+                        <div>
+                            <strong>{Logic.formatDuration(durationSeconds)}</strong>
+                            <span>Durata</span>
+                        </div>
+                        <div>
+                            <strong>{activeWorkout.exercises.length}</strong>
+                            <span>Esercizi</span>
+                        </div>
+                        <div>
+                            <strong>{totalSets}</strong>
+                            <span>Serie</span>
+                        </div>
+                    </div>
+                </div>
                 <SessionRatings
                     water={water} setWater={setWater}
                     mood={mood} setMood={setMood}

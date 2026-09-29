@@ -1,17 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { CalendarRange, ChevronRight, Dumbbell, Search } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useWorkoutSession } from '../../hooks/useWorkoutSession';
 import { Logic } from '../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../types';
-
-// Responsabilità: renderizzare la UI per la configurazione e l'avvio di una nuova sessione di allenamento.
-// Props: onNavigateToPlanning (callback per navigare alla pianificazione).
-// Effetti: Invia il comando di avvio sessione tramite useWorkoutSession.
+import { getRoutineDurationEstimate, type RoutineDurationEstimate } from './session/sessionDurationEstimate';
 
 const EMPTY_CYCLES: TrainingCycle[] = [];
 
 interface PlannedRoutineItem {
-    cycleItem: any;
     routine: WorkoutRoutine;
     letter: string;
     position: number;
@@ -21,242 +18,251 @@ export interface TrainingSessionSetupProps {
     onNavigateToPlanning?: () => void;
 }
 
+function routineExerciseLabel(routine: WorkoutRoutine): string {
+    const count = routine.exercises?.length ?? 0;
+    return `${count} ${count === 1 ? 'esercizio' : 'esercizi'}`;
+}
+
 export const TrainingSessionSetup = ({ onNavigateToPlanning }: TrainingSessionSetupProps) => {
     const trainingCycles = useAppStore(state => state.userData?.trainingCycles || EMPTY_CYCLES);
     const activeCycleId = useAppStore(state => state.userData?.activeCycleId ?? null);
-    const activeCycle = activeCycleId ? trainingCycles.find(c => c.id === activeCycleId) : null;
-    
-    const { routines, history, startWorkout, startFreeWorkout, selectedRoutine, setSelectedRoutine } = useWorkoutSession();
+    const activeCycle = activeCycleId ? trainingCycles.find(cycle => cycle.id === activeCycleId) : null;
+    const { routines, history, startWorkout, startFreeWorkout } = useWorkoutSession();
 
-    const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
-        if (!activeCycle || !activeCycle.routines) return [];
-        return activeCycle.routines
-            .map((item: any, idx: number) => {
-                const found = routines.find(r => r.id === item.routineId);
-                const letter = String.fromCharCode(65 + (idx % 26));
-                return {
-                    cycleItem: item,
-                    routine: found,
-                    letter,
-                    position: idx + 1
-                };
-            })
-            .filter((item): item is PlannedRoutineItem => item.routine !== undefined);
-    }, [activeCycle, routines]);
-
-    const nextScheduled = useMemo(() => {
-        return Logic.getNextScheduledRoutine(activeCycle, routines, history);
-    }, [activeCycle, routines, history]);
-
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectedPlannedRoutine, setSelectedPlannedRoutine] = useState('');
 
-    useEffect(() => {
-        if (nextScheduled?.nextRoutineId) {
-            setSelectedPlannedRoutine(nextScheduled.nextRoutineId);
-        } else if (plannedRoutines.length > 0 && plannedRoutines[0].routine?.id) {
-            setSelectedPlannedRoutine(plannedRoutines[0].routine.id);
-        } else {
-            setSelectedPlannedRoutine('');
+    const plannedRoutines: PlannedRoutineItem[] = useMemo(() => {
+        if (!activeCycle?.routines) return [];
+        return activeCycle.routines
+            .map((item, index) => {
+                const routine = routines.find(candidate => candidate.id === item.routineId);
+                if (!routine) return null;
+                return {
+                    routine,
+                    letter: String.fromCharCode(65 + (index % 26)),
+                    position: index + 1,
+                };
+            })
+            .filter((item): item is PlannedRoutineItem => item !== null);
+    }, [activeCycle, routines]);
+
+    const nextScheduled = useMemo(
+        () => Logic.getNextScheduledRoutine(activeCycle, routines, history),
+        [activeCycle, routines, history],
+    );
+
+    const durationEstimates = useMemo(() => {
+        const estimates = new Map<string, RoutineDurationEstimate>();
+        for (const routine of routines) {
+            const estimate = getRoutineDurationEstimate(routine.id, history);
+            if (estimate) estimates.set(routine.id, estimate);
         }
-    }, [activeCycle?.id, nextScheduled?.nextRoutineId, plannedRoutines]);
+        return estimates;
+    }, [routines, history]);
+
+    const normalizedQuery = searchQuery.trim().toLocaleLowerCase('it');
+    const filteredRoutines = useMemo(() => (
+        normalizedQuery
+            ? routines.filter(routine => routine.name.toLocaleLowerCase('it').includes(normalizedQuery))
+            : routines
+    ), [normalizedQuery, routines]);
+
+    const startPlannedRoutine = (routineId: string) => {
+        if (!activeCycle) return;
+        void startWorkout(routineId, { cycleId: activeCycle.id, cycleName: activeCycle.name });
+    };
+
+    const renderRoutineRow = (
+        routine: WorkoutRoutine,
+        options?: { letter?: string; planned?: boolean },
+    ) => {
+        const estimate = durationEstimates.get(routine.id);
+        return (
+            <button
+                key={routine.id}
+                type="button"
+                className="session-routine-row"
+                onClick={() => options?.planned ? startPlannedRoutine(routine.id) : void startWorkout(routine.id)}
+            >
+                <span className="session-routine-mark" aria-hidden="true">
+                    {options?.letter || routine.name.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="session-routine-copy">
+                    <strong>{routine.name}</strong>
+                    <span>
+                        {routineExerciseLabel(routine)}
+                        {estimate ? ` · ≈ ${estimate.minutes} min` : ''}
+                    </span>
+                    {estimate && (
+                        <small>Stima: mediana ultime {estimate.sampleSize} sessioni</small>
+                    )}
+                </span>
+                <ChevronRight size={20} aria-hidden="true" />
+            </button>
+        );
+    };
+
+    const nextRoutine = nextScheduled?.nextRoutine;
+    const nextEstimate = nextRoutine ? durationEstimates.get(nextRoutine.id) : undefined;
+    const nextPlannedItem = nextRoutine
+        ? plannedRoutines.find(item => item.routine.id === nextRoutine.id)
+        : undefined;
+    const selectedRotationId = plannedRoutines.some(item => item.routine.id === selectedPlannedRoutine)
+        ? selectedPlannedRoutine
+        : (nextRoutine?.id || plannedRoutines[0]?.routine.id || '');
+    const selectedRotationRoutine = plannedRoutines.find(item => item.routine.id === selectedRotationId)?.routine;
 
     return (
-        <div className="tab-pane active fade-in" id="train-session">
-            {/* 1. Sezione Avvia sessione pianificata */}
-            <div className="section-divider">
-                <div className="flex-between items-center mb-10 pb-8 border-b">
-                    <div>
-                        <span className="text-xs text-primary font-bold uppercase tracking-wider block">
-                            Programmazione
-                        </span>
-                        <h2 className="m-0 text-white">
-                            🎯 Avvia sessione pianificata
-                        </h2>
-                    </div>
-                    {activeCycle && (
-                        <span
-                            style={{
-                                fontSize: 'var(--font-size-micro)',
-                                fontWeight: 'bold',
-                                padding: '3px 10px',
-                                borderRadius: '12px',
-                                background: 'var(--primary-color)',
-                                color: 'var(--on-primary)'
-                            }}
-                        >
-                            {activeCycle.name}
-                        </span>
-                    )}
-                </div>
+        <div className="session-setup-page" id="train-session">
+            <header className="session-setup-header">
+                <p>Scegli l’allenamento</p>
+                <h1>Sessione</h1>
+            </header>
 
-                {activeCycle ? (
-                    plannedRoutines.length === 0 ? (
-                        <div style={{ padding: '8px 0', color: 'var(--text-muted)', fontSize: 'var(--font-size-meta)' }}>
-                            <p className="m-0 mb-8">Nessuna scheda valida trovata nel ciclo attivo "{activeCycle.name}".</p>
-                            {onNavigateToPlanning && (
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary btn-small"
-                                    style={{ fontSize: 'var(--font-size-meta)', marginBottom: 0 }}
-                                    onClick={onNavigateToPlanning}
-                                >
-                                    Modifica ciclo in Pianificazione
-                                </button>
-                            )}
-                        </div>
-                    ) : (
+            {activeCycle && nextRoutine && (
+                <section className="session-next-card section-divider" aria-labelledby="session-next-title">
+                    <div className="session-next-top">
                         <div>
-                            {nextScheduled?.nextRoutine && (
-                                <div
-                                    style={{
-                                        padding: '12px',
-                                        background: 'var(--primary-soft)',
-                                        border: '1px solid var(--primary-color)',
-                                        borderRadius: '8px',
-                                        marginBottom: '15px'
-                                    }}
-                                >
-                                    <div className="flex-between items-center mb-6">
-                                        <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--primary-color)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                            Prossima in programma
-                                        </span>
-                                        <span style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
-                                            Seduta #{nextScheduled.nextSessionIndex} di {nextScheduled.totalSessions}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex-between items-center mb-10">
-                                        <div>
-                                            <div style={{ fontSize: 'var(--font-size-control)', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                                                {nextScheduled.nextRoutine.name}
-                                            </div>
-                                            <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-                                                Rotazione {nextScheduled.rotationNumber} • Scheda {nextScheduled.positionInRotation} di {nextScheduled.totalRoutinesInCycle} • {(nextScheduled.nextRoutine.exercises || []).length} esercizi
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        className="btn btn-primary"
-                                        style={{ width: '100%', marginBottom: 0, fontWeight: 'bold' }}
-                                        onClick={() => startWorkout(nextScheduled.nextRoutine!.id, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
-                                    >
-                                        <span aria-hidden="true">🏋️</span> Avvia {nextScheduled.nextRoutine.name} (Seduta #{nextScheduled.nextSessionIndex})
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="border-t pt-10">
-                                <label htmlFor="rotation-routine-select" className="text-xs text-muted font-bold block mb-6">
-                                    Oppure scegli un'altra scheda della rotazione:
-                                </label>
-                                <div className="form-group mb-10">
-                                    <select
-                                        id="rotation-routine-select"
-                                        aria-label="Seleziona scheda della rotazione"
-                                        value={selectedPlannedRoutine}
-                                        onChange={e => setSelectedPlannedRoutine(e.target.value)}
-                                        className="w-full p-10 bg-surface text-white border-b rounded-8"
-                                        style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
-                                    >
-                                        <option value="">+ Seleziona scheda della rotazione</option>
-                                        {plannedRoutines.map(({ routine, letter, position }) => (
-                                            <option key={routine!.id} value={routine!.id}>
-                                                {letter}. {routine!.name} (Posizione {position}/{plannedRoutines.length} • {(routine!.exercises || []).length} es.)
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {selectedPlannedRoutine && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        style={{ width: '100%', marginBottom: 0 }}
-                                        onClick={() => startWorkout(selectedPlannedRoutine, { cycleId: activeCycle.id, cycleName: activeCycle.name })}
-                                    >
-                                        <span aria-hidden="true">🏋️</span> Avvia {plannedRoutines.find(p => p.routine?.id === selectedPlannedRoutine)?.routine?.name || 'scheda selezionata'}
-                                    </button>
-                                )}
-                            </div>
+                            <p className="session-eyebrow">Avvia sessione pianificata · Prossima nel ciclo</p>
+                            <h2 id="session-next-title" style={{ fontSize: 'var(--font-size-control)' }}>
+                                {nextScheduled?.nextRoutine ? nextScheduled.nextRoutine.name : nextRoutine.name}
+                            </h2>
+                            <span>
+                                {activeCycle.name}
+                                {nextScheduled?.nextSessionIndex ? ` · Seduta ${nextScheduled.nextSessionIndex} di ${nextScheduled.totalSessions}` : ''}
+                            </span>
                         </div>
-                    )
-                ) : (
-                    <div style={{ padding: '8px 0', color: 'var(--text-muted)' }}>
-                        <p className="text-base m-0 mb-10">
-                            Nessun ciclo di allenamento attivo al momento.
-                        </p>
-                        {onNavigateToPlanning && (
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                style={{ fontSize: 'var(--font-size-meta)', marginBottom: 0 }}
-                                onClick={onNavigateToPlanning}
-                            >
-                                <span aria-hidden="true">🎯</span> Vai a Pianificazione
-                            </button>
+                        <span className="session-next-icon" aria-hidden="true">
+                            <Dumbbell size={24} />
+                        </span>
+                    </div>
+
+                    <div className="session-setup-stats">
+                        <div>
+                            <strong>{nextRoutine.exercises?.length ?? 0}</strong>
+                            <span>Esercizi</span>
+                        </div>
+                        {nextEstimate && (
+                            <div>
+                                <strong>≈ {nextEstimate.minutes} min</strong>
+                                <span>Mediana {nextEstimate.sampleSize} sedute</span>
+                            </div>
+                        )}
+                        {nextPlannedItem && (
+                            <div>
+                                <strong>{nextPlannedItem.letter} di {plannedRoutines.length}</strong>
+                                <span>Rotazione</span>
+                            </div>
                         )}
                     </div>
-                )}
-            </div>
 
-            {/* 2. Sezione Avvia nuova sessione (Tutte le schede / Libera) */}
-            <div className="section-divider-last">
-                <div className="flex-between items-center mb-10 pb-8 border-b">
-                    <div>
-                        <h2 className="m-0">
-                            Avvia nuova sessione
-                        </h2>
-                        <label htmlFor="archive-routine-select" className="text-muted text-xs m-0 mt-4 block">
-                            Seleziona liberamente qualsiasi scheda dal tuo archivio o inizia senza scheda
-                        </label>
-                    </div>
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
                     <button
                         type="button"
-                        className="btn btn-primary"
-                        style={{ width: '100%', marginBottom: 0 }}
-                        onClick={() => startFreeWorkout()}
+                        className="btn btn-primary session-primary-action"
+                        onClick={() => startPlannedRoutine(nextRoutine.id)}
                     >
-                        <span aria-hidden="true">🚀</span> Allenamento libero
+                        Avvia {nextRoutine.name}{nextScheduled?.nextSessionIndex ? ` (Seduta #${nextScheduled.nextSessionIndex})` : ''}
                     </button>
-                </div>
 
-                {routines.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-size-body)' }}>
-                        Non hai ancora creato nessuna scheda. Vai in 'Schede' per crearne una e aggiungerci degli esercizi.
-                    </p>
-                ) : (
-                    <div>
-                        <div className="form-group mb-12">
-                            <select 
-                                id="archive-routine-select"
-                                aria-label="Seleziona scheda dall'archivio"
-                                value={selectedRoutine} 
-                                onChange={e => setSelectedRoutine(e.target.value)}
-                                className="w-full p-10 bg-surface text-white border-b rounded-8"
-                                style={{ fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block', appearance: 'none' }}
+                    {plannedRoutines.length > 1 && (
+                        <div className="session-rotation-picker">
+                            <label htmlFor="rotation-routine-select">Cambia scheda della rotazione</label>
+                            <select
+                                id="rotation-routine-select"
+                                aria-label="Seleziona scheda della rotazione"
+                                value={selectedRotationId}
+                                onChange={event => setSelectedPlannedRoutine(event.target.value)}
                             >
-                                <option value="">+ Seleziona scheda</option>
-                                {routines.map(r => (
-                                    <option key={r.id} value={r.id}>
-                                        {r.name} ({(r.exercises || []).length} es.)
+                                {plannedRoutines.map(item => (
+                                    <option key={item.routine.id} value={item.routine.id}>
+                                        {item.letter}. {item.routine.name}
                                     </option>
                                 ))}
                             </select>
+                            {selectedRotationRoutine && selectedRotationRoutine.id !== nextRoutine.id && (
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary session-secondary-action"
+                                    onClick={() => startPlannedRoutine(selectedRotationRoutine.id)}
+                                >
+                                    Avvia {selectedRotationRoutine.name}
+                                </button>
+                            )}
                         </div>
+                    )}
+                </section>
+            )}
+
+            {activeCycle && !nextRoutine && (
+                <section className="session-setup-message">
+                    <strong>{activeCycle.name}</strong>
+                    <span>Il ciclo attivo non contiene una scheda disponibile per l’avvio.</span>
+                </section>
+            )}
+
+            {!activeCycle && (
+                <section className="session-setup-message">
+                    <strong>Nessun ciclo di allenamento attivo al momento.</strong>
+                    <span>Puoi comunque scegliere una scheda dall’archivio o iniziare un allenamento libero.</span>
+                    {onNavigateToPlanning && (
                         <button
                             type="button"
-                            className="btn btn-secondary"
-                            style={{ width: '100%', marginBottom: 0 }}
-                            onClick={() => startWorkout(selectedRoutine)}
+                            className="btn btn-secondary session-secondary-action"
+                            onClick={onNavigateToPlanning}
                         >
-                            <span aria-hidden="true">🏋️</span> Inizia allenamento
+                            Vai a Pianificazione
                         </button>
+                    )}
+                </section>
+            )}
+
+            <section className="session-archive-section" aria-labelledby="session-archive-title">
+                <div className="session-section-heading">
+                    <div>
+                        <h2 id="session-archive-title">Scegli dall’archivio</h2>
+                        <p>{routines.length} {routines.length === 1 ? 'scheda' : 'schede'}</p>
                     </div>
+                </div>
+
+                <label className="session-search-field">
+                    <Search size={20} aria-hidden="true" />
+                    <span className="sr-only">Cerca scheda per nome</span>
+                    <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={event => setSearchQuery(event.target.value)}
+                        placeholder="Cerca scheda per nome"
+                    />
+                </label>
+
+                {filteredRoutines.length > 0 ? (
+                    <div className="session-routine-list">
+                        {filteredRoutines.map(routine => renderRoutineRow(routine))}
+                    </div>
+                ) : (
+                    <div className="session-setup-message">Nessuna scheda trovata.</div>
+                )}
+            </section>
+
+            <div className="session-free-row">
+                <button
+                    type="button"
+                    className="btn btn-secondary session-free-button"
+                    onClick={() => void startFreeWorkout()}
+                >
+                    Allenamento libero
+                </button>
+                {onNavigateToPlanning && activeCycle && (
+                    <button
+                        type="button"
+                        className="session-planning-button"
+                        onClick={onNavigateToPlanning}
+                        aria-label="Vai a Pianificazione"
+                        title="Vai a Pianificazione"
+                    >
+                        <CalendarRange size={20} aria-hidden="true" />
+                    </button>
                 )}
             </div>
         </div>

@@ -34,12 +34,11 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 6. Torna alla vista Sessione
     await page.click('button.sub-nav-btn:has-text("Sessione")');
-    await page.selectOption('select#archive-routine-select', { label: 'Scheda E2E Offline (0 es.)' });
 
-    // 7. Inizia l'allenamento
-    await page.locator('#view-training').getByRole('button', { name: 'Inizia allenamento', exact: true }).click();
+    // 7. Avvia la scheda direttamente dall'archivio e completa il check-in.
+    await page.locator('#view-training').getByRole('button', { name: /Scheda E2E Offline/ }).click();
     await page.getByRole('button', { name: 'Salta check-in e inizia' }).click();
-    await expect(page.locator('button:has-text("Termina")')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
 
     // 8. Vai offline
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
@@ -68,15 +67,15 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // Anche il workout device-local deve sopravvivere.
     await newPage.click('button.sub-nav-btn:has-text("Sessione")');
-    await expect(newPage.locator('button:has-text("Termina")')).toBeVisible();
+    await expect(newPage.getByRole('button', { name: 'Termina allenamento' })).toBeVisible();
 
     // 11. Termina l'allenamento
-    await newPage.click('button:has-text("Termina")');
+    await newPage.getByRole('button', { name: 'Termina allenamento' }).click();
     await expect(newPage.getByRole('heading', { name: /andato l.allenamento/i })).toBeVisible();
     await newPage.getByRole('button', { name: 'Salva e termina' }).click();
     await expect(newPage.getByRole('dialog', { name: /Scheda E2E Offline/ })).toBeVisible();
     await newPage.getByRole('dialog').getByRole('button', { name: 'Chiudi', exact: true }).click();
     await newPage.click('button[aria-label="Allenamento"]');
-    await expect(newPage.locator('#view-training').getByRole('button', { name: 'Inizia allenamento', exact: true })).toBeVisible();
+    await expect(newPage.locator('#view-training').getByRole('button', { name: /Scheda E2E Offline/ })).toBeVisible();
   });
 });

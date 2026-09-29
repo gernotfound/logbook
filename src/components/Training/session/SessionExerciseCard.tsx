@@ -64,6 +64,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
 
     const [showPositionMenu, setShowPositionMenu] = React.useState(false);
+    const [isNextNoteOpen, setIsNextNoteOpen] = React.useState(Boolean(exItem.sessionNote?.trim()));
     const positionMenuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -143,11 +144,11 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
     };
 
     return (
-        <div className="section-divider">
+        <div className="section-divider session-exercise-card-content">
             <div style={{ marginBottom: '10px' }}>
                 <h2 style={{color: 'var(--primary-color)', margin: 0}}>{exName}</h2>
             </div>
-            <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+            <div className="session-exercise-toolbar">
                 {/* Position dropdown */}
                 <div style={{ position: 'relative' }} ref={positionMenuRef}>
                     <button
@@ -390,11 +391,27 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 </>
             )}
 
+            <button
+                type="button"
+                className="session-next-note-toggle"
+                onClick={() => setIsNextNoteOpen(open => !open)}
+                aria-expanded={isNextNoteOpen}
+            >
+                <span>{exItem.sessionNote?.trim() ? 'Modifica nota per la prossima volta' : 'Aggiungi nota per la prossima volta'}</span>
+                <span aria-hidden="true">{isNextNoteOpen ? '−' : '+'}</span>
+            </button>
             <BufferedTextarea
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={val => onUpdateSessionNote(exIndex, val)}
-                style={{ width: '100%', padding: '12px', background: 'var(--surface-light)', border: '1px solid var(--glass-border)', color: 'var(--text-main)', borderRadius: '12px', marginTop: '12px', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
+                className="session-next-note-editor"
+                style={{
+                    width: '100%',
+                    fontSize: '16px',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    display: isNextNoteOpen ? 'block' : 'none',
+                }}
             />
         </div>
     );
