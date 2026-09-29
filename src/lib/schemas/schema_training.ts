@@ -58,8 +58,16 @@ export const ProgressionContractSchema = z.object({
     metric: z.enum(['performance', 'volume', 'density', 'execution']).optional().catch(undefined),
 });
 
+const TrainingEntityIdSchema = z.union([
+    z.string(),
+    z.number().finite().transform(value => String(value)),
+]).transform(id => id.trim()).refine(
+    id => id.length > 0 && id.length <= 160 && id !== 'undefined' && id !== 'null' && !id.includes('/'),
+    'Identificativo allenamento non valido',
+);
+
 export const RoutineExerciseSchema = z.object({
-    exId: safeString(''),
+    exId: TrainingEntityIdSchema,
     setsCount: safeNumber(0),
     minReps: safeOptionalNumber(),
     maxReps: safeOptionalNumber(),
@@ -67,12 +75,38 @@ export const RoutineExerciseSchema = z.object({
     setPlans: z.array(PlannedSetTechniqueSchema).optional().catch(undefined),
     technicalStandard: safeOptionalString(),
     progressionContract: ProgressionContractSchema.optional().catch(undefined),
-}).passthrough().catch({ exId: '', setsCount: 0 }).default({ exId: '', setsCount: 0 });
+}).passthrough();
+
+function sanitizeRoutineExercises(value: unknown): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        reportZodSchemaFallback({ schema: 'WorkoutRoutineSchema', field: 'exercises', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
+        return [];
+    }
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = RoutineExerciseSchema.safeParse(raw);
+        if (!parsed.success || seen.has(parsed.data.exId)) {
+            reportZodSchemaFallback({
+                schema: 'RoutineExerciseSchema',
+                field: 'exId',
+                fallbackUsed: 'record_quarantined',
+                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
+                error: parsed.success ? undefined : parsed.error,
+            });
+            continue;
+        }
+        seen.add(parsed.data.exId);
+        result.push(parsed.data);
+    }
+    return result;
+}
 
 export const WorkoutRoutineSchema = z.object({
     id: safeString(''),
     name: safeString(''),
-    exercises: z.array(RoutineExerciseSchema).catch([]).default([]),
+    exercises: z.preprocess(sanitizeRoutineExercises, z.array(RoutineExerciseSchema)).default([]),
 }).passthrough().catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'WorkoutRoutineSchema',
@@ -212,9 +246,35 @@ export const WorkoutSessionSchema = z.object({
 }).default({ exercises: [], pains: [] });
 
 export const TrainingCycleRoutineItemSchema = z.object({
-    routineId: safeString(''),
+    routineId: TrainingEntityIdSchema,
     frequencyPerWeek: safeNumber(1),
-}).passthrough().catch({ routineId: '', frequencyPerWeek: 1 }).default({ routineId: '', frequencyPerWeek: 1 });
+}).passthrough();
+
+function sanitizeTrainingCycleRoutines(value: unknown): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        reportZodSchemaFallback({ schema: 'TrainingCycleSchema', field: 'routines', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
+        return [];
+    }
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = TrainingCycleRoutineItemSchema.safeParse(raw);
+        if (!parsed.success || seen.has(parsed.data.routineId)) {
+            reportZodSchemaFallback({
+                schema: 'TrainingCycleRoutineItemSchema',
+                field: 'routineId',
+                fallbackUsed: 'record_quarantined',
+                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
+                error: parsed.success ? undefined : parsed.error,
+            });
+            continue;
+        }
+        seen.add(parsed.data.routineId);
+        result.push(parsed.data);
+    }
+    return result;
+}
 
 export const TrainingCycleSchema = z.object({
     id: safeString(''),
@@ -226,7 +286,7 @@ export const TrainingCycleSchema = z.object({
     endDate: safeOptionalString(),
     notes: safeOptionalString(),
     strategy: TrainingCycleStrategySchema.optional().catch(undefined),
-    routines: z.array(TrainingCycleRoutineItemSchema).catch([]).default([]),
+    routines: z.preprocess(sanitizeTrainingCycleRoutines, z.array(TrainingCycleRoutineItemSchema)).default([]),
     createdAt: safeOptionalNumber(),
     isActive: safeOptionalBoolean(),
 }).passthrough().catch((ctx) => {

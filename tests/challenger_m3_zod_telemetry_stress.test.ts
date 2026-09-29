@@ -254,7 +254,7 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
             expect(day.carbs).toBe(0);
             expect(day.fat).toBe(0);
             expect(day.meals).toHaveLength(15);
-            expect(day.supplementsIntake).toHaveLength(10);
+            expect(day.supplementsIntake).toHaveLength(0);
             expect(day.sleepHours).toBeUndefined();
         });
     });

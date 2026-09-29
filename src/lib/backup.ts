@@ -48,6 +48,39 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         }
     };
     for (const key of arrays) if (value[key] !== undefined) checkIds(value[key], key);
+
+    if (Array.isArray(value.routines)) for (const [index, routine] of value.routines.entries()) {
+        if (!isRecord(routine) || routine.exercises === undefined) continue;
+        if (!Array.isArray(routine.exercises)) throw new Error(`routines.${index}.exercises: atteso un elenco.`);
+        const seen = new Set<string>();
+        for (const exercise of routine.exercises) {
+            if (!isRecord(exercise)) throw new Error(`routines.${index}.exercises: elemento senza identificativo valido.`);
+            const exId = exercise.exId;
+            const normalized = typeof exId === 'number' && Number.isFinite(exId) ? String(exId) : typeof exId === 'string' ? exId.trim() : '';
+            if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) {
+                throw new Error(`routines.${index}.exercises: esercizio senza identificativo valido.`);
+            }
+            if (seen.has(normalized)) throw new Error(`routines.${index}.exercises: identificativo duplicato ${normalized}.`);
+            seen.add(normalized);
+        }
+    }
+
+    if (Array.isArray(value.trainingCycles)) for (const [index, cycle] of value.trainingCycles.entries()) {
+        if (!isRecord(cycle) || cycle.routines === undefined) continue;
+        if (!Array.isArray(cycle.routines)) throw new Error(`trainingCycles.${index}.routines: atteso un elenco.`);
+        const seen = new Set<string>();
+        for (const routine of cycle.routines) {
+            if (!isRecord(routine)) throw new Error(`trainingCycles.${index}.routines: elemento senza identificativo valido.`);
+            const routineId = routine.routineId;
+            const normalized = typeof routineId === 'number' && Number.isFinite(routineId) ? String(routineId) : typeof routineId === 'string' ? routineId.trim() : '';
+            if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) {
+                throw new Error(`trainingCycles.${index}.routines: routine senza identificativo valido.`);
+            }
+            if (seen.has(normalized)) throw new Error(`trainingCycles.${index}.routines: identificativo duplicato ${normalized}.`);
+            seen.add(normalized);
+        }
+    }
+
     for (const key of ['profile', 'nutrition', 'catalogOverrides', 'pendingConflicts']) {
         if (value[key] !== undefined && !isRecord(value[key])) throw new Error(`${key}: atteso un oggetto.`);
     }
@@ -55,7 +88,27 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date || !isRecord(day)) {
             throw new Error(`Giornata nutrizione non valida: ${date}.`);
         }
-        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) if (day[key] !== undefined) checkIds(day[key], `nutrition.${date}.${key}`);
+        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) {
+            if (day[key] === undefined) continue;
+            checkIds(day[key], `nutrition.${date}.${key}`);
+            for (const item of day[key] as unknown[]) {
+                if (!isRecord(item)) continue;
+                const id = item.id;
+                const normalizedId = typeof id === 'number' && Number.isFinite(id) ? String(id) : typeof id === 'string' ? id.trim() : '';
+                if (!normalizedId || normalizedId === 'undefined' || normalizedId === 'null' || normalizedId.includes('/')) {
+                    throw new Error(`nutrition.${date}.${key}: identificativo non valido.`);
+                }
+                if (key === 'supplementsIntake') {
+                    const supplementId = item.supplementId;
+                    const normalizedSupplementId = typeof supplementId === 'number' && Number.isFinite(supplementId)
+                        ? String(supplementId)
+                        : typeof supplementId === 'string' ? supplementId.trim() : '';
+                    if (!normalizedSupplementId || normalizedSupplementId === 'undefined' || normalizedSupplementId === 'null' || normalizedSupplementId.includes('/')) {
+                        throw new Error(`nutrition.${date}.supplementsIntake: integratore senza identificativo valido.`);
+                    }
+                }
+            }
+        }
     }
 }
 

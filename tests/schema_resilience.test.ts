@@ -248,10 +248,10 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.nutrition!['2026-08-14'].fat).toBe(70);
             expect(parsed.nutrition!['2026-08-14'].weight).toBe(78.5);
             expect(parsed.nutrition!['2026-08-14'].isDayOn).toBe(true);
-            expect(parsed.nutrition!['2026-08-14'].meals?.length).toBe(2);
+            expect(parsed.nutrition!['2026-08-14'].meals?.length).toBe(1);
             expect(parsed.nutrition!['2026-08-14'].meals?.[0].kcal).toBe(500);
             expect(parsed.nutrition!['2026-08-14'].meals?.[0].quantity).toBe(150);
-            expect(parsed.nutrition!['2026-08-14'].supplementsIntake?.length).toBe(2);
+            expect(parsed.nutrition!['2026-08-14'].supplementsIntake?.length).toBe(1);
             expect(parsed.nutrition!['2026-08-14'].supplementsIntake?.[0].amount).toBe(5);
             expect(parsed.nutrition!['2026-08-15']).toBeDefined();
             expect(parsed.nutrition!['2026-08-16']).toBeDefined();
@@ -315,7 +315,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.trainingCycles![0].durationWeeks).toBe(8);
             expect(parsed.trainingCycles![0].sessionsPerWeek).toBe(4);
             expect(parsed.trainingCycles![0].progressionMode).toBe('fixed');
-            expect(parsed.trainingCycles![0].routines.length).toBe(3);
+            expect(parsed.trainingCycles![0].routines.length).toBe(2);
             expect(parsed.trainingCycles![0].routines[0].frequencyPerWeek).toBe(2);
             expect(parsed.trainingCycles![0].routines[1].frequencyPerWeek).toBe(1);
             expect(parsed.activeCycleId).toBe(null);

@@ -48,38 +48,49 @@ export function filterCustomFoods(foods?: Food[] | null): Food[] {
 /**
  * Merges two arrays of entities with an `id` field.
  * In case of ID collision, guest item takes priority over cloud item.
- * Preserves items with non-matching IDs from both cloud and guest.
- * Items without a valid ID are preserved from both.
+ * Preserves items with non-matching valid IDs and quarantines entities
+ * whose business identity is missing or invalid.
  */
+function normalizeBusinessId(id: unknown): string | null {
+    if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
+    if (typeof id !== 'string') return null;
+    const normalized = id.trim();
+    if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
+    return normalized;
+}
+
+function sanitizeIdentityCollection<T extends { id?: string | number }>(
+    items?: T[] | null,
+    extraIdentity?: (item: T) => unknown,
+): T[] {
+    if (!Array.isArray(items)) return [];
+    const result: T[] = [];
+    const seen = new Set<string>();
+    for (const item of items) {
+        const id = item ? normalizeBusinessId(item.id) : null;
+        if (!id || seen.has(id)) continue;
+        if (extraIdentity && !normalizeBusinessId(extraIdentity(item))) continue;
+        seen.add(id);
+        result.push(item);
+    }
+    return result;
+}
+
 export function mergeArrayById<T extends { id?: string | number }>(
     cloudArr?: T[] | null,
     guestArr?: T[] | null
 ): T[] {
     const map = new Map<string, T>();
-    const nonIdItems: T[] = [];
 
-    if (Array.isArray(cloudArr)) {
-        for (const item of cloudArr) {
-            if (item && item.id !== undefined && item.id !== null && item.id !== '') {
-                map.set(String(item.id), item);
-            } else if (item) {
-                nonIdItems.push(item);
-            }
-        }
+    for (const item of sanitizeIdentityCollection(cloudArr)) {
+        map.set(normalizeBusinessId(item.id)!, item);
     }
 
-    if (Array.isArray(guestArr)) {
-        for (const item of guestArr) {
-            if (item && item.id !== undefined && item.id !== null && item.id !== '') {
-                // Guest overwrites cloud on collision
-                map.set(String(item.id), item);
-            } else if (item) {
-                nonIdItems.push(item);
-            }
-        }
+    for (const item of sanitizeIdentityCollection(guestArr)) {
+        map.set(normalizeBusinessId(item.id)!, item);
     }
 
-    return [...Array.from(map.values()), ...nonIdItems];
+    return Array.from(map.values());
 }
 
 /**
@@ -227,8 +238,21 @@ export function mergeNutrition(
     const allDates = Array.from(new Set([...Object.keys(cloud), ...Object.keys(guest)]));
 
     for (const date of allDates) {
-        const cloudDay = cloud[date];
-        const guestDay = guest[date];
+        const sanitizeDayIdentities = (day: NutritionDay | undefined): NutritionDay | undefined => {
+            if (!day) return undefined;
+            return {
+                ...day,
+                ...(day.meals !== undefined ? { meals: sanitizeIdentityCollection(day.meals) } : {}),
+                ...(day.supplementsIntake !== undefined ? {
+                    supplementsIntake: sanitizeIdentityCollection(day.supplementsIntake, item => item.supplementId),
+                } : {}),
+                ...(day.cardioSessions !== undefined ? { cardioSessions: sanitizeIdentityCollection(day.cardioSessions) } : {}),
+                ...(day.contextEvents !== undefined ? { contextEvents: sanitizeIdentityCollection(day.contextEvents) } : {}),
+            };
+        };
+
+        const cloudDay = sanitizeDayIdentities(cloud[date]);
+        const guestDay = sanitizeDayIdentities(guest[date]);
 
         if (cloudDay && !guestDay) {
             const cloudHip = cloudDay.hip !== undefined && cloudDay.hip !== null && cloudDay.hip !== '' ? cloudDay.hip : (cloudDay as any).hips;
@@ -237,19 +261,7 @@ export function mergeNutrition(
             const guestHip = guestDay.hip !== undefined && guestDay.hip !== null && guestDay.hip !== '' ? guestDay.hip : (guestDay as any).hips;
             result[date] = { ...guestDay, hip: guestHip !== undefined ? guestHip : guestDay.hip };
         } else if (cloudDay && guestDay) {
-            const sanitizeMealIds = (meals?: any[] | null): any[] => {
-                if (!Array.isArray(meals)) return [];
-                const seen = new Set<string>();
-                return meals.map((m, idx) => {
-                    const key = String(m?.id || '');
-                    if (!key || seen.has(key)) {
-                        return { ...m, id: `${key || 'meal'}_${idx}` };
-                    }
-                    seen.add(key);
-                    return m;
-                });
-            };
-            const mergedMeals = mergeArrayById(sanitizeMealIds(cloudDay.meals), sanitizeMealIds(guestDay.meals));
+            const mergedMeals = mergeArrayById(cloudDay.meals, guestDay.meals);
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
             const mergedCardioSessions = mergeArrayById(cloudDay.cardioSessions, guestDay.cardioSessions);
             const mergedContextEvents = mergeArrayById(cloudDay.contextEvents, guestDay.contextEvents);
