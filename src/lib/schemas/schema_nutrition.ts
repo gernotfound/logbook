@@ -60,8 +60,11 @@ export const NutritionPlanningSchema = z.object({
     return {};
 }).default({});
 
-const NutritionEntityIdSchema = z.string().trim().min(1).max(160).refine(
-    id => id !== 'undefined' && id !== 'null' && !id.includes('/'),
+const NutritionEntityIdSchema = z.union([
+    z.string(),
+    z.number().finite().transform(value => String(value)),
+]).transform(id => id.trim()).refine(
+    id => id.length > 0 && id.length <= 160 && id !== 'undefined' && id !== 'null' && !id.includes('/'),
     'Identificativo nutrizione non valido',
 );
 
