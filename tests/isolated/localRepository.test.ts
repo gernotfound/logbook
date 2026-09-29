@@ -126,4 +126,78 @@ describe('durable owner-scoped journal', () => {
         await expect(commitLocal('a', data(171), data(170))).rejects.toThrow('recupero');
         expect(await get('logbook:v2:user:a')).toEqual(corrupt);
     });
+    it('replays a stale snapshot delta over the latest envelope without deleting concurrent entities', async () => {
+        const base = UserDataSchema.parse({
+            profile: { height: '170' },
+            routines: [],
+        }) as unknown as UserData;
+        const tabA = UserDataSchema.parse({
+            ...base,
+            routines: [{ id: 'routine-a', name: 'Tab A', exercises: [] }],
+        }) as unknown as UserData;
+        const tabB = UserDataSchema.parse({
+            ...base,
+            profile: { height: '171' },
+        }) as unknown as UserData;
+
+        await initializeLocal('a', base);
+        await commitLocal('a', tabA, base);
+        const operations = await commitLocal('a', tabB, base);
+        const stored = await readLocal('a');
+
+        expect(stored?.data.profile.height).toBe('171');
+        expect(stored?.data.routines?.map(routine => routine.id)).toContain('routine-a');
+        expect(operations.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
+        expect(stored?.pending.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
+    });
+
+    it('keeps concurrent guest entities when a stale guest snapshot is committed', async () => {
+        const base = UserDataSchema.parse({
+            profile: { height: '170' },
+            routines: [],
+        }) as unknown as UserData;
+        const tabA = UserDataSchema.parse({
+            ...base,
+            routines: [{ id: 'guest-routine-a', name: 'Guest A', exercises: [] }],
+        }) as unknown as UserData;
+        const tabB = UserDataSchema.parse({
+            ...base,
+            profile: { height: '171' },
+        }) as unknown as UserData;
+
+        await initializeLocal('guest', base);
+        await commitLocal('guest', tabA, base);
+        const operations = await commitLocal('guest', tabB, base);
+        const stored = await readLocal('guest');
+
+        expect(stored?.data.profile.height).toBe('171');
+        expect(stored?.data.routines?.map(routine => routine.id)).toContain('guest-routine-a');
+        expect(operations.some(op => op.isDelete && op.path.includes('guest-routine-a'))).toBe(false);
+        expect(stored?.pending).toHaveLength(0);
+    });
+
+    it('restore-style snapshot deletes only entities known to its base and preserves concurrent additions', async () => {
+        const base = UserDataSchema.parse({
+            routines: [{ id: 'routine-old', name: 'Old', exercises: [] }],
+        }) as unknown as UserData;
+        const concurrent = UserDataSchema.parse({
+            routines: [
+                { id: 'routine-old', name: 'Old', exercises: [] },
+                { id: 'routine-new', name: 'Concurrent', exercises: [] },
+            ],
+        }) as unknown as UserData;
+        const restored = UserDataSchema.parse({ routines: [] }) as unknown as UserData;
+
+        await initializeLocal('a', base);
+        await commitLocal('a', concurrent, base);
+        const operations = await commitLocal('a', restored, base);
+        const stored = await readLocal('a');
+
+        expect(stored?.data.routines?.map(routine => routine.id)).toEqual(['routine-new']);
+        expect(operations).toEqual(expect.arrayContaining([
+            expect.objectContaining({ path: ['routines', 'routine-old'], isDelete: true }),
+        ]));
+        expect(operations.some(op => op.isDelete && op.path.includes('routine-new'))).toBe(false);
+    });
+
 });

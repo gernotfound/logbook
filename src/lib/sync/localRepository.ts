@@ -110,13 +110,14 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
 export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
     const desired = structuredClone(parse(data));
-    const fallback = structuredClone(parse(initialBase));
+    const callerBase = structuredClone(parse(initialBase));
     let operations: SemanticOperation[] = [];
     const catalog = await getCachedCatalog();
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
-        const baseDocs = projectDocuments(current?.data ?? fallback, catalog);
+        const currentData = structuredClone(parse(current?.data ?? callerBase));
+        const baseDocs = projectDocuments(callerBase, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
         const actorId = current?.actorId ?? generateId('actor');
         const nextSeq = (current?.actorSeq ?? 0) + 1;
@@ -124,10 +125,22 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         testClock[actorId] = nextSeq;
         operations = diffDocuments(baseDocs, desiredDocs, actorId, nextSeq, testClock);
         operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, nextSeq, testClock);
+
         if (operations.length === 0) {
-            return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: current?.revision ?? 0 };
+            const stableData = current?.data ?? desired;
+            return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: stableData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: current?.revision ?? 0 };
         }
-        return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: nextSeq };
+
+        // Snapshot boundaries express intent relative to the caller's observed base.
+        // Replay only that delta over the latest durable envelope so concurrent changes
+        // unknown to this tab cannot be converted into deletions/tombstones.
+        const currentDocs = projectDocuments(currentData, catalog);
+        const { documents: reconciledDocs } = applySemanticOperations(currentDocs, operations);
+        const reconciled = applyRemoteDocuments(currentData, reconciledDocs, catalog);
+        reconciled.pendingConflicts = currentData.pendingConflicts;
+        const savedData = parse(reconciled);
+
+        return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: savedData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: nextSeq };
     });
     return operations;
 }

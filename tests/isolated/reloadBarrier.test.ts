@@ -2,14 +2,18 @@ import 'fake-indexeddb/auto';
 import { clear } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
-vi.mock('../../src/store/useAppStore', () => ({ useAppStore: { getState: () => ({ ...app.state, flushPendingSyncs: app.flush }) } }));
+vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
+    getState: () => ({ ...app.state, flushPendingSyncs: app.flush }),
+    setState: (patch: any) => { app.state = { ...app.state, ...(typeof patch === 'function' ? patch(app.state) : patch) }; },
+} }));
 vi.mock('../../src/lib/firebase', () => ({ auth: app.auth }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { prepareForReload } from '../../src/lib/sync/reloadBarrier';
 import { safeHardReload } from '../../src/lib/sync/safeReload';
-import { initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
-import { invalidateSession } from '../../src/lib/sync/session';
+import { captureSession, invalidateSession } from '../../src/lib/sync/session';
+import { markTabSnapshotClean, markTabSnapshotDirty } from '../../src/lib/sync/tabSnapshotCausality';
 import { draftRegistry } from '../../src/lib/utils/draftRegistry';
 import type { UserData } from '../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
@@ -20,6 +24,7 @@ beforeEach(async () => {
     vi.stubGlobal('localStorage', { getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
     app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] } };
     await initializeLocal('user:a', app.state.userData);
+    markTabSnapshotClean(captureSession(), app.state.userData);
 });
 afterEach(() => vi.unstubAllGlobals());
 it('allows offline update only with the durable copy and synchronous active workout snapshot', async () => {
@@ -29,6 +34,7 @@ it('allows offline update only with the durable copy and synchronous active work
     expect((await readLocal('user:a'))?.data).toEqual(UserDataSchema.parse(app.state.userData));
 });
 it('repairs a lagging durable snapshot before reload', async () => {
+    markTabSnapshotDirty(captureSession(), app.state.userData);
     app.state.userData = parse(171);
     app.flush.mockRejectedValue(new Error('offline'));
     await prepareForReload();
@@ -44,6 +50,8 @@ it('repairs a lagging guest snapshot without creating a cloud journal', async ()
     const base = parse(170);
     app.state.userData = base;
     await initializeLocal('guest', base);
+    markTabSnapshotClean(captureSession(), base);
+    markTabSnapshotDirty(captureSession(), base);
     app.state.userData = parse(171);
     app.flush.mockRejectedValue(new Error('offline'));
     await prepareForReload();
@@ -86,4 +94,60 @@ it('never hard reloads when the durable reload barrier rejects', async () => {
     const reload = vi.fn();
     await expect(safeHardReload(reload)).rejects.toThrow('non sono ancora salvate');
     expect(reload).not.toHaveBeenCalled();
+});
+it('does not delete an authenticated change written by another tab when this tab is clean and stale', async () => {
+    const base = app.state.userData as UserData;
+    const concurrent = UserDataSchema.parse({
+        ...base,
+        routines: [{ id: 'routine-a', name: 'Tab A', exercises: [] }],
+    }) as unknown as UserData;
+    await commitLocal('user:a', concurrent, base);
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    await prepareForReload();
+
+    const durable = await readLocal('user:a');
+    expect(durable?.data.routines?.map(routine => routine.id)).toContain('routine-a');
+    expect(durable?.pending.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
+    expect(app.state.userData.routines?.map((routine: any) => routine.id)).toContain('routine-a');
+});
+it('preserves a concurrent authenticated change while durably replaying this tab local intent', async () => {
+    const base = app.state.userData as UserData;
+    markTabSnapshotDirty(captureSession(), base);
+    app.state.userData = parse(171);
+    const concurrent = UserDataSchema.parse({
+        ...base,
+        routines: [{ id: 'routine-a', name: 'Tab A', exercises: [] }],
+    }) as unknown as UserData;
+    await commitLocal('user:a', concurrent, base);
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    await prepareForReload();
+
+    const durable = await readLocal('user:a');
+    expect(durable?.data.profile.height).toBe('171');
+    expect(durable?.data.routines?.map(routine => routine.id)).toContain('routine-a');
+    expect(durable?.pending.some(op => op.isDelete && op.path.includes('routine-a'))).toBe(false);
+});
+it('does not erase a concurrent guest change from a clean stale tab', async () => {
+    await clear();
+    disk.set('logbook_is_guest', 'true');
+    (app.auth as any).currentUser = null;
+    invalidateSession();
+    const base = parse(170);
+    app.state.userData = base;
+    await initializeLocal('guest', base);
+    markTabSnapshotClean(captureSession(), base);
+    const concurrent = UserDataSchema.parse({
+        ...base,
+        routines: [{ id: 'guest-routine-a', name: 'Guest tab A', exercises: [] }],
+    }) as unknown as UserData;
+    await commitLocal('guest', concurrent, base);
+    app.flush.mockRejectedValue(new Error('offline'));
+
+    await prepareForReload();
+
+    const durable = await readLocal('guest');
+    expect(durable?.data.routines?.map(routine => routine.id)).toContain('guest-routine-a');
+    expect(durable?.pending).toHaveLength(0);
 });

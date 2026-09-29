@@ -11,6 +11,7 @@ import { findPendingAccountDeletion, readAccountDeletionMarker } from '../../lib
 import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync/domainOperations';
+import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 
 export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
 export type CompatibilityStatus = 'ok' | 'update-required';
@@ -120,7 +121,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                             const durable = await readLocal(session.owner);
                             if (current() && get().syncGeneration === last.generation) {
                                 if (!durable) blockLocalPersistence = true;
-                                else set({ userData: { ...durable.data, activeWorkout: get().localWorkout } });
+                                else {
+                                    const aligned = { ...durable.data, activeWorkout: get().localWorkout } as UserData;
+                                    set({ userData: aligned });
+                                    markTabSnapshotClean(session, aligned);
+                                }
                             }
                         } catch {
                             if (current() && get().syncGeneration === last.generation) blockLocalPersistence = true;
@@ -132,12 +137,19 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 const envelope = await readLocal(session.owner);
                 if (!current()) throw new Error('Sessione cambiata durante il salvataggio');
                 if (!envelope) throw new Error('Copia locale non disponibile');
+                if (current() && get().syncGeneration === last.generation) {
+                    const aligned = { ...envelope.data, activeWorkout: get().localWorkout } as UserData;
+                    set({ userData: aligned });
+                    markTabSnapshotClean(session, aligned);
+                }
                 const result = await DB.saveUserData(envelope.data, envelope.revision);
                 if (!current()) throw new Error('Sessione cambiata durante la sincronizzazione');
                 if (result.ok) {
                     const saved = await readLocal(session.owner);
                     if (saved && current() && get().syncGeneration === last.generation) {
-                        set({ userData: { ...saved.data, activeWorkout: get().localWorkout } });
+                        const aligned = { ...saved.data, activeWorkout: get().localWorkout } as UserData;
+                        set({ userData: aligned });
+                        markTabSnapshotClean(session, aligned);
                     }
                 } else if (result.status !== 'local-pending') {
                     failureStatus = result.status;
@@ -198,6 +210,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const data = UserDataSchema.parse({ ...next, activeWorkout: next.activeWorkout !== undefined ? next.activeWorkout : localWorkout }) as unknown as UserData;
             const generation = get().syncGeneration + 1;
             const session = captureSession();
+            if (userData) markTabSnapshotDirty(session, userData);
             set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
             // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
             const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
@@ -225,6 +238,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const data = applyDomainOperations(userData, operation);
             const generation = get().syncGeneration + 1;
             const session = captureSession();
+            markTabSnapshotDirty(session, userData);
             set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
