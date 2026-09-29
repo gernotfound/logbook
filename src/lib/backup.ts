@@ -55,7 +55,27 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date || !isRecord(day)) {
             throw new Error(`Giornata nutrizione non valida: ${date}.`);
         }
-        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) if (day[key] !== undefined) checkIds(day[key], `nutrition.${date}.${key}`);
+        for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) {
+            if (day[key] === undefined) continue;
+            checkIds(day[key], `nutrition.${date}.${key}`);
+            for (const item of day[key] as unknown[]) {
+                if (!isRecord(item)) continue;
+                const id = item.id;
+                const normalizedId = typeof id === 'number' && Number.isFinite(id) ? String(id) : typeof id === 'string' ? id.trim() : '';
+                if (!normalizedId || normalizedId === 'undefined' || normalizedId === 'null' || normalizedId.includes('/')) {
+                    throw new Error(`nutrition.${date}.${key}: identificativo non valido.`);
+                }
+                if (key === 'supplementsIntake') {
+                    const supplementId = item.supplementId;
+                    const normalizedSupplementId = typeof supplementId === 'number' && Number.isFinite(supplementId)
+                        ? String(supplementId)
+                        : typeof supplementId === 'string' ? supplementId.trim() : '';
+                    if (!normalizedSupplementId || normalizedSupplementId === 'undefined' || normalizedSupplementId === 'null' || normalizedSupplementId.includes('/')) {
+                        throw new Error(`nutrition.${date}.supplementsIntake: integratore senza identificativo valido.`);
+                    }
+                }
+            }
+        }
     }
 }
 
