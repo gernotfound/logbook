@@ -48,7 +48,17 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
 }) => {
     return (
         <div>
-            <h2 className="routine-editor-title">{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
+            <div className="routine-editor-head">
+                <h2 className="routine-editor-title">{editingRoutineId ? <><Pencil size={20} aria-hidden="true" /> Modifica scheda</> : <><Plus size={20} aria-hidden="true" /> Crea scheda</>}</h2>
+                <button
+                    type="button"
+                    className="btn routine-editor-close"
+                    onClick={onCancel}
+                    disabled={isSaving}
+                >
+                    Chiudi
+                </button>
+            </div>
 
             <div className="routine-editor-field">
                 <label htmlFor="routine-name">Nome scheda</label>
@@ -130,7 +140,7 @@ export const RoutineEditor: React.FC<RoutineEditorProps> = ({
                     onClick={onSave}
                     disabled={isSaving}
                 >
-                    {isSaving ? 'Salvataggio...' : (editingRoutineId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Crea scheda')}
+                    {isSaving ? 'Salvataggio...' : (editingRoutineId ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : 'Salva')}
                 </button>
             </div>
         </div>

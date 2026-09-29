@@ -28,8 +28,13 @@ const adaptiveSurfaceFiles = [
 describe('post-redesign UI hardening', () => {
   it('keeps the exercise proposal compact and iOS-safe on mobile', () => {
     const training = read('src/components/Training/training.css');
+    const routines = read('src/components/Training/routines/routines.css');
     expect(training).toMatch(/\.exercise-library-header h2\s*\{[^}]*flex:\s*1 1 auto[^}]*white-space:\s*nowrap/);
     expect(training).toMatch(/\.exercise-create-button\s*\{[^}]*width:\s*auto[^}]*max-width:\s*none[^}]*flex:\s*0 0 auto[^}]*white-space:\s*nowrap/);
+    const exerciseCreate = training.match(/\.exercise-create-button\s*\{([^}]*)\}/)?.[1] ?? '';
+    const routineCreate = routines.match(/\.routine-create-button\s*\{([^}]*)\}/)?.[1] ?? '';
+    const declarations = (block: string) => block.split(';').map(value => value.trim()).filter(Boolean).sort();
+    expect(declarations(routineCreate)).toEqual(declarations(exerciseCreate));
     expect(training).toMatch(/\.training-sub-view\.active\.exercise-library\s*\{[^}]*display:\s*grid/);
     expect(training).toMatch(/\.exercise-editor-close\s*\{[^}]*width:\s*auto[^}]*min-height:\s*2\.75rem/);
     expect(training).toMatch(/\.exercise-search-wrap > \.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap > \.exercise-muscle-search-input\s*\{[^}]*margin:\s*0[^}]*padding:\s*\.625rem 2\.75rem \.625rem 2\.875rem/);
@@ -84,8 +89,21 @@ describe('post-redesign UI hardening', () => {
 
   it('keeps the routine editor actions flush with the form bottom', () => {
     const routineEditor = read('src/components/Training/routines/RoutineEditor.tsx');
-    expect(routineEditor).toMatch(/return\s*\(\s*<div>\s*<h2/);
+    expect(routineEditor).toMatch(/return\s*\(\s*<div>\s*<div className="routine-editor-head">/);
     expect(routineEditor).not.toMatch(/return\s*\(\s*<div className="section-divider">/);
+  });
+
+  it('keeps Schede and Esercizi creation actions aligned', () => {
+    const routineEditor = read('src/components/Training/routines/RoutineEditor.tsx');
+    const exerciseEditor = read('src/components/Training/exercises/ExerciseEditorForm.tsx');
+    const routines = read('src/components/Training/routines/routines.css');
+
+    expect(routineEditor).toContain('className="btn routine-editor-close"');
+    expect(routineEditor).toMatch(/>\s*Chiudi\s*<\/button>/);
+    expect(routineEditor).toMatch(/editingRoutineId \? <><Save[^\n]+Salva modifiche<\/> : 'Salva'/);
+    expect(exerciseEditor).not.toMatch(/<Save\s/);
+    expect(exerciseEditor).toContain("{isSaving ? 'Salvataggio…' : 'Salva'}");
+    expect(routines).toMatch(/\.routine-editor-close\s*\{[^}]*min-height:\s*2\.75rem[^}]*padding:\s*0 \.875rem/);
   });
 
   it('keeps compact interactive controls at the 44px minimum target', () => {

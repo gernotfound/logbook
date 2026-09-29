@@ -92,7 +92,7 @@ describe('Workout Improvements & History Edit Suite', () => {
       });
 
       // Click "Crea scheda"
-      const createBtn = screen.getByText(/Crea scheda/i);
+      const createBtn = screen.getByRole('button', { name: 'Crea scheda' });
       act(() => {
         fireEvent.click(createBtn);
       });

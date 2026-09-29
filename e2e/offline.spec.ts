@@ -27,9 +27,9 @@ test.describe('Offline scenarios & Background suspension', () => {
 
     // 5. Crea una scheda vuota: è UserData persistito nell'envelope IndexedDB.
     await page.click('button.sub-nav-btn:has-text("Schede")');
-    await page.click('button:has-text("Crea scheda")');
+    await page.getByRole('button', { name: 'Crea scheda' }).click();
     await page.fill('input[placeholder="Nome scheda"]', 'Scheda E2E Offline');
-    await page.click('#routine-creation-form button:has-text("Crea scheda")');
+    await page.click('#routine-creation-form button:has-text("Salva")');
     await expect(page.getByText('Scheda E2E Offline', { exact: true })).toBeVisible();
 
     // 6. Torna alla vista Sessione
