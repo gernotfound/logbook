@@ -42,8 +42,12 @@ export const getInitialUserData = (): UserData | null => {
 export const saveUserDataToCache = async (data: UserData | null, base?: UserData): Promise<UserData | null> => {
         const session = captureSession();
         if (data) {
-            if (base) await commitLocal(session.owner, data, base);
-            else await initializeLocal(session.owner, data);
+            const current = await readLocal(session.owner);
+            if (!current || !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
+                if (base) await commitLocal(session.owner, data, base);
+                else if (current) await commitLocal(session.owner, data, current.data);
+                else await initializeLocal(session.owner, data);
+            }
             const envelope = await readLocal(session.owner);
             if (!envelope) throw new Error('Copia locale non disponibile dopo il salvataggio.');
             if (isCurrentSession(session)) updateStorageMarker(Date.now(), undefined, session.owner);
