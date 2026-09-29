@@ -86,11 +86,12 @@ describe('training session redesign', () => {
     it('keeps the note for the next session compact until requested', () => {
         render(<SessionExerciseCard {...baseExerciseProps} />);
 
-        expect(screen.queryByPlaceholderText('Note per la prossima volta (dolori, feedback)...')).toBeNull();
+        const editor = screen.getByPlaceholderText('Note per la prossima volta (dolori, feedback)...');
+        expect((editor as HTMLTextAreaElement).style.display).toBe('none');
 
         fireEvent.click(screen.getByRole('button', { name: /Aggiungi nota per la prossima volta/i }));
 
-        expect(screen.getByPlaceholderText('Note per la prossima volta (dolori, feedback)...')).toBeDefined();
+        expect((editor as HTMLTextAreaElement).style.display).toBe('block');
     });
 
     it('confirms removal of a filled set from the three-dot menu', async () => {
