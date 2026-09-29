@@ -103,7 +103,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders TrainingRoutines without crashing', () => {
     const { container } = renderWithProviders(<TrainingRoutines />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Crea scheda/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Crea scheda' })).toBeDefined();
   });
 
   test('renders TrainingHistory / HistoryView without crashing', () => {
