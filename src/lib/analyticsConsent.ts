@@ -23,6 +23,11 @@ export const subscribeAnalyticsConsent = (listener: (consent: boolean) => void) 
 
     const handleStorageChange = (event: StorageEvent) => {
         if (event.key !== null && event.key !== ANALYTICS_CONSENT_KEY) return;
+        try {
+            if (event.storageArea !== null && event.storageArea !== localStorage) return;
+        } catch {
+            return;
+        }
         currentAnalyticsConsent = readAnalyticsConsentFromStorage();
         listener(currentAnalyticsConsent);
     };

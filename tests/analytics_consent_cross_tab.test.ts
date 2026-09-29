@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ANALYTICS_CONSENT_KEY = 'logbook_analytics_consent';
 
-function dispatchStorageChange(key: string | null, newValue: string | null) {
-    window.dispatchEvent(new StorageEvent('storage', { key, newValue }));
+function dispatchStorageChange(
+    key: string | null,
+    newValue: string | null,
+    storageArea: Storage | null = localStorage,
+) {
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue, storageArea }));
 }
 
 describe('Analytics consent cross-tab synchronization', () => {
@@ -60,13 +64,16 @@ describe('Analytics consent cross-tab synchronization', () => {
         unsubscribe();
     });
 
-    it('ignores unrelated storage changes', async () => {
+    it('ignores unrelated keys and sessionStorage events', async () => {
         const consent = await import('../src/lib/analyticsConsent');
         const listener = vi.fn();
         const unsubscribe = consent.subscribeAnalyticsConsent(listener);
 
         localStorage.setItem('unrelated_key', 'true');
         dispatchStorageChange('unrelated_key', 'true');
+
+        sessionStorage.setItem(ANALYTICS_CONSENT_KEY, 'true');
+        dispatchStorageChange(ANALYTICS_CONSENT_KEY, 'true', sessionStorage);
 
         expect(consent.getAnalyticsConsent()).toBe(false);
         expect(listener).not.toHaveBeenCalled();
