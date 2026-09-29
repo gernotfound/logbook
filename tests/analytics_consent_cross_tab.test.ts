@@ -7,7 +7,9 @@ function dispatchStorageChange(
     newValue: string | null,
     storageArea: Storage | null = localStorage,
 ) {
-    window.dispatchEvent(new StorageEvent('storage', { key, newValue, storageArea }));
+    const event = new StorageEvent('storage', { key, newValue });
+    Object.defineProperty(event, 'storageArea', { value: storageArea });
+    window.dispatchEvent(event);
 }
 
 describe('Analytics consent cross-tab synchronization', () => {

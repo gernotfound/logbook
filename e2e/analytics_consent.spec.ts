@@ -14,7 +14,7 @@ async function enterGuestMode(page: Page) {
 
 async function openAnalyticsSettings(page: Page) {
   await page.getByRole('button', { name: 'Impostazioni' }).click();
-  await page.getByRole('button', { name: 'Privacy', exact: true }).click();
+  await page.getByRole('tab', { name: 'Privacy', exact: true }).click();
   await expect(page.locator('#analytics-toggle')).toBeVisible();
 }
 
