@@ -606,9 +606,9 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             ];
 
             const parsed = DomainParsers.parseHistory(rawHistory);
-            expect(parsed).toHaveLength(6);
+            expect(parsed).toHaveLength(2);
             expect(parsed[0].id).toBe('h_valid');
-            expect(parsed[3].id).toBe('999');
+            expect(parsed[1].id).toBe('999');
             expect(Array.isArray(parsed[1].exercises)).toBe(true);
         });
 

@@ -155,7 +155,7 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             expect(DomainParsers.parseNutritionPlanning(undefined)).toBeNull();
         });
 
-        it('sanitizes corrupt history items and notifies telemetry per corrupted item', async () => {
+        it('quarantines history items without business identity and notifies telemetry', async () => {
             vi.useFakeTimers();
             const historyData = [
                 { id: 'sess_valid', date: '2026-08-25', exercises: [] },
@@ -163,9 +163,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             ];
 
             const parsed = DomainParsers.parseHistory(historyData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].id).toBe('sess_valid');
-            expect(parsed[1].exercises).toEqual([]);
 
             await vi.advanceTimersByTimeAsync(50);
 
@@ -174,7 +173,7 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
             expect(eventCall).toBeDefined();
             expect(eventCall[1].details.schema).toBe('WorkoutSessionSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_session');
+            expect(eventCall[1].details.fallbackUsed).toBe('record_quarantined');
         });
 
         it('handles non-array history input safely and notifies telemetry', async () => {

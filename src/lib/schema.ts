@@ -14,6 +14,61 @@ import { NutritionDaySchema, FoodSchema, NutritionPlanningSchema, SupplementSche
 import { ExerciseSchema, WorkoutRoutineSchema, WorkoutSessionSchema, TrainingCycleSchema } from './schemas/schema_training';
 import { CatalogOverridesSchema } from './schemas/schema_catalog';
 
+
+const normalizePersistedWorkoutId = (record: unknown): string | null => {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+    const rawId = (record as { id?: unknown }).id;
+    if (typeof rawId === 'number') return Number.isFinite(rawId) ? String(rawId) : null;
+    if (typeof rawId !== 'string') return null;
+    const id = rawId.trim();
+    if (!id || id === 'undefined' || id === 'null' || id.includes('/')) return null;
+    return id;
+};
+
+const sanitizeWorkoutHistory = (data: unknown): unknown[] => {
+    if (data === undefined) return [];
+    if (!Array.isArray(data)) {
+        if (data !== null) {
+            reportZodSchemaFallback({
+                schema: 'WorkoutSessionSchema',
+                field: 'history',
+                fallbackUsed: 'empty_array',
+                receivedType: typeof data,
+                issueCode: 'invalid_type',
+                expectedType: 'array',
+            });
+        }
+        return [];
+    }
+
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of data) {
+        const id = normalizePersistedWorkoutId(raw);
+        if (!id || seen.has(id)) {
+            reportZodSchemaFallback({
+                schema: 'WorkoutSessionSchema',
+                field: 'id',
+                fallbackUsed: 'record_quarantined',
+                receivedType: raw === null ? 'null' : Array.isArray(raw) ? 'array' : typeof raw,
+                issueCode: id ? 'duplicate_id' : 'invalid_identity',
+                expectedType: 'unique business id',
+            });
+            continue;
+        }
+
+        const parsed = WorkoutSessionSchema.parse(raw);
+        seen.add(id);
+        result.push({ ...parsed, id });
+    }
+    return result;
+};
+
+const WorkoutHistorySchema = z.preprocess(
+    sanitizeWorkoutHistory,
+    z.array(WorkoutSessionSchema),
+).default([]);
+
 export const defaultUserDataFallback: UserData = {
     profile: {},
     library: [],
@@ -35,7 +90,7 @@ export const UserDataSchema = z.object({
     profile: UserProfileSchema.optional().catch({}).default({}),
     library: z.array(ExerciseSchema).optional().catch([]).default([]),
     routines: z.array(WorkoutRoutineSchema).optional().catch([]).default([]),
-    history: z.array(WorkoutSessionSchema).optional().catch([]).default([]), // Actually stored in history_months in Firebase
+    history: WorkoutHistorySchema, // Actually stored in history_months in Firebase
     nutrition: z.record(z.string(), NutritionDaySchema).optional().catch({}).default({}), // nutrition_months
     customFoods: z.array(FoodSchema).optional().catch([]).default([]),
     activeWorkout: WorkoutSessionSchema.nullable().optional().catch(null).default(null),
@@ -94,27 +149,7 @@ export const DomainParsers = {
     },
     // Array: sanifica i singoli elementi con sub-schema fallbacks
     parseHistory: (data: unknown) => {
-        if (!Array.isArray(data)) {
-            if (data !== undefined && data !== null) {
-                reportZodSchemaFallback({
-                    schema: 'WorkoutSessionSchema',
-                    field: 'history',
-                    fallbackUsed: 'empty_array',
-                    receivedType: typeof data,
-                    issueCode: 'invalid_type',
-                    expectedType: 'array',
-                });
-            }
-            return [];
-        }
-        return data.map((item) => {
-            try {
-                return WorkoutSessionSchema.parse(item);
-            } catch (e) {
-                quarantineCorruptedRecord({ collection: 'history', raw: item, error: e });
-                return { exercises: [], pains: [] };
-            }
-        });
+        return WorkoutHistorySchema.parse(data);
     },
     parseLibrary: (data: unknown) => {
         if (!Array.isArray(data)) {

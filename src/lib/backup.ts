@@ -49,6 +49,21 @@ export function validateImportData(value: unknown): asserts value is Record<stri
     };
     for (const key of arrays) if (value[key] !== undefined) checkIds(value[key], key);
 
+    if (Array.isArray(value.history)) {
+        const ids = new Set<string>();
+        for (const item of value.history) {
+            const rawId = isRecord(item) ? item.id : undefined;
+            const id = typeof rawId === 'number' && Number.isFinite(rawId)
+                ? String(rawId)
+                : typeof rawId === 'string' ? rawId.trim() : '';
+            if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
+                throw new Error('history: elemento senza identificativo valido.');
+            }
+            if (ids.has(id)) throw new Error(`history: identificativo duplicato ${id}.`);
+            ids.add(id);
+        }
+    }
+
     if (Array.isArray(value.routines)) for (const [index, routine] of value.routines.entries()) {
         if (!isRecord(routine) || routine.exercises === undefined) continue;
         if (!Array.isArray(routine.exercises)) throw new Error(`routines.${index}.exercises: atteso un elenco.`);

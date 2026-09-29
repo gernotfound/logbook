@@ -133,10 +133,9 @@ describe('Empirical Challenger: Milestone 3 (R1: Zod Integration) Adversarial St
                 i % 2 === 0 ? `corrupt_history_${i}` : { id: 123, exercises: 'bad_array' }
             );
             const result = DomainParsers.parseHistory(malformedHistory);
-            expect(result).toHaveLength(1000);
-            for (const session of result) {
-                expect(Array.isArray(session.exercises)).toBe(true);
-            }
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe('123');
+            expect(Array.isArray(result[0].exercises)).toBe(true);
             const duration = performance.now() - start;
             expect(duration).toBeLessThan(300);
         });
