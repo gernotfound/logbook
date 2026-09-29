@@ -53,8 +53,8 @@ function collectScope(before: UserData, after: UserData, operations: readonly Do
             case 'active-cycle.set': root('activeCycleId'); break;
             case 'active-workout.set': root('activeWorkout'); break;
             case 'active-pains.set': root('activePains'); break;
-            case 'exercise.upsert':
-            case 'exercise.delete': root('library', 'catalogOverrides'); break;
+            case 'exercise.upsert': root('library', 'catalogOverrides'); break;
+            case 'exercise.delete': root('library', 'catalogOverrides', 'routines'); break;
             case 'food.upsert':
             case 'food.delete': root('customFoods', 'catalogOverrides'); break;
             case 'catalog.exercise.patch':
