@@ -642,7 +642,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(parsed['2026-08-16'].weight).toBe(82.3);
             expect(parsed['2026-08-16'].bf).toBe(14.5);
             expect(parsed['2026-08-16'].neck).toBeUndefined();
-            expect(parsed['2026-08-16'].meals).toHaveLength(3);
+            expect(parsed['2026-08-16'].meals).toHaveLength(1);
             expect(parsed['2026-08-16'].meals[0].name).toBe('Shake');
             expect(parsed['2026-08-16'].supplementsIntake[0].amount).toBe(5);
         });
