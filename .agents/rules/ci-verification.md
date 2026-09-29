@@ -8,6 +8,7 @@ Gerarchia corrente:
 
 - **workflow GitHub Actions:** `Milestone Verification` (`.github/workflows/verification.yml`);
 - **check aggregato stabile:** `Canonical Verification`;
+- **analisi SAST richiesta:** job `Security / CodeQL` su JavaScript/TypeScript con query `security-extended`, aggregato dentro `Canonical Verification`;
 - **comando repository umbrella:** `npm run verify:m8`;
 - **orchestrazione CI:** matrice di shard exact-SHA verificata da `scripts/check-ci-contract.mjs`.
 
@@ -18,6 +19,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: ogni shard che esegue codice della PR fa checkout esplicito di `github.event.pull_request.head.sha`, non del merge ref sintetico.
 - MUST: in ogni shard, prima dei test, `git rev-parse HEAD` viene confrontato con lo SHA atteso; una divergenza termina lo shard.
 - MUST: tutti gli shard della stessa run verificano lo stesso exact SHA.
+- MUST: anche il job CodeQL fa checkout e verifica esplicita dello stesso exact SHA prima dell'analisi.
 - MUST: ogni report di validazione indica lo SHA esatto realmente verificato.
 - MUST: ogni revisione indipendente citata come evidenza si riferisce allo stesso SHA candidato o dichiara esplicitamente una baseline diversa.
 
@@ -59,7 +61,8 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 ## Workflow security
 
 - MUST: usare `pull_request`, mai `pull_request_target`, per eseguire codice della PR.
-- MUST: `permissions: contents: read` nel gate canonico salvo futura necessità documentata.
+- MUST: gli shard di verifica mantengono `permissions: contents: read`.
+- MUST: il solo job CodeQL può aggiungere `security-events: write`, limitato al caricamento dei risultati di code scanning; non estendere tale permesso agli shard applicativi.
 - MUST: nessun secret production è richiesto dal gate repository.
 - MUST: i test M7 server continuano a mockare Firebase Admin.
 - MUST: il runner E2E usa esclusivamente configurazione Firebase dummy/test.
@@ -108,6 +111,8 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 
 ## External checks
 
+- MUST: la copertura SAST bloccante non dipende da quote o disponibilità di un servizio terzo: CodeQL è parte del gate aggregato `Canonical Verification`.
+- NOTE: eventuali check Snyk esterni restano supplementari. Un errore operativo come quota/limite raggiunto non equivale a una vulnerabilità rilevata e non sostituisce il risultato CodeQL.
 - NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
 - VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.
 - VERIFY: Vercel Deployment Checks è configurazione esterna; non assumere che blocchi il deploy solo perché il job GitHub si chiama `Canonical Verification`.
@@ -116,6 +121,6 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 
 ## Acceptance
 
-Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui tutti gli shard sono verdi e il check aggregato `Canonical Verification` è `success`.
+Localmente, un candidato è tecnicamente validato dal gate repository quando `npm run verify:m8` termina con exit code 0 sull'HEAD esatto. In GitHub Actions, l'evidenza equivalente è una run `Milestone Verification` sullo stesso SHA in cui tutti gli shard e `Security / CodeQL` sono verdi e il check aggregato `Canonical Verification` è `success`.
 
 Per revisioni indipendenti richieste dal livello di rischio del task, congelare lo SHA candidato e far revisionare/testare quello stesso SHA. Non sostituire evidenza eseguibile con il solo consenso tra agenti.
