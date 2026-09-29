@@ -223,7 +223,22 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
             useAppStore.setState({
                 userData: {
                     ...emptyUserData,
-                    library: [catalogExercise, customExercise]
+                    library: [catalogExercise, customExercise],
+                    routines: [
+                        {
+                            id: 'routine-a',
+                            name: 'Scheda A',
+                            exercises: [
+                                { exId: customExercise.id, setsCount: 3 },
+                                { exId: catalogExercise.id, setsCount: 3 }
+                            ]
+                        },
+                        {
+                            id: 'routine-b',
+                            name: 'Scheda B',
+                            exercises: [{ exId: customExercise.id, setsCount: 4 }]
+                        }
+                    ]
                 }
             });
 
@@ -242,7 +257,12 @@ describe('Worker M2: Exercise Library UI & Food Form Real-Time Calorie Calculati
                 customDeleted = await result.current.handleDelete(customExercise.id, { stopPropagation });
             });
             expect(customDeleted).toBe(true);
+            expect(showConfirm).toHaveBeenCalledWith(expect.stringContaining('2 scheda/e'));
+            expect(showConfirm).toHaveBeenCalledWith(expect.stringContaining('scomparirà da quelle schede'));
             expect(useAppStore.getState().userData?.library?.map(ex => ex.id)).toEqual([catalogExercise.id]);
+            expect(
+                useAppStore.getState().userData?.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))
+            ).toEqual([[catalogExercise.id], []]);
         });
 
         it('handleRestoreExercise restores the in-memory catalog version after confirmation', async () => {
