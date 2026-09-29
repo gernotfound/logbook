@@ -33,27 +33,36 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const arrays = ['library', 'routines', 'history', 'customFoods', 'trainingCycles', 'supplements'] as const;
 
-const normalizeImportEntityId = (id: unknown): string | null => {
-    if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
-    if (typeof id !== 'string') return null;
-    const normalized = id.trim();
-    if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
-    return normalized;
-};
-
 export function validateImportData(value: unknown): asserts value is Record<string, unknown> {
     if (!isRecord(value)) throw new Error('Dati del backup non validi. Il file originale non è stato modificato.');
     const checkIds = (items: unknown, path: string) => {
         if (!Array.isArray(items)) throw new Error(`${path}: atteso un elenco.`);
         const ids = new Set<string>();
         for (const item of items) {
-            const id = isRecord(item) ? normalizeImportEntityId(item.id) : null;
-            if (!id) throw new Error(`${path}: elemento senza identificativo valido.`);
+            if (!isRecord(item) || !((typeof item.id === 'string' && item.id.trim()) || (typeof item.id === 'number' && Number.isFinite(item.id)))) {
+                throw new Error(`${path}: elemento senza identificativo valido.`);
+            }
+            const id = String(item.id);
             if (ids.has(id)) throw new Error(`${path}: identificativo duplicato ${id}.`);
             ids.add(id);
         }
     };
     for (const key of arrays) if (value[key] !== undefined) checkIds(value[key], key);
+
+    if (Array.isArray(value.history)) {
+        const ids = new Set<string>();
+        for (const item of value.history) {
+            const rawId = isRecord(item) ? item.id : undefined;
+            const id = typeof rawId === 'number' && Number.isFinite(rawId)
+                ? String(rawId)
+                : typeof rawId === 'string' ? rawId.trim() : '';
+            if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
+                throw new Error('history: elemento senza identificativo valido.');
+            }
+            if (ids.has(id)) throw new Error(`history: identificativo duplicato ${id}.`);
+            ids.add(id);
+        }
+    }
 
     if (Array.isArray(value.routines)) for (const [index, routine] of value.routines.entries()) {
         if (!isRecord(routine) || routine.exercises === undefined) continue;
