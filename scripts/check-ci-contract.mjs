@@ -76,10 +76,11 @@ if (pushBlock) {
 }
 
 const permissionDeclarations = workflow.match(/^\s*permissions\s*:/gm) ?? [];
-if (permissionDeclarations.length !== 1) {
-  failures.push(`repository permissions: expected exactly one declaration, found ${permissionDeclarations.length}`);
+if (permissionDeclarations.length !== 2) {
+  failures.push(`repository permissions: expected default + CodeQL declarations, found ${permissionDeclarations.length}`);
 }
-requirePattern('read-only permissions', workflow, /^permissions:\s*\n  contents: read\s*$/m);
+requirePattern('default read-only permissions', workflow, /^permissions:\s*\n  contents: read\s*$/m);
+requirePattern('CodeQL scoped security-events permission', workflow, /^      security-events: write\s*$/m);
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s*$/m);
 requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
@@ -94,7 +95,7 @@ requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.e
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
-if (actualShaAssignments.length !== 1) failures.push(`runtime SHA guard: expected one assignment, found ${actualShaAssignments.length}`);
+if (actualShaAssignments.length !== 2) failures.push(`runtime SHA guard: expected shard + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
 requirePattern('Java setup action', workflow, /^        uses: actions\/setup-java@v6\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
@@ -102,6 +103,11 @@ requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"
 requirePattern('conditional Playwright setup', workflow, /^        if: matrix\.playwright == true\s*$/m);
 requirePattern('Playwright Chromium install', workflow, /^        run: npx playwright install --with-deps chromium\s*$/m);
 requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.command \}\} 2>&1 \| tee "verification-\$\{\{ matrix\.id \}\}\.log"\s*$/m);
+requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
+requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
+requirePattern('CodeQL extended security queries', workflow, /^          queries: security-extended\s*$/m);
+requirePattern('CodeQL init action', workflow, /^        uses: github\/codeql-action\/init@v4\s*$/m);
+requirePattern('CodeQL analyze action', workflow, /^        uses: github\/codeql-action\/analyze@v4\s*$/m);
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',
@@ -192,10 +198,13 @@ if (auditOccurrences.length !== 1) failures.push(`security audit: expected once,
 
 const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
 if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
-requirePattern('canonical needs all shards', workflow, /^    needs: shards\s*$/m);
+requirePattern('canonical needs verification shards', workflow, /^      - shards\s*$/m);
+requirePattern('canonical needs CodeQL', workflow, /^      - codeql\s*$/m);
 requirePattern('canonical always evaluates', workflow, /^    if: \$\{\{ always\(\) \}\}\s*$/m);
-requirePattern('canonical result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
+requirePattern('canonical shard result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
+requirePattern('canonical CodeQL result binding', workflow, /^          CODEQL_RESULT: \$\{\{ needs\.codeql\.result \}\}\s*$/m);
 requirePattern('canonical rejects failed shards', workflow, /^          if \[ "\$\{SHARD_RESULT\}" != "success" \]; then\s*$/m);
+requirePattern('canonical rejects failed CodeQL', workflow, /^          if \[ "\$\{CODEQL_RESULT\}" != "success" \]; then\s*$/m);
 
 for (const legacy of [
   '.github/workflows/test.yml',
@@ -214,4 +223,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, CodeQL security analysis is required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');

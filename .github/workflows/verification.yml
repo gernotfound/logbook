@@ -124,19 +124,66 @@ jobs:
             dist/sw.js
             dist/manifest.webmanifest
 
+  codeql:
+    name: "Security / CodeQL"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          echo "Actual SHA:   ${actual_sha}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Exact-head verification failed" >&2
+            exit 1
+          fi
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"
+
   canonical:
     name: "Canonical Verification"
     runs-on: ubuntu-24.04
-    needs: shards
+    needs:
+      - shards
+      - codeql
     if: ${{ always() }}
     steps:
-      - name: Require all verification shards
+      - name: Require verification and security analysis
         env:
           SHARD_RESULT: ${{ needs.shards.result }}
+          CODEQL_RESULT: ${{ needs.codeql.result }}
         shell: bash
         run: |
           echo "Parallel verification result: ${SHARD_RESULT}"
+          echo "CodeQL result: ${CODEQL_RESULT}"
           if [ "${SHARD_RESULT}" != "success" ]; then
             echo "At least one verification shard failed or was cancelled" >&2
+            exit 1
+          fi
+          if [ "${CODEQL_RESULT}" != "success" ]; then
+            echo "CodeQL security analysis failed or was cancelled" >&2
             exit 1
           fi
