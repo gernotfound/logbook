@@ -78,13 +78,9 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
     const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
 
     const totalExercises = activeWorkout?.exercises?.length ?? 0;
-
-    useEffect(() => {
-        setCurrentExerciseIndex(current => {
-            if (totalExercises === 0) return 0;
-            return Math.min(current, totalExercises - 1);
-        });
-    }, [totalExercises]);
+    const safeCurrentExerciseIndex = totalExercises === 0
+        ? 0
+        : Math.min(currentExerciseIndex, totalExercises - 1);
 
     const handleMoveExercise = useCallback((fromIndex: number, direction: 'up' | 'down') => {
         const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
@@ -219,7 +215,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
                 onCancelHistory={handleCancelHistory}
-                currentExerciseIndex={currentExerciseIndex}
+                currentExerciseIndex={safeCurrentExerciseIndex}
                 totalExercises={totalExercises}
             />
 
@@ -261,7 +257,7 @@ export const ActiveWorkoutSession = ({ onNavigateToHistory, onRequestEnd }: Acti
                                 onRemoveSpecialSet={handleRemoveSpecialSet}
                                 onUpdateSetTarget={handleUpdateSetTarget}
                                 onToggleSpecialMenu={handleToggleSpecialMenu}
-                                isCurrent={currentExerciseIndex === exIndex}
+                                isCurrent={safeCurrentExerciseIndex === exIndex}
                                 initiallyExpanded={Boolean(activeWorkout.isEditingHistory)}
                                 onActivate={setCurrentExerciseIndex}
                             />
