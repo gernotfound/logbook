@@ -130,7 +130,7 @@ describe('training session redesign', () => {
             completedWorkout('routine-a', 30, 3),
             completedWorkout('routine-a', 40, 4),
             completedWorkout('routine-a', 50, 5),
-            completedWorkout('routine-a', 100, 6),
+            completedWorkout('routine-a', 55, 6),
             completedWorkout('routine-b', 300, 7),
         ];
 
