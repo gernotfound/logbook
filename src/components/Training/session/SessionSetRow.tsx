@@ -2,6 +2,7 @@ import React from 'react';
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { BufferedInput } from '../../UI/BufferedInput';
 import { continuationTechniqueLabel, getContinuationTechnique } from '../../../lib/advancedSets';
+import { useDialogStore } from '../../../store/useDialogStore';
 
 interface SessionSetRowProps {
     set: any;
@@ -72,7 +73,6 @@ const SessionSetRowInner: React.FC<SessionSetRowProps> = ({
         );
 
         if (isFilled) {
-            const { useDialogStore } = await import('../../../store/useDialogStore');
             const confirmed = await useDialogStore.getState().showConfirm(
                 'La serie contiene dei dati. Vuoi davvero rimuoverla?'
             );
