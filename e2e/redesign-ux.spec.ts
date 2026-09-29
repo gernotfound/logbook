@@ -81,7 +81,7 @@ test('Schede stays inside a 320px viewport and keeps the full muscle model in bo
   });
   expect(muscleFitsViewBox).toBe(true);
 
-  await page.locator('#routine-creation-form').getByRole('button', { name: 'Crea scheda' }).click();
+  await page.locator('#routine-creation-form').getByRole('button', { name: 'Salva', exact: true }).click();
   await expect(page.getByText('Scheda mobile', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Apri scheda Scheda mobile' }).click();
   await expect(page.getByText('Muscoli coinvolti')).toBeVisible();
