@@ -64,6 +64,10 @@ function persistGuestLoginOverlayState(visible: boolean): void {
   }
 }
 
+function allowOptionalAnalyticsEvent<T>(event: T): T | null {
+  return getAnalyticsConsent() ? event : null;
+}
+
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
   const syncing = useAppStore(state => state.syncing);
@@ -361,8 +365,8 @@ function App() {
       </main>
 
       {!hideBottomNav && <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />}
-      {analyticsEnabled && <Analytics />}
-      {analyticsEnabled && <SpeedInsights />}
+      {analyticsEnabled && <Analytics beforeSend={allowOptionalAnalyticsEvent} />}
+      {analyticsEnabled && <SpeedInsights beforeSend={allowOptionalAnalyticsEvent} />}
     </>
   );
 }
