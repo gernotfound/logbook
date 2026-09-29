@@ -7,7 +7,10 @@ type SessionSetLike = Partial<SessionExerciseSet> & {
 
 const hasEnteredValue = (value: unknown): boolean => {
     if (value === undefined || value === null) return false;
-    return typeof value !== 'string' || value.trim() !== '';
+    const text = String(value).trim();
+    if (text === '') return false;
+    const numeric = Number(text.replace(',', '.'));
+    return Number.isNaN(numeric) || numeric !== 0;
 };
 
 export function sessionSetHasMeaningfulData(set: SessionSetLike): boolean {
@@ -22,9 +25,7 @@ export function sessionSetHasMeaningfulData(set: SessionSetLike): boolean {
         || hasEnteredValue(set.incline)
         || hasEnteredValue(set.kcal)
         || set.rir !== undefined
-        || set.done === true
         || Boolean(set.target)
-        || (set.executionMode !== undefined && set.executionMode !== 'standard')
         || (set.technique !== undefined && set.technique !== 'straight')
     ) {
         return true;
@@ -36,7 +37,6 @@ export function sessionSetHasMeaningfulData(set: SessionSetLike): boolean {
         || hasEnteredValue(segment.time)
         || segment.restBeforeSeconds !== undefined
         || segment.target !== undefined
-        || segment.technique !== undefined
     ))) {
         return true;
     }
