@@ -70,6 +70,8 @@ describe('F-003 nutrition identity integrity', () => {
         expect(() => LoggedMealItemSchema.parse({ ...validMeal, id: 'bad/id' })).toThrow();
         expect(() => SupplementIntakeSchema.parse({ ...validIntake, id: '' })).toThrow();
         expect(() => SupplementIntakeSchema.parse({ ...validIntake, supplementId: '' })).toThrow();
+        expect(LoggedMealItemSchema.parse({ ...validMeal, id: 42 }).id).toBe('42');
+        expect(SupplementIntakeSchema.parse({ ...validIntake, id: 7, supplementId: 9 })).toMatchObject({ id: '7', supplementId: '9' });
     });
 
     it('quarantines malformed nested records while preserving valid siblings during hydration parsing', () => {
@@ -169,5 +171,12 @@ describe('F-003 nutrition identity integrity', () => {
         };
 
         expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
+
+        backup.userData.nutrition['2026-09-29'].meals = [{ ...validMeal, id: 'bad/id' }];
+        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo non valido/i);
+
+        backup.userData.nutrition['2026-09-29'].meals = [validMeal];
+        backup.userData.nutrition['2026-09-29'].supplementsIntake = [{ ...validIntake, supplementId: '' }];
+        expect(() => decodeImport(backup, 'guest')).toThrow(/integratore senza identificativo valido/i);
     });
 });
