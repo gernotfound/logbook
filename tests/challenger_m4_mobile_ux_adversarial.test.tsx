@@ -429,7 +429,7 @@ describe('Adversarial Challenger Suite: Mobile UX, Layout, Sentence Case & Edge 
         </div>
       );
 
-      expect(container.querySelector('.card')).not.toBeNull();
+      expect(container.querySelector('.planning-cycle-item')).not.toBeNull();
       const trigger = screen.getByRole('button', { name: 'Opzioni' });
       expect(trigger).not.toBeNull();
 

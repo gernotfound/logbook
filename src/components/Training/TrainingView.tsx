@@ -49,7 +49,11 @@ const TrainingView = ({ subTab = 'session', setSubTab }: TrainingViewProps) => {
                     />
                 </div>
             )}
-            {subTab === 'planning' && <div id="training-panel-planning" role="tabpanel" aria-labelledby="training-tab-planning"><TrainingPlanning /></div>}
+            {subTab === 'planning' && (
+                <div id="training-panel-planning" role="tabpanel" aria-labelledby="training-tab-planning">
+                    <TrainingPlanning onOpenSession={() => setSubTab?.('session')} />
+                </div>
+            )}
             {subTab === 'routines' && <div id="training-panel-routines" role="tabpanel" aria-labelledby="training-tab-routines"><TrainingRoutines /></div>}
             {subTab === 'exercises' && <div id="training-panel-exercises" role="tabpanel" aria-labelledby="training-tab-exercises"><TrainingExercises /></div>}
             {subTab === 'history' && <div id="training-panel-history" role="tabpanel" aria-labelledby="training-tab-history"><TrainingHistory onEditWorkout={handleEditWorkout} /></div>}

@@ -473,7 +473,7 @@ describe('Challenger 2 Empirical Stress Test Suite: Requirement R5 Training Cycl
             );
 
             expect(container.textContent).toContain('dal 01/09/2026 al 12/10/2026');
-            expect(container.textContent).toContain('(6 sett.)');
+            expect(container.textContent).toContain('6 settimane');
             expect(container.textContent).toContain('4 sedute / sett.');
         });
     });

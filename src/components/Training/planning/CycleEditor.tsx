@@ -1,9 +1,5 @@
-// Responsabilità: form di creazione o modifica di un ciclo di allenamento (con preview della schedule).
-// Props: initialCycle, routines, onSave, onCancel.
-// Effetti: chiama onSave col nuovo ciclo validato; usa lo state di dialogStore per gli alert.
-
 import React, { useCallback, useMemo } from 'react';
-import { CalendarDays, Pencil, Save, Plus } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import { Logic } from '../../../lib/logic';
 import type { Exercise, TrainingCycle, WorkoutRoutine } from '../../../types';
@@ -12,6 +8,8 @@ import { CycleSchedulePreview } from './CycleSchedulePreview';
 import { CycleRoutinesList } from './CycleRoutinesList';
 import { CycleMuscleMap } from './CycleMuscleMap';
 import { CycleStrategyFields } from './CycleStrategyFields';
+import { CycleVolumeAccordion } from './CycleVolumeAccordion';
+import { calculateCycleMacroVolume } from './cycleMacroVolume';
 
 const EMPTY_LIBRARY: Exercise[] = [];
 
@@ -20,7 +18,7 @@ interface CycleEditorProps {
     routines: WorkoutRoutine[];
     library?: Exercise[];
     hasRecordedSessions?: boolean;
-    onSave: (cycleData: TrainingCycle) => void;
+    onSave: (cycleData: TrainingCycle) => void | Promise<void>;
     onCancel: () => void;
 }
 
@@ -33,13 +31,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
     onCancel
 }) => {
     const showAlert = useDialogStore(state => state.showAlert);
-
-    const form = useCycleForm({
-        initialCycle,
-        routines,
-        onSave,
-        showAlert
-    });
+    const form = useCycleForm({ initialCycle, routines, onSave, showAlert });
 
     const {
         refs: { startDatePickerRef, endDatePickerRef },
@@ -63,7 +55,8 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             cycleRoutines,
             showSchedulePreview,
             setShowSchedulePreview,
-            tempWeeks
+            tempWeeks,
+            tempFreq
         },
         computed: { timeline, schedule },
         handlers: {
@@ -90,43 +83,52 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
         setShowSchedulePreview(!showSchedulePreview);
     }, [showSchedulePreview, setShowSchedulePreview]);
 
-    const highlightedMuscles = useMemo(() => Logic.calculateCycleVolume({
-        id: 'cycle-preview',
-        name: 'Anteprima ciclo',
-        durationWeeks: 1,
+    const previewCycle = useMemo<TrainingCycle>(() => ({
+        id: initialCycle?.id ?? 'cycle-preview',
+        name: name || 'Anteprima ciclo',
+        durationWeeks: tempWeeks,
+        sessionsPerWeek: tempFreq,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
         routines: cycleRoutines
-    }, routines, library).highlightedMuscles, [cycleRoutines, library, routines]);
+    }), [cycleRoutines, endDate, initialCycle?.id, name, startDate, tempFreq, tempWeeks]);
+
+    const highlightedMuscles = useMemo(
+        () => Logic.calculateCycleVolume(previewCycle, routines, library).highlightedMuscles,
+        [library, previewCycle, routines]
+    );
+    const macroVolume = useMemo(
+        () => calculateCycleMacroVolume(previewCycle, routines, library),
+        [library, previewCycle, routines]
+    );
 
     return (
-        <form id="cycle-editor-form" onSubmit={handleSubmit} className="card mb-20" style={{ border: '1px solid var(--primary-color)' }}>
-            <div className="mb-15">
-                <h2 className="m-0" style={{color: 'var(--primary-color)'}}>
-                    {initialCycle ? <><Pencil size={18} aria-hidden="true" /> Modifica ciclo</> : <><Plus size={18} aria-hidden="true" /> Crea ciclo di allenamento</>}
+        <form id="cycle-editor-form" onSubmit={handleSubmit} className="planning-editor">
+            <header className="planning-editor-header">
+                <h2>
+                    {initialCycle ? 'Modifica ciclo' : 'Nuovo ciclo'}
+                    {!initialCycle ? <span className="sr-only"> Crea ciclo di allenamento</span> : null}
                 </h2>
-            </div>
+                <button type="button" className="planning-close-button" onClick={onCancel}>Chiudi</button>
+            </header>
 
-            <div className="mb-15">
-                <label htmlFor="cycle-name" className="text-xs text-muted font-bold block mb-4">
-                    Nome ciclo
-                </label>
+            <label className="planning-field" htmlFor="cycle-name">
+                <span>Nome ciclo</span>
                 <input
                     id="cycle-name"
                     type="text"
                     placeholder="Es. Mesociclo ipertrofia 4 giorni"
                     value={name}
-                    onChange={e => setName(e.target.value)}
-                    onFocus={e => e.target.select()}
+                    onChange={event => setName(event.target.value)}
+                    onFocus={event => event.target.select()}
                     required
-                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
                 />
-            </div>
+            </label>
 
-            <div className="grid-2 gap-15 mb-15">
-                <div>
-                    <label htmlFor="cycle-start-date" className="text-xs text-muted font-bold block mb-4">
-                        Data di inizio
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', minWidth: 0 }}>
+            <div className="planning-editor-grid">
+                <label className="planning-field" htmlFor="cycle-start-date">
+                    <span>Data di inizio</span>
+                    <div className="planning-date-field">
                         <input
                             id="cycle-start-date"
                             type="text"
@@ -134,174 +136,90 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                             value={dateTextInput}
                             onChange={handleStartDateTextChange}
                             onBlur={handleStartDateTextBlur}
-                            onFocus={e => e.target.select()}
+                            onFocus={event => event.target.select()}
                             required
-                            style={{
-                                flex: 1,
-                                minWidth: 0,
-                                fontSize: '16px',
-                                boxSizing: 'border-box',
-                                maxWidth: '100%',
-                                display: 'block'
-                            }}
                         />
-                        <div style={{ position: 'relative', flexShrink: 0, width: '46px' }}>
+                        <span className="planning-date-picker-wrap">
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="planning-icon-button"
                                 onClick={handleOpenStartCalendar}
                                 title="Scegli data di inizio dal calendario"
                                 aria-label="Scegli data di inizio dal calendario"
-                                style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginBottom: 0,
-                                    borderRadius: '8px',
-                                    border: '1px solid var(--glass-border)',
-                                    background: 'var(--surface-light)',
-                                    cursor: 'pointer'
-                                }}
                             >
                                 <CalendarDays size={20} aria-hidden="true" />
                             </button>
                             <input
                                 ref={startDatePickerRef}
+                                className="planning-native-date-input"
                                 type="date"
                                 value={startDate}
                                 onChange={handleStartCalendarDateChange}
                                 tabIndex={-1}
                                 aria-label="Scegli data di inizio dal calendario"
-                                style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    opacity: 0,
-                                    pointerEvents: 'auto',
-                                    cursor: 'pointer',
-                                    fontSize: '16px'
-                                }}
                             />
-                        </div>
+                        </span>
                     </div>
-                </div>
+                </label>
 
-                <div>
-                    <label htmlFor="cycle-end-date" className="text-xs text-muted font-bold block mb-4">
-                        Data di fine
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px', minWidth: 0 }}>
+                <label className="planning-field" htmlFor="cycle-end-date">
+                    <span>Data di fine</span>
+                    <div className="planning-date-field">
                         <input
                             id="cycle-end-date"
                             type="text"
+                            aria-label="Data di fine"
                             placeholder="GG/MM/AAAA"
                             value={endDateTextInput}
                             onChange={handleEndDateTextChange}
                             onBlur={handleEndDateTextBlur}
-                            onFocus={e => e.target.select()}
+                            onFocus={event => event.target.select()}
                             required
-                            style={{
-                                flex: 1,
-                                minWidth: 0,
-                                fontSize: '16px',
-                                boxSizing: 'border-box',
-                                maxWidth: '100%',
-                                display: 'block'
-                            }}
                         />
-                        <div style={{ position: 'relative', flexShrink: 0, width: '46px' }}>
+                        <span className="planning-date-picker-wrap">
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="planning-icon-button"
                                 onClick={handleOpenEndCalendar}
                                 title="Scegli data di fine dal calendario"
                                 aria-label="Scegli data di fine dal calendario"
-                                style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    padding: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginBottom: 0,
-                                    borderRadius: '8px',
-                                    border: '1px solid var(--glass-border)',
-                                    background: 'var(--surface-light)',
-                                    cursor: 'pointer'
-                                }}
                             >
                                 <CalendarDays size={20} aria-hidden="true" />
                             </button>
                             <input
                                 ref={endDatePickerRef}
+                                className="planning-native-date-input"
                                 type="date"
                                 value={endDate}
                                 onChange={handleEndCalendarDateChange}
                                 tabIndex={-1}
                                 aria-label="Scegli data di fine dal calendario"
-                                style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    opacity: 0,
-                                    pointerEvents: 'auto',
-                                    cursor: 'pointer',
-                                    fontSize: '16px'
-                                }}
                             />
-                        </div>
+                        </span>
                     </div>
-                </div>
+                    <span className="planning-helper">Si aggiorna automaticamente quando cambi data iniziale o durata.</span>
+                </label>
             </div>
 
-            <div className="mb-15" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div>
-                    <label htmlFor="cycle-duration-weeks" className="text-xs text-muted font-bold block mb-4">
-                        Durata (settimane)
-                    </label>
-                    <input
-                        id="cycle-duration-weeks"
-                        type="number"
-                        min="1"
-                        max="52"
-                        value={durationWeeks}
-                        onChange={e => handleDurationWeeksChange(e.target.value)}
-                        onFocus={e => e.target.select()}
-                        required
-                        className="cycle-duration-input"
-                    />
-                </div>
+            <label className="planning-field planning-number-field" htmlFor="cycle-duration-weeks">
+                <span>Durata (settimane)</span>
+                <input
+                    id="cycle-duration-weeks"
+                    type="number"
+                    min="1"
+                    max="52"
+                    value={durationWeeks}
+                    onChange={event => handleDurationWeeksChange(event.target.value)}
+                    onFocus={event => event.target.select()}
+                    required
+                />
+            </label>
 
+            <div className="planning-period-summary" role="status">
+                <span>Periodo programmato</span>
+                <strong>{timeline.formattedRange}</strong>
+                <span>({tempWeeks} {tempWeeks === 1 ? 'settimana' : 'settimane'})</span>
             </div>
-
-            {startDate && (
-                <div
-                    style={{
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        background: 'var(--primary-soft)',
-                        border: '1px solid var(--primary-color)',
-                        fontSize: 'var(--font-size-meta)',
-                        color: 'var(--primary-color)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        marginBottom: '15px'
-                    }}
-                >
-                    <span>📅</span>
-                    <span>
-                        Periodo programmato: <strong>{timeline.formattedRange}</strong> ({tempWeeks} {tempWeeks === 1 ? 'settimana' : 'settimane'})
-                    </span>
-                </div>
-            )}
 
             <CycleStrategyFields
                 intent={strategyIntent}
@@ -315,85 +233,63 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                 onRemoveMuscle={handleRemovePriorityMuscle}
             />
 
-            <div className="mb-15">
-                <div className="flex-between items-center mb-4">
-                    <label htmlFor="cycle-sessions-per-week" className="text-xs text-muted font-bold block">
-                        Frequenza di allenamento (sedute a settimana)
-                    </label>
-                    <span className="text-xs text-primary font-bold">
-                        {form.state.tempFreq} {form.state.tempFreq === 1 ? 'seduta' : 'sedute'} / sett.
-                    </span>
-                </div>
-                <input
-                    id="cycle-sessions-per-week"
-                    type="number"
-                    min="1"
-                    max="14"
-                    value={sessionsPerWeek}
-                    onChange={e => setSessionsPerWeek(e.target.value)}
-                    onFocus={e => e.target.select()}
-                    placeholder="Es. 4"
-                    required
-                    style={{ width: '100%', fontSize: '16px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
-                />
-                <p className="text-base text-muted mt-4 mb-0">
-                    Indica quante volte ti alleni in una settimana. Le schede ruoteranno sequenzialmente seduta dopo seduta.
-                </p>
+            <div className="planning-number-block">
+                <label className="planning-field planning-number-field" htmlFor="cycle-sessions-per-week">
+                    <span>Sedute a settimana</span>
+                    <input
+                        id="cycle-sessions-per-week"
+                        type="number"
+                        min="1"
+                        max="14"
+                        value={sessionsPerWeek}
+                        onChange={event => setSessionsPerWeek(event.target.value)}
+                        onFocus={event => event.target.select()}
+                        required
+                    />
+                </label>
+                <span className="planning-helper">È una frequenza media: la rotazione prosegue quando ti alleni, senza assegnare giorni fissi.</span>
             </div>
 
-            <div className="mb-15">
-                <label className="text-xs text-muted font-bold block mb-4">
-                    Note (opzionale)
-                </label>
+            <label className="planning-field" htmlFor="cycle-notes">
+                <span>Note</span>
                 <textarea
+                    id="cycle-notes"
                     placeholder="Es. Indicazioni personali sul ciclo..."
                     value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    rows={2}
-                    style={{ width: '100%', fontSize: '16px', borderRadius: '8px', padding: '10px', boxSizing: 'border-box', maxWidth: '100%', display: 'block' }}
+                    onChange={event => setNotes(event.target.value)}
+                    rows={3}
                 />
-            </div>
+            </label>
 
-            {/* Schede nel ciclo con ordine sequenziale */}
             <CycleRoutinesList
                 cycleRoutines={cycleRoutines}
                 routines={routines}
+                library={library}
                 onAdd={handleAddRoutineById}
                 onMove={handleMoveRoutine}
                 onRemove={handleRemoveRoutine}
             />
 
-            {/* Anteprima rotazione settimane */}
-            {cycleRoutines.length > 0 && (
+            {cycleRoutines.length > 0 ? (
                 <CycleSchedulePreview
                     schedule={schedule}
                     showPreview={showSchedulePreview}
                     onTogglePreview={togglePreview}
                 />
-            )}
+            ) : null}
 
             <CycleMuscleMap
-                title="Mappa muscolare del ciclo settimanale"
+                title="Mappa muscolare del ciclo"
                 highlightedMuscles={highlightedMuscles}
                 emptyMessage="Aggiungi una scheda al ciclo per evidenziare i muscoli allenati."
             />
 
-            {/* Pulsanti di azione ordinati e bilanciati */}
-            <div className="flex gap-10 mt-20" style={{ width: '100%', minWidth: 0 }}>
-                <button
-                    type="button"
-                    className="btn flex-1"
-                    style={{ background: 'var(--surface-light)', marginBottom: 0 }}
-                    onClick={onCancel}
-                >
-                    Annulla
-                </button>
-                <button
-                    type="submit"
-                    className="btn btn-primary flex-2"
-                    style={{ marginBottom: 0 }}
-                >
-                    {initialCycle ? <><Save size={16} aria-hidden="true" /> Salva modifiche</> : <><Save size={16} aria-hidden="true" /> Salva ciclo</>}
+            <CycleVolumeAccordion items={macroVolume} />
+
+            <div className="planning-editor-actions">
+                <button type="button" className="btn" onClick={onCancel}>Annulla</button>
+                <button type="submit" className="btn btn-primary">
+                    {initialCycle ? 'Salva modifiche' : 'Salva ciclo'}
                 </button>
             </div>
         </form>

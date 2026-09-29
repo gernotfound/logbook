@@ -1,155 +1,158 @@
-// Responsabilità: mostrare la lista delle schede nel ciclo, permettendo di aggiungerle, riordinarle o rimuoverle.
-// Props: cycleRoutines, routines, onAdd, onMove, onRemove.
-// Effetti: puro componente visivo (memoizzato) che emette eventi.
-
-import React, { memo } from 'react';
-import { Trash2 } from 'lucide-react';
-import type { TrainingCycleRoutineItem, WorkoutRoutine } from '../../../types';
+import { memo, useId, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
+import type { Exercise, TrainingCycleRoutineItem, WorkoutRoutine } from '../../../types';
 
 interface CycleRoutinesListProps {
     cycleRoutines: TrainingCycleRoutineItem[];
     routines: WorkoutRoutine[];
+    library?: Exercise[];
     onAdd: (routineId: string) => void;
     onMove: (index: number, direction: -1 | 1) => void;
     onRemove: (index: number) => void;
 }
 
-export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
+const EMPTY_LIBRARY: Exercise[] = [];
+
+export const CycleRoutinesList = memo(function CycleRoutinesList({
     cycleRoutines,
     routines,
+    library = EMPTY_LIBRARY,
     onAdd,
     onMove,
     onRemove
-}) => {
+}: CycleRoutinesListProps) {
+    const [query, setQuery] = useState('');
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const resultsId = useId();
+    const exerciseNames = useMemo(() => new Map(library.map(exercise => [exercise.id, exercise.name])), [library]);
+
+    const matches = useMemo(() => {
+        const normalized = query.trim().toLocaleLowerCase('it');
+        return routines.filter(routine => {
+            if (!normalized) return true;
+            const names = (routine.exercises ?? [])
+                .map(item => exerciseNames.get(item.exId) ?? '')
+                .filter(Boolean);
+            return [routine.id, routine.name, ...names]
+                .join(' ')
+                .toLocaleLowerCase('it')
+                .includes(normalized);
+        });
+    }, [exerciseNames, query, routines]);
+
+    const addRoutine = (routineId: string) => {
+        onAdd(routineId);
+        setQuery('');
+        setIsSearchOpen(false);
+    };
+
     return (
-        <div className="mb-15">
-            <div className="flex-between items-center mb-8">
-                <div>
-                    <label className="text-xs text-muted font-bold block">
-                        Sequenza rotazione schede ({cycleRoutines.length})
-                    </label>
-                    <span className="text-xs text-muted">
-                        Ordine di esecuzione continua da una seduta alla successiva
-                    </span>
-                </div>
+        <section className="planning-sequence" aria-labelledby={`${resultsId}-title`}>
+            <div className="planning-section-copy">
+                <h3 id={`${resultsId}-title`}>Sequenza rotazione schede ({cycleRoutines.length})</h3>
+                <p>La sequenza continua da una seduta alla successiva, senza giorni fissi.</p>
             </div>
 
-            <div className="mb-12">
-                <select
-                    aria-label="Aggiungi scheda alla sequenza"
-                    onChange={e => {
-                        if (e.target.value) {
-                            onAdd(e.target.value);
-                            e.target.value = '';
-                        }
-                    }}
-                    style={{
-                        width: '100%',
-                        fontSize: '16px',
-                        boxSizing: 'border-box',
-                        maxWidth: '100%',
-                        display: 'block',
-                        padding: '10px 12px',
-                        background: 'var(--surface-light)',
-                        border: '1px solid var(--glass-border)',
-                        borderRadius: '8px',
-                        color: 'var(--text-main)'
-                    }}
-                >
-                    <option value="">+ Aggiungi scheda alla sequenza</option>
-                    {routines.map(r => (
-                        <option key={r.id} value={r.id}>
-                            {r.name} ({r.exercises?.length || 0} es.)
-                        </option>
-                    ))}
-                </select>
+            <div className="planning-routine-search">
+                <label htmlFor={`${resultsId}-input`}>Aggiungi scheda</label>
+                <div className="planning-search-field">
+                    <Search size={20} aria-hidden="true" />
+                    <input
+                        id={`${resultsId}-input`}
+                        type="search"
+                        role="combobox"
+                        aria-label="Aggiungi scheda alla sequenza"
+                        aria-controls={resultsId}
+                        aria-expanded={isSearchOpen}
+                        aria-autocomplete="list"
+                        autoComplete="off"
+                        placeholder="Cerca scheda o esercizio"
+                        value={query}
+                        onFocus={() => setIsSearchOpen(true)}
+                        onKeyDown={event => {
+                            if (event.key === 'Escape') setIsSearchOpen(false);
+                        }}
+                        onChange={event => {
+                            const value = event.target.value;
+                            const exactRoutine = routines.find(routine => routine.id === value);
+                            if (exactRoutine) {
+                                addRoutine(exactRoutine.id);
+                                return;
+                            }
+                            setQuery(value);
+                            setIsSearchOpen(true);
+                        }}
+                    />
+                </div>
+                <span className="planning-helper">Puoi cercare anche il nome di un esercizio contenuto nella scheda.</span>
+
+                {isSearchOpen ? (
+                    <div id={resultsId} className="planning-search-results" role="listbox" aria-label="Risultati schede">
+                        {matches.length === 0 ? (
+                            <p className="planning-search-empty">Nessuna scheda contiene questa ricerca.</p>
+                        ) : matches.map(routine => {
+                            const names = (routine.exercises ?? [])
+                                .map(item => exerciseNames.get(item.exId) ?? '')
+                                .filter(Boolean);
+                            return (
+                                <button
+                                    key={routine.id}
+                                    type="button"
+                                    role="option"
+                                    aria-selected="false"
+                                    className="planning-search-result"
+                                    onClick={() => addRoutine(routine.id)}
+                                >
+                                    <strong>{routine.name}</strong>
+                                    <span>{names.length ? names.join(' · ') : `${routine.exercises?.length ?? 0} esercizi`}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : null}
             </div>
 
             {cycleRoutines.length === 0 ? (
-                <div style={{ padding: '15px', background: 'var(--surface-light)', borderRadius: '8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <p className="m-0 text-base">Nessuna scheda aggiunta al ciclo. Seleziona una scheda dal menu in alto per iniziare la sequenza.</p>
-                </div>
+                <div className="planning-empty-inline">Aggiungi almeno una scheda per costruire la rotazione.</div>
             ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {cycleRoutines.map((item, idx) => {
-                        const routine = routines.find(r => r.id === item.routineId);
-                        const letterIndex = String.fromCharCode(65 + (idx % 26));
+                <div className="planning-sequence-list">
+                    {cycleRoutines.map((item, index) => {
+                        const routine = routines.find(candidate => candidate.id === item.routineId);
+                        const name = routine?.name ?? 'Scheda';
                         return (
-                            <div
-                                key={`${item.routineId}-${idx}`}
-                                style={{
-                                    padding: '10px 12px',
-                                    background: 'var(--surface-light)',
-                                    border: '1px solid var(--glass-border)',
-                                    borderRadius: '8px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: '10px'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                                    <div
-                                        style={{
-                                            width: '28px',
-                                            height: '28px',
-                                            borderRadius: '50%',
-                                            background: 'var(--primary-soft)',
-                                            border: '1px solid var(--primary-color)',
-                                            color: 'var(--primary-color)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontWeight: 'bold',
-                                            fontSize: 'var(--font-size-meta)',
-                                            flexShrink: 0
-                                        }}
-                                    >
-                                        {letterIndex}
-                                    </div>
-                                    <div style={{ minWidth: 0 }}>
-                                        <div style={{ fontWeight: 'bold', fontSize: 'var(--font-size-control)', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {routine?.name || 'Scheda'}
-                                        </div>
-                                        <div style={{ fontSize: 'var(--font-size-micro)', color: 'var(--text-muted)' }}>
-                                            Posizione {idx + 1} di {cycleRoutines.length} • {routine?.exercises?.length || 0} esercizi
-                                        </div>
-                                    </div>
+                            <div key={`${item.routineId}-${index}`} className="planning-sequence-row">
+                                <span className="planning-sequence-index" aria-hidden="true">{String.fromCharCode(65 + (index % 26))}</span>
+                                <div className="planning-sequence-name">
+                                    <strong>{name}</strong>
+                                    <span>Posizione {index + 1} di {cycleRoutines.length} · {routine?.exercises?.length ?? 0} esercizi</span>
                                 </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                <div className="planning-sequence-actions">
                                     <button
                                         type="button"
-                                        className="btn btn-secondary btn-small"
-                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: 'var(--font-size-meta)' }}
-                                        onClick={() => onMove(idx, -1)}
-                                        disabled={idx === 0}
-                                        aria-label="Sposta su nella sequenza"
+                                        onClick={() => onMove(index, -1)}
+                                        disabled={index === 0}
+                                        aria-label={`Sposta ${name} verso l'alto`}
                                         title="Sposta su nella sequenza"
                                     >
-                                        ▲
+                                        <ChevronUp size={20} aria-hidden="true" />
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn btn-secondary btn-small"
-                                        style={{ padding: '4px 8px', marginBottom: 0, fontSize: 'var(--font-size-meta)' }}
-                                        onClick={() => onMove(idx, 1)}
-                                        disabled={idx === cycleRoutines.length - 1}
-                                        aria-label="Sposta giù nella sequenza"
+                                        onClick={() => onMove(index, 1)}
+                                        disabled={index === cycleRoutines.length - 1}
+                                        aria-label={`Sposta ${name} verso il basso`}
                                         title="Sposta giù nella sequenza"
                                     >
-                                        ▼
+                                        <ChevronDown size={20} aria-hidden="true" />
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn-icon"
-                                        style={{ color: 'var(--danger-color)', fontSize: 'var(--font-size-control)', padding: '4px', marginLeft: '4px' }}
-                                        onClick={() => onRemove(idx)}
-                                        aria-label="Rimuovi scheda dalla sequenza"
+                                        className="danger"
+                                        onClick={() => onRemove(index)}
+                                        aria-label={`Rimuovi ${name} dalla sequenza`}
                                         title="Rimuovi scheda dalla sequenza"
                                     >
-                                        <Trash2 size={16} aria-hidden="true" />
-
+                                        <Trash2 size={20} aria-hidden="true" />
                                     </button>
                                 </div>
                             </div>
@@ -157,7 +160,6 @@ export const CycleRoutinesList: React.FC<CycleRoutinesListProps> = memo(({
                     })}
                 </div>
             )}
-        </div>
+        </section>
     );
 });
-CycleRoutinesList.displayName = 'CycleRoutinesList';

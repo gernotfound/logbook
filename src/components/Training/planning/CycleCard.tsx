@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, Copy, Pencil, Repeat2, Trash2 } from 'lucide-react';
 import { Logic } from '../../../lib/logic';
 import type { TrainingCycle, WorkoutRoutine } from '../../../types';
-import { ContextMenu, ContextMenuItem } from '../../UI/ContextMenu';
-import { Pencil, Copy, Trash2 } from 'lucide-react';
+import { ContextMenu, type ContextMenuItem } from '../../UI/ContextMenu';
 import { CycleStrategySummary } from './CycleStrategySummary';
+import { CycleSchedulePreview } from './CycleSchedulePreview';
 
 interface CycleCardProps {
     cycle: TrainingCycle;
@@ -26,222 +27,70 @@ export const CycleCard: React.FC<CycleCardProps> = ({
     onDuplicate,
     onDelete
 }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
     const [showSchedule, setShowSchedule] = useState(false);
-    const sessionsPerWeek = cycle.sessionsPerWeek || (cycle.routines ? cycle.routines.length : 4);
+    const sessionsPerWeek = cycle.sessionsPerWeek || cycle.routines?.length || 1;
     const timeline = Logic.calculateCycleTimeline(cycle);
-    const schedule = useMemo(() => {
-        return Logic.calculateCycleSchedule(cycle, routines);
-    }, [cycle, routines]);
+    const schedule = useMemo(() => Logic.calculateCycleSchedule(cycle, routines), [cycle, routines]);
 
     const menuItems: ContextMenuItem[] = [
-        {
-            id: 'edit-cycle',
-            label: 'Modifica',
-            icon: <Pencil size={16} />,
-            onClick: () => onEdit(cycle)
-        },
-        {
-            id: 'duplicate-cycle',
-            label: 'Duplica',
-            icon: <Copy size={16} />,
-            onClick: () => onDuplicate(cycle)
-        },
-        {
-            id: 'delete-cycle',
-            label: 'Elimina',
-            icon: <Trash2 size={16} />,
-            variant: 'danger',
-            onClick: () => onDelete(cycle)
-        }
+        { id: 'edit-cycle', label: 'Modifica', icon: <Pencil size={16} />, onClick: () => onEdit(cycle) },
+        { id: 'duplicate-cycle', label: 'Duplica', icon: <Copy size={16} />, onClick: () => onDuplicate(cycle) },
+        { id: 'delete-cycle', label: 'Elimina', icon: <Trash2 size={16} />, variant: 'danger', onClick: () => onDelete(cycle) }
     ];
 
     return (
-        <div
-            className="card mb-15"
-            style={{
-                border: isActive ? '1px solid var(--primary-color)' : '1px solid var(--glass-border)',
-                background: isActive ? 'var(--primary-soft)' : 'var(--glass-bg)'
-            }}
-        >
-            <div className="flex-between items-start mb-8 gap-10">
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <h3 className="m-0" style={{color: 'var(--text-main)'}}>
-                            {cycle.name}
-                        </h3>
-                        {isActive && (
-                            <span
-                                style={{
-                                    fontSize: 'var(--font-size-micro)',
-                                    fontWeight: 'bold',
-                                    padding: '2px 8px',
-                                    borderRadius: '12px',
-                                    background: 'var(--primary-color)',
-                                    color: 'var(--on-primary)'
-                                }}
-                            >
-                                Attivo
-                            </span>
-                        )}
-                    </div>
-                    <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        {cycle.startDate ? (
-                            <>
-                                <span>📅 {timeline.formattedRange} ({cycle.durationWeeks} sett.)</span> • <span>{sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
-                            </>
-                        ) : (
-                            <>
-                                Durata: <strong>{cycle.durationWeeks} settimane</strong> • {sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.
-                            </>
-                        )}
-                    </div>
-                </div>
-
+        <article className={isActive ? 'planning-cycle-item is-active' : 'planning-cycle-item'}>
+            <div className="planning-cycle-row">
+                <button
+                    type="button"
+                    className="planning-cycle-toggle"
+                    onClick={() => setIsExpanded(expanded => !expanded)}
+                    aria-expanded={isExpanded}
+                >
+                    <span className="planning-cycle-icon" aria-hidden="true"><Repeat2 size={22} /></span>
+                    <span className="planning-cycle-copy">
+                        <strong>{cycle.name}</strong>
+                        <span>{cycle.durationWeeks} settimane · {sessionsPerWeek} {sessionsPerWeek === 1 ? 'seduta' : 'sedute'} / sett.</span>
+                    </span>
+                    <ChevronDown className={isExpanded ? 'is-open' : ''} size={20} aria-hidden="true" />
+                </button>
                 <ContextMenu items={menuItems} />
             </div>
 
-            <div className="mb-10">
+            <div className="planning-cycle-expanded" hidden={!isExpanded}>
+                {cycle.startDate ? <p className="planning-cycle-period">{timeline.formattedRange}</p> : null}
                 <CycleStrategySummary strategy={cycle.strategy} />
-            </div>
+                {cycle.notes ? <p className="planning-cycle-notes">“{cycle.notes}”</p> : null}
 
-            {cycle.notes && (
-                <p className="text-xs text-muted mb-10" style={{ fontStyle: 'italic' }}>
-                    "{cycle.notes}"
-                </p>
-            )}
+                <div className="planning-routine-chips" aria-label="Sequenza schede del ciclo">
+                    {(cycle.routines ?? []).map((item, index) => {
+                        const routine = routines.find(candidate => candidate.id === item.routineId);
+                        return (
+                            <span key={`${item.routineId}-${index}`}>
+                                <b>{String.fromCharCode(65 + (index % 26))}</b> {routine?.name ?? 'Scheda'}
+                            </span>
+                        );
+                    })}
+                </div>
 
-            {/* Sequenza ordinata delle schede nel ciclo */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
-                {(cycle.routines || []).map((item, idx) => {
-                    const routine = routines.find(r => r.id === item.routineId);
-                    const letterIndex = String.fromCharCode(65 + (idx % 26));
-                    return (
-                        <span
-                            key={`${item.routineId}-${idx}`}
-                            style={{
-                                fontSize: 'var(--font-size-micro)',
-                                padding: '3px 8px',
-                                borderRadius: '6px',
-                                background: 'var(--surface-light)',
-                                border: '1px solid var(--glass-border)',
-                                color: 'var(--text-main)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                            }}
-                        >
-                            <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{letterIndex}.</span>
-                            <span>{routine?.name || 'Scheda'}</span>
-                        </span>
-                    );
-                })}
-            </div>
+                {cycle.routines?.length ? (
+                    <CycleSchedulePreview
+                        schedule={schedule}
+                        showPreview={showSchedule}
+                        onTogglePreview={() => setShowSchedule(open => !open)}
+                    />
+                ) : null}
 
-            {/* Pulsante per mostrare/nascondere la programmazione settimanale */}
-            {schedule.weeks.length > 0 && (
-                <div style={{ marginBottom: '10px' }}>
-                    <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        style={{
-                            width: '100%',
-                            fontSize: 'var(--font-size-micro)',
-                            padding: '4px 8px',
-                            background: 'var(--surface-light)',
-                            border: '1px dashed var(--glass-border)',
-                            color: 'var(--text-muted)',
-                            marginBottom: 0
-                        }}
-                        onClick={() => setShowSchedule(!showSchedule)}
-                    >
-                        {showSchedule ? '▲ Nascondi programmazione' : <><span aria-hidden="true">🔄</span> Vedi programmazione ({schedule.totalSessions} sedute su {cycle.durationWeeks} sett.)</>}
-                    </button>
-
-                    {showSchedule && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                            {schedule.weeks.map(week => (
-                                <div
-                                    key={week.weekNumber}
-                                    style={{
-                                        padding: '6px 8px',
-                                        background: 'var(--surface-light)',
-                                        borderRadius: '6px',
-                                        fontSize: 'var(--font-size-micro)'
-                                    }}
-                                >
-                                    <div className="flex-between mb-4">
-                                        <strong style={{ color: 'var(--primary-color)' }}>
-                                            Settimana {week.weekNumber} {week.formattedRange ? `(${week.formattedRange})` : ''}
-                                        </strong>
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                        {week.sessions.map((sess) => (
-                                            <span
-                                                key={sess.globalSessionIndex}
-                                                style={{
-                                                    padding: '2px 6px',
-                                                    background: 'var(--primary-soft)',
-                                                    border: '1px solid var(--primary-color)',
-                                                    borderRadius: '4px',
-                                                    color: 'var(--text-main)',
-                                                    fontSize: 'var(--font-size-micro)'
-                                                }}
-                                            >
-                                                #{sess.globalSessionIndex} {sess.routineName}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                <div className="planning-cycle-actions">
+                    <button type="button" className="btn" onClick={() => onEdit(cycle)}>Modifica</button>
+                    {isActive ? (
+                        <button type="button" className="btn" onClick={() => onDeactivate(cycle.id)}>Disattiva ciclo</button>
+                    ) : (
+                        <button type="button" className="btn btn-primary" onClick={() => onSetActive(cycle.id)}>Imposta come ciclo attivo</button>
                     )}
                 </div>
-            )}
-
-            {isActive && cycle.startDate && (
-                <div style={{ marginBottom: '10px' }}>
-                    <div className="flex-between text-xs mb-4">
-                        <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>
-                            {timeline.statusLabel}
-                        </span>
-                        <span className="text-muted">
-                            {timeline.progressPercent}% completato
-                        </span>
-                    </div>
-                    <div style={{ height: '5px', background: 'var(--surface-light)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div
-                            style={{
-                                height: '100%',
-                                width: `${timeline.progressPercent}%`,
-                                background: 'var(--primary-color)',
-                                transition: 'width 0.3s ease'
-                            }}
-                        />
-                    </div>
-                </div>
-            )}
-
-            <div style={{ paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                {isActive ? (
-                    <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}
-                        onClick={() => onDeactivate(cycle.id)}
-                    >
-                        <span aria-hidden="true">⏸️</span> Disattiva ciclo
-                    </button>
-                ) : (
-                    <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        style={{ width: '100%', marginBottom: 0, fontSize: 'var(--font-size-meta)' }}
-                        onClick={() => onSetActive(cycle.id)}
-                    >
-                        <span aria-hidden="true">⭐</span> Imposta come ciclo attivo
-                    </button>
-                )}
             </div>
-        </div>
+        </article>
     );
 };
