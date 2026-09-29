@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
-import { getAnalyticsConsent } from './lib/analyticsConsent';
+import { getAnalyticsConsent, subscribeAnalyticsConsent } from './lib/analyticsConsent';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -96,11 +96,7 @@ function App() {
     setShowGuestLogin(false);
   };
 
-  useEffect(() => {
-    const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
-    window.addEventListener('analytics_consent_changed', handler);
-    return () => window.removeEventListener('analytics_consent_changed', handler);
-  }, []);
+  useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
 
   useEffect(() => {
     if (showGuestLogin && currentUser && !isGuest && guestMigrationStatus === 'idle' && !syncing) {

@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
-import { getAnalyticsConsent, setAnalyticsConsent } from '../lib/analyticsConsent';
+import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { StorageDiagnostics } from './Settings/StorageDiagnostics';
@@ -55,11 +55,7 @@ const SettingsView = () => {
     const storeRoutines = useAppStore(state => state.userData?.routines);
     const storeCycles = useAppStore(state => state.userData?.trainingCycles);
 
-    useEffect(() => {
-        const handler = () => setAnalyticsEnabled(getAnalyticsConsent());
-        window.addEventListener('analytics_consent_changed', handler);
-        return () => window.removeEventListener('analytics_consent_changed', handler);
-    }, []);
+    useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
 
     const handleAnalyticsToggle = () => {
         const newState = !analyticsEnabled;
