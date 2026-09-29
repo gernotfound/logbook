@@ -448,7 +448,7 @@ render(
      * SECTION 4: GRID-2 MEDIA QUERY SWITCH AT <= 360PX VIEWPORT STRESS
      * ========================================================================= */
     describe('4. .grid-2 Media Query Switch & Layout Verification', () => {
-        it('4.1: CycleEditor uses .grid-2 for responsive dual-column inputs with minWidth: 0', () => {
+        it('4.1: CycleEditor uses the scoped responsive planning grid', () => {
             const { container } = render(
                 <CycleEditor
                     routines={[
@@ -459,14 +459,13 @@ render(
                 />
             );
 
-            const gridContainers = container.querySelectorAll('.grid-2');
-            expect(gridContainers.length).toBeGreaterThanOrEqual(1);
-
-            for (const grid of gridContainers) {
-                const el = grid as HTMLElement;
-                expect(el.classList.contains('grid-2')).toBe(true);
-                expect(el.classList.contains('gap-15')).toBe(true);
-            }
+            expect(container.querySelector('.planning-editor-grid')).not.toBeNull();
+            const planningCss = fs.readFileSync(
+                path.resolve(__dirname, '../src/components/Training/planning/planning-redesign.css'),
+                'utf-8'
+            );
+            expect(planningCss).toMatch(/\.planning-editor-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+            expect(planningCss).toMatch(/@media\s*\(max-width:\s*23\.75rem\)[\s\S]*?\.planning-editor-grid\s*\{\s*grid-template-columns:\s*1fr/);
         });
 
         it('4.2: Utility stylesheet keeps the 360px grid override after wider viewport rules', () => {
@@ -583,7 +582,7 @@ render(
                 expect(fs.existsSync(absPath), `File ${relPath} must exist`).toBe(true);
                 const fileContent = fs.readFileSync(absPath, 'utf-8');
                 expect(
-                    /section-divider|tracking-panel|settings-system-card/.test(fileContent),
+                    /section-divider|tracking-panel|settings-system-card|planning-active-card|planning-cycle-archive/.test(fileContent),
                     `File ${relPath} should utilize a divider or panel surface`
                 ).toBe(true);
             }

@@ -73,12 +73,14 @@ describe('scala tipografica canonica', () => {
   it('mantiene nomi principali di righe e card sul token control', () => {
     const setup = fs.readFileSync(path.join(ROOT, 'src/components/Training/TrainingSessionSetup.tsx'), 'utf8');
     const cycleRoutines = fs.readFileSync(path.join(ROOT, 'src/components/Training/planning/CycleRoutinesList.tsx'), 'utf8');
+    const planningCss = fs.readFileSync(path.join(ROOT, 'src/components/Training/planning/planning-redesign.css'), 'utf8');
     const supplements = fs.readFileSync(path.join(ROOT, 'src/components/Nutrition/NutritionSupplements.tsx'), 'utf8');
     const dataHistory = fs.readFileSync(path.join(ROOT, 'src/components/Data/DataHistory.tsx'), 'utf8');
     const nutritionHistory = fs.readFileSync(path.join(ROOT, 'src/components/Nutrition/NutritionHistory.tsx'), 'utf8');
 
     expect(setup).toMatch(/nextScheduled\.nextRoutine\.name[\s\S]{0,220}font-size-control|font-size-control[\s\S]{0,220}nextScheduled\.nextRoutine\.name/);
-    expect(cycleRoutines).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,180}\{routine\?\.name/);
+    expect(cycleRoutines).toContain('className="planning-sequence-name"');
+    expect(planningCss).toMatch(/\.planning-sequence-name strong\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
     expect(supplements).toMatch(/fontSize:\s*'var\(--font-size-control\)'[^\n]*\{supp\.name\}/);
     expect(dataHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,220}Logic\.formatItalianDate/);
     expect(nutritionHistory).toMatch(/fontSize:\s*'var\(--font-size-control\)'[\s\S]{0,180}Logic\.formatItalianDate/);

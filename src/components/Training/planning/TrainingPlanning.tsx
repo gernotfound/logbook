@@ -217,6 +217,7 @@ export default function TrainingPlanning({ onOpenSession }: TrainingPlanningProp
                             <h2>{activeCycle.name}</h2>
                             <p>{activeCycleTimeline.formattedRange} · {activeCycle.durationWeeks} settimane</p>
                             <CycleStrategySummary strategy={activeCycle.strategy} />
+                            {activeCycle.notes ? <p className="planning-active-notes">{activeCycle.notes}</p> : null}
                         </div>
                         <ContextMenu items={activeMenuItems} />
                     </header>

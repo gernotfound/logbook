@@ -58,7 +58,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             tempWeeks,
             tempFreq
         },
-        computed: { schedule },
+        computed: { timeline, schedule },
         handlers: {
             handleDurationWeeksChange,
             handleStartDateTextChange,
@@ -68,6 +68,7 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
             handleEndDateTextBlur,
             handleEndCalendarDateChange,
             handleOpenStartCalendar,
+            handleOpenEndCalendar,
             handleAddRoutineById,
             handleMoveRoutine,
             handleRemoveRoutine,
@@ -163,25 +164,40 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
 
                 <label className="planning-field" htmlFor="cycle-end-date">
                     <span>Data di fine</span>
-                    <input
-                        id="cycle-end-date"
-                        type="text"
-                        value={endDateTextInput}
-                        onChange={handleEndDateTextChange}
-                        onBlur={handleEndDateTextBlur}
-                        readOnly
-                        aria-readonly="true"
-                    />
-                    <span className="planning-helper">Calcolata automaticamente dalla data iniziale e dalla durata.</span>
-                    <input
-                        ref={endDatePickerRef}
-                        className="planning-compat-date-input"
-                        type="date"
-                        value={endDate}
-                        onChange={handleEndCalendarDateChange}
-                        tabIndex={-1}
-                        aria-hidden="true"
-                    />
+                    <div className="planning-date-field">
+                        <input
+                            id="cycle-end-date"
+                            type="text"
+                            aria-label="Data di fine"
+                            placeholder="GG/MM/AAAA"
+                            value={endDateTextInput}
+                            onChange={handleEndDateTextChange}
+                            onBlur={handleEndDateTextBlur}
+                            onFocus={event => event.target.select()}
+                            required
+                        />
+                        <span className="planning-date-picker-wrap">
+                            <button
+                                type="button"
+                                className="planning-icon-button"
+                                onClick={handleOpenEndCalendar}
+                                title="Scegli data di fine dal calendario"
+                                aria-label="Scegli data di fine dal calendario"
+                            >
+                                <CalendarDays size={20} aria-hidden="true" />
+                            </button>
+                            <input
+                                ref={endDatePickerRef}
+                                className="planning-native-date-input"
+                                type="date"
+                                value={endDate}
+                                onChange={handleEndCalendarDateChange}
+                                tabIndex={-1}
+                                aria-label="Scegli data di fine dal calendario"
+                            />
+                        </span>
+                    </div>
+                    <span className="planning-helper">Si aggiorna automaticamente quando cambi data iniziale o durata.</span>
                 </label>
             </div>
 
@@ -198,6 +214,12 @@ export const CycleEditor: React.FC<CycleEditorProps> = ({
                     required
                 />
             </label>
+
+            <div className="planning-period-summary" role="status">
+                <span>Periodo programmato</span>
+                <strong>{timeline.formattedRange}</strong>
+                <span>({tempWeeks} {tempWeeks === 1 ? 'settimana' : 'settimane'})</span>
+            </div>
 
             <CycleStrategyFields
                 intent={strategyIntent}

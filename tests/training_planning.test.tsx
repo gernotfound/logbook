@@ -190,6 +190,8 @@ describe('Training Planning & Volume Calculations', () => {
             expect(screen.getAllByText(/Focus petto e spalle/).length).toBeGreaterThanOrEqual(1);
             expect(screen.getAllByText('Obiettivo non specificato').length).toBeGreaterThanOrEqual(1);
 
+            fireEvent.click(screen.getByRole('button', { name: 'Dettagli ciclo' }));
+
             // Muscle model present
             expect(document.querySelector('.muscle-map-container') || document.querySelector('svg')).toBeDefined();
 

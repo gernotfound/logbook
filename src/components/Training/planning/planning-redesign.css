@@ -154,6 +154,7 @@
 .planning-compat-date-input { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0; pointer-events: none; }
 
 .planning-helper,
+.planning-period-summary,
 .planning-section-copy p,
 .planning-cycle-period,
 .planning-cycle-notes,
@@ -164,6 +165,20 @@
   font-size: var(--font-size-meta);
   line-height: 1.4;
 }
+
+.planning-period-summary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: .25rem .5rem;
+  align-items: baseline;
+  padding: .625rem .75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control, .875rem);
+  background: var(--primary-soft);
+  color: var(--text-main);
+}
+.planning-period-summary strong { color: var(--primary-color); }
 
 .planning-sequence,
 .planning-rotation-preview,
@@ -330,6 +345,7 @@
   white-space: nowrap;
 }
 .planning-active-title > p { margin: .25rem 0; color: var(--text-muted); font-size: var(--font-size-meta); }
+.planning-active-notes { margin: .375rem 0 0; color: var(--text-muted); font-size: var(--font-size-meta); font-style: italic; }
 
 .planning-next-session {
   display: grid;
