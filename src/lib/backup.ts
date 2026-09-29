@@ -33,16 +33,22 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const arrays = ['library', 'routines', 'history', 'customFoods', 'trainingCycles', 'supplements'] as const;
 
+const normalizeImportEntityId = (id: unknown): string | null => {
+    if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
+    if (typeof id !== 'string') return null;
+    const normalized = id.trim();
+    if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
+    return normalized;
+};
+
 export function validateImportData(value: unknown): asserts value is Record<string, unknown> {
     if (!isRecord(value)) throw new Error('Dati del backup non validi. Il file originale non è stato modificato.');
     const checkIds = (items: unknown, path: string) => {
         if (!Array.isArray(items)) throw new Error(`${path}: atteso un elenco.`);
         const ids = new Set<string>();
         for (const item of items) {
-            if (!isRecord(item) || !((typeof item.id === 'string' && item.id.trim()) || (typeof item.id === 'number' && Number.isFinite(item.id)))) {
-                throw new Error(`${path}: elemento senza identificativo valido.`);
-            }
-            const id = String(item.id);
+            const id = isRecord(item) ? normalizeImportEntityId(item.id) : null;
+            if (!id) throw new Error(`${path}: elemento senza identificativo valido.`);
             if (ids.has(id)) throw new Error(`${path}: identificativo duplicato ${id}.`);
             ids.add(id);
         }
