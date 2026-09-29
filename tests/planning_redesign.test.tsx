@@ -2,7 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CycleEditor } from '../src/components/Training/planning/CycleEditor';
 import { calculateCycleMacroVolume } from '../src/components/Training/planning/cycleMacroVolume';
-import type { Exercise, WorkoutRoutine } from '../src/types';
+import { applyDomainOperations } from '../src/lib/sync/domainOperations';
+import { UserDataSchema } from '../src/lib/schema';
+import type { Exercise, UserData, WorkoutRoutine } from '../src/types';
 
 const routines: WorkoutRoutine[] = [
     {
@@ -77,6 +79,25 @@ describe('Pianificazione redesign', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Chiudi' }));
         expect(onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('non conserva volume pianificato per un esercizio eliminato esplicitamente', () => {
+        const before = UserDataSchema.parse({
+            library,
+            routines,
+            trainingCycles: [{
+                id: 'cycle-delete',
+                name: 'Delete regression',
+                durationWeeks: 4,
+                sessionsPerWeek: 1,
+                routines: [{ routineId: 'upper', frequencyPerWeek: 1 }],
+            }],
+        }) as unknown as UserData;
+        const after = applyDomainOperations(before, { type: 'exercise.delete', id: 'bench' });
+        const cycle = after.trainingCycles?.[0];
+
+        expect(after.routines?.find(routine => routine.id === 'upper')?.exercises).toEqual([]);
+        expect(calculateCycleMacroVolume(cycle, after.routines ?? [], after.library ?? [])).toEqual([]);
     });
 
     it('calcola il volume per macroarea senza contare due volte due porzioni dello stesso esercizio', () => {
