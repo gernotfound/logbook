@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { useTrainingRoutines } from '../../hooks/useTrainingRoutines';
 import { RoutineEditor } from './routines/RoutineEditor';
 import { RoutineCard } from './routines/RoutineCard';
@@ -65,8 +65,8 @@ const TrainingRoutines: React.FC = () => {
                         aria-controls="routine-creation-form"
                         disabled={isSaving}
                     >
-                        <span className="routine-create-assistive">Crea scheda</span>
-                        <span aria-hidden="true">+ Crea</span>
+                        <Plus size={18} aria-hidden="true" />
+                        <span>Crea</span>
                     </button>
                 )}
             </header>
