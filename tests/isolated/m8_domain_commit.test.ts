@@ -197,12 +197,13 @@ describe('M8 domain commit durability', () => {
             routines: [{ id: 'r1', name: 'Upper', exercises: [{ exId: 'e-keep', setsCount: 3 }] }],
         }) as unknown as UserData;
         await initializeLocal('user:a', initial);
+        const beforeFailure = await readLocal('user:a');
 
         await expect(commitDomainOperations('user:a', { type: 'exercise.delete', id: 'invalid/id' }, initial))
             .rejects.toThrow(/identificativo non valido/i);
 
         const stored = await readLocal('user:a');
-        expect(stored?.data).toEqual(initial);
+        expect(stored).toEqual(beforeFailure);
         expect(stored?.actorSeq).toBe(0);
         expect(stored?.revision).toBe(0);
         expect(stored?.pending).toEqual([]);
