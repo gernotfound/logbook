@@ -2291,10 +2291,27 @@
   justify-self: end;
 }
 
-.session-exercise-card-content > div[style*="danger-soft"] {
-  border-left-color: var(--primary-color) !important;
-  background: var(--primary-soft) !important;
-  color: var(--text-muted) !important;
+.session-previous-note {
+  display: flex;
+  align-items: flex-start;
+  gap: .375rem;
+  margin-bottom: .75rem;
+  padding: .625rem;
+  border-left: .1875rem solid var(--primary-color);
+  border-radius: var(--radius-control);
+  background: var(--primary-soft);
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+  line-height: 1.4;
+}
+
+.session-previous-note > svg {
+  margin-top: .0625rem;
+  color: var(--primary-color);
+}
+
+.session-previous-note b {
+  color: var(--text-main);
 }
 
 .session-next-note-toggle {
