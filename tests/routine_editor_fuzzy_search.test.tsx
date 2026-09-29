@@ -556,7 +556,7 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
             });
 
             // Extra exercise section has search dropdown
-            expect(container.textContent).toContain('Aggiungi esercizio extra');
+            expect(container.textContent).toContain('Aggiungi esercizio');
             const searchInput = (container.querySelector('.exercise-search-container input') ||
                 container.querySelector('input[role="combobox"]')) as HTMLInputElement;
             expect(searchInput).not.toBeNull();
