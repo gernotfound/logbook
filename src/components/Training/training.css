@@ -2103,7 +2103,7 @@
 
 .session-exercise-shell {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   background: var(--surface-color);
