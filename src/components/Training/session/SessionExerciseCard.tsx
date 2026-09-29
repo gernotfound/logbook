@@ -400,15 +400,19 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <span>{exItem.sessionNote?.trim() ? 'Modifica nota per la prossima volta' : 'Aggiungi nota per la prossima volta'}</span>
                 <span aria-hidden="true">{isNextNoteOpen ? '−' : '+'}</span>
             </button>
-            {isNextNoteOpen && (
-                <BufferedTextarea
-                    placeholder="Note per la prossima volta (dolori, feedback)..."
-                    value={exItem.sessionNote || ''}
-                    onChange={val => onUpdateSessionNote(exIndex, val)}
-                    className="session-next-note-editor"
-                    style={{ width: '100%', fontSize: '16px', resize: 'vertical', boxSizing: 'border-box' }}
-                />
-            )}
+            <BufferedTextarea
+                placeholder="Note per la prossima volta (dolori, feedback)..."
+                value={exItem.sessionNote || ''}
+                onChange={val => onUpdateSessionNote(exIndex, val)}
+                className="session-next-note-editor"
+                style={{
+                    width: '100%',
+                    fontSize: '16px',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    display: isNextNoteOpen ? 'block' : 'none',
+                }}
+            />
         </div>
     );
 };
