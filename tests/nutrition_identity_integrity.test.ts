@@ -95,7 +95,7 @@ describe('F-003 nutrition identity integrity', () => {
         expect(day?.supplementsIntake?.map(item => item.id)).toEqual(['intake-ok']);
 
         const projected = projectDocuments(hydrated, catalog);
-        const projectedDay = projected.get('nutrition_months/2026-09')?.['2026-09-29'] as typeof malformedDay;
+        const projectedDay = projected.get('nutrition_months/2026-09')?.['2026-09-29'] as any;
         expect(projectedDay.meals.map(item => item.id)).toEqual(['meal-ok']);
         expect(projectedDay.supplementsIntake.map(item => item.id)).toEqual(['intake-ok']);
     });
