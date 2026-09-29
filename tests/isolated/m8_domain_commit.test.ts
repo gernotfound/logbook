@@ -143,6 +143,71 @@ describe('M8 domain commit durability', () => {
         expect(synchronized.nutrition?.['2026-09-24']).toMatchObject({ steps: 12345, cardioSessions: [{ id: 'cardio-1', durationMinutes: 35 }] });
     });
 
+    it('persists exercise deletion and routine cleanup atomically in one envelope revision', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const { projectDocuments, applyRemoteDocuments } = await import('../../src/lib/sync/documentProjection');
+        const { applySemanticOperations } = await import('../../src/lib/sync/semanticProjection');
+        const initial = UserDataSchema.parse({
+            library: [
+                { id: 'e-delete', name: 'Da eliminare', setsCount: 3, sets: [] },
+                { id: 'e-keep', name: 'Da mantenere', setsCount: 3, sets: [] },
+            ],
+            routines: [
+                {
+                    id: 'r1',
+                    name: 'Upper',
+                    exercises: [
+                        { exId: 'e-delete', setsCount: 3 },
+                        { exId: 'e-keep', setsCount: 4 },
+                    ],
+                },
+                { id: 'r2', name: 'Full body', exercises: [{ exId: 'e-delete', setsCount: 2 }] },
+            ],
+            history: [{
+                id: 'w1',
+                date: '2026-09-20',
+                exercises: [{ exId: 'e-delete', sessionNote: '', sets: [] }],
+            }],
+        }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+
+        const result = await commitDomainOperations('user:a', { type: 'exercise.delete', id: 'e-delete' }, initial);
+        const stored = await readLocal('user:a');
+
+        expect(result.data.library?.map(item => item.id)).toEqual(['e-keep']);
+        expect(stored?.data.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))).toEqual([['e-keep'], []]);
+        expect(stored?.data.history?.[0]?.exercises[0]?.exId).toBe('e-delete');
+        expect(stored?.actorSeq).toBe(1);
+        expect(stored?.revision).toBe(1);
+        expect(stored?.pending).toEqual(result.operations);
+        expect(stored?.pending.some(operation => operation.path[0] === 'library')).toBe(true);
+        expect(stored?.pending.some(operation => operation.path[0] === 'routines')).toBe(true);
+
+        const replayed = applySemanticOperations(projectDocuments(initial, catalog), stored?.pending ?? []).documents;
+        const synchronized = applyRemoteDocuments(initial, replayed, catalog);
+        expect(synchronized.library?.map(item => item.id)).toEqual(['e-keep']);
+        expect(synchronized.routines?.map(routine => routine.exercises.map(exercise => exercise.exId))).toEqual([['e-keep'], []]);
+        expect(synchronized.history?.[0]?.exercises[0]?.exId).toBe('e-delete');
+    });
+
+    it('keeps the durable envelope unchanged when exercise deletion is rejected before commit', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = UserDataSchema.parse({
+            library: [{ id: 'e-keep', name: 'Da mantenere', setsCount: 3, sets: [] }],
+            routines: [{ id: 'r1', name: 'Upper', exercises: [{ exId: 'e-keep', setsCount: 3 }] }],
+        }) as unknown as UserData;
+        await initializeLocal('user:a', initial);
+
+        await expect(commitDomainOperations('user:a', { type: 'exercise.delete', id: 'invalid/id' }, initial))
+            .rejects.toThrow(/identificativo non valido/i);
+
+        const stored = await readLocal('user:a');
+        expect(stored?.data).toEqual(initial);
+        expect(stored?.actorSeq).toBe(0);
+        expect(stored?.revision).toBe(0);
+        expect(stored?.pending).toEqual([]);
+    });
+
     it('does not enqueue cloud journal operations for guest ownership', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();
