@@ -80,7 +80,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
             } else {
                 // If we DON'T have a local workout, but the network gives us one, we can adopt it.
                 if (rawNextData.activeWorkout !== undefined) {
-                    syncedLocalWorkout = DomainParsers.parseActiveWorkout(rawNextData.activeWorkout) as UserData['activeWorkout'];
+                    syncedLocalWorkout = DomainParsers.parseActiveWorkout(rawNextData.activeWorkout) ?? null;
                     if (syncedLocalWorkout) {
                         try {
                             writeDeviceValue('workout', JSON.stringify(syncedLocalWorkout));
