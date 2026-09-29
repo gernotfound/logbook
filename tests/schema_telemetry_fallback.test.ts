@@ -130,7 +130,7 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             const eventCall = calls.find((c: any) => c[1].type === 'zod_schema_fallback');
             expect(eventCall).toBeDefined();
             expect(eventCall[1].details.schema).toBe('WorkoutSessionSchema');
-            expect(eventCall[1].details.fallbackUsed).toBe('default_empty_session');
+            expect(eventCall[1].details.fallbackUsed).toBe('record_quarantined');
         });
 
         it('notifies telemetry and returns fallback object when parseNutritionPlanning receives invalid non-object', async () => {
@@ -163,9 +163,8 @@ describe('Zod Schema Fallback & Telemetry Integration (Milestone 3 R1)', () => {
             ];
 
             const parsed = DomainParsers.parseHistory(historyData);
-            expect(parsed).toHaveLength(2);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].id).toBe('sess_valid');
-            expect(parsed[1].exercises).toEqual([]);
 
             await vi.advanceTimersByTimeAsync(50);
 

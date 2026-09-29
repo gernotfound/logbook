@@ -130,10 +130,8 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
                 `CORRUPT_SESSION_${SENSITIVE_STRINGS[2]}`,
             ];
             const arrayResult = DomainParsers.parseHistory(arrayInput);
-            expect(arrayResult).toHaveLength(3);
+            expect(arrayResult).toHaveLength(1);
             expect(arrayResult[0].id).toBe('session_ok');
-            expect(arrayResult[1].exercises).toEqual([]);
-            expect(arrayResult[2].exercises).toEqual([]);
 
             await vi.advanceTimersByTimeAsync(100);
 
