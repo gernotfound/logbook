@@ -2548,3 +2548,33 @@
   color: var(--text-muted);
   font-size: var(--font-size-micro);
 }
+
+
+.session-rotation-picker {
+  display: grid;
+  gap: .5rem;
+  margin-top: .625rem;
+}
+
+.session-rotation-picker label {
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+  font-weight: 600;
+}
+
+.session-rotation-picker select {
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: .5rem .75rem;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  background: var(--surface-light);
+  color: var(--text-main);
+  font-size: 16px !important;
+}
+
+.session-rotation-picker .session-secondary-action {
+  margin-top: 0;
+}
