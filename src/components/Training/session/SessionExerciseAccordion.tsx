@@ -32,7 +32,7 @@ const SessionExerciseAccordion = (props: SessionExerciseAccordionProps) => {
         : [];
 
     const summaryParts = [
-        `${setsCount} ${setsCount === 1 ? 'serie' : 'serie'}`,
+        `${setsCount} serie`,
         range,
         primaryMuscles.length > 0 ? `Primari: ${primaryMuscles.join(' · ')}` : '',
     ].filter(Boolean);
@@ -58,7 +58,7 @@ const SessionExerciseAccordion = (props: SessionExerciseAccordionProps) => {
             >
                 <span className="session-exercise-index" aria-hidden="true">{exIndex + 1}</span>
                 <span className="session-exercise-summary-copy">
-                    <span className="session-exercise-name">{exerciseName}</span>
+                    <span className="session-exercise-name" role="heading" aria-level={3}>{exerciseName}</span>
                     <span className="session-exercise-meta">{summaryParts.join(' · ')}</span>
                 </span>
                 <span className="session-exercise-disclosure" aria-hidden="true">
