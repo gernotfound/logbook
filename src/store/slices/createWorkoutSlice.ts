@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { Logic } from '../../lib/logic';
-import { WorkoutSessionSchema } from '../../lib/schema';
+import { DomainParsers } from '../../lib/schema';
 import type { WorkoutSession, SessionExercise, SessionExerciseSet, SyncResult } from '../../types';
 import { DEBOUNCE_DELAY_LOCAL } from '../../constants';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
@@ -55,8 +55,9 @@ export const getInitialLocalWorkout = (): WorkoutSession | null => {
         if (!saved) return null;
         const parsed = JSON.parse(saved);
         if (!parsed || typeof parsed !== 'object') return null;
-        const validated = WorkoutSessionSchema.parse(parsed) as unknown as WorkoutSession;
-        if (validated && Array.isArray(validated.exercises)) {
+        const validated = DomainParsers.parseActiveWorkout(parsed) as WorkoutSession | null;
+        if (!validated) return null;
+        if (Array.isArray(validated.exercises)) {
             validated.exercises = validated.exercises.map((ex: SessionExercise) => ({
                 ...ex,
                 id: ex.id || Logic.generateId('se'),
