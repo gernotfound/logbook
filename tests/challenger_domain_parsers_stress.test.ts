@@ -139,7 +139,7 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
             expect(parsed[0].id).toBe('h1');
         });
 
-        it('sanitizes individual corrupted items inside history array using sub-schema fallbacks', () => {
+        it('quarantines corrupted history items without a valid business identity', () => {
             const dirtyHistory = [
                 { id: 'h1', date: '2026-08-01', exercises: [{ exId: 'e1', sets: [] }] },
                 { invalid: 'session', corrupted: true },
@@ -148,12 +148,9 @@ describe('Challenger 2: DomainParsers Adversarial Stress Testing', () => {
                 null
             ];
             const parsed = DomainParsers.parseHistory(dirtyHistory);
-            expect(parsed).toHaveLength(5);
+            expect(parsed).toHaveLength(1);
             expect(parsed[0].id).toBe('h1');
-            expect(Array.isArray(parsed[1].exercises)).toBe(true);
-            expect(Array.isArray(parsed[2].exercises)).toBe(true);
-            expect(Array.isArray(parsed[3].exercises)).toBe(true);
-            expect(Array.isArray(parsed[4].exercises)).toBe(true);
+            expect(Array.isArray(parsed[0].exercises)).toBe(true);
         });
 
         it('returns empty array (defensive fallback) when non-array is passed to parseHistory', () => {
