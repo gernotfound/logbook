@@ -7,6 +7,7 @@ import SessionSetRow from '../src/components/Training/session/SessionSetRow';
 import { getRoutineDurationEstimate } from '../src/components/Training/session/sessionDurationEstimate';
 import { useDialogStore } from '../src/store/useDialogStore';
 import type { WorkoutSession } from '../src/types';
+import { sessionSetHasMeaningfulData } from '../src/lib/workoutSetData';
 
 const baseExerciseProps = {
     exItem: {
@@ -81,6 +82,83 @@ describe('training session redesign', () => {
 
         fireEvent.click(summary);
         expect(summary.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('shows a previous note only when the immediately preceding session has one', () => {
+        const { rerender } = render(
+            <SessionExerciseCard
+                {...baseExerciseProps}
+                pastWorkouts={[
+                    { date: '2026-09-30', sets: [], note: '   ' },
+                    { date: '2026-09-28', sets: [], note: 'Nota più vecchia' },
+                ]}
+            />,
+        );
+
+        expect(screen.queryByText(/Nota dall’ultima sessione:/i)).toBeNull();
+        expect(screen.queryByText('Nota più vecchia')).toBeNull();
+
+        rerender(
+            <SessionExerciseCard
+                {...baseExerciseProps}
+                pastWorkouts={[
+                    { date: '2026-09-30', sets: [], note: 'Mantieni il fermo al petto' },
+                    { date: '2026-09-28', sets: [], note: 'Nota più vecchia' },
+                ]}
+            />,
+        );
+
+        expect(screen.getByText(/Nota dall’ultima sessione:/i)).toBeDefined();
+        expect(screen.getByText(/Mantieni il fermo al petto/i)).toBeDefined();
+    });
+
+    it('renders cardio history with cardio metrics instead of weight and reps', () => {
+        render(
+            <SessionExerciseCard
+                {...baseExerciseProps}
+                libDef={{ ...baseExerciseProps.libDef, trackingType: 'cardio' }}
+                exItem={{ ...baseExerciseProps.exItem, sets: [{ id: 'cardio-set-1', kg: '', reps: '', time: '', distance: '' }] }}
+                isHistoryOpen
+                pastWorkouts={[
+                    {
+                        date: '2026-09-29',
+                        note: '',
+                        sets: [{ id: 'past-cardio', time: '30', distance: '5', speed: '10', incline: '2', kcal: '320' }],
+                    },
+                ]}
+            />,
+        );
+
+        expect(screen.getByText(/30 min · 5 km · 10 km\/h · 2% incl\. · 320 kcal/i)).toBeDefined();
+        expect(screen.queryByText(/\? kg × \?/i)).toBeNull();
+    });
+
+    it('disables impossible exercise position controls', () => {
+        const { rerender } = render(
+            <SessionExerciseCard
+                {...baseExerciseProps}
+                totalExercises={1}
+            />,
+        );
+
+        expect((screen.getByRole('button', { name: 'Cambia posizione esercizio' }) as HTMLButtonElement).disabled).toBe(true);
+
+        rerender(
+            <SessionExerciseCard
+                {...baseExerciseProps}
+                totalExercises={2}
+            />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Cambia posizione esercizio' }));
+
+        expect((screen.getByRole('button', { name: /✓ 1ª posizione/i }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('uses one consistent definition for empty and meaningful set data', () => {
+        expect(sessionSetHasMeaningfulData({ id: 'blank', kg: '', reps: '' })).toBe(false);
+        expect(sessionSetHasMeaningfulData({ id: 'zero', kg: '0,0', reps: '0.00' })).toBe(false);
+        expect(sessionSetHasMeaningfulData({ id: 'rir-zero', kg: '', reps: '', rir: 0 })).toBe(true);
+        expect(sessionSetHasMeaningfulData({ id: 'advanced', kg: '', reps: '', technique: 'dropset' })).toBe(true);
     });
 
     it('keeps the note for the next session compact until requested', () => {

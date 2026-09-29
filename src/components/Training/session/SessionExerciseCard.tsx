@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Trash2, Settings, AlertTriangle } from 'lucide-react';
+import { Trash2, Settings, MessageSquareText, History } from 'lucide-react';
 import { useDialogStore } from '../../../store/useDialogStore';
 import SessionSetRow from './SessionSetRow';
 import { BufferedInput, BufferedTextarea } from '../../UI/BufferedInput';
+import { sessionSetHasMeaningfulData } from '../../../lib/workoutSetData';
 
 interface SessionExerciseCardProps {
     exItem: any;
@@ -61,7 +62,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
 }) => {
     const exName = libDef ? libDef.name : "Esercizio rimosso";
     const exNotes = libDef ? (libDef.notes || '') : "";
-    const lastNote = pastWorkouts.find(p => p.note && p.note.trim() !== '')?.note || '';
+    const lastNote = pastWorkouts[0]?.note?.trim() || '';
 
     const [showPositionMenu, setShowPositionMenu] = React.useState(false);
     const [isNextNoteOpen, setIsNextNoteOpen] = React.useState(Boolean(exItem.sessionNote?.trim()));
@@ -91,26 +92,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
         const lastIndex = sets.length - 1;
         const lastSet = sets[lastIndex];
 
-        const checkVal = (v: any) => {
-            if (v === undefined || v === null) return false;
-            const s = String(v).trim();
-            if (s === '' || s === '0') return false;
-            const n = Number(s.replace(',', '.'));
-            return isNaN(n) ? true : n !== 0;
-        };
-        const isFilled =
-            checkVal(lastSet.kg) ||
-            checkVal(lastSet.weight) ||
-            checkVal(lastSet.reps) ||
-            checkVal(lastSet.time) ||
-            checkVal(lastSet.timeInSeconds) ||
-            checkVal(lastSet.distance) ||
-            checkVal(lastSet.speed) ||
-            checkVal(lastSet.incline) ||
-            checkVal(lastSet.kcal) ||
-            lastSet.rir !== undefined ||
-            (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
-            (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds)));
+        const isFilled = sessionSetHasMeaningfulData(lastSet);
 
         if (isFilled) {
             const confirmed = await useDialogStore.getState().showConfirm(
@@ -156,7 +138,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         className="btn-small"
                         style={{ borderRadius: '8px', minWidth: '44px', minHeight: '44px', fontWeight: 'bold', fontSize: 'var(--font-size-meta)', letterSpacing: '0.03em', color: 'var(--text-main)' }}
                         onClick={() => setShowPositionMenu(v => !v)}
+                        disabled={totalExercises !== undefined && totalExercises <= 1}
                         aria-label="Cambia posizione esercizio"
+                        title={totalExercises !== undefined && totalExercises <= 1 ? 'Unico esercizio nella sessione' : 'Cambia posizione esercizio'}
                     >#{exIndex + 1}</button>
                     {showPositionMenu && totalExercises !== undefined && totalExercises > 1 && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: 'var(--surface-color)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '4px', minWidth: '140px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginTop: '4px' }}>
@@ -165,8 +149,10 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     key={targetIdx}
                                     type="button"
                                     onClick={() => { setShowPositionMenu(false); if (targetIdx !== exIndex) onMoveToPosition?.(exIndex, targetIdx); }}
+                                    disabled={targetIdx === exIndex}
+                                    aria-current={targetIdx === exIndex ? 'true' : undefined}
                                     style={{
-                                        display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                                        display: 'block', width: '100%', minHeight: '44px', padding: '8px 12px', textAlign: 'left',
                                         background: targetIdx === exIndex ? 'var(--primary-soft)' : 'transparent',
                                         border: 'none', color: targetIdx === exIndex ? 'var(--primary-color)' : 'var(--text-main)',
                                         cursor: targetIdx === exIndex ? 'default' : 'pointer', fontSize: 'var(--font-size-meta)', borderRadius: '6px'
@@ -194,7 +180,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     aria-expanded={isHistoryOpen}
                     aria-controls={`session-history-${exIndex}`}
                 >
-                    🕒 Storico
+                    <History size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Storico
                 </button>
                 <button
                     type="button"
@@ -207,13 +193,6 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <Settings size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} /> Setup
                 </button>
             </div>
-
-            {(exItem.minReps || exItem.maxReps) && (
-                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginBottom: '15px' }}>
-                    Rep min: {exItem.minReps || '-'} | Rep max: {exItem.maxReps || '-'}
-                </div>
-            )}
-            {!(exItem.minReps || exItem.maxReps) && <div style={{ marginBottom: '15px' }}></div>}
 
             {isHistoryOpen && (
                 <div id={`session-history-${exIndex}`} style={{ padding: '12px', background: 'var(--surface-light)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--glass-border)' }}>
@@ -237,9 +216,21 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                                     const displayTime = s.time !== null && s.time !== undefined && s.time !== '' ? s.time : '?';
                                     const displayRir = Number.isInteger(s.rir) && s.rir >= 0 && s.rir <= 10 ? s.rir : undefined;
 
+                                    const cardioDetails = libDef?.trackingType === 'cardio'
+                                        ? [
+                                            s.time ? `${s.time} min` : '',
+                                            s.distance ? `${s.distance} km` : '',
+                                            s.speed ? `${s.speed} km/h` : '',
+                                            s.incline ? `${s.incline}% incl.` : '',
+                                            s.kcal ? `${s.kcal} kcal` : '',
+                                        ].filter(Boolean)
+                                        : [];
+
                                     return (
                                         <span key={sIdx} style={{ fontSize: 'var(--font-size-meta)', marginRight: '15px', display: 'inline-block' }}>
-                                            S{sIdx + 1}: {libDef?.trackingType === 'time' ? (
+                                            S{sIdx + 1}: {libDef?.trackingType === 'cardio' ? (
+                                                <b>{cardioDetails.length > 0 ? cardioDetails.join(' · ') : 'Nessun dato registrato'}</b>
+                                            ) : libDef?.trackingType === 'time' ? (
                                                 <><b>{s.kg ? s.kg + 'kg ' : ''}</b>⏱️ <b>{displayTime}</b></>
                                             ) : (
                                                 <><b>{displayKg}</b> kg × <b>{displayReps}</b>{displayRir !== undefined && <> · <b>{displayRir} RIR</b></>}</>
@@ -277,8 +268,9 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
             )}
 
             {lastNote && (
-                <div style={{ background: 'var(--danger-soft)', padding: '10px', borderRadius: '8px', borderLeft: '3px solid var(--danger-color)', fontSize: 'var(--font-size-meta)', marginBottom: '15px', color: 'var(--danger-color)' }}>
-                    <AlertTriangle size={16} aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px', color: 'var(--warning-color)' }} /> <b>Note scorsa volta:</b> {lastNote}
+                <div className="session-previous-note">
+                    <MessageSquareText size={18} aria-hidden="true" />
+                    <span><b>Nota dall’ultima sessione:</b> {lastNote}</span>
                 </div>
             )}
 

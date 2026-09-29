@@ -40,6 +40,10 @@ describe('post-redesign UI hardening', () => {
     expect(training).toMatch(/\.exercise-search-wrap > \.exercise-search-input,[\s\S]*?\.exercise-muscle-search-wrap > \.exercise-muscle-search-input\s*\{[^}]*margin:\s*0[^}]*padding:\s*\.625rem 2\.75rem \.625rem 2\.875rem/);
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-btn\s*\{[^}]*font-size:\s*var\(--font-size-meta\)/);
     expect(training).toMatch(/#view-training > \.sub-nav-shell \.sub-nav-edge\s*\{[^}]*display:\s*none/);
+    expect(training).toMatch(/\.session-routine-copy strong\s*\{[^}]*font-size:\s*var\(--font-size-control\)/);
+    expect(training).toMatch(/\.session-advanced-segment-grid\.with-rest\s*\{[^}]*grid-template-columns:\s*4\.75rem minmax\(0, 1fr\) minmax\(0, 1fr\) 2\.75rem/);
+    expect(training).toMatch(/\.session-exercise-shell\s*\{[^}]*overflow:\s*visible/);
+    expect(training).toMatch(/@media \(max-width:\s*24\.375rem\)[\s\S]*?\.session-advanced-segment-grid\.with-rest,[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   });
 
   it('keeps Schede grid spacing active instead of being overridden by the generic sub-view rule', () => {
@@ -121,7 +125,7 @@ describe('post-redesign UI hardening', () => {
     expect(search).toContain("color: isHighlighted ? 'var(--on-primary)' : 'var(--text-main)'");
     expect(search).not.toMatch(/rgba\((?:255\s*,\s*255\s*,\s*255|46\s*,\s*204\s*,\s*113|255\s*,\s*183\s*,\s*3|0\s*,\s*229\s*,\s*255)/);
     expect(search).not.toContain('#000000');
-    expect(setCard).toContain("background: 'var(--danger-soft)'");
+    expect(setCard).toContain('className="session-previous-note"');
     expect(setCard).not.toContain('#fca5a5');
     expect(ratings).not.toMatch(/background:\s*pains\.length[^\n]*rgba\(255\s*,\s*255\s*,\s*255/);
   });

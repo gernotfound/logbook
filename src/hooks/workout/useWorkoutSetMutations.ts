@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Logic } from '../../lib/logic';
 import { useAppStore } from '../../store/useAppStore';
 import type { WorkoutSession } from '../../types';
+import { sessionSetHasMeaningfulData } from '../../lib/workoutSetData';
 
 interface UseWorkoutSetMutationsProps {
     setLocalWorkout: (updater: (prev: WorkoutSession | null) => WorkoutSession | null) => void;
@@ -244,28 +245,7 @@ export function useWorkoutSetMutations({ setLocalWorkout, showConfirm }: UseWork
         const setsCount = ex.sets.length;
         const lastSet: any = ex.sets[setsCount - 1];
 
-        const checkVal = (v: any) => {
-            if (v === undefined || v === null) return false;
-            const s = String(v).trim();
-            if (s === '' || s === '0') return false;
-            const n = Number(s.replace(',', '.'));
-            return isNaN(n) ? true : n !== 0;
-        };
-        const isFilled =
-            checkVal(lastSet.kg) ||
-            checkVal(lastSet.weight) ||
-            checkVal(lastSet.reps) ||
-            checkVal(lastSet.time) ||
-            checkVal(lastSet.timeInSeconds) ||
-            checkVal(lastSet.distance) ||
-            checkVal(lastSet.speed) ||
-            checkVal(lastSet.incline) ||
-            checkVal(lastSet.kcal) ||
-            lastSet.rir !== undefined ||
-            (Array.isArray(lastSet.dropsets) && lastSet.dropsets.some((ds: any) => checkVal(ds.kg) || checkVal(ds.weight) || checkVal(ds.reps))) ||
-            (Array.isArray(lastSet.isometrics) && lastSet.isometrics.some((iso: any) => checkVal(iso.kg) || checkVal(iso.weight) || checkVal(iso.time) || checkVal(iso.timeInSeconds))) ||
-            (Array.isArray(lastSet.segments) && lastSet.segments.some((segment: any) => checkVal(segment.kg) || checkVal(segment.reps) || checkVal(segment.time) || segment.restBeforeSeconds !== undefined || segment.target !== undefined)) ||
-            lastSet.target !== undefined;
+        const isFilled = sessionSetHasMeaningfulData(lastSet);
 
         if (isFilled) {
             const ok = await showConfirm("La serie contiene dei dati. Vuoi davvero rimuoverla?");

@@ -1923,7 +1923,7 @@
 
 .session-routine-copy strong {
   color: var(--text-main);
-  font-size: var(--font-size-secondary);
+  font-size: var(--font-size-control);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2103,7 +2103,7 @@
 
 .session-exercise-shell {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-card);
   background: var(--surface-color);
@@ -2222,6 +2222,11 @@
   font-size: var(--font-size-micro) !important;
 }
 
+.session-exercise-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
 .session-exercise-card-content .set-row {
   min-width: 0;
   gap: .5rem !important;
@@ -2267,10 +2272,46 @@
   color: var(--danger-color) !important;
 }
 
-.session-exercise-card-content > div[style*="danger-soft"] {
-  border-left-color: var(--primary-color) !important;
-  background: var(--primary-soft) !important;
-  color: var(--text-muted) !important;
+.session-advanced-segment-grid {
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  gap: .3125rem;
+}
+
+.session-advanced-segment-grid.with-rest {
+  grid-template-columns: 4.75rem minmax(0, 1fr) minmax(0, 1fr) 2.75rem;
+}
+
+.session-advanced-segment-grid.compact {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2.75rem;
+}
+
+.session-advanced-segment-grid > .btn-icon {
+  justify-self: end;
+}
+
+.session-previous-note {
+  display: flex;
+  align-items: flex-start;
+  gap: .375rem;
+  margin-bottom: .75rem;
+  padding: .625rem;
+  border-left: .1875rem solid var(--primary-color);
+  border-radius: var(--radius-control);
+  background: var(--primary-soft);
+  color: var(--text-muted);
+  font-size: var(--font-size-meta);
+  line-height: 1.4;
+}
+
+.session-previous-note > svg {
+  margin-top: .0625rem;
+  color: var(--primary-color);
+}
+
+.session-previous-note b {
+  color: var(--text-main);
 }
 
 .session-next-note-toggle {
@@ -2473,6 +2514,15 @@
 
   .session-exercise-card-content .set-row > div:nth-child(2) {
     gap: .3125rem !important;
+  }
+
+  .session-advanced-segment-grid.with-rest,
+  .session-advanced-segment-grid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .session-advanced-segment-grid > .btn-icon {
+    justify-self: start;
   }
 
   .session-finish-row {
