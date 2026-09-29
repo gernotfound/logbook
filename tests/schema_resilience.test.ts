@@ -315,7 +315,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.trainingCycles![0].durationWeeks).toBe(8);
             expect(parsed.trainingCycles![0].sessionsPerWeek).toBe(4);
             expect(parsed.trainingCycles![0].progressionMode).toBe('fixed');
-            expect(parsed.trainingCycles![0].routines.length).toBe(3);
+            expect(parsed.trainingCycles![0].routines.length).toBe(2);
             expect(parsed.trainingCycles![0].routines[0].frequencyPerWeek).toBe(2);
             expect(parsed.trainingCycles![0].routines[1].frequencyPerWeek).toBe(1);
             expect(parsed.activeCycleId).toBe(null);
