@@ -62,19 +62,7 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
         const typeInfo = (expectedType && receivedType) ? ` (expected ${expectedType}, received ${receivedType})` : '';
         const syntheticMessage = `Zod fallback in ${ctx.schema} [${safeField}]: ${safeIssueCode}${typeInfo}`;
 
-        // 1. Dispatch Telemetry Event (without raw corrupted values or PII)
-        if (typeof telemetryHub.trackEvent === 'function') {
-            telemetryHub.trackEvent('zod_schema_fallback', {
-                schema: ctx.schema,
-                field: safeField,
-                issueCode: safeIssueCode,
-                expectedType: expectedType || 'unknown',
-                receivedType: receivedType || 'unknown',
-                fallbackUsed: safeFallback,
-            });
-        }
-
-        // 2. Dispatch Telemetry Error (deduplicated by telemetryHub)
+        // Report one deduplicated error. Standalone telemetry events are intentionally disabled.
         if (typeof telemetryHub.trackError === 'function') {
             const fallbackError = new Error(syntheticMessage);
             fallbackError.name = 'ZodSchemaFallbackError';
