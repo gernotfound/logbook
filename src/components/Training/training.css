@@ -2348,6 +2348,7 @@
 .session-extra-exercise {
   display: grid;
   gap: .75rem;
+  margin-block: .75rem;
 }
 
 .session-extra-exercise-heading {
@@ -2364,19 +2365,6 @@
 
 .session-extra-exercise-heading > div {
   min-width: 0;
-}
-
-.workout-total-duration {
-  margin: 0;
-  padding: .75rem;
-  border-radius: var(--radius-control);
-  background: var(--surface-light);
-  font-size: var(--font-size-meta);
-}
-
-.workout-total-duration output {
-  color: var(--text-main);
-  font-size: var(--font-size-control);
 }
 
 .session-manual-duration {
