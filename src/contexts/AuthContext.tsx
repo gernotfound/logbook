@@ -14,6 +14,7 @@ import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
+import { readLocal } from '../lib/sync/localRepository';
 import { captureSession, invalidateSession, isCurrentSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../lib/db/db_core';
@@ -91,13 +92,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const loadData = useCallback(async (user: User) => {
-        await loadAuthenticatedData({
+        const session = captureSession();
+        const result = await loadAuthenticatedData({
             user,
             isGuestActive: () => isGuestRef.current || isStoredGuest(),
             setUserData,
             setSyncing,
             setSaveError,
         });
+
+        const transferredUid = originMigrationPendingUid();
+        const sameAuthenticatedOwner = () => isCurrentSession(session)
+            && auth.currentUser?.uid === user.uid
+            && !isGuestRef.current
+            && !isStoredGuest();
+
+        if (transferredUid === user.uid && result.cloudReconciled && sameAuthenticatedOwner()) {
+            try {
+                await useAppStore.getState().flushPendingSyncs();
+                if (!sameAuthenticatedOwner()) return result;
+                const envelope = await readLocal(userOwner(user.uid));
+                if (!sameAuthenticatedOwner()) return result;
+                if (!envelope?.pending.length) {
+                    clearOriginMigrationPendingUid(user.uid);
+                }
+            } catch (error) {
+                console.warn('Riconciliazione dei dati trasferiti ancora pendente:', error);
+            }
+        }
+
+        return result;
     }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
@@ -309,13 +333,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 } else {
                     setGuestMigrationStatus('idle');
                     await loadData(user);
-                    if (isCurrentRun() && transferredUid === user.uid) {
-                        try {
-                            clearOriginMigrationPendingUid(user.uid);
-                        } catch (error) {
-                            console.warn('Dati trasferiti caricati, ma marker di migrazione non rimosso:', error);
-                        }
-                    }
                 }
             } else {
                 setGuestMigrationStatus('idle');
