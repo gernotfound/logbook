@@ -272,12 +272,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
             if (user) tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-            setCurrentUser(user);
-            setLoading(false);
 
             if (user) {
-                const wasGuest = isGuestRef.current || isStoredGuest();
-                const recoveryUid = readGuestMigrationSyncRecovery();
                 let transferredUid: string | null;
                 try {
                     transferredUid = originMigrationPendingUid();
@@ -305,6 +301,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
                     return;
                 }
+
+                setCurrentUser(user);
+                setLoading(false);
+
+                const wasGuest = isGuestRef.current || isStoredGuest();
+                const recoveryUid = readGuestMigrationSyncRecovery();
 
                 if (recoveryUid === user.uid) {
                     const handled = await resumePersistedGuestMigration(user, isCurrentRun);
@@ -362,6 +364,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     await loadData(user);
                 }
             } else {
+                setCurrentUser(null);
+                setLoading(false);
                 setGuestMigrationStatus('idle');
                 const isGuestActive = isGuestRef.current || isStoredGuest();
                 if (!isGuestActive) {
