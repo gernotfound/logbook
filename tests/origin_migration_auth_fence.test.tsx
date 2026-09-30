@@ -5,6 +5,16 @@ import { auth, onAuthStateChanged, signOut } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { AuthProvider } from '../src/contexts/AuthContext';
 import { useAppStore } from '../src/store/useAppStore';
+import { useAuth } from '../src/hooks/useAuth';
+
+function AuthProbe() {
+  const { loading, currentUser } = useAuth();
+  return (
+    <div data-testid="auth-probe">
+      {loading ? 'loading' : 'ready'}:{currentUser?.uid ?? 'signed-out'}
+    </div>
+  );
+}
 
 const wrongUser = {
   uid: 'wrong-account',
@@ -28,7 +38,7 @@ describe('origin migration authenticated identity fence', () => {
   it('signs out and does not hydrate a different account while transferred data is pending', async () => {
     localStorage.setItem('logbook_origin_migration_pending_uid_v1', 'expected-account');
 
-    render(<AuthProvider><div>app</div></AuthProvider>);
+    const view = render(<AuthProvider><AuthProbe /></AuthProvider>);
 
     await waitFor(() => {
       expect(signOut).toHaveBeenCalledWith(auth);
@@ -36,6 +46,7 @@ describe('origin migration authenticated identity fence', () => {
 
     expect(DB.loadCloudPayload).not.toHaveBeenCalled();
     expect(useAppStore.getState().saveError).toContain('altro account');
+    expect(view.getByTestId('auth-probe').textContent).toBe('ready:signed-out');
   });
   it('signs out when the migration ownership marker cannot be read', async () => {
     const originalGetItem = localStorage.getItem;
@@ -47,7 +58,7 @@ describe('origin migration authenticated identity fence', () => {
     });
 
     try {
-      render(<AuthProvider><div>app</div></AuthProvider>);
+      const view = render(<AuthProvider><AuthProbe /></AuthProvider>);
 
       await waitFor(() => {
         expect(signOut).toHaveBeenCalledWith(auth);
@@ -55,6 +66,7 @@ describe('origin migration authenticated identity fence', () => {
 
       expect(DB.loadCloudPayload).not.toHaveBeenCalled();
       expect(useAppStore.getState().saveError).toContain('Archivio locale non disponibile');
+      expect(view.getByTestId('auth-probe').textContent).toBe('ready:signed-out');
     } finally {
       localStorage.getItem = originalGetItem;
     }
