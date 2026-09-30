@@ -45,16 +45,31 @@ export const subscribeAnalyticsConsent = (listener: (consent: boolean) => void) 
 
 export const setAnalyticsConsent = (consent: boolean): boolean => {
     let persisted = false;
-    try {
-        localStorage.setItem(ANALYTICS_CONSENT_KEY, consent ? 'true' : 'false');
-        persisted = localStorage.getItem(ANALYTICS_CONSENT_KEY) === (consent ? 'true' : 'false');
-    } catch (err) {
-        console.warn('Impossibile memorizzare la preferenza Analytics:', err);
+
+    if (consent) {
+        try {
+            localStorage.setItem(ANALYTICS_CONSENT_KEY, 'true');
+            persisted = localStorage.getItem(ANALYTICS_CONSENT_KEY) === 'true';
+        } catch (err) {
+            console.warn('Impossibile memorizzare la preferenza Analytics:', err);
+        }
+        currentAnalyticsConsent = persisted;
+    } else {
+        currentAnalyticsConsent = false;
+        try {
+            localStorage.setItem(ANALYTICS_CONSENT_KEY, 'false');
+            persisted = localStorage.getItem(ANALYTICS_CONSENT_KEY) !== 'true';
+        } catch (writeErr) {
+            try {
+                localStorage.removeItem(ANALYTICS_CONSENT_KEY);
+                persisted = localStorage.getItem(ANALYTICS_CONSENT_KEY) !== 'true';
+            } catch (removeErr) {
+                console.warn('Impossibile memorizzare la preferenza Analytics:', writeErr);
+                console.warn('Impossibile rimuovere la preferenza Analytics:', removeErr);
+            }
+        }
     }
 
-    // Non-essential analytics may only be enabled after the opt-in is durably
-    // observable. Revocation stays fail-closed even when preference storage fails.
-    currentAnalyticsConsent = consent && persisted;
     if (typeof window !== 'undefined') window.dispatchEvent(new Event(ANALYTICS_CONSENT_EVENT));
-    return consent ? persisted : !currentAnalyticsConsent;
+    return persisted;
 };
