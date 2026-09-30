@@ -20,7 +20,10 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 |---|---|---|---|
 | Firebase Authentication | ACTIVE | account email/Google e sessione autenticata | Firebase console + codice Auth |
 | Cloud Firestore | ACTIVE | replica/sincronizzazione cloud dei dati account | Firestore/Rules + codice sync |
-| Firebase Hosting | NON ATTIVO | non è l'hosting Production corrente | `firebase.json` + Firebase console |
+| Firebase Realtime Database | NON USATO DAL RUNTIME | `databaseURL` resta nel config Firebase Web, ma il modulo RTDB non è importato | codice + console VERIFY-LIVE |
+| Firebase Storage | NON USATO DAL RUNTIME | `storageBucket` resta nel config Firebase Web, ma il modulo Storage non è importato | codice + console VERIFY-LIVE |
+| Firebase Cloud Messaging | NON USATO DAL RUNTIME | `messagingSenderId` resta nel config Firebase Web, ma il modulo Messaging non è importato | codice + console VERIFY-LIVE |
+| Firebase Hosting | NON USATO DAL RUNTIME / VERIFY-LIVE | non è l'hosting Production corrente | `firebase.json` + Firebase console |
 | Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Hosting / Functions / Cron | ACTIVE | Production PWA, API trusted e cron | Vercel + `vercel.json` |
@@ -32,7 +35,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 
 ## Firebase Hosting
 
-Firebase Hosting **non è attualmente il provider di hosting di LogBook**. Nel repository `firebase.json` configura soltanto le Firestore Rules e non contiene una sezione `hosting`; la Production corrente è Vercel.
+Firebase Hosting **non è il provider di hosting del runtime corrente di LogBook**. Nel repository `firebase.json` configura soltanto le Firestore Rules e non contiene una sezione `hosting`; la Production corrente è Vercel. Questo non prova che nella console Firebase non esista un sito Hosting storico: quello stato resta `VERIFY-LIVE` finché la console non viene controllata.
 
 I domini Firebase predefiniti possono comunque essere presenti nelle configurazioni Auth/OAuth perché appartengono al flusso Firebase Authentication: la loro presenza non dimostra che Firebase Hosting sia attivo.
 
@@ -57,6 +60,10 @@ Il vecchio referrer GitHub Pages è **ritirato**. È stato segnalato ancora pres
 ## Firestore
 
 Firestore è la replica remota per account autenticati, non la persistenza locale primaria. IndexedDB resta il boundary offline-first canonico.
+
+Il runtime non importa Firebase Realtime Database. `VITE_FIREBASE_DATABASE_URL` resta ancora nel contratto Firebase Web fail-fast come configurazione legacy da rivalutare, ma non giustifica allowlist `firebaseio.com` nella CSP. La seconda passata del 2026-09-30 ha quindi rimosso tali origin dalla CSP senza rimuovere la variabile dal contratto runtime.
+
+Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging. `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` restano oggi nel fail-fast/config Firebase Web per compatibilità del contratto esistente, ma la loro presenza non va interpretata come prova che quei servizi siano usati. Un'eventuale semplificazione delle sette env richiede modifica separata con test.
 
 Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono `LEGACY`: il client corrente invia errori/anomalie a Sentry, ma Rules, account deletion e retention cron restano finché i client vecchi e i documenti residui non sono definitivamente smaltiti.
 
@@ -93,6 +100,8 @@ Vercel è il provider Production di LogBook.
 
 Il repository impone deploy abilitato soltanto da `main`, Functions native per account deletion/maintenance, cron in `vercel.json` e security headers/CSP versionati. I branch di sviluppo non devono generare Preview Deployment.
 
+La CSP segue il principio di allowlist minima. LogBook usa font di sistema e non carica Google Fonts: gli origin `fonts.googleapis.com`/`fonts.gstatic.com` sono stati rimossi nella seconda passata del 2026-09-30 insieme agli origin Realtime Database non usati.
+
 Il codice corrente legge sette variabili Firebase Web:
 
 - `VITE_FIREBASE_API_KEY`
@@ -106,6 +115,8 @@ Il codice corrente legge sette variabili Firebase Web:
 `VITE_FIREBASE_MEASUREMENT_ID` è stata segnalata ancora presente in Vercel, ma **non è usata dal codice corrente**: Firebase Analytics non fa parte del prodotto e il repository ne vieta l'inizializzazione. La variabile può essere rimossa da Vercel dopo una normale verifica di build; non deve essere reintrodotta come dipendenza.
 
 Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
+
+La configurazione Production non viene più duplicata in un file `.env.production` versionato. La seconda passata del 2026-09-30 ha rimosso quel file: conteneva soltanto configurazione Firebase Web pubblica, non segreti Admin, ma duplicava identificatori/endpoints reali senza necessità. Il contratto resta in `.env.example`; i valori Production vivono in Vercel. CI/E2E usa valori sintetici espliciti.
 
 ### Scope Vercel registrati
 
@@ -143,6 +154,8 @@ Configurazione deliberata:
 
 Motivo: ottenere stack trace/release utili agli aggiornamenti frequenti senza consumare la quota Firestore e senza raccogliere telemetria comportamentale non necessaria.
 
+La scelta iniziale è stata fatta per restare sul piano gratuito: Spike Protection e deduplica client di 15 minuti per fingerprint riducono il rischio che un errore in loop consumi rapidamente il volume disponibile. **VERIFY-LIVE:** limiti, pricing e retention del piano Sentry sono configurazione commerciale esterna e possono cambiare; verificarli prima di aumentare volume, sampling o funzionalità.
+
 Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09-30 con environment Production e release Git SHA. La verifica di simbolicazione source-map può avvenire sul primo errore naturale originato dal codice applicativo.
 
 ## GitHub, Actions e CodeQL
@@ -152,6 +165,8 @@ Il repository è pubblico: questo è un vincolo di sicurezza e privacy, non solo
 Al consolidamento del 2026-09-30 il ruleset `protect main branch` è attivo sulla default branch e richiede `Canonical Verification`, status check strict, pull request, risoluzione delle review conversation, cronologia lineare e squash merge; non risultano bypass configurati.
 
 CodeQL è parte del gate canonico. Il nome `Canonical Verification` non deve essere cambiato senza verificare ruleset e integrazioni Vercel collegate.
+
+Dependabot è configurato nel repository per controlli settimanali sia delle dipendenze npm sia delle GitHub Actions, con massimo 10 PR aperte per ciascun ecosistema. È automazione di manutenzione, non un bypass: le sue PR devono attraversare gli stessi guardrail di `main`.
 
 ## Snyk
 
@@ -172,7 +187,7 @@ Il repository mantiene deliberatamente:
 - `public/robots.txt` con crawling consentito e riferimento alla sitemap;
 - `public/sitemap.xml` con URL canonico Production.
 
-Al 2026-09-30 `robots.txt`, `sitemap.xml` e il file di verifica rispondono HTTP 200 in Production.
+Al 2026-09-30 `robots.txt`, `sitemap.xml` e il file di verifica rispondono HTTP 200 in Production. Il product owner riferisce inoltre di avere configurato sitemap e indicizzazione in Search Console; **VERIFY-LIVE:** il repository non dimostra che la sitemap risulti attualmente inviata/accettata né lo stato di indicizzazione mostrato dalla console.
 
 Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata accettata.
 
@@ -183,11 +198,16 @@ GitHub Pages non è più un hosting LogBook.
 Audit repository 2026-09-30:
 
 - nessun hostname GitHub Pages è referenziato dal runtime/config corrente;
-- non esiste workflow `gh-pages`/Pages;
+- non esiste workflow `gh-pages`/Pages né branch `gh-pages`;
+- GitHub API riporta `has_pages: false` e la homepage repository punta al dominio Vercel;
 - Vercel è il solo hosting Production;
 - il vecchio test auto-contenuto di base path dinamico `/logbook/` è stato rimosso perché non esercitava la configurazione reale; il contratto PWA corrente verifica `start_url` e `scope` alla radice `/`.
 
-Pulizia esterna ancora richiesta: rimuovere il vecchio origin/referrer GitHub Pages dalle allowlist Google/Firebase segnalate sopra.
+Pulizia esterna ancora richiesta:
+- rimuovere il vecchio dominio GitHub Pages da **Firebase Authentication → Authorized domains**;
+- rimuovere il vecchio referrer GitHub Pages dalle restrizioni della **Google API Browser key**;
+- il Web OAuth client descritto dal product owner non riportava GitHub Pages, quindi non è richiesto rimuoverlo da quella lista salvo drift successivo;
+- **VERIFY-LIVE:** controllare anche i domini autorizzati della Web key reCAPTCHA Enterprise/Fraud Defense, perché il relativo elenco non è stato fornito e non può essere dedotto dal repository.
 
 ## Checklist annuale
 

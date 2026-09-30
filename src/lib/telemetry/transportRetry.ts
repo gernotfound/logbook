@@ -1,6 +1,6 @@
 import { isAccountDeletionPending } from '../sync/accountGate';
 import {
-  FIRESTORE_DISPATCH_TIMEOUT_MS,
+  TELEMETRY_DISPATCH_TIMEOUT_MS,
   INITIAL_RETRY_DELAY_MS,
   MAX_RETRY_DELAY_MS,
   type TelemetryErrorPayload,
@@ -17,7 +17,7 @@ async function dispatchWithTimeout(
 ): Promise<boolean> {
   const dispatchPromise = sendTelemetryToSentry(kind, payload);
   const timeoutPromise = new Promise<boolean>((resolve) => {
-    setTimeout(() => resolve(false), FIRESTORE_DISPATCH_TIMEOUT_MS);
+    setTimeout(() => resolve(false), TELEMETRY_DISPATCH_TIMEOUT_MS);
   });
   return Promise.race([dispatchPromise, timeoutPromise]);
 }

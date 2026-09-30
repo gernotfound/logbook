@@ -3,7 +3,7 @@ import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
-  FIRESTORE_DISPATCH_TIMEOUT_MS,
+  TELEMETRY_DISPATCH_TIMEOUT_MS,
   type QueuedTelemetryItem,
   type TelemetryEventPayload,
   type TelemetryErrorPayload,
@@ -416,13 +416,13 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
   // 4. Timeout Aborts & Partial Failures
   // =========================================================================
   describe('4. Timeout Aborts & Partial Network Failures', () => {
-    it('aborts dispatch with false when Firestore setDoc hangs past FIRESTORE_DISPATCH_TIMEOUT_MS', async () => {
+    it('aborts dispatch with false when external telemetry dispatch hangs past TELEMETRY_DISPATCH_TIMEOUT_MS', async () => {
       vi.useFakeTimers();
 
-      // Firestore mock that never resolves
+      // telemetry transport mock that never resolves
       mockSetDoc.mockImplementation(() => new Promise(() => {}));
 
-      const dispatchPromise = telemetryHub.dispatchEventToFirestore({
+      const dispatchPromise = telemetryHub.dispatchEventExternally({
         timestamp: Date.now(),
         type: 'hanging_event',
         context: { appVersion: '1.0.0', platform: 'other', displayMode: 'browser', online: true },
@@ -430,8 +430,8 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         sessionId: 'sess_timeout',
       });
 
-      // Advance timers by FIRESTORE_DISPATCH_TIMEOUT_MS (5000ms)
-      vi.advanceTimersByTime(FIRESTORE_DISPATCH_TIMEOUT_MS + 100);
+      // Advance timers by TELEMETRY_DISPATCH_TIMEOUT_MS (5000ms)
+      vi.advanceTimersByTime(TELEMETRY_DISPATCH_TIMEOUT_MS + 100);
 
       const result = await dispatchPromise;
       expect(result).toBe(false);
@@ -493,7 +493,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       mockSetDoc.mockImplementation(() => new Promise(() => {}));
 
-      const dispatchPromise = telemetryHub.dispatchErrorToFirestore({
+      const dispatchPromise = telemetryHub.dispatchErrorExternally({
         timestamp: Date.now(),
         type: 'TypeError',
         message: 'hanging error',
@@ -506,7 +506,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
         lastSeen: Date.now(),
       });
 
-      vi.advanceTimersByTime(FIRESTORE_DISPATCH_TIMEOUT_MS + 100);
+      vi.advanceTimersByTime(TELEMETRY_DISPATCH_TIMEOUT_MS + 100);
 
       const result = await dispatchPromise;
       expect(result).toBe(false);

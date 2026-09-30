@@ -73,6 +73,9 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(appSource).not.toContain('firebase/analytics');
             expect(vercelConfig).not.toContain('google-analytics.com');
             expect(vercelConfig).not.toContain('googletagmanager.com');
+            expect(vercelConfig).not.toContain('fonts.googleapis.com');
+            expect(vercelConfig).not.toContain('fonts.gstatic.com');
+            expect(vercelConfig).not.toContain('firebaseio.com');
         });
     });
 

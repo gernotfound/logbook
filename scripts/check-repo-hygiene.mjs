@@ -33,6 +33,15 @@ if (taskSpecificAnalysisArtifacts.length > 0) {
   );
 }
 
+const deploymentEnvSnapshots = tracked.filter(path => /^\.env\.(?:production|preview)(?:\.local)?$/.test(path));
+if (deploymentEnvSnapshots.length > 0) {
+  failures.push(
+    `deployment environment snapshots must not be tracked; use .env.example plus provider-managed values:\n${deploymentEnvSnapshots
+      .map(path => `  ${path}`)
+      .join('\n')}`,
+  );
+}
+
 // Let Git identify non-binary tracked content, then union that set with known
 // repository text formats so explicitly-text files are still checked even if
 // their current bytes would make Git's binary heuristic conservative.

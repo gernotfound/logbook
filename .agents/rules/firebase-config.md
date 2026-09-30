@@ -1,6 +1,6 @@
 # Configurazione Firebase — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-20 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+> Stato: normativo | Ultima verifica: 2026-09-30 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti
 
@@ -16,8 +16,8 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth |
 | `VITE_FIREBASE_DATABASE_URL` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il progetto usa Firestore, non Realtime Database, quindi la necessità futura del campo va verificata prima di rimuoverlo dal contratto |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | MUST | Config Firebase Web |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST | Config Firebase Web |
+| `VITE_FIREBASE_STORAGE_BUCKET` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Storage |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Cloud Messaging |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
 
 **MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
@@ -80,6 +80,8 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 **MUST:** non copiare una private key reale in `.env.example`, Markdown, issue, PR, fixture o codice client.
 
+**MUST:** `.env.production` non è un file di configurazione versionato. Production riceve i valori dal provider di deployment; CI/E2E usa valori sintetici espliciti quando necessari.
+
 ## Firestore Security Rules
 
 ### Test e deploy sono operazioni diverse
@@ -106,7 +108,7 @@ I file `firebase.json` e `.firebaserc` definiscono la configurazione repository 
 
 ### Telemetria tecnica — Sentry e legacy Firestore
 
-Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Prima del boundary esterno, messaggi e stack attraversano i sanitizzatori LogBook; `sendDefaultPii` resta disabilitato e il client non abilita Replay, tracing, logging o metriche.
+Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Prima del boundary esterno, messaggi e stack attraversano i sanitizzatori LogBook; il client non abilita l'invio PII di default, disattiva le integrazioni automatiche e il `beforeSend` elimina `user`, `request`, breadcrumb, transaction ed extra. Replay, tracing, logging e metriche non sono abilitati.
 
 Configurazione client/build:
 

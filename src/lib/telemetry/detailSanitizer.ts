@@ -58,8 +58,8 @@ function sanitizeDetailValue(key: string, value: unknown): TelemetryDetailValue 
 }
 
 /**
- * Minimizes telemetry event metadata before it is persisted locally or sent to
- * Firestore. Only the explicit technical allowlist crosses this boundary.
+ * Minimizes telemetry event metadata before it is persisted locally or crosses
+ * the external telemetry boundary. Only the explicit technical allowlist is retained.
  * Unknown keys, nested structures and user-authored business labels are dropped.
  */
 export function sanitizeTelemetryDetails(value: unknown): Record<string, TelemetryDetailValue> {
