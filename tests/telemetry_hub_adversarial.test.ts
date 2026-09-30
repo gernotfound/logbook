@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
   RATE_LIMIT_WINDOW_MS,
@@ -18,10 +18,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
     vi.clearAllMocks();
     vi.useRealTimers();
 
-    mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
-    vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
-      return { path: pathSegments.join('/') } as any;
-    });
+    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     telemetryHub.reset();
   });
