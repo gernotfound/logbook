@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { auth, onAuthStateChanged, signOut } from '../src/lib/firebase';
 import { DB } from '../src/lib/db';
 import { AuthProvider } from '../src/contexts/AuthContext';
@@ -70,6 +70,27 @@ describe('origin migration authenticated identity fence', () => {
     } finally {
       localStorage.getItem = originalGetItem;
     }
+  });
+
+  it('blocks foreground hydration if the pending migration owner changes', async () => {
+    const view = render(<AuthProvider><AuthProbe /></AuthProvider>);
+
+    await waitFor(() => {
+      expect(view.getByTestId('auth-probe').textContent).toBe('ready:wrong-account');
+      expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+    });
+
+    useAppStore.setState({ userData: {} as any });
+    localStorage.setItem('logbook_origin_migration_pending_uid_v1', 'expected-account');
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+
+    expect(DB.loadCloudPayload).toHaveBeenCalledTimes(1);
+    expect(useAppStore.getState().saveError).toContain('altro account');
   });
 
 });
