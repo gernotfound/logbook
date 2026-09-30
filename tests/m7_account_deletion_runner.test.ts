@@ -23,10 +23,10 @@ const mocked = vi.hoisted(() => {
   };
 });
 
-vi.mock('../server/accountDeletion/jobStore', () => mocked);
+vi.mock('../functions/src/accountDeletion/jobStore', () => mocked);
 
-import { processAccountDeletion } from '../server/accountDeletion/runner';
-import { PRIVATE_ACCOUNT_COLLECTIONS } from '../server/accountDeletion/types';
+import { processAccountDeletion } from '../functions/src/accountDeletion/runner';
+import { PRIVATE_ACCOUNT_COLLECTIONS } from '../functions/src/accountDeletion/types';
 
 describe('M7 native account deletion runner', () => {
   beforeEach(() => {
