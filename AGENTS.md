@@ -41,9 +41,9 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 ## Stack e runtime correnti
 
 - **Framework:** React 19 + Vite 8 + TypeScript 7.
-- **Runtime CI/build:** Node.js 24.x; Firebase Functions runtime Node.js 22.
-- **Hosting target:** Firebase Hosting alla radice `/`. Durante la finestra di migrazione il precedente origin Vercel resta temporaneamente disponibile come bridge/compatibilità, senza Preview Deployment sui branch.
-- **Boundary server trusted:** Firebase Cloud Functions v2 per Server Account Deletion e maintenance schedulata; Firebase Admin usa Application Default Credentials nel runtime Firebase. Gli endpoint Vercel restano adapter legacy soltanto durante la migrazione.
+- **Runtime CI/Vercel:** Node.js 24.x.
+- **Hosting:** Vercel, frontend Vite/PWA alla radice `/`.
+- **Boundary server trusted:** Vercel Functions native in `/api/` per Server Account Deletion; Firebase Admin è server-only.
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
@@ -51,7 +51,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. Vercel Analytics e Speed Insights sono ritirati nella migrazione; Google/Firebase Analytics non fa parte del prodotto. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
+- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche, `@vercel/analytics`, `@vercel/speed-insights`. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti. Google/Firebase Analytics non fa parte del prodotto.
 - **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
 
 ## File canonici del modello dati
@@ -194,13 +194,13 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 Distinguere due sistemi:
 
 1. **Telemetria tecnica LogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
-2. **Analytics di utilizzo:** non presenti nel runtime target. Vercel Analytics/Speed Insights sono ritirati e Google/Firebase Analytics non viene inizializzato né usato.
+2. **Vercel Analytics / Speed Insights:** renderizzati solo quando l'opt-in analytics è attivo. Google/Firebase Analytics non viene inizializzato né usato.
 
-- **MUST:** non reintrodurre analytics comportamentale o eventi workout/PWA senza nuova decisione di prodotto e rivalutazione privacy esplicita.
-- **MUST:** la telemetria tecnica Sentry non viene estesa a eventi comportamentali per sostituire implicitamente un sistema Analytics.
+- **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
+- **MUST:** telemetria tecnica e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
 - **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
-- **MUST:** source map Sentry sono generate solo nella build Production, caricate con credenziale build-only `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
+- **MUST:** source map Sentry sono generate solo nella build Vercel Production, caricate con credenziale server-side `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
 - **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
 - **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.
 - **MUST:** una modifica materiale alla Privacy Policy richiede bump di `LEGAL_VERSIONS.privacy` e regressioni pertinenti, così gli utenti devono riaccettare la versione aggiornata.

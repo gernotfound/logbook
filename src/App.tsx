@@ -1,6 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useAppStore } from './store/useAppStore';
+import { getAnalyticsConsent, subscribeAnalyticsConsent } from './lib/analyticsConsent';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
   LOCAL_STORAGE_ACTIVE_TAB,
@@ -20,6 +21,8 @@ import type {
   NutritionSubTab,
   DataSubTab
 } from './types';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { safeHardReload } from './lib/sync/safeReload';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
@@ -61,6 +64,9 @@ function persistGuestLoginOverlayState(visible: boolean): void {
   }
 }
 
+function allowOptionalAnalyticsEvent<T>(event: T): T | null {
+  return getAnalyticsConsent() ? event : null;
+}
 
 function App() {
   const { currentUser, loading, isGuest, guestMigrationStatus, retryGuestMigration } = useAuth();
@@ -74,6 +80,7 @@ function App() {
   const [trainingSubTab, setTrainingSubTab] = useLocalStorage<TrainingSubTab>(LOCAL_STORAGE_TRAINING_TAB, 'session', TrainingSubTabSchema);
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
@@ -93,6 +100,8 @@ function App() {
     persistGuestLoginOverlayState(false);
     setShowGuestLogin(false);
   };
+
+  useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
 
   useEffect(() => {
     if (showGuestLogin && currentUser && !isGuest && guestMigrationStatus === 'idle' && !syncing) {
@@ -390,6 +399,8 @@ function App() {
       </main>
 
       {!hideBottomNav && <BottomNav activeTab={activeTab} setActiveTab={handleTabChange} />}
+      {analyticsEnabled && <Analytics beforeSend={allowOptionalAnalyticsEvent} />}
+      {analyticsEnabled && <SpeedInsights beforeSend={allowOptionalAnalyticsEvent} />}
     </>
   );
 }

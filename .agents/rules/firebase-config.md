@@ -45,9 +45,9 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 
 Google/Firebase Analytics non fa parte del prodotto e `src/lib/firebase.ts` non deve importare `firebase/analytics`, configurare `measurementId` o richiedere `VITE_FIREBASE_MEASUREMENT_ID`.
 
-Vercel Analytics e Speed Insights sono ritirati nel target Firebase; `src/lib/analyticsConsent.ts` non fa più parte del runtime.
+L'opt-in `logbook_analytics_consent` governa esclusivamente Vercel Analytics e Speed Insights tramite `src/lib/analyticsConsent.ts`; resta disabilitato per default e revocabile.
 
-**MUST:** non reintrodurre Google/Firebase Analytics, Vercel Analytics o altri analytics comportamentali senza una nuova decisione di prodotto e una rivalutazione privacy esplicita.
+**MUST:** non reintrodurre Google/Firebase Analytics senza una nuova decisione di prodotto e una rivalutazione privacy esplicita.
 
 ## Server trusted M7 — Firebase Admin
 
@@ -140,19 +140,20 @@ Questi stati console sono **VERIFY**, non facts dimostrati dal repository.
 
 ## CSP (Content Security Policy)
 
-La CSP canonica del target è configurata in `firebase.json`; `vercel.json` mantiene una CSP compatibile soltanto finché il vecchio origin Vercel resta attivo come bridge. Prima di modificarla:
+La CSP è configurata in `vercel.json`. Prima di modificarla:
 
 1. leggere `vercel.json` e identificare la direttiva interessata;
-2. **MUST:** non rimuovere domini Firebase/Sentry o il direct endpoint Functions necessari al comportamento corrente senza una sostituzione verificata;
-3. verificare login, sync, App Check, API account deletion, bridge di migrazione origine e PWA dopo il cambiamento pertinente.
+2. **MUST:** non rimuovere i domini Firebase/Vercel necessari al comportamento corrente senza una sostituzione verificata;
+3. verificare login, sync, Vercel Analytics/Speed Insights, API M7 e PWA dopo il cambiamento pertinente.
 
-## Deployment e origin migration
+## Vercel branch deployment policy
 
-`vercel.json` mantiene durante la migrazione il vecchio origin aggiornato soltanto da `main`; i branch restano disabilitati. Il target Firebase viene deployato dal workflow `.github/workflows/firebase-production.yml` soltanto dopo `Milestone Verification` verde su un push a `main`, sullo stesso SHA ancora presente come HEAD di `main`.
+`vercel.json` contiene il contratto repository corrente per Git deployment:
 
-**MUST:** i branch di sviluppo non generano Preview Deployment Vercel né deploy Firebase.
-**MUST:** il bridge cross-origin trasferisce un Local Envelope soltanto verso l'origin target configurato, conserva causal metadata/pending journal e rifiuta overwrite divergenti.
-**MUST:** il vecchio origin non viene ritirato prima che la finestra di migrazione dati sia conclusa e che le allowlist esterne siano aggiornate.
+- `main`: deployment abilitato;
+- altri branch: deployment disabilitato.
+
+**MUST:** i branch di sviluppo non generano Preview Deployment. Non allargare `git.deploymentEnabled` per usare Vercel Preview come sostituto della CI. Il deployment di produzione deriva da `main`.
 
 ## Sicurezza HTTP
 

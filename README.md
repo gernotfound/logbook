@@ -60,7 +60,7 @@ I dati business restano sul dispositivo nella persistenza locale dell'app. Non �
 
 Con un account autenticato, i dati applicativi vengono sincronizzati su Firestore. Quando dati guest preesistenti vengono associati a un account, il flusso usa una hydration cloud completa, un merge deterministico e il journal autenticato prima della replica.
 
-La cancellazione account non è una semplice delete client-side: il target usa Firebase Cloud Functions v2 con Firebase Admin, una barriera server `account_deletions/{uid}` e recovery cross-device. Dopo il completamento resta soltanto un tombstone tecnico server-only, limitato a 30 giorni e rimosso dalla scheduled maintenance giornaliera. Durante la finestra di migrazione gli endpoint Vercel restano adapter compatibili dello stesso core.
+La cancellazione account non è una semplice delete client-side: è gestita da Vercel Functions con Firebase Admin, una barriera server `account_deletions/{uid}` e recovery cross-device. Dopo il completamento resta soltanto un tombstone tecnico server-only, limitato a 30 giorni e rimosso dal cron giornaliero.
 
 ## PWA
 
@@ -76,7 +76,7 @@ La sorgente raster approvata `public/icon-source.png` viene processata da `scrip
 Sono sistemi distinti:
 
 - **telemetria tecnica LogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; LogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
-- **Analytics di utilizzo:** non presenti nel runtime target. Vercel Analytics/Speed Insights sono ritirati; Google/Firebase Analytics non viene utilizzato.
+- **Vercel Analytics + Speed Insights:** renderizzati soltanto quando l'utente abilita l'opt-in Analytics. Google/Firebase Analytics non viene utilizzato.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.
 
@@ -166,12 +166,3 @@ Gli agenti e i maintainer devono partire da:
 - [`docs/operations/external-services-register.md`](docs/operations/external-services-register.md) — perché usiamo i provider esterni, configurazioni da preservare e verifiche future.
 
 In caso di divergenza tra documentazione e implementazione corrente, non assumere che il documento più vecchio sia corretto: verificare codice, test, history e configurazione, quindi riallineare la documentazione normativa insieme alla modifica pertinente.
-
-
-### Migrazione hosting Vercel → Firebase
-
-Il candidato di migrazione usa Firebase Hosting per la PWA e Cloud Functions v2 per il backend trusted. Il deploy Firebase è separato dalla CI PR: parte soltanto dopo `Milestone Verification` verde su un push a `main`, verifica che lo SHA sia ancora l'HEAD reale di `main` e autentica Google Cloud tramite Workload Identity Federation.
-
-Durante la finestra di cutover il vecchio origin Vercel resta intenzionalmente raggiungibile. Il nuovo origin mostra un gate una tantum che, su azione esplicita dell'utente, apre il vecchio origin come popup top-level e trasferisce il Local Envelope owner-scoped con `postMessage` limitato a source/target configurati. Il target rifiuta overwrite divergenti. Questo serve soprattutto a proteggere modalità locale, journal non ancora sincronizzato e marker di cancellazione account, che il browser non condivide automaticamente tra origin diversi.
-
-I valori Production non sono committati. Il contratto pubblico è in `.env.example`; site ID, origin, Firebase Web config, App Check, Sentry e parametri Functions vivono nei provider esterni/GitHub Actions.

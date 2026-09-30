@@ -23,19 +23,19 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase Realtime Database | NON USATO DAL RUNTIME | `databaseURL` resta nel config Firebase Web, ma il modulo RTDB non è importato | codice + console VERIFY-LIVE |
 | Firebase Storage | NON USATO DAL RUNTIME | `storageBucket` resta nel config Firebase Web, ma il modulo Storage non è importato | codice + console VERIFY-LIVE |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | `messagingSenderId` resta nel config Firebase Web, ma il modulo Messaging non è importato | codice + console VERIFY-LIVE |
-| Firebase Hosting | MIGRATION TARGET / VERIFY-LIVE | target del candidato; stato live da verificare prima del cutover | `firebase.json` + Firebase console |
-| Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Cloud Functions ADC; adapter Vercel legacy durante migrazione |
+| Firebase Hosting | NON USATO DAL RUNTIME / VERIFY-LIVE | non è l'hosting Production corrente | `firebase.json` + Firebase console |
+| Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
-| Vercel Hosting / Functions / Cron | LEGACY DURANTE MIGRAZIONE / VERIFY-LIVE | origin precedente e compatibilità temporanea | Vercel + `vercel.json` |
-| Vercel Analytics / Speed Insights | RETIRED IN CANDIDATE | rimossi dal runtime target | codice candidato + Vercel VERIFY-LIVE |
-| Sentry | ACTIVE | error monitoring tecnico Production | Sentry + build Production |
+| Vercel Hosting / Functions / Cron | ACTIVE | Production PWA, API trusted e cron | Vercel + `vercel.json` |
+| Vercel Analytics / Speed Insights | OPTIONAL | analytics/performance con opt-in | Vercel + consenso client |
+| Sentry | ACTIVE | error monitoring tecnico Production | Sentry + build Vercel |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
 
 ## Firebase Hosting
 
-Nel candidato di migrazione Firebase Hosting è configurato per pubblicare `dist/`, mantenere gli header di sicurezza/PWA e usare una SPA fallback. Il site ID reale non è hardcoded: il deploy genera una configurazione temporanea da `FIREBASE_HOSTING_SITE`. Finché il cutover non è stato eseguito, lo stato live resta `VERIFY-LIVE` e Vercel può continuare a essere il runtime effettivo.
+Firebase Hosting **non è il provider di hosting del runtime corrente di LogBook**. Nel repository `firebase.json` configura soltanto le Firestore Rules e non contiene una sezione `hosting`; la Production corrente è Vercel. Questo non prova che nella console Firebase non esista un sito Hosting storico: quello stato resta `VERIFY-LIVE` finché la console non viene controllata.
 
 I domini Firebase predefiniti possono comunque essere presenti nelle configurazioni Auth/OAuth perché appartengono al flusso Firebase Authentication: la loro presenza non dimostra che Firebase Hosting sia attivo.
 
@@ -69,9 +69,14 @@ Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `teleme
 
 ## Firebase Admin e account deletion
 
-Le Cloud Functions Firebase usano Application Default Credentials del runtime e non richiedono una private key Admin esportata. `LOGBOOK_FUNCTION_REGION` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti del deploy.
+Le Vercel Functions di account deletion richiedono per contratto:
 
-Durante la finestra legacy, le Vercel Functions possono continuare a usare `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`. Restano server-only e nessuna deve avere prefisso `VITE_`.
+- `FIREBASE_ADMIN_PROJECT_ID`;
+- `FIREBASE_ADMIN_CLIENT_EMAIL`;
+- `FIREBASE_ADMIN_PRIVATE_KEY`;
+- `CRON_SECRET`.
+
+Tutte sono server-only e nessuna deve avere prefisso `VITE_`.
 
 Verifica live del 2026-09-30: in Vercel Production risultano presenti `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`. I valori non sono registrati qui. Una chiave Admin generata accidentalmente durante la verifica è stata eliminata subito senza essere usata o installata.
 
@@ -136,7 +141,7 @@ Inventario fornito dal product owner il 2026-09-30, da verificare live prima di 
 
 ## Vercel Analytics / Speed Insights
 
-Il candidato Firebase li rimuove dal bundle e dalla UI. La chiave locale storica può essere ancora eliminata dai percorsi di cleanup, ma non governa più componenti runtime. Non introdurre Firebase Analytics come sostituzione automatica.
+Sono servizi separati dalla telemetria tecnica Sentry. Restano disabilitati per default e vengono montati soltanto dopo opt-in Analytics dell'utente. La revoca deve propagarsi anche tra tab.
 
 ## Sentry
 

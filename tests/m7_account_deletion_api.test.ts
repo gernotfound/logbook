@@ -24,11 +24,11 @@ const runner = vi.hoisted(() => ({
   progressAndReadStatus: vi.fn(),
 }));
 
-vi.mock('../functions/src/accountDeletion/httpAuth', () => auth);
-vi.mock('../functions/src/accountDeletion/jobStore', () => store);
-vi.mock('../functions/src/accountDeletion/runner', () => runner);
+vi.mock('../server/accountDeletion/httpAuth', () => auth);
+vi.mock('../server/accountDeletion/jobStore', () => store);
+vi.mock('../server/accountDeletion/runner', () => runner);
 
-import { handleAccountDeletionGet, handleAccountDeletionPost } from '../functions/src/accountDeletion/http';
+import { GET, POST } from '../api/account-deletion';
 
 function request(method: 'GET' | 'POST', body?: unknown): Request {
   return new Request('https://example.test/api/account-deletion', {
@@ -42,7 +42,7 @@ function request(method: 'GET' | 'POST', body?: unknown): Request {
   });
 }
 
-describe('M7 Firebase account deletion HTTP boundary', () => {
+describe('M7 native account deletion HTTP boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     auth.verifyDeletionRequester.mockResolvedValue({ uid: 'u' });
@@ -60,7 +60,7 @@ describe('M7 Firebase account deletion HTTP boundary', () => {
   });
 
   it('returns 400 only for malformed client input', async () => {
-    const response = await handleAccountDeletionPost(request('POST', { receiptToken: 'bad' }));
+    const response = await POST(request('POST', { receiptToken: 'bad' }));
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Ricevuta di cancellazione non valida.' });
     expect(store.createOrRefreshDeletionJob).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe('M7 Firebase account deletion HTTP boundary', () => {
     store.createOrRefreshDeletionJob.mockRejectedValueOnce(new Error('firestore unavailable for athlete@example.test with sensitive-marker'));
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const response = await handleAccountDeletionPost(request('POST', { receiptToken: 'receipt' }));
+    const response = await POST(request('POST', { receiptToken: 'receipt' }));
 
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining('temporaneamente non disponibile') });
@@ -81,7 +81,7 @@ describe('M7 Firebase account deletion HTTP boundary', () => {
   });
 
   it('accepts a valid POST, starts inline processing, and returns the persisted status', async () => {
-    const response = await handleAccountDeletionPost(request('POST', { receiptToken: 'receipt' }));
+    const response = await POST(request('POST', { receiptToken: 'receipt' }));
     expect(response.status).toBe(202);
     expect(store.createOrRefreshDeletionJob).toHaveBeenCalledWith('u', 'receipt');
     expect(runner.processAccountDeletion).toHaveBeenCalledWith('u', expect.any(Number));
@@ -89,7 +89,7 @@ describe('M7 Firebase account deletion HTTP boundary', () => {
   });
 
   it('progresses an authorized incomplete job during GET polling', async () => {
-    const response = await handleAccountDeletionGet(request('GET'));
+    const response = await GET(request('GET'));
     expect(response.status).toBe(200);
     expect(auth.verifyStatusAppCheck).toHaveBeenCalledTimes(1);
     expect(store.readAuthorizedDeletionJob).toHaveBeenCalledWith('u', 'receipt');

@@ -612,11 +612,11 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
         it('server deletion preserves <=400 batches and verifies residues before deleting Auth', () => {
             const jobStore = fs.readFileSync(
-                path.resolve(__dirname, '../functions/src/accountDeletion/jobStore.ts'),
+                path.resolve(__dirname, '../server/accountDeletion/jobStore.ts'),
                 'utf-8'
             );
             const runner = fs.readFileSync(
-                path.resolve(__dirname, '../functions/src/accountDeletion/runner.ts'),
+                path.resolve(__dirname, '../server/accountDeletion/runner.ts'),
                 'utf-8'
             );
 

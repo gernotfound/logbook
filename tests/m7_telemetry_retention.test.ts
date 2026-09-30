@@ -97,7 +97,7 @@ const fakeDb = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../functions/src/accountDeletion/firebaseAdmin', () => ({
+vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => fakeDb,
 }));
 

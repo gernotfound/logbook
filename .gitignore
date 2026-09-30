@@ -54,8 +54,3 @@ coverage/
 bundle-stats.html 
 playwright-report/  
 test-results/ 
-
-# GitHub OIDC / Firebase deploy transient artifacts
-gha-creds-*.json
-.firebase-deploy.json
-functions/lib/
