@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import {
     DomainParsers,
     UserDataSchema,
@@ -11,7 +11,7 @@ import {
 import { telemetryHub } from '../src/lib/telemetryHub';
 
 describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Hardening', () => {
-    const capturedSetDocPayloads: Array<{ path: string; payload: any }> = [];
+    const capturedSetDocPayloads: Array<{ kind: string; payload: any }> = [];
     let _mockSetDoc: any;
 
     const SENSITIVE_STRINGS = [
@@ -37,13 +37,9 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
         vi.useRealTimers();
         Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-        _mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockImplementation(async (docRef: any, data: any) => {
-            capturedSetDocPayloads.push({ path: docRef?.path || '', payload: data });
-            return undefined;
-        });
-
-        vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
-            return { path: pathSegments.join('/') } as any;
+        _mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockImplementation(async (kind: any, data: any) => {
+            capturedSetDocPayloads.push({ kind, payload: data });
+            return true;
         });
 
         setSchemaFallbackListener(null);
@@ -61,7 +57,7 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
         telemetryHub.reset();
     });
 
-    function assertZeroPIIInTelemetry(capturedPayloads: Array<{ path: string; payload: any }>) {
+    function assertZeroPIIInTelemetry(capturedPayloads: Array<{ kind: string; payload: any }>) {
         expect(capturedPayloads.length).toBeGreaterThan(0);
         for (const item of capturedPayloads) {
             const stringified = JSON.stringify(item);
@@ -349,17 +345,13 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
 
             await vi.advanceTimersByTimeAsync(100);
 
-            // Filter captured payloads by error vs event
-            const errorCalls = capturedSetDocPayloads.filter((c) => c.path.includes('telemetry_errors'));
-            const eventCalls = capturedSetDocPayloads.filter((c) => c.path.includes('telemetry_events'));
+            const errorCalls = capturedSetDocPayloads.filter((c) => c.kind === 'error');
 
-            // Error must be deduplicated to exactly 1 Firestore doc
+            // Zod fallback is represented by one deduplicated Sentry error only.
             expect(errorCalls.length).toBe(1);
             expect(errorCalls[0].payload.count).toBe(500);
             expect(errorCalls[0].payload.source).toBe('zod_schema_fallback');
-
-            // Events were dispatched for each occurrence
-            expect(eventCalls.length).toBe(500);
+            expect(capturedSetDocPayloads.some((c) => c.kind === 'event')).toBe(false);
         });
     });
 
