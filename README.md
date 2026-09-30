@@ -160,6 +160,7 @@ branch dedicato
 Gli agenti e i maintainer devono partire da:
 
 - [`AGENTS.md`](AGENTS.md) — invarianti e procedura operativa trasversale;
-- [`.agents/rules/`](.agents/rules/) — contratti specialistici per sync, dati, account lifecycle, Firebase, CI, crash consistency, catalogo e UX.
+- [`.agents/rules/`](.agents/rules/) — contratti specialistici per sync, dati, account lifecycle, Firebase, servizi esterni, CI, crash consistency, catalogo e UX;
+- [`docs/operations/external-services-register.md`](docs/operations/external-services-register.md) — perché usiamo i provider esterni, configurazioni da preservare e verifiche future.
 
 In caso di divergenza tra documentazione e implementazione corrente, non assumere che il documento più vecchio sia corretto: verificare codice, test, history e configurazione, quindi riallineare la documentazione normativa insieme alla modifica pertinente.
