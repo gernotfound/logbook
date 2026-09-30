@@ -172,7 +172,7 @@ LogBook dipende da configurazioni live che non sono completamente rappresentabil
 - **MUST:** verificare il sistema esterno competente prima di assumere stato live, quote, domini, enforcement o secret.
 - **MUST:** il repository pubblico non contiene valori segreti, email personali, identificativi di credenziali, dati di fatturazione o path locali del maintainer.
 - **MUST:** quando cambia materialmente una configurazione esterna, aggiornare il registro decisionale stabile.
-- **MUST:** origin/domìni di hosting ritirati vanno rimossi dalle allowlist esterne quando non servono più.
+- **MUST:** origin/domini di hosting ritirati vanno rimossi dalle allowlist esterne quando non servono più.
 
 → Contratto: `.agents/rules/external-services.md`. Registro decisionale: `docs/operations/external-services-register.md`.
 
