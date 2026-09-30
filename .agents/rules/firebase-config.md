@@ -26,12 +26,14 @@ Le chiavi Firebase Web sono configurazione pubblica inclusa nel bundle client; l
 
 ## App Check — reCAPTCHA Enterprise
 
+Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio **Fraud Defense**. Nel contratto LogBook corrente non esiste una seconda integrazione applicativa Fraud Defense: il client usa esclusivamente `ReCaptchaEnterpriseProvider` tramite Firebase App Check. Non dichiarare attive funzioni Account/SMS/Transaction defense o API assessment dirette senza evidenza live e codice corrispondente.
+
 - **Provider:** `ReCaptchaEnterpriseProvider` (NON `ReCaptchaV3Provider`).
 - **Bootstrap provider:** `src/lib/firebase.ts` inizializza il provider App Check prima di inizializzare Firestore. L'acquisizione del token resta asincrona e distinta dal bootstrap del provider.
 - **Stato:** `src/lib/appCheck.ts` distingue provider non inizializzato, disabled, unsupported, provider-ready, token-ready, token-error ed errore di inizializzazione. Un provider senza token non è considerato App Check attivo.
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
-- **Compatibilità transitoria:** `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` restano fallback runtime temporanei per evitare un cutover configurazione distruttivo; non usare questi nomi in nuova configurazione o documentazione.
+- **Compatibilità transitoria:** `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` restano fallback runtime temporanei per evitare un cutover configurazione distruttivo; non usare questi nomi in nuova configurazione o documentazione. Al 2026-09-30 l'inventario Vercel fornito dal product owner usa ancora il nome V3: non rimuovere il fallback finché la Production non è stata migrata e verificata sulla variabile canonica Enterprise.
 - **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle sette env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
