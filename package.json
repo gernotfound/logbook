@@ -46,10 +46,11 @@
     "verify:m7": "npm run verify:m6 && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7",
     "verify:m8": "npm run verify:m7 && npm run test:m8 && npm run test:domain-boundary:m8",
     "postbuild": "node scripts/write-deployment-metadata.mjs",
-    "functions:install": "npm install --prefix functions --ignore-scripts --no-audit --no-fund",
+    "functions:install": "npm install --prefix functions --ignore-scripts --no-audit --no-fund --package-lock=false",
     "functions:typecheck": "npm --prefix functions run typecheck",
     "functions:build": "npm --prefix functions run build",
-    "test:firebase-deploy-env": "node scripts/check-firebase-deploy-env.mjs"
+    "test:firebase-deploy-env": "node scripts/check-firebase-deploy-env.mjs",
+    "firebase:prepare-deploy": "node scripts/prepare-firebase-deploy-config.mjs"
   },
   "dependencies": {
     "@sentry/react": "^11.1.0",
