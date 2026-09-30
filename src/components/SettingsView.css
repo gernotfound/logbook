@@ -21,9 +21,9 @@
 .settings-detail-card h2,.settings-system-card h2,.settings-system-card h3 { display:flex; align-items:center; gap:.5rem; margin:0 0 .75rem; color:var(--text-main); font-size:var(--font-size-control); font-weight:600; }
 .settings-toggle-card { display:flex; min-height:5.5rem; align-items:center; gap:1rem; }
 .settings-toggle-card>div { display:grid; min-width:0; flex:1; gap:.375rem; }
-.settings-switch { position:relative; width:3.125rem; height:1.875rem; flex:0 0 3.125rem; cursor:pointer; }
-.settings-switch input { position:absolute; inset:0; z-index:1; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
-.settings-switch span { position:absolute; inset:0; pointer-events:none; border:1px solid var(--glass-border); border-radius:999px; background:var(--surface-light); transition:background .18s ease,border-color .18s ease; }
+.settings-switch { position:relative; width:3.125rem; height:2.75rem; flex:0 0 3.125rem; cursor:pointer; }
+.settings-switch input { position:absolute; inset:0; z-index:1; width:100%; height:100%; min-height:0; margin:0; opacity:0; cursor:pointer; }
+.settings-switch span { position:absolute; top:.4375rem; right:0; bottom:.4375rem; left:0; pointer-events:none; border:1px solid var(--glass-border); border-radius:999px; background:var(--surface-light); transition:background .18s ease,border-color .18s ease; }
 .settings-switch span::after { position:absolute; top:.1875rem; left:.1875rem; width:1.375rem; height:1.375rem; border-radius:50%; background:var(--text-main); content:''; transition:transform .18s ease; }
 .settings-switch input:checked+span { border-color:var(--primary-color); background:var(--primary-color); }
 .settings-switch input:checked+span::after { background:var(--on-primary); transform:translateX(1.25rem); }
