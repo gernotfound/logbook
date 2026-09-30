@@ -192,7 +192,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       mockSetDoc.mockImplementation(async () => {
         await new Promise((r) => setTimeout(r, 20));
-        return undefined;
+        return true;
       });
 
       // Start flush
@@ -254,7 +254,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // Delay mock setDoc to simulate in-flight network request
       mockSetDoc.mockImplementation(async () => {
         await new Promise((res) => setTimeout(res, 50));
-        return undefined;
+        return true;
       });
 
       // Start flush
@@ -287,7 +287,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       // 2. Set up simulated network latency of 15ms per write
       mockSetDoc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 15));
-        return undefined;
+        return true;
       });
 
       // 3. Start flush (online)
@@ -358,7 +358,7 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
 
       mockSetDoc.mockImplementation(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
-        return undefined;
+        return true;
       });
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -471,11 +471,11 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Mock setDoc: succeed for 1 and 3, reject for 2 and 4
-      mockSetDoc.mockImplementation(async (_docRef: any, payload: any) => {
+      mockSetDoc.mockImplementation(async (_kind: any, payload: any) => {
         if (payload.type === 'evt_fail_2' || payload.type === 'evt_fail_4') {
           throw new Error('Network error for item');
         }
-        return undefined;
+        return true;
       });
 
       await telemetryHub.flushQueue();
@@ -522,9 +522,9 @@ describe('Adversarial Stress Suite: Offline Queue & Online Replay Engine', () =>
     it('dispatches items in strict chronological FIFO order to Firestore', async () => {
       const dispatchOrder: string[] = [];
 
-      mockSetDoc.mockImplementation(async (_docRef: any, payload: any) => {
+      mockSetDoc.mockImplementation(async (_kind: any, payload: any) => {
         dispatchOrder.push(payload.type || payload.message);
-        return undefined;
+        return true;
       });
 
       Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
