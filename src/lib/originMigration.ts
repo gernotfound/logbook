@@ -316,11 +316,13 @@ export async function requestOriginMigration(): Promise<void> {
       cleanup();
 
       if (data.ok !== true) {
-        reject(new Error(typeof data.error === 'string' ? data.error : 'Trasferimento non riuscito.'));
+        const failure = data as Partial<Extract<OriginMigrationMessage, { ok: false }>>;
+        reject(new Error(typeof failure.error === 'string' ? failure.error : 'Trasferimento non riuscito.'));
         return;
       }
 
-      installOriginMigrationPayload(data.payload)
+      const success = data as Partial<Extract<OriginMigrationMessage, { ok: true }>>;
+      installOriginMigrationPayload(success.payload)
         .then(() => resolve())
         .catch(reject);
     };
