@@ -201,7 +201,7 @@ describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', 
       expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
 
       // Switch to another primary tab while sync remains active.
-      const dataButton = screen.getByRole('button', { name: /Dati/i });
+      const dataButton = screen.getByRole('button', { name: 'Dati e statistiche' });
       act(() => {
         fireEvent.click(dataButton);
       });

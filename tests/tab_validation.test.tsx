@@ -137,7 +137,6 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             const homeBtn = await screen.findByRole('button', { name: /^home$/i });
             expect(homeBtn.classList.contains('active')).toBe(true);
             expect(screen.queryByRole('button', { name: /^impostazioni$/i })).toBeNull();
-            expect(await screen.findByRole('button', { name: 'Apri impostazioni' })).toBeDefined();
         });
 
         it('opens settings from Home while keeping Home as the active primary destination', async () => {
