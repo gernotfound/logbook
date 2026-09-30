@@ -68,9 +68,11 @@ async function sourceOwner(): Promise<string | null> {
   if (typeof auth.authStateReady === 'function') await auth.authStateReady();
 
   const guest = readBrowserValueStrict('logbook_is_guest') === 'true';
+  const uid = auth.currentUser?.uid ?? null;
+  if (guest && uid) {
+    throw new Error('Sul vecchio indirizzo risultano contemporaneamente una sessione account e la modalità locale. Completa prima il passaggio account oppure esci e riprova.');
+  }
   if (guest) return 'guest';
-
-  const uid = auth.currentUser?.uid;
   if (uid) return userOwner(uid);
 
   // Firebase Auth may already be gone while the local receipt/envelope still
