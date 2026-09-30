@@ -35,7 +35,6 @@ export function initSentry(): boolean {
     dsn,
     environment: 'production',
     release: safeBuildSha(),
-    sendDefaultPii: false,
     tracesSampleRate: 0,
     maxBreadcrumbs: 0,
     defaultIntegrations: false,
