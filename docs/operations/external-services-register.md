@@ -45,7 +45,7 @@ Firebase Authentication è il provider identità del prodotto. LogBook supporta 
 
 In Firebase Authentication → Settings devono risultare autorizzati soltanto i domini realmente necessari: localhost per sviluppo, i domini Firebase predefiniti necessari al flusso Auth e il dominio canonico Production Vercel.
 
-Un precedente dominio GitHub Pages è **ritirato e non deve restare autorizzato**. Al consolidamento del 2026-09-30 il product owner ha segnalato che era ancora presente nella console: rimuoverlo manualmente e poi verificare login Google/email in Production.
+Il precedente dominio GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso da Firebase Authentication → Authorized domains; non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
 
 Nel Google OAuth Web Client auto-creato, le origini localhost servono lo sviluppo locale, l'origine Firebase Auth serve il flusso gestito dal provider e il redirect Firebase `__/auth/handler` è il callback OAuth gestito.
 
@@ -55,7 +55,7 @@ La Firebase Web API key è configurazione client pubblica, non una credenziale A
 
 Le restrizioni HTTP referrer devono seguire i soli frontend realmente autorizzati. Il dominio Vercel Production e l'origine Firebase necessaria al flusso Auth sono intenzionali.
 
-Il vecchio referrer GitHub Pages è **ritirato**. È stato segnalato ancora presente nella Browser key al 2026-09-30 e va rimosso dalla console Google Cloud. Non conservarlo “per sicurezza”: allarga inutilmente la superficie autorizzata.
+Il vecchio referrer GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso dalle restrizioni della Browser API key. Il dominio Production Vercel e l'origine Firebase necessaria al flusso Auth restano le allowlist intenzionali.
 
 ## Firestore
 
@@ -78,7 +78,7 @@ Le Vercel Functions di account deletion richiedono per contratto:
 
 Tutte sono server-only e nessuna deve avere prefisso `VITE_`.
 
-Nell'inventario Vercel fornito dal product owner il 2026-09-30 erano visibili `FIREBASE_ADMIN_PROJECT_ID` e `CRON_SECRET`; il repository richiede anche client email e private key. **VERIFY-LIVE:** prima di modificare il workflow account deletion, controllare direttamente in Vercel che tutte le env richieste dal codice siano presenti. Non commettere né copiare i valori nel repository.
+Verifica live del 2026-09-30: in Vercel Production risultano presenti `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`. I valori non sono registrati qui. Una chiave Admin generata accidentalmente durante la verifica è stata eliminata subito senza essere usata o installata.
 
 ## App Check, reCAPTCHA Enterprise e Fraud Defense
 
@@ -86,13 +86,20 @@ LogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere
 
 Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per LogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
 
-Il repository non contiene integrazioni dirette per Account defense, SMS defense, transaction defense o chiamate autonome alle API Fraud Defense. **VERIFY-LIVE:** il product owner ricorda di avere attivato Fraud Defense nella console Google Cloud, ma non ricorda se abbia abilitato ulteriori funzioni oltre alla chiave reCAPTCHA Enterprise usata da App Check. Finché la console non viene riletta, il repository prova soltanto App Check + reCAPTCHA Enterprise e non autorizza ad assumere attive altre difese. Se emergono funzioni aggiuntive già abilitate, registrarle qui con scopo e motivo.
+Verifica live del 2026-09-30: la Web App LogBook è registrata in Firebase App Check e la console la presenta con provider Fraud Defense/reCAPTCHA Enterprise. Cloud Firestore e Authentication mostravano 100% richieste verificate e 0% non verificate in modalità monitoraggio; l'enforcement non è stato attivato in questo task.
 
-Esiste una Web key dedicata a LogBook nella console Google Cloud. Il suo ID/valore non viene registrato nel repository.
+Nella chiave Google Cloud "Logbook Vercel":
+- la verifica dominio è attiva;
+- l'unico dominio configurato osservato è il dominio Production Vercel;
+- Bot/Fraud Defense è attivo con soglia di rischio 0,5;
+- Account defense non è configurato;
+- SMS defense non è configurato;
+- Transaction defense non è usato dal runtime LogBook e mostrava zero assessment;
+- gli assessment log risultavano disabilitati.
 
-La variabile canonica applicativa è `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. Il codice mantiene temporaneamente i fallback `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY`.
+L'ID/site key è configurazione client pubblica e non viene duplicato in questo registro; la Secret key reCAPTCHA non deve entrare nel browser né in env `VITE_*`.
 
-**Debito configurativo noto:** l'inventario Vercel del 2026-09-30 riportava ancora `VITE_RECAPTCHA_V3_SITE_KEY`. Non rimuovere il fallback dal codice finché Vercel Production non è stato migrato e verificato sulla variabile canonica Enterprise.
+Il cutover Vercel alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato il 2026-09-30. Dopo un redeploy Production è stata rimossa `VITE_RECAPTCHA_V3_SITE_KEY`; un secondo redeploy sullo stesso SHA ha risposto HTTP 200, ha incorporato la site key Enterprise nel bundle e non ha mostrato runtime error. I fallback `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` sono quindi ritirati dal contratto applicativo.
 
 ## Vercel
 
@@ -112,7 +119,7 @@ Il codice corrente legge sette variabili Firebase Web:
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 
-`VITE_FIREBASE_MEASUREMENT_ID` è stata segnalata ancora presente in Vercel, ma **non è usata dal codice corrente**: Firebase Analytics non fa parte del prodotto e il repository ne vieta l'inizializzazione. La variabile può essere rimossa da Vercel dopo una normale verifica di build; non deve essere reintrodotta come dipendenza.
+`VITE_FIREBASE_MEASUREMENT_ID` non è usata dal codice corrente e il 2026-09-30 è stata rimossa da Vercel. Firebase Analytics non fa parte del prodotto e la variabile non deve essere reintrodotta come dipendenza.
 
 Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
 
@@ -125,11 +132,11 @@ Inventario fornito dal product owner il 2026-09-30, da verificare live prima di 
 | Famiglia env | Scope riportato | Nota |
 |---|---|---|
 | sette `VITE_FIREBASE_*` usate dal client | Production + Preview | configurazione Firebase Web |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Production + Preview | legacy/non usata; candidata alla rimozione |
-| `VITE_RECAPTCHA_V3_SITE_KEY` | Production + Preview | alias legacy ancora necessario finché non viene migrato il nome canonico |
-| `FIREBASE_ADMIN_PROJECT_ID`, `CRON_SECRET` | Production | server-only |
-| `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` | VERIFY-LIVE | richieste dal codice server; assenti dall'inventario fornito |
-| env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | aggiunte per Error Monitoring/source map |
+| `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` | Production | site key pubblica canonica App Check |
+| `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET` | Production | server-only; presenza verificata, valori non registrati |
+| env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | Error Monitoring/source map |
+| `VITE_FIREBASE_MEASUREMENT_ID` | RIMOSSA | Firebase Analytics non usato |
+| `VITE_RECAPTCHA_V3_SITE_KEY` | RIMOSSA | alias legacy ritirato dopo cutover Enterprise |
 
 
 ## Vercel Analytics / Speed Insights
@@ -203,11 +210,11 @@ Audit repository 2026-09-30:
 - Vercel è il solo hosting Production;
 - il vecchio test auto-contenuto di base path dinamico `/logbook/` è stato rimosso perché non esercitava la configurazione reale; il contratto PWA corrente verifica `start_url` e `scope` alla radice `/`.
 
-Pulizia esterna ancora richiesta:
-- rimuovere il vecchio dominio GitHub Pages da **Firebase Authentication → Authorized domains**;
-- rimuovere il vecchio referrer GitHub Pages dalle restrizioni della **Google API Browser key**;
-- il Web OAuth client descritto dal product owner non riportava GitHub Pages, quindi non è richiesto rimuoverlo da quella lista salvo drift successivo;
-- **VERIFY-LIVE:** controllare anche i domini autorizzati della Web key reCAPTCHA Enterprise/Fraud Defense, perché il relativo elenco non è stato fornito e non può essere dedotto dal repository.
+Pulizia esterna completata/verificata il 2026-09-30:
+- il vecchio dominio GitHub Pages è stato rimosso da Firebase Authentication → Authorized domains;
+- il vecchio referrer GitHub Pages è stato rimosso dalla Browser API key;
+- il Web OAuth client descritto non riportava GitHub Pages;
+- la Web key reCAPTCHA Enterprise/Fraud Defense osservata autorizza il solo dominio Production Vercel e mantiene attiva la verifica dominio.
 
 ## Checklist annuale
 

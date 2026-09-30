@@ -59,6 +59,18 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             }
         });
 
+        it('uses only the canonical reCAPTCHA Enterprise environment variable', () => {
+            const appCheckSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/appCheck.ts'), 'utf-8');
+            const envExample = fs.readFileSync(path.resolve(__dirname, '../.env.example'), 'utf-8');
+
+            expect(appCheckSource).toContain('import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY');
+            expect(appCheckSource).not.toContain('VITE_RECAPTCHA_V3_SITE_KEY');
+            expect(appCheckSource).not.toContain('VITE_RECAPTCHA_SITE_KEY');
+            expect(envExample).toContain('VITE_RECAPTCHA_ENTERPRISE_SITE_KEY=');
+            expect(envExample).not.toContain('VITE_RECAPTCHA_V3_SITE_KEY');
+            expect(envExample).not.toContain('VITE_RECAPTCHA_SITE_KEY');
+        });
+
         it('does not initialize or allowlist Google/Firebase Analytics', () => {
             const firebaseSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebase.ts'), 'utf-8');
             const appSource = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf-8');

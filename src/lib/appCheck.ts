@@ -72,9 +72,7 @@ let appCheckPhase: AppCheckPhase = 'uninitialized';
 
 function resolveSiteKey(options?: AppCheckInitOptions): string | undefined {
     return options?.siteKey
-        || import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY
-        || import.meta.env.VITE_RECAPTCHA_V3_SITE_KEY
-        || import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+        || import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
 }
 
 function runtimeSupportsAppCheck(): boolean {
