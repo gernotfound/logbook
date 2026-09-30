@@ -42,5 +42,6 @@ try {
   ok=true;
 } finally {
   if (existsSync('.firebase-smoke-runner.mjs')) rmSync('.firebase-smoke-runner.mjs');
+  if (existsSync('functions/lib')) rmSync('functions/lib', { recursive: true, force: true });
   if (!ok) process.exit(1);
 }
