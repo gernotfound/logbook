@@ -33,6 +33,8 @@ function env(overrides: Record<string, string> = {}) {
     FIREBASE_HOSTING_SITE: 'thelogbook',
     FIREBASE_FUNCTION_REGION: region,
     LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},${legacyOrigin}`,
+    GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/123/locations/global/workloadIdentityPools/test/providers/github',
+    GCP_DEPLOY_SERVICE_ACCOUNT: 'firebase-deploy@example.invalid',
     ...overrides,
   };
 }
