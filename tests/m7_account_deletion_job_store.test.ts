@@ -4,6 +4,7 @@ const state = vi.hoisted(() => ({
   docs: new Set<string>(),
   batchSizes: [] as number[],
   jobUpdates: [] as unknown[],
+  jobData: new Map<string, Record<string, any>>(),
   deleteUser: vi.fn(),
   revokeRefreshTokens: vi.fn(),
   projectedQueries: [] as string[],
@@ -14,13 +15,15 @@ function fakeDocument(path: string): any {
     path,
     id: path.split('/').at(-1),
     async get() {
-      return { exists: state.docs.has(path), data: () => ({}) };
+      return { exists: state.docs.has(path), data: () => state.jobData.get(path) ?? {} };
     },
     async delete() {
       state.docs.delete(path);
+      state.jobData.delete(path);
     },
     async update(data: unknown) {
       state.jobUpdates.push(data);
+      state.jobData.set(path, { ...(state.jobData.get(path) ?? {}), ...(data as Record<string, any>) });
     },
     collection(name: string) {
       return fakeCollection(`${path}/${name}`);
@@ -78,6 +81,23 @@ const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
     return fakeCollection(name);
   },
+  async runTransaction(callback: (transaction: any) => unknown) {
+    const transaction = {
+      get: async (ref: { path: string }) => ({
+        exists: state.docs.has(ref.path),
+        data: () => state.jobData.get(ref.path) ?? {},
+      }),
+      create: (ref: { path: string }, data: Record<string, any>) => {
+        state.docs.add(ref.path);
+        state.jobData.set(ref.path, { ...data });
+      },
+      update: (ref: { path: string }, data: Record<string, any>) => {
+        state.jobUpdates.push(data);
+        state.jobData.set(ref.path, { ...(state.jobData.get(ref.path) ?? {}), ...data });
+      },
+    };
+    return callback(transaction);
+  },
   batch() {
     const deletes: string[] = [];
     return {
@@ -105,6 +125,8 @@ vi.mock('../functions/src/accountDeletion/firebaseAdmin', () => ({
 
 import {
   NonRetryableDeletionError,
+  createOrRefreshDeletionJob,
+  readAuthorizedDeletionJob,
   deleteAuthUserLast,
   deletePrivateCollectionPage,
   hashReceipt,
@@ -119,6 +141,7 @@ describe('M7 native deletion job store', () => {
     state.docs.clear();
     state.batchSizes.length = 0;
     state.jobUpdates.length = 0;
+    state.jobData.clear();
     state.projectedQueries.length = 0;
     vi.clearAllMocks();
     state.deleteUser.mockResolvedValue(undefined);
@@ -184,6 +207,26 @@ describe('M7 native deletion job store', () => {
     expect(hashReceipt(receipt)).toMatch(/^[a-f0-9]{64}$/);
     expect(hashReceipt(receipt)).not.toContain(receipt);
     expect(() => validateReceipt('short')).toThrow('Ricevuta di cancellazione non valida.');
+  });
+
+  it('keeps recovery receipts from multiple authenticated devices valid for the same deletion job', async () => {
+    const firstReceipt = 'A'.repeat(43);
+    const secondReceipt = 'B'.repeat(43);
+
+    await createOrRefreshDeletionJob('u', firstReceipt);
+    await createOrRefreshDeletionJob('u', secondReceipt);
+
+    await expect(readAuthorizedDeletionJob('u', firstReceipt)).resolves.not.toBeNull();
+    await expect(readAuthorizedDeletionJob('u', secondReceipt)).resolves.not.toBeNull();
+
+    const persisted = state.jobData.get('account_deletions/u')!;
+    expect(persisted.receiptHash).toBe(hashReceipt(firstReceipt));
+    expect(persisted.receiptHashes).toEqual([
+      hashReceipt(firstReceipt),
+      hashReceipt(secondReceipt),
+    ]);
+    expect(JSON.stringify(persisted)).not.toContain(firstReceipt);
+    expect(JSON.stringify(persisted)).not.toContain(secondReceipt);
   });
 
   it('starts the 30-day tombstone retention window only after deletion is complete', async () => {
