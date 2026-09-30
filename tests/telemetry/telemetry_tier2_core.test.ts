@@ -206,7 +206,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
       });
 
       it('F3-B5: handles extreme timestamps (0, negative, NaN, Infinity) gracefully', () => {
-        expect(DEDUP_WINDOW_MS).toBe(60000);
+        expect(DEDUP_WINDOW_MS).toBe(15 * 60 * 1000);
       });
     });
 
