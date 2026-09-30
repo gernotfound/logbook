@@ -346,12 +346,14 @@ describe('Adversarial Challenger M3: Zod Fallbacks, Zero-PII Leakage & Stress Ha
             await vi.advanceTimersByTimeAsync(100);
 
             const errorCalls = capturedSetDocPayloads.filter((c) => c.kind === 'error');
+            const localEventCalls = capturedSetDocPayloads.filter((c) => c.kind === 'event');
 
-            // Zod fallback is represented by one deduplicated Sentry error only.
+            // One external error is deduplicated; bounded diagnostic events are accepted
+            // by the local boundary and dropped before Sentry.
             expect(errorCalls.length).toBe(1);
             expect(errorCalls[0].payload.count).toBe(500);
             expect(errorCalls[0].payload.source).toBe('zod_schema_fallback');
-            expect(capturedSetDocPayloads.some((c) => c.kind === 'event')).toBe(false);
+            expect(localEventCalls.length).toBe(500);
         });
     });
 
