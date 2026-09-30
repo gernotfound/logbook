@@ -138,7 +138,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       // First retry scheduled after INITIAL_RETRY_DELAY_MS (1000ms * 2^0 = 1000ms)
       mockSetDoc.mockReset();
       // On next retry, simulate network restoration
-      mockSetDoc.mockResolvedValue(undefined as any);
+      mockSetDoc.mockResolvedValue(true);
 
       // Advance by 500ms (should not have triggered yet)
       await vi.advanceTimersByTimeAsync(500);
@@ -216,7 +216,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       expect(q.length).toBe(0);
 
       // Now verify a newly added valid event can be flushed immediately without interference
-      mockSetDoc.mockResolvedValue(undefined as any);
+      mockSetDoc.mockResolvedValue(true);
       telemetryHub.trackEvent('fresh_after_poison_cleared');
       await vi.advanceTimersByTimeAsync(100);
       expect(mockSetDoc).toHaveBeenCalled();
@@ -265,11 +265,11 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Mock: poison fails, valid succeeds
-      mockSetDoc.mockImplementation(async (_ref: any, data: any) => {
+      mockSetDoc.mockImplementation(async (_kind: any, data: any) => {
         if (data.type === 'PoisonType' || data.message?.includes('Reject always')) {
           throw new Error('Poison rejected');
         }
-        return undefined;
+        return true;
       });
 
       // Flush: poison fails (retry 1), valid succeeds and is evicted!
