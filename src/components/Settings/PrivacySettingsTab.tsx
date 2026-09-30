@@ -1,3 +1,5 @@
+import { ChevronRight, FileText, ShieldCheck } from 'lucide-react';
+
 interface PrivacySettingsTabProps {
     analyticsEnabled: boolean;
     onOpenTerms: () => void;
@@ -5,36 +7,31 @@ interface PrivacySettingsTabProps {
     onToggleAnalytics: () => void;
 }
 
-export function PrivacySettingsTab({
-    analyticsEnabled,
-    onOpenTerms,
-    onOpenPrivacy,
-    onToggleAnalytics,
-}: PrivacySettingsTabProps) {
+export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivacy, onToggleAnalytics }: PrivacySettingsTabProps) {
     return (
-        <>
-            <div className="section-divider" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <h3 style={{margin: '0 0 5px 0'}}><span aria-hidden="true">⚖️</span> Legale e privacy</h3>
-                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={onOpenTerms}>
-                    <span aria-hidden="true">📄</span> Termini e condizioni
-                </button>
-                <button className="btn" style={{ background: 'var(--surface-light)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', width: '100%', margin: 0 }} onClick={onOpenPrivacy}>
-                    <span aria-hidden="true">📋</span> Informativa sulla privacy
-                </button>
-                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)', marginTop: '8px' }}>
-                    Titolare e contatto privacy: da completare prima della distribuzione commerciale; consulta l'informativa privacy.
+        <section className="settings-detail-stack" aria-label="Privacy">
+            <div className="settings-toggle-card">
+                <div>
+                    <strong>Statistiche di utilizzo</strong>
+                    <p>Abilita Vercel Analytics e Speed Insights. Sono opzionali e disattivati per impostazione predefinita.</p>
                 </div>
+                <label className="settings-switch">
+                    <input type="checkbox" id="analytics-toggle" aria-label="Statistiche di utilizzo" checked={analyticsEnabled} onChange={onToggleAnalytics} />
+                    <span aria-hidden="true" />
+                </label>
             </div>
-
-            <div className="section-divider">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h3 style={{margin: '0 0 5px 0',color: 'var(--text-main)'}}>Statistiche di utilizzo</h3>
-                        <p style={{ margin: 0, fontSize: 'var(--font-size-body)', color: 'var(--text-muted)' }}>Abilita Vercel Analytics e Speed Insights. Sono opzionali e disattivati per impostazione predefinita.</p>
-                    </div>
-                    <input type="checkbox" id="analytics-toggle" checked={analyticsEnabled} onChange={onToggleAnalytics} style={{ width: '24px', height: '24px', accentColor: 'var(--primary-color)', marginLeft: '10px' }} />
-                </div>
+            <div className="settings-detail-list">
+                <button type="button" className="settings-simple-row" onClick={onOpenPrivacy}>
+                    <span className="settings-row-icon"><ShieldCheck size={20} aria-hidden="true" /></span>
+                    <span className="settings-row-copy"><strong>Informativa sulla privacy</strong></span>
+                    <ChevronRight size={20} aria-hidden="true" />
+                </button>
+                <button type="button" className="settings-simple-row" onClick={onOpenTerms}>
+                    <span className="settings-row-icon"><FileText size={20} aria-hidden="true" /></span>
+                    <span className="settings-row-copy"><strong>Termini e condizioni</strong></span>
+                    <ChevronRight size={20} aria-hidden="true" />
+                </button>
             </div>
-        </>
+        </section>
     );
 }

@@ -257,6 +257,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
         window.dispatchEvent(mockPromptEvent);
       });
 
+      fireEvent.click(screen.getByRole('button', { name: /Aspetto e applicazione/i }));
       const installBtn = await screen.findByRole('button', { name: /Installa app/i });
       expect(installBtn).not.toBeNull();
 

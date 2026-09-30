@@ -35,7 +35,7 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
     const setActiveTab = vi.fn();
     const { container, rerender } = render(<BottomNav activeTab="home" setActiveTab={setActiveTab} />);
 
-    expect(container.querySelectorAll('.nav-icon-shell')).toHaveLength(5);
+    expect(container.querySelectorAll('.nav-icon-shell')).toHaveLength(4);
     expect(container.querySelectorAll('.nav-item.active')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Home' }).classList.contains('active')).toBe(true);
 
@@ -57,8 +57,9 @@ describe('BottomNav & Safe Area Layout Conformance', () => {
       { name: 'Allenamento', id: 'training' },
       { name: 'Nutrizione', id: 'nutrition' },
       { name: 'Dati', id: 'data' },
-      { name: 'Impostazioni', id: 'settings' },
     ];
+
+    expect(screen.queryByRole('button', { name: 'Impostazioni' })).toBeNull();
 
     tabs.forEach(({ name, id }) => {
       const btn = screen.getByRole('button', { name: new RegExp(name, 'i') });

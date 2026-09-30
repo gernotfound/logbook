@@ -1,11 +1,15 @@
-.home-header { display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:1rem; }
+.home-header { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:start; gap:.75rem 1rem; }
+.home-header-copy { min-width:0; }
 .home-header h1 { margin:.25rem 0 0; }
 .home-muted { color:var(--text-muted); }
 .home-success { color:var(--success-color); }
-.home-header-stats { display:flex; flex-wrap:wrap; gap:.5rem; }
+.home-header-stats { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.5rem; align-self:center; }
 .home-badge { display:inline-flex; align-items:center; gap:.375rem; padding:.5rem .625rem; border-radius:.75rem; background:var(--surface-color); color:var(--text-muted); font-size: var(--font-size-meta); }
 .home-badge strong { color:var(--text-main); font-variant-numeric:tabular-nums; }
 .home-badge svg { color:var(--primary-color); }
+.home-settings-button { display:grid; place-items:center; width:2.75rem; height:2.75rem; flex:0 0 2.75rem; padding:0; border:1px solid var(--glass-border); border-radius:var(--radius-control); background:var(--surface-color); color:var(--text-main); cursor:pointer; }
+.home-settings-button:hover { background:var(--surface-light); }
+.home-settings-button:focus-visible { outline:2px solid var(--primary-color); outline-offset:3px; }
 #view-home .home-flush-card { padding:0; margin:0; }
 #view-home .home-biometry-card, #view-home .home-recovery-card { margin:0; }
 .home-workout, .home-nutrition { padding:1.25rem; }
@@ -79,4 +83,10 @@
     .home-nutrition-summary { gap:.75rem; }
     .home-calorie-ring { width:5rem; height:5rem; }
     .home-calorie-ring strong { font-size: var(--font-size-section); }
+}
+
+@media (max-width:30rem) {
+    .home-header { grid-template-columns:minmax(0,1fr) auto; }
+    .home-settings-button { grid-column:2; grid-row:1; }
+    .home-header-stats { grid-column:1 / -1; grid-row:2; justify-content:flex-start; }
 }

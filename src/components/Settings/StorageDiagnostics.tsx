@@ -3,30 +3,17 @@ import { getStorageDiagnosticData } from '../../lib/storageStatus';
 
 export function StorageDiagnostics() {
     const storageDiag = getStorageDiagnosticData();
-
     return (
-        <div className="settings-system-card">
-            <h3><HardDrive size={18} aria-hidden="true" /> Diagnostica archiviazione</h3>
-            <p style={{ fontSize: 'var(--font-size-body)', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>Stato della persistenza dei dati offline su questo dispositivo.</p>
-            {!storageDiag ? (
-                <span style={{ fontSize: 'var(--font-size-meta)' }}>Caricamento...</span>
-            ) : !storageDiag.supported ? (
-                <span style={{ fontSize: 'var(--font-size-meta)', color: 'var(--danger-color)' }}>Persistenza non supportata (Storage API mancante).</span>
+        <div className="settings-detail-card">
+            <h2><HardDrive size={20} aria-hidden="true" /> Diagnostica archiviazione</h2>
+            <p className="settings-help">Stato della persistenza dei dati offline su questo dispositivo.</p>
+            {!storageDiag ? <span className="settings-meta">Caricamento...</span> : !storageDiag.supported ? (
+                <span className="settings-meta settings-danger">Persistenza non supportata (Storage API mancante).</span>
             ) : (
-                <div style={{ fontSize: 'var(--font-size-meta)', color: 'var(--text-main)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                        <span>Stato:</span>
-                        <span style={{ color: storageDiag.persistent ? 'var(--success-color)' : 'var(--warning-color)', fontWeight: 'bold' }}>
-                            {storageDiag.persistent ? 'Persistente (Sicuro)' : 'Best-Effort (Volatile)'}
-                        </span>
-                    </div>
-                    {storageDiag.usage !== undefined && storageDiag.quota !== undefined && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Utilizzo:</span>
-                            <span>{(storageDiag.usage / 1024 / 1024).toFixed(2)} MB / {(storageDiag.quota / 1024 / 1024).toFixed(2)} MB</span>
-                        </div>
-                    )}
-                </div>
+                <dl className="settings-details">
+                    <div><dt>Stato</dt><dd className={storageDiag.persistent ? 'settings-success' : 'settings-warning'}>{storageDiag.persistent ? 'Persistente (Sicuro)' : 'Best-Effort (Volatile)'}</dd></div>
+                    {storageDiag.usage !== undefined && storageDiag.quota !== undefined && <div><dt>Utilizzo</dt><dd>{(storageDiag.usage / 1024 / 1024).toFixed(2)} MB / {(storageDiag.quota / 1024 / 1024).toFixed(2)} MB</dd></div>}
+                </dl>
             )}
         </div>
     );

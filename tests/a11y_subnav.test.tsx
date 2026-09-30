@@ -92,25 +92,16 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
         expect(planningTab.getAttribute('aria-selected')).toBe('true');
     });
 
-    it('SettingsView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
+    it('SettingsView hierarchical menu uses native buttons and accessible back navigation', async () => {
         render(<SettingsView />);
         
-        expect(screen.queryByRole('heading', { name: 'Impostazioni' })).toBeNull();
-        const tablist = screen.getByRole('tablist', { name: 'Sotto-menu Impostazioni' });
-        expect(tablist).not.toBeNull();
+        expect(screen.getByRole('heading', { name: 'Impostazioni' })).not.toBeNull();
+        const privacyButton = screen.getByRole('button', { name: /^Privacy/i });
+        expect(privacyButton.tagName).toBe('BUTTON');
         
-        const tabs = within(tablist).getAllByRole('tab');
-        expect(tabs.length).toBe(4);
-        
-        const accountTab = tabs[0];
-        const privacyTab = tabs[1];
-        
-        expect(accountTab.tagName).toBe('BUTTON');
-        expect(accountTab.getAttribute('aria-selected')).toBe('true');
-        
-        fireEvent.click(privacyTab);
-        expect(accountTab.getAttribute('aria-selected')).toBe('false');
-        expect(privacyTab.getAttribute('aria-selected')).toBe('true');
+        fireEvent.click(privacyButton);
+        expect(screen.getByRole('heading', { name: 'Privacy' })).not.toBeNull();
+        expect(screen.getByRole('button', { name: 'Torna alle impostazioni' })).not.toBeNull();
     });
 
     it('TrainingView sub-nav uses buttons with role="tab" and is keyboard accessible', async () => {
@@ -140,7 +131,7 @@ describe('A11Y-01: Keyboard Accessibility for Sub-Navigation', () => {
     it('BottomNav uses native buttons correctly', () => {
         render(<BottomNav activeTab="home" setActiveTab={vi.fn()} />);
         const navItems = screen.getAllByRole('button');
-        expect(navItems.length).toBe(5);
+        expect(navItems.length).toBe(4);
         expect(navItems[0].getAttribute('aria-label')).toBe('Home');
     });
 

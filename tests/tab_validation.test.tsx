@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, act, renderHook } from '@testing-library/react';
+import { screen, act, renderHook, fireEvent } from '@testing-library/react';
 import App from '../src/App';
-import { renderWithProviders } from './setup';
+import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
+import { defaultMockUserData, renderWithProviders } from './setup';
+import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { 
     AppTabSchema, 
     MainTabSchema, 
@@ -20,7 +22,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
 
     describe('Zod Schema Unit Validation', () => {
         it('validates all valid AppTab / MainTab values', () => {
-            const validTabs = ['home', 'training', 'nutrition', 'data', 'settings'] as const;
+            const validTabs = ['home', 'training', 'nutrition', 'data'] as const;
             for (const tab of validTabs) {
                 const parseApp = AppTabSchema.safeParse(tab);
                 const parseMain = MainTabSchema.safeParse(tab);
@@ -35,6 +37,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
                 '',
                 'corrupted_tab',
                 'dashboard',
+                'settings',
                 123,
                 null,
                 undefined,
@@ -119,13 +122,50 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             expect(homeBtn.classList.contains('active')).toBe(true);
         });
 
-        it('preserves valid tab when localStorage is valid', async () => {
+        it('preserves valid primary tab when localStorage is valid', async () => {
+            window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('training'));
+            
+            renderWithProviders(<App />);
+
+            const trainingBtn = await screen.findByRole('button', { name: /allenamento/i });
+            expect(trainingBtn.classList.contains('active')).toBe(true);
+        });
+
+        it('falls back to Home when localStorage contains the legacy settings tab', async () => {
             window.localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB, JSON.stringify('settings'));
             
             renderWithProviders(<App />);
 
-            const settingsBtn = await screen.findByRole('button', { name: /impostazioni/i });
-            expect(settingsBtn.classList.contains('active')).toBe(true);
+            const homeBtn = await screen.findByRole('button', { name: /^home$/i });
+            expect(homeBtn.classList.contains('active')).toBe(true);
+            expect(screen.queryByRole('button', { name: /^impostazioni$/i })).toBeNull();
+        });
+
+        it('opens the legacy settings shortcut as a secondary Home surface while keeping Home active', async () => {
+            window.history.replaceState({}, '', '/?tab=settings');
+            renderWithProviders(<App />, {
+                userData: {
+                    ...defaultMockUserData,
+                    legalConsent: {
+                        hasAcceptedTerms: true,
+                        hasAcceptedHealthData: true,
+                        acceptedAt: '2026-09-30T00:00:00.000Z',
+                        privacyVersion: LEGAL_VERSIONS.privacy,
+                        termsVersion: LEGAL_VERSIONS.terms,
+                    },
+                },
+            });
+
+            expect(await screen.findByRole('heading', { name: 'Impostazioni' }, { timeout: 5000 })).toBeDefined();
+            expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
+        });
+
+        it('exposes the settings control in the Home header', () => {
+            const onOpenSettings = vi.fn();
+            renderWithProviders(<HeaderDashboard streak={3} totalWorkouts={12} onOpenSettings={onOpenSettings} />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Apri impostazioni' }));
+            expect(onOpenSettings).toHaveBeenCalledTimes(1);
         });
     });
 });

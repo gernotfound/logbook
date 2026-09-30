@@ -9,12 +9,12 @@ async function enterGuestMode(page: Page) {
     await checkbox.check();
   }
   await page.getByRole('button', { name: 'Accetta e Continua' }).click();
-  await expect(page.getByRole('button', { name: 'Impostazioni' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apri impostazioni' })).toBeVisible();
 }
 
 async function openAnalyticsSettings(page: Page) {
-  await page.getByRole('button', { name: 'Impostazioni' }).click();
-  await page.getByRole('tab', { name: 'Privacy', exact: true }).click();
+  await page.getByRole('button', { name: 'Apri impostazioni' }).click();
+  await page.getByRole('button', { name: /^Privacy/ }).click();
   await expect(page.locator('#analytics-toggle')).toBeVisible();
 }
 
@@ -30,7 +30,7 @@ test.describe('Analytics consent multi-tab lifecycle', () => {
     await enterGuestMode(page);
     const secondPage = await context.newPage();
     await secondPage.goto('/');
-    await expect(secondPage.getByRole('button', { name: 'Impostazioni' })).toBeVisible();
+    await expect(secondPage.getByRole('button', { name: 'Apri impostazioni' })).toBeVisible();
 
     await openAnalyticsSettings(page);
     await openAnalyticsSettings(secondPage);

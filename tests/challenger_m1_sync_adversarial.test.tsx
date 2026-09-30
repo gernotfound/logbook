@@ -200,11 +200,10 @@ describe('Empirical Challenger: M1 Background Sync & Error Toast Stress Suite', 
 
       expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
 
-      // Switch to settings tab
-      const navButtons = container.querySelectorAll('nav button, .bottom-nav button');
-      expect(navButtons.length).toBeGreaterThan(0);
+      // Switch to another primary tab while sync remains active.
+      const dataButton = screen.getByRole('button', { name: 'Dati e statistiche' });
       act(() => {
-        fireEvent.click(navButtons[navButtons.length - 1]);
+        fireEvent.click(dataButton);
       });
 
       // Sync indicator remains visible and non-blocking

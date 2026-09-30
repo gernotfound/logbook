@@ -158,7 +158,7 @@ describe('Render Test Suite - Zero Crash Verification', () => {
   test('renders SettingsView without crashing', () => {
     const { container } = renderWithProviders(<SettingsView />);
     expect(container).toBeDefined();
-    expect(screen.getByText(/Account Google/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /Account e accesso/i })).toBeDefined();
   });
 
   test('renders DataView without crashing', () => {
