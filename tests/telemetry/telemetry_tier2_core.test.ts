@@ -180,7 +180,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         expect(mockSetDoc).toHaveBeenCalledTimes(2);
       });
 
-      it('F3-B4: error occurring at exactly 59.9s is deduplicated; at 60.1s starts new window', async () => {
+      it('F3-B4: error immediately before expiry is deduplicated; after expiry starts new window', async () => {
         vi.useFakeTimers();
         const baseTime = 1724486400000;
         vi.setSystemTime(baseTime);
@@ -191,14 +191,14 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
         const err = new Error('Window boundary test');
         telemetryHub.trackError(err);
 
-        vi.setSystemTime(baseTime + 59900);
+        vi.setSystemTime(baseTime + DEDUP_WINDOW_MS - 100);
         telemetryHub.trackError(err);
 
         await vi.advanceTimersByTimeAsync(100);
         expect(mockSetDoc).toHaveBeenCalledTimes(1);
         expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(2);
 
-        vi.setSystemTime(baseTime + 60100);
+        vi.setSystemTime(baseTime + DEDUP_WINDOW_MS + 100);
         telemetryHub.trackError(err);
 
         await vi.advanceTimersByTimeAsync(100);
