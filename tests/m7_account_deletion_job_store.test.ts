@@ -229,6 +229,27 @@ describe('M7 native deletion job store', () => {
     expect(JSON.stringify(persisted)).not.toContain(secondReceipt);
   });
 
+  it('rejects an unbounded growth of recovery receipts without invalidating existing devices', async () => {
+    const receipts = Array.from({ length: 32 }, (_, index) =>
+      Buffer.alloc(32, index + 1).toString('base64url')
+    );
+
+    for (const receipt of receipts) {
+      await createOrRefreshDeletionJob('u', receipt);
+    }
+
+    const extraReceipt = Buffer.alloc(32, 99).toString('base64url');
+    await expect(createOrRefreshDeletionJob('u', extraReceipt))
+      .rejects.toThrow('Numero massimo di dispositivi di recovery raggiunto');
+
+    await expect(readAuthorizedDeletionJob('u', receipts[0])).resolves.not.toBeNull();
+    await expect(readAuthorizedDeletionJob('u', receipts.at(-1)!)).resolves.not.toBeNull();
+    await expect(readAuthorizedDeletionJob('u', extraReceipt)).resolves.toBeNull();
+
+    const persisted = state.jobData.get('account_deletions/u')!;
+    expect(persisted.receiptHashes).toHaveLength(32);
+  });
+
   it('starts the 30-day tombstone retention window only after deletion is complete', async () => {
     await markDeletionComplete('u');
 
