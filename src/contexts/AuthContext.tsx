@@ -92,6 +92,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const loadData = useCallback(async (user: User) => {
+        let transferredUid: string | null;
+        try {
+            transferredUid = originMigrationPendingUid();
+        } catch (error) {
+            console.warn('Stato trasferimento origine non leggibile; caricamento account bloccato:', error);
+            setSaveError('Archivio locale non disponibile: non posso verificare in sicurezza a quale account appartengono i dati trasferiti. Riapri LogBook o riabilita lo storage del browser e riprova.');
+            return { cloudReconciled: false, localRecovered: false };
+        }
+        if (transferredUid && transferredUid !== user.uid) {
+            setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
+            return { cloudReconciled: false, localRecovered: false };
+        }
+
         const session = captureSession();
         const result = await loadAuthenticatedData({
             user,
@@ -100,16 +113,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSyncing,
             setSaveError,
         });
-
-        let transferredUid: string | null;
-        try {
-            transferredUid = originMigrationPendingUid();
-        } catch (error) {
-            // The data load may already be usable, but an unreadable lifecycle
-            // marker must never be cleared or interpreted as absent.
-            console.warn('Stato trasferimento origine non leggibile; marker conservato:', error);
-            return result;
-        }
         const sameAuthenticatedOwner = () => isCurrentSession(session)
             && auth.currentUser?.uid === user.uid
             && !isGuestRef.current
