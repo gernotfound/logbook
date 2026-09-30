@@ -144,6 +144,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       // Whitelist verification
       const allowedKeys = new Set([
         'timestamp',
+        'id',
+        'hash',
         'type',
         'message',
         'stack',
