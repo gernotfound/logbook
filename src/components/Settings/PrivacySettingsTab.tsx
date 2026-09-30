@@ -32,7 +32,6 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
                     <ChevronRight size={20} aria-hidden="true" />
                 </button>
             </div>
-            <p className="settings-privacy-note">Titolare e contatto privacy: da completare prima della distribuzione commerciale; consulta l'informativa privacy.</p>
         </section>
     );
 }
