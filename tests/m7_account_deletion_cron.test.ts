@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const store = vi.hoisted(() => ({
   listRecoverableDeletionJobs: vi.fn(),
@@ -14,25 +14,16 @@ const telemetryRetention = vi.hoisted(() => ({
   purgeExpiredTelemetry: vi.fn(),
 }));
 
-vi.mock('../server/accountDeletion/jobStore', () => store);
-vi.mock('../server/accountDeletion/runner', () => runner);
-vi.mock('../server/accountDeletion/retention', () => retention);
-vi.mock('../server/telemetryRetention', () => telemetryRetention);
+vi.mock('../functions/src/accountDeletion/jobStore', () => store);
+vi.mock('../functions/src/accountDeletion/runner', () => runner);
+vi.mock('../functions/src/accountDeletion/retention', () => retention);
+vi.mock('../functions/src/telemetryRetention', () => telemetryRetention);
 
-import { GET } from '../api/account-deletion-cron';
+import { runAccountDeletionMaintenance } from '../functions/src/maintenance';
 
-function request(secret?: string): Request {
-  return new Request('https://example.test/api/account-deletion-cron', {
-    headers: secret ? { authorization: `Bearer ${secret}` } : undefined,
-  });
-}
-
-describe('M7 daily account deletion recovery cron', () => {
-  const originalSecret = process.env.CRON_SECRET;
-
+describe('M7 Firebase scheduled account deletion maintenance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.CRON_SECRET;
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
     runner.processAccountDeletion.mockResolvedValue('complete');
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
@@ -43,85 +34,50 @@ describe('M7 daily account deletion recovery cron', () => {
     });
   });
 
-  afterEach(() => {
-    if (originalSecret === undefined) delete process.env.CRON_SECRET;
-    else process.env.CRON_SECRET = originalSecret;
-  });
+  it('processes recoverable jobs with the shared idempotent runner', async () => {
+    const summary = await runAccountDeletionMaintenance(Date.now() + 60_000);
 
-  it('fails closed when CRON_SECRET is not configured', async () => {
-    const response = await GET(request());
-    expect(response.status).toBe(503);
-    expect(store.listRecoverableDeletionJobs).not.toHaveBeenCalled();
-    expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
-    expect(telemetryRetention.purgeExpiredTelemetry).not.toHaveBeenCalled();
-  });
-
-  it('rejects callers that do not present the configured bearer secret', async () => {
-    process.env.CRON_SECRET = 'expected-secret';
-    const response = await GET(request('wrong-secret'));
-    expect(response.status).toBe(401);
-    expect(store.listRecoverableDeletionJobs).not.toHaveBeenCalled();
-    expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
-    expect(telemetryRetention.purgeExpiredTelemetry).not.toHaveBeenCalled();
-  });
-
-  it('processes recoverable jobs with the shared idempotent runner when authorized', async () => {
-    process.env.CRON_SECRET = 'expected-secret';
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const response = await GET(request('expected-secret'));
-
-    expect(response.status).toBe(200);
     expect(store.listRecoverableDeletionJobs).toHaveBeenCalledWith(25);
     expect(runner.processAccountDeletion).toHaveBeenCalledTimes(2);
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(1, 'a', expect.any(Number));
     expect(runner.processAccountDeletion).toHaveBeenNthCalledWith(2, 'b', expect.any(Number));
     expect(retention.purgeExpiredCompletedDeletionJobs).toHaveBeenCalledWith(400);
     expect(telemetryRetention.purgeExpiredTelemetry).toHaveBeenCalledWith(expect.any(Number));
-    expect(await response.json()).toMatchObject({
+    expect(summary).toMatchObject({
       scanned: 2,
       processed: 2,
+      completed: 2,
+      pending: 0,
+      failed: 0,
+      busy: 0,
       purged: 0,
       telemetryUsersScanned: 0,
       telemetryPurged: 0,
       telemetryCycleCompleted: true,
     });
-    expect(info).toHaveBeenCalledWith('[account-deletion-cron] completed', {
-      scanned: 2,
-      processed: 2,
-      purged: 0,
-      telemetryUsersScanned: 0,
-      telemetryPurged: 0,
-      telemetryCycleCompleted: true,
-    });
-    info.mockRestore();
   });
 
-  it('keeps account deletion recovery successful when telemetry retention fails', async () => {
-    process.env.CRON_SECRET = 'expected-secret';
+  it('keeps deletion recovery successful when telemetry retention fails', async () => {
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }]);
     telemetryRetention.purgeExpiredTelemetry.mockRejectedValue(new Error('telemetry unavailable'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const response = await GET(request('expected-secret'));
+    const summary = await runAccountDeletionMaintenance(Date.now() + 60_000);
 
-    expect(response.status).toBe(200);
     expect(runner.processAccountDeletion).toHaveBeenCalledWith('a', expect.any(Number));
-    expect(await response.json()).toMatchObject({
+    expect(summary).toMatchObject({
       scanned: 1,
       processed: 1,
-      purged: 0,
-      telemetryUsersScanned: 0,
-      telemetryPurged: 0,
+      completed: 1,
       telemetryCycleCompleted: false,
     });
-    expect(error).toHaveBeenCalledWith('[account-deletion-cron] telemetry retention failed', {
+    expect(error).toHaveBeenCalledWith('[account-deletion-maintenance] telemetry retention failed', {
       kind: 'Error',
     });
     error.mockRestore();
   });
 
-  it('uses only the residual cron budget for completed tombstone garbage collection', async () => {
-    process.env.CRON_SECRET = 'expected-secret';
+  it('uses only the residual maintenance budget for tombstone and telemetry cleanup', async () => {
     const order: string[] = [];
     store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }]);
     runner.processAccountDeletion.mockImplementation(async () => {
@@ -137,11 +93,10 @@ describe('M7 daily account deletion recovery cron', () => {
       return { usersScanned: 1, documentsDeleted: 3, completedCycle: true };
     });
 
-    const response = await GET(request('expected-secret'));
+    const summary = await runAccountDeletionMaintenance(Date.now() + 60_000);
 
-    expect(response.status).toBe(200);
     expect(order).toEqual(['recover', 'purge', 'telemetry']);
-    expect(await response.json()).toMatchObject({
+    expect(summary).toMatchObject({
       scanned: 1,
       processed: 1,
       purged: 2,
@@ -149,5 +104,14 @@ describe('M7 daily account deletion recovery cron', () => {
       telemetryPurged: 3,
       telemetryCycleCompleted: true,
     });
+  });
+
+  it('stops before destructive work when there is no safe budget left', async () => {
+    const summary = await runAccountDeletionMaintenance(Date.now() + 5_000);
+
+    expect(runner.processAccountDeletion).not.toHaveBeenCalled();
+    expect(retention.purgeExpiredCompletedDeletionJobs).not.toHaveBeenCalled();
+    expect(telemetryRetention.purgeExpiredTelemetry).not.toHaveBeenCalled();
+    expect(summary.processed).toBe(0);
   });
 });

@@ -12,6 +12,7 @@ import {
     type AccountDeletionMarker,
 } from '../sync/accountGate';
 import { waitForJournalIdle } from '../sync/replicateJournal';
+import { accountDeletionApiUrl } from '../deploymentConfig';
 
 export type AccountDeletionOutcome =
     | { status: 'complete' }
@@ -46,6 +47,9 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         const ownerUid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
         if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
             keys.add('logbook_guest_migration_sync_recovery');
+        }
+        if (ownerUid && localStorage.getItem('logbook_origin_migration_pending_uid_v1') === ownerUid) {
+            keys.add('logbook_origin_migration_pending_uid_v1');
         }
         const prefix = 'logbook:v2:' + owner + ':';
         for (let index = 0; index < localStorage.length; index++) {
@@ -88,7 +92,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionApiUrl(), {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -110,7 +114,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
 
 export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionApiUrl(), {
         method: 'GET',
         headers: {
             'x-firebase-appcheck': await appCheckToken(),

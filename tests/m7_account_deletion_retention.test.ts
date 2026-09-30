@@ -58,7 +58,7 @@ const fakeDb = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
+vi.mock('../functions/src/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => fakeDb,
 }));
 
@@ -66,7 +66,7 @@ import {
   ACCOUNT_DELETION_COMPLETED_RETENTION_MS,
   completedDeletionPurgeAfter,
   purgeExpiredCompletedDeletionJobs,
-} from '../server/accountDeletion/retention';
+} from '../functions/src/accountDeletion/retention';
 
 describe('M7 completed account deletion retention', () => {
   beforeEach(() => {

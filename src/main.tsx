@@ -9,6 +9,8 @@ import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
 import { AccountDeletionRecovery } from './components/AccountDeletionRecovery'
+import { OriginMigrationGate } from './components/UI/OriginMigrationGate'
+import { handleOriginMigrationExportRequest } from './lib/originMigration'
 import { useAppStore, getInitialUserData } from './store/useAppStore'
 import './styles/global.css'
 import { initializeAppearance } from './store/useAppearanceStore'
@@ -203,10 +205,12 @@ export const initApp = async () => {
     }).render(
       <StrictMode>
         <ErrorBoundary>
-          <AuthProvider>
-            <AccountDeletionRecovery />
-            <App />
-          </AuthProvider>
+          <OriginMigrationGate>
+            <AuthProvider>
+              <AccountDeletionRecovery />
+              <App />
+            </AuthProvider>
+          </OriginMigrationGate>
         </ErrorBoundary>
       </StrictMode>,
     );
@@ -214,5 +218,12 @@ export const initApp = async () => {
 };
 
 if (typeof document !== 'undefined') {
-  initApp();
+  void handleOriginMigrationExportRequest()
+    .then(handled => {
+      if (!handled) return initApp();
+    })
+    .catch(error => {
+      console.error('Bootstrap trasferimento origine fallito:', error);
+      return initApp();
+    });
 }

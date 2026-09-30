@@ -1,74 +1,19 @@
-import { listRecoverableDeletionJobs } from '../server/accountDeletion/jobStore.js';
-import {
-  ACCOUNT_DELETION_RETENTION_PAGE_SIZE,
-  purgeExpiredCompletedDeletionJobs,
-} from '../server/accountDeletion/retention.js';
-import { processAccountDeletion } from '../server/accountDeletion/runner.js';
-import { purgeExpiredTelemetry } from '../server/telemetryRetention.js';
+import { runAccountDeletionMaintenance } from '../functions/src/maintenance.js';
 
-export const maxDuration = 300;
+const LEGACY_CRON_BUDGET_MS = 270_000;
 
-const CRON_BUDGET_MS = 270_000;
-const SAFETY_BUFFER_MS = 10_000;
-
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get('authorization') === `Bearer ${secret}`;
+function forbidden(status: number): Response {
+  return Response.json({ error: status === 503 ? 'Cron non configurato.' : 'Non autorizzato.' }, { status });
 }
 
 export async function GET(request: Request): Promise<Response> {
-  if (!process.env.CRON_SECRET) {
-    return Response.json({ error: 'CRON_SECRET non configurato.' }, { status: 503 });
-  }
-  if (!authorized(request)) {
-    return Response.json({ error: 'Non autorizzato.' }, { status: 401 });
-  }
+  const configuredSecret = process.env.CRON_SECRET?.trim();
+  if (!configuredSecret) return forbidden(503);
 
-  const deadlineMs = Date.now() + CRON_BUDGET_MS;
-  const jobs = await listRecoverableDeletionJobs(25);
-  const results: Array<{ uid: string; result: string }> = [];
+  const authorization = request.headers.get('authorization');
+  if (authorization !== `Bearer ${configuredSecret}`) return forbidden(401);
 
-  for (const job of jobs) {
-    if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
-    const result = await processAccountDeletion(job.uid, deadlineMs);
-    results.push({ uid: job.uid, result });
-  }
-
-  let purged = 0;
-  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
-    const deleted = await purgeExpiredCompletedDeletionJobs(ACCOUNT_DELETION_RETENTION_PAGE_SIZE);
-    purged += deleted;
-    if (deleted < ACCOUNT_DELETION_RETENTION_PAGE_SIZE) break;
-  }
-
-  let telemetryRetention = { usersScanned: 0, documentsDeleted: 0, completedCycle: false };
-  if (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
-    try {
-      telemetryRetention = await purgeExpiredTelemetry(deadlineMs);
-    } catch (error) {
-      console.error('[account-deletion-cron] telemetry retention failed', {
-        kind: error instanceof Error ? error.name : typeof error,
-      });
-    }
-  }
-
-  console.info('[account-deletion-cron] completed', {
-    scanned: jobs.length,
-    processed: results.length,
-    purged,
-    telemetryUsersScanned: telemetryRetention.usersScanned,
-    telemetryPurged: telemetryRetention.documentsDeleted,
-    telemetryCycleCompleted: telemetryRetention.completedCycle,
-  });
-
-  return Response.json({
-    scanned: jobs.length,
-    processed: results.length,
-    purged,
-    telemetryUsersScanned: telemetryRetention.usersScanned,
-    telemetryPurged: telemetryRetention.documentsDeleted,
-    telemetryCycleCompleted: telemetryRetention.completedCycle,
-    results,
-  });
+  const summary = await runAccountDeletionMaintenance(Date.now() + LEGACY_CRON_BUDGET_MS);
+  console.info('[account-deletion-cron] completed', summary);
+  return Response.json(summary, { status: 200 });
 }

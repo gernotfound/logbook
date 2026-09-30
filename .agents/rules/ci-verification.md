@@ -66,7 +66,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 - MUST: nessun secret production è richiesto dal gate repository.
 - MUST: i test M7 server continuano a mockare Firebase Admin.
 - MUST: il runner E2E usa esclusivamente configurazione Firebase dummy/test.
-- MUST: `FIREBASE_ADMIN_*` e `CRON_SECRET` restano configurazione runtime e non fixture CI.
+- MUST: nessun secret Production è fixture CI. Le credenziali Admin legacy restano fuori dal gate; il deploy Firebase usa OIDC/Workload Identity Federation e non una private key committata.
 
 ## Trigger
 
@@ -90,9 +90,19 @@ Il checker automatico M8 protegge direttamente i consumer sotto `src/hooks` e `s
 ## M7 contract preservato
 
 - MUST: `vite.config.ts` resta una configurazione Vite/PWA; Nitro e Workflow non fanno parte dell'architettura corrente.
-- MUST: le Functions native account deletion mantengono il limite configurato e il recovery cron documentato.
+- MUST: le Cloud Functions v2 account deletion mantengono timeout/budget configurati e la scheduled maintenance giornaliera documentata.
 - MUST: il contract PWA M7 continua a verificare service worker e manifest.
 - MUST: eventuali modifiche future a `firestore.rules` richiedono test pertinenti e deploy Rules esplicito; il gate repository corrente usa l'emulator e **non** effettua il deploy delle Rules.
+
+## Deploy Firebase Production
+
+Il workflow stabile `.github/workflows/firebase-production.yml` non fa parte del gate PR e non usa Preview. Si attiva soltanto dopo una run `Milestone Verification` conclusa con successo per un evento `push` su `main`.
+
+- MUST: checkout dello SHA verificato e confronto con l'HEAD corrente di `origin/main`; se `main` è avanzato il deploy stale viene rifiutato.
+- MUST: autenticazione Google Cloud via GitHub OIDC / Workload Identity Federation, senza service-account key JSON persistente.
+- MUST: build Production e deploy Hosting + Functions derivano dallo stesso SHA verificato.
+- MUST: la configurazione deploy fail-closed verifica origin canonico, bridge source/target, direct Functions endpoint, App Check/Firebase env e allowlist CORS.
+- MUST: Firestore Rules non vengono deployate implicitamente da questo workflow quando non sono parte del task.
 
 ## Semantica del failure
 

@@ -14,6 +14,7 @@ import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
+import { readLocal } from '../lib/sync/localRepository';
 import { captureSession, invalidateSession, isCurrentSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../lib/db/db_core';
@@ -25,6 +26,10 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
+import {
+    clearOriginMigrationPendingUid,
+    originMigrationPendingUid,
+} from '../lib/originMigration';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -87,13 +92,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const loadData = useCallback(async (user: User) => {
-        await loadAuthenticatedData({
+        const session = captureSession();
+        const result = await loadAuthenticatedData({
             user,
             isGuestActive: () => isGuestRef.current || isStoredGuest(),
             setUserData,
             setSyncing,
             setSaveError,
         });
+
+        const transferredUid = originMigrationPendingUid();
+        const sameAuthenticatedOwner = () => isCurrentSession(session)
+            && auth.currentUser?.uid === user.uid
+            && !isGuestRef.current
+            && !isStoredGuest();
+
+        if (transferredUid === user.uid && result.cloudReconciled && sameAuthenticatedOwner()) {
+            try {
+                await useAppStore.getState().flushPendingSyncs();
+                if (!sameAuthenticatedOwner()) return result;
+                const envelope = await readLocal(userOwner(user.uid));
+                if (!sameAuthenticatedOwner()) return result;
+                if (envelope && envelope.pending.length === 0) {
+                    clearOriginMigrationPendingUid(user.uid);
+                }
+            } catch (error) {
+                console.warn('Riconciliazione dei dati trasferiti ancora pendente:', error);
+            }
+        }
+
+        return result;
     }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
@@ -242,6 +270,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
+                const transferredUid = originMigrationPendingUid();
+
+                if (transferredUid && transferredUid !== user.uid) {
+                    setGuestMigrationStatus('idle');
+                    setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
+                    void loadData(user);
+                    return;
+                }
 
                 if (recoveryUid === user.uid) {
                     const handled = await resumePersistedGuestMigration(user, isCurrentRun);
@@ -296,7 +332,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
                 } else {
                     setGuestMigrationStatus('idle');
-                    void loadData(user);
+                    await loadData(user);
                 }
             } else {
                 setGuestMigrationStatus('idle');

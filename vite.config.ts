@@ -5,17 +5,35 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 
-// Base path: set to '/' for Vercel or root domains.
+// Base path stays at the canonical origin root regardless of hosting provider.
 
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
-const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || 'dev'
+const buildSha =
+  process.env.LOGBOOK_BUILD_SHA ||
+  process.env.GITHUB_SHA ||
+  // Transitional fallback while the legacy Vercel origin remains available.
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  'dev'
+const deployEnvironment =
+  process.env.LOGBOOK_DEPLOY_ENV ||
+  // Transitional fallback only; Firebase/GitHub uses LOGBOOK_DEPLOY_ENV.
+  process.env.VERCEL_ENV ||
+  'development'
 const buildHash = buildSha.slice(0, 7)
 const sentryBuildEnabled =
-  process.env.VERCEL_ENV === 'production' &&
+  deployEnvironment === 'production' &&
   Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
 const buildTime = new Date().toISOString()
+const publicOrigin = (process.env.VITE_PUBLIC_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '')
 
 const basePath = '/'
+
+const deploymentHtml = () => ({
+  name: 'logbook:deployment-html',
+  transformIndexHtml(html: string) {
+    return html.replaceAll('__LOGBOOK_PUBLIC_ORIGIN__', publicOrigin)
+  }
+})
 
 // vite-plugin-pwa 1.3.0 still emits Rollup's deprecated inlineDynamicImports
 // in its nested Vite 8 service-worker build. Translate it to the equivalent
@@ -40,6 +58,7 @@ export default defineConfig({
 
   base: basePath,
   plugins: [
+    deploymentHtml(),
     react(),
     VitePWA({
       strategies: 'injectManifest',

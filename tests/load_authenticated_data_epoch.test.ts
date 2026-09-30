@@ -10,6 +10,10 @@ const dbState = vi.hoisted(() => ({
     loadCloudPayload: vi.fn(),
 }));
 
+const storeState = vi.hoisted(() => ({
+    userData: { profile: { height: '170' } } as UserData | null,
+}));
+
 vi.mock('../src/lib/firebase', () => ({
     auth: authState,
 }));
@@ -22,7 +26,7 @@ vi.mock('../src/lib/db', () => ({
 
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: {
-        getState: () => ({ userData: { profile: { height: '170' } } }),
+        getState: () => ({ userData: storeState.userData }),
     },
 }));
 
@@ -49,19 +53,42 @@ function payload(height: string) {
 
 async function loadModules() {
     vi.resetModules();
-    const [{ loadAuthenticatedData }, { readLocal }, { invalidateSession }] = await Promise.all([
+    const [{ loadAuthenticatedData }, { initializeLocal, readLocal }, { invalidateSession }] = await Promise.all([
         import('../src/contexts/auth/loadAuthenticatedData'),
         import('../src/lib/sync/localRepository'),
         import('../src/lib/sync/session'),
     ]);
-    return { loadAuthenticatedData, readLocal, invalidateSession };
+    return { loadAuthenticatedData, initializeLocal, readLocal, invalidateSession };
 }
 
 describe('authenticated hydration session fencing', () => {
     beforeEach(() => {
         localStorage.clear();
         authState.currentUser = { uid: 'user-a' };
+        storeState.userData = { profile: { height: '170' } } as UserData;
         dbState.loadCloudPayload.mockReset();
+    });
+
+    it('recovers the matching durable envelope when cloud loading is unavailable after sign-in', async () => {
+        const { loadAuthenticatedData, initializeLocal, invalidateSession } = await loadModules();
+        invalidateSession();
+        await initializeLocal('user-a', data('175'));
+        storeState.userData = null;
+        dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'unavailable' }));
+
+        const setUserData = vi.fn();
+        const result = await loadAuthenticatedData({
+            user: { uid: 'user-a' } as any,
+            isGuestActive: () => false,
+            setUserData,
+            setSyncing: vi.fn(),
+            setSaveError: vi.fn(),
+        });
+
+        expect(result).toEqual({ cloudReconciled: false, localRecovered: true });
+        expect(setUserData).toHaveBeenCalledWith(expect.objectContaining({
+            profile: expect.objectContaining({ height: '175' }),
+        }));
     });
 
     it('does not publish or persist A when the session changes before cloud data arrives', async () => {

@@ -95,7 +95,7 @@ const fakeDb = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
+vi.mock('../functions/src/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => fakeDb,
   adminAuth: () => ({
     deleteUser: state.deleteUser,
@@ -111,8 +111,8 @@ import {
   markDeletionComplete,
   validateReceipt,
   verifyNoAccountResidue,
-} from '../server/accountDeletion/jobStore';
-import { ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../server/accountDeletion/retention';
+} from '../functions/src/accountDeletion/jobStore';
+import { ACCOUNT_DELETION_COMPLETED_RETENTION_MS } from '../functions/src/accountDeletion/retention';
 
 describe('M7 native deletion job store', () => {
   beforeEach(() => {
