@@ -284,7 +284,7 @@ describe('Challenger 1: Empirical Adversarial Stress & Benchmark Suite', () => {
       expect(truncated50).toBeDefined();
       expect(truncated50!.length).toBeLessThanOrEqual(1000);
       expect(truncated50).toContain('...[TRUNCATED]');
-      expect(truncated50).not.toContain('gerar');
+      expect(truncated50).not.toContain('example-user');
       expect(truncated50).toContain('[REDACTED_PATH]');
 
       const start500 = performance.now();
