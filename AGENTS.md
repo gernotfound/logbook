@@ -1,6 +1,6 @@
 # LogBook — istruzioni operative per agenti AI
 
-Ultimo aggiornamento: 2026-09-20 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
+Ultimo aggiornamento: 2026-09-30 | App: 1.1.0 | Progetto: PWA fitness tracking (allenamento, nutrizione, misurazioni corporee).
 
 ## Convenzioni
 
@@ -164,6 +164,17 @@ Esistono tre contratti separati:
 - **MUST:** `service-account.json` resta ignorato e nessuna credenziale privata viene committata.
 
 → Dettagli: `.agents/rules/firebase-config.md`.
+
+## Servizi esterni e configurazione fuori repository
+
+LogBook dipende da configurazioni live che non sono completamente rappresentabili nel Git repository (Vercel env, Firebase/Google Cloud, domini OAuth/Auth, App Check/reCAPTCHA, Sentry, GitHub ruleset, Snyk e Search Console).
+
+- **MUST:** verificare il sistema esterno competente prima di assumere stato live, quote, domini, enforcement o secret.
+- **MUST:** il repository pubblico non contiene valori segreti, email personali, identificativi di credenziali, dati di fatturazione o path locali del maintainer.
+- **MUST:** quando cambia materialmente una configurazione esterna, aggiornare il registro decisionale stabile.
+- **MUST:** origin/domìni di hosting ritirati vanno rimossi dalle allowlist esterne quando non servono più.
+
+→ Contratto: `.agents/rules/external-services.md`. Registro decisionale: `docs/operations/external-services-register.md`.
 
 ## Account lifecycle e cancellazione account
 
