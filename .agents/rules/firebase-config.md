@@ -16,8 +16,8 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth |
 | `VITE_FIREBASE_DATABASE_URL` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il progetto usa Firestore, non Realtime Database, quindi la necessità futura del campo va verificata prima di rimuoverlo dal contratto |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | MUST | Config Firebase Web |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST | Config Firebase Web |
+| `VITE_FIREBASE_STORAGE_BUCKET` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Storage |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Cloud Messaging |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
 
 **MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
