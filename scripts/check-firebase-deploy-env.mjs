@@ -21,6 +21,8 @@ const required = [
   'FIREBASE_HOSTING_SITE',
   'FIREBASE_FUNCTION_REGION',
   'LOGBOOK_ALLOWED_ORIGINS',
+  'GCP_WORKLOAD_IDENTITY_PROVIDER',
+  'GCP_DEPLOY_SERVICE_ACCOUNT',
 ];
 
 const missing = required.filter(name => !process.env[name]?.trim());
