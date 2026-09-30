@@ -154,7 +154,7 @@ describe('pre-session readiness contract', () => {
             expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
 
             const waterInput = screen.getByLabelText('Acqua bevuta (litri)');
-            fireEvent.change(waterInput, { target: { value: '1,5' } });
+            fireEvent.change(waterInput, { target: { value: '1.5' } });
             fireEvent.blur(waterInput);
 
             expect(useAppStore.getState().localWorkout?.waterLiters).toBeUndefined();
