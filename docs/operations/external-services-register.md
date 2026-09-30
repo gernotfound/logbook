@@ -20,6 +20,9 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 |---|---|---|---|
 | Firebase Authentication | ACTIVE | account email/Google e sessione autenticata | Firebase console + codice Auth |
 | Cloud Firestore | ACTIVE | replica/sincronizzazione cloud dei dati account | Firestore/Rules + codice sync |
+| Firebase Realtime Database | NON USATO DAL RUNTIME | `databaseURL` resta nel config Firebase Web, ma il modulo RTDB non è importato | codice + console VERIFY-LIVE |
+| Firebase Storage | NON USATO DAL RUNTIME | `storageBucket` resta nel config Firebase Web, ma il modulo Storage non è importato | codice + console VERIFY-LIVE |
+| Firebase Cloud Messaging | NON USATO DAL RUNTIME | `messagingSenderId` resta nel config Firebase Web, ma il modulo Messaging non è importato | codice + console VERIFY-LIVE |
 | Firebase Hosting | NON USATO DAL RUNTIME / VERIFY-LIVE | non è l'hosting Production corrente | `firebase.json` + Firebase console |
 | Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
@@ -59,6 +62,8 @@ Il vecchio referrer GitHub Pages è **ritirato**. È stato segnalato ancora pres
 Firestore è la replica remota per account autenticati, non la persistenza locale primaria. IndexedDB resta il boundary offline-first canonico.
 
 Il runtime non importa Firebase Realtime Database. `VITE_FIREBASE_DATABASE_URL` resta ancora nel contratto Firebase Web fail-fast come configurazione legacy da rivalutare, ma non giustifica allowlist `firebaseio.com` nella CSP. La seconda passata del 2026-09-30 ha quindi rimosso tali origin dalla CSP senza rimuovere la variabile dal contratto runtime.
+
+Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging. `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` restano oggi nel fail-fast/config Firebase Web per compatibilità del contratto esistente, ma la loro presenza non va interpretata come prova che quei servizi siano usati. Un'eventuale semplificazione delle sette env richiede modifica separata con test.
 
 Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono `LEGACY`: il client corrente invia errori/anomalie a Sentry, ma Rules, account deletion e retention cron restano finché i client vecchi e i documenti residui non sono definitivamente smaltiti.
 
