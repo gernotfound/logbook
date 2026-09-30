@@ -26,9 +26,9 @@ describe('Empirical Challenger M1-2: useLocalStorage, ErrorBoundary & PWA Archit
             const fallback = 'guest_user';
 
             // Valid stored
-            window.localStorage.setItem('user_key', JSON.stringify('gerard'));
+            window.localStorage.setItem('user_key', JSON.stringify('fixtureuser'));
             const { result: validRes } = renderHook(() => useLocalStorage('user_key', fallback, usernameSchema));
-            expect(validRes.current[0]).toBe('gerard');
+            expect(validRes.current[0]).toBe('fixtureuser');
 
             // Invalid stored (too short, uppercase, numbers)
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
