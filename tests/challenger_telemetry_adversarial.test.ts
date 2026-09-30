@@ -384,7 +384,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       telemetryHub.setUserId('user_leak_audit');
 
       const hostileError = new Error(
-        'Crash in athlete.secret@gym.com with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature at C:\\Users\\gerar\\main.tsx:10:5 using key AIzaSyA1234567890abcdefghijklmnopqrstuv'
+        'Crash in athlete.secret@gym.com with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature at C:\\Users\\example-user\\main.tsx:10:5 using key AIzaSyA1234567890abcdefghijklmnopqrstuv'
       );
       hostileError.stack =
         'Error: Crash\n' +
@@ -410,7 +410,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
             expect(value).not.toContain('victim@logbook.app');
             expect(value).not.toContain('eyJhbGci');
             expect(value).not.toContain('AIzaSyA');
-            expect(value).not.toContain('C:\\Users\\gerar');
+            expect(value).not.toContain('C:\\Users\\example-user');
             expect(value).not.toContain('/Users/admin');
             expect(value).not.toContain('superSecretToken123');
 
