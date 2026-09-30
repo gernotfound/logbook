@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import { renderHook, act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { telemetryHub } from '../src/lib/telemetryHub';
@@ -19,10 +19,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     vi.clearAllMocks();
     vi.useRealTimers();
 
-    mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
-    vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
-      return { path: pathSegments.join('/') } as any;
-    });
+    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
