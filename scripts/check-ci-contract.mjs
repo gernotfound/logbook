@@ -150,7 +150,7 @@ if (!includeMatch) {
       failures.push(`${shard.id}: shard must use leaf commands, not a serial milestone umbrella`);
     }
     for (const part of splitChain(shard.command)) {
-      if (part === 'npm audit --audit-level=high') continue;
+      if (part === 'npm audit --audit-level=high' || part === 'npm audit --prefix functions --audit-level=high') continue;
       if (/^npm run test -- --shard=[12]\/2$/.test(part)) {
         unitShardCommands.push(part);
         continue;
@@ -193,8 +193,10 @@ if (!includeMatch) {
   if (shards.filter(shard => shard.playwright === 'true').map(shard => shard.id).join(',') !== 'e2e') failures.push('Playwright must be limited to the e2e shard');
 }
 
-const auditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
-if (auditOccurrences.length !== 1) failures.push(`security audit: expected once, found ${auditOccurrences.length}`);
+const rootAuditOccurrences = workflow.match(/npm audit --audit-level=high/g) ?? [];
+if (rootAuditOccurrences.length !== 1) failures.push(`root security audit: expected once, found ${rootAuditOccurrences.length}`);
+const functionsAuditOccurrences = workflow.match(/npm audit --prefix functions --audit-level=high/g) ?? [];
+if (functionsAuditOccurrences.length !== 1) failures.push(`Functions security audit: expected once, found ${functionsAuditOccurrences.length}`);
 
 const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
 if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
@@ -223,4 +225,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, CodeQL security analysis is required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, root and Functions dependency audits plus CodeQL are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
