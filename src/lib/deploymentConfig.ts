@@ -21,6 +21,12 @@ function absoluteHttpsUrl(value: string | undefined, name: string): string | und
 export function accountDeletionApiUrl(): string {
   const configured = absoluteHttpsUrl(import.meta.env.VITE_ACCOUNT_DELETION_API_URL, 'VITE_ACCOUNT_DELETION_API_URL');
   if (configured) return configured;
+
+  const legacySource = originMigrationSource();
+  if (typeof window !== 'undefined' && legacySource && window.location.origin === legacySource) {
+    return '/api/account-deletion';
+  }
+
   if (import.meta.env.PROD) {
     throw new Error('Configurazione Production incompleta: VITE_ACCOUNT_DELETION_API_URL mancante.');
   }
