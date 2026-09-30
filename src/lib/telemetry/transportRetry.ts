@@ -1,5 +1,6 @@
 import { isAccountDeletionPending } from '../sync/accountGate';
 import {
+  FIRESTORE_DISPATCH_TIMEOUT_MS,
   INITIAL_RETRY_DELAY_MS,
   MAX_RETRY_DELAY_MS,
   type TelemetryErrorPayload,
@@ -9,6 +10,17 @@ import { sanitizeTelemetryDetails } from './detailSanitizer';
 import { sendTelemetryToSentry } from '../sentryClient';
 
 type UserIdProvider = () => string | null;
+
+async function dispatchWithTimeout(
+  kind: 'error' | 'event',
+  payload: TelemetryErrorPayload | TelemetryEventPayload,
+): Promise<boolean> {
+  const dispatchPromise = sendTelemetryToSentry(kind, payload);
+  const timeoutPromise = new Promise<boolean>((resolve) => {
+    setTimeout(() => resolve(false), FIRESTORE_DISPATCH_TIMEOUT_MS);
+  });
+  return Promise.race([dispatchPromise, timeoutPromise]);
+}
 
 export async function dispatchTelemetryError(
   payload: TelemetryErrorPayload,
@@ -20,7 +32,7 @@ export async function dispatchTelemetryError(
       return false;
     }
 
-    return await sendTelemetryToSentry('error', payload);
+    return await dispatchWithTimeout('error', payload);
   } catch (err) {
     console.warn('[TelemetryHub] dispatchErrorToSentry failed non-blockingly:', err);
     return false;
@@ -43,7 +55,7 @@ export async function dispatchTelemetryEvent(
     };
 
     // Accepted at the boundary but intentionally not emitted externally.
-    return await sendTelemetryToSentry('event', sanitizedPayload);
+    return await dispatchWithTimeout('event', sanitizedPayload);
   } catch (err) {
     console.warn('[TelemetryHub] dispatchEventToSentry failed non-blockingly:', err);
     return false;
