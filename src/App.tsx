@@ -201,6 +201,10 @@ function App() {
   };
 
   const handleHomeNavigate = (tab: string) => {
+    if (tab === 'settings') {
+      handleOpenSettings();
+      return;
+    }
     if (tab === 'training-history') {
       setTrainingSubTab('history');
       handleTabChange('training');
@@ -214,6 +218,11 @@ function App() {
   useEffect(() => {
     const handleNavEvent = (e: Event) => {
       const detail = (e as CustomEvent).detail;
+      if (detail === 'settings') {
+        if (activeTab !== 'home') setActiveTab('home');
+        setSettingsOpen(true);
+        return;
+      }
       const parsed = AppTabSchema.safeParse(detail);
       if (parsed.success) {
         handleTabChange(parsed.data);

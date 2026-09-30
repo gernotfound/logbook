@@ -523,7 +523,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         // Sync indicator remains visible
         expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
 
-        // Switch to Settings tab (last index)
+        // Switch to Dati, now the last primary-navigation item.
         act(() => {
           fireEvent.click(navButtons[navButtons.length - 1]);
         });
