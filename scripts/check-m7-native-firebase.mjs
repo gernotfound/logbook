@@ -33,7 +33,7 @@ for (const requiredHeader of ['Content-Security-Policy','Strict-Transport-Securi
 }
 if (!serializedHeaders.includes('/sw.js') || !serializedHeaders.includes('no-cache')) failures.push('Service worker must be served with no-cache/no-store policy.');
 
-const globalHeaderGroup = hostingHeaders.find(group => group?.source === '/**');
+const globalHeaderGroup = hostingHeaders.find(group => group?.source === '**');
 const cspHeader = Array.isArray(globalHeaderGroup?.headers)
   ? globalHeaderGroup.headers.find(header => header?.key === 'Content-Security-Policy')
   : undefined;
