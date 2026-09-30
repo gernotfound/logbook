@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { hydrateLocal, commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { hydrateLocal, commitLocal, initializeLocal, installTransferredLocalEnvelope, readLocal } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -126,6 +126,40 @@ describe('durable owner-scoped journal', () => {
         await expect(commitLocal('a', data(171), data(170))).rejects.toThrow('recupero');
         expect(await get('logbook:v2:user:a')).toEqual(corrupt);
     });
+    it('installs an exact transferred envelope only into a fresh matching owner', async () => {
+        await initializeLocal('a', data(170));
+        const source = structuredClone(await readLocal('a'));
+        await clear();
+
+        await expect(installTransferredLocalEnvelope('a', source)).resolves.toEqual(source);
+        expect(await readLocal('a')).toEqual(source);
+
+        // Retrying the same transfer is idempotent.
+        await expect(installTransferredLocalEnvelope('a', structuredClone(source))).resolves.toEqual(source);
+    });
+
+    it('refuses a transferred envelope that would overwrite divergent target state', async () => {
+        await initializeLocal('a', data(170));
+        const source = structuredClone(await readLocal('a'));
+        await clear();
+        await initializeLocal('a', data(180));
+        const targetBefore = structuredClone(await readLocal('a'));
+
+        await expect(installTransferredLocalEnvelope('a', source))
+            .rejects.toThrow('esiste già un archivio locale diverso');
+        expect(await readLocal('a')).toEqual(targetBefore);
+    });
+
+    it('refuses a transferred envelope whose embedded owner does not match the target owner', async () => {
+        await initializeLocal('b', data(180));
+        const wrongOwner = structuredClone(await readLocal('b'));
+        await clear();
+
+        await expect(installTransferredLocalEnvelope('a', wrongOwner))
+            .rejects.toThrow('Archivio locale non riconosciuto');
+        expect(await get('logbook:v2:user:a')).toBeUndefined();
+    });
+
     it('replays a stale snapshot delta over the latest envelope without deleting concurrent entities', async () => {
         const base = UserDataSchema.parse({
             profile: { height: '170' },
