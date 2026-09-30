@@ -283,8 +283,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     transferredUid = originMigrationPendingUid();
                 } catch (error) {
                     console.error('Stato trasferimento origine non leggibile durante il login:', error);
-                    setGuestMigrationStatus('failed');
+                    setCurrentUser(null);
+                    setGuestMigrationStatus('idle');
                     setSaveError('Archivio locale non disponibile: non posso verificare in sicurezza a quale account appartengono i dati trasferiti. Riapri LogBook o riabilita lo storage del browser e riprova.');
+                    try {
+                        await signOut(auth);
+                    } catch (signOutError) {
+                        console.error('Impossibile chiudere la sessione dopo il blocco del trasferimento origine:', signOutError);
+                    }
                     return;
                 }
 
