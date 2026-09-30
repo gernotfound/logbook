@@ -85,10 +85,10 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
     });
 
     it('redacts Windows and Unix local filesystem user paths', () => {
-      const winBackslash = 'Crash at C:\\Users\\gerar\\Documents\\GitHub\\logbook\\src\\main.tsx:10:5';
+      const winBackslash = 'Crash at C:\\Users\\example-user\\Projects\\logbook\\src\\main.tsx:10:5';
       expect(scrubPII(winBackslash)).toBe('Crash at [REDACTED_PATH]:10:5');
 
-      const winForward = 'Crash at C:/Users/gerar/Documents/GitHub/logbook/src/main.tsx:10:5';
+      const winForward = 'Crash at C:/Users/example-user/Projects/logbook/src/main.tsx:10:5';
       expect(scrubPII(winForward)).toBe('Crash at [REDACTED_PATH]:10:5');
 
       const unixHome = 'Crash at /home/developer/projects/logbook/src/store.ts:25:2';
