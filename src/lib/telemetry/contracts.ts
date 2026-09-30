@@ -84,8 +84,8 @@ export interface RateLimitEntry {
   isDispatchPending: boolean;
 }
 
-export const RATE_LIMIT_WINDOW_MS = 60000;
-export const DEDUP_WINDOW_MS = 60000;
+export const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+export const DEDUP_WINDOW_MS = RATE_LIMIT_WINDOW_MS;
 export const FIRESTORE_DISPATCH_TIMEOUT_MS = 5000;
 export const TELEMETRY_QUEUE_KEY = 'logbook_telemetry_queue';
 export const TELEMETRY_QUEUE_CAPACITY = 50;
