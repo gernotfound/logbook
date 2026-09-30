@@ -27,7 +27,10 @@ vi.mock('../src/lib/sync/accountGate', () => ({
   findPendingAccountDeletion: migrationMocks.findPendingAccountDeletion,
 }));
 
-import { installOriginMigrationPayload } from '../src/lib/originMigration';
+async function installOriginMigrationPayload(value: unknown) {
+  const migration = await import('../src/lib/originMigration');
+  return migration.installOriginMigrationPayload(value);
+}
 
 const payload = (owner = 'user:a', device: Record<string, string> = {}) => ({
   version: 1 as const,
@@ -40,6 +43,10 @@ const payload = (owner = 'user:a', device: Record<string, string> = {}) => ({
 
 describe('cross-origin migration install boundary', () => {
   beforeEach(() => {
+    // tests/setup.tsx imports AuthProvider (and therefore originMigration) before
+    // this file's mocks are registered. Reset the module graph so the dynamic
+    // import below observes the migration-specific deploymentConfig mock.
+    vi.resetModules();
     localStorage.clear();
     authState.currentUser = null;
     authState.authStateReady.mockClear();
