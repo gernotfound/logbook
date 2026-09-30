@@ -5,6 +5,7 @@ import {
 } from './deploymentConfig';
 import {
   readBrowserValueStrict,
+  removeBrowserValue,
   writeBrowserValue,
 } from './sync/browserStorage';
 import {
@@ -200,6 +201,16 @@ export async function installOriginMigrationPayload(value: unknown): Promise<{ o
   }
 
   const payload = validatePayload(value, source);
+
+  if (typeof auth.authStateReady === 'function') await auth.authStateReady();
+  const targetUid = auth.currentUser?.uid ?? null;
+  if (payload.owner === 'guest' && targetUid) {
+    throw new Error('Sul nuovo indirizzo è già attivo un account. Esci prima di trasferire i dati della modalità locale.');
+  }
+  if (payload.owner.startsWith('user:') && targetUid && userOwner(targetUid) !== payload.owner) {
+    throw new Error('Sul nuovo indirizzo è attivo un account diverso da quello dei dati da trasferire.');
+  }
+
   const prefix = devicePrefix(payload.owner);
 
   // Preflight every localStorage key before the IndexedDB install. A retry can
@@ -257,7 +268,7 @@ export function originMigrationPendingUid(): string | null {
 
 export function clearOriginMigrationPendingUid(uid: string): void {
   if (originMigrationPendingUid() === uid) {
-    localStorage.removeItem(PENDING_UID_KEY);
+    removeBrowserValue(PENDING_UID_KEY);
   }
 }
 
