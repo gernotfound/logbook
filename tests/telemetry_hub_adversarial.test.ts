@@ -3,7 +3,7 @@ import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
   RATE_LIMIT_WINDOW_MS,
-  FIRESTORE_DISPATCH_TIMEOUT_MS,
+  TELEMETRY_DISPATCH_TIMEOUT_MS,
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
@@ -165,10 +165,10 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   });
 
   // =========================================================================
-  // 3. Hanging Firestore & Non-Blocking Resilience
+  // 3. Hanging telemetry transport & Non-Blocking Resilience
   // =========================================================================
-  describe('3. Hanging Firestore & Non-Blocking Resilience', () => {
-    it('survives indefinitely hanging Firestore setDoc promises with 5000ms timeout race', async () => {
+  describe('3. Hanging telemetry transport & Non-Blocking Resilience', () => {
+    it('survives indefinitely hanging external telemetry dispatch promises with 5000ms timeout race', async () => {
       vi.useFakeTimers();
       // Mock setDoc returning a Promise that NEVER settles
       mockSetDoc.mockImplementation(() => new Promise(() => {}));
@@ -197,7 +197,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       expect(telemetryHub.getActiveRateLimiterCount()).toBe(20);
     });
 
-    it('properly returns false from direct dispatchErrorToFirestore when setDoc hangs', async () => {
+    it('properly returns false from direct dispatchErrorExternally when dispatch hangs', async () => {
       vi.useFakeTimers();
       mockSetDoc.mockImplementation(() => new Promise(() => {}));
 
@@ -221,10 +221,10 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
         lastSeen: Date.now(),
       };
 
-      const dispatchPromise = telemetryHub.dispatchErrorToFirestore(payload);
+      const dispatchPromise = telemetryHub.dispatchErrorExternally(payload);
 
       // Advance past timeout
-      await vi.advanceTimersByTimeAsync(FIRESTORE_DISPATCH_TIMEOUT_MS + 100);
+      await vi.advanceTimersByTimeAsync(TELEMETRY_DISPATCH_TIMEOUT_MS + 100);
 
       const result = await dispatchPromise;
       expect(result).toBe(false);
@@ -381,7 +381,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
       await telemetryHub.flushQueue();
 
-      // Since userId is null, dispatchErrorToFirestore returns false without calling setDoc, retaining or skipping safely
+      // Since userId is null, dispatchErrorExternally returns false without calling setDoc, retaining or skipping safely
       expect(mockSetDoc).not.toHaveBeenCalled();
     });
   });
