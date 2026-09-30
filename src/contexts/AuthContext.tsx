@@ -280,6 +280,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 } catch (error) {
                     console.error('Stato trasferimento origine non leggibile durante il login:', error);
                     setCurrentUser(null);
+                    setLoading(false);
                     setGuestMigrationStatus('idle');
                     setSaveError('Archivio locale non disponibile: non posso verificare in sicurezza a quale account appartengono i dati trasferiti. Riapri LogBook o riabilita lo storage del browser e riprova.');
                     try {
@@ -292,6 +293,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                 if (transferredUid && transferredUid !== user.uid) {
                     setCurrentUser(null);
+                    setLoading(false);
                     setGuestMigrationStatus('idle');
                     setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
                     try {
