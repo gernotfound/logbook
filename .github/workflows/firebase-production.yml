@@ -113,6 +113,17 @@ jobs:
           LOGBOOK_ALLOWED_ORIGINS=${LOGBOOK_ALLOWED_ORIGINS}
           EOF
 
+      - name: Recheck main HEAD immediately before deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing stale Firebase Production deployment: main advanced during build." >&2
+            exit 1
+          fi
+
       - name: Deploy Hosting and Functions
         shell: bash
         run: |
