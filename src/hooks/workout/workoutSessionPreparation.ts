@@ -6,6 +6,14 @@ export interface WorkoutCycleInfo {
     cycleName?: string;
 }
 
+export interface WorkoutCompletionDraft {
+    mood: string;
+    pump: string;
+    fatigue: string;
+    water: string;
+    pains: string[];
+}
+
 export interface WorkoutPreparationRuntime {
     generateId: (prefix: string) => string;
     getLocalDateString: () => string;
@@ -175,6 +183,33 @@ export function prepareHistoricalWorkoutForSave(
     delete updatedWorkout.isEditingHistory;
     delete updatedWorkout.originalHistoryId;
     return updatedWorkout;
+}
+
+export function applyWorkoutCompletionDraft(
+    currentWorkout: WorkoutSession,
+    draft: WorkoutCompletionDraft,
+): WorkoutSession {
+    const ratingScale = currentWorkout.ratingScale ?? 10;
+    const valRes = Logic.validateWorkoutRatings(draft.mood, draft.pump, draft.fatigue, ratingScale);
+    const waterValue = draft.water.trim()
+        ? parseFloat(draft.water.replace(',', '.'))
+        : undefined;
+
+    const nextWorkout: WorkoutSession = {
+        ...currentWorkout,
+        moodRating: valRes.mood,
+        pumpRating: valRes.pump,
+        fatigueRating: valRes.fatigue,
+        pains: [...draft.pains],
+    };
+
+    if (waterValue !== undefined && Number.isFinite(waterValue)) {
+        nextWorkout.waterLiters = waterValue;
+    } else {
+        delete nextWorkout.waterLiters;
+    }
+
+    return nextWorkout;
 }
 
 export function prepareCompletedWorkout(
