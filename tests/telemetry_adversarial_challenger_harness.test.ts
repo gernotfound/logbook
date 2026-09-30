@@ -142,7 +142,7 @@ describe('Challenger 1: Empirical Adversarial Stress & Benchmark Suite', () => {
             bearer: 'Bearer secret_access_token_12345',
           },
           paths: {
-            win: 'C:\\Users\\gerar\\secret_project\\app.ts:10:1',
+            win: 'C:\\Users\\example-user\\secret_project\\app.ts:10:1',
             unix: '/home/developer/secret_project/app.ts:10:1',
           },
         },
@@ -161,7 +161,7 @@ describe('Challenger 1: Empirical Adversarial Stress & Benchmark Suite', () => {
       expect(scrubbed).not.toContain('eyJhbGci');
       expect(scrubbed).not.toContain('AIzaSyA');
       expect(scrubbed).not.toContain('secret_access_token_12345');
-      expect(scrubbed).not.toContain('C:\\Users\\gerar');
+      expect(scrubbed).not.toContain('C:\\Users\\example-user');
       expect(scrubbed).not.toContain('/home/developer');
 
       expect(scrubbed).toContain('[REDACTED_EMAIL]');
@@ -272,7 +272,7 @@ describe('Challenger 1: Empirical Adversarial Stress & Benchmark Suite', () => {
     });
 
     it('2.6: Massive stack traces (> 1000 chars, 50KB, 500KB) are truncated to <= 1000 chars without regex catastrophic backtracking', () => {
-      const frame = '    at computeCycleProgress (C:\\Users\\gerar\\logbook\\src\\calc.ts:50:12)\n';
+      const frame = '    at computeCycleProgress (C:\\Users\\example-user\\logbook\\src\\calc.ts:50:12)\n';
       const massive50KB = 'Error: Stack explosion\n' + frame.repeat(700); // ~50KB
       const massive500KB = 'Error: Megastack explosion\n' + frame.repeat(7000); // ~500KB
 
@@ -284,7 +284,7 @@ describe('Challenger 1: Empirical Adversarial Stress & Benchmark Suite', () => {
       expect(truncated50).toBeDefined();
       expect(truncated50!.length).toBeLessThanOrEqual(1000);
       expect(truncated50).toContain('...[TRUNCATED]');
-      expect(truncated50).not.toContain('gerar');
+      expect(truncated50).not.toContain('example-user');
       expect(truncated50).toContain('[REDACTED_PATH]');
 
       const start500 = performance.now();

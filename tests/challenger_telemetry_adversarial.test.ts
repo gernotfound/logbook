@@ -183,7 +183,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
   describe('4. Local Filesystem Paths (Windows, Linux, macOS)', () => {
     it('redacts standard Windows user paths without spaces', () => {
       const paths = [
-        'C:\\Users\\gerar\\Documents\\GitHub\\logbook\\src\\main.tsx:10:5',
+        'C:\\Users\\example-user\\Projects\\logbook\\src\\main.tsx:10:5',
         'c:/Users/Administrator/AppData/Local/Temp/bundle.js:100:20',
         'D:\\Users\\JohnDoe\\Desktop\\code.ts:42:1',
         'C:\\Documents and Settings\\User\\Local Settings\\file.js',
@@ -191,7 +191,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
 
       for (const p of paths) {
         const scrubbed = scrubPII(`Error at ${p}`);
-        expect(scrubbed).not.toContain('gerar');
+        expect(scrubbed).not.toContain('example-user');
         expect(scrubbed).not.toContain('Administrator');
         expect(scrubbed).not.toContain('JohnDoe');
         expect(scrubbed).toContain('[REDACTED_PATH]');
@@ -384,11 +384,11 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
       telemetryHub.setUserId('user_leak_audit');
 
       const hostileError = new Error(
-        'Crash in athlete.secret@gym.com with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature at C:\\Users\\gerar\\main.tsx:10:5 using key AIzaSyA1234567890abcdefghijklmnopqrstuv'
+        'Crash in athlete.secret@gym.com with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature at C:\\Users\\example-user\\main.tsx:10:5 using key AIzaSyA1234567890abcdefghijklmnopqrstuv'
       );
       hostileError.stack =
         'Error: Crash\n' +
-        '    at C:\\Users\\gerar\\Documents\\GitHub\\logbook\\src\\main.tsx:10:5\n'.repeat(100) +
+        '    at C:\\Users\\example-user\\Projects\\logbook\\src\\main.tsx:10:5\n'.repeat(100) +
         '    at user=victim@logbook.app\n';
 
       telemetryHub.trackError(hostileError, {
@@ -410,7 +410,7 @@ describe('Empirical Adversarial Testing Challenger Suite - Telemetry & Sanitizer
             expect(value).not.toContain('victim@logbook.app');
             expect(value).not.toContain('eyJhbGci');
             expect(value).not.toContain('AIzaSyA');
-            expect(value).not.toContain('C:\\Users\\gerar');
+            expect(value).not.toContain('C:\\Users\\example-user');
             expect(value).not.toContain('/Users/admin');
             expect(value).not.toContain('superSecretToken123');
 

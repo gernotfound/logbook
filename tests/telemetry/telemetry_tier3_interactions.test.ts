@@ -39,7 +39,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       telemetryHub.setUserId('user_t3_2');
 
       const hugeTrace = 'Error: React render failed\n' +
-        '    at UserProfile (C:\\Users\\gerar\\app.tsx:1:1) email=john.doe@gym.com\n'.repeat(40);
+        '    at UserProfile (C:\\Users\\example-user\\app.tsx:1:1) email=john.doe@gym.com\n'.repeat(40);
 
       telemetryHub.trackError(new Error('React component crash'), {
         source: 'react_caught',
@@ -52,7 +52,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 3', () => {
       const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
 
       expect(payload.componentStack).not.toContain('john.doe@gym.com');
-      expect(payload.componentStack).not.toContain('C:\\Users\\gerar');
+      expect(payload.componentStack).not.toContain('C:\\Users\\example-user');
       expect(payload.componentStack).toContain('[REDACTED_EMAIL]');
       expect(payload.componentStack).toContain('[REDACTED_PATH]');
       expect(payload.componentStack!.length).toBeLessThanOrEqual(1000);

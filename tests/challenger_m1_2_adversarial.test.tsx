@@ -26,9 +26,9 @@ describe('Empirical Challenger M1-2: useLocalStorage, ErrorBoundary & PWA Archit
             const fallback = 'guest_user';
 
             // Valid stored
-            window.localStorage.setItem('user_key', JSON.stringify('gerard'));
+            window.localStorage.setItem('user_key', JSON.stringify('test_user'));
             const { result: validRes } = renderHook(() => useLocalStorage('user_key', fallback, usernameSchema));
-            expect(validRes.current[0]).toBe('gerard');
+            expect(validRes.current[0]).toBe('test_user');
 
             // Invalid stored (too short, uppercase, numbers)
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -420,47 +420,4 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
         });
     });
 
-    describe('3. Dynamic Base Path & PWA Manifest Evaluation', () => {
-        it('evaluates base path defaulting logic for all environment variations', () => {
-            const computeBasePath = (envVal: string | undefined): string => {
-                return envVal || '/';
-            };
-
-            // Variation 1: undefined -> root '/'
-            expect(computeBasePath(undefined)).toBe('/');
-
-            // Variation 2: empty string -> root '/'
-            expect(computeBasePath('')).toBe('/');
-
-            // Variation 3: custom subpath
-            expect(computeBasePath('/logbook/')).toBe('/logbook/');
-            expect(computeBasePath('/custom-pwa-path/')).toBe('/custom-pwa-path/');
-
-            // Variation 4: relative path './'
-            expect(computeBasePath('./')).toBe('./');
-        });
-
-        it('ensures start_url, scope, and base are uniformly aligned in manifest configuration', () => {
-            const createPwaConfig = (basePathEnv?: string) => {
-                const basePath = basePathEnv || '/';
-                return {
-                    base: basePath,
-                    manifest: {
-                        start_url: basePath,
-                        scope: basePath
-                    }
-                };
-            };
-
-            const defaultCfg = createPwaConfig(undefined);
-            expect(defaultCfg.base).toBe('/');
-            expect(defaultCfg.manifest.start_url).toBe('/');
-            expect(defaultCfg.manifest.scope).toBe('/');
-
-            const customCfg = createPwaConfig('/logbook/');
-            expect(customCfg.base).toBe('/logbook/');
-            expect(customCfg.manifest.start_url).toBe('/logbook/');
-            expect(customCfg.manifest.scope).toBe('/logbook/');
-        });
-    });
 });

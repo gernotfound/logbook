@@ -129,9 +129,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
       });
 
       it('F2-5: scrubs absolute local filesystem paths (Windows/POSIX) from traces', () => {
-        const rawWin = 'Error at C:\\Users\\gerar\\Documents\\GitHub\\logbook\\src\\store.ts:42:15';
+        const rawWin = 'Error at C:\\Users\\example-user\\Projects\\logbook\\src\\store.ts:42:15';
         const scrubbedWin = scrubPII(rawWin);
-        expect(scrubbedWin).not.toContain('C:\\Users\\gerar\\Documents');
+        expect(scrubbedWin).not.toContain('C:\\Users\\example-user\\Projects');
         expect(scrubbedWin).toContain('[REDACTED_PATH]');
 
         const rawPosix = 'Error at /Users/john/workspaces/project/src/main.tsx:10:5';
@@ -296,7 +296,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         telemetryHub.setUserId('user_react19');
 
         const err = new Error('Component failed');
-        const sensitiveStack = '\n    at UserProfile (C:\\Users\\gerar\\logbook\\src\\UserProfile.tsx:12:1)\n    at email=athlete@gym.it';
+        const sensitiveStack = '\n    at UserProfile (C:\\Users\\example-user\\logbook\\src\\UserProfile.tsx:12:1)\n    at email=athlete@gym.it';
 
         telemetryHub.trackError(err, {
           source: 'react_caught',
@@ -306,7 +306,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
         await vi.advanceTimersByTimeAsync(100);
 
         const payload = mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload;
-        expect(payload.componentStack).not.toContain('C:\\Users\\gerar');
+        expect(payload.componentStack).not.toContain('C:\\Users\\example-user');
         expect(payload.componentStack).not.toContain('athlete@gym.it');
         expect(payload.componentStack).toContain('[REDACTED_PATH]');
         expect(payload.componentStack).toContain('[REDACTED_EMAIL]');

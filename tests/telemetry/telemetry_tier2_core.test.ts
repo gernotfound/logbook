@@ -92,13 +92,13 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Core', () => {
 
       it('F2-B3: handles error message containing all PII patterns simultaneously', () => {
         const multiPiiMessage =
-          'User athlete@gym.it from IP 192.168.1.10 auth failed with token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.signature at C:\\Users\\gerar\\app.ts';
+          'User athlete@gym.it from IP 192.168.1.10 auth failed with token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.signature at C:\\Users\\example-user\\app.ts';
 
         const scrubbed = scrubPII(multiPiiMessage);
         expect(scrubbed).not.toContain('athlete@gym.it');
         expect(scrubbed).not.toContain('192.168.1.10');
         expect(scrubbed).not.toContain('eyJhbGci');
-        expect(scrubbed).not.toContain('C:\\Users\\gerar');
+        expect(scrubbed).not.toContain('C:\\Users\\example-user');
         expect(scrubbed).toContain('[REDACTED_EMAIL]');
         expect(scrubbed).toContain('[REDACTED_IP]');
         expect(scrubbed).toContain('[REDACTED_TOKEN]');

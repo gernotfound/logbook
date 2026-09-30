@@ -3,7 +3,7 @@
 **Data**: 2026-08-23  
 **Auditor**: Reviewer 3 (Phase 3 Release Verification & GDPR/PWA Compliance Specialist)  
 **Modalità**: FASE 3 — Final Release Verification & Compliance Audit  
-**Target Codebase**: `c:\Users\gerar\Documents\GitHub\logbook`  
+**Target Codebase**: `[LOCAL_PATH_REDACTED]`  
 **Framework & Stack**: React 19 + TypeScript + Vite + Zustand 5 + Firebase Modular SDK v12 + IndexedDB (`idb-keyval`) + Vanilla CSS Glassmorphism  
 **Esito Complessivo**: 🟢 **APPROVATO PER IL RILASCIO IN PRODUZIONE (VERDICT: APPROVE)**
 
