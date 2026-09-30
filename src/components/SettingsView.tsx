@@ -144,7 +144,6 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                             <ChevronRight size={20} aria-hidden="true" />
                         </button>
                     </section>
-                    <p className="settings-version">LogBook {__APP_VERSION__}</p>
                 </>
             )}
 
