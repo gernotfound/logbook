@@ -79,7 +79,7 @@ LogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere
 
 Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per LogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
 
-Il repository non contiene integrazioni dirette per Account defense, SMS defense, transaction defense o chiamate autonome alle API Fraud Defense. Se una di queste funzioni viene abilitata in futuro, deve essere registrata esplicitamente qui.
+Il repository non contiene integrazioni dirette per Account defense, SMS defense, transaction defense o chiamate autonome alle API Fraud Defense. **VERIFY-LIVE:** il product owner ricorda di avere attivato Fraud Defense nella console Google Cloud, ma non ricorda se abbia abilitato ulteriori funzioni oltre alla chiave reCAPTCHA Enterprise usata da App Check. Finché la console non viene riletta, il repository prova soltanto App Check + reCAPTCHA Enterprise e non autorizza ad assumere attive altre difese. Se emergono funzioni aggiuntive già abilitate, registrarle qui con scopo e motivo.
 
 Esiste una Web key dedicata a LogBook nella console Google Cloud. Il suo ID/valore non viene registrato nel repository.
 
