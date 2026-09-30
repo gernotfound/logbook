@@ -9,13 +9,15 @@ const migrationMocks = vi.hoisted(() => ({
   installTransferredLocalEnvelope: vi.fn(async () => ({ owner: 'user:a' })),
   readLocal: vi.fn(),
   findPendingAccountDeletion: vi.fn(() => null),
+  sourceOrigin: undefined as string | undefined,
+  targetOrigin: undefined as string | undefined,
 }));
 
 vi.mock('../src/lib/firebase', () => ({ auth: authState }));
 
 vi.mock('../src/lib/deploymentConfig', () => ({
-  originMigrationSource: () => 'https://legacy.example',
-  originMigrationTarget: () => window.location.origin,
+  originMigrationSource: () => migrationMocks.sourceOrigin ?? 'https://legacy.example',
+  originMigrationTarget: () => migrationMocks.targetOrigin ?? window.location.origin,
 }));
 
 vi.mock('../src/lib/sync/localRepository', () => ({
@@ -52,6 +54,9 @@ describe('cross-origin migration install boundary', () => {
     authState.authStateReady.mockClear();
     migrationMocks.installTransferredLocalEnvelope.mockReset();
     migrationMocks.installTransferredLocalEnvelope.mockResolvedValue({ owner: 'user:a' });
+    migrationMocks.sourceOrigin = undefined;
+    migrationMocks.targetOrigin = undefined;
+    window.history.replaceState({}, '', '/');
   });
 
   it('rejects target-only owner-scoped device state instead of resurrecting stale data', async () => {
@@ -146,4 +151,25 @@ describe('cross-origin migration install boundary', () => {
     expect(localStorage.getItem('logbook_origin_migration_decision_v1')).toBe('completed');
     expect(localStorage.getItem('logbook_origin_migration_installing_owner_v1')).toBeNull();
   });
+  it('rejects export when the legacy origin has both guest mode and an authenticated account', async () => {
+    migrationMocks.sourceOrigin = window.location.origin;
+    migrationMocks.targetOrigin = 'https://target.example';
+    authState.currentUser = { uid: 'account-a' };
+    localStorage.setItem('logbook_is_guest', 'true');
+
+    const nonce = 'A'.repeat(43);
+    window.history.replaceState({}, '', `/?logbookMigration=export&target=${encodeURIComponent(migrationMocks.targetOrigin)}&nonce=${nonce}`);
+    const postMessage = vi.fn();
+    Object.defineProperty(window, 'opener', { configurable: true, value: { postMessage } });
+
+    const migration = await import('../src/lib/originMigration');
+    await expect(migration.handleOriginMigrationExportRequest()).resolves.toBe(true);
+
+    expect(migrationMocks.readLocal).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('sessione account') }),
+      'https://target.example',
+    );
+  });
+
 });
