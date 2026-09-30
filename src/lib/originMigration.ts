@@ -22,6 +22,7 @@ const QUERY_NONCE = 'nonce';
 const MESSAGE_TYPE = 'logbook:origin-migration:v1';
 const DECISION_KEY = 'logbook_origin_migration_decision_v1';
 const PENDING_UID_KEY = 'logbook_origin_migration_pending_uid_v1';
+const INSTALLING_OWNER_KEY = 'logbook_origin_migration_installing_owner_v1';
 const GUEST_MIGRATION_RECOVERY_KEY = 'logbook_guest_migration_sync_recovery';
 
 const NONCE_RE = /^[A-Za-z0-9_-]{32,128}$/;
@@ -228,6 +229,11 @@ export async function installOriginMigrationPayload(value: unknown): Promise<{ o
     throw new Error('Trasferimento bloccato: sul nuovo indirizzo esistono dati trasferiti per un altro account.');
   }
 
+  const installingOwner = readBrowserValueStrict(INSTALLING_OWNER_KEY);
+  if (installingOwner && installingOwner !== payload.owner) {
+    throw new Error('Trasferimento bloccato: sul nuovo indirizzo esiste un trasferimento incompleto per un altro archivio.');
+  }
+
   // Target-only device keys are divergent state too. Leaving one behind (for
   // example an active workout or deletion receipt) could resurrect stale state
   // after the envelope transfer. Exact matches remain valid for idempotent retry.
@@ -249,18 +255,47 @@ export async function installOriginMigrationPayload(value: unknown): Promise<{ o
     }
   }
 
-  await installTransferredLocalEnvelope(payload.owner, payload.envelope);
+  // IndexedDB and localStorage cannot participate in one browser transaction.
+  // Persist a strict install fence before the first cross-storage mutation so a
+  // quota/security failure after the envelope commit cannot be mistaken for a
+  // clean state that is safe to skip. Exact-owner retries remain idempotent.
+  let envelopeInstalled = false;
+  writeBrowserValue(INSTALLING_OWNER_KEY, payload.owner);
+  try {
+    await installTransferredLocalEnvelope(payload.owner, payload.envelope);
+    envelopeInstalled = true;
 
-  for (const [name, incoming] of Object.entries(payload.device)) {
-    writeBrowserValue(prefix + name, incoming);
+    for (const [name, incoming] of Object.entries(payload.device)) {
+      writeBrowserValue(prefix + name, incoming);
+    }
+
+    if (payload.owner === 'guest') {
+      writeBrowserValue('logbook_is_guest', 'true');
+    } else {
+      writeBrowserValue(PENDING_UID_KEY, payload.owner.slice('user:'.length));
+    }
+    writeBrowserValue(DECISION_KEY, 'completed');
+  } catch (error) {
+    // If IndexedDB never accepted the envelope, no business-data transfer was
+    // committed and the fence can be removed. After an envelope commit the
+    // fence must survive until an idempotent retry completes every storage step.
+    if (!envelopeInstalled) {
+      try {
+        removeBrowserValue(INSTALLING_OWNER_KEY);
+      } catch {
+        // Storage is already unhealthy; leaving the fence is the safer state.
+      }
+    }
+    throw error;
   }
 
-  if (payload.owner === 'guest') {
-    writeBrowserValue('logbook_is_guest', 'true');
-  } else {
-    writeBrowserValue(PENDING_UID_KEY, payload.owner.slice('user:'.length));
+  // Completion is already durable. A cleanup failure must not turn a completed
+  // transfer into a retry loop; shouldOfferOriginMigration() keys off DECISION_KEY.
+  try {
+    removeBrowserValue(INSTALLING_OWNER_KEY);
+  } catch {
+    // Best-effort cleanup of a recovery fence after durable completion.
   }
-  writeBrowserValue(DECISION_KEY, 'completed');
 
   return { owner: payload.owner };
 }
@@ -280,6 +315,13 @@ export function shouldOfferOriginMigration(): boolean {
 }
 
 export function skipOriginMigration(): void {
+  const decision = readBrowserValueStrict(DECISION_KEY);
+  if (decision === 'completed') return;
+
+  if (readBrowserValueStrict(INSTALLING_OWNER_KEY) !== null) {
+    throw new Error('Il trasferimento precedente è incompleto. Riprova il trasferimento prima di continuare senza importare.');
+  }
+
   writeBrowserValue(DECISION_KEY, 'skipped');
 }
 

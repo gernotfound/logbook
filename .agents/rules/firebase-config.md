@@ -51,30 +51,38 @@ Vercel Analytics e Speed Insights sono ritirati nel target Firebase; `src/lib/an
 
 ## Server trusted M7 — Firebase Admin
 
-`server/accountDeletion/firebaseAdmin.ts` richiede queste tre env quando inizializza Firebase Admin:
+### Target Firebase Cloud Functions v2
 
-- `FIREBASE_ADMIN_PROJECT_ID`
-- `FIREBASE_ADMIN_CLIENT_EMAIL`
-- `FIREBASE_ADMIN_PRIVATE_KEY`
+`functions/src/accountDeletion/firebaseAdmin.ts` inizializza Firebase Admin tramite `initializeApp()` senza credenziali esportate: il runtime usa Application Default Credentials e i permessi IAM associati all'identità della Function.
 
-La private key supporta newline escaped (`\\n`) e viene normalizzata server-side.
+I soli parametri applicativi del runtime Functions sono non segreti:
 
-`api/account-deletion-cron.ts` usa inoltre:
+- `LOGBOOK_FUNCTION_REGION`;
+- `LOGBOOK_ALLOWED_ORIGINS`.
 
-- `CRON_SECRET`
+Il deployment GitHub autentica Google Cloud tramite OIDC / Workload Identity Federation. **VERIFY:** provider WIF, service account, ruoli IAM, API abilitate, billing e Scheduler sono configurazione esterna e devono essere verificati direttamente prima del cutover.
 
-`CRON_SECRET` è un requisito specifico del cron: se assente, `/api/account-deletion-cron` risponde 503. Non è una variabile necessaria al bootstrap del client Vite.
+### Adapter Vercel legacy durante la migrazione
 
-**MUST:** tutte queste credenziali/config server restano server-only, senza prefisso `VITE_`, e non devono essere inserite nel bundle client o committate con valori reali.
+`server/accountDeletion/firebaseAdmin.ts` continua temporaneamente a richiedere:
 
-**VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account.
+- `FIREBASE_ADMIN_PROJECT_ID`;
+- `FIREBASE_ADMIN_CLIENT_EMAIL`;
+- `FIREBASE_ADMIN_PRIVATE_KEY`.
+
+La private key supporta newline escaped (`\\n`) e viene normalizzata server-side. `api/account-deletion-cron.ts` usa inoltre `CRON_SECRET`; se assente, l'endpoint legacy risponde 503.
+
+**MUST:** queste credenziali restano server-only, senza prefisso `VITE_`, solo finché gli adapter Vercel sono realmente necessari. Non devono entrare nel bundle client, nel runtime Firebase Functions o nel repository con valori reali.
+
+**VERIFY:** il repository prova il contratto dei due runtime, non che env Vercel o ruoli IAM Firebase siano effettivamente provisionati.
 
 ## Contratto `.env.example`
 
-`.env.example` documenta entrambi i boundary usando **solo placeholder non sensibili**:
+`.env.example` documenta i boundary pertinenti usando **solo placeholder non sensibili**:
 
 - configurazione client Firebase/App Check (`VITE_*`);
-- nomi delle env server trusted (`FIREBASE_ADMIN_*`, `CRON_SECRET`).
+- parametri non segreti Firebase Functions;
+- nomi delle env server trusted Vercel legacy (`FIREBASE_ADMIN_*`, `CRON_SECRET`).
 
 **MUST:** il template non contiene chiavi private, token, email reali, project identifier privati o altri valori di produzione. La presenza dei nomi server nel template serve soltanto a rendere esplicito il contratto runtime; i valori reali restano in Vercel/secret storage.
 
@@ -115,7 +123,7 @@ Configurazione client/build:
 - `VITE_SENTRY_DSN`: DSN pubblico del progetto Sentry, incluso nel bundle Production;
 - `SENTRY_AUTH_TOKEN`: segreto build-only con scope CI per upload source map/release;
 - `SENTRY_ORG` e `SENTRY_PROJECT`: identificatori build-time;
-- `VERCEL_GIT_COMMIT_SHA`: release Sentry e SHA canonico della build Production.
+- `LOGBOOK_BUILD_SHA`: release Sentry e SHA canonico della build Production; i provider-specific `GITHUB_SHA` / `VERCEL_GIT_COMMIT_SHA` restano fallback transitori nel codice, non il contratto del deploy Firebase.
 
 **MUST:** `SENTRY_AUTH_TOKEN` resta server/build-only, senza prefisso `VITE_`, e non deve comparire in bundle, log, Markdown o fixture. Le source map Production vengono caricate a Sentry e rimosse dagli asset pubblici dopo l'upload.
 

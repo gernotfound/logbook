@@ -4,6 +4,10 @@ const failures = [];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
 const functionsPackage = JSON.parse(readFileSync('functions/package.json', 'utf8'));
+const functionsLockPath = 'functions/package-lock.json';
+const functionsLock = existsSync(functionsLockPath)
+  ? JSON.parse(readFileSync(functionsLockPath, 'utf8'))
+  : null;
 const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
@@ -15,6 +19,28 @@ if (functionConfig?.runtime !== 'nodejs22') failures.push('Firebase Functions ru
 if (functionsPackage.engines?.node !== '22') failures.push('functions/package.json must pin Node.js 22.');
 if (!functionsPackage.dependencies?.['firebase-admin']) failures.push('Functions must depend on firebase-admin.');
 if (!functionsPackage.dependencies?.['firebase-functions']) failures.push('Functions must depend on firebase-functions.');
+if (!functionsLock) {
+  failures.push('Functions must commit functions/package-lock.json for reproducible Firebase builds.');
+} else {
+  if (functionsLock.lockfileVersion !== 3) failures.push('Functions package-lock must use lockfileVersion 3.');
+  const lockedPackages = functionsLock.packages ?? {};
+  for (const dependency of ['firebase-admin', 'firebase-functions']) {
+    const expected = functionsPackage.dependencies?.[dependency];
+    const actual = lockedPackages[`node_modules/${dependency}`]?.version;
+    if (!expected || actual !== expected) {
+      failures.push(`Functions lockfile must pin ${dependency} exactly to package.json (expected ${expected ?? 'missing'}, got ${actual ?? 'missing'}).`);
+    }
+  }
+  if (lockedPackages['node_modules/@grpc/grpc-js']?.version !== '1.14.5') {
+    failures.push('Functions lockfile must retain the patched @grpc/grpc-js 1.14.5 dependency.');
+  }
+  if (lockedPackages['node_modules/@grpc/proto-loader']?.version !== '0.8.1') {
+    failures.push('Functions lockfile must retain the patched @grpc/proto-loader 0.8.1 dependency.');
+  }
+}
+if (packageJson.scripts?.['functions:install'] !== 'npm ci --prefix functions --ignore-scripts --no-audit --no-fund') {
+  failures.push('Functions install must use npm ci against the committed lockfile.');
+}
 
 const hosting = firebase.hosting;
 if (hosting?.target !== 'production') failures.push('Firebase Hosting must use the explicit production target.');

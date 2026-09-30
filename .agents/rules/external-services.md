@@ -36,14 +36,15 @@ Il repository è pubblico.
 Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud.
 
 - Seguire `.agents/rules/firebase-config.md` per contratti env client/server, App Check e Rules.
+- Nel candidato di migrazione, Firebase Hosting + Cloud Functions v2 sono il target di delivery; il deploy Production resta vietato finché il candidato non viene approvato e mergiato su `main`.
 - Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. LogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
 - Le restrizioni Browser API key e la configurazione OAuth sono controlli di sicurezza esterni e devono essere riesaminati quando cambia l'origin canonico di deployment.
 
 ### Vercel
 
-- Vercel è il boundary di hosting/runtime Production e contiene env Production, Functions e cron.
-- `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
-- Le credenziali server-only non devono mai avere prefisso `VITE_`.
+- Fino al cutover approvato, Vercel resta il runtime Production live e il vecchio origin necessario al bridge; Hosting, Functions e cron Vercel sono compatibilità legacy, non l'architettura target finale.
+- Durante la finestra di migrazione `main` resta l'unico branch abilitato al deployment Vercel; i branch di lavoro non devono generare Preview Deployment.
+- Le credenziali server-only legacy non devono mai avere prefisso `VITE_` e vanno ritirate insieme agli adapter quando il vecchio origin non serve più.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
 
 ### GitHub / CodeQL / Snyk

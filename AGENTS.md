@@ -146,9 +146,9 @@ Esistono tre contratti separati:
 
 1. **Client Firebase:** sette env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
-3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
+3. **Server trusted target:** Firebase Cloud Functions v2 usa Application Default Credentials/IAM; `LOGBOOK_FUNCTION_REGION` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti del runtime. `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET` appartengono soltanto agli adapter Vercel legacy durante la finestra di migrazione e nessuna di queste deve avere prefisso `VITE_`.
 
-`.env.example` documenta esclusivamente nomi e placeholder sicuri; i valori reali server devono restare in Vercel/secret storage e non vanno committati.
+`.env.example` documenta esclusivamente nomi e placeholder sicuri; i valori reali legacy restano in Vercel/secret storage, mentre credenziali e ruoli del target Firebase restano in IAM/WIF e non vanno committati.
 
 ### App Check
 
@@ -180,7 +180,7 @@ LogBook dipende da configurazioni live che non sono completamente rappresentabil
 
 La cancellazione account è un workflow CRITICAL server-mediated. Il client non elimina direttamente il root `/users/{uid}`.
 
-- Vercel Functions autenticano la richiesta e il backend trusted usa Firebase Admin.
+- Firebase Cloud Functions v2 autenticano la richiesta e il backend trusted usa Firebase Admin con ADC; gli endpoint Vercel restano adapter legacy soltanto durante la finestra di migrazione.
 - Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
 - `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
 - Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; il cron autenticato giornaliero elimina i record scaduti.
