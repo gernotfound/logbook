@@ -25,6 +25,10 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
+import {
+    clearOriginMigrationPendingUid,
+    originMigrationPendingUid,
+} from '../lib/originMigration';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -242,6 +246,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
+                const transferredUid = originMigrationPendingUid();
+
+                if (transferredUid && transferredUid !== user.uid) {
+                    setGuestMigrationStatus('idle');
+                    setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
+                    void loadData(user);
+                    return;
+                }
 
                 if (recoveryUid === user.uid) {
                     const handled = await resumePersistedGuestMigration(user, isCurrentRun);
@@ -296,7 +308,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
                 } else {
                     setGuestMigrationStatus('idle');
-                    void loadData(user);
+                    await loadData(user);
+                    if (isCurrentRun() && transferredUid === user.uid) {
+                        try {
+                            clearOriginMigrationPendingUid(user.uid);
+                        } catch (error) {
+                            console.warn('Dati trasferiti caricati, ma marker di migrazione non rimosso:', error);
+                        }
+                    }
                 }
             } else {
                 setGuestMigrationStatus('idle');
