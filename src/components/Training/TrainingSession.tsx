@@ -96,7 +96,13 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             draftRegistry.flushAll();
             const draft = postSessionDraftRef.current;
             if (!draft || draft.workoutId !== String(activeWorkout.id ?? '')) return;
-            const { workoutId: _workoutId, ...completionDraft } = draft;
+            const completionDraft: WorkoutCompletionDraft = {
+                mood: draft.mood,
+                pump: draft.pump,
+                fatigue: draft.fatigue,
+                water: draft.water,
+                pains: [...draft.pains],
+            };
             const finished = await endWorkout(false, pendingEndTime, completionDraft);
             if (finished) {
                 postSessionDraftRef.current = null;
