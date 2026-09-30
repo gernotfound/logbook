@@ -116,6 +116,8 @@ npm run dev
 
 `.env.example` contiene soltanto **nomi e placeholder**. Non contiene credenziali reali.
 
+Il repository non versiona `.env.production`: i valori del deployment Production restano nel provider Vercel; test ed E2E usano configurazioni sintetiche.
+
 Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. In Production Sentry usa inoltre `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono riservate alla build per release/source map. Per collegare un clone a servizi cloud reali occorre una configurazione autorizzata.
 
 Le API trusted di account deletion usano inoltre variabili **server-only**:
