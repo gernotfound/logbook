@@ -57,7 +57,7 @@ jobs:
             playwright: true
           - id: m7-m8
             label: Build and M7-M8
-            command: "npm run build && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
+            command: "npm run build && npm run test:typecheck:m7 && npm audit --prefix functions --audit-level=high && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
             java: false
             playwright: false
     env:
