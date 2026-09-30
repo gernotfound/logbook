@@ -12,6 +12,7 @@ import {
     type AccountDeletionMarker,
 } from '../sync/accountGate';
 import { waitForJournalIdle } from '../sync/replicateJournal';
+import { accountDeletionApiUrl } from '../deploymentConfig';
 
 export type AccountDeletionOutcome =
     | { status: 'complete' }
@@ -88,7 +89,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionApiUrl(), {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -110,7 +111,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
 
 export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionApiUrl(), {
         method: 'GET',
         headers: {
             'x-firebase-appcheck': await appCheckToken(),
