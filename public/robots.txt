@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://logbook-gnf.vercel.app/sitemap.xml
+# Production sitemap URL is generated after build from VITE_PUBLIC_ORIGIN.
