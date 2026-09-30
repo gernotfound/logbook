@@ -68,4 +68,16 @@ describe('Firebase Production deploy environment guard', () => {
       VITE_ACCOUNT_DELETION_API_URL: `https://${region}-${project}.cloudfunctions.net/other/accountDeletion`,
     })).toThrow();
   });
+
+  it('rejects widening the CORS allowlist beyond the migration source and canonical origin', () => {
+    expect(() => run({
+      LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},${legacyOrigin},https://unexpected.example`,
+    })).toThrow();
+  });
+
+  it('rejects a Hosting site that does not match a *.web.app canonical origin', () => {
+    expect(() => run({
+      FIREBASE_HOSTING_SITE: 'different-site',
+    })).toThrow();
+  });
 });

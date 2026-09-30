@@ -10,6 +10,9 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
 const buildSha =
   process.env.LOGBOOK_BUILD_SHA ||
+  // Canonical PR verification exports the exact checked-out candidate here;
+  // GITHUB_SHA on pull_request can refer to GitHub's synthetic merge ref.
+  process.env.EXPECTED_SHA ||
   process.env.GITHUB_SHA ||
   // Transitional fallback while the legacy Vercel origin remains available.
   process.env.VERCEL_GIT_COMMIT_SHA ||

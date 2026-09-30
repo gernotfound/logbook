@@ -100,10 +100,22 @@ if (process.env.VITE_FIREBASE_AUTH_DOMAIN.endsWith('.firebaseapp.com')) {
   process.exit(1);
 }
 
-const allowed = new Set(process.env.LOGBOOK_ALLOWED_ORIGINS.split(',').map(v => v.trim()).filter(Boolean));
-for (const requiredOrigin of [publicOrigin.origin, migrationSource.origin]) {
-  if (!allowed.has(requiredOrigin)) {
-    console.error('LOGBOOK_ALLOWED_ORIGINS must include:', requiredOrigin);
+const allowedValues = process.env.LOGBOOK_ALLOWED_ORIGINS.split(',').map(v => v.trim()).filter(Boolean);
+const allowed = new Set(allowedValues);
+const expectedAllowed = new Set([publicOrigin.origin, migrationSource.origin]);
+if (
+  allowedValues.length !== allowed.size
+  || allowed.size !== expectedAllowed.size
+  || [...allowed].some(origin => !expectedAllowed.has(origin))
+) {
+  console.error('LOGBOOK_ALLOWED_ORIGINS must contain exactly the canonical Firebase origin and the legacy migration source.');
+  process.exit(1);
+}
+
+if (publicOrigin.hostname.endsWith('.web.app')) {
+  const expectedSite = publicOrigin.hostname.slice(0, -'.web.app'.length);
+  if (process.env.FIREBASE_HOSTING_SITE !== expectedSite) {
+    console.error('FIREBASE_HOSTING_SITE must match the configured *.web.app canonical origin.');
     process.exit(1);
   }
 }
