@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
@@ -289,9 +289,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 if (transferredUid && transferredUid !== user.uid) {
+                    setCurrentUser(null);
                     setGuestMigrationStatus('idle');
                     setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
-                    void loadData(user);
+                    try {
+                        await signOut(auth);
+                    } catch (error) {
+                        console.error('Impossibile chiudere la sessione dell’account non compatibile con i dati trasferiti:', error);
+                    }
                     return;
                 }
 
