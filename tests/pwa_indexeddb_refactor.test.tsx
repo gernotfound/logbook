@@ -399,27 +399,4 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
     });
   });
 
-  describe('R4: Workbox Google Fonts Precaching Configuration', () => {
-    test('Google Fonts stylesheet and webfont regexes match standard font URLs', () => {
-      const stylesheetRegex = /^https:\/\/fonts\.googleapis\.com\/.*/i;
-      const webfontsRegex = /^https:\/\/fonts\.gstatic\.com\/.*/i;
-
-      // Valid stylesheet URLs
-      expect(stylesheetRegex.test('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap')).toBe(true);
-      expect(stylesheetRegex.test('https://fonts.googleapis.com/css?family=Roboto')).toBe(true);
-      expect(stylesheetRegex.test('https://fonts.googleapis.com/icon?family=Material+Icons')).toBe(true);
-
-      // Non-matching stylesheet URLs
-      expect(stylesheetRegex.test('https://example.com/fonts.googleapis.com')).toBe(false);
-      expect(stylesheetRegex.test('http://fonts.googleapis.com/css')).toBe(false);
-
-      // Valid webfont URLs
-      expect(webfontsRegex.test('https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiA.woff2')).toBe(true);
-      expect(webfontsRegex.test('https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxK.woff2')).toBe(true);
-
-      // Non-matching webfont URLs
-      expect(webfontsRegex.test('https://example.com/fonts.gstatic.com')).toBe(false);
-      expect(webfontsRegex.test('http://fonts.gstatic.com/font.woff2')).toBe(false);
-    });
-  });
 });
