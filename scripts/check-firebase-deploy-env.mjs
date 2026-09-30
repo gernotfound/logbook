@@ -50,6 +50,21 @@ const migrationSource = httpsUrl('VITE_ORIGIN_MIGRATION_SOURCE');
 const migrationTarget = httpsUrl('VITE_ORIGIN_MIGRATION_TARGET');
 const deletionUrl = httpsUrl('VITE_ACCOUNT_DELETION_API_URL');
 
+function requireOriginOnly(name, url) {
+  if (url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash) {
+    console.error(`${name} must contain only the HTTPS origin, without credentials, port, path, query or fragment.`);
+    process.exit(1);
+  }
+}
+
+for (const [name, url] of [
+  ['VITE_PUBLIC_ORIGIN', publicOrigin],
+  ['VITE_ORIGIN_MIGRATION_SOURCE', migrationSource],
+  ['VITE_ORIGIN_MIGRATION_TARGET', migrationTarget],
+]) {
+  requireOriginOnly(name, url);
+}
+
 if (migrationTarget.origin !== publicOrigin.origin) {
   console.error('VITE_ORIGIN_MIGRATION_TARGET must equal VITE_PUBLIC_ORIGIN.');
   process.exit(1);
@@ -58,8 +73,17 @@ if (migrationSource.origin === migrationTarget.origin) {
   console.error('Origin migration source and target must be different origins.');
   process.exit(1);
 }
-if (!deletionUrl.hostname.endsWith('.cloudfunctions.net') || !deletionUrl.pathname.endsWith('/accountDeletion')) {
-  console.error('Account deletion must use the direct Cloud Functions accountDeletion HTTPS endpoint.');
+const expectedFunctionHost = `${process.env.FIREBASE_FUNCTION_REGION}-${process.env.FIREBASE_PROJECT_ID}.cloudfunctions.net`;
+if (
+  deletionUrl.hostname !== expectedFunctionHost
+  || deletionUrl.pathname !== '/accountDeletion'
+  || deletionUrl.search
+  || deletionUrl.hash
+  || deletionUrl.username
+  || deletionUrl.password
+  || deletionUrl.port
+) {
+  console.error('Account deletion must use the exact direct Cloud Functions accountDeletion endpoint for the configured project and region.');
   process.exit(1);
 }
 
