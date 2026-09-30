@@ -11,9 +11,10 @@
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Vercel Hosting / Functions | Hosting e API server | Request metadata; payload API necessari; log tecnici | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
 | Vercel Analytics / Speed Insights | Analytics opzionali | Dati tecnici secondo servizio/config | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Opt-in |
+| Sentry | Error Monitoring e source map | Errori/stack sanitizzati, session ID tecnico, release/build e contesto tecnico minimizzato; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | Organizzazione su regione DE; dettagli contrattuali `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google/Firebase Analytics è escluso dal runtime LogBook corrente.
+Google/Firebase Analytics è escluso dal runtime LogBook corrente. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione LogBook corrente.
 
 ## Checklist per ogni fornitore
 
