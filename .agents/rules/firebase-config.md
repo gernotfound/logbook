@@ -104,7 +104,7 @@ I file `firebase.json` e `.firebaserc` definiscono la configurazione repository 
 
 ### Telemetria tecnica — Sentry e legacy Firestore
 
-Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Prima del boundary esterno, messaggi e stack attraversano i sanitizzatori LogBook; `sendDefaultPii` resta disabilitato e il client non abilita Replay, tracing, logging o metriche.
+Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Prima del boundary esterno, messaggi e stack attraversano i sanitizzatori LogBook; il `beforeSend` elimina contesto utente/request/extra non previsto e il client non abilita Replay, tracing, logging o metriche.
 
 Configurazione client/build:
 
