@@ -1,10 +1,13 @@
+import { logger } from 'firebase-functions';
+import { defineString } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { logger } from 'firebase-functions';
 import { handleAccountDeletionGet, handleAccountDeletionPost } from './accountDeletion/http.js';
 import { runAccountDeletionMaintenance } from './maintenance.js';
 
-const FUNCTION_REGION = process.env.LOGBOOK_FUNCTION_REGION?.trim() || 'europe-west1';
+const functionRegion = defineString('LOGBOOK_FUNCTION_REGION');
+const allowedOriginsConfig = defineString('LOGBOOK_ALLOWED_ORIGINS');
+
 const MAINTENANCE_BUDGET_MS = 28 * 60 * 1000;
 const ALLOWED_METHODS = 'GET, POST, OPTIONS';
 const ALLOWED_HEADERS = [
@@ -15,16 +18,35 @@ const ALLOWED_HEADERS = [
   'x-account-deletion-receipt',
 ].join(', ');
 
+type HeaderValue = string | string[] | undefined;
+
+type FirebaseHttpRequest = {
+  get(name: string): string | undefined;
+  headers: Record<string, HeaderValue>;
+  protocol: string;
+  originalUrl: string;
+  method: string;
+  rawBody?: Buffer;
+  body?: unknown;
+};
+
+type FirebaseHttpResponse = {
+  set(name: string, value: string): FirebaseHttpResponse;
+  status(code: number): FirebaseHttpResponse;
+  json(body: unknown): void;
+  send(body: string): void;
+};
+
 function allowedOrigins(): Set<string> {
   return new Set(
-    (process.env.LOGBOOK_ALLOWED_ORIGINS ?? '')
+    allowedOriginsConfig.value()
       .split(',')
       .map(value => value.trim())
       .filter(Boolean),
   );
 }
 
-function applyCors(req: any, res: any): boolean {
+function applyCors(req: FirebaseHttpRequest, res: FirebaseHttpResponse): boolean {
   const origin = req.get('origin');
   if (!origin) return true;
 
@@ -42,9 +64,9 @@ function applyCors(req: any, res: any): boolean {
   return true;
 }
 
-function toWebRequest(req: any): Request {
+function toWebRequest(req: FirebaseHttpRequest): Request {
   const headers = new Headers();
-  for (const [name, value] of Object.entries(req.headers as Record<string, string | string[] | undefined>)) {
+  for (const [name, value] of Object.entries(req.headers)) {
     if (Array.isArray(value)) {
       for (const item of value) headers.append(name, item);
     } else if (value !== undefined) {
@@ -54,7 +76,7 @@ function toWebRequest(req: any): Request {
 
   const host = req.get('host') ?? 'localhost';
   const url = `${req.protocol}://${host}${req.originalUrl}`;
-  const method = String(req.method).toUpperCase();
+  const method = req.method.toUpperCase();
   const body = method === 'GET' || method === 'HEAD'
     ? undefined
     : req.rawBody?.length
@@ -64,7 +86,7 @@ function toWebRequest(req: any): Request {
   return new Request(url, { method, headers, body });
 }
 
-async function sendWebResponse(response: Response, res: any): Promise<void> {
+async function sendWebResponse(response: Response, res: FirebaseHttpResponse): Promise<void> {
   response.headers.forEach((value, key) => res.set(key, value));
   res.set('Cache-Control', 'no-store');
   const body = await response.text();
@@ -73,7 +95,7 @@ async function sendWebResponse(response: Response, res: any): Promise<void> {
 
 export const accountDeletion = onRequest(
   {
-    region: FUNCTION_REGION,
+    region: functionRegion,
     timeoutSeconds: 3600,
     memory: '512MiB',
     concurrency: 10,
@@ -81,27 +103,30 @@ export const accountDeletion = onRequest(
     cors: false,
   },
   async (req, res) => {
-    if (!applyCors(req, res)) return;
+    const request = req as unknown as FirebaseHttpRequest;
+    const response = res as unknown as FirebaseHttpResponse;
 
-    if (req.method === 'OPTIONS') {
-      res.set('Cache-Control', 'no-store');
-      res.status(204).send('');
+    if (!applyCors(request, response)) return;
+
+    if (request.method === 'OPTIONS') {
+      response.set('Cache-Control', 'no-store');
+      response.status(204).send('');
       return;
     }
 
-    let response: Response;
-    if (req.method === 'POST') {
-      response = await handleAccountDeletionPost(toWebRequest(req));
-    } else if (req.method === 'GET') {
-      response = await handleAccountDeletionGet(toWebRequest(req));
+    let webResponse: Response;
+    if (request.method === 'POST') {
+      webResponse = await handleAccountDeletionPost(toWebRequest(request));
+    } else if (request.method === 'GET') {
+      webResponse = await handleAccountDeletionGet(toWebRequest(request));
     } else {
-      response = Response.json(
+      webResponse = Response.json(
         { error: 'Metodo non consentito.' },
         { status: 405, headers: { Allow: ALLOWED_METHODS } },
       );
     }
 
-    await sendWebResponse(response, res);
+    await sendWebResponse(webResponse, response);
   },
 );
 
@@ -109,7 +134,7 @@ export const accountDeletionMaintenance = onSchedule(
   {
     schedule: '0 3 * * *',
     timeZone: 'Etc/UTC',
-    region: FUNCTION_REGION,
+    region: functionRegion,
     timeoutSeconds: 1800,
     memory: '512MiB',
     maxInstances: 1,
