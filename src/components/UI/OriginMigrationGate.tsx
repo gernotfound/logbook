@@ -29,8 +29,10 @@ export function OriginMigrationGate({ children }: { children: ReactNode }) {
     try {
       skipOriginMigration();
       setShow(false);
-    } catch {
-      setError('Non riesco a salvare la scelta sul dispositivo. Riprova dopo aver riabilitato lo storage del browser.');
+    } catch (cause) {
+      setError(cause instanceof Error
+        ? cause.message
+        : 'Non riesco a salvare la scelta sul dispositivo. Riprova dopo aver riabilitato lo storage del browser.');
     }
   };
 

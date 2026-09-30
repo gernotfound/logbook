@@ -183,7 +183,7 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 - Firebase Cloud Functions v2 autenticano la richiesta e il backend trusted usa Firebase Admin con ADC; gli endpoint Vercel restano adapter legacy soltanto durante la finestra di migrazione.
 - Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
 - `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
-- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; il cron autenticato giornaliero elimina i record scaduti.
+- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; la maintenance schedulata giornaliera elimina i record scaduti.
 - La copia locale non viene eliminata finché il client non ha prova del completamento cloud secondo il protocollo di recovery.
 - **MUST:** non reintrodurre cancellazioni client-side che bypassino questo workflow.
 

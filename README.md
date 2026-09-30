@@ -88,7 +88,8 @@ I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La document
 - Zustand 5
 - Zod 4
 - Firebase Web SDK 12 + Firebase Admin server-side
-- Vercel Functions
+- Firebase Hosting + Cloud Functions for Firebase v2 come target di delivery; Functions su Node.js 22
+- Vercel mantenuto temporaneamente come Production live/bridge legacy fino al cutover approvato
 - Sentry Error Monitoring (`@sentry/react` + source map build-time)
 - `vite-plugin-pwa`
 - Chart.js / `react-chartjs-2`
@@ -96,7 +97,7 @@ I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La document
 - Playwright
 - Firebase Emulator
 - oxlint
-- Node.js 24.x nel workflow canonico e nel runtime Vercel corrente
+- Node.js 24.x per frontend/build/CI canonica; Node.js 22 per Firebase Functions
 
 ## Configurazione locale
 
@@ -116,18 +117,13 @@ npm run dev
 
 `.env.example` contiene soltanto **nomi e placeholder**. Non contiene credenziali reali.
 
-Il repository non versiona `.env.production`: i valori del deployment Production restano nel provider Vercel; test ed E2E usano configurazioni sintetiche.
+Il repository non versiona `.env.production`. Prima del cutover i valori live restano in Vercel; il target Firebase riceve la configurazione Production tramite GitHub Actions/Firebase/Google Cloud. Test ed E2E usano configurazioni sintetiche.
 
 Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. In Production Sentry usa inoltre `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono riservate alla build per release/source map. Per collegare un clone a servizi cloud reali occorre una configurazione autorizzata.
 
-Le API trusted di account deletion usano inoltre variabili **server-only**:
+Nel target Firebase, le API trusted usano Application Default Credentials/IAM e i parametri non segreti `LOGBOOK_FUNCTION_REGION` e `LOGBOOK_ALLOWED_ORIGINS`. Durante la finestra legacy Vercel continuano invece a esistere le variabili server-only `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`.
 
-- `FIREBASE_ADMIN_PROJECT_ID`
-- `FIREBASE_ADMIN_CLIENT_EMAIL`
-- `FIREBASE_ADMIN_PRIVATE_KEY`
-- `CRON_SECRET`
-
-Queste variabili non devono avere prefisso `VITE_`, non devono entrare nel bundle client e i valori reali non devono essere committati.
+Le credenziali legacy non devono avere prefisso `VITE_`, non devono entrare nel bundle client e i valori reali non devono essere committati.
 
 ## Verifica
 
@@ -143,18 +139,18 @@ Comandi più piccoli (`npm run lint`, `npm run test`, `npm run build`, `npm run 
 
 ## Deployment
 
-Il repository è configurato perché Vercel distribuisca **solo `main`**. I branch di sviluppo sono disabilitati in `vercel.json` e non devono generare Preview Deployment.
+Durante la finestra di migrazione Vercel resta la Production live e distribuisce **solo `main`**; i branch di sviluppo sono disabilitati in `vercel.json` e non devono generare Preview Deployment.
 
-Il normale ciclo di consegna è quindi:
+Il candidato introduce un workflow Firebase Production separato. Non effettua deploy da PR/branch: dopo un futuro merge esplicitamente approvato, il deploy Firebase può partire soltanto da un push su `main` con Milestone/Canonical Verification verde sull'exact SHA e con un ulteriore controllo che lo SHA sia ancora l'HEAD di `main`.
+
+Per questa migrazione il ciclo deliberatamente si ferma prima del merge:
 
 ```text
 branch dedicato
 → draft PR
-→ Canonical Verification
-→ review finale exact-head
-→ merge in main
-→ CI su main
-→ deployment Vercel di produzione da main
+→ Canonical Verification exact-SHA
+→ audit indipendenti
+→ stop: nessun merge/cutover finché non viene approvato esplicitamente
 ```
 
 ## Documentazione tecnica normativa
