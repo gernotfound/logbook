@@ -7,22 +7,68 @@ import WorkoutReportModal from './WorkoutReportModal';
 import SessionRatings from './session/SessionRatings';
 import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
+import { draftRegistry } from '../../lib/utils/draftRegistry';
+import type { WorkoutCompletionDraft } from '../../hooks/workout/workoutSessionPreparation';
 
 interface TrainingSessionProps {
     onNavigateToHistory?: () => void;
     onNavigateToPlanning?: () => void;
 }
 
+interface PostSessionDraft extends WorkoutCompletionDraft {
+    workoutId: string;
+}
+
+function createPostSessionDraft(workout: WorkoutSession): PostSessionDraft {
+    return {
+        workoutId: String(workout.id ?? ''),
+        mood: workout.moodRating !== undefined && workout.moodRating !== null ? String(workout.moodRating) : '',
+        pump: workout.pumpRating !== undefined && workout.pumpRating !== null ? String(workout.pumpRating) : '',
+        fatigue: workout.fatigueRating !== undefined && workout.fatigueRating !== null ? String(workout.fatigueRating) : '',
+        water: workout.waterLiters !== undefined && workout.waterLiters !== null ? String(workout.waterLiters) : '',
+        pains: Array.isArray(workout.pains) ? [...workout.pains] : [],
+    };
+}
+
 const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
     const {
         activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout,
-        mood, setMood, pump, setPump, fatigue, setFatigue, water, setWater,
-        pains, setPains, togglePain,
     } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
     const [pendingEndTime, setPendingEndTime] = useState<number | null>(null);
+    const [postSessionDraft, setPostSessionDraft] = useState<PostSessionDraft | null>(null);
+    const postSessionDraftRef = useRef<PostSessionDraft | null>(null);
     const wasStartedRef = useRef(Boolean(activeWorkout?.globalStartTime));
     const isPostSession = pendingEndTime !== null;
+
+    const updatePostSessionDraft = useCallback((patch: Partial<WorkoutCompletionDraft>) => {
+        const current = postSessionDraftRef.current;
+        if (!current) return;
+        const next = { ...current, ...patch };
+        postSessionDraftRef.current = next;
+        setPostSessionDraft(next);
+    }, []);
+
+    const togglePostSessionPain = useCallback((muscleId: string) => {
+        const current = postSessionDraftRef.current;
+        if (!current || !muscleId) return;
+        const pains = current.pains.includes(muscleId)
+            ? current.pains.filter(id => id !== muscleId)
+            : [...current.pains, muscleId];
+        updatePostSessionDraft({ pains });
+    }, [updatePostSessionDraft]);
+
+    const handleRequestEnd = useCallback(() => {
+        if (!activeWorkout || activeWorkout.isEditingHistory) return;
+        const workoutId = String(activeWorkout.id ?? '');
+        const current = postSessionDraftRef.current;
+        if (!current || current.workoutId !== workoutId) {
+            const next = createPostSessionDraft(activeWorkout);
+            postSessionDraftRef.current = next;
+            setPostSessionDraft(next);
+        }
+        setPendingEndTime(Date.now());
+    }, [activeWorkout]);
 
     useEffect(() => {
         const isStarted = Boolean(activeWorkout?.globalStartTime);
@@ -47,8 +93,14 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         );
 
         const finish = async () => {
-            const finished = await endWorkout(false, pendingEndTime);
+            draftRegistry.flushAll();
+            const draft = postSessionDraftRef.current;
+            if (!draft || draft.workoutId !== String(activeWorkout.id ?? '')) return;
+            const { workoutId: _workoutId, ...completionDraft } = draft;
+            const finished = await endWorkout(false, pendingEndTime, completionDraft);
             if (finished) {
+                postSessionDraftRef.current = null;
+                setPostSessionDraft(null);
                 setPendingEndTime(null);
                 setReportWorkout(finished);
             }
@@ -80,14 +132,22 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                         </div>
                     </div>
                 </div>
-                <SessionRatings
-                    water={water} setWater={setWater}
-                    mood={mood} setMood={setMood}
-                    pump={pump} setPump={setPump}
-                    fatigue={fatigue} setFatigue={setFatigue}
-                    ratingScale={5}
-                    pains={pains} onTogglePain={togglePain} onSetPains={setPains}
-                />
+                {postSessionDraft && (
+                    <SessionRatings
+                        water={postSessionDraft.water}
+                        setWater={water => updatePostSessionDraft({ water })}
+                        mood={postSessionDraft.mood}
+                        setMood={mood => updatePostSessionDraft({ mood })}
+                        pump={postSessionDraft.pump}
+                        setPump={pump => updatePostSessionDraft({ pump })}
+                        fatigue={postSessionDraft.fatigue}
+                        setFatigue={fatigue => updatePostSessionDraft({ fatigue })}
+                        ratingScale={5}
+                        pains={postSessionDraft.pains}
+                        onTogglePain={togglePostSessionPain}
+                        onSetPains={pains => updatePostSessionDraft({ pains })}
+                    />
+                )}
                 <div className="pre-session-actions">
                     <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>
                     <button type="button" className="btn btn-secondary" onClick={() => setPendingEndTime(null)}>Torna all’allenamento</button>
@@ -126,7 +186,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     return (
         <ActiveWorkoutSession
             onNavigateToHistory={onNavigateToHistory}
-            onRequestEnd={() => setPendingEndTime(Date.now())}
+            onRequestEnd={handleRequestEnd}
         />
     );
 };
