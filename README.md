@@ -75,7 +75,7 @@ La sorgente raster approvata `public/icon-source.png` viene processata da `scrip
 
 Sono sistemi distinti:
 
-- **telemetria tecnica LogBook:** errori/eventi sanitizzati per stabilità e diagnostica; per un account autenticato può essere collegata all'UID tecnico dell'utente e non viene descritta come anonima;
+- **telemetria tecnica LogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; LogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
 - **Vercel Analytics + Speed Insights:** renderizzati soltanto quando l'utente abilita l'opt-in Analytics. Google/Firebase Analytics non viene utilizzato.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.
@@ -89,6 +89,7 @@ I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La document
 - Zod 4
 - Firebase Web SDK 12 + Firebase Admin server-side
 - Vercel Functions
+- Sentry Error Monitoring (`@sentry/react` + source map build-time)
 - `vite-plugin-pwa`
 - Chart.js / `react-chartjs-2`
 - Vitest + Testing Library
@@ -115,7 +116,7 @@ npm run dev
 
 `.env.example` contiene soltanto **nomi e placeholder**. Non contiene credenziali reali.
 
-Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. Per collegare un clone a servizi cloud reali occorre una configurazione Firebase propria o un ambiente autorizzato.
+Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. In Production Sentry usa inoltre `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono riservate alla build per release/source map. Per collegare un clone a servizi cloud reali occorre una configurazione autorizzata.
 
 Le API trusted di account deletion usano inoltre variabili **server-only**:
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
@@ -19,10 +19,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
-    vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
-      return { path: pathSegments.join('/') } as any;
-    });
+    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     if (telemetryHub && typeof telemetryHub.reset === 'function') {
       telemetryHub.reset();
@@ -116,15 +113,15 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       }));
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(initialItems));
 
-      // Mock setDoc: Item 1 succeeds, then sudden network failure for subsequent items
+      // Mock Sentry boundary: Item 1 succeeds, then sudden network failure for subsequent items
       mockSetDoc
-        .mockResolvedValueOnce(undefined as any)
+        .mockResolvedValueOnce(true)
         .mockRejectedValue(new Error('Network unreachable: connection reset by peer'));
 
       await telemetryHub.flushQueue();
 
       // Assertions:
-      // 1. mockSetDoc should only have been called 3 times (1 success + 2 consecutive failures triggering circuit breaker)
+      // 1. Sentry boundary should only have been called 3 times (1 success + 2 consecutive failures triggering circuit breaker)
       //    It must NOT iterate through all 20 items (which would cause 20 calls or cascading 5s timeouts).
       expect(mockSetDoc).toHaveBeenCalledTimes(3);
 
@@ -141,7 +138,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       // First retry scheduled after INITIAL_RETRY_DELAY_MS (1000ms * 2^0 = 1000ms)
       mockSetDoc.mockReset();
       // On next retry, simulate network restoration
-      mockSetDoc.mockResolvedValue(undefined as any);
+      mockSetDoc.mockResolvedValue(true);
 
       // Advance by 500ms (should not have triggered yet)
       await vi.advanceTimersByTimeAsync(500);
@@ -219,7 +216,7 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       expect(q.length).toBe(0);
 
       // Now verify a newly added valid event can be flushed immediately without interference
-      mockSetDoc.mockResolvedValue(undefined as any);
+      mockSetDoc.mockResolvedValue(true);
       telemetryHub.trackEvent('fresh_after_poison_cleared');
       await vi.advanceTimersByTimeAsync(100);
       expect(mockSetDoc).toHaveBeenCalled();
@@ -268,11 +265,11 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(items));
 
       // Mock: poison fails, valid succeeds
-      mockSetDoc.mockImplementation(async (_ref: any, data: any) => {
+      mockSetDoc.mockImplementation(async (_kind: any, data: any) => {
         if (data.type === 'PoisonType' || data.message?.includes('Reject always')) {
           throw new Error('Poison rejected');
         }
-        return undefined;
+        return true;
       });
 
       // Flush: poison fails (retry 1), valid succeeds and is evicted!

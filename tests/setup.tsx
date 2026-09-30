@@ -100,6 +100,7 @@ if (typeof window !== 'undefined') {
 // Global stubs for Vite define constants
 vi.stubGlobal('__APP_VERSION__', '1.0.0-test');
 vi.stubGlobal('__BUILD_HASH__', 'abcdef1');
+vi.stubGlobal('__BUILD_SHA__', 'abcdef1234567890abcdef1234567890abcdef12');
 vi.stubGlobal('__BUILD_TIME__', '2026-08-26T00:00:00Z');
 
 // Mock ResizeObserver

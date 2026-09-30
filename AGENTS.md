@@ -51,7 +51,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** telemetria tecnica LogBook su Firestore, `@vercel/analytics`, `@vercel/speed-insights`. Google/Firebase Analytics non fa parte del prodotto.
+- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche, `@vercel/analytics`, `@vercel/speed-insights`. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti. Google/Firebase Analytics non fa parte del prodotto.
 - **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
 
 ## File canonici del modello dati
@@ -182,13 +182,14 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 Distinguere due sistemi:
 
-1. **Telemetria tecnica LogBook:** errori/eventi diagnostici sanitizzati; per utenti autenticati può includere UID tecnico, session ID, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non traccia avvio/salvataggio workout né funnel di installazione PWA. Viene scritta nelle raccolte private dell'utente e non va descritta come “anonima”.
+1. **Telemetria tecnica LogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
 2. **Vercel Analytics / Speed Insights:** renderizzati solo quando l'opt-in analytics è attivo. Google/Firebase Analytics non viene inizializzato né usato.
 
 - **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
-- **MUST:** telemetria tecnica propria e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
-- **MUST:** la telemetria Firestore nuova usa obbligatoriamente `expireAt` per la retention di 30 giorni; errori ancorati a `lastSeen`, eventi/anomalie a `timestamp`. Scritture telemetriche client prive di scadenza vengono rifiutate senza rendere bloccante la telemetria. La cancellazione automatica avviene tramite il maintenance cron server-side, non tramite Firestore TTL.
-- **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute.
+- **MUST:** telemetria tecnica e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
+- **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
+- **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
+- **MUST:** source map Sentry sono generate solo nella build Vercel Production, caricate con credenziale server-side `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
 - **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
 - **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.
 - **MUST:** una modifica materiale alla Privacy Policy richiede bump di `LEGAL_VERSIONS.privacy` e regressioni pertinenti, così gli utenti devono riaccettare la versione aggiornata.

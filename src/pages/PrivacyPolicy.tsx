@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 23 settembre 2026
+              Aggiornata al 30 settembre 2026
             </p>
           </div>
           <button
@@ -96,7 +96,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati business inseriti nell'app — come allenamenti, nutrizione, misurazioni, routine e pianificazioni — restano nella persistenza locale del dispositivo e non vengono sincronizzati su Firestore finché non colleghi un account.
             </p>
             <p>
-              La telemetria tecnica propria può essere accodata localmente quando non esiste una sessione Firebase autenticata, ma gli elementi privi di UID autenticato non vengono caricati successivamente su Firestore come dati dell'account. Se abiliti volontariamente le statistiche di utilizzo dalle Impostazioni, anche in modalità ospite possono invece essere attivati i servizi Analytics descritti più avanti. L'uso locale dei dati fitness e l'opt-in Analytics sono quindi flussi distinti.
+              La telemetria tecnica degli errori non viene inviata a Sentry quando non esiste una sessione Firebase autenticata. Eventuali elementi diagnostici best-effort possono restare localmente sul dispositivo senza essere riassegnati a un account successivo. Se abiliti volontariamente le statistiche di utilizzo dalle Impostazioni, anche in modalità ospite possono invece essere attivati i servizi Analytics descritti più avanti. L'uso locale dei dati fitness, la telemetria tecnica e l'opt-in Analytics sono flussi distinti.
             </p>
 
             <h3 style={h3Style}>Modalità cloud (con account)</h3>
@@ -118,13 +118,13 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
             <h3 style={h3Style}>Telemetria tecnica di stabilità</h3>
             <p>
-              LogBook utilizza una telemetria tecnica propria per diagnosticare errori e problemi di stabilità. Per gli utenti autenticati questa telemetria può essere <strong style={{ color: 'var(--text-main)' }}>pseudonimizzata tramite l'UID tecnico Firebase</strong> e può includere un identificativo di sessione, versione dell'app, piattaforma derivata, modalità PWA/browser, stato online, tipo e messaggio di errore sanitizzati, contatori/timestamp e stack trace troncati e sanitizzati.
+              LogBook utilizza Sentry Error Monitoring per diagnosticare errori e anomalie tecniche in Production. L'app <strong style={{ color: 'var(--text-main)' }}>non allega deliberatamente a Sentry l'UID Firebase, l'indirizzo email o i contenuti business dell'utente</strong>. Il payload applicativo è limitato a un identificativo tecnico di sessione, versione e SHA della build, piattaforma derivata, modalità PWA/browser, stato online, sorgente dell'errore, contatori/timestamp e messaggio/stack trace sanitizzati e limitati.
             </p>
             <p>
-              Gli eventi tecnici propri sono limitati a diagnostica e recovery, ad esempio anomalie della persistenza o fallback di validazione dello schema. LogBook non usa questa telemetria proprietaria per registrare l'avvio o il salvataggio degli allenamenti, né impression, click o outcome del flusso di installazione PWA. I dettagli tecnici attraversano una allowlist: chiavi non previste e strutture libere vengono scartate; le stringhe ammesse vengono sanitizzate per rimuovere email, IP, token, API key, path utente e altre chiavi sensibili riconosciute.
+              Prima dell'invio, LogBook applica filtri che rimuovono pattern riconosciuti di email, indirizzi IP presenti nel testo, token, API key, path utente e altre chiavi sensibili. Sentry è inoltre configurato senza invio predefinito di PII. Il fornitore può comunque ricevere metadati tecnici di rete necessari alla comunicazione secondo il proprio servizio e le relative condizioni.
             </p>
             <p>
-              La telemetria tecnica non è quindi descritta come “anonima”: per un account autenticato può essere collegata tecnicamente a quell'account. Il suo scopo è sicurezza, affidabilità e diagnosi, non la profilazione commerciale dei dati di allenamento o nutrizione.
+              LogBook usa Sentry soltanto per <strong style={{ color: 'var(--text-main)' }}>Error Monitoring</strong>: non abilita Session Replay, tracing, logging, Application Metrics o tracking proprietario di avvio/salvataggio workout e funnel di installazione PWA. Gli errori identici vengono deduplicati lato app per ridurre raccolta e volume.
             </p>
           </Section>
 
@@ -154,7 +154,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. La telemetria tecnica privata entra nel ciclo di cancellazione automatica dopo 30 giorni dall'evento oppure, per gli errori aggregati, dall'ultima occorrenza registrata; un processo server giornaliero elimina i record scaduti, quindi la rimozione effettiva può avvenire alla successiva esecuzione programmata. LogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
+              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. Per la nuova telemetria Sentry, i tempi di conservazione dipendono dal piano e dalla configurazione effettiva del fornitore e devono essere verificati rispetto alle condizioni correnti. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di LogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. LogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
@@ -172,6 +172,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore e App Check/reCAPTCHA Enterprise. LogBook non utilizza Firebase Analytics.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — hosting delle risorse e delle funzioni server; solo con consenso, Vercel Analytics e Speed Insights.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; LogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
             </ul>
             <p>
               Prima della distribuzione commerciale devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).

@@ -10,7 +10,6 @@ import {
   type TelemetryEventPayload,
 } from '../../src/lib/telemetryHub';
 import { installTelemetryTestHarness, mockSetDoc } from './telemetryTestHarness';
-import { TELEMETRY_RETENTION_MS } from '../../src/lib/telemetry/retention';
 
 describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
   installTelemetryTestHarness();
@@ -26,9 +25,8 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Product', () => {
         await vi.advanceTimersByTimeAsync(100);
 
         expect(mockSetDoc).toHaveBeenCalledTimes(1);
-        const payload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload & { expireAt: Date };
+        const payload = mockSetDoc.mock.calls[0][1] as TelemetryEventPayload;
         expect(payload.type).toBe('pwa_prompt_shown');
-        expect(payload.expireAt).toEqual(new Date(payload.timestamp + TELEMETRY_RETENTION_MS));
       });
 
       it('F7-2: tracks custom install button click in Settings/Banner', async () => {

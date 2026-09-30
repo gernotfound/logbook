@@ -1,7 +1,4 @@
-import { doc, setDoc } from 'firebase/firestore';
-import { getDb } from '../firebase';
 import { isAccountDeletionPending } from '../sync/accountGate';
-import { computeErrorHash } from '../telemetrySanitizer';
 import {
   FIRESTORE_DISPATCH_TIMEOUT_MS,
   INITIAL_RETRY_DELAY_MS,
@@ -10,10 +7,20 @@ import {
   type TelemetryEventPayload,
 } from './contracts';
 import { sanitizeTelemetryDetails } from './detailSanitizer';
-import { createTelemetryId } from './id';
-import { telemetryExpiresAt } from './retention';
+import { sendTelemetryToSentry } from '../sentryClient';
 
 type UserIdProvider = () => string | null;
+
+async function dispatchWithTimeout(
+  kind: 'error' | 'event',
+  payload: TelemetryErrorPayload | TelemetryEventPayload,
+): Promise<boolean> {
+  const dispatchPromise = sendTelemetryToSentry(kind, payload);
+  const timeoutPromise = new Promise<boolean>((resolve) => {
+    setTimeout(() => resolve(false), FIRESTORE_DISPATCH_TIMEOUT_MS);
+  });
+  return Promise.race([dispatchPromise, timeoutPromise]);
+}
 
 export async function dispatchTelemetryError(
   payload: TelemetryErrorPayload,
@@ -25,39 +32,9 @@ export async function dispatchTelemetryError(
       return false;
     }
 
-    const errorId = payload.id || `err_${payload.hash || computeErrorHash(payload.type, payload.message)}`;
-    const docRef = doc(getDb(), 'users', uid, 'telemetry_errors', errorId);
-
-    const firestorePayload: Record<string, any> = {
-      timestamp: payload.timestamp || payload.firstSeen || Date.now(),
-      type: payload.type,
-      message: payload.message,
-      context: payload.context,
-      userId: uid,
-      sessionId: payload.sessionId,
-      count: payload.count,
-      firstSeen: payload.firstSeen,
-      lastSeen: payload.lastSeen,
-      expireAt: telemetryExpiresAt(payload.lastSeen),
-      source: payload.source,
-    };
-
-    if (payload.stack) {
-      firestorePayload.stack = payload.stack;
-    }
-    if (payload.componentStack) {
-      firestorePayload.componentStack = payload.componentStack;
-    }
-
-    const writePromise = setDoc(docRef, firestorePayload, { merge: true });
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Telemetry error dispatch timeout')), FIRESTORE_DISPATCH_TIMEOUT_MS)
-    );
-
-    await Promise.race([writePromise, timeoutPromise]);
-    return true;
+    return await dispatchWithTimeout('error', payload);
   } catch (err) {
-    console.warn('[TelemetryHub] dispatchErrorToFirestore failed non-blockingly:', err);
+    console.warn('[TelemetryHub] dispatchErrorToSentry failed non-blockingly:', err);
     return false;
   }
 }
@@ -72,32 +49,15 @@ export async function dispatchTelemetryEvent(
       return false;
     }
 
-    const eventId = payload.id || createTelemetryId('evt', payload.timestamp);
-    if (!payload.id) payload.id = eventId;
-    const docRef = doc(getDb(), 'users', uid, 'telemetry_events', eventId);
-
-    const firestorePayload: Record<string, any> = {
-      timestamp: payload.timestamp,
-      type: payload.type,
-      context: payload.context,
-      userId: uid,
-      sessionId: payload.sessionId,
-      expireAt: telemetryExpiresAt(payload.timestamp),
+    const sanitizedPayload: TelemetryEventPayload = {
+      ...payload,
+      details: payload.details === undefined ? undefined : sanitizeTelemetryDetails(payload.details),
     };
 
-    if (payload.details !== undefined) {
-      firestorePayload.details = sanitizeTelemetryDetails(payload.details);
-    }
-
-    const writePromise = setDoc(docRef, firestorePayload, { merge: true });
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Telemetry event dispatch timeout')), FIRESTORE_DISPATCH_TIMEOUT_MS)
-    );
-
-    await Promise.race([writePromise, timeoutPromise]);
-    return true;
+    // Accepted at the boundary but intentionally not emitted externally.
+    return await dispatchWithTimeout('event', sanitizedPayload);
   } catch (err) {
-    console.warn('[TelemetryHub] dispatchEventToFirestore failed non-blockingly:', err);
+    console.warn('[TelemetryHub] dispatchEventToSentry failed non-blockingly:', err);
     return false;
   }
 }

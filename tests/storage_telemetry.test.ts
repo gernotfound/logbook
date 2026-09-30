@@ -18,9 +18,8 @@ import {
   createStorageRecoveryAnomalyPayload,
   dispatchStorageRecoveryAnomaly,
 } from '../src/lib/storageTelemetry';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import * as firebaseLib from '../src/lib/firebase';
-import { TELEMETRY_RETENTION_MS } from '../src/lib/telemetry/retention';
 
 describe('Storage Recovery Telemetry Suite', () => {
   beforeEach(() => {
@@ -413,11 +412,8 @@ describe('Storage Recovery Telemetry Suite', () => {
       expect(isAnomalyAlreadyReported(newMarker)).toBe(false);
     });
 
-    it('writes anomaly payload to users/{uid}/telemetry_anomalies/{eventId} when uid is available', async () => {
-      const docSpy = vi.spyOn(firestoreModule, 'doc').mockImplementation((_db: any, ...pathSegments: string[]) => ({
-        path: pathSegments.join('/'),
-      } as any));
-      const setDocSpy = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
+    it('sends a storage anomaly through the Sentry boundary when uid is available', async () => {
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
       const payload = createStorageRecoveryAnomalyPayload({
         marker: { version: 1, timestamp: 1724486400000 },
@@ -427,21 +423,14 @@ describe('Storage Recovery Telemetry Suite', () => {
 
       await dispatchStorageRecoveryAnomaly(payload, 'test_user_uid_123');
 
-      expect(docSpy).toHaveBeenCalled();
-      expect(setDocSpy).toHaveBeenCalledTimes(1);
-      const [docRef, data] = setDocSpy.mock.calls[0];
-      expect(docRef.path).toMatch(/^users\/test_user_uid_123\/telemetry_anomalies\/anomaly_1724486500000_/);
-      expect(data).toEqual({
-        ...payload,
-        expireAt: new Date(payload.timestamp + TELEMETRY_RETENTION_MS),
-      });
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      expect(sendSpy).toHaveBeenCalledWith('storage-anomaly', payload);
+      expect(JSON.stringify(sendSpy.mock.calls[0])).not.toContain('test_user_uid_123');
     });
 
-    it('does not throw or reject if Firestore write rejects or times out', async () => {
-      vi.spyOn(firestoreModule, 'doc').mockImplementation((_db: any, ...pathSegments: string[]) => ({
-        path: pathSegments.join('/'),
-      } as any));
-      vi.spyOn(firestoreModule, 'setDoc').mockRejectedValue(new Error('Permission denied or network failure'));
+    it('does not throw or reject if the Sentry boundary rejects', async () => {
+      vi.spyOn(sentryClient, 'sendTelemetryToSentry')
+        .mockRejectedValue(new Error('Sentry transport failure'));
 
       const payload = createStorageRecoveryAnomalyPayload({
         marker: { version: 1, timestamp: 1724486400000 },
@@ -451,8 +440,8 @@ describe('Storage Recovery Telemetry Suite', () => {
       await expect(dispatchStorageRecoveryAnomaly(payload, 'test_user_uid_123')).resolves.not.toThrow();
     });
 
-    it('does not throw or write to protected Firestore collection if unauthenticated/guest without uid', async () => {
-      const setDocSpy = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
+    it('does not send a storage anomaly if unauthenticated/guest without uid', async () => {
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
       const payload = createStorageRecoveryAnomalyPayload({
         marker: { version: 1, timestamp: 1724486400000 },
@@ -460,20 +449,16 @@ describe('Storage Recovery Telemetry Suite', () => {
       });
 
       await dispatchStorageRecoveryAnomaly(payload, '');
-      expect(setDocSpy).not.toHaveBeenCalled();
+      expect(sendSpy).not.toHaveBeenCalled();
     });
 
     it('resolves uid via onAuthStateChanged when currentUser is initially null', async () => {
       const previousUser = firebaseLib.auth.currentUser;
       (firebaseLib.auth as any).currentUser = null;
-      vi.spyOn(firestoreModule, 'doc').mockImplementation((_db: any, ...pathSegments: string[]) => ({
-        path: pathSegments.join('/'),
-      } as any));
-      const setDocSpy = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
       const unsubSpy = vi.fn();
       vi.spyOn(firebaseLib, 'onAuthStateChanged').mockImplementation((_auth: any, callback: any) => {
-        // Synchronously trigger callback with authenticated user
         callback({ uid: 'async_auth_uid_456' });
         return unsubSpy;
       });
@@ -485,18 +470,15 @@ describe('Storage Recovery Telemetry Suite', () => {
 
       await dispatchStorageRecoveryAnomaly(payload, null);
 
-      expect(setDocSpy).toHaveBeenCalledTimes(1);
-      const [docRef] = setDocSpy.mock.calls[0];
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      expect(sendSpy).toHaveBeenCalledWith('storage-anomaly', payload);
+      expect(JSON.stringify(sendSpy.mock.calls[0])).not.toContain('async_auth_uid_456');
       (firebaseLib.auth as any).currentUser = previousUser;
-      expect(docRef.path).toContain('users/async_auth_uid_456/telemetry_anomalies/');
       expect(unsubSpy).toHaveBeenCalledTimes(1);
     });
 
     it('probes navigator.storage.persisted dynamically when payload.persisted is null', async () => {
-      vi.spyOn(firestoreModule, 'doc').mockImplementation((_db: any, ...pathSegments: string[]) => ({
-        path: pathSegments.join('/'),
-      } as any));
-      const setDocSpy = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
+      const sendSpy = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
       const originalStorage = navigator.storage;
       (navigator as any).storage = {
@@ -512,8 +494,8 @@ describe('Storage Recovery Telemetry Suite', () => {
 
         await dispatchStorageRecoveryAnomaly(payload, 'test_user_789');
 
-        expect(setDocSpy).toHaveBeenCalledTimes(1);
-        const [, data] = setDocSpy.mock.calls[0];
+        expect(sendSpy).toHaveBeenCalledTimes(1);
+        const [, data] = sendSpy.mock.calls[0];
         expect(data.persisted).toBe(true);
       } finally {
         (navigator as any).storage = originalStorage;

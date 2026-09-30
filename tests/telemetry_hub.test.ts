@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import { z } from 'zod';
 import {
   scrubPII,
@@ -20,7 +20,6 @@ import {
   TELEMETRY_QUEUE_CAPACITY,
   type TelemetryErrorPayload,
 } from '../src/lib/telemetryHub';
-import { TELEMETRY_RETENTION_MS } from '../src/lib/telemetry/retention';
 
 describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   let mockSetDoc: any;
@@ -32,10 +31,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
     vi.useRealTimers();
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockResolvedValue(undefined as any);
-    vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
-      return { path: pathSegments.join('/') } as any;
-    });
+    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockResolvedValue(true);
 
     telemetryHub.reset();
   });
@@ -320,9 +316,9 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
   });
 
   // =========================================================================
-  // 6. 60-Second Sliding Window Deduplication & Aggregation
+  // 6. 15-Minute Sliding Window Deduplication & Aggregation
   // =========================================================================
-  describe('6. 60-Second Sliding Window Deduplication & Aggregation', () => {
+  describe('6. 15-Minute Sliding Window Deduplication & Aggregation', () => {
     it('dispatches the first occurrence immediately and aggregates consecutive identical errors', async () => {
       vi.useFakeTimers();
       telemetryHub.init();
@@ -363,11 +359,9 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       expect(payload.firstSeen).toBe(baseTime);
       expect(payload.lastSeen).toBe(baseTime + 20000);
       expect(payload.count).toBe(2);
-      expect((payload as TelemetryErrorPayload & { expireAt: Date }).expireAt)
-        .toEqual(new Date(baseTime + 20000 + TELEMETRY_RETENTION_MS));
     });
 
-    it('dispatches trailing aggregation update when additional errors occur after initial dispatch and window expires', async () => {
+    it('does not emit a trailing duplicate when additional errors occur inside the window', async () => {
       vi.useFakeTimers();
       const baseTime = 1724486400000;
       vi.setSystemTime(baseTime);
@@ -390,15 +384,12 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       await vi.advanceTimersByTimeAsync(100);
       expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-      // Advance past the 60s window
+      // Expiry clears the limiter without emitting a second external event.
       await vi.advanceTimersByTimeAsync(RATE_LIMIT_WINDOW_MS);
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
-
-      const secondPayload = mockSetDoc.mock.calls[1][1] as TelemetryErrorPayload;
-      expect(secondPayload.count).toBe(3);
+      expect(mockSetDoc).toHaveBeenCalledTimes(1);
     });
 
-    it('starts a new rate limiting window when an error arrives after 60s', async () => {
+    it('starts a new rate limiting window after the configured window expires', async () => {
       vi.useFakeTimers();
       const baseTime = 1724486400000;
       vi.setSystemTime(baseTime);
@@ -411,9 +402,9 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
       await vi.advanceTimersByTimeAsync(100);
       expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-      // Advance by 65 seconds
-      vi.setSystemTime(baseTime + 65000);
-      await vi.advanceTimersByTimeAsync(65000);
+      const nextWindow = RATE_LIMIT_WINDOW_MS + 5000;
+      vi.setSystemTime(baseTime + nextWindow);
+      await vi.advanceTimersByTimeAsync(nextWindow);
 
       // New occurrence starts new window
       telemetryHub.trackError(err);

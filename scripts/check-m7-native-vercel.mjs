@@ -8,10 +8,10 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const M6_VITE_BLOB = 'ef0dac2304c7f1203e2fb72195b27d6ecaeed437';
+const VALIDATED_VITE_BLOB = '8c6c2eefbbd5523fcc8e968bf094efe7d48ad64b';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
-if (currentViteBlob !== M6_VITE_BLOB) {
-  failures.push(`vite.config.ts changed from validated M6 baseline: expected ${M6_VITE_BLOB}, got ${currentViteBlob}`);
+if (currentViteBlob !== VALIDATED_VITE_BLOB) {
+  failures.push(`vite.config.ts changed from the validated native Vercel/PWA baseline: expected ${VALIDATED_VITE_BLOB}, got ${currentViteBlob}`);
 }
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };

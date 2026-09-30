@@ -1,9 +1,7 @@
-import { doc, setDoc } from "firebase/firestore";
-import { getDb, auth, onAuthStateChanged } from './firebase';
+import { auth, onAuthStateChanged } from './firebase';
 import { UserDataSchema } from './schema';
 import { getStorageDiagnosticData } from './storageStatus';
-import { createTelemetryId } from './telemetry/id';
-import { telemetryExpiresAt } from './telemetry/retention';
+import { sendTelemetryToSentry } from './sentryClient';
 import { deviceKey } from './sync/deviceStorage';
 import { storageOwner } from './sync/session';
 
@@ -315,8 +313,8 @@ export function createStorageRecoveryAnomalyPayload({
 }
 
 /**
- * Dispatches the anomaly event to Firestore in a fire-and-forget, non-blocking manner.
- * Writes to users/{uid}/telemetry_anomalies/{eventId} with a safety timeout.
+ * Dispatches the anomaly to Sentry in a fire-and-forget, non-blocking manner.
+ * The authenticated UID is used only as a local eligibility gate and is never sent to Sentry.
  */
 export async function dispatchStorageRecoveryAnomaly(
   payload: StorageRecoveryAnomalyPayload,
@@ -394,19 +392,10 @@ export async function dispatchStorageRecoveryAnomaly(
       return;
     }
 
-    const eventId = createTelemetryId('anomaly', payload.timestamp);
-    const anomalyDocRef = doc(getDb(), "users", uid, "telemetry_anomalies", eventId);
-
-    const writePromise = setDoc(anomalyDocRef, {
-      ...payload,
-      expireAt: telemetryExpiresAt(payload.timestamp),
-    });
-    const timeoutPromise = new Promise<void>((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout invio telemetria")), 5000)
-    );
-
-    await Promise.race([writePromise, timeoutPromise]);
+    // Preserve the historical authenticated-only boundary without transmitting
+    // the Firebase UID to the external monitoring provider.
+    await sendTelemetryToSentry('storage-anomaly', payload);
   } catch (err) {
-    console.warn("Invio telemetria anomalia storage non riuscito (non bloccante):", err);
+    console.warn("Invio anomalia storage a Sentry non riuscito (non bloccante):", err);
   }
 }
