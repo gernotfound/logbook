@@ -145,7 +145,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 Esistono tre contratti separati:
 
 1. **Client Firebase:** sette env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
-2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`; i nomi V3 legacy restano solo fallback transitori.
+2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
 3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
 
 `.env.example` documenta esclusivamente nomi e placeholder sicuri; i valori reali server devono restare in Vercel/secret storage e non vanno committati.
