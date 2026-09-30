@@ -161,6 +161,8 @@ Al consolidamento del 2026-09-30 il ruleset `protect main branch` è attivo sull
 
 CodeQL è parte del gate canonico. Il nome `Canonical Verification` non deve essere cambiato senza verificare ruleset e integrazioni Vercel collegate.
 
+Dependabot è configurato nel repository per controlli settimanali sia delle dipendenze npm sia delle GitHub Actions, con massimo 10 PR aperte per ciascun ecosistema. È automazione di manutenzione, non un bypass: le sue PR devono attraversare gli stessi guardrail di `main`.
+
 ## Snyk
 
 Snyk è un controllo security **supplementare**, non la fonte canonica della decisione di merge.
