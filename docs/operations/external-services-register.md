@@ -20,6 +20,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 |---|---|---|---|
 | Firebase Authentication | ACTIVE | account email/Google e sessione autenticata | Firebase console + codice Auth |
 | Cloud Firestore | ACTIVE | replica/sincronizzazione cloud dei dati account | Firestore/Rules + codice sync |
+| Firebase Hosting | NON ATTIVO | non è l'hosting Production corrente | `firebase.json` + Firebase console |
 | Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Hosting / Functions / Cron | ACTIVE | Production PWA, API trusted e cron | Vercel + `vercel.json` |
@@ -28,6 +29,12 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
+
+## Firebase Hosting
+
+Firebase Hosting **non è attualmente il provider di hosting di LogBook**. Nel repository `firebase.json` configura soltanto le Firestore Rules e non contiene una sezione `hosting`; la Production corrente è Vercel.
+
+I domini Firebase predefiniti possono comunque essere presenti nelle configurazioni Auth/OAuth perché appartengono al flusso Firebase Authentication: la loro presenza non dimostra che Firebase Hosting sia attivo.
 
 ## Firebase Authentication e OAuth
 
