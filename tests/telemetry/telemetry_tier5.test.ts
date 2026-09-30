@@ -136,7 +136,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
         let errorResult: boolean | undefined;
         telemetryHub
-          .dispatchErrorToFirestore({
+          .dispatchErrorExternally({
             type: 'HangingError',
             message: 'Hangs',
             source: 'custom',
@@ -231,7 +231,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(mockSetDoc).toHaveBeenCalled();
       });
 
-      it('T5-8: Firestore permission-denied and resource-exhausted errors are caught silently without throwing to callers', async () => {
+      it('T5-8: telemetry provider failures are caught silently without throwing to callers', async () => {
         mockSetDoc.mockRejectedValue(new Error('FirebaseError: [code=permission-denied] Permission denied'));
 
         telemetryHub.init();
@@ -242,7 +242,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
           telemetryHub.trackEvent('permission_event');
         }).not.toThrow();
 
-        const dispatchRes = await telemetryHub.dispatchErrorToFirestore({
+        const dispatchRes = await telemetryHub.dispatchErrorExternally({
           type: 'DeniedError',
           message: 'Denied',
           source: 'custom',
@@ -286,7 +286,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         );
 
         // Mock failure for all flush attempts
-        mockSetDoc.mockRejectedValue(new Error('Persistent Firestore error'));
+        mockSetDoc.mockRejectedValue(new Error('Persistent telemetry transport error'));
 
         // Attempt 1: retryCount becomes 1
         await telemetryHub.flushQueue();
