@@ -158,7 +158,7 @@ describe('R4: useLocalStorage Safe Fallback & Strict Serialization Suite', () =>
     });
 
     describe('Zod Schema Validation (R4)', () => {
-        const tabSchema = z.enum(['home', 'training', 'nutrition', 'data', 'settings']);
+        const tabSchema = z.enum(['home', 'training', 'nutrition', 'data']);
         const configSchema = z.object({
             theme: z.enum(['dark', 'light']),
             fontSize: z.number().min(10).max(32),

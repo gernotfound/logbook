@@ -240,8 +240,8 @@ describe('Workout Improvements & History Edit Suite', () => {
     test('Esporta Dati CSV button is directly present in SettingsView', () => {
       renderWithProviders(<SettingsView />);
 
-      const exportTabBtn = screen.getByText('Esporta');
-      fireEvent.click(exportTabBtn);
+      const dataButton = screen.getByRole('button', { name: /Dati e backup/i });
+      fireEvent.click(dataButton);
 
       const csvBtn = screen.getByText(/Esporta dati \(CSV\)/i);
       expect(csvBtn).not.toBeNull();

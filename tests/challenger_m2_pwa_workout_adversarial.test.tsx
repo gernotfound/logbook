@@ -463,9 +463,9 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
 
       const { unmount } = render(React.createElement(SettingsView));
 
-      // Navigate to Privacy tab to access analytics toggle
-      const privacyTab = screen.getByRole('tab', { name: /Privacy/i });
-      fireEvent.click(privacyTab);
+      // Navigate to Privacy to access analytics toggle.
+      const privacyButton = screen.getByRole('button', { name: /^Privacy/i });
+      fireEvent.click(privacyButton);
 
       const analyticsToggle = screen.getByRole('checkbox');
       expect(analyticsToggle).toBeDefined();
@@ -477,9 +477,9 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
         fireEvent.click(analyticsToggle);
       });
 
-      // Switch to Sistema tab to access Cerca aggiornamenti
-      const systemTab = screen.getByRole('tab', { name: /Sistema/i });
-      fireEvent.click(systemTab);
+      // Return to the settings landing and open Aspetto e applicazione.
+      fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
+      fireEvent.click(screen.getByRole('button', { name: /Aspetto e applicazione/i }));
 
       const updateBtn = screen.getByRole('button', { name: /Cerca aggiornamenti/i });
       await act(async () => {
