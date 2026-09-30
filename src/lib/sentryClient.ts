@@ -35,7 +35,6 @@ export function initSentry(): boolean {
     dsn,
     environment: 'production',
     release: safeBuildSha(),
-    tracesSampleRate: 0,
     maxBreadcrumbs: 0,
     defaultIntegrations: false,
     beforeSend(event) {
@@ -72,7 +71,7 @@ function captureError(payload: TelemetryErrorPayload): boolean {
 
   const error = new Error(payload.message);
   error.name = sanitizeTag(payload.type) || 'Error';
-  if (payload.stack) error.stack = payload.stack;
+  if (payload.stack) error.stack = scrubPII(payload.stack).slice(0, 1000);
 
   Sentry.withScope((scope) => {
     scope.setFingerprint([payload.hash || `${error.name}:${payload.message}`]);
