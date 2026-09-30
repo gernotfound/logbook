@@ -190,7 +190,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 2 Product', () => {
         );
 
         mockSetDoc
-          .mockResolvedValueOnce(undefined as any)
+          .mockResolvedValueOnce(true)
           .mockRejectedValueOnce(new Error('Network dropped during flush'));
 
         await telemetryHub.flushQueue();
