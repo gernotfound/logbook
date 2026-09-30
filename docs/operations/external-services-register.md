@@ -149,6 +149,8 @@ Configurazione deliberata:
 
 Motivo: ottenere stack trace/release utili agli aggiornamenti frequenti senza consumare la quota Firestore e senza raccogliere telemetria comportamentale non necessaria.
 
+La scelta iniziale è stata fatta per restare sul piano gratuito: Spike Protection e deduplica client di 15 minuti per fingerprint riducono il rischio che un errore in loop consumi rapidamente il volume disponibile. **VERIFY-LIVE:** limiti, pricing e retention del piano Sentry sono configurazione commerciale esterna e possono cambiare; verificarli prima di aumentare volume, sampling o funzionalità.
+
 Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09-30 con environment Production e release Git SHA. La verifica di simbolicazione source-map può avvenire sul primo errore naturale originato dal codice applicativo.
 
 ## GitHub, Actions e CodeQL
