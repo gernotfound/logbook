@@ -17,15 +17,13 @@ const HeaderDashboard = ({ streak, totalWorkouts, onOpenSettings }: HeaderDashbo
                 <p className="text-sm home-muted">{formattedDate}</p>
                 <h1>LogBook</h1>
             </div>
-            <div className="home-header-actions">
-                <div className="home-header-stats">
-                    <span className="home-badge"><Flame size={18} aria-hidden="true" /><strong>{streak || 0}</strong> Streak</span>
-                    <span className="home-badge"><Dumbbell size={18} aria-hidden="true" /><strong>{totalWorkouts}</strong> Sessioni</span>
-                </div>
-                <button type="button" className="home-settings-button" aria-label="Apri impostazioni" onClick={onOpenSettings}>
-                    <Settings size={24} aria-hidden="true" />
-                </button>
+            <div className="home-header-stats">
+                <span className="home-badge"><Flame size={18} aria-hidden="true" /><strong>{streak || 0}</strong> Streak</span>
+                <span className="home-badge"><Dumbbell size={18} aria-hidden="true" /><strong>{totalWorkouts}</strong> Sessioni</span>
             </div>
+            <button type="button" className="home-settings-button" aria-label="Apri impostazioni" onClick={onOpenSettings}>
+                <Settings size={24} aria-hidden="true" />
+            </button>
         </header>
     );
 };
