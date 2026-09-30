@@ -8,10 +8,10 @@
 |---|---|---|---|---|---|
 | Dati core account | Firestore + copia locale owner-scoped | Creazione/inserimento | Per la durata dell'account e finché necessari al servizio; eventuale policy inattività `[TO_DECIDE]` | Account deletion + cancellazione locale dopo prova completion | Implementato per cancellazione account |
 | Dati guest | IndexedDB/localStorage dispositivo | Primo uso | Finché l'utente li mantiene o li elimina/migra | Azioni locali / browser OS / migrazione | Implementato |
-| Telemetria tecnica `telemetry_errors` | Firestore | Ultima occorrenza aggregata | **30 giorni dall'ultima occorrenza** | Campo `expireAt` + maintenance cron giornaliero | Implementato nel repository; runtime cron da verificare dopo deploy |
-| Telemetria tecnica `telemetry_events` | Firestore | Evento | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Implementato nel repository; runtime cron da verificare dopo deploy |
-| Telemetria storage `telemetry_anomalies` | Firestore | Anomalia | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Implementato nel repository; runtime cron da verificare dopo deploy |
-| Coda telemetria offline | localStorage owner/device | Failure/offline | Bounded a 50 elementi; espulsione/retry secondo codice | Queue lifecycle/logout/storage cleanup | Implementato |
+| Telemetria tecnica corrente | Sentry | Errore/anomalia Production | `[VERIFY_PLAN_AND_CONFIGURATION]` | Policy/configurazione Sentry | Implementato nel client; retention esterna da verificare |
+| Telemetria Firestore legacy `telemetry_errors` | Firestore | Ultima occorrenza aggregata | **30 giorni dall'ultima occorrenza** | Campo `expireAt` + maintenance cron giornaliero | Solo compatibilità/cleanup client precedenti |
+| Telemetria Firestore legacy `telemetry_events` / `telemetry_anomalies` | Firestore | Evento/anomalia | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Solo compatibilità/cleanup client precedenti |
+| Coda telemetria offline legacy/compatibilità | localStorage owner/device | Failure/offline | Bounded a 50 elementi; espulsione/retry secondo codice | Queue lifecycle/logout/storage cleanup | Implementato |
 | Consenso legale | UserData root | Accettazione | Finché serve a dimostrare la versione accettata e per la durata pertinente del rapporto/obblighi | Definire dopo cessazione: `[TO_VALIDATE]` | Persistito, retention post-account da definire |
 | Consenso analytics | storage locale | Opt-in | Finché preferenza attiva o storage disponibile | Revoca/settings/storage clear | Implementato come preferenza; evidenza/versioning da migliorare |
 | Deletion job/tombstone | Firestore server-only | Richiesta cancellazione | 30 giorni dopo completion | Cron giornaliero | Contratto implementato; runtime cron da verificare periodicamente |
@@ -30,7 +30,9 @@
 
 ## Attivazione tecnica telemetry
 
-Il repository applica una retention nominale di 30 giorni tramite un campo Firestore `expireAt` calcolato dall'evento o dall'ultima occorrenza dell'errore e Security Rules che rifiutano nuove scritture telemetriche prive di scadenza. I client PWA obsoleti possono perdere temporaneamente la sola telemetria best-effort finché non si aggiornano; le funzionalità essenziali restano indipendenti da questo canale.
+Il client corrente invia errori/anomalie tecniche a Sentry e non crea nuove scritture nelle collection Firestore `telemetry_*`. La retention Sentry è esterna al repository e deve essere verificata sul piano/configurazione effettivi prima del go-live.
+
+Per i client precedenti e i dati legacy, il repository applica una retention nominale di 30 giorni tramite un campo Firestore `expireAt` calcolato dall'evento o dall'ultima occorrenza dell'errore e Security Rules che rifiutano nuove scritture telemetriche prive di scadenza. I client PWA obsoleti possono perdere temporaneamente la sola telemetria best-effort finché non si aggiornano; le funzionalità essenziali restano indipendenti da questo canale.
 
 La cancellazione viene eseguita dal maintenance cron server-side già schedulato quotidianamente. La sweep usa Firebase Admin, pagina gli utenti, elimina i documenti scaduti nelle tre subcollection e mantiene un cursore server-only se il budget della Function termina prima di completare il ciclo.
 
