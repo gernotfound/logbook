@@ -411,19 +411,10 @@ export class TelemetryHub {
   }
 
   private onRateLimitWindowExpiry(hash: string): void {
-    const entry = this.rateLimits.get(hash);
-    if (!entry) return;
-
+    // One external event per fingerprint/window is enough for diagnosis and protects
+    // the free Sentry quota from hot-loop errors. Counts accumulated after the first
+    // dispatch are intentionally not emitted as a second event.
     this.rateLimits.delete(hash);
-
-    if (entry.count > entry.lastDispatchedCount) {
-      entry.lastDispatchedCount = entry.count;
-      if (this.isOffline()) {
-        this.queue.enqueueItem('error', entry.payload);
-      } else {
-        this.dispatchErrorToFirestore(entry.payload).catch(() => {});
-      }
-    }
   }
 
   public clearRateLimiters(): void {
