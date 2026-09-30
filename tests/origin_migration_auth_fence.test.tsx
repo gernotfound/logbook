@@ -37,4 +37,27 @@ describe('origin migration authenticated identity fence', () => {
     expect(DB.loadCloudPayload).not.toHaveBeenCalled();
     expect(useAppStore.getState().saveError).toContain('altro account');
   });
+  it('signs out when the migration ownership marker cannot be read', async () => {
+    const originalGetItem = localStorage.getItem;
+    localStorage.getItem = vi.fn((key: string) => {
+      if (key === 'logbook_origin_migration_pending_uid_v1') {
+        throw new DOMException('storage blocked', 'SecurityError');
+      }
+      return originalGetItem.call(localStorage, key);
+    });
+
+    try {
+      render(<AuthProvider><div>app</div></AuthProvider>);
+
+      await waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith(auth);
+      });
+
+      expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+      expect(useAppStore.getState().saveError).toContain('Archivio locale non disponibile');
+    } finally {
+      localStorage.getItem = originalGetItem;
+    }
+  });
+
 });
