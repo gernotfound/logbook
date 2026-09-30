@@ -62,7 +62,21 @@ export function reportZodSchemaFallback(ctx: ZodFallbackContext): void {
         const typeInfo = (expectedType && receivedType) ? ` (expected ${expectedType}, received ${receivedType})` : '';
         const syntheticMessage = `Zod fallback in ${ctx.schema} [${safeField}]: ${safeIssueCode}${typeInfo}`;
 
-        // Report one deduplicated error. Standalone telemetry events are intentionally disabled.
+        // Preserve the bounded diagnostic event for compatibility/tests. The current
+        // Sentry boundary accepts-and-drops standalone events, so this never becomes
+        // behavioral telemetry or consumes Sentry error quota.
+        if (typeof telemetryHub.trackEvent === 'function') {
+            telemetryHub.trackEvent('zod_schema_fallback', {
+                schema: ctx.schema,
+                field: safeField,
+                issueCode: safeIssueCode,
+                expectedType: expectedType || 'unknown',
+                receivedType: receivedType || 'unknown',
+                fallbackUsed: safeFallback,
+            });
+        }
+
+        // Dispatch one deduplicated external error.
         if (typeof telemetryHub.trackError === 'function') {
             const fallbackError = new Error(syntheticMessage);
             fallbackError.name = 'ZodSchemaFallbackError';
