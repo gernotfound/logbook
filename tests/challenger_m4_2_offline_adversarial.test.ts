@@ -113,15 +113,15 @@ describe('Empirical Challenger M4.2: Offline Queue, Circuit Breaker & Poison Pil
       }));
       localStorage.setItem(telemetryHub.getQueueStorageKey(), JSON.stringify(initialItems));
 
-      // Mock setDoc: Item 1 succeeds, then sudden network failure for subsequent items
+      // Mock Sentry boundary: Item 1 succeeds, then sudden network failure for subsequent items
       mockSetDoc
-        .mockResolvedValueOnce(undefined as any)
+        .mockResolvedValueOnce(true)
         .mockRejectedValue(new Error('Network unreachable: connection reset by peer'));
 
       await telemetryHub.flushQueue();
 
       // Assertions:
-      // 1. mockSetDoc should only have been called 3 times (1 success + 2 consecutive failures triggering circuit breaker)
+      // 1. Sentry boundary should only have been called 3 times (1 success + 2 consecutive failures triggering circuit breaker)
       //    It must NOT iterate through all 20 items (which would cause 20 calls or cascading 5s timeouts).
       expect(mockSetDoc).toHaveBeenCalledTimes(3);
 
