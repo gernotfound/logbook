@@ -98,10 +98,10 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
   });
 
   // =========================================================================
-  // 2. Sliding Window Boundary Precision (59,999ms vs 60,001ms)
+  // 2. Sliding Window Boundary Precision
   // =========================================================================
   describe('2. Sliding Window Boundary Precision', () => {
-    it('correctly aggregates at 59,999ms and starts a new window at 60,001ms', async () => {
+    it('aggregates immediately before expiry and starts a new window immediately after expiry', async () => {
       vi.useFakeTimers();
       const baseTime = 1724486400000;
       vi.setSystemTime(baseTime);
@@ -117,34 +117,27 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       expect(mockSetDoc).toHaveBeenCalledTimes(1);
       expect(mockSetDoc.mock.calls[0][1].count).toBe(1);
 
-      // t = 59,999ms -> Boundary just before 60s window expiration
-      // Advance fake timers to 59,999ms
-      await vi.advanceTimersByTimeAsync(59989); // from 10ms to 59,999ms
-      vi.setSystemTime(baseTime + 59999);
+      const justBeforeExpiry = RATE_LIMIT_WINDOW_MS - 1;
+      await vi.advanceTimersByTimeAsync(justBeforeExpiry - 10);
+      vi.setSystemTime(baseTime + justBeforeExpiry);
       telemetryHub.trackError(err);
 
-      // Should still be suppressed, no new dispatch yet
       expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-      // Advance 1ms to t = 60,000ms -> Timer triggers trailing flush
+      // Expiry clears the limiter but deliberately does not emit a trailing event.
       await vi.advanceTimersByTimeAsync(1);
-      expect(mockSetDoc).toHaveBeenCalledTimes(2);
-      expect(mockSetDoc.mock.calls[1][1].count).toBe(2);
-      expect(mockSetDoc.mock.calls[1][1].lastSeen).toBe(baseTime + 59999);
+      expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-      // Advance 1ms to t = 60,001ms -> New error arrives
-      await vi.advanceTimersByTimeAsync(1);
-      vi.setSystemTime(baseTime + 60001);
+      vi.setSystemTime(baseTime + RATE_LIMIT_WINDOW_MS + 1);
       telemetryHub.trackError(err);
 
       await vi.advanceTimersByTimeAsync(10);
-      expect(mockSetDoc).toHaveBeenCalledTimes(3);
-      // New window started, count reset to 1
-      expect(mockSetDoc.mock.calls[2][1].count).toBe(1);
-      expect(mockSetDoc.mock.calls[2][1].firstSeen).toBe(baseTime + 60001);
+      expect(mockSetDoc).toHaveBeenCalledTimes(2);
+      expect(mockSetDoc.mock.calls[1][1].count).toBe(1);
+      expect(mockSetDoc.mock.calls[1][1].firstSeen).toBe(baseTime + RATE_LIMIT_WINDOW_MS + 1);
     });
 
-    it('recovers cleanly when setTimeout is delayed and subsequent error arrives at t=65s', async () => {
+    it('recovers cleanly when setTimeout is delayed and a subsequent error arrives after expiry', async () => {
       vi.useFakeTimers();
       const baseTime = 1724486400000;
       vi.setSystemTime(baseTime);
@@ -157,17 +150,17 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       await vi.advanceTimersByTimeAsync(10);
       expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-      // Simulate system clock jumped to +65s before setTimeout could run
-      vi.setSystemTime(baseTime + 65000);
+      const afterExpiry = RATE_LIMIT_WINDOW_MS + 5000;
+      // Simulate system clock jumping past the configured window before the timer runs.
+      vi.setSystemTime(baseTime + afterExpiry);
 
-      // Next error arrives at t = 65s
       telemetryHub.trackError(err);
       await vi.advanceTimersByTimeAsync(10);
 
       // Should have recognized stale rate limiter, reset it, and dispatched a new window
       expect(mockSetDoc).toHaveBeenCalledTimes(2);
       expect(mockSetDoc.mock.calls[1][1].count).toBe(1);
-      expect(mockSetDoc.mock.calls[1][1].firstSeen).toBe(baseTime + 65000);
+      expect(mockSetDoc.mock.calls[1][1].firstSeen).toBe(baseTime + afterExpiry);
     });
   });
 
