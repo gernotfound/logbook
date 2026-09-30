@@ -47,12 +47,12 @@
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Sicurezza, affidabilità, diagnosi errori, integrità/recovery |
-| Dati | UID tecnico per account autenticati, session ID, versione app, piattaforma derivata, stato online, errori/stack sanitizzati, eventi diagnostici bounded |
-| Esclusioni | Nessun tracking proprietario di avvio/salvataggio workout o funnel installazione PWA |
+| Dati | Session ID tecnico, versione/release/build SHA, piattaforma derivata, stato online, errori/stack sanitizzati e anomalie tecniche bounded; nessun Firebase UID/email deliberatamente allegato a Sentry |
+| Esclusioni | Nessun tracking proprietario di avvio/salvataggio workout o funnel installazione PWA; niente Replay, tracing, logging o Application Metrics Sentry |
 | Base | Legittimo interesse dichiarato nell'informativa corrente; eseguire/archiviare LIA prima del pilot |
-| Retention | Target breve da rendere tecnicamente esecutivo; vedi `retention-schedule.md` |
-| Destinatari | Firestore / personale autorizzato strettamente necessario |
-| Misure | Sanitizzazione PII, allowlist dettagli, ownership Rules, queue bounded |
+| Retention | Configurazione/piano Sentry da verificare; legacy Firestore 30 giorni, vedi `retention-schedule.md` |
+| Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
+| Misure | Sanitizzazione PII client, `sendDefaultPii: false`, deduplica/rate limit, data scrubbing Sentry configurato esternamente; legacy Firestore owner-scoped |
 
 ## Attività 4 — Analytics opzionali
 
