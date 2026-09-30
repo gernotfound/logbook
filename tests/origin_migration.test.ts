@@ -96,19 +96,19 @@ describe('cross-origin migration install boundary', () => {
   });
 
   it('fails closed when the pending account migration marker cannot be read', async () => {
-    const originalGetItem = Storage.prototype.getItem;
-    const readSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key: string) {
+    const originalGetItem = localStorage.getItem;
+    localStorage.getItem = vi.fn((key: string) => {
       if (key === 'logbook_origin_migration_pending_uid_v1') {
         throw new DOMException('storage blocked', 'SecurityError');
       }
-      return originalGetItem.call(this, key);
+      return originalGetItem.call(localStorage, key);
     });
 
     try {
       const migration = await import('../src/lib/originMigration');
       expect(() => migration.originMigrationPendingUid()).toThrow('Browser storage read failed');
     } finally {
-      readSpy.mockRestore();
+      localStorage.getItem = originalGetItem;
     }
   });
 
