@@ -26,13 +26,24 @@ if (JSON.stringify(hosting?.rewrites ?? []).includes('function')) {
   failures.push('Account deletion must not use a Hosting-to-Function rewrite (60s Hosting ceiling).');
 }
 
-const headers = JSON.stringify(hosting?.headers ?? []);
+const hostingHeaders = Array.isArray(hosting?.headers) ? hosting.headers : [];
+const serializedHeaders = JSON.stringify(hostingHeaders);
 for (const requiredHeader of ['Content-Security-Policy','Strict-Transport-Security','X-Content-Type-Options','Referrer-Policy','Permissions-Policy']) {
-  if (!headers.includes(requiredHeader)) failures.push(`Missing Firebase Hosting security header: ${requiredHeader}`);
+  if (!serializedHeaders.includes(requiredHeader)) failures.push(`Missing Firebase Hosting security header: ${requiredHeader}`);
 }
-if (!headers.includes('/sw.js') || !headers.includes('no-cache')) failures.push('Service worker must be served with no-cache/no-store policy.');
-if (!headers.includes('cloudfunctions.net')) failures.push('CSP connect-src must allow the direct Cloud Functions endpoint.');
-if (headers.includes('vercel-scripts.com') || headers.includes('vitals.vercel-insights.com')) failures.push('Vercel analytics origins must not remain in Firebase CSP.');
+if (!serializedHeaders.includes('/sw.js') || !serializedHeaders.includes('no-cache')) failures.push('Service worker must be served with no-cache/no-store policy.');
+
+const globalHeaderGroup = hostingHeaders.find(group => group?.source === '/**');
+const cspHeader = Array.isArray(globalHeaderGroup?.headers)
+  ? globalHeaderGroup.headers.find(header => header?.key === 'Content-Security-Policy')
+  : undefined;
+const cspTokens = new Set(String(cspHeader?.value ?? '').split(/\s+/).filter(Boolean));
+if (!cspTokens.has('https://*.cloudfunctions.net')) {
+  failures.push('CSP connect-src must allow the direct Cloud Functions endpoint.');
+}
+if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vitals.vercel-insights.com')) {
+  failures.push('Vercel analytics origins must not remain in Firebase CSP.');
+}
 
 if (!/export const accountDeletion = onRequest/.test(functionIndex)) failures.push('Missing Firebase HTTP accountDeletion function.');
 if (!/timeoutSeconds:\s*3600/.test(functionIndex)) failures.push('HTTP deletion function must retain long-running capacity.');
