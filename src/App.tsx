@@ -81,6 +81,7 @@ function App() {
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
@@ -109,15 +110,22 @@ function App() {
     }
   }, [showGuestLogin, currentUser, isGuest, guestMigrationStatus, syncing]);
 
-  // Handle URL parameters for PWA shortcuts
+  // Handle URL parameters for PWA shortcuts. "settings" remains a
+  // compatibility alias even though it is no longer a primary tab.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
       if (tabParam) {
-        const parsed = AppTabSchema.safeParse(tabParam);
-        if (parsed.success && parsed.data !== activeTab) {
-          setActiveTab(parsed.data);
+        if (tabParam === 'settings') {
+          if (activeTab !== 'home') setActiveTab('home');
+          setSettingsOpen(true);
+        } else {
+          const parsed = AppTabSchema.safeParse(tabParam);
+          if (parsed.success && parsed.data !== activeTab) {
+            setActiveTab(parsed.data);
+          }
+          setSettingsOpen(false);
         }
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -151,10 +159,26 @@ function App() {
   const tabScrollPositions = useState<Record<string, number>>(() => ({}))[0];
   const currentTabRef = useState<{ current: string }>({ current: activeTab })[0];
 
+  const handleOpenSettings = () => {
+    tabScrollPositions.home = window.scrollY;
+    setSettingsOpen(true);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const handleCloseSettings = () => {
+    setSettingsOpen(false);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: tabScrollPositions.home || 0, behavior: 'instant' });
+    });
+  };
+
   const handleTabChange = (newTab: string) => {
     const parsed = AppTabSchema.safeParse(newTab);
     if (!parsed.success) return;
     const validTab = parsed.data;
+    const wasSettingsOpen = settingsOpen;
+
+    if (wasSettingsOpen) setSettingsOpen(false);
 
     if (validTab === activeTab) {
       if (validTab === 'training') setTrainingSubTab('session');
@@ -166,7 +190,7 @@ function App() {
       return;
     }
 
-    tabScrollPositions[activeTab] = window.scrollY;
+    if (!wasSettingsOpen) tabScrollPositions[activeTab] = window.scrollY;
     setVisitedTabs(prev => prev[validTab] ? prev : { ...prev, [validTab]: true });
     setActiveTab(validTab);
     currentTabRef.current = validTab;
@@ -197,7 +221,7 @@ function App() {
     };
     window.addEventListener('app:navigate', handleNavEvent);
     return () => window.removeEventListener('app:navigate', handleNavEvent);
-  }, [activeTab]);
+  }, [activeTab, settingsOpen]);
 
   // Sync Lock: prevent tab close/navigation if a cloud sync is currently in progress
   useEffect(() => {
@@ -346,7 +370,11 @@ function App() {
             </div>
           }>
             <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
-              {(visitedTabs.home || activeTab === 'home') && <HomeView onNavigate={handleHomeNavigate} />}
+              {(visitedTabs.home || activeTab === 'home') && (
+                settingsOpen
+                  ? <SettingsView onClose={handleCloseSettings} />
+                  : <HomeView onNavigate={handleHomeNavigate} onOpenSettings={handleOpenSettings} />
+              )}
             </div>
             <div style={{ display: activeTab === 'training' ? 'block' : 'none' }}>
               {(visitedTabs.training || activeTab === 'training') && <TrainingView subTab={trainingSubTab} setSubTab={setTrainingSubTab} />}
@@ -356,9 +384,6 @@ function App() {
             </div>
             <div style={{ display: activeTab === 'data' ? 'block' : 'none' }}>
               {(visitedTabs.data || activeTab === 'data') && <DataView subTab={dataSubTab} setSubTab={setDataSubTab} />}
-            </div>
-            <div style={{ display: activeTab === 'settings' ? 'block' : 'none' }}>
-              {(visitedTabs.settings || activeTab === 'settings') && <SettingsView />}
             </div>
           </Suspense>
         </ErrorBoundary>

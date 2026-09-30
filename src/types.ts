@@ -485,7 +485,7 @@ export type ResolveNutritionConflictInput = {
     expectedConflictFingerprint: string;
 };
 
-export type AppTab = 'home' | 'training' | 'nutrition' | 'data' | 'settings';
+export type AppTab = 'home' | 'training' | 'nutrition' | 'data';
 export type MainTab = AppTab;
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';

@@ -320,7 +320,7 @@ export const DomainParsers = {
 // Application Tab & Navigation Schemas (ARCH-05)
 // ==========================================
 
-export const AppTabSchema = z.enum(['home', 'training', 'nutrition', 'data', 'settings']);
+export const AppTabSchema = z.enum(['home', 'training', 'nutrition', 'data']);
 export const MainTabSchema = AppTabSchema;
 export const TrainingSubTabSchema = z.enum(['session', 'planning', 'routines', 'exercises', 'history']);
 export const NutritionSubTabSchema = z.enum(['meals', 'planning', 'archive', 'history', 'supplements']);

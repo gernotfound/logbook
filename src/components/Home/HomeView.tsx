@@ -28,7 +28,7 @@ const CHART_LOADING = (
     </div>
 );
 
-const HomeView = ({ onNavigate }: any) => {
+const HomeView = ({ onNavigate, onOpenSettings }: any) => {
   const homeState = useHomeView();
   const activeWorkout = useAppStore(state => state.localWorkout);
   
@@ -52,7 +52,7 @@ const HomeView = ({ onNavigate }: any) => {
       <div className="home-bento-grid">
         {/* Header - Full Width */}
         <div className="bento-full">
-            <HeaderDashboard streak={streak} totalWorkouts={totalWorkouts} />
+            <HeaderDashboard streak={streak} totalWorkouts={totalWorkouts} onOpenSettings={onOpenSettings} />
         </div>
 
         {/* Workout Hero - Full Width */}
