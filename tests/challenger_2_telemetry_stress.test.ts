@@ -436,7 +436,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       telemetryHub.init();
 
       const sensitiveError = new Error(
-        'Failed auth with token AIzaSyA1234567890abcdefghijklmnopqrstuv and email coach@box.it at C:\\Users\\gerar\\app.ts:15:2'
+        'Failed auth with token AIzaSyA1234567890abcdefghijklmnopqrstuv and email coach@box.it at C:\\Users\\example-user\\app.ts:15:2'
       );
       telemetryHub.trackError(sensitiveError);
 
@@ -446,7 +446,7 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       expect(payload.message).not.toContain('AIzaSyA1234567890');
       expect(payload.message).not.toContain('coach@box.it');
-      expect(payload.message).not.toContain('C:\\Users\\gerar');
+      expect(payload.message).not.toContain('C:\\Users\\example-user');
       expect(payload.message).toContain('[REDACTED_TOKEN]');
       expect(payload.message).toContain('[REDACTED_EMAIL]');
       expect(payload.message).toContain('[REDACTED_PATH]');
