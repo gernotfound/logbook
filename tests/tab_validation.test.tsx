@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, act, renderHook, fireEvent } from '@testing-library/react';
 import App from '../src/App';
-import { renderWithProviders } from './setup';
+import { defaultMockUserData, renderWithProviders } from './setup';
+import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { 
     AppTabSchema, 
     MainTabSchema, 
@@ -140,7 +141,18 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
         });
 
         it('opens settings from Home while keeping Home as the active primary destination', async () => {
-            renderWithProviders(<App />);
+            renderWithProviders(<App />, {
+                userData: {
+                    ...defaultMockUserData,
+                    legalConsent: {
+                        hasAcceptedTerms: true,
+                        hasAcceptedHealthData: true,
+                        acceptedAt: '2026-09-30T00:00:00.000Z',
+                        privacyVersion: LEGAL_VERSIONS.privacy,
+                        termsVersion: LEGAL_VERSIONS.terms,
+                    },
+                },
+            });
 
             fireEvent.click(await screen.findByRole('button', { name: 'Apri impostazioni' }));
             expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
