@@ -171,7 +171,7 @@ Audit repository 2026-09-30:
 - nessun hostname GitHub Pages è referenziato dal runtime/config corrente;
 - non esiste workflow `gh-pages`/Pages;
 - Vercel è il solo hosting Production;
-- un test usa `/logbook/` come esempio di **base path generico**: resta valido come test di portabilità e non prova una dipendenza da GitHub Pages.
+- il vecchio test auto-contenuto di base path dinamico `/logbook/` è stato rimosso perché non esercitava la configurazione reale; il contratto PWA corrente verifica `start_url` e `scope` alla radice `/`.
 
 Pulizia esterna ancora richiesta: rimuovere il vecchio origin/referrer GitHub Pages dalle allowlist Google/Firebase segnalate sopra.
 
