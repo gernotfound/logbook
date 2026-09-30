@@ -13,6 +13,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
 });
 
@@ -43,7 +44,7 @@ it('restores a persisted Vercel analytics opt-in after a module reload', async (
 it('fails closed when enabling analytics cannot be persisted', async () => {
     vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('blocked storage'); });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const consent = await import('../../src/lib/analyticsConsent');
+    let consent = await import('../../src/lib/analyticsConsent');
 
     expect(consent.setAnalyticsConsent(true)).toBe(false);
     expect(consent.getAnalyticsConsent()).toBe(false);
@@ -52,7 +53,6 @@ it('fails closed when enabling analytics cannot be persisted', async () => {
     consent = await import('../../src/lib/analyticsConsent');
     expect(consent.getAnalyticsConsent()).toBe(false);
     expect(warn).toHaveBeenCalledWith('Impossibile memorizzare la preferenza Analytics:', expect.any(Error));
-    warn.mockRestore();
 });
 
 it('persists revocation through remove fallback when the write path is blocked', async () => {
@@ -78,9 +78,9 @@ it('keeps the current session fail-closed and reports failure when revocation ca
     vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('blocked write'); });
     vi.mocked(localStorage.removeItem).mockImplementation(() => { throw new Error('blocked remove'); });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warn.mockClear();
 
     expect(consent.setAnalyticsConsent(false)).toBe(false);
     expect(consent.getAnalyticsConsent()).toBe(false);
     expect(warn).toHaveBeenCalledTimes(2);
-    warn.mockRestore();
 });
