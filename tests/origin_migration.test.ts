@@ -54,6 +54,8 @@ describe('cross-origin migration install boundary', () => {
     authState.authStateReady.mockClear();
     migrationMocks.installTransferredLocalEnvelope.mockReset();
     migrationMocks.installTransferredLocalEnvelope.mockResolvedValue({ owner: 'user:a' });
+    migrationMocks.findPendingAccountDeletion.mockReset();
+    migrationMocks.findPendingAccountDeletion.mockReturnValue(null);
     migrationMocks.sourceOrigin = undefined;
     migrationMocks.targetOrigin = undefined;
     window.history.replaceState({}, '', '/');
@@ -151,6 +153,33 @@ describe('cross-origin migration install boundary', () => {
     expect(localStorage.getItem('logbook_origin_migration_decision_v1')).toBe('completed');
     expect(localStorage.getItem('logbook_origin_migration_installing_owner_v1')).toBeNull();
   });
+  it('rejects export when another owner still has account-deletion recovery state', async () => {
+    migrationMocks.sourceOrigin = window.location.origin;
+    migrationMocks.targetOrigin = 'https://target.example';
+    authState.currentUser = null;
+    localStorage.setItem('logbook_is_guest', 'true');
+    migrationMocks.findPendingAccountDeletion.mockReturnValue({
+      owner: 'user:deleting-account',
+      uid: 'deleting-account',
+      startedAt: Date.now(),
+      receiptToken: 'A'.repeat(43),
+    });
+
+    const nonce = 'B'.repeat(43);
+    window.history.replaceState({}, '', `/?logbookMigration=export&target=${encodeURIComponent(migrationMocks.targetOrigin)}&nonce=${nonce}`);
+    const postMessage = vi.fn();
+    Object.defineProperty(window, 'opener', { configurable: true, value: { postMessage } });
+
+    const migration = await import('../src/lib/originMigration');
+    await expect(migration.handleOriginMigrationExportRequest()).resolves.toBe(true);
+
+    expect(migrationMocks.readLocal).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: false, error: expect.stringContaining('cancellazione account in sospeso') }),
+      'https://target.example',
+    );
+  });
+
   it('rejects export when the legacy origin has both guest mode and an authenticated account', async () => {
     migrationMocks.sourceOrigin = window.location.origin;
     migrationMocks.targetOrigin = 'https://target.example';

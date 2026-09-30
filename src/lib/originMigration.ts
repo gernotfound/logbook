@@ -69,16 +69,23 @@ async function sourceOwner(): Promise<string | null> {
 
   const guest = readBrowserValueStrict('logbook_is_guest') === 'true';
   const uid = auth.currentUser?.uid ?? null;
+  const pendingDeletion = findPendingAccountDeletion();
+
   if (guest && uid) {
     throw new Error('Sul vecchio indirizzo risultano contemporaneamente una sessione account e la modalità locale. Completa prima il passaggio account oppure esci e riprova.');
   }
-  if (guest) return 'guest';
-  if (uid) return userOwner(uid);
+
+  const activeOwner = guest ? 'guest' : uid ? userOwner(uid) : null;
+  if (pendingDeletion && activeOwner && pendingDeletion.owner !== activeOwner) {
+    throw new Error('Sul vecchio indirizzo esiste anche una cancellazione account in sospeso per un altro archivio. Completa prima la recovery della cancellazione, poi ripeti il trasferimento.');
+  }
+
+  if (activeOwner) return activeOwner;
 
   // Firebase Auth may already be gone while the local receipt/envelope still
   // has to finish the server-mediated deletion recovery. Preserve that owner
   // across the hosting-origin cutover as well.
-  return findPendingAccountDeletion()?.owner ?? null;
+  return pendingDeletion?.owner ?? null;
 }
 
 function safeError(error: unknown): string {
