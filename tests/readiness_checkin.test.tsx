@@ -117,6 +117,70 @@ describe('pre-session readiness contract', () => {
         await waitFor(() => expect(onStart).toHaveBeenCalledWith(undefined));
     });
 
+    it('keeps post-session answers as a local draft until Salva e termina', async () => {
+        const originalDispatch = useAppStore.getState().dispatchDomainOperation;
+        const dispatchDomainOperation = vi.fn(async (operation: unknown) => {
+            void operation;
+            return { ok: true, status: 'synced' as const };
+        });
+        const active: WorkoutSession = {
+            id: 'post-session-draft',
+            date: '2026-09-24',
+            routineName: 'Push',
+            ratingScale: 5,
+            globalStartTime: Date.now() - 60_000,
+            exercises: [],
+        };
+
+        useAppStore.setState({
+            userData: parseUserData({ activeWorkout: active, activePains: [] }),
+            localWorkout: active,
+            syncing: false,
+            dispatchDomainOperation: dispatchDomainOperation as typeof originalDispatch,
+        });
+
+        try {
+            render(<TrainingSession />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+            expect(screen.getByRole('heading', { name: 'Com’è andato l’allenamento?' })).toBeTruthy();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Umore: 5 su 5' }));
+            expect(useAppStore.getState().localWorkout?.moodRating).toBeUndefined();
+            expect(useAppStore.getState().syncing).toBe(false);
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Torna all’allenamento' }));
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Termina allenamento' }));
+            expect(screen.getByRole('button', { name: 'Umore: 5 su 5' }).getAttribute('aria-pressed')).toBe('true');
+
+            const waterInput = screen.getByLabelText('Acqua bevuta (litri)');
+            fireEvent.change(waterInput, { target: { value: '1.5' } });
+            fireEvent.blur(waterInput);
+
+            expect(useAppStore.getState().localWorkout?.waterLiters).toBeUndefined();
+            expect(dispatchDomainOperation).not.toHaveBeenCalled();
+
+            fireEvent.click(screen.getByRole('button', { name: 'Salva e termina' }));
+
+            await waitFor(() => expect(dispatchDomainOperation).toHaveBeenCalledTimes(1));
+            const operation = dispatchDomainOperation.mock.calls[0][0];
+            expect(operation).toMatchObject({
+                type: 'workout.complete',
+                workout: {
+                    id: 'post-session-draft',
+                    moodRating: 5,
+                    waterLiters: 1.5,
+                },
+            });
+            await waitFor(() => expect(useAppStore.getState().localWorkout).toBeNull());
+        } finally {
+            useAppStore.setState({ dispatchDomainOperation: originalDispatch });
+        }
+    });
+
     it('round-trips readiness through backup/restore without a schema migration', () => {
         const data = parseUserData({ history: [session({ capturedAt: 123, energy: 5, muscleRecovery: 3 })] });
         const backup = JSON.parse(JSON.stringify(createBackup(data, 'guest')));

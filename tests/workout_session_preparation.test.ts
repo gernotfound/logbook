@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { UserData, WorkoutRoutine, WorkoutSession } from '../src/types';
 import {
+    applyWorkoutCompletionDraft,
     buildFreeWorkout,
     buildRoutineWorkout,
     prepareCompletedWorkout,
@@ -201,6 +202,44 @@ describe('workout session preparation', () => {
         expect(saved.exercises[0].sets[0].rir).toBe(0);
         expect(saved.isEditingHistory).toBeUndefined();
         expect(saved.originalHistoryId).toBeUndefined();
+    });
+
+    it('keeps the post-session draft separate until completion applies it explicitly', () => {
+        const active = {
+            id: 'active-draft',
+            routineName: 'Routine A',
+            ratingScale: 5,
+            globalStartTime: 1_000,
+            exercises: [],
+        } as WorkoutSession;
+
+        const withDraft = applyWorkoutCompletionDraft(active, {
+            mood: '5',
+            pump: '4',
+            fatigue: '3',
+            water: '1,7',
+            pains: ['chest', 'back'],
+        });
+
+        expect(active.moodRating).toBeUndefined();
+        expect(active.waterLiters).toBeUndefined();
+        expect(active.pains).toBeUndefined();
+        expect(withDraft).toMatchObject({
+            moodRating: 5,
+            pumpRating: 4,
+            fatigueRating: 3,
+            waterLiters: 1.7,
+            pains: ['chest', 'back'],
+        });
+
+        const completed = prepareCompletedWorkout(withDraft, 61_000, createRuntime()).finishedWorkout;
+        expect(completed).toMatchObject({
+            moodRating: 5,
+            pumpRating: 4,
+            fatigueRating: 3,
+            waterLiters: 1.7,
+            pains: ['chest', 'back'],
+        });
     });
 
     it('prepares workout completion while preserving duration and cleanup semantics', () => {
