@@ -14,6 +14,7 @@ import {
   type LocalEnvelope,
 } from './sync/localRepository';
 import { normalizeStorageOwner, userOwner } from './sync/owner';
+import { findPendingAccountDeletion } from './sync/accountGate';
 
 const QUERY_MODE = 'logbookMigration';
 const QUERY_TARGET = 'target';
@@ -69,7 +70,12 @@ async function sourceOwner(): Promise<string | null> {
   if (guest) return 'guest';
 
   const uid = auth.currentUser?.uid;
-  return uid ? userOwner(uid) : null;
+  if (uid) return userOwner(uid);
+
+  // Firebase Auth may already be gone while the local receipt/envelope still
+  // has to finish the server-mediated deletion recovery. Preserve that owner
+  // across the hosting-origin cutover as well.
+  return findPendingAccountDeletion()?.owner ?? null;
 }
 
 function safeError(error: unknown): string {
@@ -204,6 +210,10 @@ export async function installOriginMigrationPayload(value: unknown): Promise<{ o
 
   if (typeof auth.authStateReady === 'function') await auth.authStateReady();
   const targetUid = auth.currentUser?.uid ?? null;
+  const targetGuest = readBrowserValueStrict('logbook_is_guest') === 'true';
+  if (payload.owner !== 'guest' && targetGuest) {
+    throw new Error('Sul nuovo indirizzo è già attiva la modalità locale. Esci dalla modalità locale prima di trasferire i dati di un account.');
+  }
   if (payload.owner === 'guest' && targetUid) {
     throw new Error('Sul nuovo indirizzo è già attivo un account. Esci prima di trasferire i dati della modalità locale.');
   }
