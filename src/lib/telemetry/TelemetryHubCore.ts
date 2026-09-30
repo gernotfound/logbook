@@ -405,7 +405,7 @@ export class TelemetryHub {
       if (entry.isDispatchPending) {
         entry.isDispatchPending = false;
         entry.lastDispatchedCount = entry.count;
-        this.dispatchErrorToFirestore(entry.payload).catch(() => {});
+        this.dispatchErrorExternally(entry.payload).catch(() => {});
       }
     }
   }
@@ -430,7 +430,7 @@ export class TelemetryHub {
         if (this.isOffline()) {
           this.queue.enqueueItem('error', entry.payload);
         } else {
-          await this.dispatchErrorToFirestore(entry.payload);
+          await this.dispatchErrorExternally(entry.payload);
         }
       }
     }
@@ -465,7 +465,7 @@ export class TelemetryHub {
         this.queue.enqueueItem('event', payload);
       } else {
         queueMicrotask(() => {
-          this.dispatchEventToFirestore(payload)
+          this.dispatchEventExternally(payload)
             .then((success) => {
               if (!success) {
                 this.queue.enqueueItem('event', payload);
@@ -544,11 +544,11 @@ export class TelemetryHub {
 
         let success = false;
         if (item.itemType === 'error') {
-          success = await this.dispatchErrorToFirestore(
+          success = await this.dispatchErrorExternally(
             item.payload as TelemetryErrorPayload
           );
         } else {
-          success = await this.dispatchEventToFirestore(
+          success = await this.dispatchEventExternally(
             item.payload as TelemetryEventPayload
           );
         }
@@ -627,13 +627,13 @@ export class TelemetryHub {
     });
   }
 
-  public async dispatchErrorToFirestore(
+  public async dispatchErrorExternally(
     payload: TelemetryErrorPayload
   ): Promise<boolean> {
     return dispatchTelemetryError(payload, () => this.getUserId());
   }
 
-  public async dispatchEventToFirestore(
+  public async dispatchEventExternally(
     payload: TelemetryEventPayload
   ): Promise<boolean> {
     return dispatchTelemetryEvent(payload, () => this.getUserId());
