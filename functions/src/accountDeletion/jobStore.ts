@@ -14,6 +14,7 @@ import {
 const PAGE_SIZE = 400;
 const RECEIPT_PATTERN = /^[A-Za-z0-9_-]{43,128}$/;
 const RECEIPT_HASH_PATTERN = /^[a-f0-9]{64}$/;
+const MAX_AUTHORIZED_RECEIPTS = 32;
 const JOB_COLLECTION = 'account_deletions';
 
 export class NonRetryableDeletionError extends Error {
@@ -87,6 +88,9 @@ function withAuthorizedReceipt(
 ): { receiptHash: string; receiptHashes?: string[] } {
   const existing = validReceiptHashes(job);
   const primary = existing[0] ?? receiptHash;
+  if (!existing.includes(receiptHash) && existing.length >= MAX_AUTHORIZED_RECEIPTS) {
+    throw new Error('Numero massimo di dispositivi di recovery raggiunto. Le ricevute già autorizzate restano valide.');
+  }
   const all = existing.includes(receiptHash) ? existing : [...existing, receiptHash];
   return all.length > 1
     ? { receiptHash: primary, receiptHashes: all }
