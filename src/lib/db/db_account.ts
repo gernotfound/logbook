@@ -48,6 +48,9 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         if (ownerUid && localStorage.getItem('logbook_guest_migration_sync_recovery') === ownerUid) {
             keys.add('logbook_guest_migration_sync_recovery');
         }
+        if (ownerUid && localStorage.getItem('logbook_origin_migration_pending_uid_v1') === ownerUid) {
+            keys.add('logbook_origin_migration_pending_uid_v1');
+        }
         const prefix = 'logbook:v2:' + owner + ':';
         for (let index = 0; index < localStorage.length; index++) {
             const key = localStorage.key(index);
