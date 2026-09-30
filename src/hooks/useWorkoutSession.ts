@@ -5,11 +5,13 @@ import { Logic } from '../lib/logic';
 import { resetGlobalWorkoutTimer } from '../lib/utils/timer';
 import { useWorkoutSetMutations } from './workout/useWorkoutSetMutations';
 import {
+    applyWorkoutCompletionDraft,
     buildFreeWorkout,
     buildRoutineWorkout,
     prepareCompletedWorkout,
     prepareHistoricalWorkoutForEditing,
     prepareHistoricalWorkoutForSave,
+    type WorkoutCompletionDraft,
 } from './workout/workoutSessionPreparation';
 import { mapFirebaseErrorCode } from '../lib/errorHandler';
 import type { WorkoutSession, WorkoutRoutine, Exercise, WorkoutReadiness } from '../types';
@@ -231,7 +233,11 @@ export function useWorkoutSession() {
         return false;
     }, [showConfirm, setLocalWorkout]);
 
-    const endWorkout = useCallback(async (confirmEnd = true, requestedEndTime?: number): Promise<WorkoutSession | null> => {
+    const endWorkout = useCallback(async (
+        confirmEnd = true,
+        requestedEndTime?: number,
+        completionDraft?: WorkoutCompletionDraft,
+    ): Promise<WorkoutSession | null> => {
         if (endingRef.current) return null;
         endingRef.current = true;
         const expectedUid = auth.currentUser?.uid;
@@ -243,7 +249,10 @@ export function useWorkoutSession() {
         if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
         const endTime = requestedEndTime ?? new Date().getTime();
-        const { finishedWorkout, sessionPains } = prepareCompletedWorkout(currentWorkout, endTime);
+        const workoutForCompletion = completionDraft
+            ? applyWorkoutCompletionDraft(currentWorkout, completionDraft)
+            : currentWorkout;
+        const { finishedWorkout, sessionPains } = prepareCompletedWorkout(workoutForCompletion, endTime);
 
         try {
             const currentData = useAppStore.getState().userData;
