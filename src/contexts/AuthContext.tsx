@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (!sameAuthenticatedOwner()) return result;
                 const envelope = await readLocal(userOwner(user.uid));
                 if (!sameAuthenticatedOwner()) return result;
-                if (!envelope?.pending.length) {
+                if (envelope && envelope.pending.length === 0) {
                     clearOriginMigrationPendingUid(user.uid);
                 }
             } catch (error) {
