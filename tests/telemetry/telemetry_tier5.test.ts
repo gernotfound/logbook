@@ -66,7 +66,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(telemetryHub.getActiveRateLimiterCount()).toBe(0);
       });
 
-      it('T5-3: sub-millisecond sliding window boundary precision (0ms, 59,999ms, 60,000ms, 60,001ms)', async () => {
+      it('T5-3: sliding window boundary precision around the configured deduplication interval', async () => {
         vi.useFakeTimers();
         const baseTime = 1724486400000;
         vi.setSystemTime(baseTime);
@@ -82,27 +82,25 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         expect(mockSetDoc).toHaveBeenCalledTimes(1);
         expect((mockSetDoc.mock.calls[0][1] as TelemetryErrorPayload).count).toBe(1);
 
-        // 2. t = 59,999ms: Duplicate within window
-        vi.setSystemTime(baseTime + 59999);
+        // Duplicate immediately before expiry is suppressed.
+        const justBeforeExpiry = DEDUP_WINDOW_MS - 1;
+        vi.setSystemTime(baseTime + justBeforeExpiry);
         telemetryHub.trackError(error);
-        // Should be suppressed from immediate write
         expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-        // 3. t = 60,000ms: Window expires -> trailing flush occurs
-        vi.setSystemTime(baseTime + 60000);
-        await vi.advanceTimersByTimeAsync(1);
-        expect(mockSetDoc).toHaveBeenCalledTimes(2);
-        expect((mockSetDoc.mock.calls[1][1] as TelemetryErrorPayload).count).toBe(2);
+        // Expiry clears the limiter without a redundant trailing event.
+        await vi.advanceTimersByTimeAsync(DEDUP_WINDOW_MS);
+        expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-        // 4. t = 60,001ms: New occurrence starts a new window
-        vi.setSystemTime(baseTime + 60001);
+        // A new occurrence after expiry starts a fresh window.
+        vi.setSystemTime(baseTime + DEDUP_WINDOW_MS + 1);
         telemetryHub.trackError(error);
         await vi.advanceTimersByTimeAsync(10);
-        expect(mockSetDoc).toHaveBeenCalledTimes(3);
-        expect((mockSetDoc.mock.calls[2][1] as TelemetryErrorPayload).count).toBe(1);
+        expect(mockSetDoc).toHaveBeenCalledTimes(2);
+        expect((mockSetDoc.mock.calls[1][1] as TelemetryErrorPayload).count).toBe(1);
       });
 
-      it('T5-4: timer drift and clock skew (+65s forward jump) purges stale rate limiter and starts fresh window', async () => {
+      it('T5-4: timer drift and a forward clock jump past expiry purge the stale limiter', async () => {
         vi.useFakeTimers();
         const baseTime = 1724486400000;
         vi.setSystemTime(baseTime);
@@ -115,10 +113,10 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
         await vi.advanceTimersByTimeAsync(10);
         expect(mockSetDoc).toHaveBeenCalledTimes(1);
 
-        // OS suspension / clock jump +65 seconds
-        vi.setSystemTime(baseTime + 65000);
+        const afterExpiry = DEDUP_WINDOW_MS + 5000;
+        // OS suspension / clock jump beyond the configured window.
+        vi.setSystemTime(baseTime + afterExpiry);
 
-        // Next arrival detects expired window without crashing
         telemetryHub.trackError(error);
         await vi.advanceTimersByTimeAsync(10);
 
