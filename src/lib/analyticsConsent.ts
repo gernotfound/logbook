@@ -26,6 +26,8 @@ export const subscribeAnalyticsConsent = (listener: (consent: boolean) => void) 
         try {
             if (event.storageArea !== null && event.storageArea !== localStorage) return;
         } catch {
+            currentAnalyticsConsent = false;
+            listener(currentAnalyticsConsent);
             return;
         }
         currentAnalyticsConsent = readAnalyticsConsentFromStorage();
@@ -41,12 +43,18 @@ export const subscribeAnalyticsConsent = (listener: (consent: boolean) => void) 
     };
 };
 
-export const setAnalyticsConsent = (consent: boolean) => {
-    currentAnalyticsConsent = consent;
+export const setAnalyticsConsent = (consent: boolean): boolean => {
+    let persisted = false;
     try {
         localStorage.setItem(ANALYTICS_CONSENT_KEY, consent ? 'true' : 'false');
+        persisted = localStorage.getItem(ANALYTICS_CONSENT_KEY) === (consent ? 'true' : 'false');
     } catch (err) {
         console.warn('Impossibile memorizzare la preferenza Analytics:', err);
     }
+
+    // Non-essential analytics may only be enabled after the opt-in is durably
+    // observable. Revocation stays fail-closed even when preference storage fails.
+    currentAnalyticsConsent = consent && persisted;
     if (typeof window !== 'undefined') window.dispatchEvent(new Event(ANALYTICS_CONSENT_EVENT));
+    return consent ? persisted : !currentAnalyticsConsent;
 };
