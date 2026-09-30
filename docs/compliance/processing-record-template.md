@@ -52,7 +52,7 @@
 | Base | Legittimo interesse dichiarato nell'informativa corrente; eseguire/archiviare LIA prima del pilot |
 | Retention | Configurazione/piano Sentry da verificare; legacy Firestore 30 giorni, vedi `retention-schedule.md` |
 | Destinatari | Sentry / personale autorizzato strettamente necessario; Firestore solo per cleanup legacy |
-| Misure | Sanitizzazione PII client, `sendDefaultPii: false`, deduplica/rate limit, data scrubbing Sentry configurato esternamente; legacy Firestore owner-scoped |
+| Misure | Sanitizzazione PII client, `beforeSend` restrittivo, deduplica/rate limit, data scrubbing Sentry configurato esternamente; legacy Firestore owner-scoped |
 
 ## Attività 4 — Analytics opzionali
 
