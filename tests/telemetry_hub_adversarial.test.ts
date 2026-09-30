@@ -289,7 +289,7 @@ describe('Adversarial Stress & Edge-Case Suite: TelemetryHub', () => {
       mockSetDoc.mockImplementation(() => {
         callCount++;
         if (callCount <= 2) {
-          return Promise.resolve();
+          return Promise.resolve(true);
         }
         return Promise.reject(new Error('Network disconnected mid-flush'));
       });
