@@ -6,29 +6,41 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   lockfile:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout exact PR head
         uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v7
         with:
           node-version: '22'
 
-      - name: Generate Functions lockfile
+      - name: Generate deterministic Functions lockfile
         run: npm install --prefix functions --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Upload lockfile
-        uses: actions/upload-artifact@v7
-        with:
-          name: functions-package-lock-${{ github.event.pull_request.head.sha }}
-          path: functions/package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Verify Functions lockfile
+        run: |
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm --prefix functions run typecheck
+          npm audit --prefix functions --audit-level=high
+
+      - name: Commit lockfile and remove temporary workflow
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/package-lock.json
+          git rm .github/workflows/functions-lockfile-generator.yml
+          git commit -m "build: lock Firebase Functions dependencies"
+          git push origin "HEAD:${HEAD_BRANCH}"
