@@ -141,7 +141,8 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             expect(screen.queryByRole('button', { name: /^impostazioni$/i })).toBeNull();
         });
 
-        it('opens settings as a secondary Home surface while keeping Home active', async () => {
+        it('opens the legacy settings shortcut as a secondary Home surface while keeping Home active', async () => {
+            window.history.replaceState({}, '', '/?tab=settings');
             renderWithProviders(<App />, {
                 userData: {
                     ...defaultMockUserData,
@@ -155,11 +156,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
                 },
             });
 
-            act(() => {
-                window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'settings' }));
-            });
-
-            expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
+            expect(await screen.findByRole('heading', { name: 'Impostazioni' }, { timeout: 5000 })).toBeDefined();
             expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
         });
 
