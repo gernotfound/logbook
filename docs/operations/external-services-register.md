@@ -107,6 +107,20 @@ Il codice corrente legge sette variabili Firebase Web:
 
 Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
 
+### Scope Vercel registrati
+
+Inventario fornito dal product owner il 2026-09-30, da verificare live prima di modifiche:
+
+| Famiglia env | Scope riportato | Nota |
+|---|---|---|
+| sette `VITE_FIREBASE_*` usate dal client | Production + Preview | configurazione Firebase Web |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Production + Preview | legacy/non usata; candidata alla rimozione |
+| `VITE_RECAPTCHA_V3_SITE_KEY` | Production + Preview | alias legacy ancora necessario finché non viene migrato il nome canonico |
+| `FIREBASE_ADMIN_PROJECT_ID`, `CRON_SECRET` | Production | server-only |
+| `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` | VERIFY-LIVE | richieste dal codice server; assenti dall'inventario fornito |
+| env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | aggiunte per Error Monitoring/source map |
+
+
 ## Vercel Analytics / Speed Insights
 
 Sono servizi separati dalla telemetria tecnica Sentry. Restano disabilitati per default e vengono montati soltanto dopo opt-in Analytics dell'utente. La revoca deve propagarsi anche tra tab.
