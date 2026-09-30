@@ -222,8 +222,23 @@ export async function installOriginMigrationPayload(value: unknown): Promise<{ o
   }
 
   const prefix = devicePrefix(payload.owner);
+  const incomingUid = payload.owner.startsWith('user:') ? payload.owner.slice('user:'.length) : null;
+  const existingPendingUid = readBrowserValueStrict(PENDING_UID_KEY);
+  if (existingPendingUid && existingPendingUid !== incomingUid) {
+    throw new Error('Trasferimento bloccato: sul nuovo indirizzo esistono dati trasferiti per un altro account.');
+  }
 
-  // Preflight every localStorage key before the IndexedDB install. A retry can
+  // Target-only device keys are divergent state too. Leaving one behind (for
+  // example an active workout or deletion receipt) could resurrect stale state
+  // after the envelope transfer. Exact matches remain valid for idempotent retry.
+  const existingDevice = collectDeviceState(payload.owner);
+  for (const [name, current] of Object.entries(existingDevice)) {
+    if (!Object.hasOwn(payload.device, name) || payload.device[name] !== current) {
+      throw new Error('Trasferimento bloccato: sul nuovo indirizzo esistono già dati dispositivo diversi.');
+    }
+  }
+
+  // Preflight every incoming localStorage key before the IndexedDB install. A retry can
   // continue only when existing values are identical; divergent target state is
   // never overwritten automatically.
   for (const [name, incoming] of Object.entries(payload.device)) {
