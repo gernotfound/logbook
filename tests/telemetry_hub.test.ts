@@ -132,7 +132,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
     });
 
     it('preserves stack trace under 1000 characters and scrubs PII inside it', () => {
-      const stack = 'Error: workout failed\n    at C:\\Users\\gerar\\app.ts:12:1';
+      const stack = 'Error: workout failed\n    at C:\\Users\\example-user\\app.ts:12:1';
       const truncated = truncateStack(stack, 1000);
       expect(truncated).toBe('Error: workout failed\n    at [REDACTED_PATH]:12:1');
       expect(truncated!.length).toBeLessThanOrEqual(1000);
