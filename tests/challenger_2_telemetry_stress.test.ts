@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as firestoreModule from 'firebase/firestore';
+import * as sentryClient from '../src/lib/sentryClient';
 import {
   telemetryHub,
   TELEMETRY_QUEUE_CAPACITY,
@@ -11,8 +11,7 @@ import {
 
 describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online Flush Stress Suite', () => {
   let mockSetDoc: any;
-  let _mockDoc: any;
-  let dispatchedDocs: Array<{ path: string; data: any; options?: any }>;
+  let dispatchedDocs: Array<{ kind: string; data: any }>;
 
   beforeEach(() => {
     localStorage.clear();
@@ -23,13 +22,9 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
-    mockSetDoc = vi.spyOn(firestoreModule, 'setDoc').mockImplementation(async (docRef: any, data: any, options?: any) => {
-      dispatchedDocs.push({ path: docRef.path, data, options });
-      return undefined;
-    });
-
-    _mockDoc = vi.spyOn(firestoreModule, 'doc').mockImplementation((_db, ...pathSegments) => {
-      return { path: pathSegments.join('/') } as any;
+    mockSetDoc = vi.spyOn(sentryClient, 'sendTelemetryToSentry').mockImplementation(async (kind: any, data: any) => {
+      dispatchedDocs.push({ kind, data });
+      return true;
     });
 
     telemetryHub.reset();
@@ -237,9 +232,9 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(dispatchedDocs.length).toBe(6);
       expect(telemetryHub.getQueuedEvents().length).toBe(0);
 
-      // Verify Firestore paths
-      dispatchedDocs.forEach((docEntry) => {
-        expect(docEntry.path).toMatch(/^users\/user_online_flush\/telemetry_(errors|events)\//);
+      // Verify the external boundary receives only supported telemetry kinds.
+      dispatchedDocs.forEach((entry) => {
+        expect(['error', 'event']).toContain(entry.kind);
       });
     });
 
@@ -255,13 +250,13 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       expect(telemetryHub.getQueuedEvents().length).toBe(4);
 
-      // Mock setDoc to fail only for item 2 and item 4
-      mockSetDoc.mockImplementation(async (docRef: any, data: any) => {
+      // Mock Sentry boundary to fail only for item 2 and item 4
+      mockSetDoc.mockImplementation(async (kind: any, data: any) => {
         if (data.type === 'item_to_fail_2' || data.type === 'item_to_fail_4') {
           throw new Error('Transient network drop during write');
         }
-        dispatchedDocs.push({ path: docRef.path, data });
-        return undefined;
+        dispatchedDocs.push({ kind, data });
+        return true;
       });
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
@@ -276,10 +271,10 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
       expect(remainingQueue[0].payload.type).toBe('item_to_fail_2');
       expect(remainingQueue[1].payload.type).toBe('item_to_fail_4');
 
-      // Now restore setDoc to succeed on all calls (network recovery)
-      mockSetDoc.mockImplementation(async (docRef: any, data: any) => {
-        dispatchedDocs.push({ path: docRef.path, data });
-        return undefined;
+      // Now restore Sentry boundary to succeed on all calls (network recovery)
+      mockSetDoc.mockImplementation(async (kind: any, data: any) => {
+        dispatchedDocs.push({ kind, data });
+        return true;
       });
 
       // Second flush attempt
@@ -300,16 +295,16 @@ describe('Empirical Challenger 2: Telemetry Offline Queueing, Capacity & Online 
 
       expect(telemetryHub.getQueuedEvents().length).toBe(2);
 
-      // Mock setDoc to simulate an async delay during flush, and inject a new offline event mid-flight
-      mockSetDoc.mockImplementation(async (docRef: any, data: any) => {
-        dispatchedDocs.push({ path: docRef.path, data });
+      // Mock Sentry boundary to simulate an async delay during flush, and inject a new offline event mid-flight
+      mockSetDoc.mockImplementation(async (kind: any, data: any) => {
+        dispatchedDocs.push({ kind, data });
         if (data.type === 'initial_item_1') {
           // Mid-flight: new offline item arrives (simulate device temporarily having offline items or queueing)
           Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
           telemetryHub.trackEvent('mid_flight_item_3');
           Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
         }
-        return undefined;
+        return true;
       });
 
       Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
