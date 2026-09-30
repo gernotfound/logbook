@@ -129,9 +129,9 @@ describe('Unified Telemetry Hub E2E Suite — Tier 1 Core', () => {
       });
 
       it('F2-5: scrubs absolute local filesystem paths (Windows/POSIX) from traces', () => {
-        const rawWin = 'Error at C:\\Users\\gerar\\Documents\\GitHub\\logbook\\src\\store.ts:42:15';
+        const rawWin = 'Error at C:\\Users\\example-user\\Projects\\logbook\\src\\store.ts:42:15';
         const scrubbedWin = scrubPII(rawWin);
-        expect(scrubbedWin).not.toContain('C:\\Users\\gerar\\Documents');
+        expect(scrubbedWin).not.toContain('C:\\Users\\example-user\\Projects');
         expect(scrubbedWin).toContain('[REDACTED_PATH]');
 
         const rawPosix = 'Error at /Users/john/workspaces/project/src/main.tsx:10:5';
