@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, act, renderHook, fireEvent } from '@testing-library/react';
 import App from '../src/App';
+import HeaderDashboard from '../src/components/Home/widgets/HeaderDashboard';
 import { defaultMockUserData, renderWithProviders } from './setup';
 import { LEGAL_VERSIONS } from '../src/lib/legalVersions';
 import { 
@@ -140,7 +141,7 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
             expect(screen.queryByRole('button', { name: /^impostazioni$/i })).toBeNull();
         });
 
-        it('opens settings from Home while keeping Home as the active primary destination', async () => {
+        it('opens settings as a secondary Home surface while keeping Home active', async () => {
             renderWithProviders(<App />, {
                 userData: {
                     ...defaultMockUserData,
@@ -154,9 +155,20 @@ describe('R4: Tab Zod Schema & LocalStorage Fallback Resilience (ARCH-05)', () =
                 },
             });
 
-            fireEvent.click(await screen.findByRole('button', { name: 'Apri impostazioni' }));
+            act(() => {
+                window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'settings' }));
+            });
+
             expect(await screen.findByRole('heading', { name: 'Impostazioni' })).toBeDefined();
             expect(screen.getByRole('button', { name: /^home$/i }).classList.contains('active')).toBe(true);
+        });
+
+        it('exposes the settings control in the Home header', () => {
+            const onOpenSettings = vi.fn();
+            renderWithProviders(<HeaderDashboard streak={3} totalWorkouts={12} onOpenSettings={onOpenSettings} />);
+
+            fireEvent.click(screen.getByRole('button', { name: 'Apri impostazioni' }));
+            expect(onOpenSettings).toHaveBeenCalledTimes(1);
         });
     });
 });
