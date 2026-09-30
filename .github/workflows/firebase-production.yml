@@ -34,6 +34,8 @@ jobs:
       FIREBASE_HOSTING_SITE: ${{ vars.FIREBASE_HOSTING_SITE }}
       FIREBASE_FUNCTION_REGION: ${{ vars.FIREBASE_FUNCTION_REGION }}
       LOGBOOK_ALLOWED_ORIGINS: ${{ vars.LOGBOOK_ALLOWED_ORIGINS }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       VITE_PUBLIC_ORIGIN: ${{ vars.VITE_PUBLIC_ORIGIN }}
       VITE_ORIGIN_MIGRATION_SOURCE: ${{ vars.VITE_ORIGIN_MIGRATION_SOURCE }}
@@ -88,15 +90,15 @@ jobs:
       - name: Install Functions dependencies
         run: npm run functions:install
 
+      - name: Validate Firebase Production configuration
+        run: npm run test:firebase-deploy-env
+
       - name: Authenticate to Google Cloud with Workload Identity Federation
         uses: google-github-actions/auth@v3
         with:
           project_id: ${{ vars.FIREBASE_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Validate Firebase Production configuration
-        run: npm run test:firebase-deploy-env
 
       - name: Build exact Production artifact
         run: npm run build
