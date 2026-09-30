@@ -451,7 +451,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
   // 4. SettingsView UI & Storage Resilience Stress Tests
   // =========================================================================
   describe('4. SettingsView UI & Storage Resilience Stress Tests', () => {
-    it('keeps privacy navigation free of retired analytics controls and handles rapid update checks', async () => {
+    it('handles rapid clicking on privacy, analytics toggle, and check update', async () => {
       useAppStore.setState({
         userData: {
           profile: { name: 'Settings Tester' },
@@ -463,12 +463,19 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
 
       const { unmount } = render(React.createElement(SettingsView));
 
+      // Navigate to Privacy to access analytics toggle.
       const privacyButton = screen.getByRole('button', { name: /^Privacy/i });
       fireEvent.click(privacyButton);
 
-      expect(screen.queryByRole('checkbox')).toBeNull();
-      expect(screen.getByRole('button', { name: /Informativa sulla privacy/i })).toBeDefined();
-      expect(screen.getByRole('button', { name: /Termini e condizioni/i })).toBeDefined();
+      const analyticsToggle = screen.getByRole('checkbox');
+      expect(analyticsToggle).toBeDefined();
+
+      // Rapid clicking on toggle
+      act(() => {
+        fireEvent.click(analyticsToggle);
+        fireEvent.click(analyticsToggle);
+        fireEvent.click(analyticsToggle);
+      });
 
       // Return to the settings landing and open Aspetto e applicazione.
       fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));

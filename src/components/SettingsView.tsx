@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
+import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { StorageDiagnostics } from './Settings/StorageDiagnostics';
@@ -43,6 +44,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
+    const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
     const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
     const appearance = useAppearanceStore(state => state.preference);
     const setAppearance = useAppearanceStore(state => state.setPreference);
@@ -53,6 +55,14 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const storeLibrary = useAppStore(state => state.userData?.library);
     const storeRoutines = useAppStore(state => state.userData?.routines);
     const storeCycles = useAppStore(state => state.userData?.trainingCycles);
+
+    useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
+
+    const handleAnalyticsToggle = () => {
+        const newState = !analyticsEnabled;
+        setAnalyticsEnabled(newState);
+        setAnalyticsConsent(newState);
+    };
 
     const handleCheckUpdate = async () => {
         if ('serviceWorker' in navigator) {
@@ -120,7 +130,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                         </button>
                         <button type="button" className="settings-menu-row" onClick={() => setActiveSection('privacy')}>
                             <span className="settings-row-icon"><ShieldCheck size={22} aria-hidden="true" /></span>
-                            <span className="settings-row-copy"><strong>Privacy</strong><small>Consensi e informative</small></span>
+                            <span className="settings-row-copy"><strong>Privacy</strong><small>Analytics, consensi e informative</small></span>
                             <ChevronRight size={20} aria-hidden="true" />
                         </button>
                         <button type="button" className="settings-menu-row" onClick={() => setActiveSection('data')}>
@@ -142,7 +152,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} />
+                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} />
             )}
 
             {activeSection === 'data' && (

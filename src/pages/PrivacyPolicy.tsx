@@ -96,7 +96,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati business inseriti nell'app — come allenamenti, nutrizione, misurazioni, routine e pianificazioni — restano nella persistenza locale del dispositivo e non vengono sincronizzati su Firestore finché non colleghi un account.
             </p>
             <p>
-              La telemetria tecnica degli errori non viene inviata a Sentry quando non esiste una sessione Firebase autenticata. Eventuali elementi diagnostici best-effort possono restare localmente sul dispositivo senza essere riassegnati a un account successivo. LogBook non utilizza servizi di analytics comportamentale o statistiche di utilizzo opzionali.
+              La telemetria tecnica degli errori non viene inviata a Sentry quando non esiste una sessione Firebase autenticata. Eventuali elementi diagnostici best-effort possono restare localmente sul dispositivo senza essere riassegnati a un account successivo. Se abiliti volontariamente le statistiche di utilizzo dalle Impostazioni, anche in modalità ospite possono invece essere attivati i servizi Analytics descritti più avanti. L'uso locale dei dati fitness, la telemetria tecnica e l'opt-in Analytics sono flussi distinti.
             </p>
 
             <h3 style={h3Style}>Modalità cloud (con account)</h3>
@@ -133,12 +133,19 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Esecuzione del servizio</strong> (art. 6, par. 1, lett. b GDPR): per autenticazione, sincronizzazione, backup/recovery e funzionalità richieste dall'utente.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Consenso esplicito</strong> (art. 9, par. 2, lett. a GDPR): per il trattamento dei dati relativi alla salute (categorie particolari di dati). Il consenso viene richiesto esplicitamente nell'app.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Legittimo interesse</strong> (art. 6, par. 1, lett. f GDPR): per telemetria tecnica strettamente finalizzata a sicurezza, prevenzione degli errori e stabilità del servizio, con minimizzazione e sanitizzazione.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Consenso</strong> (art. 6, par. 1, lett. a GDPR): per Analytics e statistiche di utilizzo non essenziali.</li>
             </ul>
           </Section>
 
-          <Section title="Tecnologie di memorizzazione locale">
+          <Section title="Analytics e tecnologie di memorizzazione locale">
             <p>
-              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. LogBook non inizializza Google/Firebase Analytics, Vercel Analytics, Speed Insights o altri servizi di analytics comportamentale.
+              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. Questi meccanismi sono distinti dai servizi Analytics e sono necessari alle funzionalità locali dell'app.
+            </p>
+            <p>
+              <strong style={{ color: 'var(--text-main)' }}>Vercel Analytics e Vercel Speed Insights sono disabilitati per impostazione predefinita e vengono attivati soltanto tramite opt-in nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; l'app non renderizza questi componenti senza consenso. Google/Firebase Analytics non viene inizializzato né utilizzato da LogBook.
+            </p>
+            <p>
+              Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. LogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
             </p>
           </Section>
 
@@ -163,8 +170,8 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Fornitori e trasferimento dei dati">
             <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, App Check/reCAPTCHA Enterprise, Hosting e Cloud Functions. LogBook non utilizza Firebase Analytics.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — durante la migrazione dell'hosting, il precedente indirizzo può restare temporaneamente disponibile per consentire il trasferimento sicuro dei dati locali e la compatibilità dei client già installati. Vercel Analytics e Speed Insights non sono più utilizzati.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore e App Check/reCAPTCHA Enterprise. LogBook non utilizza Firebase Analytics.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — hosting delle risorse e delle funzioni server; solo con consenso, Vercel Analytics e Speed Insights.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; LogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
             </ul>
             <p>
@@ -178,7 +185,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Accesso e portabilità</strong>: usare backup JSON/esportazione CSV e richiedere le informazioni applicabili al trattamento.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati modificabili tramite l'app.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: avviare la funzione di eliminazione account per la rimozione dei dati cloud applicativi.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: disabilitare Analytics dalle Impostazioni; per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>
