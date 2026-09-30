@@ -102,11 +102,20 @@ I file `firebase.json` e `.firebaserc` definiscono la configurazione repository 
 - Le sottocollezioni private mantengono `delete` owner-scoped per le normali operazioni di dominio dove previste; questa capacità non autorizza il client a bypassare il workflow di cancellazione account.
 - `account_deletions/{uid}` resta server-only e costituisce la barriera cross-device durante una cancellazione in corso.
 
-### Telemetria privata
+### Telemetria tecnica — Sentry e legacy Firestore
 
-Le raccolte di telemetria utente sono owner-scoped e soggette a validazione Rules tipizzata/bounded. Eventi e anomalie sono immutabili secondo il contratto corrente; gli errori aggregati ammettono soltanto gli aggiornamenti monotoni previsti dalle Rules. Le regole client non trasformano la telemetria tecnica in un database arbitrario.
+Il client corrente usa **Sentry Error Monitoring** come destinazione esterna per errori e anomalie tecniche in Production. Il Firebase UID può essere usato localmente per stabilire l'eleggibilità all'invio, ma non viene deliberatamente inserito nel payload Sentry. Prima del boundary esterno, messaggi e stack attraversano i sanitizzatori LogBook; `sendDefaultPii` resta disabilitato e il client non abilita Replay, tracing, logging o metriche.
 
-La retention prevista usa il timestamp Firestore `expireAt`: 30 giorni da `lastSeen` per `telemetry_errors` e 30 giorni da `timestamp` per `telemetry_events` / `telemetry_anomalies`. Le Rules richiedono `expireAt` sulle nuove scritture telemetriche: un client obsoleto che lo omette deve fallire soltanto sul canale telemetrico best-effort, senza creare nuovi documenti non soggetti a retention. La cancellazione viene eseguita dal maintenance cron server-side attraverso Firebase Admin, con scansione paginata degli utenti e cancellazione bounded dei documenti scaduti. **MUST:** il cron deve restare protetto da `CRON_SECRET`, rispettare il budget temporale e mantenere un cursore server-only per riprendere in sicurezza una sweep incompleta.
+Configurazione client/build:
+
+- `VITE_SENTRY_DSN`: DSN pubblico del progetto Sentry, incluso nel bundle Production;
+- `SENTRY_AUTH_TOKEN`: segreto build-only con scope CI per upload source map/release;
+- `SENTRY_ORG` e `SENTRY_PROJECT`: identificatori build-time;
+- `VERCEL_GIT_COMMIT_SHA`: release Sentry e SHA canonico della build Production.
+
+**MUST:** `SENTRY_AUTH_TOKEN` resta server/build-only, senza prefisso `VITE_`, e non deve comparire in bundle, log, Markdown o fixture. Le source map Production vengono caricate a Sentry e rimosse dagli asset pubblici dopo l'upload.
+
+Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono **legacy**: il client corrente non vi scrive nuova telemetria, ma Security Rules, account deletion e maintenance cron restano operativi per client PWA precedenti e documenti già esistenti. Le Rules continuano a richiedere ownership, payload bounded e `expireAt`; la retention legacy nominale resta 30 giorni. Ritirare questi boundary richiede prima evidenza che i client vecchi non possano più produrre dati e che il dataset residuo sia stato smaltito.
 
 ### Metadati `_sync`
 
