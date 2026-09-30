@@ -27,7 +27,6 @@ dist-ssr
 .env.*
 !.env.example
 !.env.test
-!.env.production
 
 # Firebase Admin Service Account (NEVER commit this!)
 service-account.json
