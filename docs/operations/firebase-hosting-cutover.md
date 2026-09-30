@@ -60,6 +60,7 @@ Finché il vecchio origin serve da bridge:
 
 - mantenere deploy da `main` soltanto;
 - impostare source/target migration env sul vecchio build;
+- impostare preferibilmente anche `VITE_PUBLIC_ORIGIN` sul vecchio origin; se manca, i metadati SEO del bridge usano il `VERCEL_PROJECT_PRODUCTION_URL` fornito da Vercel invece di generare URL non validi;
 - mantenere le vecchie credenziali Admin/cron server-only finché gli adapter Vercel sono necessari;
 - non riattivare Analytics/Speed Insights;
 - mantenere CSP compatibile con Firebase/Cloud Functions/Sentry.

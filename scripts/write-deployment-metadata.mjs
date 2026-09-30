@@ -7,7 +7,11 @@ function normalizedOrigin(raw) {
   return parsed.origin;
 }
 
-const origin = normalizedOrigin(process.env.VITE_PUBLIC_ORIGIN);
+const configuredOrigin = process.env.VITE_PUBLIC_ORIGIN?.trim();
+const vercelProductionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+const origin = normalizedOrigin(
+  configuredOrigin || (vercelProductionHost ? `https://${vercelProductionHost}` : undefined),
+);
 await mkdir('dist', { recursive: true });
 await writeFile('dist/robots.txt', `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, 'utf8');
 await writeFile(

@@ -11,6 +11,7 @@ const functionsLock = existsSync(functionsLockPath)
 const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
+const deploymentMetadata = readFileSync('scripts/write-deployment-metadata.mjs', 'utf8');
 
 const functionConfig = Array.isArray(firebase.functions) ? firebase.functions[0] : firebase.functions;
 if (firebase.firestore?.rules !== 'firestore.rules') failures.push('Firestore Rules configuration must be preserved.');
@@ -84,6 +85,7 @@ if (functionIndex.includes('CRON_SECRET')) failures.push('Scheduled Firebase mai
 
 if (!adminBootstrap.includes('return initializeApp();')) failures.push('Firebase runtime must support Application Default Credentials.');
 if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must be provider-neutral/configurable.');
+if (!deploymentMetadata.includes('VERCEL_PROJECT_PRODUCTION_URL')) failures.push('Legacy Vercel bridge build must retain a production-origin fallback for deployment metadata until cutover.');
 if (packageJson.dependencies?.['@vercel/analytics'] || packageJson.dependencies?.['@vercel/speed-insights']) {
   failures.push('Vercel Analytics/Speed Insights must not remain runtime dependencies.');
 }
