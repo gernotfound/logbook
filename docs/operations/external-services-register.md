@@ -203,7 +203,11 @@ Audit repository 2026-09-30:
 - Vercel è il solo hosting Production;
 - il vecchio test auto-contenuto di base path dinamico `/logbook/` è stato rimosso perché non esercitava la configurazione reale; il contratto PWA corrente verifica `start_url` e `scope` alla radice `/`.
 
-Pulizia esterna ancora richiesta: rimuovere il vecchio origin/referrer GitHub Pages dalle allowlist Google/Firebase segnalate sopra.
+Pulizia esterna ancora richiesta:
+- rimuovere il vecchio dominio GitHub Pages da **Firebase Authentication → Authorized domains**;
+- rimuovere il vecchio referrer GitHub Pages dalle restrizioni della **Google API Browser key**;
+- il Web OAuth client descritto dal product owner non riportava GitHub Pages, quindi non è richiesto rimuoverlo da quella lista salvo drift successivo;
+- **VERIFY-LIVE:** controllare anche i domini autorizzati della Web key reCAPTCHA Enterprise/Fraud Defense, perché il relativo elenco non è stato fornito e non può essere dedotto dal repository.
 
 ## Checklist annuale
 
