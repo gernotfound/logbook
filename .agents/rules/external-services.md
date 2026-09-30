@@ -1,77 +1,77 @@
-# External services and off-repository configuration
+# Servizi esterni e configurazione fuori repository
 
-This rule governs external systems whose effective configuration is not fully represented by the Git repository.
+Questa regola disciplina i sistemi esterni la cui configurazione effettiva non è rappresentata integralmente dal repository Git.
 
-The stable human-readable decision register is `docs/operations/external-services-register.md`.
+Il registro decisionale stabile e leggibile anche fuori dal codice è `docs/operations/external-services-register.md`.
 
-## Source of truth
+## Fonte di verità
 
-- **MUST:** repository code/configuration and external provider state are separate sources of truth. Do not infer live provider settings from repository files alone.
-- **MUST:** before changing an external integration, verify the live state in the competent system when access is available: GitHub, Vercel, Firebase/Google Cloud, Sentry, Snyk or Google Search Console.
-- **MUST:** when a material external setting changes, update the external-services register in the same task or explicitly record why it cannot yet be updated.
-- **MUST:** distinguish `ACTIVE`, `LEGACY`, `OPTIONAL`, `EXTERNAL-ONLY` and `VERIFY-LIVE` states. A setting reported historically is not proof of current runtime state.
+- **MUST:** codice/config repository e stato del provider esterno sono fonti di verità separate. Non dedurre la configurazione live dal solo repository.
+- **MUST:** prima di cambiare un'integrazione esterna, verificare quando possibile lo stato live nel sistema competente: GitHub, Vercel, Firebase/Google Cloud, Sentry, Snyk o Google Search Console.
+- **MUST:** quando cambia materialmente un'impostazione esterna, aggiornare nello stesso task il registro dei servizi oppure indicare esplicitamente perché non può ancora essere aggiornato.
+- **MUST:** distinguere gli stati `ACTIVE`, `LEGACY`, `OPTIONAL`, `EXTERNAL-ONLY` e `VERIFY-LIVE`. Un'impostazione riportata storicamente non prova lo stato runtime corrente.
 
-## Public-repository privacy boundary
+## Boundary privacy del repository pubblico
 
-The repository is public.
+Il repository è pubblico.
 
-- **MUST NOT:** commit secret values, auth tokens, private keys, service-account credentials, personal email addresses, billing/account identifiers, local workstation usernames or personal filesystem paths.
-- **MUST:** document environment-variable **names and purpose**, not secret values.
-- **SHOULD:** avoid duplicating public client identifiers/site keys in documentation when the name/role is sufficient.
-- **MUST:** examples and test fixtures use synthetic identities and filesystem paths.
-- **MUST:** if a private value is exposed, rotate/revoke it at the provider and scrub the current repository state where practical; deleting a chat/message or a later commit is not a substitute for rotation.
+- **MUST NOT:** committare valori segreti, auth token, private key, credenziali service account, email personali, identificativi di fatturazione/account, username della workstation o path filesystem personali.
+- **MUST:** documentare nomi e scopo delle environment variable, non i valori segreti.
+- **SHOULD:** evitare di duplicare nella documentazione identificativi/site key client pubblici quando nome e ruolo sono sufficienti.
+- **MUST:** esempi e fixture di test usano identità e path sintetici.
+- **MUST:** se un valore privato viene esposto, ruotarlo/revocarlo presso il provider e ripulire lo stato repository corrente dove praticabile; cancellare un messaggio o aggiungere un commit successivo non sostituisce la rotazione.
 
-## Retirement and allowlists
+## Ritiro servizi e allowlist
 
-- **MUST:** retired deployment origins/domains are removed from application configuration and external allowlists when they are no longer required.
-- **MUST:** do not keep an old origin authorized merely for historical compatibility unless a real runtime still depends on it.
-- **MUST:** before deleting a generic portability feature, prove that it is specific to the retired provider. Generic base-path/subpath support is not automatically legacy deployment code.
-- **VERIFY:** API-key referrer restrictions, OAuth origins/redirects, Firebase Auth authorized domains, reCAPTCHA/Fraud Defense domains and Search Console properties are external state.
+- **MUST:** origin e domini di deployment ritirati vengono rimossi dalla configurazione applicativa e dalle allowlist esterne quando non sono più necessari.
+- **MUST:** non mantenere autorizzato un vecchio origin per sola compatibilità storica se nessun runtime reale lo usa.
+- **MUST:** prima di eliminare una funzione generica di portabilità, dimostrare che sia specifica del provider ritirato. Il supporto generico a base path/subpath non è automaticamente codice legacy di deployment.
+- **VERIFY:** restrizioni referrer API key, origin/redirect OAuth, domini autorizzati Firebase Auth, domini reCAPTCHA/Fraud Defense e proprietà Search Console sono stato esterno.
 
-## Provider boundaries
+## Boundary dei provider
 
 ### Firebase / Google Cloud
 
-Firebase Authentication, Firestore, Firebase Admin and App Check are separate boundaries even when they share one Google Cloud project.
+Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud.
 
-- Follow `.agents/rules/firebase-config.md` for client/server env contracts, App Check and Rules.
-- Google Cloud may present reCAPTCHA Enterprise under the broader Fraud Defense product. LogBook currently uses the reCAPTCHA Enterprise provider through Firebase App Check; do not claim that Account defense, SMS defense, transaction defense or direct Fraud Defense assessment APIs are active without live evidence.
-- Browser API-key restrictions and OAuth client configuration are external security controls and must be reviewed when the canonical deployment origin changes.
+- Seguire `.agents/rules/firebase-config.md` per contratti env client/server, App Check e Rules.
+- Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. LogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
+- Le restrizioni Browser API key e la configurazione OAuth sono controlli di sicurezza esterni e devono essere riesaminati quando cambia l'origin canonico di deployment.
 
 ### Vercel
 
-- Vercel is the Production hosting/runtime boundary and owns Production environment variables, Functions and cron execution.
-- `main` remains the only deployment-enabled branch unless the repository contract is deliberately changed.
-- Server-only credentials must never use a `VITE_` prefix.
-- A successful Vercel deployment does not prove GitHub CI, and CI success does not prove the Production deployment.
+- Vercel è il boundary di hosting/runtime Production e contiene env Production, Functions e cron.
+- `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
+- Le credenziali server-only non devono mai avere prefisso `VITE_`.
+- Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
 
 ### GitHub / CodeQL / Snyk
 
-- GitHub is the repository, PR/ruleset and canonical CI source of truth.
-- CodeQL is part of `Canonical Verification`; Snyk is supplementary and must not become the only blocking SAST control.
-- Rulesets and required checks are external GitHub state: verify them directly before changing check names or merge behavior.
+- GitHub è la fonte di verità per repository, PR/ruleset e CI canonica.
+- CodeQL fa parte di `Canonical Verification`; Snyk è supplementare e non deve diventare l'unico controllo SAST bloccante.
+- Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
 
 ### Sentry
 
-- Sentry is Error Monitoring only unless a later product decision explicitly expands scope.
-- Do not enable Session Replay, tracing, logging or Application Metrics by accident while following onboarding prompts.
-- Sentry auth tokens are build-only secrets; the browser DSN is public runtime configuration but should not be duplicated unnecessarily.
-- Follow `docs/telemetry-sentry-guide.md` for payload minimization and source-map handling.
+- Sentry resta Error Monitoring soltanto, salvo futura decisione esplicita di prodotto.
+- Non attivare accidentalmente Session Replay, tracing, logging o Application Metrics seguendo wizard/onboarding.
+- I token auth Sentry sono segreti build-only; il DSN browser è configurazione runtime pubblica ma non va duplicato inutilmente.
+- Seguire `docs/telemetry-sentry-guide.md` per minimizzazione payload e source map.
 
 ### Google Search Console
 
-- Search Console is an indexing/verification system, not an application runtime dependency.
-- Keep the canonical Production URL, verification mechanism, `robots.txt` and `sitemap.xml` coherent.
-- Do not remove verification files/meta tags merely because indexing already succeeded; removal can invalidate future ownership checks.
+- Search Console è un sistema di verifica/indicizzazione, non una dipendenza runtime dell'app.
+- Mantenere coerenti URL Production canonico, metodo di verifica, `robots.txt` e `sitemap.xml`.
+- Non rimuovere file/meta di verifica solo perché l'indicizzazione è già riuscita: la proprietà potrebbe dover essere riverificata in futuro.
 
-## Required review when changing providers
+## Review richiesta quando cambia un provider
 
-Before replacing, removing or materially reconfiguring an external service:
+Prima di sostituire, rimuovere o riconfigurare materialmente un servizio esterno:
 
-1. identify current callers and runtime dependency;
-2. verify live provider configuration;
-3. identify data/privacy/security impact;
-4. identify quotas/free-tier assumptions and failure behavior;
-5. update code/config/tests;
-6. update this rule if the invariant changes;
-7. update `docs/operations/external-services-register.md` with the reason for the decision and verification date.
+1. identificare chiamanti e dipendenza runtime correnti;
+2. verificare la configurazione live del provider;
+3. identificare impatto dati/privacy/sicurezza;
+4. identificare assunzioni su quota/free tier e comportamento in failure;
+5. aggiornare codice/config/test;
+6. aggiornare questa regola se cambia un invariante;
+7. aggiornare `docs/operations/external-services-register.md` con motivo della decisione e data di verifica.
