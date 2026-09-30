@@ -463,7 +463,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
         lastSeen: Date.now(),
       };
 
-      const result = await telemetryHub.dispatchErrorToFirestore(payload);
+      const result = await telemetryHub.dispatchErrorExternally(payload);
       expect(result).toBe(false);
       expect(mockSetDoc).not.toHaveBeenCalled();
     });
@@ -488,7 +488,7 @@ describe('Telemetry Sanitizer & Telemetry Hub Unit & Integration Suite', () => {
         lastSeen: Date.now(),
       };
 
-      const result = await telemetryHub.dispatchErrorToFirestore(payload);
+      const result = await telemetryHub.dispatchErrorExternally(payload);
       expect(result).toBe(false);
     });
 
