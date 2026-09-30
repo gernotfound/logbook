@@ -119,7 +119,10 @@ describe('pre-session readiness contract', () => {
 
     it('keeps post-session answers as a local draft until Salva e termina', async () => {
         const originalDispatch = useAppStore.getState().dispatchDomainOperation;
-        const dispatchDomainOperation = vi.fn(async () => ({ ok: true, status: 'synced' as const }));
+        const dispatchDomainOperation = vi.fn(async (operation: unknown) => {
+            void operation;
+            return { ok: true, status: 'synced' as const };
+        });
         const active: WorkoutSession = {
             id: 'post-session-draft',
             date: '2026-09-24',
