@@ -177,7 +177,7 @@ describe('Unified Telemetry Hub E2E Suite — Tier 5', () => {
 
         // First item succeeds, subsequent items fail due to network drop
         mockSetDoc
-          .mockResolvedValueOnce(undefined as any)
+          .mockResolvedValueOnce(true)
           .mockRejectedValue(new Error('Network drop mid-flush'));
 
         await telemetryHub.flushQueue();
