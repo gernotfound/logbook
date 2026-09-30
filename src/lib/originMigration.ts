@@ -326,11 +326,9 @@ export function skipOriginMigration(): void {
 }
 
 export function originMigrationPendingUid(): string | null {
-  try {
-    return readBrowserValueStrict(PENDING_UID_KEY);
-  } catch {
-    return null;
-  }
+  // This marker is an ownership/lifecycle gate. Unreadable storage must not be
+  // mistaken for an absent pending migration.
+  return readBrowserValueStrict(PENDING_UID_KEY);
 }
 
 export function clearOriginMigrationPendingUid(uid: string): void {

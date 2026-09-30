@@ -95,6 +95,23 @@ describe('cross-origin migration install boundary', () => {
     expect(localStorage.getItem('logbook_is_guest')).toBeNull();
   });
 
+  it('fails closed when the pending account migration marker cannot be read', async () => {
+    const originalGetItem = Storage.prototype.getItem;
+    const readSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (key: string) {
+      if (key === 'logbook_origin_migration_pending_uid_v1') {
+        throw new DOMException('storage blocked', 'SecurityError');
+      }
+      return originalGetItem.call(this, key);
+    });
+
+    try {
+      const migration = await import('../src/lib/originMigration');
+      expect(() => migration.originMigrationPendingUid()).toThrow('Browser storage read failed');
+    } finally {
+      readSpy.mockRestore();
+    }
+  });
+
   it('fences a partial cross-storage install, blocks skip, and completes through an idempotent retry', async () => {
     const migration = await import('../src/lib/originMigration');
     const originalSetItem = localStorage.setItem;

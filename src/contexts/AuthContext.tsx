@@ -101,7 +101,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSaveError,
         });
 
-        const transferredUid = originMigrationPendingUid();
+        let transferredUid: string | null;
+        try {
+            transferredUid = originMigrationPendingUid();
+        } catch (error) {
+            // The data load may already be usable, but an unreadable lifecycle
+            // marker must never be cleared or interpreted as absent.
+            console.warn('Stato trasferimento origine non leggibile; marker conservato:', error);
+            return result;
+        }
         const sameAuthenticatedOwner = () => isCurrentSession(session)
             && auth.currentUser?.uid === user.uid
             && !isGuestRef.current
@@ -270,7 +278,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (user) {
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
-                const transferredUid = originMigrationPendingUid();
+                let transferredUid: string | null;
+                try {
+                    transferredUid = originMigrationPendingUid();
+                } catch (error) {
+                    console.error('Stato trasferimento origine non leggibile durante il login:', error);
+                    setGuestMigrationStatus('failed');
+                    setSaveError('Archivio locale non disponibile: non posso verificare in sicurezza a quale account appartengono i dati trasferiti. Riapri LogBook o riabilita lo storage del browser e riprova.');
+                    return;
+                }
 
                 if (transferredUid && transferredUid !== user.uid) {
                     setGuestMigrationStatus('idle');
