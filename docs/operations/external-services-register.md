@@ -1,6 +1,6 @@
 # Registro servizi esterni LogBook
 
-> Stato: registro operativo stabile. Ultimo consolidamento: 2026-09-30.
+> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-01.
 >
 > Questo file documenta **perché** esistono le integrazioni e quali impostazioni devono essere preservate. Non è un inventario di segreti e non sostituisce la verifica live nelle console dei provider.
 
@@ -23,11 +23,12 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase Realtime Database | NON USATO DAL RUNTIME | `databaseURL` resta nel config Firebase Web, ma il modulo RTDB non è importato | codice + console VERIFY-LIVE |
 | Firebase Storage | NON USATO DAL RUNTIME | `storageBucket` resta nel config Firebase Web, ma il modulo Storage non è importato | codice + console VERIFY-LIVE |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | `messagingSenderId` resta nel config Firebase Web, ma il modulo Messaging non è importato | codice + console VERIFY-LIVE |
-| Firebase Hosting | NON USATO DAL RUNTIME / VERIFY-LIVE | non è l'hosting Production corrente | `firebase.json` + Firebase console |
+| Firebase Hosting | EXTERNAL-ONLY / PREPARED TARGET | sito `thelogbook.web.app` preparato; non è ancora la Production corrente | Firebase console + futuro config Hosting |
 | Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Hosting / Functions / Cron | ACTIVE | Production PWA, API trusted e cron | Vercel + `vercel.json` |
-| Vercel Analytics / Speed Insights | OPTIONAL | analytics/performance con opt-in | Vercel + consenso client |
+| Vercel Analytics / Speed Insights | OPTIONAL / CURRENT | analytics/performance con opt-in nel runtime `main` corrente | Vercel + consenso client |
+| Google Analytics / GA4 | EXTERNAL-ONLY / PREPARED TARGET | stream Web preparato per `thelogbook.web.app`; non è inizializzato dal runtime `main` corrente | Google Analytics + Firebase |
 | Sentry | ACTIVE | error monitoring tecnico Production | Sentry + build Vercel |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
@@ -35,27 +36,50 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 
 ## Firebase Hosting
 
-Firebase Hosting **non è il provider di hosting del runtime corrente di LogBook**. Nel repository `firebase.json` configura soltanto le Firestore Rules e non contiene una sezione `hosting`; la Production corrente è Vercel. Questo non prova che nella console Firebase non esista un sito Hosting storico: quello stato resta `VERIFY-LIVE` finché la console non viene controllata.
+Firebase Hosting **non è ancora il provider di hosting del runtime corrente di LogBook**: la Production corrente resta Vercel finché non avviene un cutover esplicito e verificato.
 
-I domini Firebase predefiniti possono comunque essere presenti nelle configurazioni Auth/OAuth perché appartengono al flusso Firebase Authentication: la loro presenza non dimostra che Firebase Hosting sia attivo.
+Preparazione live verificata il 2026-10-01:
+
+- è stato creato e scelto come hostname target `thelogbook.web.app`;
+- il nome pubblico scelto per il progetto/servizio è **TheLogBook**;
+- il progetto Firebase deve restare sul piano **Spark**: non è autorizzato il passaggio a Blaze;
+- di conseguenza il target futuro non deve dipendere da Cloud Functions for Firebase o Scheduled Functions che richiedano Blaze;
+- Vercel può restare come boundary serverless gratuito per Functions/Cron mentre il frontend migra a Firebase Hosting.
+
+Questa preparazione esterna non equivale a un deploy: `main` continua a descrivere e servire la Production Vercel corrente finché codice, CI e cutover non vengono aggiornati con un task dedicato.
+
+I domini Firebase predefiniti possono comunque essere presenti nelle configurazioni Auth/OAuth perché appartengono al flusso Firebase Authentication; la loro presenza non dimostra da sola che Firebase Hosting sia Production.
 
 ## Firebase Authentication e OAuth
 
-Firebase Authentication è il provider identità del prodotto. LogBook supporta autenticazione Google e credenziali email/password. Il dominio di autenticazione Firebase resta parte del redirect OAuth, mentre l'applicazione Production è servita da Vercel.
+Firebase Authentication è il provider identità del prodotto. LogBook supporta autenticazione Google e credenziali email/password.
 
-In Firebase Authentication → Settings devono risultare autorizzati soltanto i domini realmente necessari: localhost per sviluppo, i domini Firebase predefiniti necessari al flusso Auth e il dominio canonico Production Vercel.
+Stato live verificato il 2026-10-01 durante la preparazione del futuro origin Firebase Hosting:
 
-Il precedente dominio GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso da Firebase Authentication → Authorized domains; non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
+- Firebase Authentication → Authorized domains contiene `localhost`, i domini Firebase predefiniti, il dominio Production Vercel corrente e il nuovo `thelogbook.web.app`;
+- il Web OAuth client auto-creato mantiene le origini localhost e Firebase già necessarie;
+- è stata aggiunta l'origine JavaScript `https://thelogbook.web.app`;
+- è stato aggiunto il redirect `https://thelogbook.web.app/__/auth/handler`;
+- i valori esistenti necessari alla Production Vercel/Firebase non sono stati rimossi.
 
-Nel Google OAuth Web Client auto-creato, le origini localhost servono lo sviluppo locale, l'origine Firebase Auth serve il flusso gestito dal provider e il redirect Firebase `__/auth/handler` è il callback OAuth gestito.
+Il precedente dominio GitHub Pages è **ritirato** dal 2026-09-30 e non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
+
+Il vecchio origin Vercel dovrà essere rimosso dalle allowlist soltanto dopo un cutover Firebase verificato e solo se non resta necessario per il backend/serverless.
 
 ## Google API Browser key
 
 La Firebase Web API key è configurazione client pubblica, non una credenziale Admin. La sua sicurezza dipende anche dalle restrizioni lato Google Cloud.
 
-Le restrizioni HTTP referrer devono seguire i soli frontend realmente autorizzati. Il dominio Vercel Production e l'origine Firebase necessaria al flusso Auth sono intenzionali.
+Stato live verificato il 2026-10-01:
 
-Il vecchio referrer GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso dalle restrizioni della Browser API key. Il dominio Production Vercel e l'origine Firebase necessaria al flusso Auth restano le allowlist intenzionali.
+- la chiave browser auto-creata da Firebase è limitata a **Siti web**;
+- i referrer osservati includono la Production Vercel corrente, l'origine Firebase necessaria al flusso Auth e `https://thelogbook.web.app/*`;
+- il nuovo origin Firebase Hosting è quindi già autorizzato senza aprire la chiave a qualunque sito;
+- le restrizioni API risultano già abilitate con un insieme esplicito di API; l'elenco non è stato ristretto ulteriormente durante questa preparazione per evitare di rimuovere dipendenze Firebase necessarie senza test runtime dedicati.
+
+Il vecchio referrer GitHub Pages è **ritirato** dal 2026-09-30.
+
+Il referrer Vercel deve restare autorizzato finché la Production corrente o il futuro backend serverless lo richiedono; un'eventuale rimozione va fatta solo dopo verifica live del nuovo assetto.
 
 ## Firestore
 
@@ -86,16 +110,18 @@ LogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere
 
 Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per LogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
 
-Verifica live del 2026-09-30: la Web App LogBook è registrata in Firebase App Check e la console la presenta con provider Fraud Defense/reCAPTCHA Enterprise. Cloud Firestore e Authentication mostravano 100% richieste verificate e 0% non verificate in modalità monitoraggio; l'enforcement non è stato attivato in questo task.
+Verifica live aggiornata il 2026-10-01:
 
-Nella chiave Google Cloud "Logbook Vercel":
-- la verifica dominio è attiva;
-- l'unico dominio configurato osservato è il dominio Production Vercel;
-- Bot/Fraud Defense è attivo con soglia di rischio 0,5;
-- Account defense non è configurato;
-- SMS defense non è configurato;
-- Transaction defense non è usato dal runtime LogBook e mostrava zero assessment;
-- gli assessment log risultavano disabilitati.
+- la Web App LogBook è registrata in Firebase App Check con provider Fraud Defense/reCAPTCHA Enterprise;
+- Cloud Firestore e Authentication mostravano 100% richieste verificate e 0% non verificate in modalità monitoraggio;
+- l'enforcement non è stato attivato durante questa preparazione;
+- la chiave Web è stata rinominata da `Logbook Vercel` a **TheLogBook Web** senza cambiare l'identità/site key;
+- la verifica dominio resta attiva;
+- i domini autorizzati osservati sono `logbook-gnf.vercel.app` e `thelogbook.web.app`;
+- AMP resta disabilitato;
+- il dominio Vercel è mantenuto finché è necessario al runtime corrente e verrà rivalutato dopo il cutover.
+
+Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime LogBook salvo futura decisione esplicita e verifica live.
 
 L'ID/site key è configurazione client pubblica e non viene duplicato in questo registro; la Secret key reCAPTCHA non deve entrare nel browser né in env `VITE_*`.
 
@@ -138,6 +164,33 @@ Inventario fornito dal product owner il 2026-09-30, da verificare live prima di 
 | `VITE_FIREBASE_MEASUREMENT_ID` | RIMOSSA | Firebase Analytics non usato |
 | `VITE_RECAPTCHA_V3_SITE_KEY` | RIMOSSA | alias legacy ritirato dopo cutover Enterprise |
 
+
+
+## Google Analytics / GA4 — preparazione target Firebase Hosting
+
+Il runtime `main` corrente non inizializza Firebase Analytics e continua a usare Vercel Analytics/Speed Insights secondo il consenso client esistente. Il 2026-10-01 è stata però preparata la configurazione esterna GA4 destinata al futuro frontend Firebase Hosting.
+
+Stato live verificato:
+
+- proprietà/account e Web data stream rinominati **TheLogBook**;
+- URL del Web data stream impostato su `https://thelogbook.web.app`;
+- esiste un Measurement ID GA4 `G-...`, ma il valore non viene duplicato in questo registro;
+- **Misurazione avanzata: OFF**;
+- **Google Signals: OFF**;
+- raccolta dati granulari di posizione/dispositivo: **OFF**;
+- personalizzazione annunci: **OFF**;
+- raccolta dati forniti dagli utenti / User-ID: non attivata;
+- integrazione dei segmenti di pubblico migliorata Firebase: **OFF**;
+- collegamenti prodotto: soltanto Firebase; nessun collegamento Ads osservato;
+- conservazione dati: **2 mesi**;
+- reset della retention in caso di nuova attività: **OFF**;
+- condivisione dati account: Prodotti e servizi Google **OFF**, modellazione/insight **OFF**, Assistenza tecnica **OFF**, Consigli per l'attività **OFF**;
+- paese dell'attività: **Italia**;
+- fuso orario report: **Europe/Rome / Italia**;
+- valuta: **EUR**;
+- filtro `Internal Traffic`: stato **Test**; nessuna regola di traffico interno/IP è stata configurata.
+
+Questa configurazione è deliberatamente privacy-minimal e non autorizza da sola la raccolta nel runtime corrente. L'eventuale passaggio da Vercel Analytics a GA4 richiede ancora modifica applicativa, consenso provider-specific, documentazione privacy coerente, test e cutover verificato.
 
 ## Vercel Analytics / Speed Insights
 
