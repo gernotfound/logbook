@@ -8,7 +8,7 @@
 
 Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di LogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti e documentazione B2B.
 
-La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
+La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, GitHub, Sentry e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template. Vercel è soltanto il provider storico da ritirare al cutover.
 
 ## Assunzioni correnti del pilot
 
@@ -16,7 +16,7 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 - La palestra rende LogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati LogBook degli utenti.
 - LogBook resta destinato a maggiorenni.
 - Google/Firebase Analytics non fa parte del prodotto.
-- Vercel Analytics e Speed Insights sono opzionali e disabilitati per default.
+- Vercel Analytics e Speed Insights sono ritirati; Google/Firebase Analytics non è introdotto.
 - La telemetria proprietaria è destinata a diagnostica, integrità e recovery, non a misurare il comportamento di allenamento o il funnel PWA.
 
 Queste assunzioni devono essere riconfermate nella documentazione firmata; se cambiano, vanno rivalutati ruoli privacy, contratti, informativa e DPIA.
