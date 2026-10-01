@@ -159,8 +159,6 @@ Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting 
 
 ## Vercel branch deployment policy
 
-## Vercel branch deployment policy
-
 `vercel.json` contiene il contratto repository corrente per Git deployment:
 
 - `main`: deployment abilitato;
