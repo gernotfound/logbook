@@ -94,6 +94,7 @@ if (!/timeoutSeconds:\s*3600/.test(functionIndex)) failures.push('HTTP deletion 
 if (!/invoker:\s*'public'/.test(functionIndex)) failures.push('Direct browser account-deletion Function must explicitly allow public invocation; Firebase Auth and App Check remain application-layer gates.');
 if (!/export const accountDeletionMaintenance = onSchedule/.test(functionIndex)) failures.push('Missing Firebase scheduled maintenance function.');
 if (!/timeoutSeconds:\s*1800/.test(functionIndex)) failures.push('Scheduled maintenance timeout must be explicit.');
+if (!/maxInstances:\s*1,[\s\S]*?concurrency:\s*1,[\s\S]*?retryCount:\s*3/.test(functionIndex)) failures.push('Scheduled maintenance must serialize invocations.');
 if (!/schedule:\s*'0 3 \* \* \*'/.test(functionIndex) || !/timeZone:\s*'Etc\/UTC'/.test(functionIndex)) {
   failures.push('Scheduled maintenance must run daily at 03:00 UTC.');
 }
