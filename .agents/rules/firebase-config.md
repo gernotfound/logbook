@@ -53,7 +53,7 @@ Vercel Analytics e Speed Insights sono ritirati nel target Firebase; `src/lib/an
 
 ### Target Firebase Cloud Functions v2
 
-`functions/src/accountDeletion/firebaseAdmin.ts` inizializza Firebase Admin tramite `initializeApp()` senza credenziali esportate: il runtime usa Application Default Credentials e i permessi IAM associati all'identità della Function.
+`functions/src/accountDeletion/firebaseAdmin.ts` è il bootstrap condiviso con l'adapter legacy, ma riconosce il runtime Firebase tramite la `FIREBASE_CONFIG` che Cloud Functions popola automaticamente e in quel caso forza `initializeApp()` senza credenziali esportate. Le eventuali `FIREBASE_ADMIN_*` legacy non possono quindi sostituire ADC nel runtime Firebase; i permessi derivano dall'identità IAM della Function.
 
 I soli parametri applicativi del runtime Functions sono non segreti:
 
@@ -64,7 +64,7 @@ Il deployment GitHub autentica Google Cloud tramite OIDC / Workload Identity Fed
 
 ### Adapter Vercel legacy durante la migrazione
 
-`server/accountDeletion/firebaseAdmin.ts` continua temporaneamente a richiedere:
+I moduli `server/accountDeletion/*` delegano al core condiviso sotto `functions/src/accountDeletion/*`. Fuori dal runtime Firebase, il bootstrap Admin mantiene temporaneamente il fallback certificate-based richiesto da Vercel:
 
 - `FIREBASE_ADMIN_PROJECT_ID`;
 - `FIREBASE_ADMIN_CLIENT_EMAIL`;
