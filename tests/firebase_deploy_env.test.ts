@@ -75,7 +75,7 @@ describe('Firebase Production deploy environment guard', () => {
     })).toThrow();
   });
 
-  it('rejects widening the CORS allowlist beyond the migration source and canonical origin', () => {
+  it('rejects widening the CORS allowlist beyond the canonical origin', () => {
     expect(() => run({
       LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},https://unexpected.example`,
     })).toThrow();
