@@ -111,6 +111,8 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
 
             expect(hostingConfig).toContain('www.googletagmanager.com');
             expect(hostingConfig).toContain('*.google-analytics.com');
+            expect(hostingConfig).toContain('*.googleusercontent.com');
+            expect(hostingConfig).not.toContain("img-src 'self' data: blob: https://*;");
             expect(hostingConfig).not.toContain('g.doubleclick.net');
             expect(hostingConfig).not.toContain('googlesyndication.com');
             expect(hostingConfig).not.toContain('fonts.googleapis.com');
