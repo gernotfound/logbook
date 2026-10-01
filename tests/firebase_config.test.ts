@@ -8,6 +8,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         'VITE_FIREBASE_API_KEY',
         'VITE_FIREBASE_AUTH_DOMAIN',
         'VITE_FIREBASE_PROJECT_ID',
+        'VITE_FIREBASE_FUNCTION_REGION',
         'VITE_FIREBASE_APP_ID',
         'VITE_FIREBASE_MEASUREMENT_ID'
     ] as const;
@@ -47,7 +48,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(fileContent).not.toMatch(/logbook-prod/);
         });
 
-        it('declares the five Firebase options used by LogBook', () => {
+        it('declares the Firebase runtime options used by LogBook', () => {
             const firebaseFilePath = path.resolve(__dirname, '../src/lib/firebase.ts');
             const fileContent = fs.readFileSync(firebaseFilePath, 'utf-8');
 
@@ -93,7 +94,9 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(firebaseSource).not.toContain('persistentLocalCache');
             expect(firebaseSource).not.toContain('persistentMultipleTabManager');
 
-            expect(analyticsSource).toContain("import('firebase/analytics')");
+            const analyticsSdkSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebaseAnalyticsSdk.ts'), 'utf-8');
+            expect(analyticsSdkSource).toContain("import('firebase/analytics')");
+            expect(analyticsSource).toContain('createRetryableLazyLoader');
             expect(analyticsSource).toContain('setConsent');
             expect(analyticsSource).toContain('setAnalyticsCollectionEnabled');
             expect(analyticsSource).toContain('allow_google_signals: false');
@@ -161,7 +164,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_FUNCTION_REGION, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID/
             );
         });
 

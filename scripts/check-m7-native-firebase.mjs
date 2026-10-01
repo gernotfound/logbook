@@ -15,6 +15,7 @@ const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
 const firebaseClient = readFileSync('src/lib/firebase.ts', 'utf8');
 const appSource = readFileSync('src/App.tsx', 'utf8');
 const analyticsSource = readFileSync('src/lib/firebaseAnalytics.ts', 'utf8');
+const analyticsSdkSource = readFileSync('src/lib/firebaseAnalyticsSdk.ts', 'utf8');
 const analyticsConsentSource = readFileSync('src/lib/analyticsConsent.ts', 'utf8');
 const viteConfig = readFileSync('vite.config.ts', 'utf8');
 const serviceWorkerSource = readFileSync('src/sw.ts', 'utf8');
@@ -148,7 +149,9 @@ for (const forbidden of ['credential: cert(', 'FIREBASE_ADMIN_PROJECT_ID', 'FIRE
 if (!firebaseClient.includes('VITE_FIREBASE_MEASUREMENT_ID') || !firebaseClient.includes('measurementId:')) {
   failures.push('Firebase Web config must bind the explicit GA4 measurement ID.');
 }
-if (!analyticsSource.includes("import('firebase/analytics')")) failures.push('Firebase Analytics must remain lazy-loaded behind explicit consent.');
+if (!analyticsSdkSource.includes("import('firebase/analytics')") || !analyticsSource.includes('createRetryableLazyLoader')) {
+  failures.push('Firebase Analytics must remain retryable and lazy-loaded behind explicit consent.');
+}
 if (!analyticsSource.includes('setAnalyticsCollectionEnabled') || !analyticsSource.includes('setConsent')) {
   failures.push('Firebase Analytics must implement explicit collection and Consent Mode controls.');
 }
@@ -222,20 +225,40 @@ if (functionsDeployIndex < 0 || hostingDeployIndex < 0 || functionsDeployIndex >
 }
 if (!firebaseProductionWorkflow.includes("node-version: '22'")) failures.push('Firebase Production must install/build Functions under Node.js 22.');
 if (!firebaseProductionWorkflow.includes('FIREBASE_FUNCTION_SERVICE_ACCOUNT')) failures.push('Firebase Production must provide the dedicated Functions runtime service account.');
+if (!firebaseProductionWorkflow.includes('VITE_FIREBASE_FUNCTION_REGION: ${{ vars.FIREBASE_FUNCTION_REGION }}')) {
+  failures.push('Firebase Production must bind the client Function region to the deploy region.');
+}
 if (!firebaseProductionWorkflow.includes('--only functions:accountDeletion,functions:accountDeletionMaintenance') || !firebaseProductionWorkflow.includes('--only hosting')) {
   failures.push('Firebase Production must deploy only the owned account-deletion Functions and Hosting separately.');
 }
 if (/--only\s+(?:hosting,functions|functions,hosting)/.test(firebaseProductionWorkflow)) {
   failures.push('Firebase Production must not collapse Functions and Hosting into one unordered deploy step.');
 }
+if (/npx\s+--yes/.test(firebaseProductionWorkflow)) failures.push('Privileged Firebase deploy must not download CLI code through npx.');
+for (const pinned of [
+  'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+  'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
+  'actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f',
+  'actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131',
+  'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093',
+]) {
+  if (!firebaseProductionWorkflow.includes(pinned)) failures.push(`Firebase Production action is not full-SHA pinned: ${pinned}`);
+}
+const prepareJob = firebaseProductionWorkflow.split(/^  deploy:/m)[0] ?? '';
+const deployJob = firebaseProductionWorkflow.split(/^  deploy:/m)[1] ?? '';
+if (prepareJob.includes('id-token: write')) failures.push('Firebase release preparation must not receive OIDC token-minting permission.');
+if (!deployJob.includes('id-token: write')) failures.push('Only the minimal Firebase deploy job may receive OIDC token-minting permission.');
+if (!firebaseProductionWorkflow.includes('Prepare exact-SHA release directory')
+  || !firebaseProductionWorkflow.includes('Verify artifact SHA binding')) {
+  failures.push('Firebase Production must freeze and verify an exact-SHA release artifact before privileged deployment.');
+}
+const afterFunctions = firebaseProductionWorkflow.slice(functionsDeployIndex, hostingDeployIndex);
+if (/Refusing stale|main advanced.*exit 1/i.test(afterFunctions)) {
+  failures.push('Firebase Production must not deliberately abort between Functions and Hosting after the first mutation.');
+}
 const sentrySecretReferences = firebaseProductionWorkflow.match(/SENTRY_AUTH_TOKEN:\s*\$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/g) ?? [];
-if (sentrySecretReferences.length !== 2) {
-  failures.push('SENTRY_AUTH_TOKEN must be scoped only to Firebase config validation and the Production build.');
-}
-const jobEnvBeforeSteps = firebaseProductionWorkflow.split(/^    steps:/m)[0] ?? '';
-if (jobEnvBeforeSteps.includes('SENTRY_AUTH_TOKEN')) {
-  failures.push('SENTRY_AUTH_TOKEN must not be exposed as a job-wide Firebase Production environment variable.');
-}
+if (sentrySecretReferences.length !== 2) failures.push('SENTRY_AUTH_TOKEN must be scoped only to Firebase config validation and the Production build.');
+
 
 for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing: ${output}`);

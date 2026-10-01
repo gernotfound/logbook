@@ -17,6 +17,7 @@ function env(overrides: Record<string, string> = {}) {
     VITE_FIREBASE_API_KEY: 'public-test-key',
     VITE_FIREBASE_AUTH_DOMAIN: 'thelogbook.web.app',
     VITE_FIREBASE_PROJECT_ID: project,
+    VITE_FIREBASE_FUNCTION_REGION: region,
     VITE_FIREBASE_APP_ID: '1:123:web:test',
     VITE_FIREBASE_MEASUREMENT_ID: 'G-TEST123456',
     VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'public-site-key',
@@ -62,6 +63,10 @@ describe('Firebase Production deploy environment guard', () => {
     ]) {
       expect(output).not.toContain(value);
     }
+  });
+
+  it('rejects a client Function region that differs from the deploy region', () => {
+    expect(() => run({ VITE_FIREBASE_FUNCTION_REGION: 'us-central1' })).toThrow();
   });
 
   it('rejects an invalid GA4 measurement ID', () => {
