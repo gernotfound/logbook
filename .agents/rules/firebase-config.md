@@ -47,7 +47,7 @@ La decisione di prodotto del 2026-10-01 sostituisce Vercel Analytics/Speed Insig
 
 - `src/lib/analyticsConsent.ts` usa la chiave provider-specific `logbook_google_analytics_consent_v1`, default `false`, sincronizzazione cross-tab e revoca fail-closed. La chiave legacy `logbook_analytics_consent` viene rimossa/ignorata e non autorizza Google Analytics.
 - `src/lib/firebaseAnalytics.ts` carica dinamicamente `firebase/analytics` soltanto in Production e soltanto dopo consenso persistito.
-- Prima dell'inizializzazione vengono impostati `analytics_storage: granted` e, sempre, `ad_storage`, `ad_user_data`, `ad_personalization: denied`.
+- Prima dell'inizializzazione vengono impostati `analytics_storage: granted` e, sempre, `ad_storage`, `ad_user_data`, `ad_personalization`, `functionality_storage`, `personalization_storage` e `security_storage: denied`; nessuna categoria Google non necessaria viene lasciata al default permissivo.
 - La configurazione mantiene `allow_google_signals: false` e `allow_ad_personalization_signals: false`.
 - La revoca chiama sia Consent Mode sia `setAnalyticsCollectionEnabled(..., false)`.
 - Il codice non usa `logEvent`, `setUserId` o `setUserProperties`: il target iniziale raccoglie soltanto misurazione standard GA4, senza eventi custom workout/PWA/salute e senza Firebase UID/email deliberatamente inviati.
