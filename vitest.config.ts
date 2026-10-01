@@ -30,6 +30,7 @@ export default defineConfig({
       '**/.agents/**',
       '**/tests/isolated/**',
       '**/tests/emulator/**',
+      '**/tests/firebase_functions_entrypoint.test.ts',
       '**/tests/fuzz/**',
       '**/tests/recovery/**',
       '**/tests/gc/**',
