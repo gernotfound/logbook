@@ -11,7 +11,7 @@ const appVersion = process.env.npm_package_version || '0.0.0-dev'
 const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || 'dev'
 const buildHash = buildSha.slice(0, 7)
 const sentryBuildEnabled =
-  process.env.VERCEL_ENV === 'production' &&
+  (process.env.VERCEL_ENV === 'production' || process.env.FIREBASE_HOSTING_DEPLOY === 'production') &&
   Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
 const buildTime = new Date().toISOString()
 
