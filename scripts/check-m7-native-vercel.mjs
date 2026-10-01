@@ -56,7 +56,7 @@ if (existsSync('dist/sw.js')) {
 
 if (existsSync('dist/index.html')) {
   const builtHtml = readFileSync('dist/index.html', 'utf8');
-  if (!builtHtml.includes('https://logbook-gnf.vercel.app/social-share.jpg?v=20260929-chef')) failures.push('built HTML must expose the revisioned social share card URL');
+  if (!builtHtml.includes('https://thelogbook.web.app/social-share.jpg?v=20260929-chef')) failures.push('built HTML must expose the revisioned social share card URL');
   if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
   if (!builtHtml.includes('apple-touch-icon.png?v=20260929-chef')) failures.push('built HTML must revision the Apple touch icon URL');
   if (!builtHtml.includes('favicon.png?v=20260929-chef')) failures.push('built HTML must revision the PNG favicon URL');
@@ -92,4 +92,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('M7 native Vercel/PWA contract OK: mobile standalone manifest, Vite/PWA baseline, SW precache, icons/scope, native Functions and daily recovery preserved.');
+console.log('M7 hybrid Firebase Hosting/Vercel backend contract OK: mobile standalone manifest, Vite/PWA baseline, SW precache, icons/scope, native Functions and daily recovery preserved.');
