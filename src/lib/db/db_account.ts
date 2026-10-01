@@ -62,7 +62,7 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
     if (failures.length) throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
 }
 
-const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || '').replace(/\/$/, '');
+const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
 
 function accountDeletionUrl(): string {
     if (!ACCOUNT_DELETION_API_ORIGIN) throw new Error('Backend cancellazione account non configurato.');
