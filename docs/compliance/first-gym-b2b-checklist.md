@@ -6,7 +6,7 @@
 
 - `[ ]` Production deriva da `main`.
 - `[ ]` Canonical Verification è verde sullo SHA effettivo di Production.
-- `[ ]` Vercel Production è READY sullo stesso stato.
+- `[ ]` Firebase Hosting e Cloud Functions Production risultano sullo stesso SHA verificato.
 - `[ ]` Smoke home/API pertinenti sono verdi.
 - `[ ]` Security Rules Firestore live corrispondono alla sorgente approvata.
 - `[ ]` App Check enforcement live è verificato sui servizi applicabili.
@@ -65,7 +65,7 @@ Qualunque variazione riapre almeno role decision, DPIA, Privacy Policy, Terms e 
 
 - Data: `[DATE]`
 - SHA Production: `[SHA]`
-- Deployment Vercel: `[DEPLOYMENT_ID]`
+- Deployment Firebase Hosting/Functions: `[DEPLOYMENT_EVIDENCE]`
 - CI run: `[RUN_ID]`
 - Versione documentazione legale: `[VERSION]`
 - Revisore privacy/legale: `[NAME/ROLE]`
