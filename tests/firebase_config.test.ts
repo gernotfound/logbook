@@ -8,8 +8,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         'VITE_FIREBASE_API_KEY',
         'VITE_FIREBASE_AUTH_DOMAIN',
         'VITE_FIREBASE_PROJECT_ID',
-        'VITE_FIREBASE_APP_ID',
-        'VITE_FIREBASE_MEASUREMENT_ID'
+        'VITE_FIREBASE_APP_ID'
     ] as const;
 
     beforeEach(() => {
@@ -47,7 +46,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(fileContent).not.toMatch(/logbook-prod/);
         });
 
-        it('declares all 5 required VITE_FIREBASE_* environment variables', () => {
+        it('declares all 4 required VITE_FIREBASE_* environment variables', () => {
             const firebaseFilePath = path.resolve(__dirname, '../src/lib/firebase.ts');
             const fileContent = fs.readFileSync(firebaseFilePath, 'utf-8');
 
@@ -112,7 +111,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
 
         it('throws descriptive error listing multiple missing environment variables', async () => {
             delete (import.meta.env as any).VITE_FIREBASE_AUTH_DOMAIN;
-            delete (import.meta.env as any).VITE_FIREBASE_MEASUREMENT_ID;
+            delete (import.meta.env as any).VITE_FIREBASE_AUTH_DOMAIN;
             import.meta.env.VITE_FIREBASE_APP_ID = '';
 
             await expect(async () => {
@@ -122,7 +121,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             );
         });
 
-        it('throws descriptive error listing all 5 variables when none are defined', async () => {
+        it('throws descriptive error listing all 4 variables when none are defined', async () => {
             for (const key of requiredEnvKeys) {
                 delete (import.meta.env as any)[key];
             }
@@ -130,7 +129,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID/
             );
         });
 
