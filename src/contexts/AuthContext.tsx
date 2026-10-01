@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
@@ -14,7 +14,6 @@ import { getResolvedDefaultUserData } from './auth/defaultUserData';
 import { loadAuthenticatedData } from './auth/loadAuthenticatedData';
 import { migrateGuestAccount } from './auth/migrateGuestAccount';
 import { replicateJournal } from '../lib/sync/replicateJournal';
-import { readLocal } from '../lib/sync/localRepository';
 import { captureSession, invalidateSession, isCurrentSession, userOwner } from '../lib/sync/session';
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../lib/db/db_core';
@@ -26,10 +25,6 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
-import {
-    clearOriginMigrationPendingUid,
-    originMigrationPendingUid,
-} from '../lib/originMigration';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -92,47 +87,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const loadData = useCallback(async (user: User) => {
-        let transferredUid: string | null;
-        try {
-            transferredUid = originMigrationPendingUid();
-        } catch (error) {
-            console.warn('Stato trasferimento origine non leggibile; caricamento account bloccato:', error);
-            setSaveError('Archivio locale non disponibile: non posso verificare in sicurezza a quale account appartengono i dati trasferiti. Riapri LogBook o riabilita lo storage del browser e riprova.');
-            return { cloudReconciled: false, localRecovered: false };
-        }
-        if (transferredUid && transferredUid !== user.uid) {
-            setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
-            return { cloudReconciled: false, localRecovered: false };
-        }
-
-        const session = captureSession();
-        const result = await loadAuthenticatedData({
+        await loadAuthenticatedData({
             user,
             isGuestActive: () => isGuestRef.current || isStoredGuest(),
             setUserData,
             setSyncing,
             setSaveError,
         });
-        const sameAuthenticatedOwner = () => isCurrentSession(session)
-            && auth.currentUser?.uid === user.uid
-            && !isGuestRef.current
-            && !isStoredGuest();
-
-        if (transferredUid === user.uid && result.cloudReconciled && sameAuthenticatedOwner()) {
-            try {
-                await useAppStore.getState().flushPendingSyncs();
-                if (!sameAuthenticatedOwner()) return result;
-                const envelope = await readLocal(userOwner(user.uid));
-                if (!sameAuthenticatedOwner()) return result;
-                if (envelope && envelope.pending.length === 0) {
-                    clearOriginMigrationPendingUid(user.uid);
-                }
-            } catch (error) {
-                console.warn('Riconciliazione dei dati trasferiti ancora pendente:', error);
-            }
-        }
-
-        return result;
     }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
@@ -275,41 +236,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
             if (user) tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+            setCurrentUser(user);
+            setLoading(false);
 
             if (user) {
-                let transferredUid: string | null;
-                try {
-                    transferredUid = originMigrationPendingUid();
-                } catch (error) {
-                    console.error('Stato trasferimento origine non leggibile durante il login:', error);
-                    setCurrentUser(null);
-                    setLoading(false);
-                    setGuestMigrationStatus('idle');
-                    setSaveError('Archivio locale non disponibile: non posso verificare in sicurezza a quale account appartengono i dati trasferiti. Riapri LogBook o riabilita lo storage del browser e riprova.');
-                    try {
-                        await signOut(auth);
-                    } catch (signOutError) {
-                        console.error('Impossibile chiudere la sessione dopo il blocco del trasferimento origine:', signOutError);
-                    }
-                    return;
-                }
-
-                if (transferredUid && transferredUid !== user.uid) {
-                    setCurrentUser(null);
-                    setLoading(false);
-                    setGuestMigrationStatus('idle');
-                    setSaveError('Sul dispositivo sono presenti dati trasferiti dal vecchio LogBook per un altro account. Accedi con lo stesso account usato sul vecchio indirizzo per recuperarli.');
-                    try {
-                        await signOut(auth);
-                    } catch (error) {
-                        console.error('Impossibile chiudere la sessione dell’account non compatibile con i dati trasferiti:', error);
-                    }
-                    return;
-                }
-
-                setCurrentUser(user);
-                setLoading(false);
-
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
 
@@ -366,11 +296,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     }
                 } else {
                     setGuestMigrationStatus('idle');
-                    await loadData(user);
+                    void loadData(user);
                 }
             } else {
-                setCurrentUser(null);
-                setLoading(false);
                 setGuestMigrationStatus('idle');
                 const isGuestActive = isGuestRef.current || isStoredGuest();
                 if (!isGuestActive) {
