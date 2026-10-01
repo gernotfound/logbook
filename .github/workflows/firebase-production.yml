@@ -136,7 +136,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy             --non-interactive             --project "${FIREBASE_PROJECT_ID}"             --config .firebase-deploy.json             --only functions
+          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy \
+            --non-interactive \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --config .firebase-deploy.json \
+            --only functions:accountDeletion,functions:accountDeletionMaintenance
 
       - name: Recheck main HEAD after Functions deploy
         shell: bash
@@ -173,7 +177,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy             --non-interactive             --project "${FIREBASE_PROJECT_ID}"             --config .firebase-deploy.json             --only hosting
+          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy \
+            --non-interactive \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --config .firebase-deploy.json \
+            --only hosting
 
       - name: Detect main drift after deployment
         shell: bash
