@@ -226,6 +226,22 @@ it('preregisters one durable device recovery credential and retries idempotently
     expect(boundary.fetch).toHaveBeenCalledTimes(1);
 });
 
+it('recovers after a lost preregistration acknowledgement even when registeredAt was never persisted', async () => {
+    const credential = 'L'.repeat(43);
+    persistAccountDeletionRecoveryCredential('user:a', credential);
+    boundary.auth.currentUser = null;
+
+    boundary.fetch.mockImplementation(async (_input, init?: RequestInit) => {
+        expect(init?.method).toBe('GET');
+        expect(headerValue(init?.headers, 'x-account-deletion-recovery')).toBe(credential);
+        return response(200, { uid: 'a', status: 'complete', attempts: 1 });
+    });
+
+    await expect(resumeRegisteredAccountDeletion(context)).resolves.toEqual({ status: 'complete' });
+    expect(readAccountDeletionRecoveryCredential('user:a')).toBeNull();
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+});
+
 it('recovers a secondary device that was offline for the whole deletion and never had a deletion receipt', async () => {
     const credential = 'R'.repeat(43);
     persistAccountDeletionRecoveryCredential('user:a', credential);

@@ -142,7 +142,11 @@ export function listRegisteredAccountDeletionRecoveryCredentials(): AccountDelet
         if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(recoverySuffix)) continue;
         const owner = storageKey.slice('logbook:v2:'.length, -recoverySuffix.length);
         const credential = parseRecovery(owner, readBrowserValueStrict(storageKey));
-        if (credential?.registeredAt) result.push(credential);
+        // A lost PUT acknowledgement can leave registeredAt unset even though the
+        // server durably accepted this proof. Recovery GET is proof-only and a
+        // never-registered credential simply returns 404, so ambiguous credentials
+        // are safe and necessary to probe after Auth disappears.
+        if (credential) result.push(credential);
     }
     return result.sort((a, b) => b.createdAt - a.createdAt);
 }
