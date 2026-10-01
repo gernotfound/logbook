@@ -14,6 +14,9 @@ async function enableAnalytics(): Promise<void> {
         const module = await import('firebase/analytics');
         if (!getAnalyticsConsent()) return;
         if (!(await module.isSupported())) return;
+        // Consent can be revoked while the asynchronous support check is in flight.
+        // Re-check immediately before initializing Analytics so revocation is fail-closed.
+        if (!getAnalyticsConsent()) return;
         const instance = module.initializeAnalytics(firebaseApp, { config: { send_page_view: false } });
         module.setAnalyticsCollectionEnabled(instance, true);
         analytics = instance;

@@ -6,7 +6,7 @@ const boundary = vi.hoisted(() => ({
     ensureAppCheck: vi.fn(),
     waitForPendingWrites: vi.fn(),
     waitForJournalIdle: vi.fn(),
-    getAppCheckToken: vi.fn(),
+    getLimitedUseAppCheckToken: vi.fn(),
     cancelPendingSyncs: vi.fn(),
     resetStore: vi.fn(),
 }));
@@ -25,7 +25,7 @@ vi.mock('../src/lib/firebase', () => ({
 }));
 
 vi.mock('../src/lib/appCheck', () => ({
-    getAppCheckToken: boundary.getAppCheckToken,
+    getLimitedUseAppCheckToken: boundary.getLimitedUseAppCheckToken,
 }));
 
 vi.mock('../src/lib/sync/replicateJournal', () => ({
@@ -77,7 +77,7 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         boundary.ensureAppCheck.mockResolvedValue(undefined);
         boundary.waitForPendingWrites.mockResolvedValue(undefined);
         boundary.waitForJournalIdle.mockResolvedValue(undefined);
-        boundary.getAppCheckToken.mockResolvedValue('app-check-token');
+        boundary.getLimitedUseAppCheckToken.mockResolvedValue('app-check-token');
         auth.currentUser = {
             uid: 'test-user-id',
             getIdTokenResult: boundary.getIdTokenResult,
@@ -166,7 +166,7 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
     });
 
     it('requires App Check before freezing writers or creating the durable receipt marker', async () => {
-        boundary.getAppCheckToken.mockResolvedValue(null);
+        boundary.getLimitedUseAppCheckToken.mockResolvedValue(null);
         const ctx = context();
 
         await expect(deleteAccount(ctx)).rejects.toThrow('Verifica App Check non disponibile. Cancellazione non avviata.');
