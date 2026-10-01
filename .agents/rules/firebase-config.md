@@ -142,6 +142,7 @@ La CSP canonica del target è configurata in `firebase.json`. Prima di modificar
 2. **MUST:** non rimuovere domini Firebase/Sentry o il direct endpoint Functions necessari al comportamento corrente senza una sostituzione verificata;
 3. verificare login, sync, App Check, API account deletion e PWA dopo il cambiamento pertinente;
 4. preservare il namespace Firebase riservato `/__/*` fuori dai fallback/service-worker e dagli header applicativi che romperebbero gli helper Auth.
+5. **MUST:** il `firebase.json` tracciato resta fail-closed per `connect-src`: usa l'origin non instradabile `https://logbook-function.invalid`, mentre `scripts/prepare-firebase-deploy-config.mjs` lo sostituisce con l'origin esatto di `VITE_ACCOUNT_DELETION_API_URL` nella sola configurazione temporanea di deploy. Un wildcard `https://*.cloudfunctions.net` non è ammesso nel template Production.
 
 ## Deployment clean-cut
 
