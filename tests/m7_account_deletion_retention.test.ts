@@ -7,6 +7,10 @@ const state = vi.hoisted(() => ({
   committed: 0,
 }));
 
+const recovery = vi.hoisted(() => ({
+  purgeDeletionRecoveryDevices: vi.fn(),
+}));
+
 const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
     const filters: Array<{ field: string; operator: string; value: unknown }> = [];
@@ -49,11 +53,8 @@ const fakeDb = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../server/accountDeletion/deviceRecovery', () => ({ purgeDeletionRecoveryDevices: vi.fn().mockResolvedValue(1) }));
-
-vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
-  adminDb: () => fakeDb,
-}));
+vi.mock('../server/accountDeletion/deviceRecovery', () => recovery);
+vi.mock('../server/accountDeletion/firebaseAdmin', () => ({ adminDb: () => fakeDb }));
 
 import {
   ACCOUNT_DELETION_COMPLETED_RETENTION_MS,
@@ -66,6 +67,8 @@ describe('M7 completed account deletion retention', () => {
     state.docs = [];
     state.deleted = [];
     state.committed = 0;
+    vi.clearAllMocks();
+    recovery.purgeDeletionRecoveryDevices.mockResolvedValue(1);
   });
 
   it('schedules completed tombstones exactly 30 days after completion', () => {
@@ -74,29 +77,30 @@ describe('M7 completed account deletion retention', () => {
       .toBe(now.toMillis() + ACCOUNT_DELETION_COMPLETED_RETENTION_MS);
   });
 
-  it('deletes only expired complete tombstones and preserves every other job', async () => {
+  it('purges device recovery before deleting only expired complete tombstones', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
     state.docs = [
       {
         path: 'account_deletions/expired-complete',
-        data: { status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+        data: { uid: 'expired-complete', status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
       },
       {
         path: 'account_deletions/future-complete',
-        data: { status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() + 60_000) },
+        data: { uid: 'future-complete', status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() + 60_000) },
       },
       {
         path: 'account_deletions/corrupt-active',
-        data: { status: 'deleting', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+        data: { uid: 'corrupt-active', status: 'deleting', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
       },
       {
         path: 'account_deletions/no-expiry',
-        data: { status: 'complete' },
+        data: { uid: 'no-expiry', status: 'complete' },
       },
     ];
 
     await expect(purgeExpiredCompletedDeletionJobs(400, now)).resolves.toBe(1);
 
+    expect(recovery.purgeDeletionRecoveryDevices).toHaveBeenCalledWith('expired-complete');
     expect(state.deleted).toEqual(['account_deletions/expired-complete']);
     expect(state.docs.map(item => item.path)).toEqual([
       'account_deletions/future-complete',
@@ -106,14 +110,27 @@ describe('M7 completed account deletion retention', () => {
     expect(state.committed).toBe(1);
   });
 
+  it('keeps the tombstone if device-recovery purge fails so cron can retry', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs = [{
+      path: 'account_deletions/expired-complete',
+      data: { uid: 'expired-complete', status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+    }];
+    recovery.purgeDeletionRecoveryDevices.mockRejectedValueOnce(new Error('firestore unavailable'));
+
+    await expect(purgeExpiredCompletedDeletionJobs(400, now)).rejects.toThrow('firestore unavailable');
+
+    expect(state.deleted).toEqual([]);
+    expect(state.docs.map(item => item.path)).toEqual(['account_deletions/expired-complete']);
+    expect(state.committed).toBe(0);
+  });
+
   it('does not commit a batch when no eligible tombstone is due', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.docs = [
-      {
-        path: 'account_deletions/active',
-        data: { status: 'verifying', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
-      },
-    ];
+    state.docs = [{
+      path: 'account_deletions/active',
+      data: { uid: 'active', status: 'verifying', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+    }];
 
     await expect(purgeExpiredCompletedDeletionJobs(400, now)).resolves.toBe(0);
     expect(state.deleted).toEqual([]);

@@ -36,20 +36,25 @@ export async function purgeExpiredCompletedDeletionJobs(
 
   if (snapshot.empty) return 0;
 
-  const batch = adminDb().batch();
-  const completedUids: string[] = [];
-  let deleted = 0;
+  const eligible: Array<{ uid: string; ref: unknown }> = [];
   for (const item of snapshot.docs) {
     const job = item.data() as AccountDeletionJob;
     const purgeAtMs = timestampMillis(job.purgeAfter);
     if (job.status !== 'complete' || purgeAtMs === null || purgeAtMs > nowMs) continue;
-    batch.delete(item.ref);
-    completedUids.push(job.uid);
-    deleted += 1;
+    eligible.push({ uid: job.uid, ref: item.ref });
   }
 
-  if (deleted === 0) return 0;
+  if (eligible.length === 0) return 0;
+
+  // Purge the recovery credential first. If this fails, keep the tombstone so a
+  // later cron run can retry; deleting the tombstone first could orphan the
+  // server-only recovery registry permanently.
+  for (const item of eligible) {
+    await purgeDeletionRecoveryDevices(item.uid);
+  }
+
+  const batch = adminDb().batch();
+  for (const item of eligible) batch.delete(item.ref as never);
   await batch.commit();
-  await Promise.all(completedUids.map(uid => purgeDeletionRecoveryDevices(uid)));
-  return deleted;
+  return eligible.length;
 }
