@@ -27,7 +27,7 @@ function env(overrides: Record<string, string> = {}) {
     FIREBASE_HOSTING_SITE: 'thelogbook',
     FIREBASE_FUNCTION_REGION: region,
     LOGBOOK_ALLOWED_ORIGINS: publicOrigin,
-    FIREBASE_FUNCTION_SERVICE_ACCOUNT: 'logbook-runtime@example-project.iam.gserviceaccount.com',
+    FIREBASE_FUNCTION_SERVICE_ACCOUNT: 'logbook-runtime@logbook-db-98cc4.iam.gserviceaccount.com',
     GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/123/locations/global/workloadIdentityPools/test/providers/github',
     GCP_DEPLOY_SERVICE_ACCOUNT: 'firebase-deploy@example.invalid',
     ...overrides,
@@ -63,6 +63,12 @@ describe('Firebase Production deploy environment guard', () => {
   it('rejects widening the CORS allowlist beyond the migration source and canonical origin', () => {
     expect(() => run({
       LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},https://unexpected.example`,
+    })).toThrow();
+  });
+
+  it('rejects a Functions runtime identity from another project', () => {
+    expect(() => run({
+      FIREBASE_FUNCTION_SERVICE_ACCOUNT: 'logbook-runtime@other-project.iam.gserviceaccount.com',
     })).toThrow();
   });
 
