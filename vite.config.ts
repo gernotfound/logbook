@@ -14,22 +14,16 @@ const buildSha =
   // GITHUB_SHA on pull_request can refer to GitHub's synthetic merge ref.
   process.env.EXPECTED_SHA ||
   process.env.GITHUB_SHA ||
-  // Transitional fallback while the legacy Vercel origin remains available.
-  process.env.VERCEL_GIT_COMMIT_SHA ||
   'dev'
 const deployEnvironment =
   process.env.LOGBOOK_DEPLOY_ENV ||
-  // Transitional fallback only; Firebase/GitHub uses LOGBOOK_DEPLOY_ENV.
-  process.env.VERCEL_ENV ||
   'development'
 const buildHash = buildSha.slice(0, 7)
 const sentryBuildEnabled =
   deployEnvironment === 'production' &&
   Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
 const buildTime = new Date().toISOString()
-const legacyVercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
-const fallbackOrigin = legacyVercelHost ? `https://${legacyVercelHost}` : 'https://logbook.invalid'
-const publicOrigin = (process.env.VITE_PUBLIC_ORIGIN || fallbackOrigin).replace(/\/$/, '')
+const publicOrigin = (process.env.VITE_PUBLIC_ORIGIN || 'https://logbook.invalid').replace(/\/$/, '')
 
 const basePath = '/'
 
