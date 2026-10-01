@@ -27,9 +27,11 @@ vi.mock('firebase-functions/v2/scheduler', () => ({
 }));
 vi.mock('firebase-functions/params', () => ({
   defineString: vi.fn((name: string) => ({
-    value: () => name === 'LOGBOOK_ALLOWED_ORIGINS'
-      ? 'https://app.example,https://legacy.example'
-      : 'europe-west1',
+    value: () => {
+      if (name === 'LOGBOOK_ALLOWED_ORIGINS') return 'https://app.example';
+      if (name === 'LOGBOOK_FUNCTION_SERVICE_ACCOUNT') return 'logbook-runtime@example-project.iam.gserviceaccount.com';
+      return 'europe-west1';
+    },
   })),
 }));
 vi.mock('firebase-functions', () => ({
@@ -99,6 +101,7 @@ describe('Firebase Functions production entrypoint', () => {
       maxInstances: 10,
       invoker: 'public',
       cors: false,
+      serviceAccount: 'logbook-runtime@example-project.iam.gserviceaccount.com',
     });
   });
 
@@ -143,6 +146,7 @@ describe('Firebase Functions production entrypoint', () => {
       maxInstances: 1,
       concurrency: 1,
       retryCount: 3,
+      serviceAccount: 'logbook-runtime@example-project.iam.gserviceaccount.com',
     });
     expect(state.maintenance).toHaveBeenCalledWith(expect.any(Number));
     expect(state.loggerInfo).toHaveBeenCalledWith('Account deletion maintenance completed', { processed: 0 });
