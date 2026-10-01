@@ -1,6 +1,6 @@
 # Registro servizi esterni LogBook
 
-> Stato: registro operativo stabile. Ultimo consolidamento: 2026-09-30.
+> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-01.
 >
 > Questo file documenta **perché** esistono le integrazioni e quali impostazioni devono essere preservate. Non è un inventario di segreti e non sostituisce la verifica live nelle console dei provider.
 
@@ -158,9 +158,9 @@ Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09
 
 Il repository è pubblico: questo è un vincolo di sicurezza e privacy, non solo una scelta di collaborazione.
 
-Al consolidamento del 2026-09-30 il ruleset `protect main branch` è attivo sulla default branch e richiede `Canonical Verification`, status check strict, pull request, risoluzione delle review conversation, cronologia lineare e squash merge; non risultano bypass configurati.
+Al consolidamento del 2026-10-01 il ruleset `protect main branch` è attivo sulla default branch e richiede `Canonical Verification`, status check strict, pull request, risoluzione delle review conversation, cronologia lineare e squash merge; non risultano bypass configurati. Non risulta una regola separata di code scanning nel ruleset osservato.
 
-CodeQL è parte del gate canonico. Il nome `Canonical Verification` non deve essere cambiato senza verificare il ruleset GitHub.
+CodeQL è parte del gate canonico perché `Canonical Verification` dipende dal job `Security / CodeQL`. Il job fallisce se l'analisi non viene eseguita/caricata correttamente; un alert CodeQL, invece, non va assunto automaticamente bloccante senza una regola di code scanning nel ruleset. Le review conversation generate da CodeQL restano soggette al requisito di risoluzione del ruleset. Il nome `Canonical Verification` non deve essere cambiato senza verificare il ruleset GitHub.
 
 Dependabot è configurato nel repository per controlli settimanali sia delle dipendenze npm sia delle GitHub Actions, con massimo 10 PR aperte per ciascun ecosistema. È automazione di manutenzione, non un bypass: le sue PR devono attraversare gli stessi guardrail di `main`.
 
@@ -170,7 +170,7 @@ Snyk è un controllo security **supplementare**, non la fonte canonica della dec
 
 Il repository contiene `.snyk`, che esclude test/test files dalla relativa analisi. Non esiste un workflow Snyk nel repository corrente: l'eventuale check deriva dall'integrazione esterna.
 
-Limiti quota o indisponibilità Snyk non devono eliminare la copertura SAST bloccante, che resta affidata a CodeQL nel `Canonical Verification`.
+Limiti quota o indisponibilità Snyk non devono eliminare l'analisi SAST canonica: l'esecuzione CodeQL resta una dipendenza bloccante di `Canonical Verification`, mentre gli alert prodotti vanno verificati e risolti secondo l'enforcement GitHub realmente configurato.
 
 ## Google Search Console e indicizzazione
 
