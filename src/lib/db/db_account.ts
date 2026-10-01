@@ -102,9 +102,10 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
     const body = await readJson(response);
     if (!response.ok) {
         const message = typeof body.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
-        const error = new Error(message) as Error & { definitiveRejection?: boolean };
-        error.definitiveRejection = response.status === 400 || response.status === 401 || response.status === 403;
-        throw error;
+        // Preserve the persisted receipt even for 4xx responses. The same receipt
+        // may already have been accepted by an earlier attempt whose acknowledgement
+        // was lost, and dropping it would make that durable server job unrecoverable.
+        throw new Error(message);
     }
     markAccountDeletion(marker.owner, { receiptToken: marker.receiptToken, serverAcceptedAt: Date.now() });
 }
@@ -219,9 +220,6 @@ async function performDeletion(context: DeletionContext): Promise<AccountDeletio
     try {
         await requestServerDeletion(marker, token.token, appToken);
     } catch (error) {
-        const definitive = Boolean(error && typeof error === 'object' && 'definitiveRejection' in error
-            && (error as { definitiveRejection?: boolean }).definitiveRejection);
-        if (definitive) clearAccountDeletion(owner);
         throw error instanceof Error
             ? error
             : new Error('Cancellazione non avviata. Verifica la connessione e riprova.', { cause: error });
