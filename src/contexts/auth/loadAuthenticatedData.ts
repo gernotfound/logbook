@@ -25,11 +25,8 @@ export async function loadAuthenticatedData({
     setUserData,
     setSyncing,
     setSaveError,
-}: LoadAuthenticatedDataOptions): Promise<{ cloudReconciled: boolean; localRecovered: boolean }> {
-    let cloudReconciled = false;
-    let localRecovered = false;
-    const currentResult = () => ({ cloudReconciled, localRecovered });
-    if (!user) return currentResult();
+}: LoadAuthenticatedDataOptions): Promise<void> {
+    if (!user) return;
 
     const session = captureSession();
     const expectedOwner = userOwner(user.uid);
@@ -41,19 +38,19 @@ export async function loadAuthenticatedData({
         && auth.currentUser?.uid === user.uid
         && !isGuestActive();
 
-    if (!isCurrent()) return currentResult();
+    if (!isCurrent()) return;
 
     const currentData = useAppStore.getState().userData;
     if (!currentData) setSyncing(true);
 
     try {
         const payload = await DB.loadCloudPayload();
-        if (!isCurrent()) return currentResult();
+        if (!isCurrent()) return;
 
         if (payload) {
             const cloudData = payload.data;
             try {
-                if (!isCurrent()) return currentResult();
+                if (!isCurrent()) return;
                 const hydratedEnv = await hydrateLocal(
                     user.uid,
                     cloudData,
@@ -62,11 +59,10 @@ export async function loadAuthenticatedData({
                     'window',
                     isCurrent
                 );
-                if (!isCurrent()) return currentResult();
+                if (!isCurrent()) return;
                 setUserData(hydratedEnv.data);
-                cloudReconciled = true;
             } catch (mergeError) {
-                if (!isCurrent()) return currentResult();
+                if (!isCurrent()) return;
                 if ((mergeError as { code?: unknown })?.code === 'invalid-cloud-sync-metadata') {
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e LogBook non sovrascriverà il cloud finché il problema non viene risolto.');
                     console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
@@ -76,7 +72,7 @@ export async function loadAuthenticatedData({
             }
         }
     } catch (error: any) {
-        if (!isCurrent()) return currentResult();
+        if (!isCurrent()) return;
         console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
         if (error?.code === 'unavailable' || !navigator.onLine) {
             setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
@@ -90,16 +86,15 @@ export async function loadAuthenticatedData({
                 console.warn('Copia locale autenticata non leggibile durante il fallback offline:', localError);
                 localEnvelope = undefined;
             }
-            if (!isCurrent()) return currentResult();
+            if (!isCurrent()) return;
 
             if (localEnvelope) {
                 setUserData(localEnvelope.data);
-                localRecovered = true;
             } else {
                 const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                if (!isCurrent()) return currentResult();
+                if (!isCurrent()) return;
                 const fallbackData = getResolvedDefaultUserData(catalog);
-                if (!isCurrent()) return currentResult();
+                if (!isCurrent()) return;
                 setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
             }
         }
@@ -107,5 +102,5 @@ export async function loadAuthenticatedData({
         if (isCurrent()) setSyncing(false);
     }
 
-    return currentResult();
+    return;
 }
