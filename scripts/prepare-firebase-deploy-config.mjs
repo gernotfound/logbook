@@ -44,13 +44,17 @@ let cspUpdated = false;
 for (const group of config.hosting.headers ?? []) {
   for (const header of group.headers ?? []) {
     if (header.key !== 'Content-Security-Policy') continue;
-    if (!header.value.includes(functionOriginPlaceholder)) {
-      throw new Error('firebase.json: placeholder CSP della Function mancante.');
+    const tokens = String(header.value).split(/\s+/).filter(Boolean);
+    const placeholderCount = tokens.filter(token => token === functionOriginPlaceholder).length;
+    if (placeholderCount !== 1) {
+      throw new Error('firebase.json: la CSP deve contenere esattamente un placeholder Function isolato.');
     }
-    if (header.value.includes('https://*.cloudfunctions.net')) {
+    if (tokens.includes('https://*.cloudfunctions.net')) {
       throw new Error('firebase.json: wildcard Cloud Functions non ammesso nel template Production.');
     }
-    header.value = header.value.replace(functionOriginPlaceholder, deletionOrigin);
+    header.value = tokens
+      .map(token => token === functionOriginPlaceholder ? deletionOrigin : token)
+      .join(' ');
     cspUpdated = true;
   }
 }
