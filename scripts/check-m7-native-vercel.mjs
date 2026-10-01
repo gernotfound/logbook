@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 const failures = [];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
+const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
+const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
 const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
@@ -29,6 +31,7 @@ for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) 
 if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
 if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
+if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
 if (!deletionCron) failures.push('missing daily account deletion recovery cron');
@@ -37,6 +40,35 @@ else if (deletionCron.schedule !== '0 3 * * *') failures.push('account deletion 
 if (!accountApi.includes('const POST_BUDGET_MS = 275_000;')) failures.push('POST deletion budget must remain below the 300s platform ceiling');
 if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
 if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
+const hostingSecurityHeaders = firebase.hosting?.headers?.find(item => item.source === '/**')?.headers ?? [];
+const csp = hostingSecurityHeaders.find(item => item.key === 'Content-Security-Policy')?.value ?? '';
+const requiredConnectOrigins = [
+  'https://firestore.googleapis.com',
+  'https://identitytoolkit.googleapis.com',
+  'https://securetoken.googleapis.com',
+  'https://www.googleapis.com',
+  'https://content-firebaseappcheck.googleapis.com',
+  'https://firebaseappcheck.googleapis.com',
+  'https://firebaseinstallations.googleapis.com',
+  'https://firebase.googleapis.com',
+  'https://www.google-analytics.com',
+  'https://region1.google-analytics.com',
+  'https://logbook-gnf.vercel.app',
+];
+if (csp.includes('*.googleapis.com')) failures.push('Firebase Hosting CSP must not use a broad googleapis wildcard');
+for (const origin of requiredConnectOrigins) {
+  if (!csp.includes(origin)) failures.push(`Firebase Hosting CSP missing required connect origin: ${origin}`);
+}
+if (!hostingWorkflow.includes("github.event.workflow_run.event == 'push'") || !hostingWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+  failures.push('Firebase Hosting workflow must only activate after the canonical push-to-main verification run');
+}
+if (!hostingWorkflow.includes('git rev-parse origin/main') || !hostingWorkflow.includes('firebase-tools@15.30.2 deploy --only hosting')) {
+  failures.push('Firebase Hosting workflow must re-check exact main and deploy only Hosting with the pinned CLI');
+}
+if (!hostingWorkflow.includes('google-github-actions/auth@v3') || !hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
+  failures.push('Firebase Hosting workflow must use Workload Identity Federation');
+}
+
 if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
 if (vite.includes("process.env.VERCEL_ENV === 'production'")) failures.push('Vercel backend deployments must not trigger frontend Sentry source-map builds');
 

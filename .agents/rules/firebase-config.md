@@ -153,15 +153,15 @@ La CSP e gli header del frontend Firebase Hosting sono configurati in `firebase.
 
 Prima di modificarli:
 1. leggere `firebase.json`;
-2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, GA4, Sentry e backend Vercel;
-3. **MUST:** non introdurre wildcard `script-src` o CORS `*`;
+2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, Firebase Installations/Analytics, Sentry e backend Vercel; le API Google usate dal runtime sono elencate esplicitamente, senza `*.googleapis.com`;
+3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
 4. verificare login popup/redirect, sync, App Check, GA4, account deletion e PWA.
 
 Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy è limitato a `--only hosting`; Firestore Rules/indici restano operazioni distinte.
 
 ## Vercel branch deployment policy
 
-`vercel.json` contiene il contratto repository corrente per Git deployment:
+`vercel.json` contiene il contratto repository corrente per Git deployment e imposta `fluid: true`, necessario a rendere esplicito il runtime Fluid Compute da cui dipende il ceiling di 300 secondi delle due funzioni lunghe sul piano Hobby:
 
 - `main`: deployment abilitato;
 - altri branch: deployment disabilitato.
