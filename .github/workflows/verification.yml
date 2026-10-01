@@ -57,7 +57,7 @@ jobs:
             playwright: true
           - id: m7-m8
             label: Build and M7-M8
-            command: "npm run build && npm run test:typecheck:m7 && npm audit --prefix functions --audit-level=high && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
+            command: "npm run build && npm run test:typecheck:m7 && npm run test:m7 && npm run test:pwa:m7 && npm run test:smoke:m7 && npm run test:m8 && npm run test:domain-boundary:m8"
             java: false
             playwright: false
     env:
@@ -124,6 +124,47 @@ jobs:
             dist/sw.js
             dist/manifest.webmanifest
 
+  functions-runtime:
+    name: "Verification / Functions Node 22 runtime"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact event head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          echo "Expected SHA: ${EXPECTED_SHA}"
+          echo "Actual SHA:   ${actual_sha}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Exact-head Functions runtime verification failed" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Functions on the deployed runtime major
+        run: |
+          npm --prefix functions run typecheck
+          npm audit --prefix functions --audit-level=high
+          node scripts/check-m7-firebase-smoke-test.mjs
+
   codeql:
     name: "Security / CodeQL"
     runs-on: ubuntu-24.04
@@ -168,19 +209,26 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - shards
+      - functions-runtime
       - codeql
     if: ${{ always() }}
     steps:
       - name: Require verification and security analysis
         env:
           SHARD_RESULT: ${{ needs.shards.result }}
+          FUNCTIONS_RUNTIME_RESULT: ${{ needs.functions-runtime.result }}
           CODEQL_RESULT: ${{ needs.codeql.result }}
         shell: bash
         run: |
           echo "Parallel verification result: ${SHARD_RESULT}"
+          echo "Functions Node 22 result: ${FUNCTIONS_RUNTIME_RESULT}"
           echo "CodeQL result: ${CODEQL_RESULT}"
           if [ "${SHARD_RESULT}" != "success" ]; then
             echo "At least one verification shard failed or was cancelled" >&2
+            exit 1
+          fi
+          if [ "${FUNCTIONS_RUNTIME_RESULT}" != "success" ]; then
+            echo "Firebase Functions Node 22 runtime verification failed or was cancelled" >&2
             exit 1
           fi
           if [ "${CODEQL_RESULT}" != "success" ]; then
