@@ -24,7 +24,9 @@ import { runAccountDeletionMaintenance } from '../functions/src/maintenance';
 describe('M7 Firebase scheduled account deletion maintenance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }, { uid: 'b' }]);
+    store.listRecoverableDeletionJobs
+      .mockResolvedValueOnce([{ uid: 'a' }, { uid: 'b' }])
+      .mockResolvedValue([]);
     runner.processAccountDeletion.mockResolvedValue('complete');
     retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
     telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
@@ -57,8 +59,32 @@ describe('M7 Firebase scheduled account deletion maintenance', () => {
     });
   });
 
+  it('drains additional full recovery pages before spending residual budget on retention', async () => {
+    vi.clearAllMocks();
+    const firstPage = Array.from({ length: 25 }, (_, index) => ({ uid: `p1-${index}` }));
+    const secondPage = [{ uid: 'p2' }];
+    store.listRecoverableDeletionJobs
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce(secondPage);
+    runner.processAccountDeletion.mockResolvedValue('pending');
+    retention.purgeExpiredCompletedDeletionJobs.mockResolvedValue(0);
+    telemetryRetention.purgeExpiredTelemetry.mockResolvedValue({
+      usersScanned: 0,
+      documentsDeleted: 0,
+      completedCycle: true,
+    });
+
+    const summary = await runAccountDeletionMaintenance(Date.now() + 120_000);
+
+    expect(store.listRecoverableDeletionJobs).toHaveBeenCalledTimes(2);
+    expect(runner.processAccountDeletion).toHaveBeenCalledTimes(26);
+    expect(summary.scanned).toBe(26);
+    expect(summary.processed).toBe(26);
+    expect(summary.pending).toBe(26);
+  });
+
   it('keeps deletion recovery successful when telemetry retention fails', async () => {
-    store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }]);
+    store.listRecoverableDeletionJobs.mockReset().mockResolvedValueOnce([{ uid: 'a' }]);
     telemetryRetention.purgeExpiredTelemetry.mockRejectedValue(new Error('telemetry unavailable'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -79,7 +105,7 @@ describe('M7 Firebase scheduled account deletion maintenance', () => {
 
   it('uses only the residual maintenance budget for tombstone and telemetry cleanup', async () => {
     const order: string[] = [];
-    store.listRecoverableDeletionJobs.mockResolvedValue([{ uid: 'a' }]);
+    store.listRecoverableDeletionJobs.mockReset().mockResolvedValueOnce([{ uid: 'a' }]);
     runner.processAccountDeletion.mockImplementation(async () => {
       order.push('recover');
       return 'complete';

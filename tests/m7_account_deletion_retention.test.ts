@@ -11,31 +11,41 @@ const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
     return {
       where(field: string, operator: string, value: { toMillis: () => number }) {
-        if (name !== 'account_deletions' || field !== 'purgeAfter' || operator !== '<=') {
+        if (name !== 'account_deletions' || field !== 'purgeEligibleAt' || operator !== '<=') {
           throw new Error('Unexpected retention query');
         }
         return {
-          limit(count: number) {
+          orderBy(orderField: string, direction: string) {
+            if (orderField !== 'purgeEligibleAt' || direction !== 'asc') {
+              throw new Error('Unexpected retention ordering');
+            }
             return {
-              async get() {
-                const cutoff = value.toMillis();
-                const docs = state.docs
-                  .filter(item => {
-                    const purgeAfter = item.data.purgeAfter;
-                    return Boolean(
-                      purgeAfter
-                      && typeof purgeAfter === 'object'
-                      && 'toMillis' in purgeAfter
-                      && typeof (purgeAfter as { toMillis?: unknown }).toMillis === 'function'
-                      && (purgeAfter as { toMillis: () => number }).toMillis() <= cutoff,
-                    );
-                  })
-                  .slice(0, count)
-                  .map(item => ({
-                    ref: { path: item.path },
-                    data: () => item.data,
-                  }));
-                return { empty: docs.length === 0, docs };
+              limit(count: number) {
+                return {
+                  async get() {
+                    const cutoff = value.toMillis();
+                    const docs = state.docs
+                      .filter(item => {
+                        const purgeEligibleAt = item.data.purgeEligibleAt;
+                        return Boolean(
+                          purgeEligibleAt
+                          && typeof purgeEligibleAt === 'object'
+                          && 'toMillis' in purgeEligibleAt
+                          && typeof (purgeEligibleAt as { toMillis?: unknown }).toMillis === 'function'
+                          && (purgeEligibleAt as { toMillis: () => number }).toMillis() <= cutoff,
+                        );
+                      })
+                      .sort((a, b) =>
+                        (a.data.purgeEligibleAt as { toMillis: () => number }).toMillis()
+                        - (b.data.purgeEligibleAt as { toMillis: () => number }).toMillis())
+                      .slice(0, count)
+                      .map(item => ({
+                        ref: { path: item.path },
+                        data: () => item.data,
+                      }));
+                    return { empty: docs.length === 0, docs };
+                  },
+                };
               },
             };
           },
@@ -81,20 +91,31 @@ describe('M7 completed account deletion retention', () => {
       .toBe(now.toMillis() + ACCOUNT_DELETION_COMPLETED_RETENTION_MS);
   });
 
-  it('deletes only expired complete tombstones and preserves every other job', async () => {
+  it('deletes only explicitly eligible expired complete tombstones', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
     state.docs = [
       {
         path: 'account_deletions/expired-complete',
-        data: { status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+        data: {
+          status: 'complete',
+          purgeAfter: Timestamp.fromMillis(now.toMillis() - 1),
+          purgeEligibleAt: Timestamp.fromMillis(now.toMillis() - 1),
+        },
       },
       {
         path: 'account_deletions/future-complete',
-        data: { status: 'complete', purgeAfter: Timestamp.fromMillis(now.toMillis() + 60_000) },
+        data: {
+          status: 'complete',
+          purgeAfter: Timestamp.fromMillis(now.toMillis() + 60_000),
+          purgeEligibleAt: Timestamp.fromMillis(now.toMillis() + 60_000),
+        },
       },
       {
         path: 'account_deletions/corrupt-active',
-        data: { status: 'deleting', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+        data: {
+          status: 'deleting',
+          purgeAfter: Timestamp.fromMillis(now.toMillis() - 1),
+        },
       },
       {
         path: 'account_deletions/no-expiry',
@@ -103,7 +124,6 @@ describe('M7 completed account deletion retention', () => {
     ];
 
     await expect(purgeExpiredCompletedDeletionJobs(400, now)).resolves.toBe(1);
-
     expect(state.deleted).toEqual(['account_deletions/expired-complete']);
     expect(state.docs.map(item => item.path)).toEqual([
       'account_deletions/future-complete',
@@ -113,14 +133,31 @@ describe('M7 completed account deletion retention', () => {
     expect(state.committed).toBe(1);
   });
 
+  it('fails closed on an impossible active eligibility marker', async () => {
+    const now = Timestamp.fromMillis(2_000_000_000_000);
+    state.docs = [{
+      path: 'account_deletions/corrupt-active',
+      data: {
+        status: 'deleting',
+        purgeEligibleAt: Timestamp.fromMillis(now.toMillis() - 1),
+      },
+    }];
+
+    await expect(purgeExpiredCompletedDeletionJobs(400, now))
+      .rejects.toThrow('Invalid account-deletion retention eligibility state');
+    expect(state.deleted).toEqual([]);
+    expect(state.committed).toBe(0);
+  });
+
   it('does not commit a batch when no eligible tombstone is due', async () => {
     const now = Timestamp.fromMillis(2_000_000_000_000);
-    state.docs = [
-      {
-        path: 'account_deletions/active',
-        data: { status: 'verifying', purgeAfter: Timestamp.fromMillis(now.toMillis() - 1) },
+    state.docs = [{
+      path: 'account_deletions/active',
+      data: {
+        status: 'verifying',
+        purgeAfter: Timestamp.fromMillis(now.toMillis() - 1),
       },
-    ];
+    }];
 
     await expect(purgeExpiredCompletedDeletionJobs(400, now)).resolves.toBe(0);
     expect(state.deleted).toEqual([]);
