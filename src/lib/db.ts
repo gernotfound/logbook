@@ -176,8 +176,8 @@ export const DB = {
             return classifySyncFailure(error);
         }
     },
-    async purgeAllLocalUserData(owner?: string) {
-        return purgeAllLocalUserData(owner);
+    async purgeAllLocalUserData(owner?: string, options?: { preserveDeletionRecovery?: boolean }) {
+        return purgeAllLocalUserData(owner, options);
     },
     async secureLogOut() {
         console.log("Eseguo il Log Out protetto...");

@@ -110,7 +110,7 @@ describe('Firebase Functions production entrypoint', () => {
     await accountDeletionHttpHandler(request('OPTIONS'), res as any);
 
     expect(res.statusCode).toBe(204);
-    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toContain('PUT');
     expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
 
@@ -119,7 +119,7 @@ describe('Firebase Functions production entrypoint', () => {
     await accountDeletionHttpHandler(request('PATCH'), res as any);
 
     expect(res.statusCode).toBe(405);
-    expect(res.headers.get('allow')).toBe('GET, POST, OPTIONS');
+    expect(res.headers.get('allow')).toBe('GET, POST, PUT, OPTIONS');
   });
   it('keeps scheduled maintenance private to the scheduler trigger', () => {
     expect(accountDeletionMaintenanceOptions).toMatchObject({

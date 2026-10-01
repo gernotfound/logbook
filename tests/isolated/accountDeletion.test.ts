@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const boundary = vi.hoisted(() => ({
     auth: { currentUser: null as any, signOut: vi.fn() },
     token: vi.fn(),
+    idToken: vi.fn(),
     appCheck: vi.fn(),
     idle: vi.fn(),
     pending: vi.fn(),
@@ -25,12 +26,21 @@ vi.mock('../../src/store/useAppStore', () => ({
 }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boundary.idle }));
 
-import { deleteAccount, purgeAllLocalUserData, resumeAccountDeletion } from '../../src/lib/db/db_account';
+import {
+    deleteAccount,
+    ensureAccountDeletionRecoveryCredential,
+    purgeAllLocalUserData,
+    resumeAccountDeletion,
+    resumeRegisteredAccountDeletion,
+} from '../../src/lib/db/db_account';
 import { invalidateSession } from '../../src/lib/sync/session';
 import {
     isAccountDeletionPending,
     markAccountDeletion,
+    markAccountDeletionRecoveryCredentialRegistered,
+    persistAccountDeletionRecoveryCredential,
     readAccountDeletionMarker,
+    readAccountDeletionRecoveryCredential,
 } from '../../src/lib/sync/accountGate';
 
 const context = { purgeAllLocalUserData, resetCache: vi.fn() };
@@ -85,11 +95,12 @@ beforeEach(async () => {
     });
     vi.stubGlobal('fetch', boundary.fetch);
     boundary.token.mockResolvedValue({ authTime: new Date().toISOString(), token: 'firebase-id-token' });
+    boundary.idToken.mockResolvedValue('firebase-id-token');
     boundary.appCheck.mockResolvedValue('app-check-token');
     boundary.idle.mockResolvedValue(undefined);
     boundary.pending.mockResolvedValue(undefined);
     boundary.auth.signOut.mockResolvedValue(undefined);
-    boundary.auth.currentUser = { uid: 'a', getIdTokenResult: boundary.token };
+    boundary.auth.currentUser = { uid: 'a', getIdTokenResult: boundary.token, getIdToken: boundary.idToken };
     boundary.cancel.mockImplementation(invalidateSession);
     await set('logbook:v2:user:a', { original: 'recoverable' });
     await set('logbook:v2:user:b', { original: 'other owner' });
@@ -191,6 +202,53 @@ it('keeps a pending server deletion recoverable without requiring Firebase Auth'
     expect(await get('logbook:v2:user:a')).toBeDefined();
     expect(isAccountDeletionPending('user:a')).toBe(true);
     expect(boundary.auth.signOut).not.toHaveBeenCalled();
+});
+
+it('preregisters one durable device recovery credential and retries idempotently with the same token', async () => {
+    let firstToken = '';
+    boundary.fetch.mockImplementation(async (_input, init?: RequestInit) => {
+        expect(init?.method).toBe('PUT');
+        expect(headerValue(init?.headers, 'authorization')).toBe('Bearer firebase-id-token');
+        expect(headerValue(init?.headers, 'x-firebase-appcheck')).toBe('app-check-token');
+        const body = JSON.parse(String(init?.body ?? '{}')) as { recoveryCredential?: string };
+        expect(body.recoveryCredential).toBeTruthy();
+        if (!firstToken) firstToken = body.recoveryCredential!;
+        expect(body.recoveryCredential).toBe(firstToken);
+        return new Response(null, { status: 204 });
+    });
+
+    await ensureAccountDeletionRecoveryCredential();
+    const registered = readAccountDeletionRecoveryCredential('user:a');
+    expect(registered?.token).toBe(firstToken);
+    expect(registered?.registeredAt).toEqual(expect.any(Number));
+
+    await ensureAccountDeletionRecoveryCredential();
+    expect(boundary.fetch).toHaveBeenCalledTimes(1);
+});
+
+it('recovers a secondary device that was offline for the whole deletion and never had a deletion receipt', async () => {
+    const credential = 'R'.repeat(43);
+    persistAccountDeletionRecoveryCredential('user:a', credential);
+    markAccountDeletionRecoveryCredentialRegistered('user:a');
+    boundary.auth.currentUser = null;
+
+    boundary.fetch.mockImplementation(async (_input, init?: RequestInit) => {
+        expect(init?.method).toBe('GET');
+        expect(headerValue(init?.headers, 'authorization')).toBeNull();
+        expect(headerValue(init?.headers, 'x-firebase-appcheck')).toBe('app-check-token');
+        expect(headerValue(init?.headers, 'x-account-deletion-uid')).toBe('a');
+        expect(headerValue(init?.headers, 'x-account-deletion-recovery')).toBe(credential);
+        expect(headerValue(init?.headers, 'x-account-deletion-receipt')).toBeNull();
+        return response(200, { uid: 'a', status: 'complete', attempts: 2 });
+    });
+
+    await expect(resumeRegisteredAccountDeletion(context)).resolves.toEqual({ status: 'complete' });
+
+    expect(isAccountDeletionPending('user:a')).toBe(false);
+    expect(readAccountDeletionRecoveryCredential('user:a')).toBeNull();
+    expect(await get('logbook:v2:user:a')).toBeUndefined();
+    expect(await get('logbook:v2:user:b')).toEqual({ original: 'other owner' });
+    expect(boundary.reset).toHaveBeenCalledTimes(1);
 });
 
 it('waits for earlier writers and rejects an intervening identity change before POST', async () => {

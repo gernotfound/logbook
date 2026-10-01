@@ -23,8 +23,14 @@ vi.mock('../../src/store/useAppStore', () => ({
 }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: vi.fn() }));
 
-import { resumeAccountDeletion } from '../../src/lib/db/db_account';
-import { isAccountDeletionPending, markAccountDeletion } from '../../src/lib/sync/accountGate';
+import { resumeAccountDeletion, resumeRegisteredAccountDeletion } from '../../src/lib/db/db_account';
+import {
+    isAccountDeletionPending,
+    markAccountDeletion,
+    markAccountDeletionRecoveryCredentialRegistered,
+    persistAccountDeletionRecoveryCredential,
+    readAccountDeletionRecoveryCredential,
+} from '../../src/lib/sync/accountGate';
 
 let disk: Map<string, string>;
 const receipt = 'A'.repeat(43);
@@ -68,6 +74,21 @@ it('does not sign out or purge account B when account A completes in background'
     expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
+it('does not purge account A through preregistered recovery while account B is active', async () => {
+    const credential = 'R'.repeat(43);
+    persistAccountDeletionRecoveryCredential('user:a', credential);
+    markAccountDeletionRecoveryCredentialRegistered('user:a');
+    boundary.auth.currentUser = { uid: 'b' };
+
+    await expect(resumeRegisteredAccountDeletion(context)).resolves.toBeNull();
+
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(boundary.resetCache).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+    expect(readAccountDeletionRecoveryCredential('user:a')?.token).toBe(credential);
+    expect(boundary.fetch).not.toHaveBeenCalled();
 });
 
 it('does not purge shared local drafts while explicit guest mode is active', async () => {
