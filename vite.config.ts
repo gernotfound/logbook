@@ -56,8 +56,8 @@ export default defineConfig({
       },
       manifest: {
         id: basePath,
-        name: 'LogBook',
-        short_name: 'LogBook',
+        name: 'TheLogBook',
+        short_name: 'TheLogBook',
         description: "L'app definitiva per il tracciamento di allenamento, nutrizione e progressi. Funziona anche offline in palestra.",
         theme_color: '#000000',
         background_color: '#000000',
