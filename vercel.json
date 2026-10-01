@@ -12,6 +12,9 @@
     },
     "api/account-deletion-cron.ts": {
       "maxDuration": 300
+    },
+    "api/account-deletion-device.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [
