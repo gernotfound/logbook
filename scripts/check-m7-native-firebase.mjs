@@ -129,6 +129,11 @@ if (!analyticsSource.includes('setAnalyticsCollectionEnabled') || !analyticsSour
 if (!analyticsSource.includes('allow_google_signals: false') || !analyticsSource.includes('allow_ad_personalization_signals: false')) {
   failures.push('Firebase Analytics advertising signals/personalization must remain disabled.');
 }
+for (const deniedConsent of ['functionality_storage', 'personalization_storage', 'security_storage']) {
+  if (!analyticsSource.includes(`${deniedConsent}: 'denied'`)) {
+    failures.push(`Firebase Analytics non-essential consent must remain denied: ${deniedConsent}.`);
+  }
+}
 if (!analyticsSource.includes('page_location: \`${window.location.origin}${window.location.pathname}\`')) {
   failures.push('Firebase Analytics automatic page views must strip query/hash state from page_location.');
 }
