@@ -124,6 +124,14 @@ if (!firebaseProductionWorkflow.includes('--only functions:accountDeletion,funct
 if (/--only\s+(?:hosting,functions|functions,hosting)/.test(firebaseProductionWorkflow)) {
   failures.push('Firebase Production must not collapse Functions and Hosting into one unordered deploy step.');
 }
+const sentrySecretReferences = firebaseProductionWorkflow.match(/SENTRY_AUTH_TOKEN:\s*\$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/g) ?? [];
+if (sentrySecretReferences.length !== 2) {
+  failures.push('SENTRY_AUTH_TOKEN must be scoped only to Firebase config validation and the Production build.');
+}
+const jobEnvBeforeSteps = firebaseProductionWorkflow.split(/^    steps:/m)[0] ?? '';
+if (jobEnvBeforeSteps.includes('SENTRY_AUTH_TOKEN')) {
+  failures.push('SENTRY_AUTH_TOKEN must not be exposed as a job-wide Firebase Production environment variable.');
+}
 
 for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing: ${output}`);
