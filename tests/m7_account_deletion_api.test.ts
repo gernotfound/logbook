@@ -31,7 +31,7 @@ vi.mock('../functions/src/accountDeletion/runner', () => runner);
 import { handleAccountDeletionGet, handleAccountDeletionPost } from '../functions/src/accountDeletion/http';
 
 function request(method: 'GET' | 'POST', body?: unknown): Request {
-  return new Request('https://example.test/api/account-deletion', {
+  return new Request('https://example.test/accountDeletion', {
     method,
     headers: {
       'content-type': 'application/json',
