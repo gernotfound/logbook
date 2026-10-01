@@ -88,7 +88,7 @@ requirePattern('checkout action', workflow, /^        uses: actions\/checkout@v7
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
 requirePattern('Node setup action', workflow, /^        uses: actions\/setup-node@v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
-requirePattern('Functions Node 22 runtime job', workflow, /^  functions-runtime:\s*$/m);
+requirePattern('Functions Node 22 runtime job', workflow, /^  functions_runtime:\s*$/m);
 requirePattern('Functions Node 22 setup', workflow, /^          node-version: ['"]?22['"]?\s*$/m);
 requirePattern('Functions lockfile cache', workflow, /^          cache-dependency-path: functions\/package-lock\.json\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
@@ -204,11 +204,11 @@ if (functionsAuditOccurrences.length !== 1) failures.push(`Functions security au
 const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
 if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
 requirePattern('canonical needs verification shards', workflow, /^      - shards\s*$/m);
-requirePattern('canonical needs Functions Node 22 runtime', workflow, /^      - functions-runtime\s*$/m);
+requirePattern('canonical needs Functions Node 22 runtime', workflow, /^      - functions_runtime\s*$/m);
 requirePattern('canonical needs CodeQL', workflow, /^      - codeql\s*$/m);
 requirePattern('canonical always evaluates', workflow, /^    if: \$\{\{ always\(\) \}\}\s*$/m);
 requirePattern('canonical shard result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
-requirePattern('canonical Functions runtime result binding', workflow, /^          FUNCTIONS_RUNTIME_RESULT: \$\{\{ needs\.functions-runtime\.result \}\}\s*$/m);
+requirePattern('canonical Functions runtime result binding', workflow, /^          FUNCTIONS_RUNTIME_RESULT: \$\{\{ needs\.functions_runtime\.result \}\}\s*$/m);
 requirePattern('canonical CodeQL result binding', workflow, /^          CODEQL_RESULT: \$\{\{ needs\.codeql\.result \}\}\s*$/m);
 requirePattern('canonical rejects failed shards', workflow, /^          if \[ "\$\{SHARD_RESULT\}" != "success" \]; then\s*$/m);
 requirePattern('canonical rejects failed Functions runtime', workflow, /^          if \[ "\$\{FUNCTIONS_RUNTIME_RESULT\}" != "success" \]; then\s*$/m);
