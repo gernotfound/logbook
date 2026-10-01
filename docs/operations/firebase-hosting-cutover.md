@@ -80,6 +80,14 @@ Verificare direttamente nelle console competenti:
 9. Search Console property/sitemap per il nuovo origin;
 10. Sentry release/source-map upload dal nuovo workflow.
 
+## Ordine atomico del deployment applicativo
+
+Il workflow Production pubblica deliberatamente **Functions prima di Hosting**. Il backend nuovo deve restare compatibile con il frontend precedente: se la pubblicazione Hosting fallisce o `main` avanza durante il workflow, il vecchio frontend continua quindi a parlare con un backend compatibile. Hosting viene pubblicato soltanto dopo un nuovo controllo exact-SHA di `main`.
+
+Le Functions vengono installate, typecheckate e deployate sotto Node.js 22; la build Vite/Sentry resta Node.js 24. `firebase.json` pinna il runtime deployato a `nodejs22`; il range di `functions/package.json` consente solo al tooling CI Node 22-24 di lavorare senza falsi warning di engine.
+
+La HTTPS Function `accountDeletion` dichiara esplicitamente `invoker: 'public'` perché viene chiamata direttamente dal browser, ma l'accesso applicativo non è anonimo: POST richiede ID token recente/revocation check + App Check, mentre GET recovery richiede App Check + UID/receipt opaca. CORS resta limitato ai soli origin di migrazione.
+
 ## Sequenza di cutover
 
 1. Congelare lo SHA candidato e ottenere `Canonical Verification` verde.
@@ -100,3 +108,7 @@ Verificare direttamente nelle console competenti:
 - Se il bridge non risponde o lo storage è illeggibile, il target conserva lo stato e invita a riprovare; non dichiara successo.
 - Se il vecchio origin non è più disponibile, usare il backup JSON/manual recovery anziché inventare una migrazione.
 - Un deploy Firebase verde non sostituisce la CI e non prova da solo il runtime end-to-end.
+
+## Cache e namespace Firebase Hosting
+
+Gli asset Vite fingerprinted sotto `/assets/**` sono cacheabili a lungo con `immutable`; app shell, `index.html`, manifest, service worker e Workbox vengono invece rivalidati/no-cache per non trattenere una PWA vecchia. Il namespace Firebase riservato `/__/*` ha priorità sulle SPA rewrite e il service worker LogBook non installa un navigation fallback generale: gli helper Auth `/__/auth/*` restano quindi raggiungibili dal nuovo `authDomain`.
