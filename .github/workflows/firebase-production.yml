@@ -78,7 +78,7 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Node.js
+      - name: Setup Node.js 24 for app tooling
         uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -86,9 +86,6 @@ jobs:
 
       - name: Install app dependencies
         run: npm ci
-
-      - name: Install Functions dependencies
-        run: npm run functions:install
 
       - name: Validate Firebase Production configuration
         run: npm run test:firebase-deploy-env
@@ -99,9 +96,6 @@ jobs:
           project_id: ${{ vars.FIREBASE_PROJECT_ID }}
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
-      - name: Build exact Production artifact
-        run: npm run build
 
       - name: Prepare Firebase deploy config
         run: npm run firebase:prepare-deploy
@@ -115,23 +109,79 @@ jobs:
           LOGBOOK_ALLOWED_ORIGINS=${LOGBOOK_ALLOWED_ORIGINS}
           EOF
 
-      - name: Recheck main HEAD immediately before deploy
+      - name: Setup Node.js 22 for Firebase Functions
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install and verify Functions dependencies
+        run: |
+          npm run functions:install
+          npm --prefix functions run typecheck
+
+      - name: Recheck main HEAD before Functions deploy
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
           main_sha="$(git rev-parse origin/main)"
           if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
-            echo "Refusing stale Firebase Production deployment: main advanced during build." >&2
+            echo "Refusing stale Functions deployment: main advanced." >&2
             exit 1
           fi
 
-      - name: Deploy Hosting and Functions
+      - name: Deploy Functions first
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy \
-            --non-interactive \
-            --project "${FIREBASE_PROJECT_ID}" \
-            --config .firebase-deploy.json \
-            --only hosting,functions
+          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy             --non-interactive             --project "${FIREBASE_PROJECT_ID}"             --config .firebase-deploy.json             --only functions
+
+      - name: Recheck main HEAD after Functions deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Functions are backward-compatible, but main advanced; refusing stale Hosting publication." >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js 24 for Production app build
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Build exact Production artifact
+        run: npm run build
+
+      - name: Recheck main HEAD immediately before Hosting deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing stale Firebase Hosting deployment: main advanced during build." >&2
+            exit 1
+          fi
+
+      - name: Deploy Hosting second
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy             --non-interactive             --project "${FIREBASE_PROJECT_ID}"             --config .firebase-deploy.json             --only hosting
+
+      - name: Detect main drift after deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Firebase deployment completed, but main advanced during publication; the newer main workflow must supersede it." >&2
+            exit 1
+          fi
