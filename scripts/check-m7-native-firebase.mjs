@@ -84,6 +84,7 @@ if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vita
 
 if (!/export const accountDeletion = onRequest/.test(functionIndex)) failures.push('Missing Firebase HTTP accountDeletion function.');
 if (!/timeoutSeconds:\s*3600/.test(functionIndex)) failures.push('HTTP deletion function must retain long-running capacity.');
+if (!/invoker:\s*'public'/.test(functionIndex)) failures.push('Direct browser account-deletion Function must explicitly allow public invocation; Firebase Auth and App Check remain application-layer gates.');
 if (!/export const accountDeletionMaintenance = onSchedule/.test(functionIndex)) failures.push('Missing Firebase scheduled maintenance function.');
 if (!/timeoutSeconds:\s*1800/.test(functionIndex)) failures.push('Scheduled maintenance timeout must be explicit.');
 if (!/schedule:\s*'0 3 \* \* \*'/.test(functionIndex) || !/timeZone:\s*'Etc\/UTC'/.test(functionIndex)) {
