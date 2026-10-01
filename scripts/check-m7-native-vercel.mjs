@@ -66,8 +66,8 @@ if (existsSync('dist/index.html')) {
 if (existsSync('dist/manifest.webmanifest')) {
   try {
     const manifest = JSON.parse(readFileSync('dist/manifest.webmanifest', 'utf8'));
-    if (manifest.name !== 'LogBook') failures.push(`PWA manifest name changed: ${String(manifest.name)}`);
-    if (manifest.short_name !== 'LogBook') failures.push(`PWA manifest short_name changed: ${String(manifest.short_name)}`);
+    if (manifest.name !== 'TheLogBook') failures.push(`PWA manifest name changed: ${String(manifest.name)}`);
+    if (manifest.short_name !== 'TheLogBook') failures.push(`PWA manifest short_name changed: ${String(manifest.short_name)}`);
     if (manifest.start_url !== '/') failures.push(`PWA manifest start_url changed: ${String(manifest.start_url)}`);
     if (manifest.scope !== '/') failures.push(`PWA manifest scope changed: ${String(manifest.scope)}`);
     if (manifest.display !== 'standalone') failures.push(`PWA manifest display changed: ${String(manifest.display)}`);
