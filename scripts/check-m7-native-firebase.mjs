@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 const failures = [];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
+const vercelConfig = JSON.parse(readFileSync('vercel.json', 'utf8'));
 const functionsPackage = JSON.parse(readFileSync('functions/package.json', 'utf8'));
 const functionsLockPath = 'functions/package-lock.json';
 const functionsLock = existsSync(functionsLockPath)
@@ -57,6 +58,10 @@ if (JSON.stringify(hosting?.rewrites ?? []).includes('function')) {
 }
 
 const hostingHeaders = Array.isArray(hosting?.headers) ? hosting.headers : [];
+const firebaseBridgeHeader = hostingHeaders.find(item => item?.source === '/migration-ready.json');
+if (!JSON.stringify(firebaseBridgeHeader ?? {}).includes('no-store')) failures.push('Firebase bridge readiness marker must never be cached.');
+const vercelBridgeHeader = (vercelConfig.headers ?? []).find(item => item?.source === '/migration-ready.json');
+if (!JSON.stringify(vercelBridgeHeader ?? {}).includes('no-store')) failures.push('Legacy Vercel bridge must expose a no-store readiness marker.');
 const serializedHeaders = JSON.stringify(hostingHeaders);
 for (const requiredHeader of ['Content-Security-Policy','Strict-Transport-Security','X-Content-Type-Options','Referrer-Policy','Permissions-Policy']) {
   if (!serializedHeaders.includes(requiredHeader)) failures.push(`Missing Firebase Hosting security header: ${requiredHeader}`);
@@ -124,6 +129,11 @@ if (!firebaseProductionWorkflow.includes('--only functions:accountDeletion,funct
 if (/--only\s+(?:hosting,functions|functions,hosting)/.test(firebaseProductionWorkflow)) {
   failures.push('Firebase Production must not collapse Functions and Hosting into one unordered deploy step.');
 }
+if (!firebaseProductionWorkflow.includes('Require exact legacy bridge build before Hosting')
+  || !firebaseProductionWorkflow.includes('/migration-ready.json')
+  || !firebaseProductionWorkflow.includes('marker.buildSha === expectedSha')) {
+  failures.push('Firebase Hosting cutover must wait for the exact legacy-origin bridge build.');
+}
 const sentrySecretReferences = firebaseProductionWorkflow.match(/SENTRY_AUTH_TOKEN:\s*\$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/g) ?? [];
 if (sentrySecretReferences.length !== 2) {
   failures.push('SENTRY_AUTH_TOKEN must be scoped only to Firebase config validation and the Production build.');
@@ -133,7 +143,7 @@ if (jobEnvBeforeSteps.includes('SENTRY_AUTH_TOKEN')) {
   failures.push('SENTRY_AUTH_TOKEN must not be exposed as a job-wide Firebase Production environment variable.');
 }
 
-for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml']) {
+for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml','dist/migration-ready.json']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing: ${output}`);
 }
 
@@ -154,6 +164,23 @@ if (existsSync('dist/index.html')) {
   }
   if (!html.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large social preview card');
   if (!/<link rel="canonical" href="https:\/\/[^"]+\/">/.test(html)) failures.push('built HTML must expose a canonical absolute URL from the deployment origin.');
+}
+
+if (existsSync('dist/migration-ready.json')) {
+  try {
+    const marker = JSON.parse(readFileSync('dist/migration-ready.json', 'utf8'));
+    if (marker?.version !== 1 || typeof marker?.buildSha !== 'string' || !marker.buildSha) {
+      failures.push('migration readiness marker must contain version 1 and a build SHA.');
+    }
+    if (process.env.EXPECTED_SHA && marker.buildSha !== process.env.EXPECTED_SHA) {
+      failures.push('migration readiness marker must carry the exact candidate SHA.');
+    }
+    if (typeof marker?.origin !== 'string' || !marker.origin.startsWith('https://')) {
+      failures.push('migration readiness marker must identify its HTTPS deployment origin.');
+    }
+  } catch (error) {
+    failures.push(`migration readiness marker invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 if (existsSync('dist/robots.txt') && readFileSync('dist/robots.txt','utf8').includes('vercel.app')) failures.push('robots.txt must not hardcode Vercel.');
