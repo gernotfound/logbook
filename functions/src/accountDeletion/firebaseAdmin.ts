@@ -12,6 +12,13 @@ function getAdminApp(): App {
   const existing = getApps()[0];
   if (existing) return existing;
 
+  // Firebase-managed runtimes always expose FIREBASE_CONFIG. In that runtime,
+  // force ADC even if a legacy service-account key is accidentally present.
+  // The credential fallback below exists only for the temporary Vercel adapter.
+  if (optionalEnv('FIREBASE_CONFIG')) {
+    return initializeApp();
+  }
+
   const projectId = optionalEnv('FIREBASE_ADMIN_PROJECT_ID');
   const clientEmail = optionalEnv('FIREBASE_ADMIN_CLIENT_EMAIL');
   const privateKey = optionalEnv('FIREBASE_ADMIN_PRIVATE_KEY')?.replace(/\\n/g, '\n');
