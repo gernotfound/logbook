@@ -52,7 +52,6 @@ jobs:
       VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
 
       VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
 
@@ -88,6 +87,8 @@ jobs:
         run: npm ci
 
       - name: Validate Firebase Production configuration
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run test:firebase-deploy-env
 
       - name: Authenticate to Google Cloud with Workload Identity Federation
@@ -160,6 +161,8 @@ jobs:
           cache: npm
 
       - name: Build exact Production artifact
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
       - name: Recheck main HEAD immediately before Hosting deploy
