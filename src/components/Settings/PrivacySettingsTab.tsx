@@ -13,7 +13,7 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
             <div className="settings-toggle-card">
                 <div>
                     <strong>Statistiche di utilizzo</strong>
-                    <p>Abilita Vercel Analytics e Speed Insights. Sono opzionali e disattivati per impostazione predefinita.</p>
+                    <p>Abilita Google Analytics (GA4). È opzionale, disattivato per impostazione predefinita e revocabile in qualsiasi momento.</p>
                 </div>
                 <label className="settings-switch">
                     <input type="checkbox" id="analytics-toggle" aria-label="Statistiche di utilizzo" checked={analyticsEnabled} onChange={onToggleAnalytics} />
