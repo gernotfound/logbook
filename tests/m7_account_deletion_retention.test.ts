@@ -49,6 +49,8 @@ const fakeDb = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('../server/accountDeletion/deviceRecovery', () => ({ purgeDeletionRecoveryDevices: vi.fn().mockResolvedValue(1) }));
+
 vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => fakeDb,
 }));
