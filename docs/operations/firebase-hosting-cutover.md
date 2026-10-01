@@ -1,32 +1,45 @@
 # Firebase Hosting cutover — runbook LogBook
 
-> Stato: guida operativa del candidato di migrazione. Lo stato live dei provider resta da verificare prima del cutover.
+> Stato: guida operativa del candidato di migrazione. Nessun deploy Firebase Production o merge in `main` è autorizzato in questa fase.
 
-## Obiettivo
+## Decisione di prodotto: clean cut
 
-Portare la PWA da Vercel a Firebase Hosting senza cambiare il progetto Firestore/Auth e senza perdere dati locali a causa del cambio di origin.
+Il product owner ha scelto di azzerare l’unico account esistente e creare un nuovo account dopo il passaggio a Firebase Hosting.
 
-Il codice separa tre responsabilità:
+Di conseguenza il candidato **non** contiene un bridge cross-origin fra Vercel e Firebase. IndexedDB, localStorage, Cache Storage, Firebase Auth persistence, Service Worker e installazione PWA restano origin-scoped e non vengono trasferiti automaticamente.
 
-- **Firebase Hosting:** asset PWA e security headers;
-- **Firebase Cloud Functions v2:** HTTPS `accountDeletion` e scheduled `accountDeletionMaintenance`;
-- **GitHub Actions:** build/deploy Production soltanto dopo il gate canonico verde sullo stesso SHA di `main`.
+Prima del cutover definitivo l’account/dati che si desidera abbandonare devono essere cancellati o esportati deliberatamente. Se esistono dati locali da conservare, usare il backup JSON prima del cambio di origin.
 
-Vercel resta temporaneamente disponibile come origin precedente per la migrazione dati e per client già installati. Il suo ritiro è un task successivo al periodo di transizione.
+## Architettura target
 
-## Perché serve il bridge di origin
+- **Firebase Hosting** serve la build Vite da `dist/`.
+- **Cloud Functions for Firebase v2** espone `accountDeletion` e la scheduled function `accountDeletionMaintenance`.
+- **Firestore/Auth/App Check** restano nello stesso progetto Firebase.
+- **Sentry** resta il solo error monitoring applicativo.
+- **Google/Firebase Analytics non viene introdotto**.
+- **Vercel non è parte dell’architettura target**; `vercel.json` disabilita i deployment Git automatici nel candidato.
 
-IndexedDB, localStorage, Firebase Auth browser persistence e service worker sono origin-scoped. Passare da un hostname Vercel a un hostname Firebase non trasferisce automaticamente:
+## Account deletion
 
-- modalità guest/local-only;
-- Local Envelope e journal non ancora replicato;
-- active workout/device state owner-scoped;
-- receipt/marker di account deletion;
-- altri valori owner-scoped usati per recovery.
+La cancellazione account resta una funzione prodotto anche dopo il reset.
 
-Il target mostra quindi una scelta una tantum prima dell'uso normale. Su richiesta esplicita apre il vecchio origin in una finestra top-level e usa `postMessage` soltanto fra `VITE_ORIGIN_MIGRATION_SOURCE` e `VITE_ORIGIN_MIGRATION_TARGET`, con nonce casuale.
+Il client chiama direttamente la HTTPS Function `accountDeletion`, senza rewrite Firebase Hosting. Questo evita il limite del proxy Hosting per operazioni lunghe.
 
-Il target conserva l'intero Local Envelope V4, inclusi actor, clock, pending journal e sync metadata. Un target con archivio divergente non viene sovrascritto automaticamente. Per account autenticati, dopo il trasferimento l'utente deve accedere con lo stesso Firebase UID; la normale hydration Firestore riconcilia quindi cloud + journal locale. Per guest viene ripristinato il flag locale.
+Il backend mantiene:
+
+1. ID token verificato con revocation check;
+2. requisito di autenticazione recente;
+3. App Check;
+4. receipt casuale con solo hash SHA-256 conservato server-side;
+5. job `account_deletions/{uid}` server-only;
+6. lease per serializzare i worker distruttivi;
+7. cancellazione paginata delle raccolte private note;
+8. verifica residui prima della cancellazione Auth;
+9. Firebase Auth eliminato per ultimo;
+10. tombstone tecnico con retention di 30 giorni;
+11. recovery idempotente tramite GET + scheduled maintenance.
+
+Le Functions usano Application Default Credentials tramite un service account runtime dedicato configurato con `LOGBOOK_FUNCTION_SERVICE_ACCOUNT`. Non sono richieste private key Admin esportate né `CRON_SECRET`.
 
 ## Configurazione GitHub richiesta
 
@@ -35,14 +48,16 @@ Repository variables Production:
 - `FIREBASE_PROJECT_ID`
 - `FIREBASE_HOSTING_SITE`
 - `FIREBASE_FUNCTION_REGION`
+- `FIREBASE_FUNCTION_SERVICE_ACCOUNT`
 - `LOGBOOK_ALLOWED_ORIGINS`
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
 - `GCP_DEPLOY_SERVICE_ACCOUNT`
 - `VITE_PUBLIC_ORIGIN`
-- `VITE_ORIGIN_MIGRATION_SOURCE`
-- `VITE_ORIGIN_MIGRATION_TARGET`
 - `VITE_ACCOUNT_DELETION_API_URL`
-- le sette `VITE_FIREBASE_*` usate dal client
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_APP_ID`
 - `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`
 - `VITE_SENTRY_DSN`
 - `SENTRY_ORG`
@@ -52,63 +67,89 @@ Repository secret:
 
 - `SENTRY_AUTH_TOKEN`
 
-Il deploy Google Cloud usa Workload Identity Federation/OIDC; non è richiesto un service-account key JSON persistente nel repository o in GitHub Secrets.
+Il deploy usa GitHub OIDC / Google Workload Identity Federation. Non usare una service-account key JSON persistente.
 
-## Configurazione Vercel temporanea
+Il service account di deploy e quello runtime delle Functions devono essere identità distinte.
 
-Finché il vecchio origin serve da bridge:
+## Verifiche esterne obbligatorie prima del primo deploy
 
-- mantenere deploy da `main` soltanto;
-- impostare source/target migration env sul vecchio build;
-- impostare preferibilmente anche `VITE_PUBLIC_ORIGIN` sul vecchio origin; se manca, i metadati SEO del bridge usano il `VERCEL_PROJECT_PRODUCTION_URL` fornito da Vercel invece di generare URL non validi;
-- mantenere le vecchie credenziali Admin/cron server-only finché gli adapter Vercel sono necessari;
-- non riattivare Analytics/Speed Insights;
-- mantenere CSP compatibile con Firebase/Cloud Functions/Sentry.
+Verificare direttamente nei sistemi competenti:
 
-## Verifiche esterne prima del primo deploy Firebase
+1. piano Blaze/billing del progetto;
+2. Hosting site definitivo e origin canonico scelto;
+3. regione reale Firestore e regione Functions coerente;
+4. API Cloud Functions v2, Cloud Build, Artifact Registry e Cloud Scheduler abilitate;
+5. Workload Identity Federation e service account di deploy;
+6. service account runtime Functions e IAM minimo necessario a Firestore/Auth/App Check;
+7. Firebase Auth Authorized Domains;
+8. Google OAuth origin/redirect, incluso `https://<auth-domain>/__/auth/handler`;
+9. restrizioni HTTP referrer della Browser API key;
+10. dominio della chiave reCAPTCHA Enterprise / App Check;
+11. enforcement App Check applicabile;
+12. Sentry source-map/release;
+13. Cloud Logging/Monitoring e budget alerts;
+14. Search Console/sitemap sul nuovo origin.
 
-Verificare direttamente nelle console competenti:
+## Ordine del deployment
 
-1. Firebase Hosting site realmente esistente e corretto;
-2. Firebase Auth Authorized domains per il nuovo hostname;
-3. Google OAuth origin/redirect necessari;
-4. Browser API key referrer allowlist;
-5. App Check / reCAPTCHA Enterprise domain allowlist per nuovo e vecchio origin durante la transizione;
-6. IAM del principal GitHub WIF e service account deploy;
-7. API/servizi richiesti da Cloud Functions v2, Cloud Build, Artifact Registry e Cloud Scheduler;
-8. billing/quota necessari per Functions v2/Scheduler;
-9. Search Console property/sitemap per il nuovo origin;
-10. Sentry release/source-map upload dal nuovo workflow.
+Il workflow `.github/workflows/firebase-production.yml` si attiva soltanto dopo una `Milestone Verification` riuscita su un **push a `main`**.
 
-## Ordine atomico del deployment applicativo
+L’ordine è intenzionale:
 
-Il workflow Production pubblica deliberatamente **Functions prima di Hosting**. Il backend nuovo deve restare compatibile con il frontend precedente: se la pubblicazione Hosting fallisce o `main` avanza durante il workflow, il vecchio frontend continua quindi a parlare con un backend compatibile. Hosting viene pubblicato soltanto dopo un nuovo controllo exact-SHA di `main`.
+1. checkout exact-SHA verificato;
+2. conferma che lo SHA sia ancora l’HEAD reale di `main`;
+3. autenticazione GCP via WIF;
+4. install/typecheck Functions con Node.js 22;
+5. deploy delle sole Functions LogBook;
+6. nuovo controllo che `main` non sia avanzato;
+7. build frontend Production con Node.js 24 + release Sentry sullo stesso SHA;
+8. nuovo controllo exact-SHA;
+9. deploy Firebase Hosting;
+10. controllo finale di drift.
 
-Le Functions vengono installate, typecheckate e deployate sotto Node.js 22; la build Vite/Sentry resta Node.js 24. `firebase.json` pinna il runtime deployato a `nodejs22`; il range di `functions/package.json` consente solo al tooling CI Node 22-24 di lavorare senza falsi warning di engine.
+Functions vengono pubblicate prima di Hosting perché il backend nuovo è compatibile con il client precedente; un errore nel secondo step non deve lasciare un frontend nuovo senza backend.
 
-La HTTPS Function `accountDeletion` dichiara esplicitamente `invoker: 'public'` perché viene chiamata direttamente dal browser, ma l'accesso applicativo non è anonimo: POST richiede ID token recente/revocation check + App Check, mentre GET recovery richiede App Check + UID/receipt opaca. CORS resta limitato ai soli origin di migrazione.
+## Hosting/PWA
 
-## Sequenza di cutover
+`firebase.json`:
 
-1. Congelare lo SHA candidato e ottenere `Canonical Verification` verde.
-2. Eseguire gli audit indipendenti sullo stesso SHA.
-3. Solo dopo approvazione, squash merge in `main`.
-4. Attendere CI `main` verde sullo SHA risultante.
-5. Il workflow `Firebase Production` ricontrolla che quello SHA sia ancora l'HEAD di `main`; se è stale rifiuta il deploy.
-6. Verificare Hosting, Functions, scheduled maintenance, App Check, Auth e Sentry.
-7. Verificare che il vecchio origin Vercel abbia ricevuto la build bridge da `main` e che i branch non abbiano Preview Deployment.
-8. Eseguire smoke cross-origin con account e guest reali di test, inclusi pending journal/account deletion recovery.
-9. Aggiornare Search Console/canonical indexing.
-10. Solo dopo una finestra di transizione adeguata, ritirare Vercel e rimuovere origin/credenziali/allowlist legacy con un task separato.
+- pubblica `dist/`;
+- preserva `firestore.rules`;
+- contiene soltanto la SPA fallback e **nessun rewrite verso account deletion**;
+- riserva `/__/*` agli helper Firebase;
+- non applica CSP/frame headers applicativi agli endpoint riservati;
+- serve asset fingerprinted `/assets/**` con cache lunga e `immutable`;
+- forza rivalidazione dell’app shell;
+- serve `sw.js` e Workbox con policy no-cache/no-store;
+- mantiene HSTS, nosniff, frame denial, Referrer-Policy, Permissions-Policy e CSP.
+
+Il service worker non deve intercettare il namespace `/__/*`, richiesto da Firebase Authentication.
+
+## Auth domain
+
+In Production `VITE_FIREBASE_AUTH_DOMAIN` deve coincidere con l’hostname canonico pubblico e non può terminare con `.firebaseapp.com`.
+
+Firebase documenta che il namespace `/__` del dominio Hosting è riservato anche agli helper OAuth e che, con Hosting, un auth domain first-party evita i problemi dei browser che bloccano storage/cookie di terze parti.
+
+## Sequenza operativa di cutover
+
+1. congelare il candidate SHA e ottenere `Canonical Verification` verde;
+2. eseguire gli audit indipendenti sullo stesso SHA;
+3. prima del merge/cutover, esportare eventuali dati che si vogliono conservare e completare il reset dell’account esistente;
+4. configurare e verificare tutti i prerequisiti esterni;
+5. solo con approvazione esplicita, squash merge in `main`;
+6. attendere CI post-merge verde sul nuovo SHA di `main`;
+7. verificare il workflow Firebase Production e lo SHA realmente pubblicato;
+8. smoke test: startup, PWA/offline, login email/Google, sync, logout/login, guest→account, account deletion/recovery, App Check, CSP, Sentry;
+9. verificare Search Console/canonical;
+10. rimuovere in un task separato risorse/env Vercel residue lato provider quando non servono più.
 
 ## Failure policy
 
-- Nessun dato locale target divergente viene sovrascritto automaticamente.
-- Nessun account trasferito viene associato a un UID differente.
-- Se il bridge non risponde o lo storage è illeggibile, il target conserva lo stato e invita a riprovare; non dichiara successo.
-- Se il vecchio origin non è più disponibile, usare il backup JSON/manual recovery anziché inventare una migrazione.
-- Un deploy Firebase verde non sostituisce la CI e non prova da solo il runtime end-to-end.
-
-## Cache e namespace Firebase Hosting
-
-Gli asset Vite fingerprinted sotto `/assets/**` sono cacheabili a lungo con `immutable`; app shell, `index.html`, manifest, service worker e Workbox vengono invece rivalidati/no-cache per non trattenere una PWA vecchia. Il namespace Firebase riservato `/__/*` ha priorità sulle SPA rewrite e il service worker LogBook non installa un navigation fallback generale. Inoltre gli header applicativi `X-Frame-Options: DENY` e `CSP frame-ancestors 'none'` escludono esplicitamente `/__/*`, così non interferiscono con l'iframe/helper OAuth gestito da Firebase Authentication sul nuovo `authDomain`.
+- Un deploy Firebase verde non sostituisce la CI.
+- CI verde non prova il runtime Production.
+- Nessun deploy da PR/branch.
+- Nessun fallback a credenziali Admin statiche.
+- Nessun account deletion via Hosting rewrite.
+- Nessun dato locale del vecchio origin viene dichiarato migrato: nel clean cut viene deliberatamente abbandonato/esportato prima del cambio origin.
+- Se la configurazione Production non coincide con origin, project ID, Function URL, site ID o service account previsti, il preflight fallisce chiuso.
