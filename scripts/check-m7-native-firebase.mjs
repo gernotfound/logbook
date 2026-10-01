@@ -159,7 +159,7 @@ if (!deletionHttp.includes('handleAccountDeletionPut')
   failures.push('Account deletion HTTP boundary must support preregistration and both status proof paths.');
 }
 const recoveryBranchStart = deletionHttp.indexOf('if (recoveryHeader)');
-const receiptProgressStart = deletionHttp.indexOf('progressAndReadStatus');
+const receiptProgressStart = deletionHttp.lastIndexOf('progressAndReadStatus(');
 if (recoveryBranchStart < 0 || receiptProgressStart < recoveryBranchStart) {
   failures.push('Recovery credential GET must remain proof-only and return before receipt-driven progress.');
 }
