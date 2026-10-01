@@ -61,4 +61,4 @@ for (const group of config.hosting.headers ?? []) {
 if (!cspUpdated) throw new Error('firebase.json: Content-Security-Policy mancante.');
 
 await writeFile('.firebase-deploy.json', JSON.stringify(config, null, 2) + '\n', 'utf8');
-console.log('Firebase deploy config prepared for site:', site, 'with Function origin:', deletionOrigin);
+console.log('Firebase deploy config prepared.');
