@@ -5,21 +5,18 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 
-// Base path: set to '/' for Vercel or root domains.
+// Frontend production is Firebase Hosting at the root path.
 
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
-const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev'
+const buildSha = process.env.LOGBOOK_BUILD_SHA || process.env.EXPECTED_SHA || process.env.GITHUB_SHA || process.env.VERCEL_GIT_COMMIT_SHA || 'dev'
 const buildHash = buildSha.slice(0, 7)
 const sentryBuildEnabled =
-  (process.env.VERCEL_ENV === 'production' || process.env.FIREBASE_HOSTING_DEPLOY === 'production') &&
+  process.env.FIREBASE_HOSTING_DEPLOY === 'production' &&
   Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
 const buildTime = new Date().toISOString()
 
 const basePath = '/'
 
-// vite-plugin-pwa 1.3.0 still emits Rollup's deprecated inlineDynamicImports
-// in its nested Vite 8 service-worker build. Translate it to the equivalent
-// Rolldown/Vite 8 option until the upstream plugin ships that migration.
 const pwaVite8OutputCompatibility = () => ({
   name: 'logbook:pwa-vite8-output-compatibility',
   config(config: any) {
