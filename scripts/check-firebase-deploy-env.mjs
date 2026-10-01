@@ -2,15 +2,10 @@ const required = [
   'EXPECTED_SHA',
   'LOGBOOK_BUILD_SHA',
   'VITE_PUBLIC_ORIGIN',
-  'VITE_ORIGIN_MIGRATION_SOURCE',
-  'VITE_ORIGIN_MIGRATION_TARGET',
   'VITE_ACCOUNT_DELETION_API_URL',
   'VITE_FIREBASE_API_KEY',
   'VITE_FIREBASE_AUTH_DOMAIN',
-  'VITE_FIREBASE_DATABASE_URL',
   'VITE_FIREBASE_PROJECT_ID',
-  'VITE_FIREBASE_STORAGE_BUCKET',
-  'VITE_FIREBASE_MESSAGING_SENDER_ID',
   'VITE_FIREBASE_APP_ID',
   'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
   'VITE_SENTRY_DSN',
@@ -20,6 +15,7 @@ const required = [
   'FIREBASE_PROJECT_ID',
   'FIREBASE_HOSTING_SITE',
   'FIREBASE_FUNCTION_REGION',
+  'FIREBASE_FUNCTION_SERVICE_ACCOUNT',
   'LOGBOOK_ALLOWED_ORIGINS',
   'GCP_WORKLOAD_IDENTITY_PROVIDER',
   'GCP_DEPLOY_SERVICE_ACCOUNT',
@@ -48,8 +44,6 @@ function httpsUrl(name) {
 }
 
 const publicOrigin = httpsUrl('VITE_PUBLIC_ORIGIN');
-const migrationSource = httpsUrl('VITE_ORIGIN_MIGRATION_SOURCE');
-const migrationTarget = httpsUrl('VITE_ORIGIN_MIGRATION_TARGET');
 const deletionUrl = httpsUrl('VITE_ACCOUNT_DELETION_API_URL');
 
 function requireOriginOnly(name, url) {
@@ -59,22 +53,7 @@ function requireOriginOnly(name, url) {
   }
 }
 
-for (const [name, url] of [
-  ['VITE_PUBLIC_ORIGIN', publicOrigin],
-  ['VITE_ORIGIN_MIGRATION_SOURCE', migrationSource],
-  ['VITE_ORIGIN_MIGRATION_TARGET', migrationTarget],
-]) {
-  requireOriginOnly(name, url);
-}
-
-if (migrationTarget.origin !== publicOrigin.origin) {
-  console.error('VITE_ORIGIN_MIGRATION_TARGET must equal VITE_PUBLIC_ORIGIN.');
-  process.exit(1);
-}
-if (migrationSource.origin === migrationTarget.origin) {
-  console.error('Origin migration source and target must be different origins.');
-  process.exit(1);
-}
+requireOriginOnly('VITE_PUBLIC_ORIGIN', publicOrigin);
 const expectedFunctionHost = `${process.env.FIREBASE_FUNCTION_REGION}-${process.env.FIREBASE_PROJECT_ID}.cloudfunctions.net`;
 if (
   deletionUrl.hostname !== expectedFunctionHost
@@ -103,14 +82,19 @@ if (process.env.VITE_FIREBASE_AUTH_DOMAIN.endsWith('.firebaseapp.com')) {
 }
 
 const allowedValues = process.env.LOGBOOK_ALLOWED_ORIGINS.split(',').map(v => v.trim()).filter(Boolean);
-const allowed = new Set(allowedValues);
-const expectedAllowed = new Set([publicOrigin.origin, migrationSource.origin]);
-if (
-  allowedValues.length !== allowed.size
-  || allowed.size !== expectedAllowed.size
-  || [...allowed].some(origin => !expectedAllowed.has(origin))
-) {
-  console.error('LOGBOOK_ALLOWED_ORIGINS must contain exactly the canonical Firebase origin and the legacy migration source.');
+if (allowedValues.length !== 1 || allowedValues[0] !== publicOrigin.origin) {
+  console.error('LOGBOOK_ALLOWED_ORIGINS must contain exactly the canonical Firebase origin.');
+  process.exit(1);
+}
+
+const serviceAccount = process.env.FIREBASE_FUNCTION_SERVICE_ACCOUNT.trim();
+const serviceAccountPattern = /^[a-z0-9][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9][a-z0-9.-]*\.iam\.gserviceaccount\.com$/;
+if (!serviceAccountPattern.test(serviceAccount)) {
+  console.error('FIREBASE_FUNCTION_SERVICE_ACCOUNT must be a full Google service-account email.');
+  process.exit(1);
+}
+if (serviceAccount === process.env.GCP_DEPLOY_SERVICE_ACCOUNT.trim()) {
+  console.error('Functions runtime and deployment service accounts must be distinct.');
   process.exit(1);
 }
 
@@ -125,8 +109,8 @@ if (publicOrigin.hostname.endsWith('.web.app')) {
 console.log('Firebase Production deploy environment OK:', {
   sha: process.env.LOGBOOK_BUILD_SHA,
   origin: publicOrigin.origin,
-  migrationSource: migrationSource.origin,
   project: process.env.FIREBASE_PROJECT_ID,
   site: process.env.FIREBASE_HOSTING_SITE,
   region: process.env.FIREBASE_FUNCTION_REGION,
+  runtimeServiceAccount: serviceAccount,
 });
