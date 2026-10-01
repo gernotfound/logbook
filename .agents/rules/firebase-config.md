@@ -13,7 +13,7 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | Variabile | Stato corrente | Note |
 |---|---|---|
 | `VITE_FIREBASE_API_KEY` | MUST | Chiave API pubblica Firebase |
-| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth |
+| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth; in Production Firebase Hosting deve essere `thelogbook.web.app` così popup/redirect usano lo stesso origin del frontend |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
 | `VITE_FIREBASE_MEASUREMENT_ID` | OPTIONAL core / REQUIRED per GA4 Production | Letta esclusivamente dal modulo Analytics dopo consenso |
@@ -143,7 +143,8 @@ Le Rules verificano gli invarianti top-level del protocollo che appartengono al 
 Se si cambia o si aggiunge un dominio di hosting:
 
 1. verificare Firebase Auth → Authorized domains;
-2. verificare le restrizioni applicabili della Browser API Key in Google Cloud.
+2. per Firebase Hosting su `web.app`, usare l'origin pubblico anche come `authDomain` Production e autorizzare `https://<origin>/__/auth/handler` nel client OAuth;
+3. verificare le restrizioni applicabili della Browser API Key in Google Cloud.
 
 Questi stati console sono **VERIFY**, non facts dimostrati dal repository.
 

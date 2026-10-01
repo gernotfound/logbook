@@ -87,6 +87,9 @@ if (!hostingWorkflow.includes('thelogbook-index-headers.txt') || !hostingWorkflo
 if (!hostingWorkflow.includes('google-github-actions/auth@v3') || !hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
   failures.push('Firebase Hosting workflow must use Workload Identity Federation');
 }
+if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.includes('thelogbook.web.app')) {
+  failures.push('Firebase Hosting production workflow must enforce the Firebase Hosting origin as authDomain');
+}
 
 if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
 if (vite.includes("process.env.VERCEL_ENV === 'production'")) failures.push('Vercel backend deployments must not trigger frontend Sentry source-map builds');

@@ -295,7 +295,7 @@ GA4 sostituisce Vercel Analytics/Speed Insights nel candidato. Il consenso usa u
 ### VERIFY-LIVE prima del cutover
 
 - confermare che Firebase resti Spark e che il site ID `thelogbook` punti al progetto atteso;
-- configurare sul build frontend le env pubbliche necessarie, incluso Measurement ID GA4 e origin backend Vercel;
+- configurare sul build frontend le env pubbliche necessarie, incluso `VITE_FIREBASE_AUTH_DOMAIN=thelogbook.web.app`, Measurement ID GA4 e origin backend Vercel;
 - verificare che Vercel applichi `framework: null` (preset Other/backend-only) e `fluid: true` dal repository, così non resta dipendente dal preset Vite del frontend e le Functions conservano il runtime atteso; configurare su Vercel `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` senza esporre secret al client; durante la sola finestra di cutover/rollback usare anche `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`, da rimuovere dopo smoke verdi;
 - predisporre Workload Identity Federation per il workflow `Firebase Hosting Production` con service account a privilegio minimo; nessun deploy da PR/branch e nessuna nuova chiave privata JSON se WIF è disponibile;
 - eseguire il deploy Hosting soltanto dallo SHA `main` già passato da Canonical Verification; il workflow post-gate ricontrolla che lo SHA sia ancora l'attuale `origin/main` e deploya esclusivamente Hosting;

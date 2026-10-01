@@ -95,6 +95,10 @@ jobs:
             echo "Unexpected trusted backend origin" >&2
             exit 1
           fi
+          if [ "${VITE_FIREBASE_AUTH_DOMAIN}" != "thelogbook.web.app" ]; then
+            echo "Production Firebase Auth must use the Firebase Hosting origin as authDomain" >&2
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
