@@ -263,15 +263,16 @@ npm run verify:m8
 
 → Contratto completo: `.agents/rules/ci-verification.md` e `.agents/rules/verification-hardening.md`.
 
-## Vercel e deployment
+## Firebase deployment
 
-`vercel.json` è la configurazione repository canonica. Nel contratto corrente:
+`firebase.json` e `.github/workflows/firebase-production.yml` definiscono il target di delivery. `vercel.json` disabilita i deployment Git nel candidato clean-cut.
 
-- **MUST:** `main` è il solo branch abilitato ai deployment Vercel tramite `git.deploymentEnabled`; i branch di sviluppo sono disabilitati.
-- **MUST:** non indebolire questa barriera per ottenere una Preview; la CI GitHub è il gate del branch.
-- Il deployment di produzione deve derivare da `main`.
-- Dopo il merge verificare: commit effettivo su `main`, Canonical Verification sul commit di `main`, deployment Vercel corrispondente e stato verde di entrambi.
-- **VERIFY:** se Vercel Deployment Checks dipende dal nome `Canonical Verification`, non rinominare il job senza prima verificare/aggiornare la configurazione esterna.
+- **MUST:** branch e PR non generano deployment Firebase o Vercel.
+- **MUST:** Firebase Production deriva soltanto da un push su `main` con `Milestone Verification` / `Canonical Verification` verde sullo SHA esatto.
+- **MUST:** il workflow ricontrolla che lo SHA verificato sia ancora l’HEAD di `main` prima di Functions, prima di Hosting e dopo la pubblicazione.
+- **MUST:** Functions vengono pubblicate prima di Hosting e usano Node.js 22 + service account runtime dedicato; frontend/build usa Node.js 24.
+- Dopo il merge verificare: SHA effettivo di `main`, CI post-merge, deployment Functions/Hosting sullo stesso stato e smoke runtime.
+- **VERIFY:** WIF, IAM, Hosting site, Auth/OAuth, App Check, Browser API key, Sentry e Search Console sono configurazione esterna e vanno osservati nel sistema competente.
 
 ## Catalogo globale
 
