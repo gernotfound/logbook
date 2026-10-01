@@ -70,9 +70,9 @@ Il candidato clean-cut non contiene Functions/cron Vercel e `vercel.json` disabi
 
 - configurazione client Firebase/App Check (`VITE_*`);
 - parametri non segreti Firebase Functions;
-- nomi delle env server trusted Vercel legacy (`FIREBASE_ADMIN_*`, `CRON_SECRET`).
+- parametri build Sentry e configurazione Firebase Production senza valori reali.
 
-**MUST:** il template non contiene chiavi private, token, email reali, project identifier privati o altri valori di produzione. La presenza dei nomi server nel template serve soltanto a rendere esplicito il contratto runtime; i valori reali restano in Vercel/secret storage.
+**MUST:** il template non contiene chiavi private, token, email reali, project identifier privati o altri valori di produzione. I valori reali restano in GitHub/Firebase/Google Cloud/Sentry secondo il relativo boundary.
 
 **MUST:** non copiare una private key reale in `.env.example`, Markdown, issue, PR, fixture o codice client.
 
@@ -111,7 +111,7 @@ Configurazione client/build:
 - `VITE_SENTRY_DSN`: DSN pubblico del progetto Sentry, incluso nel bundle Production;
 - `SENTRY_AUTH_TOKEN`: segreto build-only con scope CI per upload source map/release;
 - `SENTRY_ORG` e `SENTRY_PROJECT`: identificatori build-time;
-- `LOGBOOK_BUILD_SHA`: release Sentry e SHA canonico della build Production; i provider-specific `GITHUB_SHA` / `VERCEL_GIT_COMMIT_SHA` restano fallback transitori nel codice, non il contratto del deploy Firebase.
+- `LOGBOOK_BUILD_SHA`: release Sentry e SHA canonico della build Production; `GITHUB_SHA` è solo un fallback CI, non il contratto di deploy.
 
 **MUST:** `SENTRY_AUTH_TOKEN` resta server/build-only, senza prefisso `VITE_`, e non deve comparire in bundle, log, Markdown o fixture. Le source map Production vengono caricate a Sentry e rimosse dagli asset pubblici dopo l'upload.
 
@@ -136,23 +136,25 @@ Questi stati console sono **VERIFY**, non facts dimostrati dal repository.
 
 ## CSP (Content Security Policy)
 
-La CSP canonica del target è configurata in `firebase.json`; `vercel.json` mantiene una CSP compatibile soltanto finché il vecchio origin Vercel resta attivo come bridge. Prima di modificarla:
+La CSP canonica del target è configurata in `firebase.json`. Prima di modificarla:
 
-1. leggere `vercel.json` e identificare la direttiva interessata;
+1. leggere `firebase.json` e identificare la direttiva interessata;
 2. **MUST:** non rimuovere domini Firebase/Sentry o il direct endpoint Functions necessari al comportamento corrente senza una sostituzione verificata;
-3. verificare login, sync, App Check, API account deletion, bridge di migrazione origine e PWA dopo il cambiamento pertinente.
+3. verificare login, sync, App Check, API account deletion e PWA dopo il cambiamento pertinente;
+4. preservare il namespace Firebase riservato `/__/*` fuori dai fallback/service-worker e dagli header applicativi che romperebbero gli helper Auth.
 
-## Deployment e origin migration
+## Deployment clean-cut
 
-`vercel.json` mantiene durante la migrazione il vecchio origin aggiornato soltanto da `main`; i branch restano disabilitati. Il target Firebase viene deployato dal workflow `.github/workflows/firebase-production.yml` soltanto dopo `Milestone Verification` verde su un push a `main`, sullo stesso SHA ancora presente come HEAD di `main`.
+Il target Firebase viene deployato dal workflow `.github/workflows/firebase-production.yml` soltanto dopo `Milestone Verification` verde su un push a `main`, sullo stesso SHA ancora presente come HEAD di `main`.
 
-**MUST:** i branch di sviluppo non generano Preview Deployment Vercel né deploy Firebase.
-**MUST:** il bridge cross-origin trasferisce un Local Envelope soltanto verso l'origin target configurato, conserva causal metadata/pending journal e rifiuta overwrite divergenti.
-**MUST:** il vecchio origin non viene ritirato prima che la finestra di migrazione dati sia conclusa e che le allowlist esterne siano aggiornate.
+**MUST:** i branch/PR non generano deploy Firebase o Vercel.
+**MUST:** `vercel.json` disabilita i deployment Git automatici nel candidato.
+**MUST:** non esiste trasferimento automatico dello storage browser dal vecchio origin. Il reset/export dei dati esistenti è una precondizione operativa del clean cut.
+**MUST:** le allowlist esterne vengono aggiornate al nuovo origin e il vecchio origin viene rimosso quando non serve più.
 
 ## Sicurezza HTTP
 
-Gli header HTTP sono configurati in `vercel.json`; leggere la configurazione corrente prima di descriverne l'elenco come normativo, perché può cambiare indipendentemente da questa regola.
+Gli header HTTP Production target sono configurati in `firebase.json`; `vercel.json` non è la fonte normativa degli header del target.
 
 ## File di credenziali
 
