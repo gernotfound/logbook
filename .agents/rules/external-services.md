@@ -33,7 +33,7 @@ Il repository è pubblico.
 
 ### Firebase / Google Cloud
 
-Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud.
+Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud. Il frontend/PWA target è servito da Firebase Hosting statico sul piano Spark; Functions/Scheduler Firebase non fanno parte dell'architettura.
 
 - Seguire `.agents/rules/firebase-config.md` per contratti env client/server, App Check e Rules.
 - Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. LogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
@@ -41,7 +41,7 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 
 ### Vercel
 
-- Vercel è il boundary di hosting/runtime Production e contiene env Production, Functions e cron.
+- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA Production target è Firebase Hosting.
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
@@ -51,6 +51,13 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 - GitHub è la fonte di verità per repository, PR/ruleset e CI canonica.
 - CodeQL fa parte di `Canonical Verification`; Snyk è supplementare e non deve diventare l'unico controllo SAST bloccante.
 - Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
+
+### Google Analytics / GA4
+
+- GA4 è analytics di utilizzo del frontend Firebase Hosting, separato dalla telemetria tecnica Sentry.
+- La raccolta resta OFF per default e viene abilitata soltanto da un consenso nuovo provider-specific.
+- **MUST:** niente User-ID, user property o eventi custom relativi a workout, nutrizione, misure o salute.
+- **VERIFY:** stream, Measurement ID, Signals, Ads/personalization, retention e data sharing sono stato esterno.
 
 ### Sentry
 

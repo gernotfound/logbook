@@ -116,6 +116,8 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 - NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
 - VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.
 - VERIFY: Vercel Deployment Checks è configurazione esterna; non assumere che blocchi il deploy solo perché il job GitHub si chiama `Canonical Verification`.
+- MUST: Firebase Hosting Production parte soltanto dopo `Milestone Verification` verde su push a `main`, usa lo stesso exact SHA e rifiuta di deployare se `origin/main` è già avanzato.
+- MUST: il workflow Hosting usa `firebase deploy --only hosting`; Rules e indici Firestore non sono side effect del deploy frontend.
 - VERIFY: Vercel Preview verifica build/routing ma non sostituisce il gate repository.
 - VERIFY: ruoli IAM Google Cloud e secret provisionati non sono dimostrati dalla configurazione repository se non esiste IaC/evidenza diretta.
 
