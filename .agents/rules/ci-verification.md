@@ -101,7 +101,7 @@ Il workflow stabile `.github/workflows/firebase-production.yml` non fa parte del
 - MUST: checkout dello SHA verificato e confronto con l'HEAD corrente di `origin/main`; se `main` è avanzato il deploy stale viene rifiutato.
 - MUST: autenticazione Google Cloud via GitHub OIDC / Workload Identity Federation, senza service-account key JSON persistente.
 - MUST: build Production e deploy Hosting + Functions derivano dallo stesso SHA verificato.
-- MUST: la configurazione deploy fail-closed verifica origin canonico, bridge source/target, direct Functions endpoint, App Check/Firebase env e allowlist CORS.
+- MUST: la configurazione deploy fail-closed verifica origin canonico, direct Functions endpoint, App Check/Firebase env, service account runtime dedicato e allowlist CORS.
 - MUST: Firestore Rules non vengono deployate implicitamente da questo workflow quando non sono parte del task.
 
 ## Semantica del failure
@@ -115,7 +115,7 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 
 `pipefail` preserva il codice di uscita non-zero del leaf chain; `2>&1` unisce stdout e stderr nel log. La matrice non usa `continue-on-error`. Il job `Canonical Verification` usa `needs: shards` e fallisce se il risultato aggregato non è `success`.
 
-- MUST: il check aggregato resta denominato esattamente `Canonical Verification` finché required checks/Vercel esterni dipendono da quel nome.
+- MUST: il check aggregato resta denominato esattamente `Canonical Verification` finché il ruleset GitHub lo richiede.
 - MUST: nessun documento può affermare che “qualsiasi stderr” è automaticamente bloccante finché tale controllo non viene implementato.
 - SHOULD: warning inattesi, React `act(...)`, unhandled rejection e framework warning nelle suite candidate vanno corretti o spiegati; non sopprimerli indiscriminatamente per ottenere silenzio.
 
@@ -125,8 +125,6 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 - NOTE: eventuali check Snyk esterni restano supplementari. Un errore operativo come quota/limite raggiunto non equivale a una vulnerabilità rilevata e non sostituisce il risultato CodeQL.
 - NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
 - VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.
-- VERIFY: Vercel Deployment Checks è configurazione esterna; non assumere che blocchi il deploy solo perché il job GitHub si chiama `Canonical Verification`.
-- VERIFY: Vercel Preview verifica build/routing ma non sostituisce il gate repository.
 - VERIFY: ruoli IAM Google Cloud e secret provisionati non sono dimostrati dalla configurazione repository se non esiste IaC/evidenza diretta.
 
 ## Acceptance
