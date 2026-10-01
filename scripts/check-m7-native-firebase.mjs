@@ -165,7 +165,7 @@ function collectRuntimeFiles(dir) {
   }
   return entries;
 }
-for (const file of collectRuntimeFiles('src')) {
+for (const file of [...collectRuntimeFiles('src'), ...collectRuntimeFiles('functions/src')]) {
   const source = readFileSync(file, 'utf8');
   if (/@vercel\/|\/_vercel\/|\bVERCEL_[A-Z0-9_]+\b|vercel\.app/i.test(source)) {
     failures.push(`Vercel runtime dependency remains in ${file}.`);
