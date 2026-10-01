@@ -33,7 +33,7 @@
 - `[ ]` Incident/data-breach runbook è assegnato e provato.
 - `[ ]` Procedura per i diritti degli interessati è operativa.
 - `[ ]` Revoca del consenso dati salute è implementata e testata.
-- `[ ]` Analytics opzionali restano disabilitati per default e revocabili.
+- `[ ]` Google Analytics resta disabilitato per default e revocabile; Web data stream, retention/data sharing, Misurazione avanzata OFF, Google Signals OFF e Ads personalization/links non deliberati sono verificati live.
 - `[ ]` Privacy Policy e Termini corrispondono al modello commerciale e ai fornitori effettivi.
 
 ## Gate contrattuale e commerciale
