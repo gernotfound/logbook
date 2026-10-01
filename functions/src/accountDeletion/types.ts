@@ -23,12 +23,11 @@ export interface AccountDeletionJob {
   cursor?: AccountDeletionCursor;
   attempts: number;
   receiptHash: string;
-  /**
-   * Additional recovery receipts accepted from other authenticated devices.
-   * receiptHash remains the backward-compatible primary receipt.
-   */
   receiptHashes?: string[];
+  recoveryCredentialHashes?: string[];
+  nextAttemptAt?: unknown;
   purgeAfter?: unknown;
+  purgeEligibleAt?: unknown;
   retryable?: boolean;
   leaseOwner?: string;
   leaseUntil?: unknown;

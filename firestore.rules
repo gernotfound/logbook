@@ -269,6 +269,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /account_deletion_recovery/{userId} {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       // Root deletion is server-only. Client-side account deletion must always use
       // the trusted account-deletion job so subcollections and Firebase Auth cannot

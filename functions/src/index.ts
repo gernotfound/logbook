@@ -2,7 +2,7 @@ import { logger } from 'firebase-functions';
 import { defineString } from 'firebase-functions/params';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { handleAccountDeletionGet, handleAccountDeletionPost } from './accountDeletion/http.js';
+import { handleAccountDeletionGet, handleAccountDeletionPost, handleAccountDeletionPut } from './accountDeletion/http.js';
 import { runAccountDeletionMaintenance } from './maintenance.js';
 
 const functionRegion = defineString('LOGBOOK_FUNCTION_REGION');
@@ -10,13 +10,14 @@ const allowedOriginsConfig = defineString('LOGBOOK_ALLOWED_ORIGINS');
 const runtimeServiceAccount = defineString('LOGBOOK_FUNCTION_SERVICE_ACCOUNT');
 
 const MAINTENANCE_BUDGET_MS = 28 * 60 * 1000;
-const ALLOWED_METHODS = 'GET, POST, OPTIONS';
+const ALLOWED_METHODS = 'GET, POST, PUT, OPTIONS';
 const ALLOWED_HEADERS = [
   'authorization',
   'content-type',
   'x-firebase-appcheck',
   'x-account-deletion-uid',
   'x-account-deletion-receipt',
+  'x-account-deletion-recovery',
 ].join(', ');
 
 type HeaderValue = string | string[] | undefined;
@@ -120,6 +121,8 @@ export async function accountDeletionHttpHandler(
   let webResponse: Response;
   if (request.method === 'POST') {
     webResponse = await handleAccountDeletionPost(toWebRequest(request));
+  } else if (request.method === 'PUT') {
+    webResponse = await handleAccountDeletionPut(toWebRequest(request));
   } else if (request.method === 'GET') {
     webResponse = await handleAccountDeletionGet(toWebRequest(request));
   } else {

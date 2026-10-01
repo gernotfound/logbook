@@ -1,9 +1,12 @@
-import { RequestAuthError, verifyDeletionRequester, verifyStatusAppCheck } from './httpAuth.js';
+import { RequestAuthError, verifyAuthenticatedRequester, verifyDeletionRequester, verifyStatusAppCheck } from './httpAuth.js';
 import {
   createOrRefreshDeletionJob,
   readAuthorizedDeletionJob,
   readDeletionStatus,
+  readDeletionStatusWithRecoveryCredential,
+  registerDeletionRecoveryCredential,
   validateReceipt,
+  validateRecoveryCredential,
   validateUid,
 } from './jobStore.js';
 import { processAccountDeletion, progressAndReadStatus } from './runner.js';
@@ -17,22 +20,15 @@ class RequestInputError extends Error {
     this.name = 'RequestInputError';
   }
 }
-
 function validatedInput<T>(read: () => T): T {
-  try {
-    return read();
-  } catch (error) {
+  try { return read(); }
+  catch (error) {
     throw new RequestInputError(error instanceof Error ? error.message : 'Richiesta di cancellazione non valida.');
   }
 }
-
 function errorResponse(error: unknown): Response {
-  if (error instanceof RequestAuthError) {
-    return Response.json({ error: error.message }, { status: error.status });
-  }
-  if (error instanceof RequestInputError) {
-    return Response.json({ error: error.message }, { status: 400 });
-  }
+  if (error instanceof RequestAuthError) return Response.json({ error: error.message }, { status: error.status });
+  if (error instanceof RequestInputError) return Response.json({ error: error.message }, { status: 400 });
   const kind = error instanceof Error ? error.name : 'UnknownError';
   console.error('[account-deletion] backend failure', { kind });
   return Response.json(
@@ -40,7 +36,6 @@ function errorResponse(error: unknown): Response {
     { status: 500 },
   );
 }
-
 async function requestBody(request: Request): Promise<Record<string, unknown>> {
   try {
     const body = await request.json();
@@ -50,12 +45,23 @@ async function requestBody(request: Request): Promise<Record<string, unknown>> {
   }
 }
 
+export async function handleAccountDeletionPut(request: Request): Promise<Response> {
+  try {
+    const { uid } = await verifyAuthenticatedRequester(request);
+    const body = await requestBody(request);
+    const recoveryCredential = validatedInput(() => validateRecoveryCredential(body.recoveryCredential));
+    await registerDeletionRecoveryCredential(uid, recoveryCredential);
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 export async function handleAccountDeletionPost(request: Request): Promise<Response> {
   try {
     const { uid } = await verifyDeletionRequester(request);
     const body = await requestBody(request);
     const receiptToken = validatedInput(() => validateReceipt(body.receiptToken));
-
     await createOrRefreshDeletionJob(uid, receiptToken);
     await processAccountDeletion(uid, Date.now() + ACCOUNT_DELETION_POST_BUDGET_MS);
     const status = await readDeletionStatus(uid, receiptToken);
@@ -70,16 +76,23 @@ export async function handleAccountDeletionGet(request: Request): Promise<Respon
   try {
     await verifyStatusAppCheck(request);
     const uid = validatedInput(() => validateUid(request.headers.get('x-account-deletion-uid')));
-    const receiptToken = validatedInput(() => validateReceipt(request.headers.get('x-account-deletion-receipt')));
+    const receiptHeader = request.headers.get('x-account-deletion-receipt');
+    const recoveryHeader = request.headers.get('x-account-deletion-recovery');
+    if (Boolean(receiptHeader) === Boolean(recoveryHeader)) {
+      throw new RequestInputError('Fornire una sola credenziale di recovery.');
+    }
 
+    if (recoveryHeader) {
+      const recoveryCredential = validatedInput(() => validateRecoveryCredential(recoveryHeader));
+      const status = await readDeletionStatusWithRecoveryCredential(uid, recoveryCredential);
+      if (!status) return Response.json({ error: 'Cancellazione non trovata.' }, { status: 404 });
+      return Response.json(status, { status: 200 });
+    }
+
+    const receiptToken = validatedInput(() => validateReceipt(receiptHeader));
     const authorized = await readAuthorizedDeletionJob(uid, receiptToken);
     if (!authorized) return Response.json({ error: 'Cancellazione non trovata.' }, { status: 404 });
-
-    const status = await progressAndReadStatus(
-      uid,
-      receiptToken,
-      Date.now() + ACCOUNT_DELETION_GET_PROGRESS_BUDGET_MS,
-    );
+    const status = await progressAndReadStatus(uid, receiptToken, Date.now() + ACCOUNT_DELETION_GET_PROGRESS_BUDGET_MS);
     if (!status) return Response.json({ error: 'Cancellazione non trovata.' }, { status: 404 });
     return Response.json(status, { status: 200 });
   } catch (error) {

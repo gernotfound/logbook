@@ -7,6 +7,7 @@ import { processAccountDeletion } from './accountDeletion/runner.js';
 import { purgeExpiredTelemetry } from './telemetryRetention.js';
 
 const SAFETY_BUFFER_MS = 10_000;
+const RECOVERY_PAGE_SIZE = 25;
 
 export interface MaintenanceSummary {
   scanned: number;
@@ -22,13 +23,20 @@ export interface MaintenanceSummary {
 }
 
 export async function runAccountDeletionMaintenance(deadlineMs: number): Promise<MaintenanceSummary> {
-  const jobs = await listRecoverableDeletionJobs(25);
   const counts = { complete: 0, pending: 0, failed: 0, busy: 0 };
+  let scanned = 0;
 
-  for (const job of jobs) {
+  while (Date.now() + SAFETY_BUFFER_MS < deadlineMs) {
+    const jobs = await listRecoverableDeletionJobs(RECOVERY_PAGE_SIZE);
+    scanned += jobs.length;
+    if (jobs.length === 0) break;
+    for (const job of jobs) {
+      if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
+      const result = await processAccountDeletion(job.uid, deadlineMs);
+      counts[result] += 1;
+    }
     if (Date.now() + SAFETY_BUFFER_MS >= deadlineMs) break;
-    const result = await processAccountDeletion(job.uid, deadlineMs);
-    counts[result] += 1;
+    if (jobs.length < RECOVERY_PAGE_SIZE) break;
   }
 
   let purged = 0;
@@ -50,7 +58,7 @@ export async function runAccountDeletionMaintenance(deadlineMs: number): Promise
   }
 
   return {
-    scanned: jobs.length,
+    scanned,
     processed: counts.complete + counts.pending + counts.failed + counts.busy,
     completed: counts.complete,
     pending: counts.pending,
