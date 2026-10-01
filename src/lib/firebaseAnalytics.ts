@@ -9,6 +9,9 @@ const grantedConsent = {
     ad_storage: 'denied',
     ad_user_data: 'denied',
     ad_personalization: 'denied',
+    functionality_storage: 'denied',
+    personalization_storage: 'denied',
+    security_storage: 'denied',
 } as const;
 
 const deniedConsent = {
@@ -16,6 +19,9 @@ const deniedConsent = {
     ad_storage: 'denied',
     ad_user_data: 'denied',
     ad_personalization: 'denied',
+    functionality_storage: 'denied',
+    personalization_storage: 'denied',
+    security_storage: 'denied',
 } as const;
 
 let analyticsSdkPromise: Promise<AnalyticsSdk> | null = null;
