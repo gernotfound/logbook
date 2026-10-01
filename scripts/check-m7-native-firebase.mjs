@@ -26,6 +26,7 @@ const viteConfig = readFileSync('vite.config.ts', 'utf8');
 const serviceWorkerSource = readFileSync('src/sw.ts', 'utf8');
 const deploymentMetadata = readFileSync('scripts/write-deployment-metadata.mjs', 'utf8');
 const firebaseProductionWorkflow = readFileSync('.github/workflows/firebase-production.yml', 'utf8');
+const accountDeletionRecoveryComponent = readFileSync('src/components/AccountDeletionRecovery.tsx', 'utf8');
 
 const functionConfig = Array.isArray(firebase.functions) ? firebase.functions[0] : firebase.functions;
 if (firebase.firestore?.rules !== 'firestore.rules') failures.push('Firestore Rules configuration must be preserved.');
@@ -170,6 +171,12 @@ if (!deletionStore.includes("const RECOVERY_COLLECTION = 'account_deletion_recov
 }
 if (!firestoreRules.match(/match\s+\/account_deletion_recovery\/\{userId\}[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/)) {
   failures.push('Preregistered account deletion recovery credentials must remain server-only in Firestore Rules.');
+}
+const pendingRecoveryLookup = accountDeletionRecoveryComponent.indexOf('const pendingDeletion = findPendingAccountDeletion()');
+const preregistrationLookup = accountDeletionRecoveryComponent.indexOf('if (!pendingDeletion)');
+const receiptResumeLookup = accountDeletionRecoveryComponent.indexOf('? await resumeAccountDeletion(context)');
+if (pendingRecoveryLookup < 0 || preregistrationLookup < pendingRecoveryLookup || receiptResumeLookup < preregistrationLookup) {
+  failures.push('Pending deletion receipt recovery must be selected before opportunistic preregistration.');
 }
 
 if (!adminBootstrap.includes('return initializeApp();')) {

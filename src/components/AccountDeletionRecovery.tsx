@@ -19,13 +19,23 @@ export function AccountDeletionRecovery() {
             if (typeof navigator !== 'undefined' && !navigator.onLine) return;
             running = true;
             try {
-                await ensureAccountDeletionRecoveryCredential();
+                const pendingDeletion = findPendingAccountDeletion();
+                // A persisted receipt is already sufficient to resume the job.
+                // Do not put preregistration first: refresh tokens may have been
+                // revoked already, so an authenticated PUT can legitimately fail.
+                if (!pendingDeletion) {
+                    try {
+                        await ensureAccountDeletionRecoveryCredential();
+                    } catch (error) {
+                        console.warn('Preregistrazione recovery cancellazione non disponibile:', error);
+                    }
+                }
                 const context = {
                     purgeAllLocalUserData: (owner: string, options?: { preserveDeletionRecovery?: boolean }) =>
                         DB.purgeAllLocalUserData(owner, options),
                     resetCache: () => DB.resetCache(),
                 };
-                const outcome = findPendingAccountDeletion()
+                const outcome = pendingDeletion
                     ? await resumeAccountDeletion(context)
                     : await resumeRegisteredAccountDeletion(context);
                 if (!disposed && outcome?.status === 'pending') {
