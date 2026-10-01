@@ -129,6 +129,9 @@ if (!analyticsSource.includes('setAnalyticsCollectionEnabled') || !analyticsSour
 if (!analyticsSource.includes('allow_google_signals: false') || !analyticsSource.includes('allow_ad_personalization_signals: false')) {
   failures.push('Firebase Analytics advertising signals/personalization must remain disabled.');
 }
+if (!analyticsSource.includes('page_location: \`${window.location.origin}${window.location.pathname}\`')) {
+  failures.push('Firebase Analytics automatic page views must strip query/hash state from page_location.');
+}
 if (/\blogEvent\s*\(/.test(analyticsSource) || /setUserId|setUserProperties/.test(analyticsSource)) {
   failures.push('Firebase Analytics must not add custom behavior/health events or user identifiers without a separate reviewed taxonomy.');
 }
