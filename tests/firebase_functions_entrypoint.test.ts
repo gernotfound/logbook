@@ -141,6 +141,7 @@ describe('Firebase Functions production entrypoint', () => {
       timeoutSeconds: 1800,
       memory: '512MiB',
       maxInstances: 1,
+      concurrency: 1,
       retryCount: 3,
     });
     expect(state.maintenance).toHaveBeenCalledWith(expect.any(Number));
