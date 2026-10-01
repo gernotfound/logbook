@@ -10,6 +10,7 @@ Object.assign(process.env, {
   VITE_FIREBASE_AUTH_DOMAIN: 'dummy-domain.web.app',
   VITE_FIREBASE_PROJECT_ID: 'demo-logbook-audit',
   VITE_FIREBASE_APP_ID: '1:1234567890:web:123456',
+  VITE_FIREBASE_MEASUREMENT_ID: 'G-TEST123456',
   VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'dummy-recaptcha-key',
 });
 
