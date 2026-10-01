@@ -25,7 +25,7 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
-import { registerDeletionRecoveryDevice } from '../lib/deletionDeviceRecovery';
+import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -96,6 +96,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSaveError,
         });
     }, [setSyncing, setUserData, setSaveError]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        return watchDeletionRecoveryDeviceRegistration(
+            currentUser,
+            error => console.warn('Recovery device non registrato; nuovo tentativo al prossimo ritorno online/in primo piano.', error),
+        );
+    }, [currentUser]);
 
     useEffect(() => {
         if (!currentUser || guestMigrationStatus === 'idle') return;
@@ -238,7 +246,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
-                void registerDeletionRecoveryDevice(user).catch(error => console.warn('Recovery device non registrato; sarà ritentato al prossimo accesso.', error));
             }
             setCurrentUser(user);
             setLoading(false);

@@ -19,6 +19,24 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(true),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
  if(!response.ok)throw new Error('Registrazione recovery device non riuscita.');
 }
+
+export function watchDeletionRecoveryDeviceRegistration(
+ user:User,
+ onError:(error:unknown)=>void=()=>{},
+):()=>void{
+ let disposed=false;let running=false;
+ const attempt=async()=>{
+   if(disposed||running||!API||!navigator.onLine||auth.currentUser?.uid!==user.uid)return;
+   running=true;
+   try{await registerDeletionRecoveryDevice(user);}catch(error){if(!disposed)onError(error);}finally{running=false;}
+ };
+ const handleOnline=()=>{void attempt();};
+ const handleVisibility=()=>{if(document.visibilityState==='visible')void attempt();};
+ void attempt();
+ window.addEventListener('online',handleOnline);
+ document.addEventListener('visibilitychange',handleVisibility);
+ return()=>{disposed=true;window.removeEventListener('online',handleOnline);document.removeEventListener('visibilitychange',handleVisibility);};
+}
 export async function recoverDeletedAccountOnThisDevice(purge:(owner:string)=>Promise<void>):Promise<boolean>{
  if(!API||!navigator.onLine||auth.currentUser)return false;
  let changed=false;const kept:Credential[]=[];
