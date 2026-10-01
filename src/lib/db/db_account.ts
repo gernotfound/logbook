@@ -62,6 +62,13 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
     if (failures.length) throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
 }
 
+const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || '').replace(/\/$/, '');
+
+function accountDeletionUrl(): string {
+    if (!ACCOUNT_DELETION_API_ORIGIN) throw new Error('Backend cancellazione account non configurato.');
+    return ACCOUNT_DELETION_API_ORIGIN + '/api/account-deletion';
+}
+
 let deleting: Promise<AccountDeletionOutcome> | undefined;
 
 function createReceiptToken(): string {
@@ -88,7 +95,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionUrl(), {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -110,7 +117,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
 
 export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionUrl(), {
         method: 'GET',
         headers: {
             'x-firebase-appcheck': await appCheckToken(),
