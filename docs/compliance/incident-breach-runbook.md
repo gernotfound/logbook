@@ -71,7 +71,7 @@ Se il provider agisce come responsabile per uno specifico trattamento, notificar
 - revoca/rotazione credenziali se coinvolte;
 - chiusura accessi non necessari;
 - correzione root cause via branch/PR/CI, senza bypass dei guardrail;
-- verifica post-fix su GitHub, Vercel e Firebase/Google Cloud pertinenti;
+- verifica post-fix su GitHub, Firebase/Google Cloud e Sentry pertinenti;
 - restore solo da backup verificato;
 - smoke test su isolamento account, sync, deletion e accessi interessati.
 
