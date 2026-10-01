@@ -1,6 +1,6 @@
 # Telemetria Sentry — guida operativa LogBook
 
-> Stato: guida tecnica stabile | Ultima verifica: 2026-09-30 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts`, `firebase.json` e, durante la finestra legacy, `vercel.json`.
+> Stato: guida tecnica stabile | Ultima verifica: 2026-10-01 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts` e `firebase.json`.
 
 LogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Non sono presenti analytics comportamentali nel runtime target: Vercel Analytics e Speed Insights sono ritirati e Google/Firebase Analytics non viene utilizzato.
 
@@ -35,13 +35,13 @@ La build Production usa:
 
 - `VITE_SENTRY_DSN` nel browser;
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` solo durante la build;
-- `LOGBOOK_BUILD_SHA` come nome release e SHA completo; il fallback Vercel è solo transitorio.
+- `LOGBOOK_BUILD_SHA` come nome release e SHA completo.
 
 `@sentry/vite-plugin` viene attivato soltanto in Production quando le credenziali build sono presenti. Vite genera source map hidden, il plugin le carica a Sentry e poi elimina `dist/**/*.map`, evitando di pubblicarle come asset statici.
 
 ## CSP
 
-`firebase.json` autorizza l'endpoint ingest Sentry del progetto nella direttiva `connect-src`; `vercel.json` mantiene lo stesso boundary finché il vecchio origin resta attivo. Non è richiesto alcun dominio Sentry in `script-src` perché lo SDK viene bundlato dall'app.
+`firebase.json` autorizza l'endpoint ingest Sentry del progetto nella direttiva `connect-src`. Non è richiesto alcun dominio Sentry in `script-src` perché lo SDK viene bundlato dall'app.
 
 ## Firestore legacy
 
