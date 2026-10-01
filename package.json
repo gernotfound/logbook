@@ -50,7 +50,9 @@
     "functions:typecheck": "npm --prefix functions run typecheck",
     "functions:build": "npm --prefix functions run build",
     "test:firebase-deploy-env": "node scripts/check-firebase-deploy-env.mjs",
-    "firebase:prepare-deploy": "node scripts/prepare-firebase-deploy-config.mjs"
+    "firebase:prepare-deploy": "node scripts/prepare-firebase-deploy-config.mjs",
+    "test:firebase-release-compatibility": "vitest run tests/m7_account_deletion_api.test.ts && vitest run --config vitest.functions.config.ts tests/firebase_functions_entrypoint.test.ts",
+    "firebase:prepare-release": "node scripts/prepare-firebase-release.mjs"
   },
   "dependencies": {
     "@sentry/react": "^11.1.0",

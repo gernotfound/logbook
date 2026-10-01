@@ -9,15 +9,14 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: firebase-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy Firebase Production
+  prepare:
+    name: Prepare exact-SHA Firebase release
     if: >-
       ${{ github.event.workflow_run.event == 'push' &&
           github.event.workflow_run.head_branch == 'main' &&
@@ -28,8 +27,6 @@ jobs:
       EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
       LOGBOOK_BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
       LOGBOOK_DEPLOY_ENV: production
-      FIREBASE_CLI_VERSION: '15.32.0'
-
       FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
       FIREBASE_HOSTING_SITE: ${{ vars.FIREBASE_HOSTING_SITE }}
       FIREBASE_FUNCTION_REGION: ${{ vars.FIREBASE_FUNCTION_REGION }}
@@ -37,24 +34,22 @@ jobs:
       LOGBOOK_ALLOWED_ORIGINS: ${{ vars.LOGBOOK_ALLOWED_ORIGINS }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-
       VITE_PUBLIC_ORIGIN: ${{ vars.VITE_PUBLIC_ORIGIN }}
       VITE_ACCOUNT_DELETION_API_URL: ${{ vars.VITE_ACCOUNT_DELETION_API_URL }}
-
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_FUNCTION_REGION: ${{ vars.FIREBASE_FUNCTION_REGION }}
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_MEASUREMENT_ID: ${{ vars.VITE_FIREBASE_MEASUREMENT_ID }}
       VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
-
       VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
 
     steps:
       - name: Checkout exact verified SHA
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -66,16 +61,13 @@ jobs:
           actual_sha="$(git rev-parse HEAD)"
           git fetch --no-tags origin main
           main_sha="$(git rev-parse origin/main)"
-          echo "Verified SHA: ${EXPECTED_SHA}"
-          echo "Checkout SHA: ${actual_sha}"
-          echo "Current main: ${main_sha}"
           if [ "${actual_sha}" != "${EXPECTED_SHA}" ] || [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
-            echo "Refusing stale Firebase Production deployment." >&2
+            echo "Refusing stale Firebase Production preparation." >&2
             exit 1
           fi
 
       - name: Setup Node.js 24 for app tooling
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '24'
           cache: npm
@@ -87,13 +79,6 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run test:firebase-deploy-env
-
-      - name: Authenticate to Google Cloud with Workload Identity Federation
-        uses: google-github-actions/auth@v3
-        with:
-          project_id: ${{ vars.FIREBASE_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - name: Prepare Firebase deploy config
         run: npm run firebase:prepare-deploy
@@ -109,51 +94,23 @@ jobs:
           EOF
 
       - name: Setup Node.js 22 for Firebase Functions
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: functions/package-lock.json
 
-      - name: Install and verify Functions dependencies
+      - name: Install, typecheck and compile Functions
         run: |
           npm run functions:install
           npm --prefix functions run typecheck
+          npm --prefix functions run build
 
-      - name: Recheck main HEAD before Functions deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin main
-          main_sha="$(git rev-parse origin/main)"
-          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
-            echo "Refusing stale Functions deployment: main advanced." >&2
-            exit 1
-          fi
-
-      - name: Deploy Functions first
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy \
-            --non-interactive \
-            --project "${FIREBASE_PROJECT_ID}" \
-            --config .firebase-deploy.json \
-            --only functions:accountDeletion,functions:accountDeletionMaintenance
-
-      - name: Recheck main HEAD after Functions deploy
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin main
-          main_sha="$(git rev-parse origin/main)"
-          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
-            echo "Functions are backward-compatible, but main advanced; refusing stale Hosting publication." >&2
-            exit 1
-          fi
+      - name: Verify previous-frontend to candidate-Functions compatibility
+        run: npm run test:firebase-release-compatibility
 
       - name: Setup Node.js 24 for Production app build
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '24'
           cache: npm
@@ -163,34 +120,117 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
-      - name: Recheck main HEAD immediately before Hosting deploy
+      - name: Require tracked source unchanged by dependency execution
+        shell: bash
+        run: git diff --exit-code -- .
+
+      - name: Setup Node.js 22 for pinned Firebase CLI packaging
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+
+      - name: Install pinned Firebase CLI outside privileged job
+        run: npm install --prefix tools/firebase-deploy --ignore-scripts --no-audit --no-fund
+
+      - name: Recheck main before freezing release artifact
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
           main_sha="$(git rev-parse origin/main)"
           if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
-            echo "Refusing stale Firebase Hosting deployment: main advanced during build." >&2
+            echo "Refusing stale Firebase release artifact: main advanced." >&2
             exit 1
           fi
+
+      - name: Prepare exact-SHA release directory
+        run: npm run firebase:prepare-release
+
+      - name: Upload immutable Firebase release
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: firebase-production-${{ env.EXPECTED_SHA }}
+          path: .firebase-release
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2
+
+  deploy:
+    name: Deploy Firebase Production
+    needs: prepare
+    if: ${{ needs.prepare.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout Git metadata for stale-main guard
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Download exact-SHA release artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: firebase-production-${{ env.EXPECTED_SHA }}
+          path: .firebase-release
+
+      - name: Verify artifact SHA binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_sha="$(tr -d '\r\n' < .firebase-release/verified-sha.txt)"
+          if [ "${artifact_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Firebase release artifact SHA mismatch." >&2
+            exit 1
+          fi
+
+      - name: Reject stale release immediately before first Production mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          main_sha="$(git rev-parse origin/main)"
+          if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing stale Firebase Production deployment: main advanced." >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          project_id: ${{ vars.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Deploy Functions first
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd .firebase-release
+          node tools/firebase-deploy/node_modules/firebase-tools/lib/bin/firebase.js deploy             --non-interactive             --project "${FIREBASE_PROJECT_ID}"             --config firebase.json             --only functions:accountDeletion,functions:accountDeletionMaintenance
 
       - name: Deploy Hosting second
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes "firebase-tools@${FIREBASE_CLI_VERSION}" deploy \
-            --non-interactive \
-            --project "${FIREBASE_PROJECT_ID}" \
-            --config .firebase-deploy.json \
-            --only hosting
+          cd .firebase-release
+          node tools/firebase-deploy/node_modules/firebase-tools/lib/bin/firebase.js deploy             --non-interactive             --project "${FIREBASE_PROJECT_ID}"             --config firebase.json             --only hosting
 
-      - name: Detect main drift after deployment
+      - name: Observe main drift after coherent release
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
           main_sha="$(git rev-parse origin/main)"
           if [ "${main_sha}" != "${EXPECTED_SHA}" ]; then
-            echo "Firebase deployment completed, but main advanced during publication; the newer main workflow must supersede it." >&2
-            exit 1
+            echo "main advanced during publication; this coherent release completed and the newer main run will supersede it."
           fi

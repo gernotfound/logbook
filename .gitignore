@@ -59,3 +59,5 @@ test-results/
 gha-creds-*.json
 .firebase-deploy.json
 functions/lib/
+
+.firebase-release/
