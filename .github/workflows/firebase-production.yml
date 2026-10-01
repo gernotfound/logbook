@@ -39,16 +39,11 @@ jobs:
       GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       VITE_PUBLIC_ORIGIN: ${{ vars.VITE_PUBLIC_ORIGIN }}
-      VITE_ORIGIN_MIGRATION_SOURCE: ${{ vars.VITE_ORIGIN_MIGRATION_SOURCE }}
-      VITE_ORIGIN_MIGRATION_TARGET: ${{ vars.VITE_ORIGIN_MIGRATION_TARGET }}
       VITE_ACCOUNT_DELETION_API_URL: ${{ vars.VITE_ACCOUNT_DELETION_API_URL }}
 
       VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
-      VITE_FIREBASE_DATABASE_URL: ${{ vars.VITE_FIREBASE_DATABASE_URL }}
       VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
       VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
       VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ vars.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY }}
 
@@ -166,34 +161,6 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
-
-      - name: Require exact legacy bridge build before Hosting
-        shell: bash
-        run: |
-          set -euo pipefail
-          marker_url="${VITE_ORIGIN_MIGRATION_SOURCE}/migration-ready.json"
-          for attempt in $(seq 1 30); do
-            marker="$(curl -fsS --max-time 10 -H 'Cache-Control: no-cache' "${marker_url}?sha=${EXPECTED_SHA}&attempt=${attempt}" || true)"
-            if MARKER="${marker}" node --input-type=module -e '
-              try {
-                const marker = JSON.parse(process.env.MARKER || "{}");
-                const expectedSha = process.env.EXPECTED_SHA;
-                const expectedOrigin = process.env.VITE_ORIGIN_MIGRATION_SOURCE;
-                if (marker.version === 1 && marker.buildSha === expectedSha && marker.origin === expectedOrigin) {
-                  process.exit(0);
-                }
-              } catch {}
-              process.exit(1);
-            '; then
-              echo "Legacy origin is serving the exact migration bridge SHA ${EXPECTED_SHA}."
-              break
-            fi
-            if [ "${attempt}" -eq 30 ]; then
-              echo "Refusing Firebase Hosting cutover: legacy origin is not serving the exact migration bridge SHA." >&2
-              exit 1
-            fi
-            sleep 10
-          done
 
       - name: Recheck main HEAD immediately before Hosting deploy
         shell: bash
