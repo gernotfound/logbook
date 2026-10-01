@@ -5,7 +5,6 @@ const sha = 'a'.repeat(40);
 const project = 'logbook-db-98cc4';
 const region = 'europe-west1';
 const publicOrigin = 'https://thelogbook.web.app';
-const legacyOrigin = 'https://legacy-logbook.vercel.app';
 
 function env(overrides: Record<string, string> = {}) {
   return {
@@ -14,15 +13,10 @@ function env(overrides: Record<string, string> = {}) {
     LOGBOOK_BUILD_SHA: sha,
     LOGBOOK_DEPLOY_ENV: 'production',
     VITE_PUBLIC_ORIGIN: publicOrigin,
-    VITE_ORIGIN_MIGRATION_SOURCE: legacyOrigin,
-    VITE_ORIGIN_MIGRATION_TARGET: publicOrigin,
     VITE_ACCOUNT_DELETION_API_URL: `https://${region}-${project}.cloudfunctions.net/accountDeletion`,
     VITE_FIREBASE_API_KEY: 'public-test-key',
     VITE_FIREBASE_AUTH_DOMAIN: 'thelogbook.web.app',
-    VITE_FIREBASE_DATABASE_URL: 'https://example.invalid',
     VITE_FIREBASE_PROJECT_ID: project,
-    VITE_FIREBASE_STORAGE_BUCKET: 'example.invalid',
-    VITE_FIREBASE_MESSAGING_SENDER_ID: '123',
     VITE_FIREBASE_APP_ID: '1:123:web:test',
     VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'public-site-key',
     VITE_SENTRY_DSN: 'https://public@example.invalid/1',
@@ -32,7 +26,8 @@ function env(overrides: Record<string, string> = {}) {
     FIREBASE_PROJECT_ID: project,
     FIREBASE_HOSTING_SITE: 'thelogbook',
     FIREBASE_FUNCTION_REGION: region,
-    LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},${legacyOrigin}`,
+    LOGBOOK_ALLOWED_ORIGINS: publicOrigin,
+    FIREBASE_FUNCTION_SERVICE_ACCOUNT: 'logbook-runtime@example-project.iam.gserviceaccount.com',
     GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/123/locations/global/workloadIdentityPools/test/providers/github',
     GCP_DEPLOY_SERVICE_ACCOUNT: 'firebase-deploy@example.invalid',
     ...overrides,
@@ -53,12 +48,6 @@ describe('Firebase Production deploy environment guard', () => {
     expect(run()).toContain('Firebase Production deploy environment OK');
   });
 
-  it('rejects a migration target with a path even when its origin matches', () => {
-    expect(() => run({
-      VITE_ORIGIN_MIGRATION_TARGET: publicOrigin + '/unexpected-path',
-    })).toThrow();
-  });
-
   it('rejects an account deletion endpoint from another Firebase project', () => {
     expect(() => run({
       VITE_ACCOUNT_DELETION_API_URL: `https://${region}-other-project.cloudfunctions.net/accountDeletion`,
@@ -73,7 +62,19 @@ describe('Firebase Production deploy environment guard', () => {
 
   it('rejects widening the CORS allowlist beyond the migration source and canonical origin', () => {
     expect(() => run({
-      LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},${legacyOrigin},https://unexpected.example`,
+      LOGBOOK_ALLOWED_ORIGINS: `${publicOrigin},https://unexpected.example`,
+    })).toThrow();
+  });
+
+  it('rejects reusing the deployment identity as the Functions runtime identity', () => {
+    expect(() => run({
+      FIREBASE_FUNCTION_SERVICE_ACCOUNT: 'firebase-deploy@example.invalid',
+    })).toThrow();
+  });
+
+  it('rejects an invalid Functions runtime service-account identity', () => {
+    expect(() => run({
+      FIREBASE_FUNCTION_SERVICE_ACCOUNT: 'not-a-service-account',
     })).toThrow();
   });
 
