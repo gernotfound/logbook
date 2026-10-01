@@ -164,7 +164,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, App Check/reCAPTCHA Enterprise, Hosting e Cloud Functions. LogBook non utilizza Firebase Analytics.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — durante la migrazione dell'hosting, il precedente indirizzo può restare temporaneamente disponibile per consentire il trasferimento sicuro dei dati locali e la compatibilità dei client già installati. Vercel Analytics e Speed Insights non sono più utilizzati.</li>
+
               <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; LogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
             </ul>
             <p>
