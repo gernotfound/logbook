@@ -60,6 +60,19 @@ describe('M7 native account deletion HTTP boundary', () => {
     runner.progressAndReadStatus.mockResolvedValue({ uid: 'u', status: 'deleting', attempts: 1 });
   });
 
+
+  it('rejects cross-origin callers outside the Firebase Hosting origin before auth', async () => {
+    const bad = new Request('https://example.test/api/account-deletion', {
+      method: 'POST',
+      headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+      body: JSON.stringify({ receiptToken: 'receipt' }),
+    });
+    const response = await POST(bad);
+    expect(response.status).toBe(403);
+    expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
   it('returns 400 only for malformed client input', async () => {
     const response = await POST(request('POST', { receiptToken: 'bad' }));
     expect(response.status).toBe(400);
