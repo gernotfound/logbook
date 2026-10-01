@@ -93,6 +93,10 @@ if (!serviceAccountPattern.test(serviceAccount)) {
   console.error('FIREBASE_FUNCTION_SERVICE_ACCOUNT must be a full Google service-account email.');
   process.exit(1);
 }
+if (!serviceAccount.endsWith(`@${process.env.FIREBASE_PROJECT_ID}.iam.gserviceaccount.com`)) {
+  console.error('FIREBASE_FUNCTION_SERVICE_ACCOUNT must belong to the configured Firebase project.');
+  process.exit(1);
+}
 if (serviceAccount === process.env.GCP_DEPLOY_SERVICE_ACCOUNT.trim()) {
   console.error('Functions runtime and deployment service accounts must be distinct.');
   process.exit(1);
