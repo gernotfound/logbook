@@ -82,7 +82,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         it('does not initialize or allowlist Google/Firebase Analytics', () => {
             const firebaseSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebase.ts'), 'utf-8');
             const appSource = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf-8');
-            const vercelConfig = fs.readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf-8');
+            const hostingConfig = fs.readFileSync(path.resolve(__dirname, '../firebase.json'), 'utf-8');
 
             expect(firebaseSource).not.toContain('firebase/analytics');
             expect(firebaseSource).not.toContain('measurementId');
@@ -91,11 +91,11 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(firebaseSource).not.toContain('persistentLocalCache');
             expect(firebaseSource).not.toContain('persistentMultipleTabManager');
             expect(appSource).not.toContain('firebase/analytics');
-            expect(vercelConfig).not.toContain('google-analytics.com');
-            expect(vercelConfig).not.toContain('googletagmanager.com');
-            expect(vercelConfig).not.toContain('fonts.googleapis.com');
-            expect(vercelConfig).not.toContain('fonts.gstatic.com');
-            expect(vercelConfig).not.toContain('firebaseio.com');
+            expect(hostingConfig).not.toContain('google-analytics.com');
+            expect(hostingConfig).not.toContain('googletagmanager.com');
+            expect(hostingConfig).not.toContain('fonts.googleapis.com');
+            expect(hostingConfig).not.toContain('fonts.gstatic.com');
+            expect(hostingConfig).not.toContain('firebaseio.com');
         });
     });
 
