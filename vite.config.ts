@@ -8,7 +8,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 // Base path: set to '/' for Vercel or root domains.
 
 const appVersion = process.env.npm_package_version || '0.0.0-dev'
-const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || 'dev'
+const buildSha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || 'dev'
 const buildHash = buildSha.slice(0, 7)
 const sentryBuildEnabled =
   (process.env.VERCEL_ENV === 'production' || process.env.FIREBASE_HOSTING_DEPLOY === 'production') &&
