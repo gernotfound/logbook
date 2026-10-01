@@ -28,6 +28,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
 | Vercel Hosting | CURRENT LIVE UNTIL CUTOVER / RETIRED IN TARGET | provider precedente; nessuna dipendenza nel candidato | Vercel VERIFY-LIVE + `vercel.json` con deploy Git disabilitato |
 | Vercel Analytics / Speed Insights | RETIRED IN CANDIDATE | rimossi dal runtime target | codice candidato + Vercel VERIFY-LIVE |
+| Google Analytics for Firebase | OPTIONAL / VERIFY-LIVE | statistiche di utilizzo non essenziali dopo opt-in | codice candidato + Firebase/Google Analytics console |
 | Sentry | ACTIVE | error monitoring tecnico Production | Sentry + build Production |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
@@ -102,14 +103,15 @@ Nel candidato `vercel.json` imposta `deploymentEnabled: false`: nessun branch, i
 
 La CSP segue il principio di allowlist minima. LogBook usa font di sistema e non carica Google Fonts: gli origin `fonts.googleapis.com`/`fonts.gstatic.com` sono stati rimossi nella seconda passata del 2026-09-30 insieme agli origin Realtime Database non usati.
 
-Il codice target legge quattro variabili Firebase Web:
+Il codice target legge cinque variabili Firebase Web:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
 - `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
 
-`VITE_FIREBASE_MEASUREMENT_ID` non è usata dal codice corrente e il 2026-09-30 è stata rimossa da Vercel. Firebase Analytics non fa parte del prodotto e la variabile non deve essere reintrodotta come dipendenza.
+Il `measurementId` GA4 era stato rimosso dal vecchio deployment Vercel il 2026-09-30 quando Firebase Analytics non faceva parte del prodotto. La decisione di prodotto del 2026-10-01 introduce invece Google Analytics nel **nuovo target Firebase**: il valore Production deve vivere nella configurazione GitHub/Firebase del nuovo delivery, non essere reintrodotto come dipendenza Vercel.
 
 Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
 
@@ -121,16 +123,22 @@ Inventario fornito dal product owner il 2026-09-30, da verificare live prima di 
 
 | Famiglia env | Scope riportato | Nota |
 |---|---|---|
-| quattro `VITE_FIREBASE_*` usate dal client | target Production | configurazione Firebase Web |
+| quattro `VITE_FIREBASE_*` storiche usate dal client Vercel | Production corrente | configurazione Firebase Web della vecchia Production |
 | `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` | Production | site key pubblica canonica App Check |
 | env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | Error Monitoring/source map |
-| `VITE_FIREBASE_MEASUREMENT_ID` | RIMOSSA | Firebase Analytics non usato |
+| `VITE_FIREBASE_MEASUREMENT_ID` | RIMOSSA DALLA PRODUCTION VERCEL | verrà configurata nel target Firebase/GitHub, non nel provider ritirato |
 | `VITE_RECAPTCHA_V3_SITE_KEY` | RIMOSSA | alias legacy ritirato dopo cutover Enterprise |
 
 
 ## Vercel Analytics / Speed Insights
 
-Il candidato Firebase li rimuove dal bundle e dalla UI. La chiave locale storica può essere ancora eliminata dai percorsi di cleanup, ma non governa più componenti runtime. Non introdurre Firebase Analytics come sostituzione automatica.
+Il candidato Firebase li rimuove dal bundle e dalla UI. La decisione di prodotto del 2026-10-01 introduce Google Analytics for Firebase come sostituzione, ma **non eredita il consenso Vercel**: `logbook_analytics_consent` viene ritirata e il nuovo opt-in usa `logbook_google_analytics_consent_v1`, default OFF.
+
+## Google Analytics for Firebase
+
+Il runtime target carica `firebase/analytics` soltanto in Production e dopo consenso esplicito. Consent Mode mantiene sempre negati `ad_storage`, `ad_user_data` e `ad_personalization`; inoltre il codice disabilita Google Signals e advertising personalization. Non vengono definiti eventi custom workout/nutrizione/misure, né vengono deliberatamente inviati UID Firebase o email.
+
+**VERIFY-LIVE prima del cutover:** Firebase deve essere collegato alla proprietà Google Analytics corretta e alla Web data stream corretta; measurement ID, retention, data sharing, Google Signals, Ads personalization/links e impostazioni territoriali devono essere verificati direttamente in console. Il repository dimostra il comportamento client, non lo stato della proprietà GA.
 
 ## Sentry
 
@@ -213,7 +221,8 @@ Pulizia esterna completata/verificata il 2026-09-30:
 4. dopo il cutover revocare env/credenziali e integrazioni Vercel residue;
 5. verificare cron e Functions;
 6. verificare GitHub ruleset/required check;
-7. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
-8. verificare Snyk come supplementare e CodeQL come gate;
-9. verificare Search Console, sitemap, robots e canonical Production URL;
-10. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
+7. verificare Google Analytics: data stream, consent, retention/data sharing e assenza di funzionalità Ads non deliberate;
+8. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
+9. verificare Snyk come supplementare e CodeQL come gate;
+10. verificare Search Console, sitemap, robots e canonical Production URL;
+11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.

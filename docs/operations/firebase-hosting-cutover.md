@@ -16,7 +16,7 @@ Prima del cutover definitivo l’account/dati che si desidera abbandonare devono
 - **Cloud Functions for Firebase v2** espone `accountDeletion` e la scheduled function `accountDeletionMaintenance`.
 - **Firestore/Auth/App Check** restano nello stesso progetto Firebase.
 - **Sentry** resta il solo error monitoring applicativo.
-- **Google/Firebase Analytics non viene introdotto**.
+- **Google Analytics for Firebase** sostituisce Vercel Analytics/Speed Insights, ma resta opzionale: default OFF, lazy-load solo dopo opt-in, nessun riuso del vecchio consenso Vercel e nessuna funzionalità Ads.
 - **Vercel non è parte dell’architettura target**; `vercel.json` disabilita i deployment Git automatici nel candidato.
 
 ## Account deletion
@@ -86,9 +86,10 @@ Verificare direttamente nei sistemi competenti:
 9. restrizioni HTTP referrer della Browser API key;
 10. dominio della chiave reCAPTCHA Enterprise / App Check;
 11. enforcement App Check applicabile;
-12. Sentry source-map/release;
-13. Cloud Logging/Monitoring e budget alerts;
-14. Search Console/sitemap sul nuovo origin.
+12. Google Analytics collegato al progetto Firebase con Web data stream corretta, `VITE_FIREBASE_MEASUREMENT_ID`, retention/data sharing verificati e Google Signals/Ads personalization non attivati;
+13. Sentry source-map/release;
+14. Cloud Logging/Monitoring e budget alerts;
+15. Search Console/sitemap sul nuovo origin.
 
 ## Ordine del deployment
 
@@ -141,9 +142,23 @@ Firebase documenta che il namespace `/__` del dominio Hosting è riservato anche
 5. solo con approvazione esplicita, squash merge in `main`;
 6. attendere CI post-merge verde sul nuovo SHA di `main`;
 7. verificare il workflow Firebase Production e lo SHA realmente pubblicato;
-8. smoke test: startup, PWA/offline, login email/Google, sync, logout/login, guest→account, account deletion/recovery, App Check, CSP, Sentry;
+8. smoke test: startup, PWA/offline, login email/Google, sync, logout/login, guest→account, account deletion/recovery, App Check, CSP, Sentry e Google Analytics opt-in/revoca;
 9. verificare Search Console/canonical;
 10. rimuovere in un task separato risorse/env Vercel residue lato provider quando non servono più.
+
+## Valutazione delle funzionalità native Firebase
+
+Per il target sono state riesaminate le primitive Firebase più vicine ai problemi reali di LogBook:
+
+- **Firebase Analytics / GA4: ADOTTATO**, perché sostituisce in modo nativo le statistiche Vercel. Rimane separato da Sentry, opzionale e consent-gated.
+- **App Check + reCAPTCHA Enterprise: MANTENUTO**, già coerente con Firebase e con il boundary anti-abuse.
+- **Scheduled Functions: MANTENUTE**, adatte alla recovery/retention giornaliera senza endpoint cron pubblico o `CRON_SECRET`.
+- **Firebase Admin con ADC/IAM: MANTENUTO**, evitando private key statiche.
+- **Firebase Performance Monitoring: NON ADOTTATO ORA**. Aggiungerebbe un ulteriore flusso telemetrico/privacy e non è necessario per completare il cutover; Sentry copre l'error monitoring e GA4 le statistiche di utilizzo.
+- **Firestore persistent cache: NON ADOTTATA**. LogBook usa deliberatamente IndexedDB owner-scoped come persistenza offline canonica e mantiene Firestore memory-only per non creare una seconda copia privata non governata dal lifecycle.
+- **Hosting rewrite verso accountDeletion: NON ADOTTATO**. La Function può durare più del limite di proxy di Hosting, quindi il client usa l'endpoint HTTPS diretto.
+- **Remote Config, FCM, Storage e Realtime Database: NON ADOTTATI** finché non esiste un requisito di prodotto concreto.
+- **Firestore TTL per i dati legacy: NON ADOTTATO in questo cutover**. La maintenance server esistente conserva un comportamento unico e testato per retention/account-deletion; eventuale sostituzione richiede un task dedicato e verifica live di billing/configurazione.
 
 ## Failure policy
 

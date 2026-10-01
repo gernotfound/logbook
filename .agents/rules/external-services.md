@@ -39,6 +39,8 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 - Nel candidato di migrazione, Firebase Hosting + Cloud Functions v2 sono il target di delivery; il deploy Production resta vietato finché il candidato non viene approvato e mergiato su `main`.
 - Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. LogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
 - Le restrizioni Browser API key e la configurazione OAuth sono controlli di sicurezza esterni e devono essere riesaminati quando cambia l'origin canonico di deployment.
+- Google Analytics for Firebase è un boundary opzionale distinto da Sentry: richiede opt-in esplicito, proprietà/data stream e `measurementId` verificati live. Google Signals, advertising personalization e collegamenti Ads non vanno considerati attivi senza evidenza esplicita.
+- Retention, data sharing e impostazioni regionali Google Analytics sono stato esterno e devono essere verificate prima del cutover; il codice non deve compensare configurazioni console ignote con default permissivi.
 
 ### Vercel
 

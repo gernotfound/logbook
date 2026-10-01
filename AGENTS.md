@@ -32,7 +32,7 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 
 ## Autonomia operativa
 
-Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Vercel.
+Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Firebase Production/runtime.
 
 Non richiedere una nuova approvazione per scelte di implementazione, test falliti, CI rossa, conflitti tecnici o correzioni necessarie lungo quel ciclo. Fermarsi solo se serve una vera decisione di prodotto/UX non deducibile, un'azione distruttiva/irreversibile sui dati utente non già autorizzata, oppure mancano permessi/strumenti indispensabili.
 
@@ -47,11 +47,11 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
-- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `app-check`).
+- **Backend client:** Firebase Modular SDK v12 (`firestore`, `auth`, `app-check`, `analytics` opzionale).
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. Vercel Analytics e Speed Insights sono ritirati nella migrazione; Google/Firebase Analytics non fa parte del prodotto. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
+- **Monitoring e analytics:** Sentry Error Monitoring per errori/anomalie tecniche; Google Analytics for Firebase per statistiche di utilizzo non essenziali, solo dopo opt-in esplicito e revocabile. Vercel Analytics e Speed Insights sono ritirati nella migrazione. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
 - **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
 
 ## File canonici del modello dati
@@ -144,7 +144,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 
 Esistono tre contratti separati:
 
-1. **Client Firebase:** quattro env `VITE_FIREBASE_*` effettivamente usate (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`) sono lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote.
+1. **Client Firebase:** cinque env `VITE_FIREBASE_*` effettivamente usate (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`, `MEASUREMENT_ID`) sono lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote. `MEASUREMENT_ID` abilita il boundary Google Analytics opzionale ma resta configurazione client pubblica.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
 3. **Server trusted target:** Firebase Cloud Functions v2 usa Application Default Credentials/IAM; `LOGBOOK_FUNCTION_REGION`, `LOGBOOK_FUNCTION_SERVICE_ACCOUNT` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti. Non esiste un percorso Production basato su private key Admin esportate o `CRON_SECRET`.
 
@@ -194,10 +194,12 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 Distinguere due sistemi:
 
 1. **Telemetria tecnica LogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
-2. **Analytics di utilizzo:** non presenti nel runtime target. Vercel Analytics/Speed Insights sono ritirati e Google/Firebase Analytics non viene inizializzato né usato.
+2. **Analytics di utilizzo:** Google Analytics for Firebase è opzionale, disabilitato per default e viene caricato soltanto dopo un opt-in esplicito memorizzato nella nuova preferenza provider-specific `logbook_google_analytics_consent_v1`. La precedente preferenza Vercel `logbook_analytics_consent` viene ignorata/ritirata e non può autorizzare automaticamente Google Analytics. La revoca disabilita immediatamente la raccolta nella sessione corrente ed è sincronizzata fra tab.
 
-- **MUST:** non reintrodurre analytics comportamentale o eventi workout/PWA senza nuova decisione di prodotto e rivalutazione privacy esplicita.
-- **MUST:** la telemetria tecnica Sentry non viene estesa a eventi comportamentali per sostituire implicitamente un sistema Analytics.
+- **MUST:** senza opt-in Google Analytics non viene inizializzato e il modulo `firebase/analytics` resta lazy; non affidarsi ai soli cookieless pings come sostituto del consenso.
+- **MUST:** `analytics_storage` è concesso solo dopo opt-in; `ad_storage`, `ad_user_data` e `ad_personalization` restano sempre `denied`; Google signals e advertising personalization restano disabilitati nel codice.
+- **MUST:** non inviare a Google Analytics Firebase UID, email, identificatori account, contenuti workout/nutrizione/misure o eventi custom relativi a salute/comportamento senza una nuova decisione di prodotto, tassonomia eventi e rivalutazione privacy esplicita.
+- **MUST:** la telemetria tecnica Sentry non viene estesa a eventi comportamentali per sostituire implicitamente Google Analytics.
 - **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
 - **MUST:** source map Sentry sono generate solo nella build Production, caricate con credenziale build-only `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.

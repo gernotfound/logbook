@@ -1,6 +1,6 @@
 # Configurazione Firebase — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-10-01 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `functions/src/accountDeletion/firebaseAdmin.ts`, `functions/src/index.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+> Stato: normativo | Ultima verifica: 2026-10-01 | File verificati: `src/lib/firebase.ts`, `src/lib/firebaseAnalytics.ts`, `src/lib/analyticsConsent.ts`, `src/lib/appCheck.ts`, `functions/src/accountDeletion/firebaseAdmin.ts`, `functions/src/index.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti
 
@@ -8,7 +8,7 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 
 ### Client Firebase — fail-fast
 
-`src/lib/firebase.ts` controlla all'avvio soltanto le quattro opzioni Firebase realmente usate dal client. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
+`src/lib/firebase.ts` controlla all'avvio le cinque opzioni Firebase realmente usate dal client. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
 
 | Variabile | Stato corrente | Note |
 |---|---|---|
@@ -16,6 +16,7 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 | `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Deve coincidere con l’hostname canonico Firebase Hosting |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
 | `VITE_FIREBASE_APP_ID` | MUST | ID della Firebase Web App |
+| `VITE_FIREBASE_MEASUREMENT_ID` | MUST | ID GA4 Web (`G-...`) della data stream collegata alla Firebase Web App |
 
 Realtime Database, Firebase Storage e Firebase Cloud Messaging non sono importati dal runtime LogBook; `databaseURL`, `storageBucket` e `messagingSenderId` non fanno quindi parte del contratto fail-fast.
 
@@ -33,20 +34,29 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
 - **Compatibilità:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato e verificato il 2026-09-30; i precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
-- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle sette env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
+- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle cinque env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
 **VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
-## Analytics non essenziali
+## Google Analytics for Firebase — opzionale e consent-gated
 
-Google/Firebase Analytics non fa parte del prodotto e `src/lib/firebase.ts` non deve importare `firebase/analytics`, configurare `measurementId` o richiedere `VITE_FIREBASE_MEASUREMENT_ID`.
+La decisione di prodotto del 2026-10-01 sostituisce Vercel Analytics/Speed Insights con **Google Analytics for Firebase** nel target Firebase. Il provider analytics cambia, quindi il vecchio consenso Vercel non viene riutilizzato.
 
-Vercel Analytics e Speed Insights sono ritirati nel target Firebase; `src/lib/analyticsConsent.ts` non fa più parte del runtime.
+- `src/lib/analyticsConsent.ts` usa la chiave provider-specific `logbook_google_analytics_consent_v1`, default `false`, sincronizzazione cross-tab e revoca fail-closed. La chiave legacy `logbook_analytics_consent` viene rimossa/ignorata e non autorizza Google Analytics.
+- `src/lib/firebaseAnalytics.ts` carica dinamicamente `firebase/analytics` soltanto in Production e soltanto dopo consenso persistito.
+- Prima dell'inizializzazione vengono impostati `analytics_storage: granted` e, sempre, `ad_storage`, `ad_user_data`, `ad_personalization: denied`.
+- La configurazione mantiene `allow_google_signals: false` e `allow_ad_personalization_signals: false`.
+- La revoca chiama sia Consent Mode sia `setAnalyticsCollectionEnabled(..., false)`.
+- Il codice non usa `logEvent`, `setUserId` o `setUserProperties`: il target iniziale raccoglie soltanto misurazione standard GA4, senza eventi custom workout/PWA/salute e senza Firebase UID/email deliberatamente inviati.
+- `VITE_FIREBASE_MEASUREMENT_ID` è configurazione pubblica obbligatoria del candidato Production e viene validata dal preflight.
+- La CSP autorizza solo gli origin necessari a Google Analytics **senza funzionalità Ads**; non allowlistare DoubleClick/Google Ads salvo futura decisione esplicita.
 
-**MUST:** non reintrodurre Google/Firebase Analytics, Vercel Analytics o altri analytics comportamentali senza una nuova decisione di prodotto e una rivalutazione privacy esplicita.
+**VERIFY-LIVE prima del cutover:** collegamento Firebase ↔ proprietà Google Analytics, Web data stream corretta, measurement ID, data retention, data sharing/Google Signals/Ads personalization e impostazioni territoriali devono essere verificati nella console competente. Il repository non prova il loro stato live.
+
+**MUST:** nessun dato salute/contenuto business, identificativo account o evento custom viene aggiunto ad Analytics senza nuova decisione di prodotto, tassonomia documentata, aggiornamento privacy e regressioni.
 
 ## Server trusted M7 — Firebase Admin
 

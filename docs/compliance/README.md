@@ -1,7 +1,7 @@
 # LogBook — pacchetto compliance per il primo pilot
 
 > Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
-> Ultimo aggiornamento tecnico: 23 settembre 2026.
+> Ultimo aggiornamento tecnico: 1 ottobre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 
 ## Obiettivo
@@ -15,9 +15,10 @@ La fonte di verità tecnica resta il repository corrente. Le configurazioni este
 - La palestra paga tramite rapporto commerciale esterno alla PWA.
 - La palestra rende LogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati LogBook degli utenti.
 - LogBook resta destinato a maggiorenni.
-- Google/Firebase Analytics non fa parte del prodotto.
-- Vercel Analytics e Speed Insights sono ritirati; Google/Firebase Analytics non è introdotto.
-- La telemetria proprietaria è destinata a diagnostica, integrità e recovery, non a misurare il comportamento di allenamento o il funnel PWA.
+- Google Analytics for Firebase è opzionale, disabilitato per default e attivato soltanto dopo consenso esplicito revocabile.
+- Vercel Analytics e Speed Insights sono ritirati; il loro vecchio consenso non viene riutilizzato per Google Analytics.
+- Google Analytics non riceve deliberatamente UID/email o eventi custom con contenuti fitness/salute; advertising signals e personalizzazione restano disabilitati nel codice.
+- La telemetria tecnica Sentry resta destinata a diagnostica, integrità e recovery e non viene usata come canale analytics.
 
 Queste assunzioni devono essere riconfermate nella documentazione firmata; se cambiano, vanno rivalutati ruoli privacy, contratti, informativa e DPIA.
 

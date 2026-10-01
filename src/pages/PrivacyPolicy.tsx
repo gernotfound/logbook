@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 30 settembre 2026
+              Aggiornata al 1 ottobre 2026
             </p>
           </div>
           <button
@@ -96,7 +96,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati business inseriti nell'app — come allenamenti, nutrizione, misurazioni, routine e pianificazioni — restano nella persistenza locale del dispositivo e non vengono sincronizzati su Firestore finché non colleghi un account.
             </p>
             <p>
-              La telemetria tecnica degli errori non viene inviata a Sentry quando non esiste una sessione Firebase autenticata. Eventuali elementi diagnostici best-effort possono restare localmente sul dispositivo senza essere riassegnati a un account successivo. LogBook non utilizza servizi di analytics comportamentale o statistiche di utilizzo opzionali.
+              La telemetria tecnica degli errori non viene inviata a Sentry quando non esiste una sessione Firebase autenticata. Eventuali elementi diagnostici best-effort possono restare localmente sul dispositivo senza essere riassegnati a un account successivo. Google Analytics resta disattivato finché non abiliti volontariamente “Statistiche di utilizzo” nelle Impostazioni.
             </p>
 
             <h3 style={h3Style}>Modalità cloud (con account)</h3>
@@ -126,19 +126,28 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <p>
               LogBook usa Sentry soltanto per <strong style={{ color: 'var(--text-main)' }}>Error Monitoring</strong>: non abilita Session Replay, tracing, logging, Application Metrics o tracking proprietario di avvio/salvataggio workout e funnel di installazione PWA. Gli errori identici vengono deduplicati lato app per ridurre raccolta e volume.
             </p>
+
+            <h3 style={h3Style}>Statistiche di utilizzo opzionali</h3>
+            <p>
+              <strong style={{ color: 'var(--text-main)' }}>Google Analytics for Firebase è disattivato per impostazione predefinita e non viene inizializzato finché non fornisci un opt-in esplicito nelle Impostazioni.</strong> La preferenza può essere revocata in qualsiasi momento ed è separata dal precedente consenso Vercel Analytics, che non viene riutilizzato per autorizzare Google Analytics.
+            </p>
+            <p>
+              Dopo l'opt-in, LogBook consente la misurazione standard GA4 necessaria a comprendere l'utilizzo generale dell'app. Il codice non imposta UID Firebase, email o proprietà utente Analytics e non invia eventi personalizzati contenenti allenamenti, nutrizione, misurazioni o altri dati di salute. Le categorie di consenso pubblicitario restano negate e le opzioni Google Signals e personalizzazione pubblicitaria sono disabilitate. Google può comunque trattare dati tecnici del browser/dispositivo, identificatori o informazioni di rete necessari al servizio secondo la configurazione e le condizioni applicabili.
+            </p>
           </Section>
 
           <Section title="Base giuridica del trattamento">
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Esecuzione del servizio</strong> (art. 6, par. 1, lett. b GDPR): per autenticazione, sincronizzazione, backup/recovery e funzionalità richieste dall'utente.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Consenso esplicito</strong> (art. 9, par. 2, lett. a GDPR): per il trattamento dei dati relativi alla salute (categorie particolari di dati). Il consenso viene richiesto esplicitamente nell'app.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Consenso</strong> (art. 6, par. 1, lett. a GDPR): per Google Analytics, che è non essenziale, disabilitato per default e revocabile dalle Impostazioni.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Legittimo interesse</strong> (art. 6, par. 1, lett. f GDPR): per telemetria tecnica strettamente finalizzata a sicurezza, prevenzione degli errori e stabilità del servizio, con minimizzazione e sanitizzazione.</li>
             </ul>
           </Section>
 
           <Section title="Tecnologie di memorizzazione locale">
             <p>
-              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. LogBook non inizializza Google/Firebase Analytics, Vercel Analytics, Speed Insights o altri servizi di analytics comportamentale.
+              IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. La preferenza Google Analytics è memorizzata localmente ed è disabilitata per default. Solo dopo opt-in Google Analytics può utilizzare le tecnologie di misurazione previste dal servizio; la revoca disabilita la raccolta applicativa successiva. Vercel Analytics e Speed Insights non fanno parte del target Firebase.
             </p>
           </Section>
 
@@ -147,7 +156,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. Per la nuova telemetria Sentry, i tempi di conservazione dipendono dal piano e dalla configurazione effettiva del fornitore e devono essere verificati rispetto alle condizioni correnti. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di LogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. LogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
+              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. Per Sentry e Google Analytics, i tempi di conservazione dipendono dal piano e dalla configurazione effettiva dei rispettivi fornitori e devono essere verificati rispetto alle condizioni correnti prima del go-live. La revoca di Google Analytics impedisce la nuova raccolta applicativa, ma non equivale automaticamente alla cancellazione retroattiva dei dati già trattati secondo le impostazioni di retention applicabili. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di LogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. LogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
@@ -163,7 +172,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Fornitori e trasferimento dei dati">
             <p>I servizi cloud dell'app si appoggiano principalmente ai seguenti fornitori:</p>
             <ul style={ulStyle}>
-              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, App Check/reCAPTCHA Enterprise, Hosting e Cloud Functions. LogBook non utilizza Firebase Analytics.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore, App Check/reCAPTCHA Enterprise, Hosting, Cloud Functions e, soltanto dopo opt-in, Google Analytics for Firebase per statistiche di utilizzo.</li>
 
               <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; LogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
             </ul>
@@ -178,7 +187,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <li><strong style={{ color: 'var(--text-main)' }}>Accesso e portabilità</strong>: usare backup JSON/esportazione CSV e richiedere le informazioni applicabili al trattamento.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Rettifica</strong>: correggere i dati modificabili tramite l'app.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Cancellazione</strong>: avviare la funzione di eliminazione account per la rimozione dei dati cloud applicativi.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Revoca del consenso</strong>: per i dati di salute, la revoca non pregiudica la liceità del trattamento precedente e può richiedere l'interruzione delle funzionalità che dipendono da tali dati; per Google Analytics puoi revocare separatamente l'opt-in dalle Impostazioni senza perdere le funzioni essenziali di LogBook.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Limitazione/opposizione</strong>: quando applicabile rispetto alla specifica base giuridica e al trattamento interessato.</li>
             </ul>
             <p>

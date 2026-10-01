@@ -76,7 +76,7 @@ La sorgente raster approvata `public/icon-source.png` viene processata da `scrip
 Sono sistemi distinti:
 
 - **telemetria tecnica LogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; LogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
-- **Analytics di utilizzo:** non presenti nel runtime target. Vercel Analytics/Speed Insights sono ritirati; Google/Firebase Analytics non viene utilizzato.
+- **Analytics di utilizzo:** Google Analytics for Firebase, opzionale, disabilitato per default e caricato solo dopo opt-in esplicito; advertising signals/personalization sono disabilitati. Vercel Analytics/Speed Insights sono ritirati e il loro vecchio consenso non viene riutilizzato.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.
 
@@ -87,7 +87,7 @@ I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La document
 - TypeScript 7
 - Zustand 5
 - Zod 4
-- Firebase Web SDK 12 + Firebase Admin server-side
+- Firebase Web SDK 12 (Auth, Firestore, App Check e Analytics opzionale) + Firebase Admin server-side
 - Firebase Hosting + Cloud Functions for Firebase v2 come target di delivery; Functions su Node.js 22
 - Firebase Hosting come hosting Production target; Vercel non fa parte dell’architettura target
 - Sentry Error Monitoring (`@sentry/react` + source map build-time)

@@ -12,7 +12,7 @@
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
 | Telemetria | Sanitizzazione PII, allowlist dettagli, queue bounded | Implementato |
-| Analytics | Nessun analytics comportamentale nel target; Vercel Analytics/Speed Insights ritirati, Google/Firebase Analytics non introdotto | Implementato |
+| Analytics | Google Analytics opzionale: default OFF, consenso provider-specific, lazy-load, revoca cross-tab, Ads consent negato e Google Signals/personalizzazione disabilitati; Vercel Analytics ritirato | Implementato/testato |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin via ADC/IAM; nessuna private key Admin o cron secret nel target | Contratto repository |
 | HTTP | CSP, HSTS, frame denial, referrer/permissions policies | `firebase.json` nel target + verifica live Production |

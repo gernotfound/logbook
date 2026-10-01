@@ -10,11 +10,11 @@
 | Google / Cloud Firestore | Dati cloud utenti, telemetria tecnica | Dati app, salute, metadati tecnici | `[VERIFY_DPA]` | Database: `[VERIFY_LIVE]` | `[VERIFY]` | App + servizio | Aperto |
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Google Cloud / Firebase Hosting + Cloud Functions | Hosting e API server | Request metadata; payload API necessari; log tecnici | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Target |
-| Analytics comportamentale | Non utilizzato | Nessun flusso previsto | N/A | N/A | N/A | N/A | Vercel Analytics/Speed Insights ritirati; Firebase Analytics non introdotto |
+| Google Analytics for Firebase / GA4 | Statistiche di utilizzo opzionali | Dati tecnici/misurazione standard GA4 dopo opt-in; nessun UID/email o contenuto fitness deliberatamente aggiunto dall'app | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PROPERTY_RETENTION]` | OPTIONAL / consent-gated |
 | Sentry | Error Monitoring e source map | Errori/stack sanitizzati, session ID tecnico, release/build e contesto tecnico minimizzato; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | Organizzazione su regione DE; dettagli contrattuali `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google/Firebase Analytics è escluso dal runtime LogBook corrente. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione LogBook corrente.
+Vercel Analytics/Speed Insights sono esclusi dal target. Google Analytics for Firebase è opzionale e consent-gated; Sentry Replay, tracing, logging e Application Metrics restano esclusi dalla configurazione LogBook corrente.
 
 ## Checklist per ogni fornitore
 

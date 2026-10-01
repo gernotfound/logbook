@@ -59,11 +59,12 @@
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Statistiche tecniche e di utilizzo non essenziali |
-| Fornitore | Nessun provider analytics comportamentale |
-| Attivazione | Opt-in; disabilitati per default e revocabili |
-| Base | Consenso |
-| Dati | Dati tecnici secondo il servizio e configurazione effettiva; non includere deliberatamente contenuto fitness grezzo |
-| Retention/trasferimenti | Non applicabile finché analytics comportamentale resta disattivato |
+| Fornitore | Google Analytics for Firebase / Google Analytics 4 |
+| Attivazione | Opt-in esplicito provider-specific; disabilitato per default e revocabile |
+| Base | Consenso (art. 6(1)(a), da validare professionalmente) |
+| Dati | Misurazione standard GA4 e dati tecnici del servizio; nessun UID/email deliberatamente impostato e nessun evento custom con contenuti workout/nutrizione/misure |
+| Esclusioni | `ad_storage`, `ad_user_data`, `ad_personalization` negati; Google Signals e advertising personalization disabilitati nel codice |
+| Retention/trasferimenti | Proprietà/configurazione Google Analytics da verificare live e documentare prima del go-live |
 
 ## Attività 5 — Account deletion e recovery
 

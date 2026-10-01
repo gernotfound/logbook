@@ -2,7 +2,7 @@
 
 > Stato: guida tecnica stabile | Ultima verifica: 2026-10-01 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts` e `firebase.json`.
 
-LogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Non sono presenti analytics comportamentali nel runtime target: Vercel Analytics e Speed Insights sono ritirati e Google/Firebase Analytics non viene utilizzato.
+LogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Google Analytics for Firebase è un sistema separato per statistiche di utilizzo opzionali e consent-gated; Vercel Analytics e Speed Insights sono ritirati. Nessun evento Google Analytics deve essere instradato attraverso Sentry.
 
 ## Perimetro
 

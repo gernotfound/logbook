@@ -13,7 +13,8 @@
 | Telemetria Firestore legacy `telemetry_events` / `telemetry_anomalies` | Firestore | Evento/anomalia | **30 giorni dall'evento** | Campo `expireAt` + maintenance cron giornaliero | Solo compatibilità/cleanup client precedenti |
 | Coda telemetria offline legacy/compatibilità | localStorage owner/device | Failure/offline | Bounded a 50 elementi; espulsione/retry secondo codice | Queue lifecycle/logout/storage cleanup | Implementato |
 | Consenso legale | UserData root | Accettazione | Finché serve a dimostrare la versione accettata e per la durata pertinente del rapporto/obblighi | Definire dopo cessazione: `[TO_VALIDATE]` | Persistito, retention post-account da definire |
-| Consenso analytics | storage locale | Opt-in | Finché preferenza attiva o storage disponibile | Revoca/settings/storage clear | Implementato come preferenza; evidenza/versioning da migliorare |
+| Consenso Google Analytics | localStorage device-level | Opt-in | Finché preferenza attiva o storage disponibile | Revoca/settings/storage clear | Implementato con chiave provider-specific v1 e sincronizzazione cross-tab |
+| Google Analytics / GA4 | Google Analytics | Primo evento dopo opt-in | `[VERIFY_PROPERTY_RETENTION]` | Retention/configurazione proprietà Google; revoca blocca nuova raccolta applicativa | Esterno da verificare prima del go-live |
 | Deletion job/tombstone | Firestore server-only | Richiesta cancellazione | 30 giorni dopo completion | Cron giornaliero | Contratto implementato; runtime cron da verificare periodicamente |
 | Log Cloud Functions/Hosting | Google Cloud / Firebase | Request/function event | `[VERIFY_PLAN_AND_CONFIGURATION]` | Policy Google Cloud configurata | Esterno da verificare |
 | Log Firebase/Google Cloud | Google | Evento servizi | `[VERIFY_SERVICE_CONFIGURATION]` | Policy servizio | Esterno da verificare |
