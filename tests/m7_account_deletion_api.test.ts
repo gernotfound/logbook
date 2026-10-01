@@ -34,6 +34,7 @@ function request(method: 'GET' | 'POST', body?: unknown): Request {
   return new Request('https://example.test/api/account-deletion', {
     method,
     headers: {
+      'origin': 'https://thelogbook.web.app',
       'content-type': 'application/json',
       'x-account-deletion-uid': 'u',
       'x-account-deletion-receipt': 'receipt',
