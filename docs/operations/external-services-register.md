@@ -136,7 +136,7 @@ Il candidato Firebase li rimuove dal bundle e dalla UI. La decisione di prodotto
 
 ## Google Analytics for Firebase
 
-Il runtime target carica `firebase/analytics` soltanto in Production e dopo consenso esplicito. Consent Mode mantiene sempre negati `ad_storage`, `ad_user_data` e `ad_personalization`; inoltre il codice disabilita Google Signals e advertising personalization. Non vengono definiti eventi custom workout/nutrizione/misure, né vengono deliberatamente inviati UID Firebase o email.
+Il runtime target carica `firebase/analytics` soltanto in Production e dopo consenso esplicito. Consent Mode concede soltanto `analytics_storage` dopo opt-in e mantiene negati `ad_storage`, `ad_user_data`, `ad_personalization`, `functionality_storage`, `personalization_storage` e `security_storage`; inoltre il codice disabilita Google Signals e advertising personalization. Non vengono definiti eventi custom workout/nutrizione/misure, né vengono deliberatamente inviati UID Firebase o email.
 
 **VERIFY-LIVE prima del cutover:** Firebase deve essere collegato alla proprietà Google Analytics corretta e alla Web data stream corretta; measurement ID, retention, data sharing, Google Signals, Ads personalization/links e impostazioni territoriali devono essere verificati direttamente in console. Nel target iniziale la **Misurazione avanzata** resta disabilitata per evitare raccolta automatica di scroll, outbound click, ricerca sito, download, interazioni form e video; resta la misurazione standard pagina/sessione dopo opt-in. Il repository dimostra il comportamento client, non lo stato della proprietà GA.
 
