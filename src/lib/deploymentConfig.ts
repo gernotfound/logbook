@@ -31,11 +31,15 @@ export function accountDeletionApiUrl(): string {
   if (!projectId) {
     throw new Error('Configurazione incompleta: VITE_FIREBASE_PROJECT_ID mancante.');
   }
+  const functionRegion = trimmed(import.meta.env.VITE_FIREBASE_FUNCTION_REGION);
+  if (!functionRegion) {
+    throw new Error('Configurazione incompleta: VITE_FIREBASE_FUNCTION_REGION mancante.');
+  }
 
   const parsed = new URL(configured);
-  const expectedHostSuffix = `-${projectId}.cloudfunctions.net`;
+  const expectedHost = `${functionRegion}-${projectId}.cloudfunctions.net`;
   if (
-    !parsed.hostname.endsWith(expectedHostSuffix)
+    parsed.hostname !== expectedHost
     || parsed.pathname !== '/accountDeletion'
     || parsed.username
     || parsed.password

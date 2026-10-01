@@ -6,6 +6,7 @@ const required = [
   'VITE_FIREBASE_API_KEY',
   'VITE_FIREBASE_AUTH_DOMAIN',
   'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_FUNCTION_REGION',
   'VITE_FIREBASE_APP_ID',
   'VITE_FIREBASE_MEASUREMENT_ID',
   'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
@@ -76,6 +77,10 @@ if (!/^G-[A-Z0-9]+$/.test(process.env.VITE_FIREBASE_MEASUREMENT_ID)) {
 
 if (process.env.VITE_FIREBASE_PROJECT_ID !== process.env.FIREBASE_PROJECT_ID) {
   console.error('Client and deploy Firebase project IDs must match.');
+  process.exit(1);
+}
+if (process.env.VITE_FIREBASE_FUNCTION_REGION !== process.env.FIREBASE_FUNCTION_REGION) {
+  console.error('Client and deploy Firebase Function regions must match.');
   process.exit(1);
 }
 if (process.env.VITE_FIREBASE_AUTH_DOMAIN !== publicOrigin.hostname) {

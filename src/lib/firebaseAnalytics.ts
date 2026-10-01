@@ -1,7 +1,9 @@
 import { firebaseApp } from './firebase';
 import { getAnalyticsConsent } from './analyticsConsent';
+import { importFirebaseAnalyticsSdk, type FirebaseAnalyticsSdk } from './firebaseAnalyticsSdk';
+import { createRetryableLazyLoader } from './utils/retryableLazyLoader';
 
-type AnalyticsSdk = typeof import('firebase/analytics');
+type AnalyticsSdk = FirebaseAnalyticsSdk;
 type AnalyticsInstance = import('firebase/analytics').Analytics;
 
 const grantedConsent = {
@@ -24,19 +26,18 @@ const deniedConsent = {
     security_storage: 'denied',
 } as const;
 
-let analyticsSdkPromise: Promise<AnalyticsSdk> | null = null;
 let analyticsSdk: AnalyticsSdk | null = null;
 let analyticsInstance: AnalyticsInstance | null = null;
 let consentGeneration = 0;
 
+const loadAnalyticsModule = createRetryableLazyLoader<AnalyticsSdk>(
+    importFirebaseAnalyticsSdk,
+);
+
 async function loadAnalyticsSdk(): Promise<AnalyticsSdk> {
-    if (!analyticsSdkPromise) {
-        analyticsSdkPromise = import('firebase/analytics').then(module => {
-            analyticsSdk = module;
-            return module;
-        });
-    }
-    return analyticsSdkPromise;
+    const module = await loadAnalyticsModule();
+    analyticsSdk = module;
+    return module;
 }
 
 export async function applyFirebaseAnalyticsConsent(enabled: boolean): Promise<void> {
