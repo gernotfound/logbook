@@ -42,8 +42,8 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 
 - **Framework:** React 19 + Vite 8 + TypeScript 7.
 - **Runtime CI/build:** Node.js 24.x; Firebase Functions runtime Node.js 22.
-- **Hosting target:** Firebase Hosting alla radice `/`. Durante la finestra di migrazione il precedente origin Vercel resta temporaneamente disponibile come bridge/compatibilità, senza Preview Deployment sui branch.
-- **Boundary server trusted:** Firebase Cloud Functions v2 per Server Account Deletion e maintenance schedulata; Firebase Admin usa Application Default Credentials nel runtime Firebase. Gli endpoint Vercel restano adapter legacy soltanto durante la migrazione.
+- **Hosting target:** Firebase Hosting alla radice `/`. Il candidato di cutover non dipende da un bridge Vercel: il product owner ha scelto un reset clean-cut dell’unico account esistente e la creazione di un nuovo account sul nuovo origin.
+- **Boundary server trusted:** Firebase Cloud Functions v2 per Server Account Deletion e maintenance schedulata; Firebase Admin usa esclusivamente Application Default Credentials tramite un service account runtime dedicato. Gli adapter Vercel non fanno parte del target.
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
@@ -144,11 +144,11 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 
 Esistono tre contratti separati:
 
-1. **Client Firebase:** sette env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
+1. **Client Firebase:** quattro env `VITE_FIREBASE_*` effettivamente usate (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`) sono lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
-3. **Server trusted target:** Firebase Cloud Functions v2 usa Application Default Credentials/IAM; `LOGBOOK_FUNCTION_REGION` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti del runtime. `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET` appartengono soltanto agli adapter Vercel legacy durante la finestra di migrazione e nessuna di queste deve avere prefisso `VITE_`.
+3. **Server trusted target:** Firebase Cloud Functions v2 usa Application Default Credentials/IAM; `LOGBOOK_FUNCTION_REGION`, `LOGBOOK_FUNCTION_SERVICE_ACCOUNT` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti. Non esiste un percorso Production basato su private key Admin esportate o `CRON_SECRET`.
 
-`.env.example` documenta esclusivamente nomi e placeholder sicuri; i valori reali legacy restano in Vercel/secret storage, mentre credenziali e ruoli del target Firebase restano in IAM/WIF e non vanno committati.
+`.env.example` documenta esclusivamente nomi e placeholder sicuri; credenziali e ruoli del target Firebase restano in IAM/WIF e non vanno committati.
 
 ### App Check
 
@@ -167,7 +167,7 @@ Esistono tre contratti separati:
 
 ## Servizi esterni e configurazione fuori repository
 
-LogBook dipende da configurazioni live che non sono completamente rappresentabili nel Git repository (Vercel env, Firebase/Google Cloud, domini OAuth/Auth, App Check/reCAPTCHA, Sentry, GitHub ruleset, Snyk e Search Console).
+LogBook dipende da configurazioni live che non sono completamente rappresentabili nel Git repository (Firebase/Google Cloud, domini OAuth/Auth, App Check/reCAPTCHA, Sentry, GitHub ruleset, Snyk e Search Console; Vercel resta rilevante solo finché ospita la Production precedente al cutover).
 
 - **MUST:** verificare il sistema esterno competente prima di assumere stato live, quote, domini, enforcement o secret.
 - **MUST:** il repository pubblico non contiene valori segreti, email personali, identificativi di credenziali, dati di fatturazione o path locali del maintainer.
@@ -180,7 +180,7 @@ LogBook dipende da configurazioni live che non sono completamente rappresentabil
 
 La cancellazione account è un workflow CRITICAL server-mediated. Il client non elimina direttamente il root `/users/{uid}`.
 
-- Firebase Cloud Functions v2 autenticano la richiesta e il backend trusted usa Firebase Admin con ADC; gli endpoint Vercel restano adapter legacy soltanto durante la finestra di migrazione.
+- Firebase Cloud Functions v2 autenticano la richiesta e il backend trusted usa Firebase Admin con ADC tramite identità runtime dedicata.
 - Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
 - `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
 - Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; la maintenance schedulata giornaliera elimina i record scaduti.
