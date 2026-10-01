@@ -29,7 +29,7 @@
 | Trasferimenti extra SEE | Vedi `vendor-transfer-register.md`; `[TO_VERIFY]` |
 | Retention | Vedi `retention-schedule.md` |
 | Misure | Vedi `technical-organizational-measures.md` |
-| Sistemi | Browser/PWA; IndexedDB/localStorage; Firebase Authentication/Firestore; Vercel |
+| Sistemi | Browser/PWA; IndexedDB/localStorage; Firebase Authentication/Firestore/Hosting/Cloud Functions; Sentry |
 
 ## Attività 2 — Autenticazione e gestione account
 
@@ -59,11 +59,11 @@
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Statistiche tecniche e di utilizzo non essenziali |
-| Fornitore | Vercel Analytics / Speed Insights |
+| Fornitore | Nessun provider analytics comportamentale |
 | Attivazione | Opt-in; disabilitati per default e revocabili |
 | Base | Consenso |
 | Dati | Dati tecnici secondo il servizio e configurazione effettiva; non includere deliberatamente contenuto fitness grezzo |
-| Retention/trasferimenti | Verificare documentazione e configurazione Vercel corrente |
+| Retention/trasferimenti | Non applicabile finché analytics comportamentale resta disattivato |
 
 ## Attività 5 — Account deletion e recovery
 
@@ -72,7 +72,7 @@
 | Finalità | Cancellazione sicura, idempotenza e recovery cross-device |
 | Dati | Job tecnico, timestamp/stato, hash non reversibile della receipt; nessun dato fitness nel tombstone finale |
 | Retention | 30 giorni per il tombstone tecnico, poi purge giornaliero previsto |
-| Sistema | Vercel Functions + Firebase Admin + Firestore/Auth |
+| Sistema | Firebase Cloud Functions v2 + Firebase Admin ADC + Firestore/Auth |
 | Accesso | Server-only |
 
 ## Attività 6 — Richieste privacy e supporto
