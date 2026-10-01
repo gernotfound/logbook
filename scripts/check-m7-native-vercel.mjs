@@ -84,7 +84,15 @@ if (!hostingWorkflow.includes('git rev-parse origin/main') || !hostingWorkflow.i
 if (!hostingWorkflow.includes('thelogbook-index-headers.txt') || !hostingWorkflow.includes("^cache-control: .*no-cache.*no-store.*must-revalidate")) {
   failures.push('Firebase Hosting post-deploy smoke must verify app-shell cache revalidation');
 }
-if (!hostingWorkflow.includes('google-github-actions/auth@v3') || !hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
+const requiredHostingActionPins = [
+  'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7',
+  'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7',
+  'google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3',
+];
+for (const actionPin of requiredHostingActionPins) {
+  if (!hostingWorkflow.includes(actionPin)) failures.push(`Firebase Hosting production workflow must pin privileged action: ${actionPin}`);
+}
+if (!hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
   failures.push('Firebase Hosting workflow must use Workload Identity Federation');
 }
 if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.includes('thelogbook.web.app')) {
