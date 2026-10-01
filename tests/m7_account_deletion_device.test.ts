@@ -105,7 +105,7 @@ describe('M7 account deletion recovery device registry', () => {
     await expect(verifyDeletionRecoveryDevice('user-b', raw)).resolves.toBe(false);
   });
 
-  it('is idempotent and rotates the oldest hash instead of permanently exhausting the bounded registry', async () => {
+  it('keeps the registry bounded and evicts the least recently registered token instead of exhausting it', async () => {
     await registerDeletionRecoveryDevice('user-a', token('A'));
     await registerDeletionRecoveryDevice('user-a', token('A'));
     expect((state.registry?.tokenHashes as string[])).toHaveLength(1);
@@ -114,12 +114,14 @@ describe('M7 account deletion recovery device registry', () => {
       await registerDeletionRecoveryDevice('user-a', token(String.fromCharCode(65 + index)));
     }
     expect((state.registry?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
-    await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(true);
 
+    // Touch A so it is no longer the least-recently registered credential.
+    await registerDeletionRecoveryDevice('user-a', token('A'));
     await registerDeletionRecoveryDevice('user-a', token('Z'));
 
     expect((state.registry?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
-    await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(false);
+    await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(true);
+    await expect(verifyDeletionRecoveryDevice('user-a', token('B'))).resolves.toBe(false);
     await expect(verifyDeletionRecoveryDevice('user-a', token('Z'))).resolves.toBe(true);
   });
 

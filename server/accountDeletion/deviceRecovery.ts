@@ -80,7 +80,10 @@ export async function registerDeletionRecoveryDevice(uidValue: string, tokenValu
     if (current.uid !== uid) throw new Error('Registro recovery device non coerente.');
     const hashes = parseHashes(current.tokenHashes);
     if (hashes.includes(tokenHash)) {
-      transaction.update(ref, { updatedAt: now });
+      transaction.update(ref, {
+        tokenHashes: [...hashes.filter(hash => hash !== tokenHash), tokenHash],
+        updatedAt: now,
+      });
       return;
     }
     const nextHashes = hashes.length >= MAX_DELETION_RECOVERY_DEVICES
