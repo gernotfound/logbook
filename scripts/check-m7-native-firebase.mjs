@@ -24,6 +24,8 @@ if (functionConfig?.runtime !== 'nodejs22') failures.push('Firebase Functions ru
 if (functionsPackage.engines?.node !== '>=22 <25') failures.push('functions/package.json must support Node 22-24 tooling while firebase.json pins the deployed runtime to Node.js 22.');
 if (!functionsPackage.dependencies?.['firebase-admin']) failures.push('Functions must depend on firebase-admin.');
 if (!functionsPackage.dependencies?.['firebase-functions']) failures.push('Functions must depend on firebase-functions.');
+if (functionsPackage.overrides?.['@grpc/grpc-js'] !== '1.14.5') failures.push('Functions package must explicitly override @grpc/grpc-js to 1.14.5.');
+if (functionsPackage.overrides?.['@grpc/proto-loader'] !== '0.8.1') failures.push('Functions package must explicitly override @grpc/proto-loader to 0.8.1.');
 if (!functionsLock) {
   failures.push('Functions must commit functions/package-lock.json for reproducible Firebase builds.');
 } else {
