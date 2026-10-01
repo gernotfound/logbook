@@ -16,7 +16,7 @@ export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API||!navigator.onLine)return;
  const all=readAll();let cred=all.find(x=>x.uid===user.uid);
  if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
- const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(true),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
+ const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
  if(!response.ok)throw new Error('Registrazione recovery device non riuscita.');
 }
 
@@ -24,11 +24,11 @@ export function watchDeletionRecoveryDeviceRegistration(
  user:User,
  onError:(error:unknown)=>void=()=>{},
 ):()=>void{
- let disposed=false;let running=false;
+ let disposed=false;let running=false;let registered=false;
  const attempt=async()=>{
-   if(disposed||running||!API||!navigator.onLine||auth.currentUser?.uid!==user.uid)return;
+   if(disposed||running||registered||!API||!navigator.onLine||auth.currentUser?.uid!==user.uid)return;
    running=true;
-   try{await registerDeletionRecoveryDevice(user);}catch(error){if(!disposed)onError(error);}finally{running=false;}
+   try{await registerDeletionRecoveryDevice(user);registered=true;}catch(error){if(!disposed)onError(error);}finally{running=false;}
  };
  const handleOnline=()=>{void attempt();};
  const handleVisibility=()=>{if(document.visibilityState==='visible')void attempt();};

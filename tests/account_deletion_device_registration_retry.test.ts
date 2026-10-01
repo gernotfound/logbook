@@ -47,13 +47,18 @@ describe('account deletion recovery device registration retries', () => {
     const dispose = watchDeletionRecoveryDeviceRegistration(current);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    expect(current.getIdToken).toHaveBeenCalledWith(true);
+    expect(current.getIdToken).toHaveBeenCalledWith();
     expect(appCheck.getLimitedUseAppCheckToken).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0];
     expect((init as RequestInit).headers).toMatchObject({
       authorization: 'Bearer id-token',
       'x-firebase-appcheck': 'app-check-token',
     });
+
+    window.dispatchEvent(new Event('online'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     dispose();
   });
 
