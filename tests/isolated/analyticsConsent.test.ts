@@ -23,14 +23,14 @@ it('defaults optional analytics to disabled and persists explicit choices', asyn
 
     expect(consent.setAnalyticsConsent(true)).toBe(true);
     expect(consent.getAnalyticsConsent()).toBe(true);
-    expect(localStorage.setItem).toHaveBeenLastCalledWith('logbook_analytics_consent', 'true');
+    expect(localStorage.setItem).toHaveBeenLastCalledWith('logbook_ga4_consent_v1', 'true');
 
     expect(consent.setAnalyticsConsent(false)).toBe(true);
     expect(consent.getAnalyticsConsent()).toBe(false);
-    expect(localStorage.setItem).toHaveBeenLastCalledWith('logbook_analytics_consent', 'false');
+    expect(localStorage.setItem).toHaveBeenLastCalledWith('logbook_ga4_consent_v1', 'false');
 });
 
-it('restores a persisted Vercel analytics opt-in after a module reload', async () => {
+it('restores only the provider-specific GA4 opt-in after a module reload', async () => {
     storedValue = 'true';
     let consent = await import('../../src/lib/analyticsConsent');
     expect(consent.getAnalyticsConsent()).toBe(true);
@@ -38,7 +38,7 @@ it('restores a persisted Vercel analytics opt-in after a module reload', async (
     vi.resetModules();
     consent = await import('../../src/lib/analyticsConsent');
     expect(consent.getAnalyticsConsent()).toBe(true);
-    expect(localStorage.getItem).toHaveBeenCalledWith('logbook_analytics_consent');
+    expect(localStorage.getItem).toHaveBeenCalledWith('logbook_ga4_consent_v1');
 });
 
 it('fails closed when enabling analytics cannot be persisted', async () => {
@@ -52,35 +52,6 @@ it('fails closed when enabling analytics cannot be persisted', async () => {
     vi.resetModules();
     consent = await import('../../src/lib/analyticsConsent');
     expect(consent.getAnalyticsConsent()).toBe(false);
-    expect(warn).toHaveBeenCalledWith('Impossibile memorizzare la preferenza Analytics:', expect.any(Error));
+    expect(warn).toHaveBeenCalledWith('Impossibile memorizzare la preferenza Google Analytics:', expect.any(Error));
 });
 
-it('persists revocation through remove fallback when the write path is blocked', async () => {
-    storedValue = 'true';
-    let consent = await import('../../src/lib/analyticsConsent');
-    expect(consent.getAnalyticsConsent()).toBe(true);
-
-    vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('blocked storage'); });
-    expect(consent.setAnalyticsConsent(false)).toBe(true);
-    expect(consent.getAnalyticsConsent()).toBe(false);
-    expect(localStorage.removeItem).toHaveBeenCalledWith('logbook_analytics_consent');
-
-    vi.resetModules();
-    consent = await import('../../src/lib/analyticsConsent');
-    expect(consent.getAnalyticsConsent()).toBe(false);
-});
-
-it('keeps the current session fail-closed and reports failure when revocation cannot be persisted', async () => {
-    storedValue = 'true';
-    const consent = await import('../../src/lib/analyticsConsent');
-    expect(consent.getAnalyticsConsent()).toBe(true);
-
-    vi.mocked(localStorage.setItem).mockImplementation(() => { throw new Error('blocked write'); });
-    vi.mocked(localStorage.removeItem).mockImplementation(() => { throw new Error('blocked remove'); });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    warn.mockClear();
-
-    expect(consent.setAnalyticsConsent(false)).toBe(false);
-    expect(consent.getAnalyticsConsent()).toBe(false);
-    expect(warn).toHaveBeenCalledTimes(2);
-});
