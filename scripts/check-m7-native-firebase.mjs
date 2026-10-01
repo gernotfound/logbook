@@ -62,12 +62,10 @@ for (const requiredHeader of ['Content-Security-Policy','Strict-Transport-Securi
   if (!serializedHeaders.includes(requiredHeader)) failures.push(`Missing Firebase Hosting security header: ${requiredHeader}`);
 }
 if (!serializedHeaders.includes('/sw.js') || !serializedHeaders.includes('no-cache')) failures.push('Service worker must be served with no-cache/no-store policy.');
-for (const source of ['/', '/index.html']) {
-  const group = hostingHeaders.find(item => item?.source === source);
-  if (!JSON.stringify(group ?? {}).includes('no-cache')) failures.push(`${source} must revalidate so users do not stay on a stale app shell.`);
+const appRouteHeaders = hostingHeaders.find(item => item?.source === '!/@(assets|__)/**');
+if (!JSON.stringify(appRouteHeaders ?? {}).includes('no-cache')) {
+  failures.push('All non-fingerprinted app routes must revalidate, including SPA rewrites.');
 }
-const manifestHeaders = hostingHeaders.find(item => item?.source === '/manifest.webmanifest');
-if (!JSON.stringify(manifestHeaders ?? {}).includes('no-cache')) failures.push('PWA manifest must revalidate after deploy.');
 const assetHeaders = hostingHeaders.find(item => item?.source === '/assets/**');
 if (!JSON.stringify(assetHeaders ?? {}).includes('immutable')) failures.push('Fingerprint Vite assets must use immutable long-lived caching.');
 
