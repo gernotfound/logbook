@@ -165,6 +165,34 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: npm run build
 
+      - name: Require exact legacy bridge build before Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker_url="${VITE_ORIGIN_MIGRATION_SOURCE}/migration-ready.json"
+          for attempt in $(seq 1 30); do
+            marker="$(curl -fsS --max-time 10 -H 'Cache-Control: no-cache' "${marker_url}?sha=${EXPECTED_SHA}&attempt=${attempt}" || true)"
+            if MARKER="${marker}" node --input-type=module -e '
+              try {
+                const marker = JSON.parse(process.env.MARKER || "{}");
+                const expectedSha = process.env.EXPECTED_SHA;
+                const expectedOrigin = process.env.VITE_ORIGIN_MIGRATION_SOURCE;
+                if (marker.version === 1 && marker.buildSha === expectedSha && marker.origin === expectedOrigin) {
+                  process.exit(0);
+                }
+              } catch {}
+              process.exit(1);
+            '; then
+              echo "Legacy origin is serving the exact migration bridge SHA ${EXPECTED_SHA}."
+              break
+            fi
+            if [ "${attempt}" -eq 30 ]; then
+              echo "Refusing Firebase Hosting cutover: legacy origin is not serving the exact migration bridge SHA." >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
       - name: Recheck main HEAD immediately before Hosting deploy
         shell: bash
         run: |
