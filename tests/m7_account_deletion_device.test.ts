@@ -42,7 +42,7 @@ const store = vi.hoisted(() => ({
   readDeletionStatusForUid: vi.fn(),
 }));
 const auth = vi.hoisted(() => ({
-  verifyDeletionRequester: vi.fn(),
+  verifyRecoveryRegistrationRequester: vi.fn(),
   verifyStatusAppCheck: vi.fn(),
   RequestAuthError: class RequestAuthError extends Error {
     constructor(message: string, public readonly status: 401 | 403 = 401) {
@@ -57,7 +57,6 @@ vi.mock('../server/accountDeletion/jobStore', () => store);
 vi.mock('../server/accountDeletion/httpAuth', () => auth);
 
 import {
-  DeletionRecoveryInputError,
   MAX_DELETION_RECOVERY_DEVICES,
   purgeDeletionRecoveryDevices,
   registerDeletionRecoveryDevice,
@@ -90,7 +89,7 @@ describe('M7 account deletion recovery device registry', () => {
     state.deleted = 0;
     vi.clearAllMocks();
     delete process.env.PUBLIC_APP_LEGACY_ORIGIN;
-    auth.verifyDeletionRequester.mockResolvedValue({ uid: 'user-a' });
+    auth.verifyRecoveryRegistrationRequester.mockResolvedValue({ uid: 'user-a' });
     auth.verifyStatusAppCheck.mockResolvedValue(undefined);
     store.readDeletionStatusForUid.mockResolvedValue({ uid: 'user-a', status: 'complete' });
   });
@@ -106,7 +105,7 @@ describe('M7 account deletion recovery device registry', () => {
     await expect(verifyDeletionRecoveryDevice('user-b', raw)).resolves.toBe(false);
   });
 
-  it('is idempotent for the same device and caps distinct recovery devices per account', async () => {
+  it('is idempotent and rotates the oldest hash instead of permanently exhausting the bounded registry', async () => {
     await registerDeletionRecoveryDevice('user-a', token('A'));
     await registerDeletionRecoveryDevice('user-a', token('A'));
     expect((state.registry?.tokenHashes as string[])).toHaveLength(1);
@@ -115,8 +114,13 @@ describe('M7 account deletion recovery device registry', () => {
       await registerDeletionRecoveryDevice('user-a', token(String.fromCharCode(65 + index)));
     }
     expect((state.registry?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
-    await expect(registerDeletionRecoveryDevice('user-a', token('Z')))
-      .rejects.toBeInstanceOf(DeletionRecoveryInputError);
+    await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(true);
+
+    await registerDeletionRecoveryDevice('user-a', token('Z'));
+
+    expect((state.registry?.tokenHashes as string[])).toHaveLength(MAX_DELETION_RECOVERY_DEVICES);
+    await expect(verifyDeletionRecoveryDevice('user-a', token('A'))).resolves.toBe(false);
+    await expect(verifyDeletionRecoveryDevice('user-a', token('Z'))).resolves.toBe(true);
   });
 
   it('purges the bounded registry in one operation', async () => {
@@ -129,7 +133,7 @@ describe('M7 account deletion recovery device registry', () => {
   it('rejects unauthorized origins before auth or recovery work', async () => {
     const response = await POST(request('POST', { origin: 'https://evil.example' }));
     expect(response.status).toBe(403);
-    expect(auth.verifyDeletionRequester).not.toHaveBeenCalled();
+    expect(auth.verifyRecoveryRegistrationRequester).not.toHaveBeenCalled();
   });
 
   it('returns 404 for an invalid recovery credential without exposing account state', async () => {

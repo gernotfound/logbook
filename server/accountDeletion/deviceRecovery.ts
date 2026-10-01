@@ -83,12 +83,12 @@ export async function registerDeletionRecoveryDevice(uidValue: string, tokenValu
       transaction.update(ref, { updatedAt: now });
       return;
     }
-    if (hashes.length >= MAX_DELETION_RECOVERY_DEVICES) {
-      throw new DeletionRecoveryInputError('Numero massimo di dispositivi recovery raggiunto.');
-    }
+    const nextHashes = hashes.length >= MAX_DELETION_RECOVERY_DEVICES
+      ? [...hashes.slice(1), tokenHash]
+      : [...hashes, tokenHash];
 
     transaction.update(ref, {
-      tokenHashes: [...hashes, tokenHash],
+      tokenHashes: nextHashes,
       updatedAt: now,
     });
   });

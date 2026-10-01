@@ -37,17 +37,25 @@ async function verifyConsumableAppCheck(request: Request): Promise<void> {
   }
 }
 
-export async function verifyDeletionRequester(request: Request): Promise<{ uid: string }> {
+async function verifyAuthenticatedRequester(request: Request): Promise<DecodedIdToken> {
   const idToken = bearerToken(request);
-
-  let decoded: DecodedIdToken;
   try {
-    decoded = await adminAuth().verifyIdToken(idToken, true);
-  } catch {
+    const decoded = await adminAuth().verifyIdToken(idToken, true);
+    await verifyConsumableAppCheck(request);
+    return decoded;
+  } catch (error) {
+    if (error instanceof RequestAuthError) throw error;
     throw new RequestAuthError('Sessione non valida o revocata. Effettua nuovamente il login.');
   }
+}
 
-  await verifyConsumableAppCheck(request);
+export async function verifyRecoveryRegistrationRequester(request: Request): Promise<{ uid: string }> {
+  const decoded = await verifyAuthenticatedRequester(request);
+  return { uid: decoded.uid };
+}
+
+export async function verifyDeletionRequester(request: Request): Promise<{ uid: string }> {
+  const decoded = await verifyAuthenticatedRequester(request);
 
   const now = Math.floor(Date.now() / 1000);
   const authenticatedAt = Number(decoded.auth_time);

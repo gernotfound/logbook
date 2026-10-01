@@ -13,6 +13,7 @@ vi.mock('../server/accountDeletion/firebaseAdmin', () => ({
 import {
   RequestAuthError,
   verifyDeletionRequester,
+  verifyRecoveryRegistrationRequester,
   verifyStatusAppCheck,
 } from '../server/accountDeletion/httpAuth';
 
@@ -64,7 +65,17 @@ describe('M7 App Check replay protection for account deletion', () => {
     }))).rejects.toBeInstanceOf(RequestAuthError);
   });
 
-  it('rejects stale authentication even with valid one-time App Check', async () => {
+  it('allows recovery-device registration with a valid non-revoked session even when auth_time is old', async () => {
+    admin.verifyIdToken.mockResolvedValueOnce({
+      uid: 'user-a',
+      auth_time: Math.floor(Date.now() / 1000) - 86_400,
+    });
+    await expect(verifyRecoveryRegistrationRequester(requesterRequest())).resolves.toEqual({ uid: 'user-a' });
+    expect(admin.verifyIdToken).toHaveBeenCalledWith('id-token', true);
+    expect(admin.verifyToken).toHaveBeenCalledWith('limited-use-app-check', { consume: true });
+  });
+
+  it('rejects stale authentication for the destructive deletion request even with valid one-time App Check', async () => {
     admin.verifyIdToken.mockResolvedValueOnce({
       uid: 'user-a',
       auth_time: Math.floor(Date.now() / 1000) - 301,

@@ -1,4 +1,4 @@
-import { RequestAuthError, verifyDeletionRequester, verifyStatusAppCheck } from '../server/accountDeletion/httpAuth.js';
+import { RequestAuthError, verifyRecoveryRegistrationRequester, verifyStatusAppCheck } from '../server/accountDeletion/httpAuth.js';
 import { readDeletionStatusForUid } from '../server/accountDeletion/jobStore.js';
 import {
   DeletionRecoveryInputError,
@@ -36,7 +36,7 @@ export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
     requireAccountDeletionOrigin(request);
-    const { uid } = await verifyDeletionRequester(request);
+    const { uid } = await verifyRecoveryRegistrationRequester(request);
     const body = await request.json() as { deviceToken?: unknown };
     await registerDeletionRecoveryDevice(uid, body.deviceToken);
     return json({ registered: true }, 200, origin);
