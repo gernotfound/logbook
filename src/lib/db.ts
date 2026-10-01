@@ -13,6 +13,7 @@ import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
 import { storageOwner } from './sync/session';
 import { classifySyncFailure } from './sync/syncFailure';
 import { replicateJournal } from './sync/replicateJournal';
+import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
 
 export const DB = {
     resetCache() {
@@ -182,8 +183,10 @@ export const DB = {
     async secureLogOut() {
         console.log("Eseguo il Log Out protetto...");
         const owner = storageOwner();
+        const uid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
         await auth.signOut();
         await this.purgeAllLocalUserData(owner);
+        if (uid) removeDeletionRecoveryCredential(uid);
         this.resetCache();
     },
     async deleteAccount() {

@@ -133,6 +133,26 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         consoleWarnSpy.mockRestore();
     });
 
+    it('secureLogOut removes the account-deletion recovery credential only after local purge succeeds', async () => {
+        const recoveryKey = 'logbook_deletion_recovery_devices_v1';
+        localStorage.setItem(recoveryKey, JSON.stringify([{ uid: 'user123', token: 'A'.repeat(43) }]));
+
+        await DB.secureLogOut();
+
+        expect(localStorage.getItem(recoveryKey)).toBeNull();
+    });
+
+    it('secureLogOut preserves the recovery credential if local purge fails after sign-out', async () => {
+        const recoveryKey = 'logbook_deletion_recovery_devices_v1';
+        localStorage.setItem(recoveryKey, JSON.stringify([{ uid: 'user123', token: 'A'.repeat(43) }]));
+        const purgeSpy = vi.spyOn(DB, 'purgeAllLocalUserData').mockRejectedValueOnce(new Error('local purge failed'));
+
+        await expect(DB.secureLogOut()).rejects.toThrow('local purge failed');
+        expect(localStorage.getItem(recoveryKey)).not.toBeNull();
+
+        purgeSpy.mockRestore();
+    });
+
     it('secureLogOut preserves the local archive and rejects when auth.signOut fails', async () => {
         const { auth } = await import('../src/lib/firebase');
         vi.mocked(auth.signOut).mockRejectedValueOnce(new Error('Network offline'));
