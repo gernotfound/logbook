@@ -81,21 +81,45 @@ const cspHeader = Array.isArray(globalHeaderGroup?.headers)
   ? globalHeaderGroup.headers.find(header => header?.key === 'Content-Security-Policy')
   : undefined;
 if (!globalHeaderGroup) failures.push('Firebase reserved /__/* endpoints must be excluded from app-level framing/CSP headers.');
-const cspTokens = new Set(String(cspHeader?.value ?? '').split(/\s+/).filter(Boolean));
-if (!cspTokens.has('https://logbook-function.invalid')) {
-  failures.push('Tracked Firebase CSP must contain the fail-closed Function-origin placeholder.');
-}
+const cspValue = String(cspHeader?.value ?? '');
+const cspTokens = new Set(cspValue.split(/\s+/).map(token => token.replace(/;$/, '')).filter(Boolean));
+const cspDirectives = new Map(
+  cspValue
+    .split(';')
+    .map(directive => directive.trim())
+    .filter(Boolean)
+    .map(directive => {
+      const [name, ...values] = directive.split(/\s+/);
+      return [name, new Set(values)];
+    }),
+);
+const requireCspSource = (directive, source, message) => {
+  if (!cspDirectives.get(directive)?.has(source)) failures.push(message);
+};
+
+requireCspSource(
+  'connect-src',
+  'https://logbook-function.invalid',
+  'Tracked Firebase CSP connect-src must contain the fail-closed Function-origin placeholder.',
+);
 if (cspTokens.has('https://*.cloudfunctions.net')) {
   failures.push('Tracked Firebase CSP must not allow a wildcard Cloud Functions origin.');
 }
 if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vitals.vercel-insights.com')) {
   failures.push('Vercel analytics origins must not remain in Firebase CSP.');
 }
-for (const requiredAnalyticsOrigin of ['https://www.googletagmanager.com', 'https://*.google-analytics.com']) {
-  if (!cspTokens.has(requiredAnalyticsOrigin)) failures.push(`Firebase Analytics CSP origin missing: ${requiredAnalyticsOrigin}`);
+
+requireCspSource('script-src', 'https://www.googletagmanager.com', 'Firebase Analytics script-src must allow Google Tag Manager.');
+for (const source of ['https://www.googletagmanager.com', 'https://*.google-analytics.com', 'https://*.google.com']) {
+  requireCspSource('connect-src', source, `Firebase Analytics connect-src origin missing: ${source}`);
 }
-if (cspTokens.has('https://*')) failures.push('Firebase Hosting CSP must not allow arbitrary HTTPS image origins.');
-if (!cspTokens.has('https://*.googleusercontent.com')) failures.push('Firebase Hosting CSP must allow Google account avatar images.');
+for (const source of ['https://www.googletagmanager.com', 'https://*.google-analytics.com']) {
+  requireCspSource('img-src', source, `Firebase Analytics img-src origin missing: ${source}`);
+}
+requireCspSource('img-src', 'https://*.googleusercontent.com', 'Firebase Hosting img-src must allow Google account avatar images.');
+if (cspDirectives.get('img-src')?.has('https://*')) {
+  failures.push('Firebase Hosting img-src must not allow arbitrary HTTPS image origins.');
+}
 for (const forbiddenAdsOrigin of ['https://*.g.doubleclick.net', 'https://pagead2.googlesyndication.com', 'https://googleads.g.doubleclick.net']) {
   if (cspTokens.has(forbiddenAdsOrigin)) failures.push(`Google Ads origin must not be allowlisted for analytics-only telemetry: ${forbiddenAdsOrigin}`);
 }
