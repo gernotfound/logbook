@@ -107,6 +107,9 @@ for (const forbidden of ['credential: cert(', 'FIREBASE_ADMIN_PROJECT_ID', 'FIRE
   if (adminBootstrap.includes(forbidden)) failures.push(`Firebase Functions Admin runtime must not contain legacy credential path: ${forbidden}`);
 }
 if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must use the configured direct Firebase Function endpoint.');
+if (/['"]\/api\/account-deletion['"]/.test(deploymentConfig)) {
+  failures.push('Client deletion backend must not retain the removed Vercel /api/account-deletion fallback.');
+}
 for (const source of [deploymentMetadata, viteConfig, deploymentConfig]) {
   if (/VERCEL_|vercel\.app/i.test(source)) failures.push('Production build/config must not depend on Vercel metadata or origins.');
 }

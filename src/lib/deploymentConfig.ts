@@ -19,13 +19,36 @@ function absoluteHttpsUrl(value: string | undefined, name: string): string | und
 }
 
 export function accountDeletionApiUrl(): string {
-  const configured = absoluteHttpsUrl(import.meta.env.VITE_ACCOUNT_DELETION_API_URL, 'VITE_ACCOUNT_DELETION_API_URL');
-  if (configured) return configured;
-
-  if (import.meta.env.PROD) {
-    throw new Error('Configurazione Production incompleta: VITE_ACCOUNT_DELETION_API_URL mancante.');
+  const configured = absoluteHttpsUrl(
+    import.meta.env.VITE_ACCOUNT_DELETION_API_URL,
+    'VITE_ACCOUNT_DELETION_API_URL',
+  );
+  if (!configured) {
+    throw new Error('Configurazione incompleta: VITE_ACCOUNT_DELETION_API_URL mancante.');
   }
-  return '/api/account-deletion';
+
+  const projectId = trimmed(import.meta.env.VITE_FIREBASE_PROJECT_ID);
+  if (!projectId) {
+    throw new Error('Configurazione incompleta: VITE_FIREBASE_PROJECT_ID mancante.');
+  }
+
+  const parsed = new URL(configured);
+  const expectedHostSuffix = `-${projectId}.cloudfunctions.net`;
+  if (
+    !parsed.hostname.endsWith(expectedHostSuffix)
+    || parsed.pathname !== '/accountDeletion'
+    || parsed.username
+    || parsed.password
+    || parsed.port
+    || parsed.search
+    || parsed.hash
+  ) {
+    throw new Error(
+      'Configurazione non valida: VITE_ACCOUNT_DELETION_API_URL deve puntare alla Function accountDeletion del progetto Firebase configurato.',
+    );
+  }
+
+  return parsed.origin + '/accountDeletion';
 }
 
 export function publicOrigin(): string | undefined {

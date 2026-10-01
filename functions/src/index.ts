@@ -94,59 +94,72 @@ async function sendWebResponse(response: Response, res: FirebaseHttpResponse): P
   res.status(response.status).send(body);
 }
 
+export const accountDeletionOptions = {
+  region: functionRegion,
+  serviceAccount: runtimeServiceAccount,
+  timeoutSeconds: 3600,
+  memory: '512MiB',
+  concurrency: 10,
+  maxInstances: 10,
+  invoker: 'public',
+  cors: false,
+} as const;
+
+export async function accountDeletionHttpHandler(
+  request: FirebaseHttpRequest,
+  response: FirebaseHttpResponse,
+): Promise<void> {
+  if (!applyCors(request, response)) return;
+
+  if (request.method === 'OPTIONS') {
+    response.set('Cache-Control', 'no-store');
+    response.status(204).send('');
+    return;
+  }
+
+  let webResponse: Response;
+  if (request.method === 'POST') {
+    webResponse = await handleAccountDeletionPost(toWebRequest(request));
+  } else if (request.method === 'GET') {
+    webResponse = await handleAccountDeletionGet(toWebRequest(request));
+  } else {
+    webResponse = Response.json(
+      { error: 'Metodo non consentito.' },
+      { status: 405, headers: { Allow: ALLOWED_METHODS } },
+    );
+  }
+
+  await sendWebResponse(webResponse, response);
+}
+
 export const accountDeletion = onRequest(
-  {
-    region: functionRegion,
-    serviceAccount: runtimeServiceAccount,
-    timeoutSeconds: 3600,
-    memory: '512MiB',
-    concurrency: 10,
-    maxInstances: 10,
-    invoker: 'public',
-    cors: false,
-  },
+  accountDeletionOptions,
   async (req, res) => {
-    const request = req as unknown as FirebaseHttpRequest;
-    const response = res as unknown as FirebaseHttpResponse;
-
-    if (!applyCors(request, response)) return;
-
-    if (request.method === 'OPTIONS') {
-      response.set('Cache-Control', 'no-store');
-      response.status(204).send('');
-      return;
-    }
-
-    let webResponse: Response;
-    if (request.method === 'POST') {
-      webResponse = await handleAccountDeletionPost(toWebRequest(request));
-    } else if (request.method === 'GET') {
-      webResponse = await handleAccountDeletionGet(toWebRequest(request));
-    } else {
-      webResponse = Response.json(
-        { error: 'Metodo non consentito.' },
-        { status: 405, headers: { Allow: ALLOWED_METHODS } },
-      );
-    }
-
-    await sendWebResponse(webResponse, response);
+    await accountDeletionHttpHandler(
+      req as unknown as FirebaseHttpRequest,
+      res as unknown as FirebaseHttpResponse,
+    );
   },
 );
 
+export const accountDeletionMaintenanceOptions = {
+  schedule: '0 3 * * *',
+  timeZone: 'Etc/UTC',
+  region: functionRegion,
+  serviceAccount: runtimeServiceAccount,
+  timeoutSeconds: 1800,
+  memory: '512MiB',
+  maxInstances: 1,
+  concurrency: 1,
+  retryCount: 3,
+} as const;
+
+export async function accountDeletionMaintenanceHandler(): Promise<void> {
+  const summary = await runAccountDeletionMaintenance(Date.now() + MAINTENANCE_BUDGET_MS);
+  logger.info('Account deletion maintenance completed', summary);
+}
+
 export const accountDeletionMaintenance = onSchedule(
-  {
-    schedule: '0 3 * * *',
-    timeZone: 'Etc/UTC',
-    region: functionRegion,
-    serviceAccount: runtimeServiceAccount,
-    timeoutSeconds: 1800,
-    memory: '512MiB',
-    maxInstances: 1,
-    concurrency: 1,
-    retryCount: 3,
-  },
-  async () => {
-    const summary = await runAccountDeletionMaintenance(Date.now() + MAINTENANCE_BUDGET_MS);
-    logger.info('Account deletion maintenance completed', summary);
-  },
+  accountDeletionMaintenanceOptions,
+  accountDeletionMaintenanceHandler,
 );

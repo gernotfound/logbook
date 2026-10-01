@@ -51,7 +51,7 @@ function headerValue(headers: HeadersInit | undefined, name: string): string | n
 function installSuccessfulServerFlow(onRequest?: (receiptToken: string) => void) {
     boundary.fetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
-        expect(url).toContain('/api/account-deletion');
+        expect(url).toBe('https://europe-west1-test-project-id.cloudfunctions.net/accountDeletion');
         if (init?.method === 'POST') {
             const body = JSON.parse(String(init.body ?? '{}')) as { receiptToken?: string };
             const marker = readAccountDeletionMarker('user:a');

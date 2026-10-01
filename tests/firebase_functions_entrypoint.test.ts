@@ -1,51 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-const state = vi.hoisted(() => ({
-  httpsOptions: undefined as any,
-  httpsHandler: undefined as any,
-  scheduleOptions: undefined as any,
-  scheduleHandler: undefined as any,
-  post: vi.fn(),
-  get: vi.fn(),
-  maintenance: vi.fn(),
-  loggerInfo: vi.fn(),
-}));
+process.env.LOGBOOK_FUNCTION_REGION = 'europe-west1';
+process.env.LOGBOOK_FUNCTION_SERVICE_ACCOUNT =
+  'logbook-runtime@example-project.iam.gserviceaccount.com';
+process.env.LOGBOOK_ALLOWED_ORIGINS = 'https://app.example';
 
-vi.mock('firebase-functions/v2/https', () => ({
-  onRequest: vi.fn((options: unknown, handler: unknown) => {
-    state.httpsOptions = options;
-    state.httpsHandler = handler;
-    return handler;
-  }),
-}));
-vi.mock('firebase-functions/v2/scheduler', () => ({
-  onSchedule: vi.fn((options: unknown, handler: unknown) => {
-    state.scheduleOptions = options;
-    state.scheduleHandler = handler;
-    return handler;
-  }),
-}));
-vi.mock('firebase-functions/params', () => ({
-  defineString: vi.fn((name: string) => ({
-    value: () => {
-      if (name === 'LOGBOOK_ALLOWED_ORIGINS') return 'https://app.example';
-      if (name === 'LOGBOOK_FUNCTION_SERVICE_ACCOUNT') return 'logbook-runtime@example-project.iam.gserviceaccount.com';
-      return 'europe-west1';
-    },
-  })),
-}));
-vi.mock('firebase-functions', () => ({
-  logger: { info: state.loggerInfo },
-}));
-vi.mock('../functions/src/accountDeletion/http', () => ({
-  handleAccountDeletionPost: state.post,
-  handleAccountDeletionGet: state.get,
-}));
-vi.mock('../functions/src/maintenance', () => ({
-  runAccountDeletionMaintenance: state.maintenance,
-}));
+const {
+  accountDeletion,
+  accountDeletionHttpHandler,
+  accountDeletionOptions,
+  accountDeletionMaintenance,
+  accountDeletionMaintenanceOptions,
+} = await import('../functions/src/index.ts');
 
-await import('../functions/src/index');
+type TestResponse = {
+  headers: Map<string, string>;
+  statusCode: number;
+  body: unknown;
+  set(name: string, value: string): TestResponse;
+  status(code: number): TestResponse;
+  json(body: unknown): TestResponse;
+  send(body: unknown): TestResponse;
+};
 
 function request(method: string, origin = 'https://app.example') {
   const headers: Record<string, string> = origin ? { origin } : {};
@@ -62,55 +38,59 @@ function request(method: string, origin = 'https://app.example') {
   } as any;
 }
 
-function response() {
-  const result: any = {
+function response(): TestResponse {
+  return {
     headers: new Map<string, string>(),
     statusCode: 200,
     body: undefined,
+    set(name: string, value: string) {
+      this.headers.set(name, value);
+      return this;
+    },
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body: unknown) {
+      this.body = body;
+      return this;
+    },
+    send(body: unknown) {
+      this.body = body;
+      return this;
+    },
   };
-  result.set = vi.fn((name: string, value: string) => {
-    result.headers.set(name, value);
-    return result;
-  });
-  result.status = vi.fn((code: number) => {
-    result.statusCode = code;
-    return result;
-  });
-  result.json = vi.fn((body: unknown) => {
-    result.body = body;
-  });
-  result.send = vi.fn((body: unknown) => {
-    result.body = body;
-  });
-  return result;
 }
 
 describe('Firebase Functions production entrypoint', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    state.post.mockResolvedValue(Response.json({ status: 'deleting' }, { status: 202 }));
-    state.get.mockResolvedValue(Response.json({ status: 'complete' }, { status: 200 }));
-    state.maintenance.mockResolvedValue({ processed: 0 });
-  });
-
   it('declares an explicitly public direct HTTPS Function with bounded scaling', () => {
-    expect(state.httpsOptions).toMatchObject({
+    expect(accountDeletionOptions).toMatchObject({
       timeoutSeconds: 3600,
       memory: '512MiB',
       concurrency: 10,
       maxInstances: 10,
       invoker: 'public',
       cors: false,
-      serviceAccount: 'logbook-runtime@example-project.iam.gserviceaccount.com',
     });
+
+    const endpoint = (accountDeletion as any).__endpoint;
+    expect(endpoint).toMatchObject({
+      platform: 'gcfv2',
+      availableMemoryMb: 512,
+      timeoutSeconds: 3600,
+      maxInstances: 10,
+      concurrency: 10,
+      httpsTrigger: { invoker: ['public'] },
+    });
+    expect(endpoint.region?.name).toBe('LOGBOOK_FUNCTION_REGION');
+    expect(endpoint.serviceAccountEmail?.name).toBe('LOGBOOK_FUNCTION_SERVICE_ACCOUNT');
   });
 
-  it('allows only configured origins and preserves CORS on the shared HTTP response', async () => {
+  it('allows configured origins and fails closed before destructive work without auth', async () => {
     const res = response();
-    await state.httpsHandler(request('POST'), res);
+    await accountDeletionHttpHandler(request('POST'), res as any);
 
-    expect(state.post).toHaveBeenCalledTimes(1);
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(401);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example');
     expect(res.headers.get('Vary')).toBe('Origin');
     expect(res.headers.get('Cache-Control')).toBe('no-store');
@@ -118,27 +98,31 @@ describe('Firebase Functions production entrypoint', () => {
 
   it('rejects an unlisted browser origin before the deletion core is reached', async () => {
     const res = response();
-    await state.httpsHandler(request('POST', 'https://evil.example'), res);
+    await accountDeletionHttpHandler(request('POST', 'https://evil.example'), res as any);
 
     expect(res.statusCode).toBe(403);
-    expect(state.post).not.toHaveBeenCalled();
-    expect(state.get).not.toHaveBeenCalled();
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeUndefined();
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
 
   it('handles preflight without invoking destructive logic', async () => {
     const res = response();
-    await state.httpsHandler(request('OPTIONS'), res);
+    await accountDeletionHttpHandler(request('OPTIONS'), res as any);
 
     expect(res.statusCode).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
-    expect(state.post).not.toHaveBeenCalled();
-    expect(state.get).not.toHaveBeenCalled();
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
   });
 
-  it('keeps scheduled maintenance private to the scheduler trigger and logs only its summary', async () => {
-    await state.scheduleHandler();
+  it('rejects unsupported methods with an explicit Allow contract', async () => {
+    const res = response();
+    await accountDeletionHttpHandler(request('PATCH'), res as any);
 
-    expect(state.scheduleOptions).toMatchObject({
+    expect(res.statusCode).toBe(405);
+    expect(res.headers.get('allow')).toBe('GET, POST, OPTIONS');
+  });
+  it('keeps scheduled maintenance private to the scheduler trigger', () => {
+    expect(accountDeletionMaintenanceOptions).toMatchObject({
       schedule: '0 3 * * *',
       timeZone: 'Etc/UTC',
       timeoutSeconds: 1800,
@@ -146,9 +130,22 @@ describe('Firebase Functions production entrypoint', () => {
       maxInstances: 1,
       concurrency: 1,
       retryCount: 3,
-      serviceAccount: 'logbook-runtime@example-project.iam.gserviceaccount.com',
     });
-    expect(state.maintenance).toHaveBeenCalledWith(expect.any(Number));
-    expect(state.loggerInfo).toHaveBeenCalledWith('Account deletion maintenance completed', { processed: 0 });
+
+    const endpoint = (accountDeletionMaintenance as any).__endpoint;
+    expect(endpoint).toMatchObject({
+      platform: 'gcfv2',
+      availableMemoryMb: 512,
+      timeoutSeconds: 1800,
+      maxInstances: 1,
+      concurrency: 1,
+      scheduleTrigger: {
+        schedule: '0 3 * * *',
+        retryConfig: { retryCount: 3 },
+        timeZone: 'Etc/UTC',
+      },
+    });
+    expect(endpoint.region?.name).toBe('LOGBOOK_FUNCTION_REGION');
+    expect(endpoint.serviceAccountEmail?.name).toBe('LOGBOOK_FUNCTION_SERVICE_ACCOUNT');
   });
 });

@@ -6,10 +6,27 @@ if (!site) throw new Error('FIREBASE_HOSTING_SITE mancante.');
 const deletionApi = process.env.VITE_ACCOUNT_DELETION_API_URL?.trim();
 if (!deletionApi) throw new Error('VITE_ACCOUNT_DELETION_API_URL mancante.');
 
-const deletionOrigin = new URL(deletionApi).origin;
-if (!deletionOrigin.endsWith('.cloudfunctions.net')) {
-  throw new Error('VITE_ACCOUNT_DELETION_API_URL deve usare il dominio Cloud Functions atteso.');
+const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+if (!projectId) throw new Error('FIREBASE_PROJECT_ID mancante.');
+
+const functionRegion = process.env.FIREBASE_FUNCTION_REGION?.trim();
+if (!functionRegion) throw new Error('FIREBASE_FUNCTION_REGION mancante.');
+
+const deletionUrl = new URL(deletionApi);
+const expectedFunctionHost = `${functionRegion}-${projectId}.cloudfunctions.net`;
+if (
+  deletionUrl.protocol !== 'https:'
+  || deletionUrl.hostname !== expectedFunctionHost
+  || deletionUrl.pathname !== '/accountDeletion'
+  || deletionUrl.username
+  || deletionUrl.password
+  || deletionUrl.port
+  || deletionUrl.search
+  || deletionUrl.hash
+) {
+  throw new Error('VITE_ACCOUNT_DELETION_API_URL non corrisponde alla Function accountDeletion configurata.');
 }
+const deletionOrigin = deletionUrl.origin;
 
 const config = JSON.parse(await readFile('firebase.json', 'utf8'));
 if (!config.hosting || Array.isArray(config.hosting)) {

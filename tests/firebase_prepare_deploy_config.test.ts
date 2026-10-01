@@ -34,6 +34,8 @@ function run(dir: string, overrides: Record<string, string> = {}) {
     env: {
       ...process.env,
       FIREBASE_HOSTING_SITE: 'thelogbook',
+      FIREBASE_PROJECT_ID: 'logbook-db-98cc4',
+      FIREBASE_FUNCTION_REGION: 'europe-west1',
       VITE_ACCOUNT_DELETION_API_URL: 'https://europe-west1-logbook-db-98cc4.cloudfunctions.net/accountDeletion',
       ...overrides,
     },
@@ -61,6 +63,16 @@ describe('Firebase deploy config preparation', () => {
     const dir = fixture();
     expect(() => run(dir, {
       VITE_ACCOUNT_DELETION_API_URL: 'https://example.invalid/accountDeletion',
+    })).toThrow();
+  });
+
+  it('fails closed when the Function endpoint belongs to another project or path', () => {
+    expect(() => run(fixture(), {
+      VITE_ACCOUNT_DELETION_API_URL: 'https://europe-west1-other-project.cloudfunctions.net/accountDeletion',
+    })).toThrow();
+
+    expect(() => run(fixture(), {
+      VITE_ACCOUNT_DELETION_API_URL: 'https://europe-west1-logbook-db-98cc4.cloudfunctions.net/other',
     })).toThrow();
   });
 });
