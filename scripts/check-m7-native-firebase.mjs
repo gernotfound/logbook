@@ -71,10 +71,11 @@ if (!JSON.stringify(manifestHeaders ?? {}).includes('no-cache')) failures.push('
 const assetHeaders = hostingHeaders.find(item => item?.source === '/assets/**');
 if (!JSON.stringify(assetHeaders ?? {}).includes('immutable')) failures.push('Fingerprint Vite assets must use immutable long-lived caching.');
 
-const globalHeaderGroup = hostingHeaders.find(group => group?.source === '**');
+const globalHeaderGroup = hostingHeaders.find(group => group?.source === '!/__/**');
 const cspHeader = Array.isArray(globalHeaderGroup?.headers)
   ? globalHeaderGroup.headers.find(header => header?.key === 'Content-Security-Policy')
   : undefined;
+if (!globalHeaderGroup) failures.push('Firebase reserved /__/* endpoints must be excluded from app-level framing/CSP headers.');
 const cspTokens = new Set(String(cspHeader?.value ?? '').split(/\s+/).filter(Boolean));
 if (!cspTokens.has('https://*.cloudfunctions.net')) {
   failures.push('CSP connect-src must allow the direct Cloud Functions endpoint.');
