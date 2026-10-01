@@ -12,12 +12,13 @@ const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
 const deploymentMetadata = readFileSync('scripts/write-deployment-metadata.mjs', 'utf8');
+const firebaseProductionWorkflow = readFileSync('.github/workflows/firebase-production.yml', 'utf8');
 
 const functionConfig = Array.isArray(firebase.functions) ? firebase.functions[0] : firebase.functions;
 if (firebase.firestore?.rules !== 'firestore.rules') failures.push('Firestore Rules configuration must be preserved.');
 if (functionConfig?.source !== 'functions') failures.push('Firebase Functions source must be functions/.');
 if (functionConfig?.runtime !== 'nodejs22') failures.push('Firebase Functions runtime must be Node.js 22.');
-if (functionsPackage.engines?.node !== '22') failures.push('functions/package.json must pin Node.js 22.');
+if (functionsPackage.engines?.node !== '>=22 <25') failures.push('functions/package.json must support Node 22-24 tooling while firebase.json pins the deployed runtime to Node.js 22.');
 if (!functionsPackage.dependencies?.['firebase-admin']) failures.push('Functions must depend on firebase-admin.');
 if (!functionsPackage.dependencies?.['firebase-functions']) failures.push('Functions must depend on firebase-functions.');
 if (!functionsLock) {
@@ -59,6 +60,14 @@ for (const requiredHeader of ['Content-Security-Policy','Strict-Transport-Securi
   if (!serializedHeaders.includes(requiredHeader)) failures.push(`Missing Firebase Hosting security header: ${requiredHeader}`);
 }
 if (!serializedHeaders.includes('/sw.js') || !serializedHeaders.includes('no-cache')) failures.push('Service worker must be served with no-cache/no-store policy.');
+for (const source of ['/', '/index.html']) {
+  const group = hostingHeaders.find(item => item?.source === source);
+  if (!JSON.stringify(group ?? {}).includes('no-cache')) failures.push(`${source} must revalidate so users do not stay on a stale app shell.`);
+}
+const manifestHeaders = hostingHeaders.find(item => item?.source === '/manifest.webmanifest');
+if (!JSON.stringify(manifestHeaders ?? {}).includes('no-cache')) failures.push('PWA manifest must revalidate after deploy.');
+const assetHeaders = hostingHeaders.find(item => item?.source === '/assets/**');
+if (!JSON.stringify(assetHeaders ?? {}).includes('immutable')) failures.push('Fingerprint Vite assets must use immutable long-lived caching.');
 
 const globalHeaderGroup = hostingHeaders.find(group => group?.source === '**');
 const cspHeader = Array.isArray(globalHeaderGroup?.headers)
@@ -83,11 +92,27 @@ if (!functionIndex.includes("defineString('LOGBOOK_FUNCTION_REGION')")) failures
 if (!functionIndex.includes("defineString('LOGBOOK_ALLOWED_ORIGINS')")) failures.push('Direct HTTP CORS allowlist must be deployment-parameterized.');
 if (functionIndex.includes('CRON_SECRET')) failures.push('Scheduled Firebase maintenance must not rely on CRON_SECRET.');
 
-if (!adminBootstrap.includes('return initializeApp();')) failures.push('Firebase runtime must support Application Default Credentials.');
+if (!adminBootstrap.includes("optionalEnv('FIREBASE_CONFIG')") || !adminBootstrap.includes('return initializeApp();')) {
+  failures.push('Firebase-managed runtime must force Application Default Credentials using the automatic FIREBASE_CONFIG boundary.');
+}
+if (!adminBootstrap.includes('credential: cert(')) failures.push('Legacy Vercel adapter must retain its temporary server-only certificate fallback until Vercel is retired.');
 if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must be provider-neutral/configurable.');
 if (!deploymentMetadata.includes('VERCEL_PROJECT_PRODUCTION_URL')) failures.push('Legacy Vercel bridge build must retain a production-origin fallback for deployment metadata until cutover.');
 if (packageJson.dependencies?.['@vercel/analytics'] || packageJson.dependencies?.['@vercel/speed-insights']) {
   failures.push('Vercel Analytics/Speed Insights must not remain runtime dependencies.');
+}
+
+const functionsDeployIndex = firebaseProductionWorkflow.indexOf('name: Deploy Functions first');
+const hostingDeployIndex = firebaseProductionWorkflow.indexOf('name: Deploy Hosting second');
+if (functionsDeployIndex < 0 || hostingDeployIndex < 0 || functionsDeployIndex >= hostingDeployIndex) {
+  failures.push('Firebase Production must deploy backward-compatible Functions before publishing Hosting.');
+}
+if (!firebaseProductionWorkflow.includes("node-version: '22'")) failures.push('Firebase Production must install/build Functions under Node.js 22.');
+if (!firebaseProductionWorkflow.includes('--only functions') || !firebaseProductionWorkflow.includes('--only hosting')) {
+  failures.push('Firebase Production must use separate Functions and Hosting deploy commands.');
+}
+if (/--only\s+(?:hosting,functions|functions,hosting)/.test(firebaseProductionWorkflow)) {
+  failures.push('Firebase Production must not collapse Functions and Hosting into one unordered deploy step.');
 }
 
 for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml']) {
