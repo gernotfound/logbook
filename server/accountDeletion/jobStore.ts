@@ -299,16 +299,9 @@ export async function markDeletionFailed(
   });
 }
 
-export async function readDeletionStatus(uidValue: string, receiptValue: string): Promise<AccountDeletionPublicStatus | null> {
-  const uid = validateUid(uidValue);
-  const receipt = validateReceipt(receiptValue);
-  const snapshot = await jobRef(uid).get();
-  if (!snapshot.exists) return null;
-  const job = snapshot.data() as AccountDeletionJob;
-  if (!receiptMatches(receipt, job.receiptHash)) return null;
-
+function publicStatus(job: AccountDeletionJob): AccountDeletionPublicStatus {
   return {
-    uid,
+    uid: job.uid,
     status: job.status,
     attempts: Math.max(0, Number(job.attempts) || 0),
     cursor: job.cursor,
@@ -319,6 +312,23 @@ export async function readDeletionStatus(uidValue: string, receiptValue: string)
       ? 'Cancellazione cloud incompleta. Alcuni dati potrebbero essere già stati eliminati; riprova dalle impostazioni.'
       : undefined,
   };
+}
+
+export async function readDeletionStatusForUid(uidValue: string): Promise<AccountDeletionPublicStatus | null> {
+  const uid = validateUid(uidValue);
+  const snapshot = await jobRef(uid).get();
+  return snapshot.exists ? publicStatus(snapshot.data() as AccountDeletionJob) : null;
+}
+
+export async function readDeletionStatus(uidValue: string, receiptValue: string): Promise<AccountDeletionPublicStatus | null> {
+  const uid = validateUid(uidValue);
+  const receipt = validateReceipt(receiptValue);
+  const snapshot = await jobRef(uid).get();
+  if (!snapshot.exists) return null;
+  const job = snapshot.data() as AccountDeletionJob;
+  if (!receiptMatches(receipt, job.receiptHash)) return null;
+
+  return publicStatus(job);
 }
 
 export async function listRecoverableDeletionJobs(limitCount = 20): Promise<AccountDeletionJob[]> {
