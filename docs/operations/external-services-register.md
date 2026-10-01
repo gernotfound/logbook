@@ -282,3 +282,24 @@ Pulizia esterna completata/verificata il 2026-09-30:
 9. verificare Search Console, sitemap, robots e canonical Production URL;
 10. verificare GA4/Google Analytics se preparato o attivo: stream, Enhanced Measurement, Signals, Ads, retention e condivisione dati;
 11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
+
+
+## Candidato migrazione Firebase Hosting Spark (PR #191, non live)
+
+Il candidato `migrazione-firebase-hosting-spark` prepara il frontend/PWA per `https://thelogbook.web.app` mantenendo Firebase sul piano Spark. Firebase Hosting serve esclusivamente asset statici; nessuna Cloud Function, Scheduled Function, Cloud Scheduler o Cloud Run è richiesta dal runtime.
+
+Vercel resta il boundary trusted server-only: `/api/account-deletion`, `/api/account-deletion-device` e il cron giornaliero `/api/account-deletion-cron`. Il frontend usa un origin Vercel esplicito e il backend accetta CORS soltanto dall'origin pubblico configurato (`PUBLIC_APP_ORIGIN`, fallback `https://thelogbook.web.app`), con App Check e autenticazione/credential specifica per il flusso.
+
+GA4 sostituisce Vercel Analytics/Speed Insights nel candidato. Il consenso usa una nuova chiave provider-specific, quindi il precedente opt-in Vercel non abilita GA4. Il modulo Analytics è caricato dinamicamente solo dopo opt-in e una inizializzazione fallita non viene memorizzata come Promise rejected permanente.
+
+### VERIFY-LIVE prima del cutover
+
+- confermare che Firebase resti Spark e che il site ID `thelogbook` punti al progetto atteso;
+- configurare sul build frontend le env pubbliche necessarie, incluso Measurement ID GA4 e origin backend Vercel;
+- configurare su Vercel `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` senza esporre secret al client;
+- predisporre credenziali di deploy Firebase Hosting con minimo privilegio; nessun deploy da PR/branch;
+- eseguire il deploy Hosting soltanto dallo SHA `main` già passato da Canonical Verification e soltanto dopo autorizzazione al cutover;
+- verificare Auth popup/redirect, App Check, CORS, GA4 opt-in/revoca, PWA/offline e account deletion multi-device sul runtime reale;
+- aggiornare Search Console per il nuovo origin senza rimuovere prematuramente la verifica della Production precedente.
+
+Nessuna delle voci sopra è dichiarata live dal solo merge del codice.
