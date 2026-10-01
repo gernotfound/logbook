@@ -1,6 +1,6 @@
 # Configurazione Firebase — LogBook
 
-> Stato: normativo | Ultima verifica: 2026-09-30 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `server/accountDeletion/firebaseAdmin.ts`, `api/account-deletion-cron.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
+> Stato: normativo | Ultima verifica: 2026-10-01 | File verificati: `src/lib/firebase.ts`, `src/lib/appCheck.ts`, `functions/src/accountDeletion/firebaseAdmin.ts`, `functions/src/index.ts`, `firestore.rules`, `firebase.json`, `.firebaserc`, `vercel.json`, `.env.example`
 
 ## Tre contratti di configurazione distinti
 
@@ -8,17 +8,16 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 
 ### Client Firebase — fail-fast
 
-`src/lib/firebase.ts` controlla all'avvio sette variabili `VITE_FIREBASE_*`. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
+`src/lib/firebase.ts` controlla all'avvio soltanto le quattro opzioni Firebase realmente usate dal client. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
 
 | Variabile | Stato corrente | Note |
 |---|---|---|
 | `VITE_FIREBASE_API_KEY` | MUST | Chiave API pubblica Firebase |
-| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth |
-| `VITE_FIREBASE_DATABASE_URL` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il progetto usa Firestore, non Realtime Database, quindi la necessità futura del campo va verificata prima di rimuoverlo dal contratto |
+| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Deve coincidere con l’hostname canonico Firebase Hosting |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Storage |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Cloud Messaging |
-| `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
+| `VITE_FIREBASE_APP_ID` | MUST | ID della Firebase Web App |
+
+Realtime Database, Firebase Storage e Firebase Cloud Messaging non sono importati dal runtime LogBook; `databaseURL`, `storageBucket` e `messagingSenderId` non fanno quindi parte del contratto fail-fast.
 
 **MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
 
@@ -53,29 +52,18 @@ Vercel Analytics e Speed Insights sono ritirati nel target Firebase; `src/lib/an
 
 ### Target Firebase Cloud Functions v2
 
-`functions/src/accountDeletion/firebaseAdmin.ts` è il bootstrap condiviso con l'adapter legacy, ma riconosce il runtime Firebase tramite la `FIREBASE_CONFIG` che Cloud Functions popola automaticamente e in quel caso forza `initializeApp()` senza credenziali esportate. Le eventuali `FIREBASE_ADMIN_*` legacy non possono quindi sostituire ADC nel runtime Firebase; i permessi derivano dall'identità IAM della Function.
+`functions/src/accountDeletion/firebaseAdmin.ts` inizializza Firebase Admin con `initializeApp()` senza credenziali esplicite. Le Functions sono associate tramite `LOGBOOK_FUNCTION_SERVICE_ACCOUNT` a un service account runtime dedicato e usano Application Default Credentials.
 
-I soli parametri applicativi del runtime Functions sono non segreti:
+Parametri non segreti:
 
-- `LOGBOOK_FUNCTION_REGION`;
-- `LOGBOOK_ALLOWED_ORIGINS`.
+- `LOGBOOK_FUNCTION_REGION`
+- `LOGBOOK_FUNCTION_SERVICE_ACCOUNT`
+- `LOGBOOK_ALLOWED_ORIGINS`
 
-Il deployment GitHub autentica Google Cloud tramite OIDC / Workload Identity Federation. **VERIFY:** provider WIF, service account, ruoli IAM, API abilitate, billing e Scheduler sono configurazione esterna e devono essere verificati direttamente prima del cutover.
+**MUST:** nessuna private key Admin esportata e nessun `CRON_SECRET` fanno parte del runtime Firebase Production.
+### Vercel
 
-### Adapter Vercel legacy durante la migrazione
-
-I moduli `server/accountDeletion/*` delegano al core condiviso sotto `functions/src/accountDeletion/*`. Fuori dal runtime Firebase, il bootstrap Admin mantiene temporaneamente il fallback certificate-based richiesto da Vercel:
-
-- `FIREBASE_ADMIN_PROJECT_ID`;
-- `FIREBASE_ADMIN_CLIENT_EMAIL`;
-- `FIREBASE_ADMIN_PRIVATE_KEY`.
-
-La private key supporta newline escaped (`\\n`) e viene normalizzata server-side. `api/account-deletion-cron.ts` usa inoltre `CRON_SECRET`; se assente, l'endpoint legacy risponde 503.
-
-**MUST:** queste credenziali restano server-only, senza prefisso `VITE_`, solo finché gli adapter Vercel sono realmente necessari. Non devono entrare nel bundle client, nel runtime Firebase Functions o nel repository con valori reali.
-
-**VERIFY:** il repository prova il contratto dei due runtime, non che env Vercel o ruoli IAM Firebase siano effettivamente provisionati.
-
+Il candidato clean-cut non contiene Functions/cron Vercel e `vercel.json` disabilita i deployment Git automatici. Fino al cutover, la Production Vercel corrente resta uno stato esterno separato; non è una dipendenza del codice candidato.
 ## Contratto `.env.example`
 
 `.env.example` documenta i boundary pertinenti usando **solo placeholder non sensibili**:
