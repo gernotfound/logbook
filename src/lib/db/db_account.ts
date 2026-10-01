@@ -12,6 +12,7 @@ import {
     type AccountDeletionMarker,
 } from '../sync/accountGate';
 import { waitForJournalIdle } from '../sync/replicateJournal';
+import { removeDeletionRecoveryCredential } from '../deletionDeviceRecovery';
 
 export type AccountDeletionOutcome =
     | { status: 'complete' }
@@ -50,7 +51,6 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         const prefix = 'logbook:v2:' + owner + ':';
         for (let index = 0; index < localStorage.length; index++) {
             const key = localStorage.key(index);
-            // Keep the server-deletion receipt until every other local purge succeeds.
             if (key?.startsWith(prefix) && !key.endsWith(':account-deletion')) keys.add(key);
         }
         if (owner === 'guest') keys.add('logbook_is_guest');
@@ -142,8 +142,6 @@ function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
 }
 
 async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: DeletionContext): Promise<AccountDeletionOutcome> {
-    // A stale receipt from account A must never sign out, purge global drafts, or reset
-    // the in-memory view of account B (or an explicitly active guest) on a shared device.
     if (anotherLocalIdentityIsActive(marker)) {
         return {
             status: 'pending',
@@ -161,6 +159,7 @@ async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context:
 
     try {
         await context.purgeAllLocalUserData(marker.owner);
+        removeDeletionRecoveryCredential(marker.uid);
         context.resetCache();
         clearAccountDeletion(marker.owner);
         useAppStore.getState().resetStore();

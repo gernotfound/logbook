@@ -9,6 +9,7 @@ type Credential={uid:string;token:string};
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
 function readAll():Credential[]{try{const v=localStorage.getItem(KEY);const p=v?JSON.parse(v):[];return Array.isArray(p)?p.filter(x=>typeof x?.uid==='string'&&typeof x?.token==='string').slice(-MAX_DEVICES):[];}catch{return [];}}
 function writeAll(v:Credential[]){localStorage.setItem(KEY,JSON.stringify(v.slice(-MAX_DEVICES)));}
+export function removeDeletionRecoveryCredential(uid:string):void{writeAll(readAll().filter(x=>x.uid!==uid));}
 async function appToken(){await ensureAppCheck();const {getAppCheckToken}=await import('./appCheck');const t=await getAppCheckToken(true);if(!t)throw new Error('App Check non disponibile.');return t;}
 
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{

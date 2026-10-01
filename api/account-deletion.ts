@@ -7,37 +7,29 @@ import {
   validateUid,
 } from '../server/accountDeletion/jobStore.js';
 import { processAccountDeletion, progressAndReadStatus } from '../server/accountDeletion/runner.js';
+import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../server/accountDeletion/cors.js';
 
 export const maxDuration = 300;
 
 const POST_BUDGET_MS = 275_000;
 const GET_PROGRESS_BUDGET_MS = 20_000;
-const ALLOWED_ORIGIN = process.env.PUBLIC_APP_ORIGIN || 'https://thelogbook.web.app';
-
-function corsHeaders(origin: string | null): HeadersInit {
-  return origin === ALLOWED_ORIGIN ? {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'authorization, content-type, x-firebase-appcheck, x-account-deletion-uid, x-account-deletion-receipt',
-    'access-control-max-age': '600',
-    'vary': 'Origin',
-  } : { 'vary': 'Origin' };
-}
+const ALLOWED_HEADERS = 'authorization, content-type, x-firebase-appcheck, x-account-deletion-uid, x-account-deletion-receipt';
 
 function json(body: unknown, init: ResponseInit = {}, origin: string | null = null): Response {
-  return Response.json(body, { ...init, headers: { ...corsHeaders(origin), ...(init.headers || {}) } });
-}
-
-function requireAllowedOrigin(request: Request): string {
-  const origin = request.headers.get('origin');
-  if (origin !== ALLOWED_ORIGIN) throw new RequestAuthError('Origin non autorizzata.', 403);
-  return origin;
+  return Response.json(body, {
+    ...init,
+    headers: { ...accountDeletionCorsHeaders(origin, ALLOWED_HEADERS), ...(init.headers || {}) },
+  });
 }
 
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
-  if (origin !== ALLOWED_ORIGIN) return json({ error: 'Origin non autorizzata.' }, { status: 403 }, origin);
-  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  try {
+    requireAccountDeletionOrigin(request);
+    return new Response(null, { status: 204, headers: accountDeletionCorsHeaders(origin, ALLOWED_HEADERS) });
+  } catch (error) {
+    return errorResponse(error, origin);
+  }
 }
 
 class RequestInputError extends Error {
@@ -79,7 +71,7 @@ async function requestBody(request: Request): Promise<Record<string, unknown>> {
 export async function POST(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
-    requireAllowedOrigin(request);
+    requireAccountDeletionOrigin(request);
     const { uid } = await verifyDeletionRequester(request);
     const body = await requestBody(request);
     const receiptToken = validatedInput(() => validateReceipt(body.receiptToken));
@@ -97,7 +89,7 @@ export async function POST(request: Request): Promise<Response> {
 export async function GET(request: Request): Promise<Response> {
   const origin = request.headers.get('origin');
   try {
-    requireAllowedOrigin(request);
+    requireAccountDeletionOrigin(request);
     await verifyStatusAppCheck(request);
     const uid = validatedInput(() => validateUid(request.headers.get('x-account-deletion-uid')));
     const receiptToken = validatedInput(() => validateReceipt(request.headers.get('x-account-deletion-receipt')));

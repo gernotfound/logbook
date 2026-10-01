@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auth = vi.hoisted(() => ({
   verifyDeletionRequester: vi.fn(),
@@ -44,8 +44,11 @@ function request(method: 'GET' | 'POST', body?: unknown): Request {
 }
 
 describe('M7 native account deletion HTTP boundary', () => {
+  const originalLegacyOrigin = process.env.PUBLIC_APP_LEGACY_ORIGIN;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.PUBLIC_APP_LEGACY_ORIGIN;
     auth.verifyDeletionRequester.mockResolvedValue({ uid: 'u' });
     auth.verifyStatusAppCheck.mockResolvedValue(undefined);
     store.validateUid.mockImplementation(value => String(value));
@@ -60,8 +63,24 @@ describe('M7 native account deletion HTTP boundary', () => {
     runner.progressAndReadStatus.mockResolvedValue({ uid: 'u', status: 'deleting', attempts: 1 });
   });
 
+  afterEach(() => {
+    if (originalLegacyOrigin === undefined) delete process.env.PUBLIC_APP_LEGACY_ORIGIN;
+    else process.env.PUBLIC_APP_LEGACY_ORIGIN = originalLegacyOrigin;
+  });
 
-  it('rejects cross-origin callers outside the Firebase Hosting origin before auth', async () => {
+  it('accepts the explicitly configured legacy origin only during cutover', async () => {
+    process.env.PUBLIC_APP_LEGACY_ORIGIN = 'https://logbook-gnf.vercel.app';
+    const legacy = new Request('https://example.test/api/account-deletion', {
+      method: 'POST',
+      headers: { origin: 'https://logbook-gnf.vercel.app', 'content-type': 'application/json' },
+      body: JSON.stringify({ receiptToken: 'receipt' }),
+    });
+    const response = await POST(legacy);
+    expect(response.status).toBe(202);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://logbook-gnf.vercel.app');
+  });
+
+  it('rejects cross-origin callers outside the configured exact origins before auth', async () => {
     const bad = new Request('https://example.test/api/account-deletion', {
       method: 'POST',
       headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
