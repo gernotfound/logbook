@@ -126,12 +126,13 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         expect(boundary.signOut).not.toHaveBeenCalled();
     });
 
-    it('clears a pre-request marker on definitive authentication/App Check rejection', async () => {
+    it('preserves the receipt after authentication/App Check rejection because an earlier POST may already have created the server job', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(response(401, { error: 'Sessione non valida.' }));
         const ctx = context();
 
         await expect(deleteAccount(ctx)).rejects.toThrow('Sessione non valida.');
-        expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
+        expect(readAccountDeletionMarker('user:test-user-id')?.receiptToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(isAccountDeletionPending('user:test-user-id')).toBe(true);
         expect(ctx.purgeAllLocalUserData).not.toHaveBeenCalled();
     });
 
