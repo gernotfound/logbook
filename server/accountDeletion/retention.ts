@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
 import type { AccountDeletionJob } from './types.js';
+import { purgeDeletionRecoveryDevices } from './deviceRecovery.js';
 
 const JOB_COLLECTION = 'account_deletions';
 
@@ -36,16 +37,19 @@ export async function purgeExpiredCompletedDeletionJobs(
   if (snapshot.empty) return 0;
 
   const batch = adminDb().batch();
+  const completedUids: string[] = [];
   let deleted = 0;
   for (const item of snapshot.docs) {
     const job = item.data() as AccountDeletionJob;
     const purgeAtMs = timestampMillis(job.purgeAfter);
     if (job.status !== 'complete' || purgeAtMs === null || purgeAtMs > nowMs) continue;
     batch.delete(item.ref);
+    completedUids.push(job.uid);
     deleted += 1;
   }
 
   if (deleted === 0) return 0;
   await batch.commit();
+  await Promise.all(completedUids.map(uid => purgeDeletionRecoveryDevices(uid)));
   return deleted;
 }
