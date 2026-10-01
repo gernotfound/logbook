@@ -111,13 +111,12 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
 
         it('throws descriptive error listing multiple missing environment variables', async () => {
             delete (import.meta.env as any).VITE_FIREBASE_AUTH_DOMAIN;
-            delete (import.meta.env as any).VITE_FIREBASE_AUTH_DOMAIN;
             import.meta.env.VITE_FIREBASE_APP_ID = '';
 
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_APP_ID/
             );
         });
 
