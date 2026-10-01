@@ -7,6 +7,7 @@ import { runAccountDeletionMaintenance } from './maintenance.js';
 
 const functionRegion = defineString('LOGBOOK_FUNCTION_REGION');
 const allowedOriginsConfig = defineString('LOGBOOK_ALLOWED_ORIGINS');
+const runtimeServiceAccount = defineString('LOGBOOK_FUNCTION_SERVICE_ACCOUNT');
 
 const MAINTENANCE_BUDGET_MS = 28 * 60 * 1000;
 const ALLOWED_METHODS = 'GET, POST, OPTIONS';
@@ -96,6 +97,7 @@ async function sendWebResponse(response: Response, res: FirebaseHttpResponse): P
 export const accountDeletion = onRequest(
   {
     region: functionRegion,
+    serviceAccount: runtimeServiceAccount,
     timeoutSeconds: 3600,
     memory: '512MiB',
     concurrency: 10,
@@ -136,6 +138,7 @@ export const accountDeletionMaintenance = onSchedule(
     schedule: '0 3 * * *',
     timeZone: 'Etc/UTC',
     region: functionRegion,
+    serviceAccount: runtimeServiceAccount,
     timeoutSeconds: 1800,
     memory: '512MiB',
     maxInstances: 1,
