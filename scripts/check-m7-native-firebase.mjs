@@ -120,6 +120,11 @@ if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vita
 }
 
 requireCspSource('script-src', 'https://www.googletagmanager.com', 'Firebase Analytics script-src must allow Google Tag Manager.');
+for (const forbiddenHostingScriptSource of ['https://*.firebaseapp.com', 'https://*.web.app']) {
+  if (cspDirectives.get('script-src')?.has(forbiddenHostingScriptSource)) {
+    failures.push(`Firebase Hosting script-src must not trust every Firebase Hosting project: ${forbiddenHostingScriptSource}`);
+  }
+}
 for (const source of ['https://www.googletagmanager.com', 'https://*.google-analytics.com', 'https://*.google.com']) {
   requireCspSource('connect-src', source, `Firebase Analytics connect-src origin missing: ${source}`);
 }
