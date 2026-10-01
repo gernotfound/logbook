@@ -111,4 +111,4 @@ La HTTPS Function `accountDeletion` dichiara esplicitamente `invoker: 'public'` 
 
 ## Cache e namespace Firebase Hosting
 
-Gli asset Vite fingerprinted sotto `/assets/**` sono cacheabili a lungo con `immutable`; app shell, `index.html`, manifest, service worker e Workbox vengono invece rivalidati/no-cache per non trattenere una PWA vecchia. Il namespace Firebase riservato `/__/*` ha priorità sulle SPA rewrite e il service worker LogBook non installa un navigation fallback generale: gli helper Auth `/__/auth/*` restano quindi raggiungibili dal nuovo `authDomain`.
+Gli asset Vite fingerprinted sotto `/assets/**` sono cacheabili a lungo con `immutable`; app shell, `index.html`, manifest, service worker e Workbox vengono invece rivalidati/no-cache per non trattenere una PWA vecchia. Il namespace Firebase riservato `/__/*` ha priorità sulle SPA rewrite e il service worker LogBook non installa un navigation fallback generale. Inoltre gli header applicativi `X-Frame-Options: DENY` e `CSP frame-ancestors 'none'` escludono esplicitamente `/__/*`, così non interferiscono con l'iframe/helper OAuth gestito da Firebase Authentication sul nuovo `authDomain`.
