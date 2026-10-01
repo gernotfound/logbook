@@ -25,6 +25,7 @@ import {
 } from '../lib/sync/browserStorage';
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
+import { registerDeletionRecoveryDevice } from '../lib/deletionDeviceRecovery';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -235,7 +236,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 && authRunRef.current === authRun
                 && (expectedUid ? auth.currentUser?.uid === expectedUid : auth.currentUser === null);
 
-            if (user) tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+            if (user) {
+                tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+                void registerDeletionRecoveryDevice(user).catch(error => console.warn('Recovery device non registrato; sarà ritentato al prossimo accesso.', error));
+            }
             setCurrentUser(user);
             setLoading(false);
 
