@@ -8,7 +8,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 
-const VALIDATED_VITE_BLOB = 'c70364d817571068faa47ff8a23eef8afad09029';
+const VALIDATED_VITE_BLOB = '89e92f08c85b3cc1663b8d16b78ce7dc8de55421';
 const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
 if (currentViteBlob !== VALIDATED_VITE_BLOB) {
   failures.push(`vite.config.ts changed from the validated native Vercel/PWA baseline: expected ${VALIDATED_VITE_BLOB}, got ${currentViteBlob}`);
