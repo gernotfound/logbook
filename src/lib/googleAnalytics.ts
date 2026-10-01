@@ -14,9 +14,11 @@ async function enableAnalytics(): Promise<void> {
         const module = await import('firebase/analytics');
         if (!getAnalyticsConsent()) return;
         if (!(await module.isSupported())) return;
-        const instance = module.getAnalytics(firebaseApp);
+        const instance = module.initializeAnalytics(firebaseApp, { config: { send_page_view: false } });
         module.setAnalyticsCollectionEnabled(instance, true);
         analytics = instance;
+        const pageLocation = window.location.origin + window.location.pathname;
+        module.logEvent(instance, 'page_view', { page_location: pageLocation, page_path: window.location.pathname, page_title: document.title });
     })();
 
     initialization = attempt;
