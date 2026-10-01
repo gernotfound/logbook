@@ -19,7 +19,7 @@ function fixture() {
         source: '!/__/**',
         headers: [{
           key: 'Content-Security-Policy',
-          value: "default-src 'self'; connect-src 'self' https://*.cloudfunctions.net https://example.invalid;",
+          value: "default-src 'self'; connect-src 'self' https://logbook-function.invalid https://example.invalid;",
         }],
       }],
       rewrites: [{ source: '**', destination: '/index.html' }],
@@ -56,6 +56,7 @@ describe('Firebase deploy config preparation', () => {
 
     const csp = config.hosting.headers[0].headers[0].value as string;
     expect(csp).toContain('https://europe-west1-logbook-db-98cc4.cloudfunctions.net');
+    expect(csp).not.toContain('https://logbook-function.invalid');
     expect(csp).not.toContain('https://*.cloudfunctions.net');
   });
 
