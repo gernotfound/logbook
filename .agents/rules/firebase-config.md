@@ -54,7 +54,7 @@ La decisione di prodotto del 2026-10-01 sostituisce Vercel Analytics/Speed Insig
 - `VITE_FIREBASE_MEASUREMENT_ID` è configurazione pubblica obbligatoria del candidato Production e viene validata dal preflight.
 - La CSP autorizza solo gli origin necessari a Google Analytics **senza funzionalità Ads**; non allowlistare DoubleClick/Google Ads salvo futura decisione esplicita.
 
-**VERIFY-LIVE prima del cutover:** collegamento Firebase ↔ proprietà Google Analytics, Web data stream corretta, measurement ID, data retention, data sharing/Google Signals/Ads personalization e impostazioni territoriali devono essere verificati nella console competente. Il repository non prova il loro stato live.
+**VERIFY-LIVE prima del cutover:** collegamento Firebase ↔ proprietà Google Analytics, Web data stream corretta, measurement ID, data retention, data sharing/Google Signals/Ads personalization e impostazioni territoriali devono essere verificati nella console competente. La **Misurazione avanzata** della Web data stream deve restare disabilitata nel target iniziale (scroll, clic in uscita, ricerca sito, download, form e video): LogBook parte dalla sola misurazione standard pagina/sessione dopo opt-in. Il repository non prova lo stato live di queste impostazioni.
 
 **MUST:** nessun dato salute/contenuto business, identificativo account o evento custom viene aggiunto ad Analytics senza nuova decisione di prodotto, tassonomia documentata, aggiornamento privacy e regressioni.
 
