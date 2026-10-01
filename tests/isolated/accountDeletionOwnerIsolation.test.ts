@@ -17,7 +17,7 @@ vi.mock('../../src/lib/firebase', () => ({
     ensureAppCheck: async () => {},
     waitForPendingWrites: vi.fn(),
 }));
-vi.mock('../../src/lib/appCheck', () => ({ getAppCheckToken: boundary.appCheck }));
+vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
 vi.mock('../../src/store/useAppStore', () => ({
     useAppStore: { getState: () => ({ cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset }) },
 }));

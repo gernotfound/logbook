@@ -52,7 +52,7 @@ export async function GET(request: Request): Promise<Response> {
     await verifyStatusAppCheck(request);
     const uid = request.headers.get('x-account-deletion-uid');
     const token = request.headers.get('x-account-deletion-device');
-    if (!await verifyDeletionRecoveryDevice(uid, token)) {
+    if (!uid || !await verifyDeletionRecoveryDevice(uid, token)) {
       return json({ error: 'Recovery non autorizzato.' }, 404, origin);
     }
     const status = await readDeletionStatusForUid(uid);
