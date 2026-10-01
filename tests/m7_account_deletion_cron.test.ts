@@ -61,6 +61,7 @@ describe('M7 Firebase scheduled account deletion maintenance', () => {
 
   it('drains additional full recovery pages before spending residual budget on retention', async () => {
     vi.clearAllMocks();
+    store.listRecoverableDeletionJobs.mockReset();
     const firstPage = Array.from({ length: 25 }, (_, index) => ({ uid: `p1-${index}` }));
     const secondPage = [{ uid: 'p2' }];
     store.listRecoverableDeletionJobs

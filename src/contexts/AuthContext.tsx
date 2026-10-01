@@ -240,9 +240,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setLoading(false);
 
             if (user) {
-                void DB.ensureAccountDeletionRecoveryCredential().catch(error => {
-                    console.warn('Registrazione recovery cancellazione account non disponibile:', error);
-                });
+                // Keep AuthProvider compatible with focused DB test doubles while the
+                // production DB boundary opportunistically preregisters recovery.
+                if (typeof DB.ensureAccountDeletionRecoveryCredential === 'function') {
+                    void DB.ensureAccountDeletionRecoveryCredential().catch(error => {
+                        console.warn('Registrazione recovery cancellazione account non disponibile:', error);
+                    });
+                }
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
 
