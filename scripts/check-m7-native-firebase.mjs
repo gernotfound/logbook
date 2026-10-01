@@ -60,10 +60,6 @@ if (JSON.stringify(hosting?.rewrites ?? []).includes('function')) {
 }
 
 const hostingHeaders = Array.isArray(hosting?.headers) ? hosting.headers : [];
-const firebaseBridgeHeader = hostingHeaders.find(item => item?.source === '/migration-ready.json');
-if (!JSON.stringify(firebaseBridgeHeader ?? {}).includes('no-store')) failures.push('Firebase bridge readiness marker must never be cached.');
-const vercelBridgeHeader = (vercelConfig.headers ?? []).find(item => item?.source === '/migration-ready.json');
-if (!JSON.stringify(vercelBridgeHeader ?? {}).includes('no-store')) failures.push('Legacy Vercel bridge must expose a no-store readiness marker.');
 const serializedHeaders = JSON.stringify(hostingHeaders);
 for (const requiredHeader of ['Content-Security-Policy','Strict-Transport-Security','X-Content-Type-Options','Referrer-Policy','Permissions-Policy']) {
   if (!serializedHeaders.includes(requiredHeader)) failures.push(`Missing Firebase Hosting security header: ${requiredHeader}`);
@@ -99,17 +95,22 @@ if (!/schedule:\s*'0 3 \* \* \*'/.test(functionIndex) || !/timeZone:\s*'Etc\/UTC
   failures.push('Scheduled maintenance must run daily at 03:00 UTC.');
 }
 if (!functionIndex.includes("defineString('LOGBOOK_FUNCTION_REGION')")) failures.push('Function region must be deployment-parameterized.');
+if (!functionIndex.includes("defineString('LOGBOOK_FUNCTION_SERVICE_ACCOUNT')")) failures.push('Functions must bind a dedicated runtime service account.');
+if (!/serviceAccount:\s*runtimeServiceAccount/.test(functionIndex)) failures.push('Both Firebase Functions must use the configured runtime service account.');
 if (!functionIndex.includes("defineString('LOGBOOK_ALLOWED_ORIGINS')")) failures.push('Direct HTTP CORS allowlist must be deployment-parameterized.');
 if (functionIndex.includes('CRON_SECRET')) failures.push('Scheduled Firebase maintenance must not rely on CRON_SECRET.');
 
-if (!adminBootstrap.includes("optionalEnv('FIREBASE_CONFIG')") || !adminBootstrap.includes('return initializeApp();')) {
-  failures.push('Firebase-managed runtime must force Application Default Credentials using the automatic FIREBASE_CONFIG boundary.');
+if (!adminBootstrap.includes('return initializeApp();')) {
+  failures.push('Firebase Admin must initialize with Application Default Credentials.');
 }
-if (!adminBootstrap.includes('credential: cert(')) failures.push('Legacy Vercel adapter must retain its temporary server-only certificate fallback until Vercel is retired.');
-if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must be provider-neutral/configurable.');
-if (!deploymentMetadata.includes('VERCEL_PROJECT_PRODUCTION_URL')) failures.push('Legacy Vercel bridge build must retain a production-origin fallback for deployment metadata until cutover.');
-if (viteConfig.includes('logbook-gnf.vercel.app')) failures.push('Vite config must not hardcode the retired Vercel production origin.');
-if (!viteConfig.includes('VERCEL_PROJECT_PRODUCTION_URL')) failures.push('Legacy Vercel build must derive any transitional origin fallback from provider metadata, not a hardcoded hostname.');
+for (const forbidden of ['credential: cert(', 'FIREBASE_ADMIN_PROJECT_ID', 'FIREBASE_ADMIN_CLIENT_EMAIL', 'FIREBASE_ADMIN_PRIVATE_KEY']) {
+  if (adminBootstrap.includes(forbidden)) failures.push(`Firebase Functions Admin runtime must not contain legacy credential path: ${forbidden}`);
+}
+if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must use the configured direct Firebase Function endpoint.');
+for (const source of [deploymentMetadata, viteConfig, deploymentConfig]) {
+  if (/VERCEL_|vercel\.app/i.test(source)) failures.push('Production build/config must not depend on Vercel metadata or origins.');
+}
+if (vercelConfig?.git?.deploymentEnabled !== false) failures.push('Vercel automatic Git deployments must be disabled after the clean cutover.');
 const hasNavigationFallback = serviceWorkerSource.includes('NavigationRoute')
   || serviceWorkerSource.includes('navigateFallback')
   || viteConfig.includes('navigateFallback');
@@ -126,16 +127,12 @@ if (functionsDeployIndex < 0 || hostingDeployIndex < 0 || functionsDeployIndex >
   failures.push('Firebase Production must deploy backward-compatible Functions before publishing Hosting.');
 }
 if (!firebaseProductionWorkflow.includes("node-version: '22'")) failures.push('Firebase Production must install/build Functions under Node.js 22.');
+if (!firebaseProductionWorkflow.includes('FIREBASE_FUNCTION_SERVICE_ACCOUNT')) failures.push('Firebase Production must provide the dedicated Functions runtime service account.');
 if (!firebaseProductionWorkflow.includes('--only functions:accountDeletion,functions:accountDeletionMaintenance') || !firebaseProductionWorkflow.includes('--only hosting')) {
   failures.push('Firebase Production must deploy only the owned account-deletion Functions and Hosting separately.');
 }
 if (/--only\s+(?:hosting,functions|functions,hosting)/.test(firebaseProductionWorkflow)) {
   failures.push('Firebase Production must not collapse Functions and Hosting into one unordered deploy step.');
-}
-if (!firebaseProductionWorkflow.includes('Require exact legacy bridge build before Hosting')
-  || !firebaseProductionWorkflow.includes('/migration-ready.json')
-  || !firebaseProductionWorkflow.includes('marker.buildSha === expectedSha')) {
-  failures.push('Firebase Hosting cutover must wait for the exact legacy-origin bridge build.');
 }
 const sentrySecretReferences = firebaseProductionWorkflow.match(/SENTRY_AUTH_TOKEN:\s*\$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/g) ?? [];
 if (sentrySecretReferences.length !== 2) {
@@ -146,7 +143,7 @@ if (jobEnvBeforeSteps.includes('SENTRY_AUTH_TOKEN')) {
   failures.push('SENTRY_AUTH_TOKEN must not be exposed as a job-wide Firebase Production environment variable.');
 }
 
-for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml','dist/migration-ready.json']) {
+for (const output of ['dist/sw.js','dist/manifest.webmanifest','dist/index.html','dist/favicon.ico','dist/social-share.jpg','dist/robots.txt','dist/sitemap.xml']) {
   if (!existsSync(output)) failures.push(`PWA build artifact missing: ${output}`);
 }
 
@@ -169,25 +166,8 @@ if (existsSync('dist/index.html')) {
   if (!/<link rel="canonical" href="https:\/\/[^"]+\/">/.test(html)) failures.push('built HTML must expose a canonical absolute URL from the deployment origin.');
 }
 
-if (existsSync('dist/migration-ready.json')) {
-  try {
-    const marker = JSON.parse(readFileSync('dist/migration-ready.json', 'utf8'));
-    if (marker?.version !== 1 || typeof marker?.buildSha !== 'string' || !marker.buildSha) {
-      failures.push('migration readiness marker must contain version 1 and a build SHA.');
-    }
-    if (process.env.EXPECTED_SHA && marker.buildSha !== process.env.EXPECTED_SHA) {
-      failures.push('migration readiness marker must carry the exact candidate SHA.');
-    }
-    if (typeof marker?.origin !== 'string' || !marker.origin.startsWith('https://')) {
-      failures.push('migration readiness marker must identify its HTTPS deployment origin.');
-    }
-  } catch (error) {
-    failures.push(`migration readiness marker invalid: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-if (existsSync('dist/robots.txt') && readFileSync('dist/robots.txt','utf8').includes('vercel.app')) failures.push('robots.txt must not hardcode Vercel.');
-if (existsSync('dist/sitemap.xml') && readFileSync('dist/sitemap.xml','utf8').includes('vercel.app')) failures.push('sitemap.xml must not hardcode Vercel.');
+if (existsSync('dist/robots.txt') && /vercel\.app/i.test(readFileSync('dist/robots.txt','utf8'))) failures.push('robots.txt must not reference Vercel.');
+if (existsSync('dist/sitemap.xml') && /vercel\.app/i.test(readFileSync('dist/sitemap.xml','utf8'))) failures.push('sitemap.xml must not reference Vercel.');
 
 if (existsSync('dist/manifest.webmanifest')) {
   try {
