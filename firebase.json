@@ -64,7 +64,7 @@
         ]
       },
       {
-        "source": "**",
+        "source": "!/__/**",
         "headers": [
           {
             "key": "Strict-Transport-Security",
