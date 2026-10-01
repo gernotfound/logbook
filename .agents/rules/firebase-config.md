@@ -8,13 +8,14 @@ Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco ob
 
 ### Client Firebase — fail-fast
 
-`src/lib/firebase.ts` controlla all'avvio le cinque opzioni Firebase realmente usate dal client. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
+Il runtime client controlla all'avvio sei variabili pubbliche Firebase/deployment realmente usate. Se una manca o è vuota, il client fallisce chiuso prima di inizializzare i boundary cloud che dipendono dalla configurazione.
 
 | Variabile | Stato corrente | Note |
 |---|---|---|
 | `VITE_FIREBASE_API_KEY` | MUST | Chiave API pubblica Firebase |
 | `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Deve coincidere con l’hostname canonico Firebase Hosting |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
+| `VITE_FIREBASE_FUNCTION_REGION` | MUST | Regione pubblica attesa della HTTPS Function; valida l’hostname esatto di account deletion |
 | `VITE_FIREBASE_APP_ID` | MUST | ID della Firebase Web App |
 | `VITE_FIREBASE_MEASUREMENT_ID` | MUST | ID GA4 Web (`G-...`) della data stream collegata alla Firebase Web App |
 
@@ -34,7 +35,7 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
 - **Compatibilità:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato e verificato il 2026-09-30; i precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
-- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle cinque env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
+- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle sei env Firebase/deployment client e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
 **VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
@@ -111,6 +112,7 @@ I file `firebase.json` e `.firebaserc` definiscono la configurazione repository 
 - **MUST:** il client non può eliminare direttamente `/users/{uid}`. Il root utente viene eliminato dal backend trusted del job account-deletion dopo la bonifica delle raccolte private e prima della cancellazione finale di Firebase Auth.
 - Le sottocollezioni private mantengono `delete` owner-scoped per le normali operazioni di dominio dove previste; questa capacità non autorizza il client a bypassare il workflow di cancellazione account.
 - `account_deletions/{uid}` resta server-only e costituisce la barriera cross-device durante una cancellazione in corso.
+- `account_deletion_recovery/{uid}` resta server-only e conserva soltanto hash bounded delle credenziali device preregistrate; il cleartext resta locale e questo proof path può solo leggere lo stato, mai avviare o avanzare una cancellazione.
 
 ### Telemetria tecnica — Sentry e legacy Firestore
 

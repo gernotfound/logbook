@@ -28,16 +28,18 @@ Il client chiama direttamente la HTTPS Function `accountDeletion`, senza rewrite
 Il backend mantiene:
 
 1. ID token verificato con revocation check;
-2. requisito di autenticazione recente;
+2. requisito di autenticazione recente per avviare la cancellazione;
 3. App Check;
-4. receipt casuale con solo hash SHA-256 conservato server-side;
-5. job `account_deletions/{uid}` server-only;
-6. lease per serializzare i worker distruttivi;
-7. cancellazione paginata delle raccolte private note;
-8. verifica residui prima della cancellazione Auth;
-9. Firebase Auth eliminato per ultimo;
-10. tombstone tecnico con retention di 30 giorni;
-11. recovery idempotente tramite GET + scheduled maintenance.
+4. credenziale device random preregistrata nel normale lifecycle, con solo hash SHA-256 server-side e uso proof-only;
+5. receipt di cancellazione casuale con solo hash SHA-256 conservato server-side;
+6. job `account_deletions/{uid}` e registro `account_deletion_recovery/{uid}` server-only;
+7. lease per serializzare i worker distruttivi;
+8. scheduling `nextAttemptAt` + backoff server-side prima del limite di pagina;
+9. cancellazione paginata delle raccolte private note;
+10. verifica residui prima della cancellazione Auth;
+11. Firebase Auth eliminato per ultimo;
+12. tombstone tecnico con retention di 30 giorni e proof hash sufficienti al recovery offline multi-device;
+13. recovery idempotente tramite receipt GET, proof-only GET e scheduled maintenance.
 
 Le Functions usano Application Default Credentials tramite un service account runtime dedicato configurato con `LOGBOOK_FUNCTION_SERVICE_ACCOUNT`. Non sono richieste private key Admin esportate né `CRON_SECRET`.
 
@@ -57,6 +59,7 @@ Repository variables Production:
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_FUNCTION_REGION`
 - `VITE_FIREBASE_APP_ID`
 - `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`
 - `VITE_SENTRY_DSN`
@@ -97,18 +100,20 @@ Il workflow `.github/workflows/firebase-production.yml` si attiva soltanto dopo 
 
 L’ordine è intenzionale:
 
-1. checkout exact-SHA verificato;
-2. conferma che lo SHA sia ancora l’HEAD reale di `main`;
-3. autenticazione GCP via WIF;
-4. install/typecheck Functions con Node.js 22;
-5. deploy delle sole Functions LogBook;
-6. nuovo controllo che `main` non sia avanzato;
-7. build frontend Production con Node.js 24 + release Sentry sullo stesso SHA;
-8. nuovo controllo exact-SHA;
-9. deploy Firebase Hosting;
-10. controllo finale di drift.
+1. job `prepare` senza OIDC: checkout exact-SHA verificato e conferma che sia ancora l’HEAD reale di `main`;
+2. preflight fail-closed della configurazione Production;
+3. install/typecheck/build Functions con Node.js 22;
+4. install della Firebase CLI a versione esatta nel boundary non privilegiato;
+5. build frontend Production con Node.js 24 + release/source map Sentry sullo stesso SHA;
+6. nuovo controllo che `main` non sia avanzato prima di congelare la release;
+7. creazione di un artifact immutabile contenente exact SHA, build, Functions compilate e tooling deploy;
+8. job `deploy` minimale, unico con `id-token: write`, che scarica/verifica l'artifact e ricontrolla `main` immediatamente prima della prima mutazione;
+9. autenticazione GCP via WIF;
+10. deploy delle sole Functions LogBook;
+11. deploy Firebase Hosting senza un secondo abort deliberato per drift fra le due mutazioni;
+12. osservazione finale del drift: se `main` è avanzato, la release appena iniziata resta coerente e la nuova HEAD verrà gestita dalla run successiva.
 
-Functions vengono pubblicate prima di Hosting perché il backend nuovo è compatibile con il client precedente; un errore nel secondo step non deve lasciare un frontend nuovo senza backend.
+Functions vengono pubblicate prima di Hosting perché il backend candidato mantiene compatibilità con il frontend Production precedente; POST/GET legacy account-deletion restano coperti da regressioni. Le Actions sensibili sono pin a full commit SHA e il job privilegiato non usa `npx --yes` né installa pacchetti dal network.
 
 ## Hosting/PWA
 

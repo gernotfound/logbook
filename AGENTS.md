@@ -144,7 +144,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 
 Esistono tre contratti separati:
 
-1. **Client Firebase:** cinque env `VITE_FIREBASE_*` effettivamente usate (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`, `MEASUREMENT_ID`) sono lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote. `MEASUREMENT_ID` abilita il boundary Google Analytics opzionale ma resta configurazione client pubblica.
+1. **Client Firebase/deployment:** sei env pubbliche `VITE_FIREBASE_*` (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `FUNCTION_REGION`, `APP_ID`, `MEASUREMENT_ID`) sono lette staticamente; tutte devono essere presenti/non vuote. `FUNCTION_REGION` vincola l’endpoint HTTPS di account deletion all’host Cloud Functions esatto, mentre `MEASUREMENT_ID` abilita il boundary Google Analytics opzionale.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
 3. **Server trusted target:** Firebase Cloud Functions v2 usa Application Default Credentials/IAM; `LOGBOOK_FUNCTION_REGION`, `LOGBOOK_FUNCTION_SERVICE_ACCOUNT` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti. Non esiste un percorso Production basato su private key Admin esportate o `CRON_SECRET`.
 
@@ -182,9 +182,11 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 
 - Firebase Cloud Functions v2 autenticano la richiesta e il backend trusted usa Firebase Admin con ADC tramite identità runtime dedicata.
 - Il job pulisce dati privati/telemetria e cancella Firebase Auth per ultimo.
-- `account_deletions/{uid}` è server-only e agisce da barriera cross-device.
-- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; la maintenance schedulata giornaliera elimina i record scaduti.
-- La copia locale non viene eliminata finché il client non ha prova del completamento cloud secondo il protocollo di recovery.
+- `account_deletions/{uid}` è server-only e agisce da barriera cross-device; `account_deletion_recovery/{uid}` è server-only e conserva soltanto hash bounded di credenziali device preregistrate.
+- Ogni device autenticato preregistra una credenziale random owner-scoped: il cleartext resta locale e può soltanto leggere lo stato del job dopo perdita di Auth, mai creare o avanzare una cancellazione.
+- La maintenance seleziona i job tramite `nextAttemptAt` prima del limite e applica backoff ai failure retryable; i failure non-retryable non restano eleggibili automaticamente.
+- Dopo completamento viene conservato un tombstone tecnico server-only limitato a 30 giorni; la maintenance schedulata giornaliera elimina solo tombstone esplicitamente eleggibili e scaduti.
+- La copia locale non viene eliminata finché il client non ha prova server `complete` tramite receipt o credenziale preregistrata; un’altra identità attiva sul device sospende il purge dell’owner precedente.
 - **MUST:** non reintrodurre cancellazioni client-side che bypassino questo workflow.
 
 → Dettagli: `.agents/rules/account-lifecycle.md`.
@@ -271,8 +273,10 @@ npm run verify:m8
 
 - **MUST:** branch e PR non generano deployment Firebase o Vercel.
 - **MUST:** Firebase Production deriva soltanto da un push su `main` con `Milestone Verification` / `Canonical Verification` verde sullo SHA esatto.
-- **MUST:** il workflow ricontrolla che lo SHA verificato sia ancora l’HEAD di `main` prima di Functions, prima di Hosting e dopo la pubblicazione.
-- **MUST:** Functions vengono pubblicate prima di Hosting e usano Node.js 22 + service account runtime dedicato; frontend/build usa Node.js 24.
+- **MUST:** preparazione e build avvengono senza `id-token: write`, producono un artifact immutabile legato all’exact SHA e includono una Firebase CLI a versione esatta; il job deploy minimale è l’unico boundary con OIDC/WIF.
+- **MUST:** il candidato stale viene rifiutato immediatamente prima della prima mutazione Production. Dopo l’inizio del deploy Functions non si abortisce deliberatamente fra Functions e Hosting se `main` avanza: si completa la release coerente e la nuova HEAD genera la run successiva.
+- **MUST:** le Actions sensibili sono pin a full commit SHA verificati e il job privilegiato non scarica tooling con `npx --yes`.
+- **MUST:** Functions vengono pubblicate prima di Hosting, restano backward-compatible con il frontend Production precedente e usano Node.js 22 + service account runtime dedicato; frontend/build usa Node.js 24.
 - Dopo il merge verificare: SHA effettivo di `main`, CI post-merge, deployment Functions/Hosting sullo stesso stato e smoke runtime.
 - **VERIFY:** WIF, IAM, Hosting site, Auth/OAuth, App Check, Browser API key, Sentry e Search Console sono configurazione esterna e vanno osservati nel sistema competente.
 

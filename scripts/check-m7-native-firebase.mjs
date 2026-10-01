@@ -10,6 +10,9 @@ const functionsLock = existsSync(functionsLockPath)
   ? JSON.parse(readFileSync(functionsLockPath, 'utf8'))
   : null;
 const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
+const deletionHttp = readFileSync('functions/src/accountDeletion/http.ts', 'utf8');
+const deletionStore = readFileSync('functions/src/accountDeletion/jobStore.ts', 'utf8');
+const firestoreRules = readFileSync('firestore.rules', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
 const firebaseClient = readFileSync('src/lib/firebase.ts', 'utf8');
@@ -139,6 +142,30 @@ if (!functionIndex.includes("defineString('LOGBOOK_FUNCTION_SERVICE_ACCOUNT')"))
 if (!/serviceAccount:\s*runtimeServiceAccount/.test(functionIndex)) failures.push('Both Firebase Functions must use the configured runtime service account.');
 if (!functionIndex.includes("defineString('LOGBOOK_ALLOWED_ORIGINS')")) failures.push('Direct HTTP CORS allowlist must be deployment-parameterized.');
 if (functionIndex.includes('CRON_SECRET')) failures.push('Scheduled Firebase maintenance must not rely on CRON_SECRET.');
+if (!functionIndex.includes("const ALLOWED_METHODS = 'GET, POST, PUT, OPTIONS'")) {
+  failures.push('Account deletion HTTP contract must expose preregistration PUT alongside legacy POST/GET.');
+}
+if (!functionIndex.includes("'x-account-deletion-recovery'")) {
+  failures.push('Account deletion CORS contract must allow the recovery proof header.');
+}
+if (!deletionHttp.includes('handleAccountDeletionPut')
+  || !deletionHttp.includes('readDeletionStatusWithRecoveryCredential')
+  || !deletionHttp.includes('progressAndReadStatus')) {
+  failures.push('Account deletion HTTP boundary must support preregistration and both status proof paths.');
+}
+const recoveryBranchStart = deletionHttp.indexOf('if (recoveryHeader)');
+const receiptProgressStart = deletionHttp.indexOf('progressAndReadStatus');
+if (recoveryBranchStart < 0 || receiptProgressStart < recoveryBranchStart) {
+  failures.push('Recovery credential GET must remain proof-only and return before receipt-driven progress.');
+}
+if (!deletionStore.includes("const RECOVERY_COLLECTION = 'account_deletion_recovery'")
+  || !deletionStore.includes(".where('nextAttemptAt', '<=', now)")
+  || !deletionStore.includes(".where('purgeEligibleAt', '<=', now)")) {
+  failures.push('Deletion durability must retain preregistered recovery, due scheduling and explicit retention eligibility.');
+}
+if (!firestoreRules.match(/match\s+\/account_deletion_recovery\/\{userId\}[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/)) {
+  failures.push('Preregistered account deletion recovery credentials must remain server-only in Firestore Rules.');
+}
 
 if (!adminBootstrap.includes('return initializeApp();')) {
   failures.push('Firebase Admin must initialize with Application Default Credentials.');

@@ -28,6 +28,12 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
     expect(rulesContent.match(/isActiveOwner\(userId\)/g)?.length).toBeGreaterThanOrEqual(12);
   });
 
+  it('keeps preregistered deletion recovery credentials server-only', () => {
+    expect(rulesContent).toMatch(
+      /match\s+\/account_deletion_recovery\/\{userId\}\s*\{[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/,
+    );
+  });
+
   it('keeps root deletion server-only while allowing active-owner reads and writes', () => {
     const usersBlock = rulesContent.match(/match\s+\/users\/\{userId\}\s*\{([\s\S]*?)\n\s*match\s+\/history_months/);
     expect(usersBlock).not.toBeNull();

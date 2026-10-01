@@ -103,13 +103,16 @@ Nel candidato `vercel.json` imposta `deploymentEnabled: false`: nessun branch, i
 
 La CSP segue il principio di allowlist minima. LogBook usa font di sistema e non carica Google Fonts: gli origin `fonts.googleapis.com`/`fonts.gstatic.com` sono stati rimossi nella seconda passata del 2026-09-30 insieme agli origin Realtime Database non usati.
 
-Il codice target legge cinque variabili Firebase Web:
+Il codice target richiede sei variabili pubbliche Firebase/deployment lato client:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_FUNCTION_REGION`
 - `VITE_FIREBASE_APP_ID`
 - `VITE_FIREBASE_MEASUREMENT_ID`
+
+Nel workflow Production `VITE_FIREBASE_FUNCTION_REGION` deriva dalla singola repository variable `FIREBASE_FUNCTION_REGION`; il preflight rifiuta configurazioni in cui regione client e regione deploy divergono.
 
 Il `measurementId` GA4 era stato rimosso dal vecchio deployment Vercel il 2026-09-30 quando Firebase Analytics non faceva parte del prodotto. La decisione di prodotto del 2026-10-01 introduce invece Google Analytics nel **nuovo target Firebase**: il valore Production deve vivere nella configurazione GitHub/Firebase del nuovo delivery, non essere reintrodotto come dipendenza Vercel.
 

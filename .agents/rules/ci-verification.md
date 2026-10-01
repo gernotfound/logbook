@@ -98,10 +98,14 @@ Il checker automatico M8 protegge direttamente i consumer sotto `src/hooks` e `s
 
 Il workflow stabile `.github/workflows/firebase-production.yml` non fa parte del gate PR e non usa Preview. Si attiva soltanto dopo una run `Milestone Verification` conclusa con successo per un evento `push` su `main`.
 
-- MUST: checkout dello SHA verificato e confronto con l'HEAD corrente di `origin/main`; se `main` è avanzato il deploy stale viene rifiutato.
-- MUST: autenticazione Google Cloud via GitHub OIDC / Workload Identity Federation, senza service-account key JSON persistente.
+- MUST: il job `prepare` fa checkout dell'exact verified SHA, ricontrolla `origin/main`, valida configurazione, builda Functions/frontend e produce un artifact release immutabile; non possiede `id-token: write`.
+- MUST: il job `deploy` è l'unico boundary con `id-token: write` e autentica Google Cloud via OIDC / Workload Identity Federation, senza service-account key JSON persistente.
+- MUST: l'artifact contiene un binding esplicito all'exact SHA e tooling Firebase a versione esatta installato nel job non privilegiato; nel job privilegiato non sono ammessi download di pacchetti tramite `npx --yes`.
+- MUST: le Actions sensibili del workflow Production sono pin a full commit SHA verificati, non a major tag mutabili.
+- MUST: il confronto stale con `main` avviene immediatamente prima della prima mutazione Production. Dopo l'inizio del deploy Functions, un avanzamento concorrente di `main` non deve causare un abort deliberato prima di Hosting: la release corrente viene completata e la nuova HEAD sarà gestita dalla run successiva.
+- MUST: Functions candidate restano backward-compatible con il frontend Production precedente durante la finestra Functions-first; POST/GET legacy account-deletion sono regressioni obbligatorie.
 - MUST: build Production e deploy Hosting + Functions derivano dallo stesso SHA verificato.
-- MUST: la configurazione deploy fail-closed verifica origin canonico, direct Functions endpoint, App Check/Firebase env, service account runtime dedicato e allowlist CORS.
+- MUST: la configurazione deploy fail-closed verifica origin canonico, direct Functions endpoint con project+region esatti, App Check/Firebase env, service account runtime dedicato e allowlist CORS.
 - MUST: Firestore Rules non vengono deployate implicitamente da questo workflow quando non sono parte del task.
 
 ## Semantica del failure
