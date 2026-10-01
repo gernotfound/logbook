@@ -3,6 +3,7 @@ import { DB } from '../lib/db';
 import { resumeAccountDeletion } from '../lib/db/db_account';
 import { findPendingAccountDeletion } from '../lib/sync/accountGate';
 import { useDialogStore } from '../store/useDialogStore';
+import { recoverDeletedAccountOnThisDevice } from '../lib/deletionDeviceRecovery';
 
 /**
  * Reconciles a durable server-deletion receipt after reload/Auth removal.
@@ -15,10 +16,14 @@ export function AccountDeletionRecovery() {
         let running = false;
 
         const reconcile = async () => {
-            if (disposed || running || !findPendingAccountDeletion()) return;
+            if (disposed || running) return;
             if (typeof navigator !== 'undefined' && !navigator.onLine) return;
             running = true;
             try {
+                if (!findPendingAccountDeletion()) {
+                    await recoverDeletedAccountOnThisDevice(owner => DB.purgeAllLocalUserData(owner));
+                    return;
+                }
                 const outcome = await resumeAccountDeletion({
                     purgeAllLocalUserData: owner => DB.purgeAllLocalUserData(owner),
                     resetCache: () => DB.resetCache(),
