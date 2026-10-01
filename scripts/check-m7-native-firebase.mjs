@@ -12,6 +12,8 @@ const functionsLock = existsSync(functionsLockPath)
 const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
 const deletionHttp = readFileSync('functions/src/accountDeletion/http.ts', 'utf8');
 const deletionStore = readFileSync('functions/src/accountDeletion/jobStore.ts', 'utf8');
+const deletionRetention = readFileSync('functions/src/accountDeletion/retention.ts', 'utf8');
+const deployToolPackage = JSON.parse(readFileSync('tools/firebase-deploy/package.json', 'utf8'));
 const firestoreRules = readFileSync('firestore.rules', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
@@ -55,6 +57,9 @@ if (!functionsLock) {
 }
 if (packageJson.scripts?.['functions:install'] !== 'npm ci --prefix functions --ignore-scripts --no-audit --no-fund') {
   failures.push('Functions install must use npm ci against the committed lockfile.');
+}
+if (deployToolPackage.dependencies?.['firebase-tools'] !== '15.32.0') {
+  failures.push('Firebase deploy tooling must pin firebase-tools exactly to 15.32.0.');
 }
 
 const hosting = firebase.hosting;
@@ -160,7 +165,7 @@ if (recoveryBranchStart < 0 || receiptProgressStart < recoveryBranchStart) {
 }
 if (!deletionStore.includes("const RECOVERY_COLLECTION = 'account_deletion_recovery'")
   || !deletionStore.includes(".where('nextAttemptAt', '<=', now)")
-  || !deletionStore.includes(".where('purgeEligibleAt', '<=', now)")) {
+  || !deletionRetention.includes(".where('purgeEligibleAt', '<=', now)")) {
   failures.push('Deletion durability must retain preregistered recovery, due scheduling and explicit retention eligibility.');
 }
 if (!firestoreRules.match(/match\s+\/account_deletion_recovery\/\{userId\}[\s\S]*?allow\s+read,\s*write:\s*if\s+false;/)) {
@@ -204,6 +209,10 @@ if (!appSource.includes('applyFirebaseAnalyticsConsent') || /@vercel\/(?:analyti
 }
 
 if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must use the configured direct Firebase Function endpoint.');
+if (!deploymentConfig.includes('VITE_FIREBASE_FUNCTION_REGION')
+  || !deploymentConfig.includes('parsed.hostname !== expectedHost')) {
+  failures.push('Client deletion backend must bind the direct Function endpoint to the exact configured region and project.');
+}
 if (/['"]\/api\/account-deletion['"]/.test(deploymentConfig)) {
   failures.push('Client deletion backend must not retain the removed Vercel /api/account-deletion fallback.');
 }
