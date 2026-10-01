@@ -118,8 +118,8 @@ if (functionsDeployIndex < 0 || hostingDeployIndex < 0 || functionsDeployIndex >
   failures.push('Firebase Production must deploy backward-compatible Functions before publishing Hosting.');
 }
 if (!firebaseProductionWorkflow.includes("node-version: '22'")) failures.push('Firebase Production must install/build Functions under Node.js 22.');
-if (!firebaseProductionWorkflow.includes('--only functions') || !firebaseProductionWorkflow.includes('--only hosting')) {
-  failures.push('Firebase Production must use separate Functions and Hosting deploy commands.');
+if (!firebaseProductionWorkflow.includes('--only functions:accountDeletion,functions:accountDeletionMaintenance') || !firebaseProductionWorkflow.includes('--only hosting')) {
+  failures.push('Firebase Production must deploy only the owned account-deletion Functions and Hosting separately.');
 }
 if (/--only\s+(?:hosting,functions|functions,hosting)/.test(firebaseProductionWorkflow)) {
   failures.push('Firebase Production must not collapse Functions and Hosting into one unordered deploy step.');
