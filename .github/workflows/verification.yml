@@ -124,7 +124,7 @@ jobs:
             dist/sw.js
             dist/manifest.webmanifest
 
-  functions-runtime:
+  functions_runtime:
     name: "Verification / Functions Node 22 runtime"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -209,14 +209,14 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - shards
-      - functions-runtime
+      - functions_runtime
       - codeql
     if: ${{ always() }}
     steps:
       - name: Require verification and security analysis
         env:
           SHARD_RESULT: ${{ needs.shards.result }}
-          FUNCTIONS_RUNTIME_RESULT: ${{ needs.functions-runtime.result }}
+          FUNCTIONS_RUNTIME_RESULT: ${{ needs.functions_runtime.result }}
           CODEQL_RESULT: ${{ needs.codeql.result }}
         shell: bash
         run: |
