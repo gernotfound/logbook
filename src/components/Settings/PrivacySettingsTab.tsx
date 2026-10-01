@@ -13,7 +13,7 @@ export function PrivacySettingsTab({ analyticsEnabled, onOpenTerms, onOpenPrivac
             <div className="settings-toggle-card">
                 <div>
                     <strong>Statistiche di utilizzo</strong>
-                    <p>Abilita Google Analytics per statistiche aggregate di utilizzo. È opzionale e disattivato per impostazione predefinita.</p>
+                    <p>Abilita Google Analytics per statistiche di utilizzo. È opzionale e disattivato per impostazione predefinita.</p>
                 </div>
                 <label className="settings-switch">
                     <input
