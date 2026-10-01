@@ -11,6 +11,7 @@ import {
     initializeAppCheck,
     ReCaptchaEnterpriseProvider,
     getToken,
+    getLimitedUseToken,
     type AppCheck,
     type AppCheckTokenResult,
 } from 'firebase/app-check';
@@ -226,6 +227,24 @@ export async function getAppCheckToken(forceRefresh = false): Promise<string | n
         const message = error instanceof Error ? error.message : 'Token App Check non disponibile';
         console.error('[AppCheck] Errore durante il recupero del token:', error);
         lastToken = null;
+        lastTokenError = message;
+        isFallbackOfflineMode = true;
+        appCheckPhase = 'token-error';
+        return null;
+    }
+}
+
+export async function getLimitedUseAppCheckToken(): Promise<string | null> {
+    if (!appCheckInstance) return null;
+    try {
+        const tokenResult = await getLimitedUseToken(appCheckInstance);
+        lastTokenError = null;
+        isFallbackOfflineMode = false;
+        appCheckPhase = 'token-ready';
+        return tokenResult.token;
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Token App Check limited-use non disponibile';
+        console.error('[AppCheck] Errore durante il recupero del token limited-use:', error);
         lastTokenError = message;
         isFallbackOfflineMode = true;
         appCheckPhase = 'token-error';

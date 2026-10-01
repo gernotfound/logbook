@@ -83,8 +83,8 @@ function createReceiptToken(): string {
 
 async function appCheckToken(): Promise<string> {
     await ensureAppCheck();
-    const { getAppCheckToken } = await import('../appCheck');
-    const token = await getAppCheckToken(true);
+    const { getLimitedUseAppCheckToken } = await import('../appCheck');
+    const token = await getLimitedUseAppCheckToken();
     if (!token) throw new Error('Verifica App Check non disponibile. Cancellazione non avviata.');
     return token;
 }
