@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
 import type { AccountDeletionJob } from './types.js';
 import { purgeDeletionRecoveryDevices } from './deviceRecovery.js';
@@ -36,7 +36,7 @@ export async function purgeExpiredCompletedDeletionJobs(
 
   if (snapshot.empty) return 0;
 
-  const eligible: Array<{ uid: string; ref: unknown }> = [];
+  const eligible: Array<{ uid: string; ref: DocumentReference }> = [];
   for (const item of snapshot.docs) {
     const job = item.data() as AccountDeletionJob;
     const purgeAtMs = timestampMillis(job.purgeAfter);
@@ -54,7 +54,7 @@ export async function purgeExpiredCompletedDeletionJobs(
   }
 
   const batch = adminDb().batch();
-  for (const item of eligible) batch.delete(item.ref as never);
+  for (const item of eligible) batch.delete(item.ref);
   await batch.commit();
   return eligible.length;
 }

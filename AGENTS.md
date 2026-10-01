@@ -155,6 +155,7 @@ Esistono tre contratti separati:
 - Provider canonico: `ReCaptchaEnterpriseProvider`.
 - Il provider viene bootstrap-pato prima di Firestore; il token è acquisito separatamente e può essere ritentato dopo failure.
 - Il support check App Check è manuale (`window.crypto`, `window.fetch`); non dipende da Firebase Analytics.
+- **MUST:** le chiamate sensibili al backend custom di account deletion/recovery usano token App Check limited-use; Vercel li verifica consumandoli una sola volta e rifiuta il replay.
 - **MUST:** un `permission-denied` di sync resta `rejected` finché non è stata discriminata la causa; non etichettare genericamente Rules/Auth/App Check senza evidenza.
 
 ### Firestore Rules

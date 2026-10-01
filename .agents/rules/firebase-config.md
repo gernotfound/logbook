@@ -36,10 +36,12 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
 - **Compatibilità:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato e verificato il 2026-09-30; i precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
-- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle sette env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
+- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle quattro env Firebase core e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
-**VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
+**MUST:** le richieste sensibili al backend custom Vercel (`account-deletion` e recovery device/status) usano token App Check limited-use; il server li verifica con `consume: true` e rifiuta token già consumati. I token standard restano appropriati per i servizi Firebase gestiti.
+
+**VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti. Il service account Firebase Admin usato da Vercel deve avere l'autorizzazione necessaria a consumare token App Check; verificare IAM live prima del cutover.
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
@@ -74,7 +76,7 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 **MUST:** tutte queste credenziali/config server restano server-only, senza prefisso `VITE_`, e non devono essere inserite nel bundle client o committate con valori reali.
 
-**VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account.
+**VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account. In particolare, la replay protection App Check del backend richiede che l'identità Admin possa consumare token limited-use; questa capability IAM va verificata direttamente in Google Cloud/Firebase.
 
 ## Contratto `.env.example`
 
@@ -168,7 +170,7 @@ Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting 
 
 ## Sicurezza HTTP
 
-Gli header HTTP sono configurati in `vercel.json`; leggere la configurazione corrente prima di descriverne l'elenco come normativo, perché può cambiare indipendentemente da questa regola.
+Gli header browser del frontend sono configurati in `firebase.json`; `vercel.json` disciplina invece routing/runtime del backend Vercel. Leggere entrambi i file prima di descrivere il contratto HTTP corrente.
 
 ## File di credenziali
 

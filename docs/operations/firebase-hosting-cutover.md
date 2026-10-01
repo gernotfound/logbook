@@ -16,7 +16,7 @@ Stato: procedura operativa. Non prova lo stato live: ogni voce esterna va verifi
 2. `Canonical Verification` verde sullo stesso SHA.
 3. Firebase: confermare Spark, project ID e site ID `thelogbook`.
 4. Firestore: deployare `firestore.indexes.json` e attendere che gli indici risultino pronti prima di attivare il nuovo backend.
-5. Vercel Production: mantenere `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET`; impostare `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e, solo nella finestra di cutover/rollback, `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`.
+5. Vercel Production: mantenere `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET`; impostare `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e, solo nella finestra di cutover/rollback, `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Verificare in Google Cloud/Firebase che il service account Admin usato da Vercel possa verificare e consumare i token App Check limited-use; non sostituire queste credenziali runtime con la WIF del deploy Hosting.
 6. GitHub Actions: configurare Workload Identity Federation verso un service account dedicato al deploy. Il principal GitHub deve poter impersonare il service account; i ruoli effettivi del deployer vanno verificati live e mantenuti al minimo necessario.
 7. Repository variables richieste: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Secret: `SENTRY_AUTH_TOKEN`.
 8. Verificare Auth Authorized domains, OAuth origin/redirect, App Check/reCAPTCHA Enterprise e GA4 per `https://thelogbook.web.app`.
@@ -38,7 +38,7 @@ Stato: procedura operativa. Non prova lo stato live: ogni voce esterna va verifi
 - Google popup + redirect `/__/auth/handler`; email/password.
 - Firestore read/write e sync local-first con App Check.
 - CORS Vercel dal nuovo origin, mai wildcard.
-- Account deletion con autenticazione recente, polling, recovery device, offline/multi-device.
+- Account deletion con autenticazione recente, polling, recovery device, offline/multi-device; ripetere intenzionalmente una richiesta con lo stesso token App Check deve essere rifiutato come replay.
 - GA4: zero richieste prima del consenso; page view dopo opt-in senza query/hash; revoca cross-tab.
 - Sentry: solo Error Monitoring e release uguale allo SHA di `main`.
 - robots, sitemap, Open Graph, favicon.
