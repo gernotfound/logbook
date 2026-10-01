@@ -5,7 +5,7 @@
   "type": "module",
   "main": "lib/index.js",
   "engines": {
-    "node": "22"
+    "node": ">=22 <25"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
