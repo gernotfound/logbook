@@ -22,11 +22,6 @@ export function accountDeletionApiUrl(): string {
   const configured = absoluteHttpsUrl(import.meta.env.VITE_ACCOUNT_DELETION_API_URL, 'VITE_ACCOUNT_DELETION_API_URL');
   if (configured) return configured;
 
-  const legacySource = originMigrationSource();
-  if (typeof window !== 'undefined' && legacySource && window.location.origin === legacySource) {
-    return '/api/account-deletion';
-  }
-
   if (import.meta.env.PROD) {
     throw new Error('Configurazione Production incompleta: VITE_ACCOUNT_DELETION_API_URL mancante.');
   }
@@ -35,12 +30,4 @@ export function accountDeletionApiUrl(): string {
 
 export function publicOrigin(): string | undefined {
   return absoluteHttpsUrl(import.meta.env.VITE_PUBLIC_ORIGIN, 'VITE_PUBLIC_ORIGIN');
-}
-
-export function originMigrationSource(): string | undefined {
-  return absoluteHttpsUrl(import.meta.env.VITE_ORIGIN_MIGRATION_SOURCE, 'VITE_ORIGIN_MIGRATION_SOURCE');
-}
-
-export function originMigrationTarget(): string | undefined {
-  return absoluteHttpsUrl(import.meta.env.VITE_ORIGIN_MIGRATION_TARGET, 'VITE_ORIGIN_MIGRATION_TARGET');
 }
