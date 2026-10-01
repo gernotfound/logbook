@@ -86,7 +86,7 @@ Verificare direttamente nei sistemi competenti:
 9. restrizioni HTTP referrer della Browser API key;
 10. dominio della chiave reCAPTCHA Enterprise / App Check;
 11. enforcement App Check applicabile;
-12. Google Analytics collegato al progetto Firebase con Web data stream corretta, `VITE_FIREBASE_MEASUREMENT_ID`, retention/data sharing verificati e Google Signals/Ads personalization non attivati;
+12. Google Analytics collegato al progetto Firebase con Web data stream corretta, `VITE_FIREBASE_MEASUREMENT_ID`, retention/data sharing verificati, Google Signals/Ads personalization non attivati e Misurazione avanzata disabilitata salvo il page view standard;
 13. Sentry source-map/release;
 14. Cloud Logging/Monitoring e budget alerts;
 15. Search Console/sitemap sul nuovo origin.
