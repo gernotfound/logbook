@@ -26,3 +26,10 @@ export async function verifyDeletionRecoveryDevice(uidValue: string, tokenValue:
   const data=snap.data() as {uid?:unknown;tokenHash?:unknown};
   return data.uid===uid && typeof data.tokenHash==='string' && matches(token,data.tokenHash);
 }
+
+export async function purgeDeletionRecoveryDevices(uidValue: string): Promise<number> {
+  const uid=validateUid(uidValue);
+  const snapshot=await adminDb().collection(COLLECTION).where('uid','==',uid).limit(20).get();
+  if(snapshot.empty)return 0;
+  const batch=adminDb().batch();for(const item of snapshot.docs)batch.delete(item.ref);await batch.commit();return snapshot.size;
+}
