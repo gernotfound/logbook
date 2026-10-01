@@ -60,7 +60,7 @@ I dati business restano sul dispositivo nella persistenza locale dell'app. Non �
 
 Con un account autenticato, i dati applicativi vengono sincronizzati su Firestore. Quando dati guest preesistenti vengono associati a un account, il flusso usa una hydration cloud completa, un merge deterministico e il journal autenticato prima della replica.
 
-La cancellazione account non è una semplice delete client-side: il target usa Firebase Cloud Functions v2 con Firebase Admin, una barriera server `account_deletions/{uid}` e recovery cross-device. Dopo il completamento resta soltanto un tombstone tecnico server-only, limitato a 30 giorni e rimosso dalla scheduled maintenance giornaliera. Durante la finestra di migrazione gli endpoint Vercel restano adapter compatibili dello stesso core.
+La cancellazione account non è una semplice delete client-side: il target usa Firebase Cloud Functions v2 con Firebase Admin, una barriera server `account_deletions/{uid}` e recovery cross-device. Dopo il completamento resta soltanto un tombstone tecnico server-only, limitato a 30 giorni e rimosso dalla scheduled maintenance giornaliera. Il backend trusted del target è esclusivamente Firebase Cloud Functions v2.
 
 ## PWA
 
@@ -89,7 +89,7 @@ I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La document
 - Zod 4
 - Firebase Web SDK 12 + Firebase Admin server-side
 - Firebase Hosting + Cloud Functions for Firebase v2 come target di delivery; Functions su Node.js 22
-- Vercel mantenuto temporaneamente come Production live/bridge legacy fino al cutover approvato
+- Firebase Hosting come hosting Production target; Vercel non fa parte dell’architettura target
 - Sentry Error Monitoring (`@sentry/react` + source map build-time)
 - `vite-plugin-pwa`
 - Chart.js / `react-chartjs-2`
@@ -117,13 +117,11 @@ npm run dev
 
 `.env.example` contiene soltanto **nomi e placeholder**. Non contiene credenziali reali.
 
-Il repository non versiona `.env.production`. Prima del cutover i valori live restano in Vercel; il target Firebase riceve la configurazione Production tramite GitHub Actions/Firebase/Google Cloud. Test ed E2E usano configurazioni sintetiche.
+Il repository non versiona `.env.production`. Il target Firebase riceve la configurazione Production tramite GitHub Actions/Firebase/Google Cloud. Test ed E2E usano configurazioni sintetiche.
 
-Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. In Production Sentry usa inoltre `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono riservate alla build per release/source map. Per collegare un clone a servizi cloud reali occorre una configurazione autorizzata.
+Il client richiede le quattro variabili Firebase effettivamente usate (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`); App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. In Production Sentry usa inoltre `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono riservate alla build per release/source map. Per collegare un clone a servizi cloud reali occorre una configurazione autorizzata.
 
-Nel target Firebase, le API trusted usano Application Default Credentials/IAM e i parametri non segreti `LOGBOOK_FUNCTION_REGION` e `LOGBOOK_ALLOWED_ORIGINS`. Durante la finestra legacy Vercel continuano invece a esistere le variabili server-only `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`.
-
-Le credenziali legacy non devono avere prefisso `VITE_`, non devono entrare nel bundle client e i valori reali non devono essere committati.
+Nel target Firebase, le API trusted usano Application Default Credentials/IAM e i parametri non segreti `LOGBOOK_FUNCTION_REGION`, `LOGBOOK_FUNCTION_SERVICE_ACCOUNT` e `LOGBOOK_ALLOWED_ORIGINS`. Non sono richieste private key Admin esportate né `CRON_SECRET`.
 
 ## Verifica
 
@@ -139,7 +137,7 @@ Comandi più piccoli (`npm run lint`, `npm run test`, `npm run build`, `npm run 
 
 ## Deployment
 
-Durante la finestra di migrazione Vercel resta la Production live e distribuisce **solo `main`**; i branch di sviluppo sono disabilitati in `vercel.json` e non devono generare Preview Deployment.
+Fino alla decisione di cutover la Production esistente può restare su Vercel, ma il candidato disabilita i deployment Git Vercel. Nessun branch o PR della migrazione deve generare deployment Vercel/Firebase.
 
 Il candidato introduce un workflow Firebase Production separato. Non effettua deploy da PR/branch: dopo un futuro merge esplicitamente approvato, il deploy Firebase può partire soltanto da un push su `main` con Milestone/Canonical Verification verde sull'exact SHA e con un ulteriore controllo che lo SHA sia ancora l'HEAD di `main`.
 
@@ -168,6 +166,6 @@ In caso di divergenza tra documentazione e implementazione corrente, non assumer
 
 Il candidato di migrazione usa Firebase Hosting per la PWA e Cloud Functions v2 per il backend trusted. Il deploy Firebase è separato dalla CI PR: parte soltanto dopo `Milestone Verification` verde su un push a `main`, verifica che lo SHA sia ancora l'HEAD reale di `main` e autentica Google Cloud tramite Workload Identity Federation.
 
-Durante la finestra di cutover il vecchio origin Vercel resta intenzionalmente raggiungibile. Il nuovo origin mostra un gate una tantum che, su azione esplicita dell'utente, apre il vecchio origin come popup top-level e trasferisce il Local Envelope owner-scoped con `postMessage` limitato a source/target configurati. Il target rifiuta overwrite divergenti. Questo serve soprattutto a proteggere modalità locale, journal non ancora sincronizzato e marker di cancellazione account, che il browser non condivide automaticamente tra origin diversi.
+Il product owner ha scelto un **clean cut**: l’unico account esistente verrà resettato e il nuovo account verrà creato sul nuovo origin. Il candidato non trasferisce IndexedDB/localStorage tra origin e non contiene un bridge `postMessage`. I dati da conservare devono quindi essere esportati o il reset deve essere completato prima del cutover.
 
 I valori Production non sono committati. Il contratto pubblico è in `.env.example`; site ID, origin, Firebase Web config, App Check, Sentry e parametri Functions vivono nei provider esterni/GitHub Actions.
