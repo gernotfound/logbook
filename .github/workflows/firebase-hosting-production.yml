@@ -122,7 +122,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors https://thelogbook.web.app/ -o /tmp/thelogbook-index.html
+          curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors -D /tmp/thelogbook-index-headers.txt https://thelogbook.web.app/ -o /tmp/thelogbook-index.html
           grep -F 'rel="canonical" href="https://thelogbook.web.app/"' /tmp/thelogbook-index.html
+          grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-index-headers.txt
           curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors -D /tmp/thelogbook-sw-headers.txt -o /tmp/thelogbook-sw.js https://thelogbook.web.app/sw.js
           grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-sw-headers.txt

@@ -30,5 +30,6 @@
       "permanent": false
     }
   ],
-  "fluid": true
+  "fluid": true,
+  "framework": null
 }

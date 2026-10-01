@@ -31,6 +31,7 @@ for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) 
 if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
 if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
+if (vercel.framework !== null) failures.push('Vercel must use the Other framework preset so Production is backend-only instead of rebuilding the Vite frontend');
 if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
@@ -42,6 +43,13 @@ if (!accountApi.includes('export async function POST') || !accountApi.includes('
 if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
 const hostingSecurityHeaders = firebase.hosting?.headers?.find(item => item.source === '/**')?.headers ?? [];
 const csp = hostingSecurityHeaders.find(item => item.key === 'Content-Security-Policy')?.value ?? '';
+for (const source of ['/', '/index.html', '/manifest.webmanifest', '/sw.js']) {
+  const rule = firebase.hosting?.headers?.find(item => item.source === source)?.headers ?? [];
+  const cacheControl = rule.find(item => item.key === 'Cache-Control')?.value ?? '';
+  if (!cacheControl.includes('no-cache') || !cacheControl.includes('no-store') || !cacheControl.includes('must-revalidate')) {
+    failures.push(`Firebase Hosting ${source} must explicitly disable caching/revalidate to prevent a stale app shell`);
+  }
+}
 const requiredConnectOrigins = [
   'https://firestore.googleapis.com',
   'https://identitytoolkit.googleapis.com',
@@ -64,6 +72,9 @@ if (!hostingWorkflow.includes("github.event.workflow_run.event == 'push'") || !h
 }
 if (!hostingWorkflow.includes('git rev-parse origin/main') || !hostingWorkflow.includes('firebase-tools@15.30.2 deploy --only hosting')) {
   failures.push('Firebase Hosting workflow must re-check exact main and deploy only Hosting with the pinned CLI');
+}
+if (!hostingWorkflow.includes('thelogbook-index-headers.txt') || !hostingWorkflow.includes("^cache-control: .*no-cache.*no-store.*must-revalidate")) {
+  failures.push('Firebase Hosting post-deploy smoke must verify app-shell cache revalidation');
 }
 if (!hostingWorkflow.includes('google-github-actions/auth@v3') || !hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
   failures.push('Firebase Hosting workflow must use Workload Identity Federation');
