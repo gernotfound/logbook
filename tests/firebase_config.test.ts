@@ -98,6 +98,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(analyticsSource).toContain('setAnalyticsCollectionEnabled');
             expect(analyticsSource).toContain('allow_google_signals: false');
             expect(analyticsSource).toContain('allow_ad_personalization_signals: false');
+            expect(analyticsSource).toContain('page_location: \`${window.location.origin}${window.location.pathname}\`');
             expect(analyticsSource).not.toMatch(/\blogEvent\s*\(/);
             expect(analyticsSource).not.toMatch(/setUserId|setUserProperties/);
             expect(consentSource).toContain('logbook_google_analytics_consent_v1');
