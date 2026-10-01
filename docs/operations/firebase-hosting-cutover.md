@@ -122,7 +122,8 @@ Functions vengono pubblicate prima di Hosting perché il backend nuovo è compat
 - serve asset fingerprinted `/assets/**` con cache lunga e `immutable`;
 - forza rivalidazione dell’app shell;
 - serve `sw.js` e Workbox con policy no-cache/no-store;
-- mantiene HSTS, nosniff, frame denial, Referrer-Policy, Permissions-Policy e CSP.
+- mantiene HSTS, nosniff, frame denial, Referrer-Policy, Permissions-Policy e CSP;
+- limita `img-src` agli asset locali/data/blob, agli avatar Google e agli endpoint immagine Google Analytics senza aprire `https://*` né domini Ads;
 - nel file tracciato la CSP usa `https://logbook-function.invalid` come placeholder fail-closed; il workflow genera `.firebase-deploy.json` sostituendolo con l'origin esatto di `accountDeletion`, senza wildcard `*.cloudfunctions.net`.
 
 Il service worker non deve intercettare il namespace `/__/*`, richiesto da Firebase Authentication.
