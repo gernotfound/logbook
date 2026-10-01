@@ -11,6 +11,8 @@ const functionsLock = existsSync(functionsLockPath)
 const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
+const viteConfig = readFileSync('vite.config.ts', 'utf8');
+const serviceWorkerSource = readFileSync('src/sw.ts', 'utf8');
 const deploymentMetadata = readFileSync('scripts/write-deployment-metadata.mjs', 'utf8');
 const firebaseProductionWorkflow = readFileSync('.github/workflows/firebase-production.yml', 'utf8');
 
@@ -98,6 +100,14 @@ if (!adminBootstrap.includes("optionalEnv('FIREBASE_CONFIG')") || !adminBootstra
 if (!adminBootstrap.includes('credential: cert(')) failures.push('Legacy Vercel adapter must retain its temporary server-only certificate fallback until Vercel is retired.');
 if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must be provider-neutral/configurable.');
 if (!deploymentMetadata.includes('VERCEL_PROJECT_PRODUCTION_URL')) failures.push('Legacy Vercel bridge build must retain a production-origin fallback for deployment metadata until cutover.');
+if (viteConfig.includes('logbook-gnf.vercel.app')) failures.push('Vite config must not hardcode the retired Vercel production origin.');
+if (!viteConfig.includes('VERCEL_PROJECT_PRODUCTION_URL')) failures.push('Legacy Vercel build must derive any transitional origin fallback from provider metadata, not a hardcoded hostname.');
+const hasNavigationFallback = serviceWorkerSource.includes('NavigationRoute')
+  || serviceWorkerSource.includes('navigateFallback')
+  || viteConfig.includes('navigateFallback');
+if (hasNavigationFallback && !serviceWorkerSource.includes('/__/') && !viteConfig.includes('/__/')) {
+  failures.push('Any service-worker navigation fallback must explicitly exclude Firebase reserved /__/* auth/config endpoints.');
+}
 if (packageJson.dependencies?.['@vercel/analytics'] || packageJson.dependencies?.['@vercel/speed-insights']) {
   failures.push('Vercel Analytics/Speed Insights must not remain runtime dependencies.');
 }
@@ -135,6 +145,7 @@ if (existsSync('dist/index.html')) {
     failures.push('built HTML must expose an absolute revisioned social share image');
   }
   if (!html.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large social preview card');
+  if (!/<link rel="canonical" href="https:\/\/[^"]+\/">/.test(html)) failures.push('built HTML must expose a canonical absolute URL from the deployment origin.');
 }
 
 if (existsSync('dist/robots.txt') && readFileSync('dist/robots.txt','utf8').includes('vercel.app')) failures.push('robots.txt must not hardcode Vercel.');
