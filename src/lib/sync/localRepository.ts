@@ -107,38 +107,6 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
     return validate(await get<any>(keyFor(owner)), owner);
 }
 
-/**
- * Installs an envelope exported by another LogBook origin without rewriting its
- * causal metadata. This boundary is intentionally strict: it is only safe on a
- * fresh target origin, or as an idempotent retry of the exact same transfer.
- *
- * Keeping actor/clock/pending intact is what lets the normal hydration path
- * reconcile an authenticated user's unsynced journal with Firestore after the
- * user signs in on the new origin.
- */
-export async function installTransferredLocalEnvelope(owner: string, value: unknown): Promise<LocalEnvelope> {
-    owner = normalizeStorageOwner(owner);
-    const candidate = validate(structuredClone(value), owner);
-    if (!candidate) throw new Error('Trasferimento origine: archivio locale mancante o non valido.');
-
-    let installed: LocalEnvelope | undefined;
-    await update<any>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
-        if (current) {
-            if (!equal(current, candidate)) {
-                throw new Error('Trasferimento origine bloccato: sul nuovo indirizzo esiste già un archivio locale diverso.');
-            }
-            installed = current;
-            return raw;
-        }
-        installed = structuredClone(candidate);
-        return installed;
-    });
-
-    if (!installed) throw new Error('Trasferimento origine non completato.');
-    return installed;
-}
-
 export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
     const desired = structuredClone(parse(data));
