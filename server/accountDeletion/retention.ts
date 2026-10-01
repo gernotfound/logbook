@@ -28,6 +28,7 @@ export async function purgeExpiredCompletedDeletionJobs(
   const boundedLimit = Math.max(1, Math.min(ACCOUNT_DELETION_RETENTION_PAGE_SIZE, Math.floor(limitCount)));
   const nowMs = now.toMillis();
   const snapshot = await adminDb().collection(JOB_COLLECTION)
+    .where('status', '==', 'complete')
     .where('purgeAfter', '<=', now)
     .limit(boundedLimit)
     .get();
