@@ -44,8 +44,23 @@ function run(overrides: Record<string, string> = {}) {
 }
 
 describe('Firebase Production deploy environment guard', () => {
-  it('accepts the exact configured Hosting origin and Functions endpoint', () => {
-    expect(run()).toContain('Firebase Production deploy environment OK');
+  it('accepts the exact configured Hosting origin and Functions endpoint without echoing configuration values', () => {
+    const output = run();
+    expect(output.trim()).toBe('Firebase Production deploy environment OK.');
+
+    for (const value of [
+      sha,
+      project,
+      region,
+      publicOrigin,
+      'public-test-key',
+      'public-site-key',
+      'test-token',
+      'logbook-runtime@logbook-db-98cc4.iam.gserviceaccount.com',
+      'firebase-deploy@example.invalid',
+    ]) {
+      expect(output).not.toContain(value);
+    }
   });
 
   it('rejects an account deletion endpoint from another Firebase project', () => {
