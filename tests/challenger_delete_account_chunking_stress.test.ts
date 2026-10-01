@@ -107,7 +107,10 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         expect(markerSeenDuringRequest).toBe(true);
         expect(boundary.cancelPendingSyncs).toHaveBeenCalledTimes(1);
         expect(boundary.signOut).toHaveBeenCalledTimes(1);
-        expect(ctx.purgeAllLocalUserData).toHaveBeenCalledWith('user:test-user-id');
+        expect(ctx.purgeAllLocalUserData).toHaveBeenCalledWith(
+            'user:test-user-id',
+            { preserveDeletionRecovery: true },
+        );
         expect(ctx.resetCache).toHaveBeenCalledTimes(1);
         expect(boundary.resetStore).toHaveBeenCalledTimes(1);
         expect(isAccountDeletionPending('user:test-user-id')).toBe(false);
