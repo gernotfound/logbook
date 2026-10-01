@@ -63,6 +63,9 @@ export async function applyFirebaseAnalyticsConsent(enabled: boolean): Promise<v
             analyticsInstance = sdk.initializeAnalytics(firebaseApp, {
                 config: {
                     send_page_view: true,
+                    // Never expose PWA shortcut/query state (for example ?tab=training)
+                    // through the automatic page_view payload.
+                    page_location: `${window.location.origin}${window.location.pathname}`,
                     allow_google_signals: false,
                     allow_ad_personalization_signals: false,
                 },
