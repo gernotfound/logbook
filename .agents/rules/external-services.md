@@ -41,6 +41,7 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 - Le restrizioni Browser API key e la configurazione OAuth sono controlli di sicurezza esterni e devono essere riesaminati quando cambia l'origin canonico di deployment.
 - Google Analytics for Firebase è un boundary opzionale distinto da Sentry: richiede opt-in esplicito, proprietà/data stream e `measurementId` verificati live. Google Signals, advertising personalization e collegamenti Ads non vanno considerati attivi senza evidenza esplicita.
 - Retention, data sharing e impostazioni regionali Google Analytics sono stato esterno e devono essere verificate prima del cutover; il codice non deve compensare configurazioni console ignote con default permissivi.
+- La Web data stream GA4 target mantiene la Misurazione avanzata disabilitata nel primo rilascio. Scroll, outbound click, site search, download, form e video non vengono raccolti automaticamente finché il product owner non decide di ampliare la tassonomia e la documentazione privacy.
 
 ### Vercel
 
