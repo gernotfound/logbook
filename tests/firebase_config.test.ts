@@ -8,7 +8,8 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
         'VITE_FIREBASE_API_KEY',
         'VITE_FIREBASE_AUTH_DOMAIN',
         'VITE_FIREBASE_PROJECT_ID',
-        'VITE_FIREBASE_APP_ID'
+        'VITE_FIREBASE_APP_ID',
+        'VITE_FIREBASE_MEASUREMENT_ID'
     ] as const;
 
     beforeEach(() => {
@@ -46,7 +47,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(fileContent).not.toMatch(/logbook-prod/);
         });
 
-        it('declares the four Firebase options used by LogBook', () => {
+        it('declares the five Firebase options used by LogBook', () => {
             const firebaseFilePath = path.resolve(__dirname, '../src/lib/firebase.ts');
             const fileContent = fs.readFileSync(firebaseFilePath, 'utf-8');
 
@@ -79,20 +80,35 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             expect(envExample).not.toContain('VITE_RECAPTCHA_SITE_KEY');
         });
 
-        it('does not initialize or allowlist Google/Firebase Analytics', () => {
+        it('uses consent-gated Firebase Analytics without advertising signals or persistent Firestore cache', () => {
             const firebaseSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebase.ts'), 'utf-8');
+            const analyticsSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/firebaseAnalytics.ts'), 'utf-8');
+            const consentSource = fs.readFileSync(path.resolve(__dirname, '../src/lib/analyticsConsent.ts'), 'utf-8');
             const appSource = fs.readFileSync(path.resolve(__dirname, '../src/App.tsx'), 'utf-8');
             const hostingConfig = fs.readFileSync(path.resolve(__dirname, '../firebase.json'), 'utf-8');
 
-            expect(firebaseSource).not.toContain('firebase/analytics');
-            expect(firebaseSource).not.toContain('measurementId');
-            expect(firebaseSource).not.toContain('VITE_FIREBASE_MEASUREMENT_ID');
+            expect(firebaseSource).toContain('VITE_FIREBASE_MEASUREMENT_ID');
+            expect(firebaseSource).toContain('measurementId');
             expect(firebaseSource).toContain('memoryLocalCache');
             expect(firebaseSource).not.toContain('persistentLocalCache');
             expect(firebaseSource).not.toContain('persistentMultipleTabManager');
-            expect(appSource).not.toContain('firebase/analytics');
-            expect(hostingConfig).not.toContain('google-analytics.com');
-            expect(hostingConfig).not.toContain('googletagmanager.com');
+
+            expect(analyticsSource).toContain("import('firebase/analytics')");
+            expect(analyticsSource).toContain('setConsent');
+            expect(analyticsSource).toContain('setAnalyticsCollectionEnabled');
+            expect(analyticsSource).toContain('allow_google_signals: false');
+            expect(analyticsSource).toContain('allow_ad_personalization_signals: false');
+            expect(analyticsSource).not.toMatch(/\blogEvent\s*\(/);
+            expect(analyticsSource).not.toMatch(/setUserId|setUserProperties/);
+            expect(consentSource).toContain('logbook_google_analytics_consent_v1');
+            expect(consentSource).toContain('logbook_analytics_consent');
+            expect(appSource).toContain('applyFirebaseAnalyticsConsent');
+            expect(appSource).not.toMatch(/@vercel\/(analytics|speed-insights)/);
+
+            expect(hostingConfig).toContain('www.googletagmanager.com');
+            expect(hostingConfig).toContain('*.google-analytics.com');
+            expect(hostingConfig).not.toContain('g.doubleclick.net');
+            expect(hostingConfig).not.toContain('googlesyndication.com');
             expect(hostingConfig).not.toContain('fonts.googleapis.com');
             expect(hostingConfig).not.toContain('fonts.gstatic.com');
             expect(hostingConfig).not.toContain('firebaseio.com');
@@ -139,7 +155,7 @@ describe('R2: Firebase Config Security & Fail-Fast Suite', () => {
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID, VITE_FIREBASE_MEASUREMENT_ID/
             );
         });
 

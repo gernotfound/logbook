@@ -18,6 +18,7 @@ function env(overrides: Record<string, string> = {}) {
     VITE_FIREBASE_AUTH_DOMAIN: 'thelogbook.web.app',
     VITE_FIREBASE_PROJECT_ID: project,
     VITE_FIREBASE_APP_ID: '1:123:web:test',
+    VITE_FIREBASE_MEASUREMENT_ID: 'G-TEST123456',
     VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'public-site-key',
     VITE_SENTRY_DSN: 'https://public@example.invalid/1',
     SENTRY_AUTH_TOKEN: 'test-token',
@@ -61,6 +62,12 @@ describe('Firebase Production deploy environment guard', () => {
     ]) {
       expect(output).not.toContain(value);
     }
+  });
+
+  it('rejects an invalid GA4 measurement ID', () => {
+    expect(() => run({
+      VITE_FIREBASE_MEASUREMENT_ID: 'legacy-measurement-id',
+    })).toThrow();
   });
 
   it('rejects an account deletion endpoint from another Firebase project', () => {

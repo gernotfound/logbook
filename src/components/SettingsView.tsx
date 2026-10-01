@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDialogStore } from '../store/useDialogStore';
 import { PrivacyPolicy } from '../pages/PrivacyPolicy';
 import { TermsAndConditions } from '../pages/TermsAndConditions';
+import { getAnalyticsConsent, setAnalyticsConsent, subscribeAnalyticsConsent } from '../lib/analyticsConsent';
 import type { ExportSelection } from './ExportSelector';
 import { AccountSettingsTab } from './Settings/AccountSettingsTab';
 import { StorageDiagnostics } from './Settings/StorageDiagnostics';
@@ -43,6 +44,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
     const [showPrivacy, setShowPrivacy] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
+    const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
     const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
     const appearance = useAppearanceStore(state => state.preference);
     const setAppearance = useAppearanceStore(state => state.setPreference);
@@ -53,6 +55,18 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
     const storeLibrary = useAppStore(state => state.userData?.library);
     const storeRoutines = useAppStore(state => state.userData?.routines);
     const storeCycles = useAppStore(state => state.userData?.trainingCycles);
+
+    useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
+
+    const handleAnalyticsToggle = () => {
+        const requested = !analyticsEnabled;
+        const persisted = setAnalyticsConsent(requested);
+        if (!persisted) {
+            useDialogStore.getState().showAlert(requested
+                ? 'Google Analytics resta disattivato: il browser non ha potuto salvare il consenso.'
+                : 'Google Analytics è disattivato per questa sessione, ma il browser non ha potuto salvare la revoca. Riprova prima di ricaricare LogBook.');
+        }
+    };
 
     const handleCheckUpdate = async () => {
         if ('serviceWorker' in navigator) {
@@ -142,7 +156,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
             )}
 
             {activeSection === 'privacy' && (
-                <PrivacySettingsTab onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} />
+                <PrivacySettingsTab analyticsEnabled={analyticsEnabled} onOpenTerms={() => setShowTerms(true)} onOpenPrivacy={() => setShowPrivacy(true)} onToggleAnalytics={handleAnalyticsToggle} />
             )}
 
             {activeSection === 'data' && (

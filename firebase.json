@@ -70,7 +70,7 @@
           },
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; script-src 'self' https://*.firebaseapp.com https://*.web.app https://*.googleapis.com https://apis.google.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://*.googleapis.com https://apis.google.com https://www.google.com https://logbook-function.invalid https://o4512174476230656.ingest.de.sentry.io; img-src 'self' data: blob: https://*; frame-src 'self' https://*.firebaseapp.com https://*.web.app https://*.google.com https://www.google.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self' blob:; upgrade-insecure-requests;"
+            "value": "default-src 'self'; script-src 'self' https://*.firebaseapp.com https://*.web.app https://*.googleapis.com https://apis.google.com https://www.google.com https://www.gstatic.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://*.googleapis.com https://apis.google.com https://www.google.com https://*.google.com https://www.googletagmanager.com https://*.google-analytics.com https://logbook-function.invalid https://o4512174476230656.ingest.de.sentry.io; img-src 'self' data: blob: https://*; frame-src 'self' https://*.firebaseapp.com https://*.web.app https://*.google.com https://www.google.com https://accounts.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self' blob:; upgrade-insecure-requests;"
           }
         ]
       },

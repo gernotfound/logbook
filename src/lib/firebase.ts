@@ -32,7 +32,8 @@ const envVars: Record<string, string | undefined> = {
     'VITE_FIREBASE_API_KEY': import.meta.env.VITE_FIREBASE_API_KEY,
     'VITE_FIREBASE_AUTH_DOMAIN': import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
     'VITE_FIREBASE_PROJECT_ID': import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    'VITE_FIREBASE_APP_ID': import.meta.env.VITE_FIREBASE_APP_ID
+    'VITE_FIREBASE_APP_ID': import.meta.env.VITE_FIREBASE_APP_ID,
+    'VITE_FIREBASE_MEASUREMENT_ID': import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const missingEnvVars = Object.entries(envVars)
@@ -47,15 +48,16 @@ const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-const app = initializeApp(firebaseConfig);
+export const firebaseApp = initializeApp(firebaseConfig);
 
 // App Check provider bootstrap is synchronous so protected Firebase services can
 // never be initialized before the provider. Token acquisition remains async and
 // is exposed separately through ensureAppCheck().
-ensureAppCheckProvider(app);
+ensureAppCheckProvider(firebaseApp);
 
 export class AppCheckUnavailableError extends Error {
     readonly code = 'app-check-unavailable';
@@ -76,7 +78,7 @@ export class AppCheckUnavailableError extends Error {
 export let appCheckPromise: Promise<AppCheckResult> | null = null;
 export const ensureAppCheck = (): Promise<AppCheckResult> => {
     if (!appCheckPromise) {
-        const inFlight = initAppCheck(app).then((result) => {
+        const inFlight = initAppCheck(firebaseApp).then((result) => {
             const disabledOutsideProduction = result.disabled === true && !import.meta.env.PROD;
             if (!result.success && !disabledOutsideProduction) {
                 const error = new AppCheckUnavailableError(result);
@@ -104,8 +106,8 @@ export const getDb = () => {
     if (!_db) {
         // Idempotent guard: keeps ordering explicit even if tests reset App Check
         // state or a future caller constructs Firestore before ensureAppCheck().
-        ensureAppCheckProvider(app);
-        _db = initializeFirestore(app, {
+        ensureAppCheckProvider(firebaseApp);
+        _db = initializeFirestore(firebaseApp, {
             // Durable offline data belongs to LogBook's owner-scoped IndexedDB envelope.
             // Keep Firestore memory-only so logout/account deletion cannot leave a second
             // persistent copy of private cloud documents on the device.
@@ -115,7 +117,7 @@ export const getDb = () => {
     return _db;
 };
 
-const auth = initializeAuth(app, {
+const auth = initializeAuth(firebaseApp, {
     persistence: browserLocalPersistence,
     ...(typeof window !== 'undefined' ? { popupRedirectResolver: browserPopupRedirectResolver } : {}),
 });

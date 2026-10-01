@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 const failures = [];
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -12,6 +12,10 @@ const functionsLock = existsSync(functionsLockPath)
 const functionIndex = readFileSync('functions/src/index.ts', 'utf8');
 const adminBootstrap = readFileSync('functions/src/accountDeletion/firebaseAdmin.ts', 'utf8');
 const deploymentConfig = readFileSync('src/lib/deploymentConfig.ts', 'utf8');
+const firebaseClient = readFileSync('src/lib/firebase.ts', 'utf8');
+const appSource = readFileSync('src/App.tsx', 'utf8');
+const analyticsSource = readFileSync('src/lib/firebaseAnalytics.ts', 'utf8');
+const analyticsConsentSource = readFileSync('src/lib/analyticsConsent.ts', 'utf8');
 const viteConfig = readFileSync('vite.config.ts', 'utf8');
 const serviceWorkerSource = readFileSync('src/sw.ts', 'utf8');
 const deploymentMetadata = readFileSync('scripts/write-deployment-metadata.mjs', 'utf8');
@@ -87,6 +91,12 @@ if (cspTokens.has('https://*.cloudfunctions.net')) {
 if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vitals.vercel-insights.com')) {
   failures.push('Vercel analytics origins must not remain in Firebase CSP.');
 }
+for (const requiredAnalyticsOrigin of ['https://www.googletagmanager.com', 'https://*.google-analytics.com']) {
+  if (!cspTokens.has(requiredAnalyticsOrigin)) failures.push(`Firebase Analytics CSP origin missing: ${requiredAnalyticsOrigin}`);
+}
+for (const forbiddenAdsOrigin of ['https://*.g.doubleclick.net', 'https://pagead2.googlesyndication.com', 'https://googleads.g.doubleclick.net']) {
+  if (cspTokens.has(forbiddenAdsOrigin)) failures.push(`Google Ads origin must not be allowlisted for analytics-only telemetry: ${forbiddenAdsOrigin}`);
+}
 
 if (!/export const accountDeletion = onRequest/.test(functionIndex)) failures.push('Missing Firebase HTTP accountDeletion function.');
 if (!/timeoutSeconds:\s*3600/.test(functionIndex)) failures.push('HTTP deletion function must retain long-running capacity.');
@@ -109,6 +119,26 @@ if (!adminBootstrap.includes('return initializeApp();')) {
 for (const forbidden of ['credential: cert(', 'FIREBASE_ADMIN_PROJECT_ID', 'FIREBASE_ADMIN_CLIENT_EMAIL', 'FIREBASE_ADMIN_PRIVATE_KEY']) {
   if (adminBootstrap.includes(forbidden)) failures.push(`Firebase Functions Admin runtime must not contain legacy credential path: ${forbidden}`);
 }
+if (!firebaseClient.includes('VITE_FIREBASE_MEASUREMENT_ID') || !firebaseClient.includes('measurementId:')) {
+  failures.push('Firebase Web config must bind the explicit GA4 measurement ID.');
+}
+if (!analyticsSource.includes("import('firebase/analytics')")) failures.push('Firebase Analytics must remain lazy-loaded behind explicit consent.');
+if (!analyticsSource.includes('setAnalyticsCollectionEnabled') || !analyticsSource.includes('setConsent')) {
+  failures.push('Firebase Analytics must implement explicit collection and Consent Mode controls.');
+}
+if (!analyticsSource.includes('allow_google_signals: false') || !analyticsSource.includes('allow_ad_personalization_signals: false')) {
+  failures.push('Firebase Analytics advertising signals/personalization must remain disabled.');
+}
+if (/\blogEvent\s*\(/.test(analyticsSource) || /setUserId|setUserProperties/.test(analyticsSource)) {
+  failures.push('Firebase Analytics must not add custom behavior/health events or user identifiers without a separate reviewed taxonomy.');
+}
+if (!analyticsConsentSource.includes('logbook_google_analytics_consent_v1') || !analyticsConsentSource.includes('logbook_analytics_consent')) {
+  failures.push('Google Analytics consent must use a new provider-specific key and retire the Vercel consent key.');
+}
+if (!appSource.includes('applyFirebaseAnalyticsConsent') || /@vercel\/(?:analytics|speed-insights)/.test(appSource)) {
+  failures.push('App runtime must use Firebase Analytics consent boundary and contain no Vercel analytics SDK.');
+}
+
 if (!deploymentConfig.includes('VITE_ACCOUNT_DELETION_API_URL')) failures.push('Client deletion backend must use the configured direct Firebase Function endpoint.');
 if (/['"]\/api\/account-deletion['"]/.test(deploymentConfig)) {
   failures.push('Client deletion backend must not retain the removed Vercel /api/account-deletion fallback.');
@@ -117,6 +147,30 @@ for (const source of [deploymentMetadata, viteConfig, deploymentConfig]) {
   if (/VERCEL_|vercel\.app/i.test(source)) failures.push('Production build/config must not depend on Vercel metadata or origins.');
 }
 if (vercelConfig?.git?.deploymentEnabled !== false) failures.push('Vercel automatic Git deployments must be disabled after the clean cutover.');
+const vercelTopLevelKeys = Object.keys(vercelConfig).filter(key => !['$schema', 'git'].includes(key));
+const vercelGitKeys = Object.keys(vercelConfig?.git ?? {}).filter(key => key !== 'deploymentEnabled');
+if (vercelTopLevelKeys.length || vercelGitKeys.length) {
+  failures.push('vercel.json must remain a deployment-disable guardrail only; Functions, cron, rewrites and headers belong to Firebase.');
+}
+for (const retiredDirectory of ['api', 'server']) {
+  if (existsSync(retiredDirectory)) failures.push(`Retired Vercel server directory must not exist in the Firebase target: ${retiredDirectory}/`);
+}
+function collectRuntimeFiles(dir) {
+  if (!existsSync(dir)) return [];
+  const entries = [];
+  for (const item of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = `${dir}/${item.name}`;
+    if (item.isDirectory()) entries.push(...collectRuntimeFiles(fullPath));
+    else if (/\.(?:ts|tsx|js|mjs|json)$/.test(item.name)) entries.push(fullPath);
+  }
+  return entries;
+}
+for (const file of collectRuntimeFiles('src')) {
+  const source = readFileSync(file, 'utf8');
+  if (/@vercel\/|\/_vercel\/|\bVERCEL_[A-Z0-9_]+\b|vercel\.app/i.test(source)) {
+    failures.push(`Vercel runtime dependency remains in ${file}.`);
+  }
+}
 const hasNavigationFallback = serviceWorkerSource.includes('NavigationRoute')
   || serviceWorkerSource.includes('navigateFallback')
   || viteConfig.includes('navigateFallback');

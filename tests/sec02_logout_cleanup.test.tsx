@@ -46,7 +46,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
         const deviceKeys = [
             'logbook_ios_install_prompt',
-            'logbook_analytics_consent'
+            'logbook_google_analytics_consent_v1'
         ];
 
         sensitiveKeys.forEach(k => localStorage.setItem(k, 'sensitive_data'));

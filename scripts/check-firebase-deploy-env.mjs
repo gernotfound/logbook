@@ -7,6 +7,7 @@ const required = [
   'VITE_FIREBASE_AUTH_DOMAIN',
   'VITE_FIREBASE_PROJECT_ID',
   'VITE_FIREBASE_APP_ID',
+  'VITE_FIREBASE_MEASUREMENT_ID',
   'VITE_RECAPTCHA_ENTERPRISE_SITE_KEY',
   'VITE_SENTRY_DSN',
   'SENTRY_AUTH_TOKEN',
@@ -65,6 +66,11 @@ if (
   || deletionUrl.port
 ) {
   console.error('Account deletion must use the exact direct Cloud Functions accountDeletion endpoint for the configured project and region.');
+  process.exit(1);
+}
+
+if (!/^G-[A-Z0-9]+$/.test(process.env.VITE_FIREBASE_MEASUREMENT_ID)) {
+  console.error('VITE_FIREBASE_MEASUREMENT_ID must be a GA4 web measurement ID (G-...).');
   process.exit(1);
 }
 

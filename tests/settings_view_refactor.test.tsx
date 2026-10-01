@@ -19,7 +19,8 @@ describe('SettingsView hierarchical navigation', () => {
         expect(screen.getByRole('heading', { name: 'Privacy' })).toBeDefined();
         expect(screen.getByRole('button', { name: /Termini e condizioni/i })).toBeDefined();
         expect(screen.getByRole('button', { name: /Informativa sulla privacy/i })).toBeDefined();
-        expect(screen.queryByRole('checkbox', { name: 'Statistiche di utilizzo' })).toBeNull();
+        expect(screen.getByRole('checkbox', { name: 'Statistiche di utilizzo' })).toBeDefined();
+        expect((screen.getByRole('checkbox', { name: 'Statistiche di utilizzo' }) as HTMLInputElement).checked).toBe(false);
 
         fireEvent.click(screen.getByRole('button', { name: 'Torna alle impostazioni' }));
         fireEvent.click(screen.getByRole('button', { name: /Dati e backup/i }));

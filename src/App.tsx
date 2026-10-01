@@ -21,6 +21,8 @@ import type {
   DataSubTab
 } from './types';
 import { safeHardReload } from './lib/sync/safeReload';
+import { getAnalyticsConsent, subscribeAnalyticsConsent } from './lib/analyticsConsent';
+import { applyFirebaseAnalyticsConsent } from './lib/firebaseAnalytics';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
@@ -75,6 +77,7 @@ function App() {
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(getAnalyticsConsent());
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
@@ -93,6 +96,12 @@ function App() {
     persistGuestLoginOverlayState(false);
     setShowGuestLogin(false);
   };
+
+  useEffect(() => subscribeAnalyticsConsent(setAnalyticsEnabled), []);
+
+  useEffect(() => {
+    void applyFirebaseAnalyticsConsent(analyticsEnabled);
+  }, [analyticsEnabled]);
 
   useEffect(() => {
     if (showGuestLogin && currentUser && !isGuest && guestMigrationStatus === 'idle' && !syncing) {
