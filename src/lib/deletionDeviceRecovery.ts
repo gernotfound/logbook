@@ -1,27 +1,33 @@
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 
-const KEY='logbook_deletion_recovery_device_v1';
+const KEY='logbook_deletion_recovery_devices_v1';
 const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/,'');
+const MAX_DEVICES=4;
 type Credential={uid:string;token:string};
 
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
-function read():Credential|null{try{const v=localStorage.getItem(KEY);if(!v)return null;const p=JSON.parse(v);return typeof p?.uid==='string'&&typeof p?.token==='string'?p:null;}catch{return null;}}
-function write(v:Credential){localStorage.setItem(KEY,JSON.stringify(v));}
+function readAll():Credential[]{try{const v=localStorage.getItem(KEY);const p=v?JSON.parse(v):[];return Array.isArray(p)?p.filter(x=>typeof x?.uid==='string'&&typeof x?.token==='string').slice(-MAX_DEVICES):[];}catch{return [];}}
+function writeAll(v:Credential[]){localStorage.setItem(KEY,JSON.stringify(v.slice(-MAX_DEVICES)));}
 async function appToken(){await ensureAppCheck();const {getAppCheckToken}=await import('./appCheck');const t=await getAppCheckToken(true);if(!t)throw new Error('App Check non disponibile.');return t;}
 
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API||!navigator.onLine)return;
- let cred=read();if(!cred||cred.uid!==user.uid){cred={uid:user.uid,token:randomToken()};write(cred);}
+ const all=readAll();let cred=all.find(x=>x.uid===user.uid);
+ if(!cred){cred={uid:user.uid,token:randomToken()};writeAll([...all.filter(x=>x.uid!==user.uid),cred]);}
  const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(true),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
  if(!response.ok)throw new Error('Registrazione recovery device non riuscita.');
 }
 export async function recoverDeletedAccountOnThisDevice(purge:(owner:string)=>Promise<void>):Promise<boolean>{
- if(!API||!navigator.onLine||auth.currentUser)return false;
- const cred=read();if(!cred)return false;
- const response=await fetch(API+'/api/account-deletion-device',{headers:{'x-firebase-appcheck':await appToken(),'x-account-deletion-uid':cred.uid,'x-account-deletion-device':cred.token},cache:'no-store'});
- if(!response.ok)return false;
- const body=await response.json() as {status?:string};
- if(body.status!=='complete')return false;
- await purge('user:'+cred.uid);localStorage.removeItem(KEY);return true;
+ if(!API||!navigator.onLine)return false;
+ const currentUid=auth.currentUser?.uid;let changed=false;const kept:Credential[]=[];
+ for(const cred of readAll()){
+   if(cred.uid===currentUid){kept.push(cred);continue;}
+   const response=await fetch(API+'/api/account-deletion-device',{headers:{'x-firebase-appcheck':await appToken(),'x-account-deletion-uid':cred.uid,'x-account-deletion-device':cred.token},cache:'no-store'});
+   if(!response.ok){kept.push(cred);continue;}
+   const body=await response.json() as {status?:string};
+   if(body.status==='complete'){await purge('user:'+cred.uid);changed=true;} else kept.push(cred);
+ }
+ if(changed)writeAll(kept);
+ return changed;
 }
