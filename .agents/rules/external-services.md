@@ -20,6 +20,7 @@ Il repository è pubblico.
 - **MUST:** non tracciare snapshot `.env.production` o equivalenti con valori reali del deployment. Il contratto pubblico vive in `.env.example`; i valori Production vivono nel provider di deployment.
 - **SHOULD:** evitare di duplicare nella documentazione identificativi/site key client pubblici quando nome e ruolo sono sufficienti.
 - **MUST:** esempi e fixture di test usano identità e path sintetici.
+- **MUST:** il deploy Firebase Hosting da GitHub usa Workload Identity Federation con impersonation limitata al repository; il service account Hosting ha soltanto `roles/firebasehosting.admin` + `roles/serviceusage.apiKeysViewer`. L'identità Firebase Admin di Vercel è separata e richiede `roles/firebaseappcheck.tokenVerifier` quando consuma token App Check limited-use.
 - **MUST:** se un valore privato viene esposto, ruotarlo/revocarlo presso il provider e ripulire lo stato repository corrente dove praticabile; cancellare un messaggio o aggiungere un commit successivo non sostituisce la rotazione.
 
 ## Ritiro servizi e allowlist
