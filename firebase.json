@@ -28,25 +28,7 @@
     ],
     "headers": [
       {
-        "source": "/",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/manifest.webmanifest",
+        "source": "!/@(assets|__)/**",
         "headers": [
           {
             "key": "Cache-Control",
