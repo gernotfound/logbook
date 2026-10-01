@@ -42,10 +42,10 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 
 ### Vercel
 
-- Fino al cutover approvato, Vercel resta il runtime Production live e il vecchio origin necessario al bridge; Hosting, Functions e cron Vercel sono compatibilità legacy, non l'architettura target finale.
-- Durante la finestra di migrazione `main` resta l'unico branch abilitato al deployment Vercel; i branch di lavoro non devono generare Preview Deployment.
-- Le credenziali server-only legacy non devono mai avere prefisso `VITE_` e vanno ritirate insieme agli adapter quando il vecchio origin non serve più.
-- Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
+- Fino al cutover approvato Vercel può ancora servire la Production precedente, ma non è una dipendenza del candidato.
+- `vercel.json` disabilita i deployment Git automatici nel target clean-cut; branch, PR e il futuro `main` del candidato non devono creare nuovi deployment Vercel.
+- Dopo il cutover, env/credenziali/integrations Vercel residue vanno revocate nel provider quando non sono più necessarie.
+- Lo stato storico Vercel non prova il runtime Firebase e non sostituisce la CI GitHub.
 
 ### GitHub / CodeQL / Snyk
 
