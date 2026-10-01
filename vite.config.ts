@@ -27,7 +27,9 @@ const sentryBuildEnabled =
   deployEnvironment === 'production' &&
   Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT)
 const buildTime = new Date().toISOString()
-const publicOrigin = (process.env.VITE_PUBLIC_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '')
+const legacyVercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+const fallbackOrigin = legacyVercelHost ? `https://${legacyVercelHost}` : 'https://logbook.invalid'
+const publicOrigin = (process.env.VITE_PUBLIC_ORIGIN || fallbackOrigin).replace(/\/$/, '')
 
 const basePath = '/'
 
