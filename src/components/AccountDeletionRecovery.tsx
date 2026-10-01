@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { DB } from '../lib/db';
-import { resumeAccountDeletion } from '../lib/db/db_account';
+import { ensureAccountDeletionRecoveryCredential, resumeAccountDeletion, resumeRegisteredAccountDeletion } from '../lib/db/db_account';
 import { findPendingAccountDeletion } from '../lib/sync/accountGate';
 import { useDialogStore } from '../store/useDialogStore';
 
@@ -15,14 +15,19 @@ export function AccountDeletionRecovery() {
         let running = false;
 
         const reconcile = async () => {
-            if (disposed || running || !findPendingAccountDeletion()) return;
+            if (disposed || running) return;
             if (typeof navigator !== 'undefined' && !navigator.onLine) return;
             running = true;
             try {
-                const outcome = await resumeAccountDeletion({
-                    purgeAllLocalUserData: owner => DB.purgeAllLocalUserData(owner),
+                await ensureAccountDeletionRecoveryCredential();
+                const context = {
+                    purgeAllLocalUserData: (owner: string, options?: { preserveDeletionRecovery?: boolean }) =>
+                        DB.purgeAllLocalUserData(owner, options),
                     resetCache: () => DB.resetCache(),
-                });
+                };
+                const outcome = findPendingAccountDeletion()
+                    ? await resumeAccountDeletion(context)
+                    : await resumeRegisteredAccountDeletion(context);
                 if (!disposed && outcome?.status === 'pending') {
                     await useDialogStore.getState().showAlert(outcome.message);
                 }

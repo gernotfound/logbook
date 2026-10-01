@@ -4,8 +4,10 @@ import {
     writeBrowserJson,
 } from './browserStorage';
 
-const suffix = ':account-deletion';
-const key = (owner: string) => 'logbook:v2:' + owner + suffix;
+const deletionSuffix = ':account-deletion';
+const recoverySuffix = ':account-deletion-recovery';
+const deletionKey = (owner: string) => 'logbook:v2:' + owner + deletionSuffix;
+const recoveryKey = (owner: string) => 'logbook:v2:' + owner + recoverySuffix;
 
 export interface AccountDeletionMarker {
     owner: string;
@@ -15,7 +17,15 @@ export interface AccountDeletionMarker {
     serverAcceptedAt?: number;
 }
 
-function parse(owner: string, raw: string | null): AccountDeletionMarker | null {
+export interface AccountDeletionRecoveryCredential {
+    owner: string;
+    uid: string;
+    createdAt: number;
+    token: string;
+    registeredAt?: number;
+}
+
+function parseDeletion(owner: string, raw: string | null): AccountDeletionMarker | null {
     if (!raw || !owner.startsWith('user:')) return null;
     try {
         const value = JSON.parse(raw) as Partial<AccountDeletionMarker>;
@@ -33,17 +43,33 @@ function parse(owner: string, raw: string | null): AccountDeletionMarker | null 
     }
 }
 
+function parseRecovery(owner: string, raw: string | null): AccountDeletionRecoveryCredential | null {
+    if (!raw || !owner.startsWith('user:')) return null;
+    try {
+        const value = JSON.parse(raw) as Partial<AccountDeletionRecoveryCredential>;
+        const createdAt = Number(value.createdAt);
+        if (!Number.isFinite(createdAt) || createdAt <= 0 || typeof value.token !== 'string' || !value.token) return null;
+        return {
+            owner,
+            uid: typeof value.uid === 'string' && value.uid ? value.uid : owner.slice(5),
+            createdAt,
+            token: value.token,
+            registeredAt: Number.isFinite(Number(value.registeredAt)) ? Number(value.registeredAt) : undefined,
+        };
+    } catch {
+        return null;
+    }
+}
+
 export function readAccountDeletionMarker(owner: string): AccountDeletionMarker | null {
     if (typeof localStorage === 'undefined') return null;
-    return parse(owner, readBrowserValueStrict(key(owner)));
+    return parseDeletion(owner, readBrowserValueStrict(deletionKey(owner)));
 }
 
 export function isAccountDeletionPending(owner: string): boolean {
     if (typeof localStorage === 'undefined') return false;
     try {
-        // An unreadable marker remains a hard gate: storage failure cannot be
-        // interpreted as proof that account deletion is not in progress.
-        return readBrowserValueStrict(key(owner)) !== null;
+        return readBrowserValueStrict(deletionKey(owner)) !== null;
     } catch {
         return true;
     }
@@ -55,8 +81,7 @@ export function markAccountDeletion(owner: string, values?: Partial<Pick<Account
     try {
         existing = readAccountDeletionMarker(owner);
     } catch {
-        // We can still attempt to persist a fresh marker. The strict write below
-        // is the authority: if storage is unavailable the deletion flow stops.
+        // The strict write below remains authoritative.
     }
     const marker: AccountDeletionMarker = {
         owner,
@@ -65,13 +90,61 @@ export function markAccountDeletion(owner: string, values?: Partial<Pick<Account
         receiptToken: values?.receiptToken ?? existing?.receiptToken,
         serverAcceptedAt: values?.serverAcceptedAt ?? existing?.serverAcceptedAt,
     };
-    writeBrowserJson(key(owner), marker);
+    writeBrowserJson(deletionKey(owner), marker);
     return marker;
 }
 
 export function clearAccountDeletion(owner: string): void {
     if (typeof localStorage === 'undefined') return;
-    removeBrowserValue(key(owner));
+    removeBrowserValue(deletionKey(owner));
+}
+
+export function readAccountDeletionRecoveryCredential(owner: string): AccountDeletionRecoveryCredential | null {
+    if (typeof localStorage === 'undefined') return null;
+    return parseRecovery(owner, readBrowserValueStrict(recoveryKey(owner)));
+}
+
+export function persistAccountDeletionRecoveryCredential(
+    owner: string,
+    token: string,
+): AccountDeletionRecoveryCredential {
+    if (!owner.startsWith('user:')) throw new Error('La recovery cancellazione richiede un account autenticato.');
+    const existing = readAccountDeletionRecoveryCredential(owner);
+    const credential: AccountDeletionRecoveryCredential = {
+        owner,
+        uid: owner.slice(5),
+        createdAt: existing?.createdAt ?? Date.now(),
+        token: existing?.token ?? token,
+        registeredAt: existing?.registeredAt,
+    };
+    writeBrowserJson(recoveryKey(owner), credential);
+    return credential;
+}
+
+export function markAccountDeletionRecoveryCredentialRegistered(owner: string): AccountDeletionRecoveryCredential {
+    const credential = readAccountDeletionRecoveryCredential(owner);
+    if (!credential) throw new Error('Credenziale locale di recovery non disponibile.');
+    const registered = { ...credential, registeredAt: Date.now() };
+    writeBrowserJson(recoveryKey(owner), registered);
+    return registered;
+}
+
+export function clearAccountDeletionRecoveryCredential(owner: string): void {
+    if (typeof localStorage === 'undefined') return;
+    removeBrowserValue(recoveryKey(owner));
+}
+
+export function listRegisteredAccountDeletionRecoveryCredentials(): AccountDeletionRecoveryCredential[] {
+    if (typeof localStorage === 'undefined') return [];
+    const result: AccountDeletionRecoveryCredential[] = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const storageKey = localStorage.key(index);
+        if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(recoverySuffix)) continue;
+        const owner = storageKey.slice('logbook:v2:'.length, -recoverySuffix.length);
+        const credential = parseRecovery(owner, readBrowserValueStrict(storageKey));
+        if (credential?.registeredAt) result.push(credential);
+    }
+    return result.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function findPendingAccountDeletion(): AccountDeletionMarker | null {
@@ -79,9 +152,9 @@ export function findPendingAccountDeletion(): AccountDeletionMarker | null {
     let newest: AccountDeletionMarker | null = null;
     for (let index = 0; index < localStorage.length; index++) {
         const storageKey = localStorage.key(index);
-        if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(suffix)) continue;
-        const owner = storageKey.slice('logbook:v2:'.length, -suffix.length);
-        const marker = parse(owner, readBrowserValueStrict(storageKey));
+        if (!storageKey?.startsWith('logbook:v2:user:') || !storageKey.endsWith(deletionSuffix)) continue;
+        const owner = storageKey.slice('logbook:v2:'.length, -deletionSuffix.length);
+        const marker = parseDeletion(owner, readBrowserValueStrict(storageKey));
         if (marker && (!newest || marker.startedAt > newest.startedAt)) newest = marker;
     }
     return newest;

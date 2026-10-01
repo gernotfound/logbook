@@ -240,6 +240,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setLoading(false);
 
             if (user) {
+                void DB.ensureAccountDeletionRecoveryCredential().catch(error => {
+                    console.warn('Registrazione recovery cancellazione account non disponibile:', error);
+                });
                 const wasGuest = isGuestRef.current || isStoredGuest();
                 const recoveryUid = readGuestMigrationSyncRecovery();
 

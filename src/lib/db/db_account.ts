@@ -6,10 +6,16 @@ import { readBrowserValueStrict } from '../sync/browserStorage';
 import { storageOwner, captureSession, isCurrentSession } from '../sync/session';
 import {
     clearAccountDeletion,
+    clearAccountDeletionRecoveryCredential,
     findPendingAccountDeletion,
+    listRegisteredAccountDeletionRecoveryCredentials,
     markAccountDeletion,
+    markAccountDeletionRecoveryCredentialRegistered,
+    persistAccountDeletionRecoveryCredential,
     readAccountDeletionMarker,
+    readAccountDeletionRecoveryCredential,
     type AccountDeletionMarker,
+    type AccountDeletionRecoveryCredential,
 } from '../sync/accountGate';
 import { waitForJournalIdle } from '../sync/replicateJournal';
 import { accountDeletionApiUrl } from '../deploymentConfig';
@@ -18,10 +24,16 @@ export type AccountDeletionOutcome =
     | { status: 'complete' }
     | { status: 'pending'; message: string };
 
+type LocalPurgeOptions = {
+    preserveDeletionRecovery?: boolean;
+};
+
 type DeletionContext = {
-    purgeAllLocalUserData: (owner: string) => Promise<void>;
+    purgeAllLocalUserData: (owner: string, options?: LocalPurgeOptions) => Promise<void>;
     resetCache: () => void;
 };
+
+type DeletionIdentity = Pick<AccountDeletionMarker, 'owner' | 'uid'>;
 
 type ServerDeletionStatus = {
     uid: string;
@@ -31,7 +43,10 @@ type ServerDeletionStatus = {
     error?: string;
 };
 
-export async function purgeAllLocalUserData(owner = storageOwner()) {
+export async function purgeAllLocalUserData(
+    owner = storageOwner(),
+    options: LocalPurgeOptions = {},
+) {
     const failures: unknown[] = [];
     const results = await Promise.allSettled([
         del('logbook:v2:' + owner), del('logbook_cached_user_data'),
@@ -51,8 +66,10 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         const prefix = 'logbook:v2:' + owner + ':';
         for (let index = 0; index < localStorage.length; index++) {
             const key = localStorage.key(index);
-            // Keep the server-deletion receipt until every other local purge succeeds.
-            if (key?.startsWith(prefix) && !key.endsWith(':account-deletion')) keys.add(key);
+            if (!key?.startsWith(prefix)) continue;
+            if (key.endsWith(':account-deletion')) continue;
+            if (options.preserveDeletionRecovery && key.endsWith(':account-deletion-recovery')) continue;
+            keys.add(key);
         }
         if (owner === 'guest') keys.add('logbook_is_guest');
     } catch (error) { failures.push(error); }
@@ -88,6 +105,38 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
     catch { return {}; }
 }
 
+export async function ensureAccountDeletionRecoveryCredential(): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) return;
+    const owner = 'user:' + user.uid;
+
+    let credential = readAccountDeletionRecoveryCredential(owner);
+    if (!credential) {
+        credential = persistAccountDeletionRecoveryCredential(owner, createReceiptToken());
+    }
+    if (credential.registeredAt) return;
+
+    const appToken = await appCheckToken();
+    const idToken = await user.getIdToken(true);
+    const response = await fetch(accountDeletionApiUrl(), {
+        method: 'PUT',
+        headers: {
+            'content-type': 'application/json',
+            authorization: 'Bearer ' + idToken,
+            'x-firebase-appcheck': appToken,
+        },
+        body: JSON.stringify({ recoveryCredential: credential.token }),
+        cache: 'no-store',
+    });
+    const body = await readJson(response);
+    if (!response.ok) {
+        throw new Error(typeof body.error === 'string'
+            ? body.error
+            : 'Impossibile registrare la recovery della cancellazione account.');
+    }
+    markAccountDeletionRecoveryCredentialRegistered(owner);
+}
+
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
     const response = await fetch(accountDeletionApiUrl(), {
         method: 'POST',
@@ -102,9 +151,6 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
     const body = await readJson(response);
     if (!response.ok) {
         const message = typeof body.error === 'string' ? body.error : 'Impossibile avviare la cancellazione account.';
-        // Preserve the persisted receipt even for 4xx responses. The same receipt
-        // may already have been accepted by an earlier attempt whose acknowledgement
-        // was lost, and dropping it would make that durable server job unrecoverable.
         throw new Error(message);
     }
     markAccountDeletion(marker.owner, { receiptToken: marker.receiptToken, serverAcceptedAt: Date.now() });
@@ -130,15 +176,35 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker):
     return body as unknown as ServerDeletionStatus;
 }
 
-function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
+async function fetchAccountDeletionStatusWithRecoveryCredential(
+    credential: AccountDeletionRecoveryCredential,
+): Promise<ServerDeletionStatus | null> {
+    const response = await fetch(accountDeletionApiUrl(), {
+        method: 'GET',
+        headers: {
+            'x-firebase-appcheck': await appCheckToken(),
+            'x-account-deletion-uid': credential.uid,
+            'x-account-deletion-recovery': credential.token,
+        },
+        cache: 'no-store',
+    });
+    if (response.status === 404) return null;
+    const body = await readJson(response);
+    if (!response.ok) {
+        throw new Error(typeof body.error === 'string'
+            ? body.error
+            : 'Impossibile verificare la cancellazione account. Copia locale conservata.');
+    }
+    return body as unknown as ServerDeletionStatus;
+}
+
+function anotherLocalIdentityIsActive(marker: DeletionIdentity): boolean {
     if (readBrowserValueStrict('logbook_is_guest') === 'true') return true;
     const currentUid = auth.currentUser?.uid;
     return Boolean(currentUid && currentUid !== marker.uid);
 }
 
-async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: DeletionContext): Promise<AccountDeletionOutcome> {
-    // A stale receipt from account A must never sign out, purge global drafts, or reset
-    // the in-memory view of account B (or an explicitly active guest) on a shared device.
+async function finalizeCompletedDeletion(marker: DeletionIdentity, context: DeletionContext): Promise<AccountDeletionOutcome> {
     if (anotherLocalIdentityIsActive(marker)) {
         return {
             status: 'pending',
@@ -155,9 +221,10 @@ async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context:
     }
 
     try {
-        await context.purgeAllLocalUserData(marker.owner);
+        await context.purgeAllLocalUserData(marker.owner, { preserveDeletionRecovery: true });
         context.resetCache();
         clearAccountDeletion(marker.owner);
+        clearAccountDeletionRecoveryCredential(marker.owner);
         useAppStore.getState().resetStore();
         return { status: 'complete' };
     } catch (error) {
@@ -238,4 +305,27 @@ export async function resumeAccountDeletion(context: DeletionContext): Promise<A
         };
     }
     return observeDeletion(marker, context, 0);
+}
+
+export async function resumeRegisteredAccountDeletion(
+    context: DeletionContext,
+): Promise<AccountDeletionOutcome | null> {
+    if (readBrowserValueStrict('logbook_is_guest') === 'true') return null;
+    const activeUid = auth.currentUser?.uid;
+    const credentials = listRegisteredAccountDeletionRecoveryCredentials()
+        .filter(credential => !activeUid || credential.uid === activeUid);
+    for (const credential of credentials) {
+        const status = await fetchAccountDeletionStatusWithRecoveryCredential(credential);
+        if (!status) continue;
+        if (status.status === 'complete') return finalizeCompletedDeletion(credential, context);
+        if (status.status === 'failed') {
+            throw new Error(status.error
+                ?? 'Cancellazione non completata: alcuni dati cloud potrebbero essere già eliminati. Copia locale conservata.');
+        }
+        return {
+            status: 'pending',
+            message: 'La cancellazione cloud dell’account è ancora in corso. La copia locale resta conservata finché il server non conferma il completamento.',
+        };
+    }
+    return null;
 }
