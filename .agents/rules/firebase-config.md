@@ -157,11 +157,11 @@ Prima di modificarli:
 3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
 4. verificare login popup/redirect, sync, App Check, GA4, account deletion e PWA.
 
-Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy è limitato a `--only hosting`; Firestore Rules/indici restano operazioni distinte.
+Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy è limitato a `--only hosting`; Firestore Rules/indici restano operazioni distinte. Root app shell, `index.html`, manifest, service worker e Workbox devono essere esplicitamente revalidati/no-store; soltanto gli asset fingerprinted sotto `/assets/` sono immutable.
 
 ## Vercel branch deployment policy
 
-`vercel.json` contiene il contratto repository corrente per Git deployment e imposta `fluid: true`, necessario a rendere esplicito il runtime Fluid Compute da cui dipende il ceiling di 300 secondi delle due funzioni lunghe sul piano Hobby:
+`vercel.json` contiene il contratto repository corrente per Git deployment, imposta `framework: null` per il preset **Other** (backend-only, senza dipendere dal preset Vite del progetto) e `fluid: true` per rendere esplicito Fluid Compute:
 
 - `main`: deployment abilitato;
 - altri branch: deployment disabilitato.
