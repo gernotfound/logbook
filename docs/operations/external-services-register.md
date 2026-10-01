@@ -20,13 +20,13 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 |---|---|---|---|
 | Firebase Authentication | ACTIVE | account email/Google e sessione autenticata | Firebase console + codice Auth |
 | Cloud Firestore | ACTIVE | replica/sincronizzazione cloud dei dati account | Firestore/Rules + codice sync |
-| Firebase Realtime Database | NON USATO DAL RUNTIME | `databaseURL` resta nel config Firebase Web, ma il modulo RTDB non è importato | codice + console VERIFY-LIVE |
-| Firebase Storage | NON USATO DAL RUNTIME | `storageBucket` resta nel config Firebase Web, ma il modulo Storage non è importato | codice + console VERIFY-LIVE |
-| Firebase Cloud Messaging | NON USATO DAL RUNTIME | `messagingSenderId` resta nel config Firebase Web, ma il modulo Messaging non è importato | codice + console VERIFY-LIVE |
+| Firebase Realtime Database | NON USATO DAL RUNTIME | nessuna opzione RTDB nel contratto client | codice |
+| Firebase Storage | NON USATO DAL RUNTIME | nessuna opzione Storage nel contratto client | codice |
+| Firebase Cloud Messaging | NON USATO DAL RUNTIME | nessuna opzione Messaging nel contratto client | codice |
 | Firebase Hosting | MIGRATION TARGET / VERIFY-LIVE | target del candidato; stato live da verificare prima del cutover | `firebase.json` + Firebase console |
-| Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Cloud Functions ADC; adapter Vercel legacy durante migrazione |
+| Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Cloud Functions ADC con service account runtime dedicato |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
-| Vercel Hosting / Functions / Cron | LEGACY DURANTE MIGRAZIONE / VERIFY-LIVE | origin precedente e compatibilità temporanea | Vercel + `vercel.json` |
+| Vercel Hosting | CURRENT LIVE UNTIL CUTOVER / RETIRED IN TARGET | provider precedente; nessuna dipendenza nel candidato | Vercel VERIFY-LIVE + `vercel.json` con deploy Git disabilitato |
 | Vercel Analytics / Speed Insights | RETIRED IN CANDIDATE | rimossi dal runtime target | codice candidato + Vercel VERIFY-LIVE |
 | Sentry | ACTIVE | error monitoring tecnico Production | Sentry + build Production |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
@@ -35,15 +35,15 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 
 ## Firebase Hosting
 
-Nel candidato di migrazione Firebase Hosting è configurato per pubblicare `dist/`, mantenere gli header di sicurezza/PWA e usare una SPA fallback. Il site ID reale non è hardcoded: il deploy genera una configurazione temporanea da `FIREBASE_HOSTING_SITE`. Finché il cutover non è stato eseguito, lo stato live resta `VERIFY-LIVE` e Vercel può continuare a essere il runtime effettivo.
+Nel candidato di migrazione Firebase Hosting è configurato per pubblicare `dist/`, mantenere gli header di sicurezza/PWA e usare una SPA fallback. Il site ID reale non è hardcoded: il deploy genera una configurazione temporanea da `FIREBASE_HOSTING_SITE`. Finché il cutover non è stato eseguito, Vercel può continuare a servire la Production corrente, ma il candidato non usa un bridge cross-origin e non richiede funzioni Vercel.
 
 I domini Firebase predefiniti possono comunque essere presenti nelle configurazioni Auth/OAuth perché appartengono al flusso Firebase Authentication: la loro presenza non dimostra che Firebase Hosting sia attivo.
 
 ## Firebase Authentication e OAuth
 
-Firebase Authentication è il provider identità del prodotto. LogBook supporta autenticazione Google e credenziali email/password. Il dominio di autenticazione Firebase resta parte del redirect OAuth, mentre l'applicazione Production è servita da Vercel.
+Firebase Authentication è il provider identità del prodotto. LogBook supporta autenticazione Google e credenziali email/password. Nel target, `authDomain` coincide con l’hostname canonico Firebase Hosting.
 
-In Firebase Authentication → Settings devono risultare autorizzati soltanto i domini realmente necessari: localhost per sviluppo, i domini Firebase predefiniti necessari al flusso Auth e il dominio canonico Production Vercel.
+In Firebase Authentication → Settings devono risultare autorizzati soltanto i domini realmente necessari: localhost per sviluppo e l’hostname canonico Firebase Hosting; eventuali domini provider precedenti vanno rimossi dopo il cutover.
 
 Il precedente dominio GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso da Firebase Authentication → Authorized domains; non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
 
@@ -53,27 +53,25 @@ Nel Google OAuth Web Client auto-creato, le origini localhost servono lo svilupp
 
 La Firebase Web API key è configurazione client pubblica, non una credenziale Admin. La sua sicurezza dipende anche dalle restrizioni lato Google Cloud.
 
-Le restrizioni HTTP referrer devono seguire i soli frontend realmente autorizzati. Il dominio Vercel Production e l'origine Firebase necessaria al flusso Auth sono intenzionali.
+Le restrizioni HTTP referrer devono seguire i soli frontend realmente autorizzati. Nel target l’origin canonico Firebase Hosting è l’unico frontend Production.
 
-Il vecchio referrer GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso dalle restrizioni della Browser API key. Il dominio Production Vercel e l'origine Firebase necessaria al flusso Auth restano le allowlist intenzionali.
+Il vecchio referrer GitHub Pages è **ritirato**. Il 2026-09-30 è stato rimosso dalle restrizioni della Browser API key. Al cutover anche il referrer Vercel va rimosso quando non serve più.
 
 ## Firestore
 
 Firestore è la replica remota per account autenticati, non la persistenza locale primaria. IndexedDB resta il boundary offline-first canonico.
 
-Il runtime non importa Firebase Realtime Database. `VITE_FIREBASE_DATABASE_URL` resta ancora nel contratto Firebase Web fail-fast come configurazione legacy da rivalutare, ma non giustifica allowlist `firebaseio.com` nella CSP. La seconda passata del 2026-09-30 ha quindi rimosso tali origin dalla CSP senza rimuovere la variabile dal contratto runtime.
+Il runtime non importa Firebase Realtime Database e `VITE_FIREBASE_DATABASE_URL` non fa più parte del contratto client.
 
-Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging. `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` restano oggi nel fail-fast/config Firebase Web per compatibilità del contratto esistente, ma la loro presenza non va interpretata come prova che quei servizi siano usati. Un'eventuale semplificazione delle sette env richiede modifica separata con test.
+Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messaging; `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` sono stati rimossi dal contratto fail-fast.
 
 Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono `LEGACY`: il client corrente invia errori/anomalie a Sentry, ma Rules, account deletion e retention cron restano finché i client vecchi e i documenti residui non sono definitivamente smaltiti.
 
 ## Firebase Admin e account deletion
 
-Le Cloud Functions Firebase usano Application Default Credentials del runtime e non richiedono una private key Admin esportata. `LOGBOOK_FUNCTION_REGION` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti del deploy.
+Le Cloud Functions Firebase usano Application Default Credentials del runtime e non richiedono una private key Admin esportata. `LOGBOOK_FUNCTION_REGION`, `LOGBOOK_FUNCTION_SERVICE_ACCOUNT` e `LOGBOOK_ALLOWED_ORIGINS` sono parametri non segreti del deploy.
 
-Durante la finestra legacy, le Vercel Functions possono continuare a usare `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`. Restano server-only e nessuna deve avere prefisso `VITE_`.
-
-Verifica live del 2026-09-30: in Vercel Production risultano presenti `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e `CRON_SECRET`. I valori non sono registrati qui. Una chiave Admin generata accidentalmente durante la verifica è stata eliminata subito senza essere usata o installata.
+Il candidato non contiene Functions/cron Vercel e non usa `FIREBASE_ADMIN_*` o `CRON_SECRET`. Le eventuali credenziali/env rimaste nel provider precedente sono configurazione esterna da revocare dopo il cutover.
 
 ## App Check, reCAPTCHA Enterprise e Fraud Defense
 
@@ -100,25 +98,22 @@ Il cutover Vercel alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` �
 
 Vercel è il provider Production di LogBook.
 
-Il repository impone deploy abilitato soltanto da `main`, Functions native per account deletion/maintenance, cron in `vercel.json` e security headers/CSP versionati. I branch di sviluppo non devono generare Preview Deployment.
+Nel candidato `vercel.json` imposta `deploymentEnabled: false`: nessun branch, incluso `main`, deve generare nuovi deployment Git Vercel dopo l’adozione del candidato.
 
 La CSP segue il principio di allowlist minima. LogBook usa font di sistema e non carica Google Fonts: gli origin `fonts.googleapis.com`/`fonts.gstatic.com` sono stati rimossi nella seconda passata del 2026-09-30 insieme agli origin Realtime Database non usati.
 
-Il codice corrente legge sette variabili Firebase Web:
+Il codice target legge quattro variabili Firebase Web:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_DATABASE_URL`
 - `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 
 `VITE_FIREBASE_MEASUREMENT_ID` non è usata dal codice corrente e il 2026-09-30 è stata rimossa da Vercel. Firebase Analytics non fa parte del prodotto e la variabile non deve essere reintrodotta come dipendenza.
 
 Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
 
-La configurazione Production non viene più duplicata in un file `.env.production` versionato. La seconda passata del 2026-09-30 ha rimosso quel file: conteneva soltanto configurazione Firebase Web pubblica, non segreti Admin, ma duplicava identificatori/endpoints reali senza necessità. Il contratto resta in `.env.example`; i valori Production vivono in Vercel. CI/E2E usa valori sintetici espliciti.
+La configurazione Production non viene più duplicata in un file `.env.production` versionato. La seconda passata del 2026-09-30 ha rimosso quel file: conteneva soltanto configurazione Firebase Web pubblica, non segreti Admin, ma duplicava identificatori/endpoints reali senza necessità. Il contratto resta in `.env.example`; i valori target Production vivono in GitHub/Firebase/Google Cloud. CI/E2E usa valori sintetici espliciti.
 
 ### Scope Vercel registrati
 
@@ -126,9 +121,8 @@ Inventario fornito dal product owner il 2026-09-30, da verificare live prima di 
 
 | Famiglia env | Scope riportato | Nota |
 |---|---|---|
-| sette `VITE_FIREBASE_*` usate dal client | Production + Preview | configurazione Firebase Web |
+| quattro `VITE_FIREBASE_*` usate dal client | target Production | configurazione Firebase Web |
 | `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` | Production | site key pubblica canonica App Check |
-| `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET` | Production | server-only; presenza verificata, valori non registrati |
 | env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | Error Monitoring/source map |
 | `VITE_FIREBASE_MEASUREMENT_ID` | RIMOSSA | Firebase Analytics non usato |
 | `VITE_RECAPTCHA_V3_SITE_KEY` | RIMOSSA | alias legacy ritirato dopo cutover Enterprise |
@@ -166,7 +160,7 @@ Il repository è pubblico: questo è un vincolo di sicurezza e privacy, non solo
 
 Al consolidamento del 2026-09-30 il ruleset `protect main branch` è attivo sulla default branch e richiede `Canonical Verification`, status check strict, pull request, risoluzione delle review conversation, cronologia lineare e squash merge; non risultano bypass configurati.
 
-CodeQL è parte del gate canonico. Il nome `Canonical Verification` non deve essere cambiato senza verificare ruleset e integrazioni Vercel collegate.
+CodeQL è parte del gate canonico. Il nome `Canonical Verification` non deve essere cambiato senza verificare il ruleset GitHub.
 
 Dependabot è configurato nel repository per controlli settimanali sia delle dipendenze npm sia delle GitHub Actions, con massimo 10 PR aperte per ciascun ecosistema. È automazione di manutenzione, non un bypass: le sue PR devono attraversare gli stessi guardrail di `main`.
 
@@ -180,7 +174,7 @@ Limiti quota o indisponibilità Snyk non devono eliminare la copertura SAST bloc
 
 ## Google Search Console e indicizzazione
 
-La proprietà Search Console corrisponde al sito Production Vercel. L'integrazione serve a dimostrare il controllo del sito, presentare/controllare la sitemap, consentire crawling/indicizzazione e osservare lo stato degli URL.
+La proprietà Search Console corrente può ancora corrispondere al sito Production Vercel fino al cutover; il nuovo origin Firebase richiede verifica/sitemap dedicata. L'integrazione serve a dimostrare il controllo del sito, presentare/controllare la sitemap, consentire crawling/indicizzazione e osservare lo stato degli URL.
 
 Il repository mantiene deliberatamente:
 
@@ -216,7 +210,7 @@ Pulizia esterna completata/verificata il 2026-09-30:
 1. verificare domini Firebase Auth;
 2. verificare restrizioni Browser API key e OAuth origins/redirect;
 3. verificare App Check e dominio/key reCAPTCHA Enterprise;
-4. verificare env Vercel per nome/scope senza esportarne i valori;
+4. dopo il cutover revocare env/credenziali e integrazioni Vercel residue;
 5. verificare cron e Functions;
 6. verificare GitHub ruleset/required check;
 7. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
