@@ -121,10 +121,10 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 
 ## External checks
 
-- MUST: la copertura SAST bloccante non dipende da quote o disponibilità di un servizio terzo: CodeQL è parte del gate aggregato `Canonical Verification`.
+- MUST: l'esecuzione CodeQL non dipende da quote o disponibilità di un servizio terzo: il job `Security / CodeQL` è una dipendenza bloccante del gate aggregato `Canonical Verification`.
 - NOTE: eventuali check Snyk esterni restano supplementari. Un errore operativo come quota/limite raggiunto non equivale a una vulnerabilità rilevata e non sostituisce il risultato CodeQL.
 - NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
-- VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.
+- VERIFY: required status checks/rulesets e l'eventuale enforcement degli alert di code scanning sono configurazione GitHub esterna; il successo del job `Security / CodeQL` prova che l'analisi è stata eseguita, non che ogni alert CodeQL sia automaticamente bloccante. Non dichiarare un alert-threshold required senza leggere il ruleset effettivo.
 - VERIFY: ruoli IAM Google Cloud e secret provisionati non sono dimostrati dalla configurazione repository se non esiste IaC/evidenza diretta.
 
 ## Acceptance
