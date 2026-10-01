@@ -78,8 +78,11 @@ const cspHeader = Array.isArray(globalHeaderGroup?.headers)
   : undefined;
 if (!globalHeaderGroup) failures.push('Firebase reserved /__/* endpoints must be excluded from app-level framing/CSP headers.');
 const cspTokens = new Set(String(cspHeader?.value ?? '').split(/\s+/).filter(Boolean));
-if (!cspTokens.has('https://*.cloudfunctions.net')) {
-  failures.push('CSP connect-src must allow the direct Cloud Functions endpoint.');
+if (!cspTokens.has('https://logbook-function.invalid')) {
+  failures.push('Tracked Firebase CSP must contain the fail-closed Function-origin placeholder.');
+}
+if (cspTokens.has('https://*.cloudfunctions.net')) {
+  failures.push('Tracked Firebase CSP must not allow a wildcard Cloud Functions origin.');
 }
 if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vitals.vercel-insights.com')) {
   failures.push('Vercel analytics origins must not remain in Firebase CSP.');
