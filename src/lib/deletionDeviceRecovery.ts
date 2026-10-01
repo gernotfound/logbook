@@ -2,7 +2,7 @@ import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
 
 const KEY='logbook_deletion_recovery_device_v1';
-const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || '').replace(/\/$/,'');
+const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/,'');
 type Credential={uid:string;token:string};
 
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
