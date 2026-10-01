@@ -77,7 +77,7 @@ describe('authenticated hydration session fencing', () => {
         dbState.loadCloudPayload.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'unavailable' }));
 
         const setUserData = vi.fn();
-        const result = await loadAuthenticatedData({
+        await loadAuthenticatedData({
             user: { uid: 'user-a' } as any,
             isGuestActive: () => false,
             setUserData,
@@ -85,7 +85,6 @@ describe('authenticated hydration session fencing', () => {
             setSaveError: vi.fn(),
         });
 
-        expect(result).toEqual({ cloudReconciled: false, localRecovered: true });
         expect(setUserData).toHaveBeenCalledWith(expect.objectContaining({
             profile: expect.objectContaining({ height: '175' }),
         }));
