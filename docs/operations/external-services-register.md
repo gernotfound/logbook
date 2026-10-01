@@ -267,7 +267,7 @@ Pulizia esterna completata/verificata il 2026-09-30:
 - il vecchio dominio GitHub Pages è stato rimosso da Firebase Authentication → Authorized domains;
 - il vecchio referrer GitHub Pages è stato rimosso dalla Browser API key;
 - il Web OAuth client descritto non riportava GitHub Pages;
-- la Web key reCAPTCHA Enterprise/Fraud Defense osservata autorizza il solo dominio Production Vercel e mantiene attiva la verifica dominio.
+- la Web key reCAPTCHA Enterprise/Fraud Defense mantiene attiva la verifica dominio; dal 2026-10-01 autorizza sia il dominio Production Vercel corrente sia `thelogbook.web.app` in preparazione al cutover.
 
 ## Checklist annuale
 
@@ -280,4 +280,5 @@ Pulizia esterna completata/verificata il 2026-09-30:
 7. verificare Sentry privacy, Spike Protection e feature non richieste ancora disattivate;
 8. verificare Snyk come supplementare e CodeQL come gate;
 9. verificare Search Console, sitemap, robots e canonical Production URL;
-10. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
+10. verificare GA4/Google Analytics se preparato o attivo: stream, Enhanced Measurement, Signals, Ads, retention e condivisione dati;
+11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
