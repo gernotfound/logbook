@@ -27,6 +27,7 @@ if (
   throw new Error('VITE_ACCOUNT_DELETION_API_URL non corrisponde alla Function accountDeletion configurata.');
 }
 const deletionOrigin = deletionUrl.origin;
+const functionOriginPlaceholder = 'https://logbook-function.invalid';
 
 const config = JSON.parse(await readFile('firebase.json', 'utf8'));
 if (!config.hosting || Array.isArray(config.hosting)) {
@@ -43,10 +44,13 @@ let cspUpdated = false;
 for (const group of config.hosting.headers ?? []) {
   for (const header of group.headers ?? []) {
     if (header.key !== 'Content-Security-Policy') continue;
-    if (!header.value.includes('https://*.cloudfunctions.net')) {
-      throw new Error('firebase.json: CSP Cloud Functions wildcard mancante.');
+    if (!header.value.includes(functionOriginPlaceholder)) {
+      throw new Error('firebase.json: placeholder CSP della Function mancante.');
     }
-    header.value = header.value.replace('https://*.cloudfunctions.net', deletionOrigin);
+    if (header.value.includes('https://*.cloudfunctions.net')) {
+      throw new Error('firebase.json: wildcard Cloud Functions non ammesso nel template Production.');
+    }
+    header.value = header.value.replace(functionOriginPlaceholder, deletionOrigin);
     cspUpdated = true;
   }
 }
