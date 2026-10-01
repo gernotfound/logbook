@@ -110,11 +110,4 @@ if (publicOrigin.hostname.endsWith('.web.app')) {
   }
 }
 
-console.log('Firebase Production deploy environment OK:', {
-  sha: process.env.LOGBOOK_BUILD_SHA,
-  origin: publicOrigin.origin,
-  project: process.env.FIREBASE_PROJECT_ID,
-  site: process.env.FIREBASE_HOSTING_SITE,
-  region: process.env.FIREBASE_FUNCTION_REGION,
-  runtimeServiceAccount: serviceAccount,
-});
+console.log('Firebase Production deploy environment OK.');
