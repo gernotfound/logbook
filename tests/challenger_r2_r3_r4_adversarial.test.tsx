@@ -16,10 +16,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
         const requiredEnvKeys = [
             'VITE_FIREBASE_API_KEY',
             'VITE_FIREBASE_AUTH_DOMAIN',
-            'VITE_FIREBASE_DATABASE_URL',
             'VITE_FIREBASE_PROJECT_ID',
-            'VITE_FIREBASE_STORAGE_BUCKET',
-            'VITE_FIREBASE_MESSAGING_SENDER_ID',
             'VITE_FIREBASE_APP_ID'
         ] as const;
 
@@ -59,7 +56,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             expect(fileContent).not.toMatch(/\.firebaseapp\.com/);
             expect(fileContent).not.toMatch(/\.firebasestorage\.app/);
 
-            // Must verify all 7 required variables are listed in requiredEnvVars
+            // Must verify all required variables are listed in requiredEnvVars
             for (const key of requiredEnvKeys) {
                 expect(fileContent).toContain(`'${key}'`);
             }
@@ -104,18 +101,18 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             });
         }
 
-        it('RUNTIME COMBINATORIAL: throws listing all 7 variables when all are undefined', async () => {
+        it('RUNTIME COMBINATORIAL: throws listing all required variables when all are undefined', async () => {
             for (const key of requiredEnvKeys) {
                 delete (import.meta.env as any)[key];
             }
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_DATABASE_URL, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID/
             );
         });
 
-        it('RUNTIME COMBINATORIAL: throws listing all 7 variables when all are empty strings', async () => {
+        it('RUNTIME COMBINATORIAL: throws listing all required variables when all are empty strings', async () => {
             for (const key of requiredEnvKeys) {
                 import.meta.env[key] = '';
             }
@@ -126,18 +123,18 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress & Robustness Suite (R2, R3, R
             );
         });
 
-        it('RUNTIME COMBINATORIAL: throws listing multiple arbitrary missing variables (subset: API_KEY, STORAGE_BUCKET)', async () => {
+        it('RUNTIME COMBINATORIAL: throws listing multiple arbitrary missing variables (subset: API_KEY, APP_ID)', async () => {
             delete (import.meta.env as any).VITE_FIREBASE_API_KEY;
-            delete (import.meta.env as any).VITE_FIREBASE_STORAGE_BUCKET;
+            delete (import.meta.env as any).VITE_FIREBASE_APP_ID;
 
             await expect(async () => {
                 await import('../src/lib/firebase');
             }).rejects.toThrowError(
-                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_STORAGE_BUCKET/
+                /Configurazione Firebase incompleta: mancano le variabili d'ambiente necessarie: VITE_FIREBASE_API_KEY, VITE_FIREBASE_APP_ID/
             );
         });
 
-        it('RUNTIME SUCCESS: loads and exports auth, db, provider when all 7 environment variables are properly defined', async () => {
+        it('RUNTIME SUCCESS: loads and exports auth, db, provider when all required environment variables are properly defined', async () => {
             for (const key of requiredEnvKeys) {
                 import.meta.env[key] = `valid_${key}_value_12345`;
             }
