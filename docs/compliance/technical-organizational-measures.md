@@ -12,12 +12,12 @@
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
 | Telemetria | Sanitizzazione PII, allowlist dettagli, queue bounded | Implementato |
-| Analytics | Google/Firebase Analytics rimosso; Vercel analytics opt-in | Implementato |
+| Analytics | Nessun analytics comportamentale nel target; Vercel Analytics/Speed Insights ritirati, Google/Firebase Analytics non introdotto | Implementato |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin/cron server-only, esclusi dal bundle | Contratto repository |
-| HTTP | CSP, HSTS, frame denial, referrer/permissions policies | `vercel.json` + verifica Production |
+| HTTP | CSP, HSTS, frame denial, referrer/permissions policies | `firebase.json` nel target + verifica live Production; `vercel.json` resta bridge legacy |
 | CI | Exact-SHA Canonical Verification + M8 | GitHub Actions |
-| Deploy | Solo `main` abilita Git deployment Vercel | Contratto repository |
+| Deploy | PR senza deploy; Firebase Production solo da `main` verificato exact-SHA, Functions prima di Hosting; Vercel solo bridge legacy durante cutover | Contratto repository |
 | PWA update | Reload barrier prima dell'update | Implementato/testato |
 
 ## Misure esterne da verificare
