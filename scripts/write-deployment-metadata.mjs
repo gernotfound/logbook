@@ -7,18 +7,8 @@ function normalizedOrigin(raw) {
   return parsed.origin;
 }
 
-const configuredOrigin = process.env.VITE_PUBLIC_ORIGIN?.trim();
-const vercelProductionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
-const buildSha = (
-  process.env.LOGBOOK_BUILD_SHA
-  || process.env.EXPECTED_SHA
-  || process.env.GITHUB_SHA
-  || process.env.VERCEL_GIT_COMMIT_SHA
-  || 'dev'
-).trim();
-const origin = normalizedOrigin(
-  configuredOrigin || (vercelProductionHost ? `https://${vercelProductionHost}` : undefined),
-);
+const origin = normalizedOrigin(process.env.VITE_PUBLIC_ORIGIN?.trim());
+
 await mkdir('dist', { recursive: true });
 await writeFile('dist/robots.txt', `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, 'utf8');
 await writeFile(
@@ -26,9 +16,4 @@ await writeFile(
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${origin}/</loc></url>\n</urlset>\n`,
   'utf8',
 );
-await writeFile(
-  'dist/migration-ready.json',
-  JSON.stringify({ version: 1, buildSha, origin }) + '\n',
-  'utf8',
-);
-console.log(`Deployment metadata generated for ${origin} at ${buildSha}`);
+console.log(`Deployment metadata generated for ${origin}`);
