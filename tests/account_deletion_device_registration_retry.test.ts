@@ -8,11 +8,6 @@ const appCheck = vi.hoisted(() => ({
   getLimitedUseAppCheckToken: vi.fn(async () => 'app-check-token'),
 }));
 
-vi.mock('../src/lib/firebase', () => firebase);
-vi.mock('../src/lib/appCheck', () => appCheck);
-
-import { watchDeletionRecoveryDeviceRegistration } from '../src/lib/deletionDeviceRecovery';
-
 function setOnline(value: boolean) {
   Object.defineProperty(navigator, 'onLine', { configurable: true, value });
 }
@@ -24,10 +19,18 @@ function user(uid = 'user-a') {
   } as any;
 }
 
+async function loadSubject() {
+  vi.resetModules();
+  vi.doMock('../src/lib/firebase', () => firebase);
+  vi.doMock('../src/lib/appCheck', () => appCheck);
+  return import('../src/lib/deletionDeviceRecovery');
+}
+
 describe('account deletion recovery device registration retries', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    firebase.auth.currentUser = null;
     firebase.ensureAppCheck.mockClear();
     appCheck.getLimitedUseAppCheckToken.mockClear();
     setOnline(true);
@@ -36,9 +39,12 @@ describe('account deletion recovery device registration retries', () => {
   afterEach(() => {
     firebase.auth.currentUser = null;
     vi.unstubAllGlobals();
+    vi.doUnmock('../src/lib/firebase');
+    vi.doUnmock('../src/lib/appCheck');
   });
 
   it('registers the authenticated device immediately with a limited-use App Check token', async () => {
+    const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
     const current = user();
     firebase.auth.currentUser = current;
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
@@ -63,6 +69,7 @@ describe('account deletion recovery device registration retries', () => {
   });
 
   it('retries registration when a device that started offline comes back online', async () => {
+    const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
     const current = user();
     firebase.auth.currentUser = current;
     setOnline(false);
@@ -80,6 +87,7 @@ describe('account deletion recovery device registration retries', () => {
   });
 
   it('does not register a stale user after the authenticated account changes', async () => {
+    const { watchDeletionRecoveryDeviceRegistration } = await loadSubject();
     const stale = user('user-a');
     firebase.auth.currentUser = user('user-b');
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
