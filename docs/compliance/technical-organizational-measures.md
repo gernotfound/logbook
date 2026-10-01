@@ -14,10 +14,10 @@
 | Telemetria | Sanitizzazione PII, allowlist dettagli, queue bounded | Implementato |
 | Analytics | Nessun analytics comportamentale nel target; Vercel Analytics/Speed Insights ritirati, Google/Firebase Analytics non introdotto | Implementato |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
-| Segreti | Firebase Admin/cron server-only, esclusi dal bundle | Contratto repository |
-| HTTP | CSP, HSTS, frame denial, referrer/permissions policies | `firebase.json` nel target + verifica live Production; `vercel.json` resta bridge legacy |
+| Segreti | Firebase Admin via ADC/IAM; nessuna private key Admin o cron secret nel target | Contratto repository |
+| HTTP | CSP, HSTS, frame denial, referrer/permissions policies | `firebase.json` nel target + verifica live Production |
 | CI | Exact-SHA Canonical Verification + M8 | GitHub Actions |
-| Deploy | PR senza deploy; Firebase Production solo da `main` verificato exact-SHA, Functions prima di Hosting; Vercel solo bridge legacy durante cutover | Contratto repository |
+| Deploy | PR senza deploy; Firebase Production solo da `main` verificato exact-SHA; Functions prima di Hosting; Vercel Git deployment disabilitato nel candidato | Contratto repository |
 | PWA update | Reload barrier prima dell'update | Implementato/testato |
 
 ## Misure esterne da verificare
@@ -31,8 +31,6 @@
 | Google Cloud | Restrizioni Browser API key | `[VERIFY]` |
 | Firestore | Regione/database location | `[VERIFY]` |
 | Firestore | Backup/PITR e restore test | `[DECIDE/VERIFY]` |
-| Vercel | Env server trusted presenti e corretti | `[VERIFY]` |
-| Vercel | Accessi team, MFA, log retention | `[VERIFY]` |
 | GitHub | Ruleset/required check exact-SHA | `[VERIFY]` |
 | Account amministrativi | MFA/2FA | `[VERIFY]` |
 
@@ -54,7 +52,7 @@
 Allegare/archiviare:
 
 1. SHA Production e CI verde;
-2. deploy Vercel associato;
+2. deployment Firebase Hosting/Functions associato allo stesso SHA;
 3. Rules/App Check live verificati;
 4. elenco env richieste senza valori segreti;
 5. risultati smoke account/deletion pertinenti;
