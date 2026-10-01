@@ -16,7 +16,7 @@ import { GET as getDeletion } from './.smoke-test-dist/api/account-deletion.js';
 import { GET as getCron } from './.smoke-test-dist/api/account-deletion-cron.js';
 
 async function run() {
-  const req1 = new Request('https://example.test/api/account-deletion');
+  const req1 = new Request('https://example.test/api/account-deletion', { headers: { origin: 'https://thelogbook.web.app' } });
   const res1 = await getDeletion(req1);
   if (res1.status !== 403) throw new Error('Expected 403 on /api/account-deletion, got ' + res1.status);
 
