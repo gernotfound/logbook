@@ -60,6 +60,17 @@ describe('Firebase deploy config preparation', () => {
     expect(csp).not.toContain('https://*.cloudfunctions.net');
   });
 
+  it('refuses CSP values that only contain the placeholder as part of another URL token', () => {
+    const dir = fixture();
+    const configPath = join(dir, 'firebase.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.hosting.headers[0].headers[0].value =
+      "default-src 'self'; connect-src 'self' https://logbook-function.invalid.evil.example;";
+    writeFileSync(configPath, JSON.stringify(config), 'utf8');
+
+    expect(() => run(dir)).toThrow();
+  });
+
   it('fails closed when the account deletion endpoint is not a Cloud Functions URL', () => {
     const dir = fixture();
     expect(() => run(dir, {
