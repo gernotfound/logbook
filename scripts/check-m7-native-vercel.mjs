@@ -50,6 +50,13 @@ for (const source of ['/', '/index.html', '/manifest.webmanifest', '/sw.js']) {
     failures.push(`Firebase Hosting ${source} must explicitly disable caching/revalidate to prevent a stale app shell`);
   }
 }
+const requiredCspOrigins = [
+  'https://apis.google.com',
+  'https://lh3.googleusercontent.com',
+];
+for (const origin of requiredCspOrigins) {
+  if (!csp.includes(origin)) failures.push(`Firebase Hosting CSP missing required Auth/UI origin: ${origin}`);
+}
 const requiredConnectOrigins = [
   'https://firestore.googleapis.com',
   'https://identitytoolkit.googleapis.com',
@@ -59,6 +66,7 @@ const requiredConnectOrigins = [
   'https://firebaseappcheck.googleapis.com',
   'https://firebaseinstallations.googleapis.com',
   'https://firebase.googleapis.com',
+  'https://apis.google.com',
   'https://www.google-analytics.com',
   'https://region1.google-analytics.com',
   'https://logbook-gnf.vercel.app',
