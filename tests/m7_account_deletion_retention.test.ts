@@ -9,46 +9,37 @@ const state = vi.hoisted(() => ({
 
 const fakeDb = vi.hoisted(() => ({
   collection(name: string) {
-    return {
-      where(field: string, operator: string, value: { toMillis: () => number }) {
-        if (name !== 'account_deletions' || field !== 'purgeAfter' || operator !== '<=') {
-          throw new Error('Unexpected retention query');
-        }
+    const filters: Array<{ field: string; operator: string; value: unknown }> = [];
+    const query: any = {
+      where(field: string, operator: string, value: unknown) {
+        filters.push({ field, operator, value });
+        return query;
+      },
+      limit(count: number) {
         return {
-          limit(count: number) {
-            return {
-              async get() {
-                const cutoff = value.toMillis();
-                const docs = state.docs
-                  .filter(item => {
-                    const purgeAfter = item.data.purgeAfter;
-                    return Boolean(
-                      purgeAfter
-                      && typeof purgeAfter === 'object'
-                      && 'toMillis' in purgeAfter
-                      && typeof (purgeAfter as { toMillis?: unknown }).toMillis === 'function'
-                      && (purgeAfter as { toMillis: () => number }).toMillis() <= cutoff,
-                    );
-                  })
-                  .slice(0, count)
-                  .map(item => ({
-                    ref: { path: item.path },
-                    data: () => item.data,
-                  }));
-                return { empty: docs.length === 0, docs };
-              },
-            };
+          async get() {
+            if (name !== 'account_deletions') throw new Error('Unexpected retention collection');
+            const docs = state.docs.filter(item => filters.every(filter => {
+              if (filter.field === 'status' && filter.operator === '==') return item.data.status === filter.value;
+              if (filter.field === 'purgeAfter' && filter.operator === '<=') {
+                const purgeAfter = item.data.purgeAfter;
+                return Boolean(purgeAfter && typeof purgeAfter === 'object' && 'toMillis' in purgeAfter
+                  && typeof (purgeAfter as { toMillis?: unknown }).toMillis === 'function'
+                  && (purgeAfter as { toMillis: () => number }).toMillis() <= (filter.value as { toMillis: () => number }).toMillis());
+              }
+              throw new Error('Unexpected retention query');
+            })).slice(0, count).map(item => ({ ref: { path: item.path }, data: () => item.data }));
+            return { empty: docs.length === 0, docs };
           },
         };
       },
     };
+    return query;
   },
   batch() {
     const deletes: string[] = [];
     return {
-      delete(ref: { path: string }) {
-        deletes.push(ref.path);
-      },
+      delete(ref: { path: string }) { deletes.push(ref.path); },
       async commit() {
         state.committed += 1;
         state.deleted.push(...deletes);
