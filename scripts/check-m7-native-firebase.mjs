@@ -94,6 +94,8 @@ if (cspTokens.has('https://*.vercel-scripts.com') || cspTokens.has('https://vita
 for (const requiredAnalyticsOrigin of ['https://www.googletagmanager.com', 'https://*.google-analytics.com']) {
   if (!cspTokens.has(requiredAnalyticsOrigin)) failures.push(`Firebase Analytics CSP origin missing: ${requiredAnalyticsOrigin}`);
 }
+if (cspTokens.has('https://*')) failures.push('Firebase Hosting CSP must not allow arbitrary HTTPS image origins.');
+if (!cspTokens.has('https://*.googleusercontent.com')) failures.push('Firebase Hosting CSP must allow Google account avatar images.');
 for (const forbiddenAdsOrigin of ['https://*.g.doubleclick.net', 'https://pagead2.googlesyndication.com', 'https://googleads.g.doubleclick.net']) {
   if (cspTokens.has(forbiddenAdsOrigin)) failures.push(`Google Ads origin must not be allowlisted for analytics-only telemetry: ${forbiddenAdsOrigin}`);
 }
