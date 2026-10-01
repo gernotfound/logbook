@@ -100,6 +100,7 @@ export const accountDeletion = onRequest(
     memory: '512MiB',
     concurrency: 10,
     maxInstances: 10,
+    invoker: 'public',
     cors: false,
   },
   async (req, res) => {
