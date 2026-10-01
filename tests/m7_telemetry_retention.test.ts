@@ -101,7 +101,7 @@ vi.mock('../functions/src/accountDeletion/firebaseAdmin', () => ({
   adminDb: () => fakeDb,
 }));
 
-import { purgeExpiredTelemetry } from '../server/telemetryRetention';
+import { purgeExpiredTelemetry } from '../functions/src/telemetryRetention';
 
 function telemetry(
   errors: TelemetryDoc[] = [],
