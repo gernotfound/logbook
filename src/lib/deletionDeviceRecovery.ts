@@ -13,7 +13,7 @@ async function appToken(){await ensureAppCheck();const {getAppCheckToken}=await 
 export async function registerDeletionRecoveryDevice(user:User):Promise<void>{
  if(!API||!navigator.onLine)return;
  let cred=read();if(!cred||cred.uid!==user.uid){cred={uid:user.uid,token:randomToken()};write(cred);}
- const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{origin:location.origin,'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(true),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
+ const response=await fetch(API+'/api/account-deletion-device',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await user.getIdToken(true),'x-firebase-appcheck':await appToken()},body:JSON.stringify({deviceToken:cred.token}),cache:'no-store'});
  if(!response.ok)throw new Error('Registrazione recovery device non riuscita.');
 }
 export async function recoverDeletedAccountOnThisDevice(purge:(owner:string)=>Promise<void>):Promise<boolean>{
