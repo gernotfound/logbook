@@ -88,6 +88,9 @@ requirePattern('checkout action', workflow, /^        uses: actions\/checkout@v7
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
 requirePattern('Node setup action', workflow, /^        uses: actions\/setup-node@v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
+requirePattern('Functions Node 22 runtime job', workflow, /^  functions-runtime:\s*$/m);
+requirePattern('Functions Node 22 setup', workflow, /^          node-version: ['"]?22['"]?\s*$/m);
+requirePattern('Functions lockfile cache', workflow, /^          cache-dependency-path: functions\/package-lock\.json\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
 requirePattern('dependency install', workflow, /^        run: npm ci\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
@@ -95,7 +98,7 @@ requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.e
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
 requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual_sha\}" != "\$\{EXPECTED_SHA\}" \]; then\s*$/m);
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
-if (actualShaAssignments.length !== 2) failures.push(`runtime SHA guard: expected shard + CodeQL assignments, found ${actualShaAssignments.length}`);
+if (actualShaAssignments.length !== 3) failures.push(`runtime SHA guard: expected shard + Functions runtime + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
 requirePattern('Java setup action', workflow, /^        uses: actions\/setup-java@v6\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
@@ -201,11 +204,14 @@ if (functionsAuditOccurrences.length !== 1) failures.push(`Functions security au
 const canonicalNames = workflow.match(/name: ["']Canonical Verification["']/g) ?? [];
 if (canonicalNames.length !== 1) failures.push(`canonical aggregate: expected one stable check name, found ${canonicalNames.length}`);
 requirePattern('canonical needs verification shards', workflow, /^      - shards\s*$/m);
+requirePattern('canonical needs Functions Node 22 runtime', workflow, /^      - functions-runtime\s*$/m);
 requirePattern('canonical needs CodeQL', workflow, /^      - codeql\s*$/m);
 requirePattern('canonical always evaluates', workflow, /^    if: \$\{\{ always\(\) \}\}\s*$/m);
 requirePattern('canonical shard result binding', workflow, /^          SHARD_RESULT: \$\{\{ needs\.shards\.result \}\}\s*$/m);
+requirePattern('canonical Functions runtime result binding', workflow, /^          FUNCTIONS_RUNTIME_RESULT: \$\{\{ needs\.functions-runtime\.result \}\}\s*$/m);
 requirePattern('canonical CodeQL result binding', workflow, /^          CODEQL_RESULT: \$\{\{ needs\.codeql\.result \}\}\s*$/m);
 requirePattern('canonical rejects failed shards', workflow, /^          if \[ "\$\{SHARD_RESULT\}" != "success" \]; then\s*$/m);
+requirePattern('canonical rejects failed Functions runtime', workflow, /^          if \[ "\$\{FUNCTIONS_RUNTIME_RESULT\}" != "success" \]; then\s*$/m);
 requirePattern('canonical rejects failed CodeQL', workflow, /^          if \[ "\$\{CODEQL_RESULT\}" != "success" \]; then\s*$/m);
 
 for (const legacy of [
@@ -225,4 +231,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, root and Functions dependency audits plus CodeQL are required, specialized dependencies stay isolated, and Canonical Verification remains the single aggregate gate.');
+console.log('M8 CI contract OK: exact-SHA parallel shards are leaf-equivalent to verify:m8, Firebase Functions are additionally verified on Node 22, root and Functions dependency audits plus CodeQL are required, and Canonical Verification remains the single aggregate gate.');
