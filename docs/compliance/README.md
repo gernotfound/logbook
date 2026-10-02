@@ -1,23 +1,23 @@
-# LogBook — pacchetto compliance per il primo pilot
+# TheLogBook — pacchetto compliance per il primo pilot
 
 > Stato: struttura operativa da completare e far revisionare professionalmente prima della prima palestra.
-> Ultimo aggiornamento tecnico: 23 settembre 2026.
+> Ultimo aggiornamento tecnico: 2 ottobre 2026.
 > Questo pacchetto non certifica conformità GDPR e non sostituisce consulenza legale, privacy o fiscale.
 
 ## Obiettivo
 
-Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di LogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti e documentazione B2B.
+Questa cartella raccoglie i documenti operativi che servono per trasformare le scelte tecniche di TheLogBook in un processo dimostrabile: registro dei trattamenti, screening DPIA, retention, incident response, fornitori/trasferimenti, misure tecniche e organizzative, gestione dei diritti e documentazione B2B.
 
 La fonte di verità tecnica resta il repository corrente. Le configurazioni esterne — Firebase/Google Cloud, Vercel, GitHub e relativi account amministrativi — devono essere verificate direttamente prima del pilot e non vanno dedotte da questi template.
 
 ## Assunzioni correnti del pilot
 
 - La palestra paga tramite rapporto commerciale esterno alla PWA.
-- La palestra rende LogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati LogBook degli utenti.
-- LogBook resta destinato a maggiorenni.
-- Google/Firebase Analytics non fa parte del prodotto.
-- Vercel Analytics e Speed Insights sono opzionali e disabilitati per default.
-- La telemetria proprietaria è destinata a diagnostica, integrità e recovery, non a misurare il comportamento di allenamento o il funnel PWA.
+- La palestra rende TheLogBook disponibile agli iscritti ma, nell'architettura attuale, non dispone di ruoli gym/coach/admin e non accede ai dati TheLogBook degli utenti.
+- TheLogBook resta destinato a maggiorenni.
+- Google Analytics 4/Firebase Analytics è opzionale, disabilitato per default e viene caricato soltanto dopo opt-in esplicito provider-specific.
+- Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
+- Sentry è usato esclusivamente per errori/anomalie tecniche sanitizzati; la telemetria tecnica non viene usata per misurare il comportamento di allenamento o il funnel PWA.
 
 Queste assunzioni devono essere riconfermate nella documentazione firmata; se cambiano, vanno rivalutati ruoli privacy, contratti, informativa e DPIA.
 
