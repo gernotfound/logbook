@@ -6,6 +6,7 @@ import { provider, linkWithPopup, linkWithCredential, updateEmail, updatePasswor
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
+import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
 
 export const AccountCard = () => {
     const { currentUser, isGuest, linkGoogleAccount, registerWithEmail } = useAuth();
@@ -27,15 +28,6 @@ export const AccountCard = () => {
 
     const hasGoogle = providers.includes('google.com');
     const hasPassword = providers.includes('password');
-
-    const checkPasswordStrength = (pass: string) => {
-        if (pass.length < 8) return "La password deve contenere almeno 8 caratteri.";
-        if (!/\d/.test(pass)) return "La password deve contenere almeno 1 numero.";
-        if (!/[a-z]/.test(pass)) return "La password deve contenere almeno 1 lettera minuscola.";
-        if (!/[A-Z]/.test(pass)) return "La password deve contenere almeno 1 lettera maiuscola.";
-        if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
-        return null;
-    };
 
     const reloadAfterAccountChange = async () => {
         try {
