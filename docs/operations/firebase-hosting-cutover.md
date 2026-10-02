@@ -15,12 +15,27 @@ Stato: procedura operativa. Non prova lo stato live: ogni voce esterna va verifi
 1. PR DRAFT sul vero `main`, nessun thread review aperto, exact-SHA candidato congelato.
 2. `Canonical Verification` verde sullo stesso SHA.
 3. Firebase: confermare Spark, project ID e site ID `thelogbook`.
-4. Firestore: deployare `firestore.indexes.json` e attendere che gli indici risultino pronti prima di attivare il nuovo backend.
-5. Vercel Production: verificare che il deployment applichi `framework: null` (preset Other/backend-only) e `fluid: true` dal `vercel.json`, evitando una build frontend Vite su Vercel e preservando il runtime delle funzioni; verificare inoltre `roles/firebaseappcheck.tokenVerifier` sul service account Firebase Admin usato dal backend, necessario alla consumazione dei token limited-use; mantenere `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET`; impostare `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e, solo nella finestra di cutover/rollback, `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Verificare in Google Cloud/Firebase che il service account Admin usato da Vercel possa verificare e consumare i token App Check limited-use; non sostituire queste credenziali runtime con la WIF del deploy Hosting.
-6. GitHub Actions: configurare Workload Identity Federation verso un service account dedicato al deploy. Mappare il claim `attribute.repository` e autorizzare all'impersonation (`roles/iam.workloadIdentityUser` sul service account) soltanto il principal set del repository `gernotfound/logbook`; non concedere il pool intero. Sul progetto Firebase assegnare al deployer soltanto `roles/firebasehosting.admin` e `roles/serviceusage.apiKeysViewer`, necessari al deploy Hosting via Firebase CLI. Non assegnare ruoli Functions/Cloud Run/Firestore a questa identità Hosting.
+4. Firestore: deployare `firestore.indexes.json` e attendere che gli indici risultino pronti prima di attivare il nuovo backend. Checkpoint 2026-10-02: entrambi gli indici compositi richiesti da `account_deletions` risultano Abilitati.
+5. Vercel Production: verificare che il deployment applichi `framework: null` (preset Other/backend-only) e `fluid: true` dal `vercel.json`, evitando una build frontend Vite su Vercel e preservando il runtime delle funzioni; verificare inoltre il permesso effettivo `firebaseappcheck.appCheckTokens.verify` sul service account Firebase Admin usato dal backend, necessario alla consumazione dei token limited-use; mantenere `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET`; impostare `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e, solo nella finestra di cutover/rollback, `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Checkpoint 2026-10-02: il permesso App Check è presente tramite Firebase App Check Admin e le due env origin sono configurate in Production senza redeploy manuale. Non sostituire queste credenziali runtime con la WIF del deploy Hosting.
+6. GitHub Actions: configurare Workload Identity Federation verso un service account dedicato al deploy. Mappare `google.subject=assertion.sub`, `attribute.repository_id=assertion.repository_id` e `attribute.repository_owner_id=assertion.repository_owner_id`; applicare al provider una condition sugli ID immutabili del repository e dell'owner di `gernotfound/logbook`, quindi autorizzare all'impersonation (`roles/iam.workloadIdentityUser` sul service account) soltanto il principal del repository, non il pool intero. Sul progetto Firebase assegnare al deployer soltanto `roles/firebasehosting.admin` e `roles/serviceusage.apiKeysViewer`, necessari al deploy Hosting via Firebase CLI. Non assegnare ruoli Functions/Cloud Run/Firestore a questa identità Hosting. Checkpoint 2026-10-02: pool/provider/deployer e binding risultano configurati senza chiavi private JSON.
 7. Repository variables richieste: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN` (esattamente `thelogbook.web.app` in Production), `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`. Secret: `SENTRY_AUTH_TOKEN`.
 8. Verificare Auth Authorized domains, OAuth origin/redirect, App Check/reCAPTCHA Enterprise e GA4 per `https://thelogbook.web.app`.
 9. Non rimuovere ancora il vecchio origin Vercel dalle allowlist esterne.
+
+### Checkpoint preparazione live — 2026-10-02
+
+Completato e verificato prima del merge:
+
+- Firebase Hosting `thelogbook` su Spark, ancora senza release;
+- due indici Firestore `account_deletions` Abilitati;
+- Auth domains, OAuth origin/redirect, Browser API key e reCAPTCHA Enterprise predisposti per `thelogbook.web.app`, mantenendo temporaneamente Vercel per rollback;
+- App Check in monitoraggio; Firestore e Authentication osservati 100% verificati;
+- WIF GitHub Actions + deployer Hosting least-privilege configurati; repository variables e secret del workflow provisionati;
+- Vercel Production env per origin nuovo + legacy configurate senza redeploy manuale;
+- GA4 privacy-minimal verificato e privo di collegamenti Ads/AdMob;
+- Sentry CI token configurato, Allowed Domains ristretto ai due frontend del cutover e Project Security Token ruotato dopo esposizione durante la configurazione.
+
+Restano deliberatamente da fare **solo nella fase autorizzata di merge/cutover**: exact-SHA CI finale dopo questo aggiornamento documentale, review finale, eventuale merge, CI su `main`, deploy Vercel backend dallo stesso stato, prima release Firebase Hosting e smoke runtime completi. Nessuno di questi passaggi è autorizzato implicitamente da questo checkpoint.
 
 ## Merge e deploy
 

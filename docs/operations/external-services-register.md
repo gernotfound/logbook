@@ -1,6 +1,6 @@
 # Registro servizi esterni LogBook
 
-> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-01.
+> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-02.
 >
 > Questo file documenta **perché** esistono le integrazioni e quali impostazioni devono essere preservate. Non è un inventario di segreti e non sostituisce la verifica live nelle console dei provider.
 
@@ -283,6 +283,49 @@ Pulizia esterna completata/verificata il 2026-09-30:
 10. verificare GA4/Google Analytics se preparato o attivo: stream, Enhanced Measurement, Signals, Ads, retention e condivisione dati;
 11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
 
+
+## Preparazione live cutover — 2026-10-02
+
+Questa sezione registra operazioni e verifiche esterne eseguite per preparare la PR #191. Non equivale a un cutover: il frontend Firebase Hosting non è stato ancora pubblicato, la PR resta DRAFT e Production continua a derivare da `main`.
+
+### Firebase / Google Cloud
+
+- Firebase Hosting: site ID `thelogbook`, dominio target `https://thelogbook.web.app`, progetto ancora su piano **Spark** e nessuna release Hosting presente al momento della verifica.
+- Firestore: creati e portati a stato **Abilitato** i due indici compositi di `account_deletions` richiesti dal candidato: `status ASC + retryable ASC` e `status ASC + purgeAfter ASC`.
+- Firebase Authentication: `thelogbook.web.app` è presente negli Authorized domains; il dominio Vercel corrente resta temporaneamente autorizzato per cutover/rollback.
+- OAuth Web client: verificati origine JavaScript `https://thelogbook.web.app` e redirect `https://thelogbook.web.app/__/auth/handler`; mantenuti i valori Firebase preesistenti.
+- Browser API key Firebase: restrizione applicazione su **Siti web**; referrer verificati per Vercel corrente, `thelogbook.web.app` e dominio Firebase necessario al flusso Auth. Le restrizioni API restano esplicite e non sono state ristrette durante il cutover.
+- App Check / reCAPTCHA Enterprise: chiave **TheLogBook Web**, verifica dominio attiva, AMP disabilitato, domini autorizzati Vercel + `thelogbook.web.app`. Firestore e Authentication risultavano 100% verificati / 0% non verificati in modalità monitoraggio; enforcement non attivato.
+- Il service account Firebase Admin usato dal backend Vercel dispone già del permesso effettivo `firebaseappcheck.appCheckTokens.verify` tramite il ruolo Firebase App Check Admin; non è stato aggiunto un ruolo ridondante durante questa preparazione.
+
+### GitHub Actions / Workload Identity Federation
+
+- Creato service account dedicato al deploy Hosting, senza chiavi private JSON; IAM progetto limitato a Firebase Hosting Admin e API Keys Viewer.
+- Creato Workload Identity Pool `github-logbook` e provider OIDC `github-actions` con issuer GitHub Actions.
+- Mapping provider: `google.subject <- assertion.sub`, `attribute.repository_id <- assertion.repository_id`, `attribute.repository_owner_id <- assertion.repository_owner_id`.
+- La condition del provider vincola gli ID immutabili del repository e dell'owner di `gernotfound/logbook`; l'impersonation del deployer è concessa tramite `roles/iam.workloadIdentityUser` al principal del repository, non al pool intero.
+- Configurate le repository variables richieste dal workflow Firebase Hosting: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+- Configurato il repository secret `SENTRY_AUTH_TOKEN`. Nessun valore segreto viene registrato nel repository.
+
+### Vercel backend
+
+- La Production Vercel verificata resta READY sullo SHA corrente di `main`; non è stato effettuato alcun redeploy per la sola modifica delle env e non risultavano runtime error nelle 24 ore osservate.
+- Confermata la presenza delle env server-only Firebase Admin e `CRON_SECRET` senza esporne i valori.
+- Aggiunte in scope **Production** come configurazione non sensibile `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il legacy origin va rimosso dopo smoke verdi del cutover.
+
+### Google Analytics / GA4
+
+- Stream Web **TheLogBook** verificato su `https://thelogbook.web.app`; Measurement ID coerente con la repository variable configurata per il build.
+- Misurazione avanzata OFF, Google Signals OFF, raccolta dati forniti dagli utenti OFF, dati granulari posizione/dispositivo OFF e personalizzazione annunci consentita in 0 regioni.
+- Retention eventi e utenti: 2 mesi; reset retention su nuova attività OFF.
+- Filtro `Internal Traffic`: stato Test.
+- Collegamento Firebase presente con integrazione segmenti di pubblico migliorata OFF; Google Ads e AdMob: 0 collegamenti.
+
+### Sentry
+
+- Creata integrazione interna dedicata al build GitHub/Firebase Hosting con solo capacità **Continuous Integration (CI)**; il token generato è conservato esclusivamente come GitHub Secret `SENTRY_AUTH_TOKEN`.
+- `Allowed Domains` del progetto è stato ristretto ai due frontend ammessi durante il cutover: `https://thelogbook.web.app` e `https://logbook-gnf.vercel.app`.
+- Un Project Security Token visualizzato durante la configurazione è stato ruotato; il nuovo valore non è registrato né usato come `SENTRY_AUTH_TOKEN`.
 
 ## Candidato migrazione Firebase Hosting Spark (PR #191, non live)
 
