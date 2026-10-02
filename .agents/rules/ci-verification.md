@@ -62,7 +62,6 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 - MUST: usare `pull_request`, mai `pull_request_target`, per eseguire codice della PR.
 - MUST: gli shard di verifica mantengono `permissions: contents: read`.
-- MUST: tutte le action terze usate dal workflow canonico sono pin-nate a commit SHA immutabili; il commento di versione serve alla manutenzione e Dependabot può aggiornare il pin.
 - MUST: il solo job CodeQL può aggiungere `security-events: write`, limitato al caricamento dei risultati di code scanning; non estendere tale permesso agli shard applicativi.
 - MUST: nessun secret production è richiesto dal gate repository.
 - MUST: tutte le GitHub Actions di terze parti usate dal workflow canonico sono pin-nate a commit SHA completi e immutabili; il commento di versione serve alla manutenzione/Dependabot, non alla risoluzione runtime.
