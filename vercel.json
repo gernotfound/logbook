@@ -27,7 +27,7 @@
     {
       "source": "/",
       "destination": "https://thelogbook.web.app/",
-      "permanent": false
+      "permanent": true
     }
   ],
   "fluid": true,
