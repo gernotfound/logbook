@@ -112,7 +112,7 @@ Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato com
 
 Verifica live aggiornata il 2026-10-01:
 
-- la Web App LogBook è registrata in Firebase App Check con provider Fraud Defense/reCAPTCHA Enterprise;
+- la Web App TheLogBook è registrata in Firebase App Check con provider Fraud Defense/reCAPTCHA Enterprise;
 - Cloud Firestore e Authentication mostravano 100% richieste verificate e 0% non verificate in modalità monitoraggio;
 - l'enforcement non è stato attivato durante questa preparazione;
 - la chiave Web è stata rinominata da `Logbook Vercel` a **TheLogBook Web** senza cambiare l'identità/site key;
@@ -121,7 +121,7 @@ Verifica live aggiornata il 2026-10-01:
 - AMP resta disabilitato;
 - il vecchio dominio frontend Vercel è ritirato dal runtime post-cutover; la relativa allowlist esterna resta da rimuovere durante la pulizia console.
 
-Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime LogBook salvo futura decisione esplicita e verifica live.
+Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime TheLogBook salvo futura decisione esplicita e verifica live.
 
 L'ID/site key è configurazione client pubblica e non viene duplicato in questo registro; la Secret key reCAPTCHA non deve entrare nel browser né in env `VITE_*`.
 
@@ -244,7 +244,7 @@ Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata 
 
 ## GitHub Pages — hosting ritirato
 
-GitHub Pages non è più un hosting LogBook.
+GitHub Pages non è più un hosting TheLogBook.
 
 Audit repository 2026-09-30:
 
