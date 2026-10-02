@@ -28,7 +28,7 @@ import {
     mergeActivePainsContract
 } from './requirements_r1_r6_contracts';
 
-describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
+describe('TheLogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
     beforeEach(() => {
         window.localStorage.clear();
         useAppStore.getState().resetStore();
@@ -680,7 +680,7 @@ describe('LogBook 4-Tier Automated Test Suite (Requirements R1 - R6)', () => {
                     activePains: ['petto', 'bicipiti']
                 };
                 renderWithProviders(<HomeView onNavigate={vi.fn()} />, { userData });
-                expect(screen.getByText('LogBook')).toBeDefined();
+                expect(screen.getByText('TheLogBook')).toBeDefined();
             });
 
             it('T1.5.7: toggling muscle adds it if absent, removes it if present in activePains state', () => {
