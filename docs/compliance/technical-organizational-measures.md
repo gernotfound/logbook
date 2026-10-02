@@ -29,8 +29,8 @@
 | Firebase Auth | Authorized domains | Vercel frontend rimosso; Firebase defaults + `thelogbook.web.app` verificati 2026-10-02 |
 | Firebase Auth | Password policy / provider config | ENFORCE: min 8 + maiuscola/minuscola/numero/non-alfanumerico; Improved Email Privacy ON — verificato 2026-10-02 |
 | Google Cloud | Restrizioni Browser API key | referrer Vercel rimosso; Firebase action origin + `thelogbook.web.app` mantenuti — verificato 2026-10-02 |
-| Firestore | Regione/database location | `[VERIFY]` |
-| Firestore | Backup/PITR e restore test | `[DECIDE/VERIFY]` |
+| Firestore | Regione/database location | `europe-west12`, Native Standard/free tier — verificato 2026-10-02 |
+| Firestore | Delete protection / Backup-PITR | Delete protection ENABLED; PITR/backup gestiti disabilitati perché richiedono billing — verificato 2026-10-02 |
 | Vercel | Env server trusted presenti e corretti | `[VERIFY]` |
 | Vercel | Accessi team, MFA, log retention | `[VERIFY]` |
 | GitHub | Ruleset/required check exact-SHA | `[VERIFY]` |
