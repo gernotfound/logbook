@@ -2,18 +2,15 @@ import { RequestAuthError } from './httpAuth.js';
 
 const DEFAULT_PUBLIC_APP_ORIGIN = 'https://thelogbook.web.app';
 
-function parseConfiguredOrigin(
-  name: 'PUBLIC_APP_ORIGIN' | 'PUBLIC_APP_LEGACY_ORIGIN',
-  fallback?: string,
-): string | null {
-  const raw = process.env[name];
+function parseConfiguredOrigin(fallback?: string): string | null {
+  const raw = process.env.PUBLIC_APP_ORIGIN;
   if (raw === undefined || raw.trim() === '') return fallback ?? null;
 
   let url: URL;
   try {
     url = new URL(raw.trim());
   } catch {
-    throw new Error(`${name} non valida.`);
+    throw new Error('PUBLIC_APP_ORIGIN non valida.');
   }
 
   if (url.protocol !== 'https:'
@@ -22,15 +19,13 @@ function parseConfiguredOrigin(
     || url.search
     || url.hash
     || (url.pathname !== '' && url.pathname !== '/')) {
-    throw new Error(`${name} deve essere un origin HTTPS esatto senza path, query o credenziali.`);
+    throw new Error('PUBLIC_APP_ORIGIN deve essere un origin HTTPS esatto senza path, query o credenziali.');
   }
   return url.origin;
 }
 
 export function allowedAccountDeletionOrigins(): ReadonlySet<string> {
-  const primary = parseConfiguredOrigin('PUBLIC_APP_ORIGIN', DEFAULT_PUBLIC_APP_ORIGIN)!;
-  const legacy = parseConfiguredOrigin('PUBLIC_APP_LEGACY_ORIGIN');
-  return new Set(legacy ? [primary, legacy] : [primary]);
+  return new Set([parseConfiguredOrigin(DEFAULT_PUBLIC_APP_ORIGIN)!]);
 }
 
 export function requireAccountDeletionOrigin(request: Request): string {
