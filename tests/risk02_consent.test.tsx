@@ -137,7 +137,7 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
 
     it('chiarisce che una palestra non riceve automaticamente accesso ai dati degli iscritti', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
-        expect(screen.getByText(/non riceve per questo motivo accesso ai loro dati in LogBook/i)).toBeDefined();
+        expect(screen.getByText(/non riceve per questo motivo accesso ai loro dati in TheLogBook/i)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {

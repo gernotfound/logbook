@@ -48,10 +48,10 @@ let pending: Job[] = [];
 let active: Job[] = [];
 let running: Promise<void> | null = null;
 const synced: SyncResult = { ok: true, status: 'synced' };
-const LOCAL_PERSISTENCE_BLOCKED_MESSAGE = 'Archivio locale non leggibile dopo un errore di salvataggio. Le modifiche sono bloccate per evitare perdita di dati; riapri LogBook prima di continuare.';
+const LOCAL_PERSISTENCE_BLOCKED_MESSAGE = 'Archivio locale non leggibile dopo un errore di salvataggio. Le modifiche sono bloccate per evitare perdita di dati; riapri TheLogBook prima di continuare.';
 const updateRequiredMessage = (error: unknown) => error instanceof Error
     ? error.message
-    : 'Questi dati sono stati scritti da una versione più recente di LogBook. Aggiorna l’app prima di continuare.';
+    : 'Questi dati sono stati scritti da una versione più recente di TheLogBook. Aggiorna l’app prima di continuare.';
 const updateRequiredResult = (message: string): SyncResult => ({ ok: false, status: 'failed', error: new Error(message) });
 
 function relevantDeletionPending(): boolean {

@@ -22,7 +22,7 @@ describe('update-required application state', () => {
         useAppStore.getState().setUpdateRequired(error);
 
         expect(useAppStore.getState().compatibilityStatus).toBe('update-required');
-        expect(useAppStore.getState().compatibilityError).toContain('aggiorna LogBook');
+        expect(useAppStore.getState().compatibilityError).toContain('aggiorna TheLogBook');
 
         useAppStore.getState().setUserData({ profile: { name: 'after' } } as any);
         expect(useAppStore.getState().userData).toBe(original);

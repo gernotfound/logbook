@@ -153,9 +153,9 @@ export function useSettings() {
                 await logout({ mode: 'force' });
                 return;
             }
-            if (!(await showConfirm('Questa operazione è irreversibile: elimina allenamenti, nutrizione, misurazioni e account. Prima di continuare, chiudi LogBook sugli altri dispositivi ed esporta un backup se vuoi conservare i dati. Procedere?'))) return;
+            if (!(await showConfirm('Questa operazione è irreversibile: elimina allenamenti, nutrizione, misurazioni e account. Prima di continuare, chiudi TheLogBook sugli altri dispositivi ed esporta un backup se vuoi conservare i dati. Procedere?'))) return;
             assertCurrent();
-            if (!(await showConfirm('Ultima conferma: eliminare definitivamente il tuo account LogBook?'))) return;
+            if (!(await showConfirm('Ultima conferma: eliminare definitivamente il tuo account TheLogBook?'))) return;
             assertCurrent();
             setDeletingAccount(true);
             const { auth } = await import('../lib/firebase');

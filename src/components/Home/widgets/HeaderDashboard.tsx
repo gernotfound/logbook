@@ -15,7 +15,7 @@ const HeaderDashboard = ({ streak, totalWorkouts, onOpenSettings }: HeaderDashbo
         <header className="home-header">
             <div className="home-header-copy">
                 <p className="text-sm home-muted">{formattedDate}</p>
-                <h1>LogBook</h1>
+                <h1>TheLogBook</h1>
             </div>
             <div className="home-header-stats">
                 <span className="home-badge"><Flame size={18} aria-hidden="true" /><strong>{streak || 0}</strong> Streak</span>

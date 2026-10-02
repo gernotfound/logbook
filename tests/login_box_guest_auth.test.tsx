@@ -70,7 +70,7 @@ describe('LoginBox guest Google authentication', () => {
         const onCancel = vi.fn();
         const view = render(<LoginBox onCancel={onCancel} />);
 
-        const dialog = screen.getByRole('dialog', { name: 'LogBook' });
+        const dialog = screen.getByRole('dialog', { name: 'TheLogBook' });
         expect(dialog.getAttribute('aria-modal')).toBe('true');
         expect(document.activeElement).toBe(screen.getByLabelText('Email'));
 

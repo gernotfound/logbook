@@ -74,16 +74,16 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           <Section title="Titolare del trattamento">
             <p>
               Prima della distribuzione commerciale devono essere indicati qui l'identità e i recapiti del titolare del trattamento: <strong style={{ color: 'var(--text-main)' }}>[NOME / RAGIONE SOCIALE]</strong>, <strong style={{ color: 'var(--text-main)' }}>[INDIRIZZO]</strong>, <strong style={{ color: 'var(--text-main)' }}>[EMAIL PRIVACY]</strong>.
-              Se LogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
+              Se TheLogBook viene fornito tramite una palestra, i ruoli privacy tra le parti dipendono dalle finalità e dai mezzi effettivamente determinati da ciascuna parte e devono essere definiti nella documentazione contrattuale.
             </p>
             <p>
               Il trattamento avviene nel rispetto del Regolamento Generale sulla Protezione dei Dati dell'Unione Europea (GDPR, Regolamento UE 2016/679) e della normativa nazionale applicabile.
             </p>
           </Section>
 
-          <Section title="Che cos'è LogBook">
+          <Section title="Che cos'è TheLogBook">
             <p>
-              LogBook è un'applicazione web progressiva (PWA) per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
+              TheLogBook è un'applicazione web progressiva (PWA) per il tracciamento degli allenamenti, della nutrizione e di misurazioni corporee, progettata con un'architettura <em>offline-first</em>.
             </p>
             <p>
               <strong style={{ color: 'var(--text-main)' }}>Limitazione d'età:</strong> il servizio è destinato esclusivamente a utenti maggiorenni (18+). Non raccogliamo intenzionalmente dati di minori. Se sei un minore, non utilizzare il servizio.
@@ -113,18 +113,18 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati cloud sono conservati nell'area privata associata all'account e sono protetti dalle regole di sicurezza applicative. Il backend amministrativo mantiene capacità tecniche necessarie a gestione, sicurezza, recovery e cancellazione account; tali capacità non sono destinate a profilazione commerciale dei dati fitness.
             </p>
             <p>
-              Nell'architettura attuale LogBook non prevede ruoli palestra, coach o amministratore con accesso ai dati degli iscritti: una palestra che rende disponibile il servizio ai propri iscritti non riceve per questo motivo accesso ai loro dati in LogBook. Qualsiasi futura funzione di condivisione richiederà una specifica modifica del prodotto e della relativa informativa.
+              Nell'architettura attuale TheLogBook non prevede ruoli palestra, coach o amministratore con accesso ai dati degli iscritti: una palestra che rende disponibile il servizio ai propri iscritti non riceve per questo motivo accesso ai loro dati in TheLogBook. Qualsiasi futura funzione di condivisione richiederà una specifica modifica del prodotto e della relativa informativa.
             </p>
 
             <h3 style={h3Style}>Telemetria tecnica di stabilità</h3>
             <p>
-              LogBook utilizza Sentry Error Monitoring per diagnosticare errori e anomalie tecniche in Production. L'app <strong style={{ color: 'var(--text-main)' }}>non allega deliberatamente a Sentry l'UID Firebase, l'indirizzo email o i contenuti business dell'utente</strong>. Il payload applicativo è limitato a un identificativo tecnico di sessione, versione e SHA della build, piattaforma derivata, modalità PWA/browser, stato online, sorgente dell'errore, contatori/timestamp e messaggio/stack trace sanitizzati e limitati.
+              TheLogBook utilizza Sentry Error Monitoring per diagnosticare errori e anomalie tecniche in Production. L'app <strong style={{ color: 'var(--text-main)' }}>non allega deliberatamente a Sentry l'UID Firebase, l'indirizzo email o i contenuti business dell'utente</strong>. Il payload applicativo è limitato a un identificativo tecnico di sessione, versione e SHA della build, piattaforma derivata, modalità PWA/browser, stato online, sorgente dell'errore, contatori/timestamp e messaggio/stack trace sanitizzati e limitati.
             </p>
             <p>
-              Prima dell'invio, LogBook applica filtri che rimuovono pattern riconosciuti di email, indirizzi IP presenti nel testo, token, API key, path utente e altre chiavi sensibili. Sentry è inoltre configurato senza invio predefinito di PII. Il fornitore può comunque ricevere metadati tecnici di rete necessari alla comunicazione secondo il proprio servizio e le relative condizioni.
+              Prima dell'invio, TheLogBook applica filtri che rimuovono pattern riconosciuti di email, indirizzi IP presenti nel testo, token, API key, path utente e altre chiavi sensibili. Sentry è inoltre configurato senza invio predefinito di PII. Il fornitore può comunque ricevere metadati tecnici di rete necessari alla comunicazione secondo il proprio servizio e le relative condizioni.
             </p>
             <p>
-              LogBook usa Sentry soltanto per <strong style={{ color: 'var(--text-main)' }}>Error Monitoring</strong>: non abilita Session Replay, tracing, logging, Application Metrics o tracking proprietario di avvio/salvataggio workout e funnel di installazione PWA. Gli errori identici vengono deduplicati lato app per ridurre raccolta e volume.
+              TheLogBook usa Sentry soltanto per <strong style={{ color: 'var(--text-main)' }}>Error Monitoring</strong>: non abilita Session Replay, tracing, logging, Application Metrics o tracking proprietario di avvio/salvataggio workout e funnel di installazione PWA. Gli errori identici vengono deduplicati lato app per ridurre raccolta e volume.
             </p>
           </Section>
 
@@ -145,7 +145,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <strong style={{ color: 'var(--text-main)' }}>Google Analytics 4 è disabilitato per impostazione predefinita e viene caricato soltanto dopo un nuovo opt-in specifico nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; l'app non renderizza questi componenti senza consenso. Vercel Analytics e Speed Insights non vengono più utilizzati dal frontend Firebase Hosting.
             </p>
             <p>
-              Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. LogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
+              Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. TheLogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
             </p>
           </Section>
 
@@ -154,13 +154,13 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. Per la nuova telemetria Sentry, i tempi di conservazione dipendono dal piano e dalla configurazione effettiva del fornitore e devono essere verificati rispetto alle condizioni correnti. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di LogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. LogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
+              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. Per la nuova telemetria Sentry, i tempi di conservazione dipendono dal piano e dalla configurazione effettiva del fornitore e devono essere verificati rispetto alle condizioni correnti. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di TheLogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. TheLogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
             </p>
             <p>
-              Dopo il completamento della cancellazione, LogBook conserva temporaneamente un record tecnico server-only di recovery privo dei dati di allenamento, nutrizione e misurazioni. Il record contiene l'identificativo tecnico del job, stato/timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. È programmato per la rimozione dopo 30 giorni e viene eliminato dal successivo ciclo giornaliero di manutenzione applicabile.
+              Dopo il completamento della cancellazione, TheLogBook conserva temporaneamente un record tecnico server-only di recovery privo dei dati di allenamento, nutrizione e misurazioni. Il record contiene l'identificativo tecnico del job, stato/timestamp e l'hash non reversibile della ricevuta di cancellazione. Serve a permettere a un dispositivo rimasto offline di verificare che la cancellazione cloud sia realmente terminata prima di eliminare la propria copia locale. È programmato per la rimozione dopo 30 giorni e viene eliminato dal successivo ciclo giornaliero di manutenzione applicabile.
             </p>
             <p style={{ marginTop: '8px', color: 'var(--warning-color)' }}>
               <strong>Attenzione:</strong> il servizio non garantisce backup di livello enterprise. È consigliato effettuare periodicamente un backup JSON e/o un'esportazione CSV tramite le funzioni dell'app.
@@ -172,7 +172,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <ul style={ulStyle}>
               <li><strong style={{ color: 'var(--text-main)' }}>Google / Firebase</strong> — Authentication, Firestore e App Check/reCAPTCHA Enterprise. Google Analytics per Firebase/GA4 è opzionale, senza User-ID, Google Signals, advertising personalization o eventi custom relativi a workout, nutrizione, misure o salute.</li>
               <li><strong style={{ color: 'var(--text-main)' }}>Vercel</strong> — sole funzioni server trusted e manutenzione giornaliera; il frontend/PWA è servito da Firebase Hosting.</li>
-              <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; LogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
+              <li><strong style={{ color: 'var(--text-main)' }}>Sentry</strong> — Error Monitoring tecnico in Production e gestione delle source map necessarie a ricostruire gli stack trace; TheLogBook non abilita Replay, tracing, logging o metriche Sentry.</li>
             </ul>
             <p>
               Prima della distribuzione commerciale devono essere verificati e pubblicati l'elenco aggiornato dei fornitori/sub-responsabili, le localizzazioni effettive del trattamento e, per eventuali trasferimenti fuori dallo SEE, il meccanismo applicabile (ad esempio decisione di adeguatezza o clausole contrattuali standard).

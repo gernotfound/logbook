@@ -124,7 +124,7 @@ describe('Analytics UI Components & Dashboard Integration', () => {
             renderWithProviders(<HomeView onNavigate={() => {}} />);
 
             // Existing elements
-            expect(screen.getByText('LogBook')).toBeDefined();
+            expect(screen.getByText('TheLogBook')).toBeDefined();
             expect(screen.getByText(/Esposizione recente e dolori/i)).toBeDefined();
             expect(screen.getByText('Trend peso corporeo')).toBeDefined();
 

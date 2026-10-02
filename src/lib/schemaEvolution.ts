@@ -13,7 +13,7 @@ export const UPDATE_REQUIRED_EVENT = 'logbook:update-required' as const;
 export class FutureVersionError extends Error {
     readonly code = 'update-required';
     constructor(readonly kind: string, readonly found: number, readonly supported: number) {
-        super(`${kind} ${found} non supportato: aggiorna LogBook (versione corrente ${supported}).`);
+        super(`${kind} ${found} non supportato: aggiorna TheLogBook (versione corrente ${supported}).`);
         this.name = 'FutureVersionError';
     }
 }

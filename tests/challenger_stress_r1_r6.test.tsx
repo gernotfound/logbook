@@ -527,7 +527,7 @@ describe('EMPIRICAL CHALLENGER: Adversarial Stress Test Suite (Requirements R1 -
                 activePains: ['chest', 'biceps_left']
             };
             renderWithProviders(<HomeView onNavigate={vi.fn()} />, { userData });
-            expect(screen.getByText('LogBook')).toBeDefined();
+            expect(screen.getByText('TheLogBook')).toBeDefined();
         });
     });
 
