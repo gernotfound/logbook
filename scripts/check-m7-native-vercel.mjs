@@ -143,8 +143,8 @@ for (const actionPin of requiredHostingActionPins) {
 if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs preflight') || !firestoreWorkflow.includes('scripts/verify-firestore-production.mjs verify')) {
   failures.push('Firestore Production workflow must preflight and verify the live target');
 }
-if (!firestoreVerifier.includes('firebaserules.googleapis.com') || !firestoreVerifier.includes('firestore.googleapis.com')) {
-  failures.push('Firestore Production verifier must read back both live Rules and composite indexes');
+if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifier.includes('/indexes') || !firestoreVerifier.includes('Authorization:')) {
+  failures.push('Firestore Production verifier must read back authenticated live Rules and composite indexes');
 }
 if (!firestoreVerifier.includes("fieldOverrides.length !== 0")) {
   failures.push('Firestore Production verifier must fail closed until fieldOverrides verification is explicitly supported');
