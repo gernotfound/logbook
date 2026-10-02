@@ -6,7 +6,7 @@ import { useDialogStore } from '../../../store/useDialogStore';
 const TECHNIQUE_HELP = {
     technicalStandard: {
         title: 'Esecuzione da mantenere',
-        message: 'Descrive le condizioni che vuoi mantenere stabili per confrontare le prestazioni nel tempo: ROM, setup, macchina, pause, tempo o altri dettagli esecutivi. Se lo standard cambia, LogBook evita di trattare la nuova prestazione come direttamente equivalente alla precedente.',
+        message: 'Descrive le condizioni che vuoi mantenere stabili per confrontare le prestazioni nel tempo: ROM, setup, macchina, pause, tempo o altri dettagli esecutivi. Se lo standard cambia, TheLogBook evita di trattare la nuova prestazione come direttamente equivalente alla precedente.',
     },
     role: {
         title: 'Ruolo nella scheda',
