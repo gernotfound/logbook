@@ -182,8 +182,8 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
 
                     {isInstallable && (
                         <div className="settings-detail-card">
-                            <h2><Smartphone size={20} aria-hidden="true" /> Installa TheLogBook</h2>
-                            <p className="settings-help">Aggiungi TheLogBook al dispositivo per usarlo come un'app.</p>
+                            <h2><Smartphone size={20} aria-hidden="true" /> Installa TheTheLogBook</h2>
+                            <p className="settings-help">Aggiungi TheTheLogBook al dispositivo per usarlo come un'app.</p>
                             <button type="button" className="btn btn-primary settings-full" onClick={promptInstall}>Installa app sul telefono</button>
                         </div>
                     )}
@@ -196,7 +196,7 @@ const SettingsView = ({ onClose }: SettingsViewProps) => {
                     {isOffline && (
                         <div className="settings-detail-card settings-offline-card" role="status">
                             <h2><WifiOff size={20} aria-hidden="true" /> Connessione assente</h2>
-                            <p className="settings-help settings-help-last">Puoi continuare a usare TheLogBook: le modifiche restano sul dispositivo e verranno sincronizzate quando tornerà la connessione.</p>
+                            <p className="settings-help settings-help-last">Puoi continuare a usare TheTheLogBook: le modifiche restano sul dispositivo e verranno sincronizzate quando tornerà la connessione.</p>
                         </div>
                     )}
 
