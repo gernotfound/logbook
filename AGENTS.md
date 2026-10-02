@@ -41,6 +41,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 ## Stack e runtime correnti
 
 - **Framework:** React 19 + Vite 8 + TypeScript 7.
+- **Nome pubblico/PWA:** **TheLogBook**. I namespace tecnici/persistiti storici (`logbook:*`, package/repository e chiavi storage) restano invariati salvo migrazione esplicita: un rebranding non deve rinominare chiavi persistite.
 - **Runtime CI/Vercel:** Node.js 24.x.
 - **Hosting frontend/PWA:** Firebase Hosting, site `thelogbook`, frontend Vite/PWA alla radice `/`; il progetto Firebase resta sul piano Spark.
 - **Boundary server trusted:** Vercel Hobby resta backend-only con Functions native in `/api/` per Server Account Deletion e cron giornaliero; Firebase Admin è server-only.
