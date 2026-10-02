@@ -106,9 +106,9 @@ Verifica live del 2026-09-30: in Vercel Production risultano presenti `FIREBASE_
 
 ## App Check, reCAPTCHA Enterprise e Fraud Defense
 
-LogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere più difficile l'accesso abusivo alle risorse Firebase.
+TheLogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere più difficile l'accesso abusivo alle risorse Firebase.
 
-Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per LogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
+Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per TheLogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
 
 Verifica live aggiornata il 2026-10-01:
 
@@ -330,7 +330,7 @@ Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** del
 - Smoke browser reale eseguito dal product owner: il popup Google mostra `thelogbook.web.app` e il login completa correttamente entrando nell'account.
 - Nei log Vercel successivi allo smoke, `/api/account-deletion-device` ha risposto con 200 alle richieste applicative e 204 ai preflight; le sonde senza origin autorizzata hanno prodotto 403. Questo verifica il boundary CORS del nuovo origin e il percorso di registrazione recovery autenticato/App Check limited-use.
 - Nessun runtime error Vercel è emerso nella finestra post-cutover osservata.
-- Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository LogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
+- Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository TheLogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
 - Restano esterni e da verificare/ripulire nelle rispettive console: vecchio origin Vercel in Firebase Auth, Browser API key, reCAPTCHA/Sentry allowlist; proprietà Search Console del nuovo origin. Il backend post-cutover ritira invece il supporto applicativo al CORS legacy, così una variabile provider residua non può riabilitare il vecchio frontend.
 
 ## Archivio decisionale — candidato PR #191
