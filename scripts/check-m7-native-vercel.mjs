@@ -30,6 +30,13 @@ if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnable
 if (vercel.framework !== null) failures.push('Vercel must use the Other framework preset so Production is backend-only instead of rebuilding the Vite frontend');
 if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
 
+const legacyFrontendRedirect = vercel.redirects?.find(item => item.source === '/');
+if (!legacyFrontendRedirect) failures.push('missing retired Vercel frontend root redirect');
+else {
+  if (legacyFrontendRedirect.destination !== 'https://thelogbook.web.app/') failures.push('retired Vercel frontend root must redirect to the Firebase Hosting canonical origin');
+  if (legacyFrontendRedirect.permanent !== true) failures.push('retired Vercel frontend root redirect must be permanent for the Search site move');
+}
+
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
 if (!deletionCron) failures.push('missing daily account deletion recovery cron');
 else if (deletionCron.schedule !== '0 3 * * *') failures.push('account deletion recovery cron must run once daily at 03:00 UTC');
