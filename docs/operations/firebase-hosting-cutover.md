@@ -31,6 +31,7 @@ Completato e verificato prima del merge:
 - Auth domains, OAuth origin/redirect, Browser API key e reCAPTCHA Enterprise predisposti per `thelogbook.web.app`, mantenendo temporaneamente Vercel per rollback;
 - App Check in monitoraggio; Firestore e Authentication osservati 100% verificati;
 - WIF GitHub Actions + deployer Hosting least-privilege configurati; repository variables e secret del workflow provisionati;
+- preflight read-only WIF riuscito: GitHub Actions ha impersonato il deployer e letto il sito Hosting `thelogbook` senza creare versioni, release o canali; il workflow diagnostico temporaneo è rimosso dall'HEAD candidato;
 - Vercel Production env per origin nuovo + legacy configurate senza redeploy manuale;
 - GA4 privacy-minimal verificato e privo di collegamenti Ads/AdMob;
 - Sentry CI token configurato, Allowed Domains ristretto ai due frontend del cutover e Project Security Token ruotato dopo esposizione durante la configurazione.

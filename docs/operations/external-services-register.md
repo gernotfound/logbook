@@ -306,6 +306,7 @@ Questa sezione registra operazioni e verifiche esterne eseguite per preparare la
 - La condition del provider vincola gli ID immutabili del repository e dell'owner di `gernotfound/logbook`; l'impersonation del deployer è concessa tramite `roles/iam.workloadIdentityUser` al principal del repository, non al pool intero.
 - Configurate le repository variables richieste dal workflow Firebase Hosting: `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MEASUREMENT_ID`, `VITE_ACCOUNT_DELETION_API_ORIGIN`, `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`, `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
 - Configurato il repository secret `SENTRY_AUTH_TOKEN`. Nessun valore segreto viene registrato nel repository.
+- Preflight read-only eseguito da GitHub Actions il 2026-10-02: autenticazione OIDC/WIF riuscita con il service account dedicato e lettura del sito Hosting `thelogbook` riuscita tramite Firebase CLI. Il workflow temporaneo usato per la prova viene rimosso dall'HEAD candidato e non effettua deploy.
 
 ### Vercel backend
 
