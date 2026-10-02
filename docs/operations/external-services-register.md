@@ -60,7 +60,7 @@ Stato live verificato il 2026-10-02 dopo il cutover:
 - Firebase Authentication → Authorized domains contiene `localhost`, i due domini Firebase predefiniti e `thelogbook.web.app`; il vecchio frontend `logbook-gnf.vercel.app` è stato rimosso;
 - email/password è abilitato e Improved Email Privacy è attivo;
 - la password policy server è in modalità **ENFORCE**: minimo 8 caratteri, almeno una maiuscola, una minuscola, un numero e un carattere non alfanumerico; `forceUpgradeOnSignin` resta disattivato per non bloccare credenziali preesistenti al solo accesso;
-- il client imposta esplicitamente la lingua Auth su italiano per le azioni avviate dall'app;
+- il default locale Firebase Auth è stato impostato su `it` e il client imposta esplicitamente `auth.languageCode = 'it'` per mantenere coerenti le azioni email avviate dalla PWA;
 - il callback delle email action gestite dal template Firebase resta sul dominio Firebase predefinito `firebaseapp.com`: il tentativo di migrazione al site `thelogbook.web.app` è stato rifiutato dal provider con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. Per questo il dominio Firebase predefinito resta una dipendenza Auth legittima e non va rimosso dalle allowlist;
 - il Web OAuth client era già stato predisposto con origine `https://thelogbook.web.app` e redirect `https://thelogbook.web.app/__/auth/handler`; la rimozione di eventuali valori OAuth Vercel residui resta **VERIFY-LIVE** finché non viene osservata direttamente nel relativo client Google Cloud.
 
