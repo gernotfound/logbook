@@ -57,7 +57,7 @@ export const ConsentOverlay: React.FC = () => {
                     Aggiornamento Termini e Privacy
                 </h2>
                 <p className="ui-consent-overlay-4" style={{ margin: 0, lineHeight: "1.5" }}>
-                    Prima di continuare a utilizzare TheLogBook, leggi i documenti legali e indica separatamente le scelte richieste per i trattamenti basati sul consenso.
+                    Prima di continuare a utilizzare TheTheLogBook, leggi i documenti legali e indica separatamente le scelte richieste per i trattamenti basati sul consenso.
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.9375rem" }}>
