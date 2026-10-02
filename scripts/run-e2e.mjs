@@ -9,10 +9,7 @@ Object.assign(process.env, {
   VITE_FIREBASE_API_KEY: 'dummy-key',
   VITE_FIREBASE_AUTH_DOMAIN: 'dummy-domain.firebaseapp.com',
   VITE_FIREBASE_PROJECT_ID: 'demo-logbook-audit',
-  VITE_FIREBASE_STORAGE_BUCKET: 'dummy-bucket.appspot.com',
-  VITE_FIREBASE_MESSAGING_SENDER_ID: '1234567890',
   VITE_FIREBASE_APP_ID: '1:1234567890:web:123456',
-  VITE_FIREBASE_DATABASE_URL: 'https://demo-logbook-audit.firebaseio.com',
   VITE_RECAPTCHA_ENTERPRISE_SITE_KEY: 'dummy-recaptcha-key',
 });
 

@@ -6,7 +6,8 @@
 
 - `[ ]` Production deriva da `main`.
 - `[ ]` Canonical Verification è verde sullo SHA effettivo di Production.
-- `[ ]` Vercel Production è READY sullo stesso stato.
+- `[ ]` Firebase Hosting Production è sulla release derivata dallo stesso `main` verificato.
+- `[ ]` Vercel backend Production è READY sullo stesso stato.
 - `[ ]` Smoke home/API pertinenti sono verdi.
 - `[ ]` Security Rules Firestore live corrispondono alla sorgente approvata.
 - `[ ]` App Check enforcement live è verificato sui servizi applicabili.
@@ -52,7 +53,7 @@
 
 Per il primo pilot, salvo successiva decisione esplicita:
 
-- la palestra non accede ai dati LogBook degli utenti;
+- la palestra non accede ai dati TheLogBook degli utenti;
 - non esiste tenant gym/coach/admin;
 - servizio destinato a maggiorenni;
 - pagamenti e fatturazione restano fuori dalla PWA;
@@ -65,7 +66,8 @@ Qualunque variazione riapre almeno role decision, DPIA, Privacy Policy, Terms e 
 
 - Data: `[DATE]`
 - SHA Production: `[SHA]`
-- Deployment Vercel: `[DEPLOYMENT_ID]`
+- Release Firebase Hosting: `[RELEASE_ID/RUN_ID]`
+- Deployment Vercel backend: `[DEPLOYMENT_ID]`
 - CI run: `[RUN_ID]`
 - Versione documentazione legale: `[VERSION]`
 - Revisore privacy/legale: `[NAME/ROLE]`

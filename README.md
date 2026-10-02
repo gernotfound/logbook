@@ -1,6 +1,6 @@
-# LogBook
+# TheLogBook
 
-LogBook è una Progressive Web App per allenamento, nutrizione e monitoraggio della composizione corporea. È progettata **offline-first**: le modifiche vengono persistite localmente prima della replica cloud, così l'app può continuare a funzionare anche con connettività assente o instabile.
+TheLogBook è una Progressive Web App per allenamento, nutrizione e monitoraggio della composizione corporea. È progettata **offline-first**: le modifiche vengono persistite localmente prima della replica cloud, così l'app può continuare a funzionare anche con connettività assente o instabile.
 
 Versione applicativa corrente: **1.1.0**.
 
@@ -37,7 +37,7 @@ Versione applicativa corrente: **1.1.0**.
 
 ## Architettura offline-first
 
-LogBook usa più livelli di persistenza con responsabilità separate:
+TheLogBook usa più livelli di persistenza con responsabilità separate:
 
 | Livello | Tecnologia | Ruolo |
 |---|---|---|
@@ -48,7 +48,7 @@ LogBook usa più livelli di persistenza con responsabilità separate:
 
 Le normali mutazioni business attraversano **Domain Operations**: l'intento viene trasformato in operazioni semantiche, persistito atomicamente nell'envelope locale e poi replicato verso Firestore. La sincronizzazione usa metadati causali/Vector Clock e mantiene le operation pending quando la rete non consente una conferma sicura.
 
-Una race importante è coperta esplicitamente: se una nuova modifica locale avviene tra il commit remoto e l'acknowledge locale, LogBook prende lo snapshot remoto confermato come baseline e rigioca soltanto le operation locali ancora pending, evitando di perdere sia modifiche remote sia modifiche locali.
+Una race importante è coperta esplicitamente: se una nuova modifica locale avviene tra il commit remoto e l'acknowledge locale, TheLogBook prende lo snapshot remoto confermato come baseline e rigioca soltanto le operation locali ancora pending, evitando di perdere sia modifiche remote sia modifiche locali.
 
 ## Modalità ospite e account
 
@@ -75,8 +75,9 @@ La sorgente raster approvata `public/icon-source.png` viene processata da `scrip
 
 Sono sistemi distinti:
 
-- **telemetria tecnica LogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; LogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
-- **Vercel Analytics + Speed Insights:** renderizzati soltanto quando l'utente abilita l'opt-in Analytics. Google/Firebase Analytics non viene utilizzato.
+- **telemetria tecnica TheLogBook:** Sentry Error Monitoring riceve solo errori/anomalie tecniche sanitizzati in Production; TheLogBook non allega deliberatamente Firebase UID o email e non abilita Replay, tracing, logging o metriche. Le vecchie collection Firestore telemetriche restano temporaneamente solo per cleanup/compatibilità;
+- **Google Analytics 4 / Firebase Analytics:** opzionale, disabilitato per default e caricato dinamicamente soltanto dopo opt-in esplicito provider-specific; non usa User-ID né eventi custom relativi a workout, nutrizione, misure o salute;
+- **Vercel Analytics + Speed Insights:** ritirati dal frontend Production dopo il cutover a Firebase Hosting.
 
 I dettagli destinati agli utenti sono nella Privacy Policy dell'app. La documentazione tecnica non deve promettere anonimato quando esistono identificativi tecnici pseudonimi.
 
@@ -116,9 +117,9 @@ npm run dev
 
 `.env.example` contiene soltanto **nomi e placeholder**. Non contiene credenziali reali.
 
-Il repository non versiona `.env.production`: i valori del deployment Production restano nel provider Vercel; test ed E2E usano configurazioni sintetiche.
+Il repository non versiona `.env.production`. Il frontend Firebase Hosting riceve la configurazione pubblica dalla pipeline GitHub Actions; le credenziali server-only restano nel runtime Vercel. Test ed E2E usano configurazioni sintetiche.
 
-Il client richiede le sette variabili `VITE_FIREBASE_*` configurate in `src/lib/firebase.ts`; App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. In Production Sentry usa inoltre `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono riservate alla build per release/source map. Per collegare un clone a servizi cloud reali occorre una configurazione autorizzata.
+Il client richiede quattro variabili Firebase core (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`). `VITE_FIREBASE_MEASUREMENT_ID` è opzionale per il core e viene usata solo da GA4 dopo consenso. App Check usa `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`; il frontend usa inoltre `VITE_ACCOUNT_DELETION_API_ORIGIN` per raggiungere il backend trusted Vercel. In Production Sentry usa `VITE_SENTRY_DSN`, mentre `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono build-only per release/source map.
 
 Le API trusted di account deletion usano inoltre variabili **server-only**:
 
@@ -143,18 +144,20 @@ Comandi più piccoli (`npm run lint`, `npm run test`, `npm run build`, `npm run 
 
 ## Deployment
 
-Il repository è configurato perché Vercel distribuisca **solo `main`**. I branch di sviluppo sono disabilitati in `vercel.json` e non devono generare Preview Deployment.
+Il frontend Production è distribuito su **Firebase Hosting** esclusivamente dallo stato corrente di `main` dopo il successo di `Milestone Verification` / `Canonical Verification`. Il workflow ricontrolla l'exact SHA e rifiuta un candidato diventato obsoleto prima di eseguire `firebase deploy --only hosting`.
+
+Vercel distribuisce da `main` soltanto il backend trusted/cron e il redirect del vecchio hostname. I branch di sviluppo non generano Preview Deployment Vercel.
 
 Il normale ciclo di consegna è quindi:
 
 ```text
 branch dedicato
 → draft PR
-→ Canonical Verification
-→ review finale exact-head
-→ merge in main
+→ Canonical Verification exact-SHA
+→ review finale
+→ squash merge in main
 → CI su main
-→ deployment Vercel di produzione da main
+→ Firebase Hosting frontend + Vercel backend dallo stesso main verificato
 ```
 
 ## Documentazione tecnica normativa

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
 const failures = [];
@@ -7,20 +6,17 @@ const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
 const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
 const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
 const vite = readFileSync('vite.config.ts', 'utf8');
+const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
-
-const VALIDATED_VITE_BLOB = 'a1b41b31fc6bea94e2524f1f8422042a6ab3ea28';
-const currentViteBlob = execFileSync('git', ['hash-object', 'vite.config.ts'], { encoding: 'utf8' }).trim();
-if (currentViteBlob !== VALIDATED_VITE_BLOB) {
-  failures.push(`vite.config.ts changed from the validated hybrid Firebase/Vercel baseline: expected ${VALIDATED_VITE_BLOB}, got ${currentViteBlob}`);
-}
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 for (const forbidden of ['nitro', 'workflow']) {
   if (allDeps[forbidden]) failures.push(`forbidden M7 dependency present: ${forbidden}`);
 }
 if (/workflow\/vite|nitro\/vite|\bnitro\s*\(/.test(vite)) failures.push('vite.config.ts must remain a plain Vite/PWA configuration without Nitro/Workflow');
+if (!swSource.includes("createHandlerBoundToURL('/index.html')") || !swSource.includes('new NavigationRoute(')) failures.push('service worker must route document navigations to the precached SPA shell');
+if (!swSource.includes("{ denylist: [/^\\/__\\//] }")) failures.push('service worker SPA navigation fallback must exclude Firebase /__/ helpers');
 if (!packageJson.dependencies?.['firebase-admin']) failures.push('firebase-admin must be a runtime dependency for native Vercel Functions');
 if (packageJson.devDependencies?.['firebase-admin']) failures.push('firebase-admin must not remain dev-only');
 

@@ -6,7 +6,7 @@ test.describe('Offline scenarios & Background suspension', () => {
     await page.goto('/');
 
     // 2. Assicurati che l'app sia caricata e pronta
-    await expect(page.locator('text=LogBook')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
 
     // 3. Login as Guest
     await page.click('button:has-text("Continua senza account")');
@@ -78,4 +78,28 @@ test.describe('Offline scenarios & Background suspension', () => {
     await newPage.click('button[aria-label="Allenamento"]');
     await expect(newPage.locator('#view-training').getByRole('button', { name: /Scheda E2E Offline/ })).toBeVisible();
   });
+
+  test('PWA shortcut query reopens the precached app shell while offline', async ({ page, context }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'TheLogBook' })).toBeVisible();
+
+    // The SW update lifecycle is mounted after the app has an owner context.
+    // Enter guest mode first, exactly as a real installed PWA session would.
+    await page.getByRole('button', { name: 'Continua senza account' }).click();
+    await page.waitForSelector('text=Aggiornamento Termini e Privacy');
+    for (const checkbox of await page.locator('input[type="checkbox"]').all()) {
+      await checkbox.check();
+    }
+    await page.getByRole('button', { name: 'Accetta e Continua' }).click();
+    await expect(page.locator('button[aria-label="Allenamento"]')).toBeVisible();
+
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await context.setOffline(true);
+
+    await page.goto('/?tab=training');
+    await expect(page.locator('#view-training')).toBeVisible();
+    await expect.poll(() => new URL(page.url()).search).toBe('');
+  });
+
 });

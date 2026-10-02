@@ -84,12 +84,13 @@ requirePattern('CodeQL scoped security-events permission', workflow, /^      sec
 requirePattern('concurrency cancellation', workflow, /^  cancel-in-progress: true\s*$/m);
 requirePattern('matrix fail-fast disabled', workflow, /^      fail-fast: false\s*$/m);
 requirePattern('Ubuntu 24.04 shard runner', workflow, /^    runs-on: ubuntu-24\.04\s*$/m);
-requirePattern('checkout action', workflow, /^        uses: actions\/checkout@v7\s*$/m);
+requirePattern('checkout action pin', workflow, /^        uses: actions\/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\s*$/m);
 requirePattern('full checkout history', workflow, /^          fetch-depth: 0\s*$/m);
-requirePattern('Node setup action', workflow, /^        uses: actions\/setup-node@v7\s*$/m);
+requirePattern('Node setup action pin', workflow, /^        uses: actions\/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7\s*$/m);
 requirePattern('Node 24 runtime', workflow, /^          node-version: ['"]?24['"]?\s*$/m);
 requirePattern('npm cache', workflow, /^          cache: npm\s*$/m);
 requirePattern('dependency install', workflow, /^        run: npm ci\s*$/m);
+requirePattern('failure artifact action pin', workflow, /^        uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7\s*$/m);
 requirePattern('exact event SHA binding', workflow, /^      EXPECTED_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('exact checkout ref', workflow, /^          ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}\s*$/m);
 requirePattern('runtime SHA read', workflow, /^          actual_sha="\$\(git rev-parse HEAD\)"\s*$/m);
@@ -97,7 +98,7 @@ requirePattern('runtime SHA comparison', workflow, /^          if \[ "\$\{actual
 const actualShaAssignments = workflow.match(/^\s*actual_sha=/gm) ?? [];
 if (actualShaAssignments.length !== 2) failures.push(`runtime SHA guard: expected shard + CodeQL assignments, found ${actualShaAssignments.length}`);
 requirePattern('conditional Java setup', workflow, /^        if: matrix\.java == true\s*$/m);
-requirePattern('Java setup action', workflow, /^        uses: actions\/setup-java@v6\s*$/m);
+requirePattern('Java setup action pin', workflow, /^        uses: actions\/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6\s*$/m);
 requirePattern('Temurin distribution', workflow, /^          distribution: temurin\s*$/m);
 requirePattern('Java 21 runtime', workflow, /^          java-version: ['"]?21['"]?\s*$/m);
 requirePattern('conditional Playwright setup', workflow, /^        if: matrix\.playwright == true\s*$/m);
@@ -106,8 +107,8 @@ requirePattern('matrix command execution', workflow, /^          \$\{\{ matrix\.
 requirePattern('CodeQL job', workflow, /^  codeql:\s*$/m);
 requirePattern('CodeQL JavaScript-TypeScript language', workflow, /^          languages: javascript-typescript\s*$/m);
 requirePattern('CodeQL extended security queries', workflow, /^          queries: security-extended\s*$/m);
-requirePattern('CodeQL init action', workflow, /^        uses: github\/codeql-action\/init@v4\s*$/m);
-requirePattern('CodeQL analyze action', workflow, /^        uses: github\/codeql-action\/analyze@v4\s*$/m);
+requirePattern('CodeQL init action pin', workflow, /^        uses: github\/codeql-action\/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\s*$/m);
+requirePattern('CodeQL analyze action pin', workflow, /^        uses: github\/codeql-action\/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4\s*$/m);
 
 const allowedIfLines = new Set([
   'if: matrix.java == true',

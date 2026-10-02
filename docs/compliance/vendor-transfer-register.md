@@ -1,4 +1,4 @@
-# Registro fornitori, subprocessori e trasferimenti — LogBook
+# Registro fornitori, subprocessori e trasferimenti — TheLogBook
 
 > Compilare da documentazione contrattuale e console correnti. Non dedurre localizzazione, ruolo o meccanismo di trasferimento dal solo repository.
 
@@ -9,12 +9,13 @@
 | Google / Firebase Authentication | Login/account | UID, email, dati provider auth | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
 | Google / Cloud Firestore | Dati cloud utenti, telemetria tecnica | Dati app, salute, metadati tecnici | `[VERIFY_DPA]` | Database: `[VERIFY_LIVE]` | `[VERIFY]` | App + servizio | Aperto |
 | Google / reCAPTCHA Enterprise / App Check | Anti-abuse/attestazione | Dati tecnici dispositivo/rete secondo servizio | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
-| Vercel Hosting / Functions | Hosting e API server | Request metadata; payload API necessari; log tecnici | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
-| Vercel Analytics / Speed Insights | Analytics opzionali | Dati tecnici secondo servizio/config | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Opt-in |
-| Sentry | Error Monitoring e source map | Errori/stack sanitizzati, session ID tecnico, release/build e contesto tecnico minimizzato; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | Organizzazione su regione DE; dettagli contrattuali `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
+| Google / Firebase Hosting | Hosting statico frontend/PWA | Request metadata e asset pubblici; nessun dato business utente intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Aperto |
+| Vercel Functions / Cron | API server trusted e manutenzione account | Request metadata; payload API necessari; log tecnici | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_PLAN]` | Aperto |
+| Google Analytics 4 / Firebase Analytics | Analytics opzionale post-consenso | Dati tecnici di utilizzo secondo configurazione; nessun User-ID/evento salute custom intenzionale | `[VERIFY_DPA]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY_CONFIGURATION]` | Opt-in |
+| Sentry | Error Monitoring e source map | Errori/stack sanitizzati, session ID tecnico, release/build e contesto tecnico minimizzato; nessun UID/email deliberatamente allegato dall'app | `[VERIFY_DPA]` | `[VERIFY_LIVE]` | `[VERIFY]` | `[VERIFY_PLAN_AND_CONFIGURATION]` | Errori tecnici |
 | GitHub | Repository e CI | Codice, metadati dev, log CI; nessun dato utente intenzionale | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | `[VERIFY]` | Dev-only |
 
-Google/Firebase Analytics è escluso dal runtime LogBook corrente. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione LogBook corrente.
+Vercel Analytics e Speed Insights sono ritirati dal frontend Production. Sentry Replay, tracing, logging e Application Metrics sono esclusi dalla configurazione TheLogBook corrente.
 
 ## Checklist per ogni fornitore
 

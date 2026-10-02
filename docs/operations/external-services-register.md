@@ -1,4 +1,4 @@
-# Registro servizi esterni LogBook
+# Registro servizi esterni TheLogBook
 
 > Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-02.
 >
@@ -36,7 +36,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 
 ## Firebase Hosting
 
-Firebase Hosting è il provider del frontend/PWA Production di LogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
+Firebase Hosting è il provider del frontend/PWA Production di TheLogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
 
 Preparazione live verificata il 2026-10-01:
 
@@ -52,15 +52,15 @@ I domini Firebase predefiniti possono comunque essere presenti nelle configurazi
 
 ## Firebase Authentication e OAuth
 
-Firebase Authentication è il provider identità del prodotto. LogBook supporta autenticazione Google e credenziali email/password.
+Firebase Authentication è il provider identità del prodotto. TheLogBook supporta autenticazione Google e credenziali email/password.
 
 Stato live verificato il 2026-10-01 durante la preparazione del futuro origin Firebase Hosting:
 
-- Firebase Authentication → Authorized domains contiene `localhost`, i domini Firebase predefiniti, il dominio Production Vercel corrente e il nuovo `thelogbook.web.app`;
+- Firebase Authentication → Authorized domains conteneva, al checkpoint pre-cutover, `localhost`, i domini Firebase predefiniti, il vecchio dominio frontend Vercel e `thelogbook.web.app`;
 - il Web OAuth client auto-creato mantiene le origini localhost e Firebase già necessarie;
 - è stata aggiunta l'origine JavaScript `https://thelogbook.web.app`;
 - è stato aggiunto il redirect `https://thelogbook.web.app/__/auth/handler`;
-- i valori esistenti necessari alla Production Vercel/Firebase non sono stati rimossi.
+- in quella fase i valori esistenti necessari al rollback Vercel/Firebase non erano ancora stati rimossi.
 
 Il precedente dominio GitHub Pages è **ritirato** dal 2026-09-30 e non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
 
@@ -73,7 +73,7 @@ La Firebase Web API key è configurazione client pubblica, non una credenziale A
 Stato live verificato il 2026-10-01:
 
 - la chiave browser auto-creata da Firebase è limitata a **Siti web**;
-- i referrer osservati includono la Production Vercel corrente, l'origine Firebase necessaria al flusso Auth e `https://thelogbook.web.app/*`;
+- i referrer osservati al checkpoint pre-cutover includevano il vecchio frontend Vercel, l'origine Firebase necessaria al flusso Auth e `https://thelogbook.web.app/*`;
 - il nuovo origin Firebase Hosting è quindi già autorizzato senza aprire la chiave a qualunque sito;
 - le restrizioni API risultano già abilitate con un insieme esplicito di API; l'elenco non è stato ristretto ulteriormente durante questa preparazione per evitare di rimuovere dipendenze Firebase necessarie senza test runtime dedicati.
 
@@ -106,65 +106,56 @@ Verifica live del 2026-09-30: in Vercel Production risultano presenti `FIREBASE_
 
 ## App Check, reCAPTCHA Enterprise e Fraud Defense
 
-LogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere più difficile l'accesso abusivo alle risorse Firebase.
+TheLogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rendere più difficile l'accesso abusivo alle risorse Firebase.
 
-Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per LogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
+Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per TheLogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
 
 Verifica live aggiornata il 2026-10-01:
 
-- la Web App LogBook è registrata in Firebase App Check con provider Fraud Defense/reCAPTCHA Enterprise;
+- la Web App TheLogBook è registrata in Firebase App Check con provider Fraud Defense/reCAPTCHA Enterprise;
 - Cloud Firestore e Authentication mostravano 100% richieste verificate e 0% non verificate in modalità monitoraggio;
 - l'enforcement non è stato attivato durante questa preparazione;
 - la chiave Web è stata rinominata da `Logbook Vercel` a **TheLogBook Web** senza cambiare l'identità/site key;
 - la verifica dominio resta attiva;
 - i domini autorizzati osservati sono `logbook-gnf.vercel.app` e `thelogbook.web.app`;
 - AMP resta disabilitato;
-- il dominio Vercel è mantenuto finché è necessario al runtime corrente e verrà rivalutato dopo il cutover.
+- il vecchio dominio frontend Vercel è ritirato dal runtime post-cutover; la relativa allowlist esterna resta da rimuovere durante la pulizia console.
 
-Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime LogBook salvo futura decisione esplicita e verifica live.
+Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime TheLogBook salvo futura decisione esplicita e verifica live.
 
 L'ID/site key è configurazione client pubblica e non viene duplicato in questo registro; la Secret key reCAPTCHA non deve entrare nel browser né in env `VITE_*`.
 
 Il cutover Vercel alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato il 2026-09-30. Dopo un redeploy Production è stata rimossa `VITE_RECAPTCHA_V3_SITE_KEY`; un secondo redeploy sullo stesso SHA ha risposto HTTP 200, ha incorporato la site key Enterprise nel bundle e non ha mostrato runtime error. I fallback `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` sono quindi ritirati dal contratto applicativo.
 
-## Vercel
+## Vercel backend
 
-Vercel è il provider Production di LogBook.
+Vercel è il boundary **backend trusted Production** di TheLogBook. Il frontend/PWA Production è Firebase Hosting; Vercel mantiene soltanto le Functions native di account deletion/recovery, il cron giornaliero e il redirect del vecchio hostname verso `https://thelogbook.web.app/`.
 
-Il repository impone deploy abilitato soltanto da `main`, Functions native per account deletion/maintenance, cron in `vercel.json` e security headers/CSP versionati. I branch di sviluppo non devono generare Preview Deployment.
+Il repository abilita i deploy Vercel soltanto da `main` e impone `framework: null` / Fluid Compute tramite `vercel.json`. I branch di sviluppo non devono generare Preview Deployment.
 
-La CSP segue il principio di allowlist minima. LogBook usa font di sistema e non carica Google Fonts: gli origin `fonts.googleapis.com`/`fonts.gstatic.com` sono stati rimossi nella seconda passata del 2026-09-30 insieme agli origin Realtime Database non usati.
+Le configurazioni server-only che appartengono al runtime Vercel sono:
 
-Il codice corrente legge sette variabili Firebase Web:
+- `FIREBASE_ADMIN_PROJECT_ID`;
+- `FIREBASE_ADMIN_CLIENT_EMAIL`;
+- `FIREBASE_ADMIN_PRIVATE_KEY`;
+- `CRON_SECRET`;
+- `PUBLIC_APP_ORIGIN=https://thelogbook.web.app`.
 
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_DATABASE_URL`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
+`PUBLIC_APP_LEGACY_ORIGIN` è ritirata dal contratto applicativo post-cutover e non deve essere reintrodotta.
 
-`VITE_FIREBASE_MEASUREMENT_ID` non è usata dal codice corrente e il 2026-09-30 è stata rimossa da Vercel. Firebase Analytics non fa parte del prodotto e la variabile non deve essere reintrodotta come dipendenza.
+## Firebase Hosting build configuration
 
-Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
+La configurazione pubblica del frontend Production viene fornita al workflow GitHub Actions che costruisce e distribuisce Firebase Hosting, non al runtime Vercel:
 
-La configurazione Production non viene più duplicata in un file `.env.production` versionato. La seconda passata del 2026-09-30 ha rimosso quel file: conteneva soltanto configurazione Firebase Web pubblica, non segreti Admin, ma duplicava identificatori/endpoints reali senza necessità. Il contratto resta in `.env.example`; i valori Production vivono in Vercel. CI/E2E usa valori sintetici espliciti.
+- quattro env Firebase Web core: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`;
+- `VITE_FIREBASE_MEASUREMENT_ID`, usata soltanto da GA4 dopo consenso;
+- `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`;
+- `VITE_ACCOUNT_DELETION_API_ORIGIN`, che punta al backend trusted Vercel;
+- `VITE_SENTRY_DSN`.
 
-### Scope Vercel registrati
+`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono build-only nel workflow Firebase Hosting Production per release/source map. Il token non entra nel bundle client.
 
-Inventario fornito dal product owner il 2026-09-30, da verificare live prima di modifiche:
-
-| Famiglia env | Scope riportato | Nota |
-|---|---|---|
-| quattro env Firebase Web core (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`) | Production Firebase Hosting | configurazione Firebase Web fail-fast |
-| `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` | Production | site key pubblica canonica App Check |
-| `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET` | Production | server-only; presenza verificata, valori non registrati |
-| env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | Error Monitoring/source map |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Production Firebase Hosting | GA4 opzionale, letta solo dopo consenso |
-| `VITE_RECAPTCHA_V3_SITE_KEY` | RIMOSSA | alias legacy ritirato dopo cutover Enterprise |
-
-
+Realtime Database, Firebase Storage e Cloud Messaging non fanno parte del runtime corrente; le relative vecchie env client sono ritirate. La configurazione Production non viene duplicata in un file `.env.production` versionato; `.env.example` documenta solo il contratto e CI/E2E usa valori sintetici.
 
 ## Google Analytics / GA4
 
@@ -253,21 +244,21 @@ Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata 
 
 ## GitHub Pages — hosting ritirato
 
-GitHub Pages non è più un hosting LogBook.
+GitHub Pages non è più un hosting TheLogBook.
 
 Audit repository 2026-09-30:
 
 - nessun hostname GitHub Pages è referenziato dal runtime/config corrente;
 - non esiste workflow `gh-pages`/Pages né branch `gh-pages`;
-- GitHub API riporta `has_pages: false` e la homepage repository punta al dominio Vercel;
-- Vercel è il solo hosting Production;
+- GitHub API riporta `has_pages: false`;
+- GitHub Pages non partecipa alla Production; il frontend Production corrente è Firebase Hosting;
 - il vecchio test auto-contenuto di base path dinamico `/logbook/` è stato rimosso perché non esercitava la configurazione reale; il contratto PWA corrente verifica `start_url` e `scope` alla radice `/`.
 
 Pulizia esterna completata/verificata il 2026-09-30:
 - il vecchio dominio GitHub Pages è stato rimosso da Firebase Authentication → Authorized domains;
 - il vecchio referrer GitHub Pages è stato rimosso dalla Browser API key;
 - il Web OAuth client descritto non riportava GitHub Pages;
-- la Web key reCAPTCHA Enterprise/Fraud Defense mantiene attiva la verifica dominio; dal 2026-10-01 autorizza sia il dominio Production Vercel corrente sia `thelogbook.web.app` in preparazione al cutover.
+- la Web key reCAPTCHA Enterprise/Fraud Defense manteneva attiva la verifica dominio; dal 2026-10-01 autorizzava il vecchio frontend Vercel e `thelogbook.web.app` in preparazione al cutover. Il vecchio dominio resta una pulizia esterna post-cutover.
 
 ## Checklist annuale
 
@@ -284,9 +275,9 @@ Pulizia esterna completata/verificata il 2026-09-30:
 11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
 
 
-## Preparazione live cutover — 2026-10-02
+## Preparazione live cutover — 2026-10-02 (storico)
 
-Questa sezione registra operazioni e verifiche esterne eseguite per preparare la PR #191. Non equivale a un cutover: il frontend Firebase Hosting non è stato ancora pubblicato, la PR resta DRAFT e Production continua a derivare da `main`.
+Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** della PR #191. Le frasi al presente descrivono esclusivamente quel checkpoint storico; lo stato corrente è quello delle sezioni Production e `Cutover Production verificato`.
 
 ### Firebase / Google Cloud
 
@@ -312,7 +303,7 @@ Questa sezione registra operazioni e verifiche esterne eseguite per preparare la
 
 - La Production Vercel verificata resta READY sullo SHA corrente di `main`; non è stato effettuato alcun redeploy per la sola modifica delle env e non risultavano runtime error nelle 24 ore osservate.
 - Confermata la presenza delle env server-only Firebase Admin e `CRON_SECRET` senza esporne i valori.
-- Aggiunte in scope **Production** come configurazione non sensibile `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il legacy origin va rimosso dopo smoke verdi del cutover.
+- Durante la finestra di cutover erano state configurate `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e la temporanea `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il supporto applicativo al legacy origin è stato poi ritirato dopo gli smoke verdi.
 
 ### Google Analytics / GA4
 
@@ -339,7 +330,7 @@ Questa sezione registra operazioni e verifiche esterne eseguite per preparare la
 - Smoke browser reale eseguito dal product owner: il popup Google mostra `thelogbook.web.app` e il login completa correttamente entrando nell'account.
 - Nei log Vercel successivi allo smoke, `/api/account-deletion-device` ha risposto con 200 alle richieste applicative e 204 ai preflight; le sonde senza origin autorizzata hanno prodotto 403. Questo verifica il boundary CORS del nuovo origin e il percorso di registrazione recovery autenticato/App Check limited-use.
 - Nessun runtime error Vercel è emerso nella finestra post-cutover osservata.
-- Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository LogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
+- Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository TheLogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
 - Restano esterni e da verificare/ripulire nelle rispettive console: vecchio origin Vercel in Firebase Auth, Browser API key, reCAPTCHA/Sentry allowlist; proprietà Search Console del nuovo origin. Il backend post-cutover ritira invece il supporto applicativo al CORS legacy, così una variabile provider residua non può riabilitare il vecchio frontend.
 
 ## Archivio decisionale — candidato PR #191

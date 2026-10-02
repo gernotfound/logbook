@@ -27,7 +27,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.0');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.1');
         expect(LEGAL_VERSIONS.terms).toBe('1.2.0');
         expect(needsLegalUpdate({
             ...mockConsent,
@@ -138,6 +138,13 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
     it('chiarisce che una palestra non riceve automaticamente accesso ai dati degli iscritti', () => {
         render(<PrivacyPolicy onClose={vi.fn()} />);
         expect(screen.getByText(/non riceve per questo motivo accesso ai loro dati in TheLogBook/i)).toBeDefined();
+    });
+
+    it('descrive il nuovo stato GA4 e la data dell’informativa aggiornata', () => {
+        render(<PrivacyPolicy onClose={vi.fn()} />);
+        expect(screen.getByText('Aggiornata al 2 ottobre 2026')).toBeDefined();
+        expect(screen.getByText(/cookie first-party tecnici\/analitici/i)).toBeDefined();
+        expect(screen.getByText(/_ga/)).toBeDefined();
     });
 
     it('Pulsante disabilitato se consenso incompleto', () => {
