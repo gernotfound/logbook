@@ -25,10 +25,10 @@
 | Sistema | Controllo | Stato |
 |---|---|---|
 | Firebase | Security Rules live corrispondono al commit approvato | `[VERIFY]` |
-| App Check | Enforcement effettivo sui servizi applicabili | `[VERIFY]` |
-| Firebase Auth | Authorized domains | `[VERIFY]` |
-| Firebase Auth | Password policy / provider config | `[VERIFY]` |
-| Google Cloud | Restrizioni Browser API key | `[VERIFY]` |
+| App Check | Enforcement effettivo sui servizi applicabili | `ENFORCED` su Firestore, Authentication e RTDB — verificato 2026-10-02 |
+| Firebase Auth | Authorized domains | Vercel frontend rimosso; Firebase defaults + `thelogbook.web.app` verificati 2026-10-02 |
+| Firebase Auth | Password policy / provider config | ENFORCE: min 8 + maiuscola/minuscola/numero/non-alfanumerico; Improved Email Privacy ON — verificato 2026-10-02 |
+| Google Cloud | Restrizioni Browser API key | referrer Vercel rimosso; Firebase action origin + `thelogbook.web.app` mantenuti — verificato 2026-10-02 |
 | Firestore | Regione/database location | `[VERIFY]` |
 | Firestore | Backup/PITR e restore test | `[DECIDE/VERIFY]` |
 | Vercel | Env server trusted presenti e corretti | `[VERIFY]` |
