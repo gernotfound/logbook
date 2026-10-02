@@ -1,4 +1,4 @@
-# Misure tecniche e organizzative — LogBook
+# Misure tecniche e organizzative — TheLogBook
 
 > Scheda TOM Art. 32 da allineare allo stato reale. "Presente nel codice" non equivale a "configurato live": le verifiche esterne sono esplicitamente separate.
 
@@ -12,12 +12,12 @@
 | Sync | Local durability prima della replica cloud; recovery lost-ack | Implementato/testato |
 | Validazione | Gateway Zod ai boundary persistiti | Implementato |
 | Telemetria | Sanitizzazione PII, allowlist dettagli, queue bounded | Implementato |
-| Analytics | Google/Firebase Analytics rimosso; Vercel analytics opt-in | Implementato |
+| Analytics | GA4 lazy e opt-in provider-specific; Vercel Analytics/Speed Insights ritirati | Implementato/testato |
 | Account deletion | Workflow server-mediated, idempotente, Auth cancellata per ultima | Implementato/testato |
 | Segreti | Firebase Admin/cron server-only, esclusi dal bundle | Contratto repository |
-| HTTP | CSP, HSTS, frame denial, referrer/permissions policies | `vercel.json` + verifica Production |
+| HTTP | CSP, frame denial, referrer/permissions policies e cache policy app-shell/SW | `firebase.json` + smoke Firebase Hosting |
 | CI | Exact-SHA Canonical Verification + M8 | GitHub Actions |
-| Deploy | Solo `main` abilita Git deployment Vercel | Contratto repository |
+| Deploy | Firebase Hosting solo dopo CI verde exact-SHA su `main`; Vercel backend main-only | Workflow GitHub + `vercel.json` |
 | PWA update | Reload barrier prima dell'update | Implementato/testato |
 
 ## Misure esterne da verificare
@@ -54,7 +54,7 @@
 Allegare/archiviare:
 
 1. SHA Production e CI verde;
-2. deploy Vercel associato;
+2. release Firebase Hosting e deployment Vercel backend associati allo stesso stato di `main`;
 3. Rules/App Check live verificati;
 4. elenco env richieste senza valori segreti;
 5. risultati smoke account/deletion pertinenti;
