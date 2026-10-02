@@ -21,7 +21,7 @@ export async function prepareForReload() {
     if (state.userData && envelope && !equal(UserDataSchema.parse(envelope.data), UserDataSchema.parse(state.userData))) {
         const tabSnapshot = readTabSnapshotState(session);
         if (!tabSnapshot) {
-            throw new Error('Impossibile verificare in sicurezza la provenienza delle modifiche locali. Riapri LogBook e riprova.');
+            throw new Error('Impossibile verificare in sicurezza la provenienza delle modifiche locali. Riapri TheLogBook e riprova.');
         }
 
         if (tabSnapshot.dirty) {
