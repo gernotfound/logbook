@@ -73,13 +73,13 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
         }}>
           <Section title="1. Accettazione dei termini">
             <p>
-              Installando, accedendo o utilizzando LogBook ("l'Applicazione"), l'utente accetta di essere vincolato dai presenti Termini e condizioni. Se non si accettano questi termini, non utilizzare l'Applicazione.
+              Installando, accedendo o utilizzando TheLogBook ("l'Applicazione"), l'utente accetta di essere vincolato dai presenti Termini e condizioni. Se non si accettano questi termini, non utilizzare l'Applicazione.
             </p>
           </Section>
 
           <Section title="2. Disclaimer medico (importante)">
             <div style={{ padding: '16px', backgroundColor: 'var(--danger-soft)', border: '1px solid var(--danger-color)', borderRadius: '8px', color: 'var(--text-main)' }}>
-              <strong>LogBook non fornisce consulenza medica.</strong>
+              <strong>TheLogBook non fornisce consulenza medica.</strong>
               <p style={{ marginTop: '8px', marginBottom: 0 }}>
                 L'Applicazione è progettata unicamente per tracciare e monitorare l'allenamento fisico e l'alimentazione a scopo informativo e personale. Nessuna informazione fornita dall'Applicazione costituisce parere medico, diagnosi o trattamento.
                 Prima di intraprendere qualsiasi nuovo programma di allenamento o dieta, si consiglia di consultare un medico o un professionista sanitario qualificato.
@@ -89,7 +89,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
 
           <Section title="3. Disponibilità del software">
             <p>
-              LogBook è un software indipendente che può essere fornito direttamente oppure tramite organizzazioni partner, incluse palestre. Salvo eventuali livelli di servizio concordati separatamente, l'Applicazione viene resa disponibile senza garanzia di continuità assoluta o di uno specifico livello di uptime. Restano ferme le garanzie e le responsabilità che non possono essere escluse o limitate dalla legge applicabile.
+              TheLogBook è un software indipendente che può essere fornito direttamente oppure tramite organizzazioni partner, incluse palestre. Salvo eventuali livelli di servizio concordati separatamente, l'Applicazione viene resa disponibile senza garanzia di continuità assoluta o di uno specifico livello di uptime. Restano ferme le garanzie e le responsabilità che non possono essere escluse o limitate dalla legge applicabile.
             </p>
             <p style={{ marginTop: '8px' }}>
               Il titolare può modificare, sospendere o interrompere funzionalità nei limiti consentiti dalla legge e degli eventuali accordi applicabili. È consigliato utilizzare periodicamente le funzioni di backup/esportazione disponibili per mantenere una copia personale dei dati.
@@ -98,7 +98,7 @@ export const TermsAndConditions: React.FC<{ onClose: () => void }> = ({ onClose 
 
           <Section title="4. Limitazione di responsabilità">
             <p>
-              L'uso dell'Applicazione avviene sotto la responsabilità dell'utente, nei limiti consentiti dalla legge applicabile. LogBook non garantisce risultati specifici, inclusi perdita di peso o aumento della massa muscolare, e non sostituisce valutazioni mediche o professionali. Le limitazioni previste in questa sezione non escludono responsabilità che non possono essere escluse o limitate per legge.
+              L'uso dell'Applicazione avviene sotto la responsabilità dell'utente, nei limiti consentiti dalla legge applicabile. TheLogBook non garantisce risultati specifici, inclusi perdita di peso o aumento della massa muscolare, e non sostituisce valutazioni mediche o professionali. Le limitazioni previste in questa sezione non escludono responsabilità che non possono essere escluse o limitate per legge.
             </p>
           </Section>
 
