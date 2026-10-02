@@ -1,5 +1,5 @@
 /**
- * Firebase App Check Security Module (TheLogBook PWA)
+ * Firebase App Check Security Module (TheTheLogBook PWA)
  *
  * Provider: ReCaptchaEnterpriseProvider (Google reCAPTCHA Enterprise).
  * The provider is initialized synchronously before Firestore so protected
@@ -58,7 +58,7 @@ export interface AppCheckStatusDetails {
 
 export const APP_CHECK_STRINGS = {
     unsupportedTitle: 'Verifica di sicurezza non supportata',
-    unsupportedMessage: 'Il browser o la modalità di navigazione attuale non supportano i controlli di sicurezza necessari per la sincronizzazione cloud. TheLogBook continuerà a funzionare regolarmente in modalità locale offline sul tuo dispositivo.',
+    unsupportedMessage: 'Il browser o la modalità di navigazione attuale non supportano i controlli di sicurezza necessari per la sincronizzazione cloud. TheTheLogBook continuerà a funzionare regolarmente in modalità locale offline sul tuo dispositivo.',
     initErrorTitle: 'Errore controllo di sicurezza',
     initErrorMessage: 'Non è stato possibile completare la verifica di sicurezza con il server. La sincronizzazione cloud è temporaneamente sospesa; i tuoi dati sono salvati in sicurezza sul dispositivo.',
     missingSiteKeyWarning: 'Chiave reCAPTCHA Enterprise (VITE_RECAPTCHA_ENTERPRISE_SITE_KEY) non configurata. App Check non inizializzato.',
