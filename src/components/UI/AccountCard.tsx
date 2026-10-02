@@ -42,7 +42,7 @@ export const AccountCard = () => {
             await safeHardReload();
         } catch (error) {
             console.error('Reload account bloccato dalla barriera di persistenza:', error);
-            await showAlert('Operazione completata, ma TheTheLogBook non verrà ricaricato finché le modifiche locali non sono state salvate in sicurezza. Riprova tra poco.');
+            await showAlert('Operazione completata, ma TheLogBook non verrà ricaricato finché le modifiche locali non sono state salvate in sicurezza. Riprova tra poco.');
         }
     };
 
@@ -178,7 +178,7 @@ export const AccountCard = () => {
             <div className="card">
                 <h2 className="ui-account-card-1" style={{ marginTop: 0 }}><span aria-hidden="true">⚠️</span> Modalità locale</h2>
                 <p className="ui-account-card-2" style={{ marginBottom: "0.9375rem" }}>
-                    Stai usando TheTheLogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
+                    Stai usando TheLogBook senza un account. I tuoi dati sono salvati solo su questo dispositivo.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                     <button className="btn btn-primary" onClick={linkGoogleAccount}>
@@ -235,7 +235,7 @@ export const AccountCard = () => {
                         </div>
                     )}
                     <div>
-                        <div style={{ fontWeight: "bold" }}>{currentUser.displayName || 'Utente TheTheLogBook'}</div>
+                        <div style={{ fontWeight: "bold" }}>{currentUser.displayName || 'Utente TheLogBook'}</div>
                         <div className="ui-account-card-16" >{currentUser.email}</div>
                     </div>
                 </div>
