@@ -83,6 +83,11 @@ for (const desired of indexConfig.indexes) {
   desiredByGroup.get(group).push(desired);
 }
 
+const release = await requestJson(
+  `https://firebaserules.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/releases/cloud.firestore`,
+);
+if (!release.rulesetName) throw new Error('Live Cloud Firestore release has no rulesetName');
+
 const indexStatuses = [];
 for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
   const liveIndexes = await loadLiveIndexes(collectionGroup);
@@ -111,11 +116,6 @@ if (mode === 'preflight') {
   }
   process.exit(0);
 }
-
-const release = await requestJson(
-  `https://firebaserules.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/releases/cloud.firestore`,
-);
-if (!release.rulesetName) throw new Error('Live Cloud Firestore release has no rulesetName');
 
 const ruleset = await requestJson(
   `https://firebaserules.googleapis.com/v1/${release.rulesetName}`,
