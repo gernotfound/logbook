@@ -140,6 +140,13 @@ describe('RISK-02: ConsentOverlay UI Behavior', () => {
         expect(screen.getByText(/non riceve per questo motivo accesso ai loro dati in TheLogBook/i)).toBeDefined();
     });
 
+    it('descrive il nuovo stato GA4 e la data dell’informativa aggiornata', () => {
+        render(<PrivacyPolicy onClose={vi.fn()} />);
+        expect(screen.getByText('Aggiornata al 2 ottobre 2026')).toBeDefined();
+        expect(screen.getByText(/cookie first-party tecnici\/analitici/i)).toBeDefined();
+        expect(screen.getByText(/_ga/)).toBeDefined();
+    });
+
     it('Pulsante disabilitato se consenso incompleto', () => {
         render(<ConsentOverlay />);
         const button = screen.getByRole('button', { name: /accetta e continua/i }) as HTMLButtonElement;
