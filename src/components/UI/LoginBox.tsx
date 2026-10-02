@@ -100,7 +100,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
 
     return (
         <div id="auth-login-box" ref={dialogRef} role={onCancel ? "dialog" : undefined} aria-modal={onCancel ? "true" : undefined} aria-labelledby={onCancel ? titleId : undefined} tabIndex={onCancel ? -1 : undefined} className="ui-login-box-1" style={{ textAlign: "center", width: "90%", maxWidth: "25rem", margin: "0 auto", padding: "1.875rem", overflowY: "auto", maxHeight: "100vh" }}>
-            <h1 id={titleId} className="ui-login-box-2" style={{ marginBottom: "0.625rem" }}>TheTheLogBook</h1>
+            <h1 id={titleId} className="ui-login-box-2" style={{ marginBottom: "0.625rem" }}>TheLogBook</h1>
             <p className="ui-login-box-3" style={{ marginBottom: "1.25rem" }}>
                 Accedi o registrati per sincronizzare i tuoi allenamenti sul cloud.
             </p>
