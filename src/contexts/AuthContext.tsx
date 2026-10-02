@@ -26,6 +26,7 @@ import {
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
+import { PASSWORD_POLICY_SUMMARY } from '../lib/auth/passwordPolicy';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -379,7 +380,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         switch (error.code) {
             case 'auth/email-already-in-use': msg = "Questa email è già registrata."; break;
             case 'auth/invalid-email': msg = "Formato email non valido."; break;
-            case 'auth/weak-password': msg = "La password è troppo debole (min. 6 caratteri per Firebase)."; break;
+            case 'auth/weak-password': msg = PASSWORD_POLICY_SUMMARY; break;
             case 'auth/user-not-found':
             case 'auth/wrong-password':
             case 'auth/invalid-credential':
