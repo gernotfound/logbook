@@ -27,7 +27,7 @@ describe('RISK-02: Legal Consent Lifecycle', () => {
     };
 
     it('richiede un nuovo consenso quando una versione legale precedente non coincide', () => {
-        expect(LEGAL_VERSIONS.privacy).toBe('1.3.0');
+        expect(LEGAL_VERSIONS.privacy).toBe('1.3.1');
         expect(LEGAL_VERSIONS.terms).toBe('1.2.0');
         expect(needsLegalUpdate({
             ...mockConsent,
