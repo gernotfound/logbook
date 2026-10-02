@@ -127,44 +127,35 @@ L'ID/site key è configurazione client pubblica e non viene duplicato in questo 
 
 Il cutover Vercel alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato il 2026-09-30. Dopo un redeploy Production è stata rimossa `VITE_RECAPTCHA_V3_SITE_KEY`; un secondo redeploy sullo stesso SHA ha risposto HTTP 200, ha incorporato la site key Enterprise nel bundle e non ha mostrato runtime error. I fallback `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` sono quindi ritirati dal contratto applicativo.
 
-## Vercel
+## Vercel backend
 
-Vercel è il provider Production di LogBook.
+Vercel è il boundary **backend trusted Production** di TheLogBook. Il frontend/PWA Production è Firebase Hosting; Vercel mantiene soltanto le Functions native di account deletion/recovery, il cron giornaliero e il redirect del vecchio hostname verso `https://thelogbook.web.app/`.
 
-Il repository impone deploy abilitato soltanto da `main`, Functions native per account deletion/maintenance, cron in `vercel.json` e security headers/CSP versionati. I branch di sviluppo non devono generare Preview Deployment.
+Il repository abilita i deploy Vercel soltanto da `main` e impone `framework: null` / Fluid Compute tramite `vercel.json`. I branch di sviluppo non devono generare Preview Deployment.
 
-La CSP segue il principio di allowlist minima. LogBook usa font di sistema e non carica Google Fonts: gli origin `fonts.googleapis.com`/`fonts.gstatic.com` sono stati rimossi nella seconda passata del 2026-09-30 insieme agli origin Realtime Database non usati.
+Le configurazioni server-only che appartengono al runtime Vercel sono:
 
-Il codice corrente legge sette variabili Firebase Web:
+- `FIREBASE_ADMIN_PROJECT_ID`;
+- `FIREBASE_ADMIN_CLIENT_EMAIL`;
+- `FIREBASE_ADMIN_PRIVATE_KEY`;
+- `CRON_SECRET`;
+- `PUBLIC_APP_ORIGIN=https://thelogbook.web.app`.
 
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_DATABASE_URL`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_STORAGE_BUCKET`
-- `VITE_FIREBASE_MESSAGING_SENDER_ID`
-- `VITE_FIREBASE_APP_ID`
+`PUBLIC_APP_LEGACY_ORIGIN` è ritirata dal contratto applicativo post-cutover e non deve essere reintrodotta.
 
-`VITE_FIREBASE_MEASUREMENT_ID` non è usata dal codice corrente e il 2026-09-30 è stata rimossa da Vercel. Firebase Analytics non fa parte del prodotto e la variabile non deve essere reintrodotta come dipendenza.
+## Firebase Hosting build configuration
 
-Production usa inoltre `VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT`; il token è build-only e non deve entrare nel bundle o nel repository.
+La configurazione pubblica del frontend Production viene fornita al workflow GitHub Actions che costruisce e distribuisce Firebase Hosting, non al runtime Vercel:
 
-La configurazione Production non viene più duplicata in un file `.env.production` versionato. La seconda passata del 2026-09-30 ha rimosso quel file: conteneva soltanto configurazione Firebase Web pubblica, non segreti Admin, ma duplicava identificatori/endpoints reali senza necessità. Il contratto resta in `.env.example`; i valori Production vivono in Vercel. CI/E2E usa valori sintetici espliciti.
+- quattro env Firebase Web core: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`;
+- `VITE_FIREBASE_MEASUREMENT_ID`, usata soltanto da GA4 dopo consenso;
+- `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`;
+- `VITE_ACCOUNT_DELETION_API_ORIGIN`, che punta al backend trusted Vercel;
+- `VITE_SENTRY_DSN`.
 
-### Scope Vercel registrati
+`SENTRY_AUTH_TOKEN`, `SENTRY_ORG` e `SENTRY_PROJECT` sono build-only nel workflow Firebase Hosting Production per release/source map. Il token non entra nel bundle client.
 
-Inventario fornito dal product owner il 2026-09-30, da verificare live prima di modifiche:
-
-| Famiglia env | Scope riportato | Nota |
-|---|---|---|
-| quattro env Firebase Web core (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`) | Production Firebase Hosting | configurazione Firebase Web fail-fast |
-| `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` | Production | site key pubblica canonica App Check |
-| `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`, `CRON_SECRET` | Production | server-only; presenza verificata, valori non registrati |
-| env Sentry (`VITE_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) | Production | Error Monitoring/source map |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Production Firebase Hosting | GA4 opzionale, letta solo dopo consenso |
-| `VITE_RECAPTCHA_V3_SITE_KEY` | RIMOSSA | alias legacy ritirato dopo cutover Enterprise |
-
-
+Realtime Database, Firebase Storage e Cloud Messaging non fanno parte del runtime corrente; le relative vecchie env client sono ritirate. La configurazione Production non viene duplicata in un file `.env.production` versionato; `.env.example` documenta solo il contratto e CI/E2E usa valori sintetici.
 
 ## Google Analytics / GA4
 
@@ -312,7 +303,7 @@ Questa sezione registra operazioni e verifiche esterne eseguite per preparare la
 
 - La Production Vercel verificata resta READY sullo SHA corrente di `main`; non è stato effettuato alcun redeploy per la sola modifica delle env e non risultavano runtime error nelle 24 ore osservate.
 - Confermata la presenza delle env server-only Firebase Admin e `CRON_SECRET` senza esporne i valori.
-- Aggiunte in scope **Production** come configurazione non sensibile `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il legacy origin va rimosso dopo smoke verdi del cutover.
+- Durante la finestra di cutover erano state configurate `PUBLIC_APP_ORIGIN=https://thelogbook.web.app` e la temporanea `PUBLIC_APP_LEGACY_ORIGIN=https://logbook-gnf.vercel.app`. Il supporto applicativo al legacy origin è stato poi ritirato dopo gli smoke verdi.
 
 ### Google Analytics / GA4
 
