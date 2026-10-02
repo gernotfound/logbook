@@ -34,7 +34,7 @@ import { initSentry } from './lib/sentryClient';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 import { initOptionalGoogleAnalytics } from './lib/googleAnalytics';
 
-const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. LogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
+const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. TheLogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
 
 function renderStorageUnavailable(rootElement: HTMLElement | null): void {
   window.__INITIAL_USER_DATA__ = null;
