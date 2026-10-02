@@ -23,20 +23,20 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 | Firebase Realtime Database | NON USATO DAL RUNTIME | `databaseURL` resta nel config Firebase Web, ma il modulo RTDB non è importato | codice + console VERIFY-LIVE |
 | Firebase Storage | NON USATO DAL RUNTIME | `storageBucket` resta nel config Firebase Web, ma il modulo Storage non è importato | codice + console VERIFY-LIVE |
 | Firebase Cloud Messaging | NON USATO DAL RUNTIME | `messagingSenderId` resta nel config Firebase Web, ma il modulo Messaging non è importato | codice + console VERIFY-LIVE |
-| Firebase Hosting | EXTERNAL-ONLY / PREPARED TARGET | sito `thelogbook.web.app` preparato; non è ancora la Production corrente | Firebase console + futuro config Hosting |
+| Firebase Hosting | ACTIVE | frontend/PWA Production su `thelogbook.web.app`, deploy exact-SHA da GitHub Actions | Firebase Hosting + workflow Production |
 | Firebase Admin | ACTIVE | account deletion e manutenzione server trusted | Vercel env + Vercel Functions |
 | Firebase App Check + reCAPTCHA Enterprise / Google Cloud Fraud Defense | ACTIVE | attestazione anti-abuse prima dell'accesso cloud | Firebase App Check + Google Cloud |
-| Vercel Hosting / Functions / Cron | ACTIVE | Production PWA, API trusted e cron | Vercel + `vercel.json` |
-| Vercel Analytics / Speed Insights | OPTIONAL / CURRENT | analytics/performance con opt-in nel runtime `main` corrente | Vercel + consenso client |
-| Google Analytics / GA4 | EXTERNAL-ONLY / PREPARED TARGET | stream Web preparato per `thelogbook.web.app`; non è inizializzato dal runtime `main` corrente | Google Analytics + Firebase |
-| Sentry | ACTIVE | error monitoring tecnico Production | Sentry + build Vercel |
+| Vercel Functions / Cron | ACTIVE | backend trusted account-deletion/recovery, cron e redirect del vecchio root verso Firebase | Vercel + `vercel.json` |
+| Vercel Analytics / Speed Insights | RITIRATO | non fanno più parte del frontend Production | codice + cronologia cutover |
+| Google Analytics / GA4 | OPTIONAL / ACTIVE ARCHITECTURE | analytics di utilizzo del frontend Firebase, default OFF e lazy dopo consenso provider-specific | Google Analytics + Firebase + codice consenso |
+| Sentry | ACTIVE | error monitoring tecnico Production e source map del frontend Firebase Hosting | Sentry + build Firebase Hosting |
 | GitHub Actions / CodeQL / ruleset | ACTIVE | repository pubblico, PR, CI e SAST canonico | GitHub |
 | Snyk | OPTIONAL | controllo security supplementare | integrazione Snyk esterna |
 | Google Search Console | EXTERNAL-ONLY | verifica proprietà, sitemap e indicizzazione | Search Console + asset SEO repo |
 
 ## Firebase Hosting
 
-Firebase Hosting **non è ancora il provider di hosting del runtime corrente di LogBook**: la Production corrente resta Vercel finché non avviene un cutover esplicito e verificato.
+Firebase Hosting è il provider del frontend/PWA Production di LogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
 
 Preparazione live verificata il 2026-10-01:
 
@@ -238,7 +238,7 @@ Limiti quota o indisponibilità Snyk non devono eliminare la copertura SAST bloc
 
 ## Google Search Console e indicizzazione
 
-La proprietà Search Console corrisponde al sito Production Vercel. L'integrazione serve a dimostrare il controllo del sito, presentare/controllare la sitemap, consentire crawling/indicizzazione e osservare lo stato degli URL.
+La precedente proprietà Search Console corrisponde al vecchio frontend Vercel. Dopo il cutover il canonical Production è `https://thelogbook.web.app/`; l'aggiornamento/verifica della proprietà Search Console per il nuovo origin resta un'operazione esterna da completare e verificare.
 
 Il repository mantiene deliberatamente:
 
@@ -327,6 +327,20 @@ Questa sezione registra operazioni e verifiche esterne eseguite per preparare la
 - Creata integrazione interna dedicata al build GitHub/Firebase Hosting con solo capacità **Continuous Integration (CI)**; il token generato è conservato esclusivamente come GitHub Secret `SENTRY_AUTH_TOKEN`.
 - `Allowed Domains` del progetto è stato ristretto ai due frontend ammessi durante il cutover: `https://thelogbook.web.app` e `https://logbook-gnf.vercel.app`.
 - Un Project Security Token visualizzato durante la configurazione è stato ruotato; il nuovo valore non è registrato né usato come `SENTRY_AUTH_TOKEN`.
+
+## Cutover Production verificato — 2026-10-02
+
+- PR #191 squash-merged; `main` reale dopo il merge: `edf164e3e410a650d1390b9cbe92344fa1fb9501`.
+- `Milestone Verification` post-merge #1123 / run `36992742404`: success; `Canonical Verification`, CodeQL, Rules, E2E, build/M7-M8, hardening/stress e unit/integration verdi sullo SHA di `main`.
+- Workflow `Firebase Hosting Production` run `36992998590`: success sullo stesso SHA, WIF riuscita, build Production completata e deploy limitato a Hosting.
+- Firebase Hosting ha rilasciato il site `thelogbook`; smoke automatico HTTP verde su app shell e `sw.js`, entrambi con cache policy no-cache/no-store/must-revalidate, e canonical `https://thelogbook.web.app/`.
+- Sentry ha creato la release sullo SHA di `main` e l'upload source-map del build Firebase Hosting è riuscito.
+- Vercel Production deployment `dpl_GBkkFGbvLczGmBjVe7MV9A4ssKTu` è READY sullo stesso SHA. Il root Vercel reindirizza al nuovo frontend Firebase; gli endpoint account-deletion restano serverless Vercel.
+- Smoke browser reale eseguito dal product owner: il popup Google mostra `thelogbook.web.app` e il login completa correttamente entrando nell'account.
+- Nei log Vercel successivi allo smoke, `/api/account-deletion-device` ha risposto con 200 alle richieste applicative e 204 ai preflight; le sonde senza origin autorizzata hanno prodotto 403. Questo verifica il boundary CORS del nuovo origin e il percorso di registrazione recovery autenticato/App Check limited-use.
+- Nessun runtime error Vercel è emerso nella finestra post-cutover osservata.
+- Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository LogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
+- Restano esterni e da verificare/ripulire nelle rispettive console: vecchio origin Vercel in Firebase Auth, Browser API key, reCAPTCHA/Sentry allowlist; proprietà Search Console del nuovo origin. Il backend post-cutover ritira invece il supporto applicativo al CORS legacy, così una variabile provider residua non può riabilitare il vecchio frontend.
 
 ## Candidato migrazione Firebase Hosting Spark (PR #191, non live)
 
