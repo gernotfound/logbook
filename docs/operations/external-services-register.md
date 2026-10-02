@@ -1,4 +1,4 @@
-# Registro servizi esterni LogBook
+# Registro servizi esterni TheLogBook
 
 > Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-02.
 >
@@ -36,7 +36,7 @@ Il repository è pubblico. Questo registro non contiene token, private key, emai
 
 ## Firebase Hosting
 
-Firebase Hosting è il provider del frontend/PWA Production di LogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
+Firebase Hosting è il provider del frontend/PWA Production di TheLogBook dal cutover verificato del 2026-10-02. Vercel resta esclusivamente backend trusted/cron e redirect del vecchio root.
 
 Preparazione live verificata il 2026-10-01:
 
@@ -52,15 +52,15 @@ I domini Firebase predefiniti possono comunque essere presenti nelle configurazi
 
 ## Firebase Authentication e OAuth
 
-Firebase Authentication è il provider identità del prodotto. LogBook supporta autenticazione Google e credenziali email/password.
+Firebase Authentication è il provider identità del prodotto. TheLogBook supporta autenticazione Google e credenziali email/password.
 
 Stato live verificato il 2026-10-01 durante la preparazione del futuro origin Firebase Hosting:
 
-- Firebase Authentication → Authorized domains contiene `localhost`, i domini Firebase predefiniti, il dominio Production Vercel corrente e il nuovo `thelogbook.web.app`;
+- Firebase Authentication → Authorized domains conteneva, al checkpoint pre-cutover, `localhost`, i domini Firebase predefiniti, il vecchio dominio frontend Vercel e `thelogbook.web.app`;
 - il Web OAuth client auto-creato mantiene le origini localhost e Firebase già necessarie;
 - è stata aggiunta l'origine JavaScript `https://thelogbook.web.app`;
 - è stato aggiunto il redirect `https://thelogbook.web.app/__/auth/handler`;
-- i valori esistenti necessari alla Production Vercel/Firebase non sono stati rimossi.
+- in quella fase i valori esistenti necessari al rollback Vercel/Firebase non erano ancora stati rimossi.
 
 Il precedente dominio GitHub Pages è **ritirato** dal 2026-09-30 e non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
 
@@ -73,7 +73,7 @@ La Firebase Web API key è configurazione client pubblica, non una credenziale A
 Stato live verificato il 2026-10-01:
 
 - la chiave browser auto-creata da Firebase è limitata a **Siti web**;
-- i referrer osservati includono la Production Vercel corrente, l'origine Firebase necessaria al flusso Auth e `https://thelogbook.web.app/*`;
+- i referrer osservati al checkpoint pre-cutover includevano il vecchio frontend Vercel, l'origine Firebase necessaria al flusso Auth e `https://thelogbook.web.app/*`;
 - il nuovo origin Firebase Hosting è quindi già autorizzato senza aprire la chiave a qualunque sito;
 - le restrizioni API risultano già abilitate con un insieme esplicito di API; l'elenco non è stato ristretto ulteriormente durante questa preparazione per evitare di rimuovere dipendenze Firebase necessarie senza test runtime dedicati.
 
@@ -119,7 +119,7 @@ Verifica live aggiornata il 2026-10-01:
 - la verifica dominio resta attiva;
 - i domini autorizzati osservati sono `logbook-gnf.vercel.app` e `thelogbook.web.app`;
 - AMP resta disabilitato;
-- il dominio Vercel è mantenuto finché è necessario al runtime corrente e verrà rivalutato dopo il cutover.
+- il vecchio dominio frontend Vercel è ritirato dal runtime post-cutover; la relativa allowlist esterna resta da rimuovere durante la pulizia console.
 
 Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime LogBook salvo futura decisione esplicita e verifica live.
 
@@ -250,15 +250,15 @@ Audit repository 2026-09-30:
 
 - nessun hostname GitHub Pages è referenziato dal runtime/config corrente;
 - non esiste workflow `gh-pages`/Pages né branch `gh-pages`;
-- GitHub API riporta `has_pages: false` e la homepage repository punta al dominio Vercel;
-- Vercel è il solo hosting Production;
+- GitHub API riporta `has_pages: false`;
+- GitHub Pages non partecipa alla Production; il frontend Production corrente è Firebase Hosting;
 - il vecchio test auto-contenuto di base path dinamico `/logbook/` è stato rimosso perché non esercitava la configurazione reale; il contratto PWA corrente verifica `start_url` e `scope` alla radice `/`.
 
 Pulizia esterna completata/verificata il 2026-09-30:
 - il vecchio dominio GitHub Pages è stato rimosso da Firebase Authentication → Authorized domains;
 - il vecchio referrer GitHub Pages è stato rimosso dalla Browser API key;
 - il Web OAuth client descritto non riportava GitHub Pages;
-- la Web key reCAPTCHA Enterprise/Fraud Defense mantiene attiva la verifica dominio; dal 2026-10-01 autorizza sia il dominio Production Vercel corrente sia `thelogbook.web.app` in preparazione al cutover.
+- la Web key reCAPTCHA Enterprise/Fraud Defense manteneva attiva la verifica dominio; dal 2026-10-01 autorizzava il vecchio frontend Vercel e `thelogbook.web.app` in preparazione al cutover. Il vecchio dominio resta una pulizia esterna post-cutover.
 
 ## Checklist annuale
 
@@ -275,9 +275,9 @@ Pulizia esterna completata/verificata il 2026-09-30:
 11. rimuovere origin, chiavi e integrazioni legacy non più necessarie.
 
 
-## Preparazione live cutover — 2026-10-02
+## Preparazione live cutover — 2026-10-02 (storico)
 
-Questa sezione registra operazioni e verifiche esterne eseguite per preparare la PR #191. Non equivale a un cutover: il frontend Firebase Hosting non è stato ancora pubblicato, la PR resta DRAFT e Production continua a derivare da `main`.
+Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** della PR #191. Le frasi al presente descrivono esclusivamente quel checkpoint storico; lo stato corrente è quello delle sezioni Production e `Cutover Production verificato`.
 
 ### Firebase / Google Cloud
 
