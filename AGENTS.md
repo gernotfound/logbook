@@ -270,9 +270,11 @@ npm run verify:m8
 `vercel.json` è la configurazione repository canonica. Nel contratto corrente:
 
 - **MUST:** `main` è il solo branch abilitato ai deployment Vercel tramite `git.deploymentEnabled`; i branch di sviluppo sono disabilitati.
+- **MUST:** `ignoreCommand` deve saltare i deployment Git che non modificano il boundary backend Vercel; cambi a `api/`, `server/`, configurazione Vercel, dipendenze/runtime o configurazione TypeScript server devono invece continuare a generare un deployment Production.
+- **MUST:** in assenza di uno SHA precedente affidabile o se il confronto Git fallisce, il selettore deve fallire aperto verso il deployment, mai saltare un possibile aggiornamento backend.
 - **MUST:** non indebolire questa barriera per ottenere una Preview; la CI GitHub è il gate del branch.
-- Il deployment di produzione deve derivare da `main`.
-- Dopo il merge verificare: commit effettivo su `main`, Canonical Verification sul commit di `main`, deployment Vercel corrispondente e stato verde di entrambi.
+- Il deployment di produzione Vercel, quando necessario, deve derivare da `main`.
+- Dopo il merge verificare sempre commit effettivo e Canonical Verification su `main`; verificare un nuovo deployment Vercel sullo stesso SHA solo quando il diff richiede il backend, altrimenti verificare che Vercel abbia correttamente ignorato il commit frontend-only.
 - **VERIFY:** se Vercel Deployment Checks dipende dal nome `Canonical Verification`, non rinominare il job senza prima verificare/aggiornare la configurazione esterna.
 
 ## Catalogo globale

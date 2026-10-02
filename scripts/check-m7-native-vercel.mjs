@@ -27,6 +27,20 @@ for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) 
 if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
 if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
+if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.push('Vercel must skip Git deployments that do not change the backend contract');
+if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
+else {
+  const vercelIgnoreBuild = readFileSync('scripts/vercel-ignore-build.mjs', 'utf8');
+  for (const requiredPath of ['api', 'server', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json']) {
+    if (!vercelIgnoreBuild.includes(`'${requiredPath}'`)) failures.push(`Vercel selective deployment guard missing backend-sensitive path: ${requiredPath}`);
+  }
+  if (!vercelIgnoreBuild.includes('VERCEL_GIT_PREVIOUS_SHA') || !vercelIgnoreBuild.includes('VERCEL_GIT_COMMIT_SHA')) {
+    failures.push('Vercel selective deployment guard must compare against the previous successful deployment SHA');
+  }
+  if (!vercelIgnoreBuild.includes("process.exit(0)") || !vercelIgnoreBuild.includes("process.exit(1)")) {
+    failures.push('Vercel selective deployment guard must skip unchanged frontend-only commits and deploy backend changes');
+  }
+}
 if (vercel.framework !== null) failures.push('Vercel must use the Other framework preset so Production is backend-only instead of rebuilding the Vite frontend');
 if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
 

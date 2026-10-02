@@ -164,10 +164,11 @@ Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting 
 
 `vercel.json` contiene il contratto repository corrente per Git deployment, imposta `framework: null` per il preset **Other** (backend-only, senza dipendere dal preset Vite del progetto) e `fluid: true` per rendere esplicito Fluid Compute:
 
-- `main`: deployment abilitato;
-- altri branch: deployment disabilitato.
+- `main`: integrazione Git abilitata, ma `ignoreCommand` salta i commit che non modificano il boundary backend;
+- altri branch: deployment disabilitato;
+- modifiche a `api/`, `server/`, `vercel.json`, dipendenze/runtime o configurazione TypeScript server continuano a produrre il deployment Production necessario.
 
-**MUST:** i branch di sviluppo non generano Preview Deployment. Non allargare `git.deploymentEnabled` per usare Vercel Preview come sostituto della CI. Il deployment di produzione deriva da `main`.
+**MUST:** i branch di sviluppo non generano Preview Deployment. Non allargare `git.deploymentEnabled` per usare Vercel Preview come sostituto della CI. Il selettore dei deploy deve confrontare il commit corrente con l'ultimo deployment Vercel riuscito e, se non può determinare con sicurezza il diff, deve consentire il deployment invece di saltarlo. Il deployment di produzione Vercel, quando richiesto, deriva da `main`.
 
 ## Sicurezza HTTP
 
