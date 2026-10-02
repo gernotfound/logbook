@@ -5,6 +5,7 @@ import { useDialogStore } from '../../store/useDialogStore';
 import { writeBrowserValue } from '../../lib/sync/browserStorage';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
+import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
 
 interface LoginBoxProps {
     onCancel?: () => void;
@@ -30,15 +31,6 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         active: Boolean(onCancel) && !globalDialogOpen,
         onEscape: onCancel,
     });
-
-    const checkPasswordStrength = (pass: string) => {
-        if (pass.length < 8) return "La password deve contenere almeno 8 caratteri.";
-        if (!/\d/.test(pass)) return "La password deve contenere almeno 1 numero.";
-        if (!/[a-z]/.test(pass)) return "La password deve contenere almeno 1 lettera minuscola.";
-        if (!/[A-Z]/.test(pass)) return "La password deve contenere almeno 1 lettera maiuscola.";
-        if (!/[!@#$%^&*(),.?":{}|<>_+-]/.test(pass)) return "La password deve contenere almeno 1 carattere speciale.";
-        return null; // OK
-    };
 
     const handleAuthAction = async (action: () => Promise<void>) => {
         if (isGuest) {
