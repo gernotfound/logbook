@@ -89,6 +89,8 @@ Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messagi
 
 Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono `LEGACY`: il client corrente invia errori/anomalie a Sentry, ma Rules, account deletion e retention cron restano finché i client vecchi e i documenti residui non sono definitivamente smaltiti.
 
+Verifica live 2026-10-02 del database `(default)`: Firestore Native Standard in regione `europe-west12`, free tier attivo, PITR disabilitato e **delete protection abilitata** per impedire la cancellazione accidentale del database. PITR/backup gestiti non vengono attivati sul piano Spark perché richiedono fatturazione.
+
 ## Firebase Admin e account deletion
 
 Le Vercel Functions di account deletion richiedono per contratto:
