@@ -98,7 +98,7 @@ test.describe('Offline scenarios & Background suspension', () => {
     await context.setOffline(true);
 
     await page.goto('/?tab=training');
-    await expect(page.locator('button[aria-label="Allenamento"]')).toBeVisible();
+    await expect(page.locator('#view-training')).toBeVisible();
     await expect.poll(() => new URL(page.url()).search).toBe('');
   });
 
