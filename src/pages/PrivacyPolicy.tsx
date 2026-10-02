@@ -142,7 +142,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               IndexedDB e localStorage sono utilizzati per il funzionamento offline, la persistenza locale, il workout in corso, preferenze e altri stati tecnici necessari. Questi meccanismi sono distinti dai servizi Analytics e sono necessari alle funzionalità locali dell'app.
             </p>
             <p>
-              <strong style={{ color: 'var(--text-main)' }}>Google Analytics 4 è disabilitato per impostazione predefinita e viene caricato soltanto dopo un nuovo opt-in specifico nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; l'app non renderizza questi componenti senza consenso. Google/Firebase Analytics non viene inizializzato né utilizzato da LogBook.
+              <strong style={{ color: 'var(--text-main)' }}>Google Analytics 4 è disabilitato per impostazione predefinita e viene caricato soltanto dopo un nuovo opt-in specifico nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; l'app non renderizza questi componenti senza consenso. Vercel Analytics e Speed Insights non vengono più utilizzati dal frontend Firebase Hosting.
             </p>
             <p>
               Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. LogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
