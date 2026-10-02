@@ -48,7 +48,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               Informativa sulla privacy
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--font-size-meta)', color: 'var(--text-muted)' }}>
-              Aggiornata al 1 ottobre 2026
+              Aggiornata al 2 ottobre 2026
             </p>
           </div>
           <button
@@ -145,6 +145,9 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <strong style={{ color: 'var(--text-main)' }}>Google Analytics 4 è disabilitato per impostazione predefinita e viene caricato soltanto dopo un nuovo opt-in specifico nelle Impostazioni.</strong> L'opt-in può essere revocato successivamente; l'app non renderizza questi componenti senza consenso. Vercel Analytics e Speed Insights non vengono più utilizzati dal frontend Firebase Hosting.
             </p>
             <p>
+              Dopo l'opt-in, Google Analytics 4 può utilizzare identificatori e cookie first-party tecnici/analitici, inclusi identificatori della famiglia <code>_ga</code>, secondo la configurazione del servizio. Nessun tag GA4 viene caricato da TheLogBook prima del consenso. La revoca disabilita la raccolta futura nell'app ma non elimina automaticamente eventuali dati già trasmessi al fornitore.
+            </p>
+            <p>
               Questi servizi sono destinati a statistiche tecniche e di utilizzo. Non li descriviamo come necessariamente anonimi: i fornitori possono trattare dati tecnici di rete/dispositivo secondo le proprie condizioni e configurazioni. TheLogBook non deve includere deliberatamente nei relativi eventi il contenuto grezzo di allenamenti, nutrizione o misurazioni corporee.
             </p>
           </Section>
@@ -154,7 +157,7 @@ export const PrivacyPolicy: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               I dati locali in modalità ospite rimangono sul dispositivo finché non vengono eliminati dall'utente, rimossi dal browser/sistema oppure migrati secondo i flussi previsti dall'app.
             </p>
             <p>
-              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. Per la nuova telemetria Sentry, i tempi di conservazione dipendono dal piano e dalla configurazione effettiva del fornitore e devono essere verificati rispetto alle condizioni correnti. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di TheLogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. TheLogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
+              I dati applicativi cloud associati all'account vengono conservati per fornire il servizio finché l'account rimane attivo, salvo cancellazioni o obblighi diversi applicabili. La telemetria tecnica Sentry viene conservata secondo il periodo configurato nel servizio e soltanto per finalità diagnostiche; tale periodo va mantenuto coerente con la configurazione Production effettiva e con la documentazione pubblicata. Le vecchie raccolte telemetriche Firestore generate da versioni precedenti di TheLogBook mantengono invece la retention tecnica di 30 giorni e vengono progressivamente eliminate dal processo server di manutenzione. TheLogBook mette a disposizione backup JSON ed esportazioni CSV per consentire all'utente di conservare una copia dei propri dati.
             </p>
             <p>
               La funzione <strong style={{ color: 'var(--text-main)' }}>Elimina account</strong> avvia un workflow server-side che rimuove le raccolte private previste, i dati applicativi cloud e infine l'account Firebase Authentication. Il dispositivo conserva la propria copia locale finché non ha prova che il workflow cloud sia completato, per evitare cancellazioni locali premature in caso di rete instabile.
