@@ -37,7 +37,7 @@ Versione applicativa corrente: **1.1.0**.
 
 ## Architettura offline-first
 
-LogBook usa più livelli di persistenza con responsabilità separate:
+TheLogBook usa più livelli di persistenza con responsabilità separate:
 
 | Livello | Tecnologia | Ruolo |
 |---|---|---|
@@ -48,7 +48,7 @@ LogBook usa più livelli di persistenza con responsabilità separate:
 
 Le normali mutazioni business attraversano **Domain Operations**: l'intento viene trasformato in operazioni semantiche, persistito atomicamente nell'envelope locale e poi replicato verso Firestore. La sincronizzazione usa metadati causali/Vector Clock e mantiene le operation pending quando la rete non consente una conferma sicura.
 
-Una race importante è coperta esplicitamente: se una nuova modifica locale avviene tra il commit remoto e l'acknowledge locale, LogBook prende lo snapshot remoto confermato come baseline e rigioca soltanto le operation locali ancora pending, evitando di perdere sia modifiche remote sia modifiche locali.
+Una race importante è coperta esplicitamente: se una nuova modifica locale avviene tra il commit remoto e l'acknowledge locale, TheLogBook prende lo snapshot remoto confermato come baseline e rigioca soltanto le operation locali ancora pending, evitando di perdere sia modifiche remote sia modifiche locali.
 
 ## Modalità ospite e account
 
