@@ -53,7 +53,7 @@
 
 Per il primo pilot, salvo successiva decisione esplicita:
 
-- la palestra non accede ai dati LogBook degli utenti;
+- la palestra non accede ai dati TheLogBook degli utenti;
 - non esiste tenant gym/coach/admin;
 - servizio destinato a maggiorenni;
 - pagamenti e fatturazione restano fuori dalla PWA;
