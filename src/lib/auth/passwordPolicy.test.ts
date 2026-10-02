@@ -4,7 +4,7 @@ import { checkPasswordStrength, PASSWORD_POLICY_SUMMARY } from './passwordPolicy
 describe('password policy', () => {
     it('matches the Firebase Auth policy enforced in Production', () => {
         expect(checkPasswordStrength('Password1!')).toBeNull();
-        expect(checkPasswordStrength('Abc1 def')).toBeNull();
+        expect(checkPasswordStrength('Abc1~def')).toBeNull();
         expect(PASSWORD_POLICY_SUMMARY).toContain('almeno 8 caratteri');
     });
 
@@ -14,6 +14,7 @@ describe('password policy', () => {
         ['PASSWORD1!', 'almeno 1 lettera minuscola'],
         ['password1!', 'almeno 1 lettera maiuscola'],
         ['Password1', 'almeno 1 carattere speciale'],
+        ['Abc1 def', 'almeno 1 carattere speciale'],
     ])('rejects %s', (password, expected) => {
         expect(checkPasswordStrength(password)).toContain(expected);
     });
