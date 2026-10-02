@@ -31,5 +31,6 @@
     }
   ],
   "fluid": true,
-  "framework": null
+  "framework": null,
+  "ignoreCommand": "node scripts/vercel-ignore-build.mjs"
 }
