@@ -24,7 +24,7 @@
 
 | Sistema | Controllo | Stato |
 |---|---|---|
-| Firebase | Security Rules live corrispondono al commit approvato | `[VERIFY]` |
+| Firebase | Security Rules live corrispondono al commit approvato | sorgente live identica a `firestore.rules` di `main` — verificato 2026-10-02 |
 | App Check | Enforcement effettivo sui servizi applicabili | `ENFORCED` su Firestore, Authentication e RTDB — verificato 2026-10-02 |
 | Firebase Auth | Authorized domains | Vercel frontend rimosso; Firebase defaults + `thelogbook.web.app` verificati 2026-10-02 |
 | Firebase Auth | Password policy / provider config | ENFORCE: min 8 + maiuscola/minuscola/numero/non-alfanumerico; Improved Email Privacy ON — verificato 2026-10-02 |
