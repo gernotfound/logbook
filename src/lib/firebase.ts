@@ -120,6 +120,7 @@ const auth = initializeAuth(firebaseApp, {
     persistence: browserLocalPersistence,
     ...(typeof window !== 'undefined' ? { popupRedirectResolver: browserPopupRedirectResolver } : {}),
 });
+auth.languageCode = 'it';
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
