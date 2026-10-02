@@ -1,4 +1,4 @@
-# Registro delle attività di trattamento — template LogBook
+# Registro delle attività di trattamento — template TheLogBook
 
 > Template di lavoro Art. 30 GDPR. Compilare in base al ruolo effettivo e far validare prima del pilot.
 
@@ -13,12 +13,12 @@
 - Data approvazione: `[DATE]`
 - Responsabile dell'approvazione: `[ROLE]`
 
-## Attività 1 — Erogazione LogBook e dati applicativi
+## Attività 1 — Erogazione TheLogBook e dati applicativi
 
 | Campo | Contenuto da validare |
 |---|---|
 | Ruolo GDPR | `[CONTROLLER / PROCESSOR / OTHER — SEE controller-role-decision.md]` |
-| Interessati | Utenti maggiorenni di LogBook |
+| Interessati | Utenti maggiorenni di TheLogBook |
 | Finalità | Erogare funzioni richieste: allenamento, nutrizione, misurazioni, persistenza locale/cloud, sync, recovery |
 | Categorie dati | Account; routine/sessioni/esercizi; nutrizione; peso/composizione/circonferenze; sonno; dolori/fatica; preferenze e metadati tecnici |
 | Dati particolari | Dati relativi alla salute quando le informazioni inserite rientrano nell'art. 9 GDPR |
@@ -29,7 +29,7 @@
 | Trasferimenti extra SEE | Vedi `vendor-transfer-register.md`; `[TO_VERIFY]` |
 | Retention | Vedi `retention-schedule.md` |
 | Misure | Vedi `technical-organizational-measures.md` |
-| Sistemi | Browser/PWA; IndexedDB/localStorage; Firebase Authentication/Firestore; Vercel |
+| Sistemi | Browser/PWA; IndexedDB/localStorage; Firebase Hosting/Authentication/Firestore/App Check; Vercel Functions per backend trusted |
 
 ## Attività 2 — Autenticazione e gestione account
 
@@ -59,11 +59,11 @@
 | Campo | Contenuto da validare |
 |---|---|
 | Finalità | Statistiche tecniche e di utilizzo non essenziali |
-| Fornitore | Vercel Analytics / Speed Insights |
-| Attivazione | Opt-in; disabilitati per default e revocabili |
+| Fornitore | Google Analytics 4 / Firebase Analytics |
+| Attivazione | Opt-in provider-specific; disabilitato per default e revocabile |
 | Base | Consenso |
-| Dati | Dati tecnici secondo il servizio e configurazione effettiva; non includere deliberatamente contenuto fitness grezzo |
-| Retention/trasferimenti | Verificare documentazione e configurazione Vercel corrente |
+| Dati | Dati tecnici di utilizzo secondo configurazione effettiva; nessun User-ID o evento custom relativo a workout, nutrizione, misure o salute intenzionale |
+| Retention/trasferimenti | Verificare documentazione e configurazione Google Analytics corrente |
 
 ## Attività 5 — Account deletion e recovery
 
