@@ -1,4 +1,4 @@
-# Retention schedule — LogBook
+# Retention schedule — TheLogBook
 
 > Policy di conservazione da approvare prima del pilot e mantenere allineata al comportamento reale. Le durate di progetto non sono "imposte dal GDPR": devono essere motivate da finalità, necessità, rischio e obblighi applicabili.
 
