@@ -16,7 +16,7 @@ for (const forbidden of ['nitro', 'workflow']) {
 }
 if (/workflow\/vite|nitro\/vite|\bnitro\s*\(/.test(vite)) failures.push('vite.config.ts must remain a plain Vite/PWA configuration without Nitro/Workflow');
 if (!swSource.includes("createHandlerBoundToURL('/index.html')") || !swSource.includes('new NavigationRoute(')) failures.push('service worker must route document navigations to the precached SPA shell');
-if (!swSource.includes('{ denylist: [/^\\/__*/') && !swSource.includes('{ denylist: [/^\\/__\\//]')) failures.push('service worker SPA navigation fallback must exclude Firebase /__/ helpers');
+if (!swSource.includes("{ denylist: [/^\\/__\\//] }")) failures.push('service worker SPA navigation fallback must exclude Firebase /__/ helpers');
 if (!packageJson.dependencies?.['firebase-admin']) failures.push('firebase-admin must be a runtime dependency for native Vercel Functions');
 if (packageJson.devDependencies?.['firebase-admin']) failures.push('firebase-admin must not remain dev-only');
 
