@@ -113,6 +113,22 @@ if (existsSync('dist/sw.js')) {
 
 if (existsSync('dist/index.html')) {
   const builtHtml = readFileSync('dist/index.html', 'utf8');
+  const requiredBranding = [
+    '<title>TheLogBook</title>',
+    'name="apple-mobile-web-app-title" content="TheLogBook"',
+    'name="description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
+    'property="og:title" content="TheLogBook"',
+    'property="og:site_name" content="TheLogBook"',
+    'property="og:description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
+    'property="og:image:alt" content="Icona TheLogBook con stickman chef su sfondo nero"',
+    'name="twitter:title" content="TheLogBook"',
+    'name="twitter:description" content="Traccia i tuoi allenamenti, l\'alimentazione e i progressi corporei con TheLogBook."',
+    'name="twitter:image:alt" content="Icona TheLogBook con stickman chef su sfondo nero"',
+    '<h1>TheLogBook</h1>',
+  ];
+  for (const branding of requiredBranding) {
+    if (!builtHtml.includes(branding)) failures.push(`built HTML missing canonical TheLogBook branding: ${branding}`);
+  }
   if (!builtHtml.includes('https://thelogbook.web.app/social-share.jpg?v=20260929-chef')) failures.push('built HTML must expose the revisioned social share card URL');
   if (!builtHtml.includes('name="twitter:card" content="summary_large_image"')) failures.push('built HTML must request a large Twitter/social preview card');
   if (!builtHtml.includes('apple-touch-icon.png?v=20260929-chef')) failures.push('built HTML must revision the Apple touch icon URL');
