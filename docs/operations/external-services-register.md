@@ -130,7 +130,7 @@ Vercel è il boundary **backend trusted Production** di TheLogBook. Il frontend/
 
 Il redirect del root legacy deve usare **HTTP 301** esplicito: `vercel.json` usa `statusCode: 301`, così il pre-check dello strumento Search Console **Cambio di indirizzo** vede il codice richiesto da Google. Un redirect temporaneo 307 o il generico `permanent: true` di Vercel, che produce 308, non soddisfano questo contratto operativo specifico. Gli endpoint `/api/*` restano esclusi da questo redirect e continuano a servire il backend trusted.
 
-Il repository abilita i deploy Vercel soltanto da `main` e impone `framework: null` / Fluid Compute tramite `vercel.json`. I branch di sviluppo non devono generare Preview Deployment.
+Il repository abilita l'integrazione Git Vercel soltanto da `main` e impone `framework: null` / Fluid Compute tramite `vercel.json`. I branch di sviluppo non generano Preview Deployment. Dal 2026-10-02 un `ignoreCommand` selettivo evita nuovi deployment Production quando un commit modifica soltanto il frontend Firebase o documentazione non rilevante per il backend; modifiche a `api/`, `server/`, `vercel.json`, dipendenze/runtime o configurazione TypeScript server continuano invece a produrre automaticamente il deployment Vercel. Se il confronto con l'ultimo deployment riuscito non è disponibile o fallisce, il selettore consente il deployment per non lasciare indietro il backend.
 
 Le configurazioni server-only che appartengono al runtime Vercel sono:
 
