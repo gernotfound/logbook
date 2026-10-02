@@ -54,32 +54,30 @@ I domini Firebase predefiniti possono comunque essere presenti nelle configurazi
 
 Firebase Authentication è il provider identità del prodotto. TheLogBook supporta autenticazione Google e credenziali email/password.
 
-Stato live verificato il 2026-10-01 durante la preparazione del futuro origin Firebase Hosting:
+Stato live verificato il 2026-10-02 dopo il cutover:
 
-- Firebase Authentication → Authorized domains conteneva, al checkpoint pre-cutover, `localhost`, i domini Firebase predefiniti, il vecchio dominio frontend Vercel e `thelogbook.web.app`;
-- il Web OAuth client auto-creato mantiene le origini localhost e Firebase già necessarie;
-- è stata aggiunta l'origine JavaScript `https://thelogbook.web.app`;
-- è stato aggiunto il redirect `https://thelogbook.web.app/__/auth/handler`;
-- in quella fase i valori esistenti necessari al rollback Vercel/Firebase non erano ancora stati rimossi.
+- Firebase Project e Web App hanno display name **TheLogBook**;
+- Firebase Authentication → Authorized domains contiene `localhost`, i due domini Firebase predefiniti e `thelogbook.web.app`; il vecchio frontend `logbook-gnf.vercel.app` è stato rimosso;
+- email/password è abilitato e Improved Email Privacy è attivo;
+- la password policy server è in modalità **ENFORCE**: minimo 8 caratteri, almeno una maiuscola, una minuscola, un numero e un carattere non alfanumerico; `forceUpgradeOnSignin` resta disattivato per non bloccare credenziali preesistenti al solo accesso;
+- il client imposta esplicitamente la lingua Auth su italiano per le azioni avviate dall'app;
+- il callback delle email action gestite dal template Firebase resta sul dominio Firebase predefinito `firebaseapp.com`: il tentativo di migrazione al site `thelogbook.web.app` è stato rifiutato dal provider con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. Per questo il dominio Firebase predefinito resta una dipendenza Auth legittima e non va rimosso dalle allowlist;
+- il Web OAuth client era già stato predisposto con origine `https://thelogbook.web.app` e redirect `https://thelogbook.web.app/__/auth/handler`; la rimozione di eventuali valori OAuth Vercel residui resta **VERIFY-LIVE** finché non viene osservata direttamente nel relativo client Google Cloud.
 
 Il precedente dominio GitHub Pages è **ritirato** dal 2026-09-30 e non deve essere reintrodotto salvo nuova dipendenza runtime esplicita.
-
-Il vecchio origin Vercel non è più un frontend Production. La sua rimozione dalle allowlist Auth/OAuth va completata nelle console esterne dopo verifica che nessun flusso residuo ne dipenda; il backend Vercel non richiede che il proprio hostname sia un Authorized Domain Firebase Auth.
 
 ## Google API Browser key
 
 La Firebase Web API key è configurazione client pubblica, non una credenziale Admin. La sua sicurezza dipende anche dalle restrizioni lato Google Cloud.
 
-Stato live verificato il 2026-10-01:
+Stato live verificato il 2026-10-02:
 
 - la chiave browser auto-creata da Firebase è limitata a **Siti web**;
-- i referrer osservati al checkpoint pre-cutover includevano il vecchio frontend Vercel, l'origine Firebase necessaria al flusso Auth e `https://thelogbook.web.app/*`;
-- il nuovo origin Firebase Hosting è quindi già autorizzato senza aprire la chiave a qualunque sito;
-- le restrizioni API risultano già abilitate con un insieme esplicito di API; l'elenco non è stato ristretto ulteriormente durante questa preparazione per evitare di rimuovere dipendenze Firebase necessarie senza test runtime dedicati.
+- i referrer correnti sono il dominio Firebase predefinito necessario alle email action Auth e `https://thelogbook.web.app/*`; il vecchio referrer Vercel è stato rimosso;
+- le restrizioni API restano l'allowlist Firebase auto-gestita già presente. Non è stata ristretta artificialmente: Firebase documenta la Web API key come configurazione client pubblica e la protezione applicativa resta affidata a Rules, Auth e App Check;
+- l'API Keys API di Google Cloud è stata abilitata come control plane per applicare e verificare questa pulizia; non introduce un nuovo servizio runtime della PWA.
 
 Il vecchio referrer GitHub Pages è **ritirato** dal 2026-09-30.
-
-Il vecchio referrer Vercel non è più richiesto dal frontend Production e va rimosso dalla Browser API key quando la console Google Cloud viene verificata nel post-cutover.
 
 ## Firestore
 
@@ -110,16 +108,13 @@ TheLogBook usa `ReCaptchaEnterpriseProvider` tramite Firebase App Check per rend
 
 Nella terminologia Google Cloud corrente, reCAPTCHA Enterprise è presentato come funzionalità della piattaforma Google Cloud Fraud Defense. Per TheLogBook questi nomi non indicano due integrazioni applicative separate: il codice usa **App Check + provider reCAPTCHA Enterprise**.
 
-Verifica live aggiornata il 2026-10-01:
+Verifica live aggiornata il 2026-10-02:
 
 - la Web App TheLogBook è registrata in Firebase App Check con provider Fraud Defense/reCAPTCHA Enterprise;
-- Cloud Firestore e Authentication mostravano 100% richieste verificate e 0% non verificate in modalità monitoraggio;
-- l'enforcement non è stato attivato durante questa preparazione;
-- la chiave Web è stata rinominata da `Logbook Vercel` a **TheLogBook Web** senza cambiare l'identità/site key;
-- la verifica dominio resta attiva;
-- i domini autorizzati osservati sono `logbook-gnf.vercel.app` e `thelogbook.web.app`;
-- AMP resta disabilitato;
-- il vecchio dominio frontend Vercel è ritirato dal runtime post-cutover; la relativa allowlist esterna resta da rimuovere durante la pulizia console.
+- provider Enterprise configurato con TTL token **3600 s** e soglia score **0,5**;
+- enforcement **ENFORCED** su Cloud Firestore, Firebase Authentication/Identity Toolkit e Realtime Database;
+- la replay protection dei servizi Firebase gestiti resta OFF; è distinta dal backend custom Vercel, che continua a consumare token App Check limited-use e a rifiutarne il replay;
+- la chiave Web **TheLogBook Web** mantiene la verifica dominio attiva, `allowAllDomains=false`, AMP disabilitato e autorizza soltanto `thelogbook.web.app`; il vecchio dominio Vercel è stato rimosso.
 
 Bot/Fraud Defense resta il boundary App Check osservato; Account defense, SMS defense e Transaction defense non fanno parte del runtime TheLogBook salvo futura decisione esplicita e verifica live.
 
@@ -331,7 +326,7 @@ Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** del
 - Nei log Vercel successivi allo smoke, `/api/account-deletion-device` ha risposto con 200 alle richieste applicative e 204 ai preflight; le sonde senza origin autorizzata hanno prodotto 403. Questo verifica il boundary CORS del nuovo origin e il percorso di registrazione recovery autenticato/App Check limited-use.
 - Nessun runtime error Vercel è emerso nella finestra post-cutover osservata.
 - Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository TheLogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
-- Restano esterni e da verificare/ripulire nelle rispettive console: vecchio origin Vercel in Firebase Auth, Browser API key, reCAPTCHA/Sentry allowlist; proprietà Search Console del nuovo origin. Il backend post-cutover ritira invece il supporto applicativo al CORS legacy, così una variabile provider residua non può riabilitare il vecchio frontend.
+- Pulizia Firebase/Google Cloud del 2026-10-02: vecchio origin Vercel rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise; App Check portato in enforcement. Restano **VERIFY-LIVE** l'eventuale origin/redirect Vercel nel Web OAuth client, la rimozione Vercel dalla allowlist Sentry e la proprietà Search Console del nuovo origin. Il callback email Auth resta deliberatamente sul dominio Firebase predefinito finché il provider rifiuta il cambio con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
 
 ## Archivio decisionale — candidato PR #191
 
