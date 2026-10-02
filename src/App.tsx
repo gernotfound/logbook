@@ -240,7 +240,7 @@ function App() {
     return (
       <div id="auth-overlay">
         <div id="auth-loading" className="auth-panel">
-            <h1 className="text-primary mb-10">TheTheLogBook</h1>
+            <h1 className="text-primary mb-10">TheLogBook</h1>
             <div className="spinner auth-spinner"></div>
             <p>Caricamento...</p>
         </div>
@@ -254,13 +254,13 @@ function App() {
         <div className="auth-panel">
           <h1 className="text-primary mb-10">Aggiornamento richiesto</h1>
           <p style={{ lineHeight: 1.5 }}>
-            Questa copia di TheTheLogBook non può modificare in sicurezza i dati trovati. I dati locali e cloud sono stati lasciati intatti.
+            Questa copia di TheLogBook non può modificare in sicurezza i dati trovati. I dati locali e cloud sono stati lasciati intatti.
           </p>
           <p className="text-muted">
-            {compatibilityError ?? 'Aggiorna TheTheLogBook alla versione più recente prima di continuare.'}
+            {compatibilityError ?? 'Aggiorna TheLogBook alla versione più recente prima di continuare.'}
           </p>
           <button type="button" onClick={() => { void safeHardReload().catch(() => {}); }} className="btn btn-primary">
-            Ricarica TheTheLogBook
+            Ricarica TheLogBook
           </button>
         </div>
       </div>
@@ -279,7 +279,7 @@ function App() {
     return (
       <div id="auth-overlay" style={{ zIndex: 10001 }} role="status" aria-live="polite">
         <div id="auth-loading" className="auth-panel">
-          <h1 className="text-primary mb-10">TheTheLogBook</h1>
+          <h1 className="text-primary mb-10">TheLogBook</h1>
           <div className="spinner auth-spinner"></div>
           <p>Preparazione account...</p>
         </div>
