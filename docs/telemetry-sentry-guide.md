@@ -1,8 +1,8 @@
-# Telemetria Sentry — guida operativa LogBook
+# Telemetria Sentry — guida operativa TheLogBook
 
-> Stato: guida tecnica stabile | Ultima verifica: 2026-09-30 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts`, `vercel.json`.
+> Stato: guida tecnica stabile | Ultima verifica: 2026-10-02 | Fonti eseguibili: `src/lib/sentryClient.ts`, `src/lib/telemetry/`, `src/lib/telemetrySanitizer.ts`, `src/lib/storageTelemetry.ts`, `vite.config.ts`, `firebase.json`.
 
-LogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Vercel Analytics e Speed Insights restano sistemi separati e subordinati all'opt-in Analytics. Google/Firebase Analytics non viene utilizzato.
+TheLogBook usa Sentry esclusivamente come **Error Monitoring** tecnico della Production. Google Analytics 4 è un sistema separato e opzionale, caricato soltanto dopo opt-in esplicito; Vercel Analytics e Speed Insights sono ritirati dal frontend Production.
 
 ## Perimetro
 
@@ -31,17 +31,17 @@ La coda locale best-effort resta bounded a 50 elementi per compatibilità/offlin
 
 ## Release e source map
 
-La build Vercel Production usa:
+La build frontend **Firebase Hosting Production** usa:
 
 - `VITE_SENTRY_DSN` nel browser;
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` solo durante la build;
-- `VERCEL_GIT_COMMIT_SHA` come nome release e SHA completo.
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` soltanto nella build trusted GitHub Actions;
+- l'exact SHA GitHub come nome release completo.
 
-`@sentry/vite-plugin` viene attivato soltanto in Production quando le credenziali build sono presenti. Vite genera source map hidden, il plugin le carica a Sentry e poi elimina `dist/**/*.map`, evitando di pubblicarle come asset statici.
+`@sentry/vite-plugin` viene attivato soltanto quando `FIREBASE_HOSTING_DEPLOY=production` e sono presenti le credenziali build. Vite genera source map hidden, il plugin le carica a Sentry e poi elimina `dist/**/*.map`, evitando di pubblicarle come asset statici. I deploy backend Vercel non attivano questo passaggio frontend.
 
 ## CSP
 
-`vercel.json` autorizza esclusivamente l'endpoint ingest Sentry del progetto nella direttiva `connect-src`. Non è richiesto alcun dominio Sentry in `script-src` perché lo SDK viene bundlato dall'app.
+`firebase.json` autorizza l'endpoint ingest Sentry del progetto nella direttiva `connect-src`. Non è richiesto alcun dominio Sentry in `script-src` perché lo SDK viene bundlato dall'app.
 
 ## Firestore legacy
 
@@ -60,7 +60,7 @@ Per ogni modifica al monitoring:
 1. mantenere sanitizzazione/minimizzazione;
 2. non aggiungere dati business liberi;
 3. aggiornare test del boundary di produzione;
-4. verificare build source-map Sentry in Vercel Production;
+4. verificare la build source-map Sentry nel workflow Firebase Hosting Production;
 5. verificare almeno un errore controllato in Sentry senza esporre PII;
 6. eseguire il gate canonico `npm run verify:m8` sull'exact SHA candidato.
 
