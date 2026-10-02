@@ -566,7 +566,7 @@ function describe(
         case 'deload_change':
             return { headline: 'Deload: variazione descrittiva', detail: `Set di riferimento: ${previousRef} → ${currentRef}. Dose osservata: ${previous?.workSets ?? 0} → ${current.workSets} serie. Le riduzioni programmate non vengono classificate come regressione.` };
         case 'execution_baseline':
-            return { headline: 'Esecuzione: baseline registrata', detail: 'LogBook usa modalità, standard tecnico e parametri registrati. Non deduce la qualità tecnica da dati non inseriti.' };
+            return { headline: 'Esecuzione: baseline registrata', detail: 'TheLogBook usa modalità, standard tecnico e parametri registrati. Non deduce la qualità tecnica da dati non inseriti.' };
         case 'density_limited':
             return { headline: 'Densità: confronto limitato alla sessione', detail: 'Non sono disponibili timestamp per attribuire una densità precisa al singolo esercizio.' };
         case 'new_baseline':
