@@ -88,7 +88,6 @@ describe('M7 account deletion recovery device registry', () => {
     state.registry = null;
     state.deleted = 0;
     vi.clearAllMocks();
-    delete process.env.PUBLIC_APP_LEGACY_ORIGIN;
     auth.verifyRecoveryRegistrationRequester.mockResolvedValue({ uid: 'user-a' });
     auth.verifyStatusAppCheck.mockResolvedValue(undefined);
     store.readDeletionStatusForUid.mockResolvedValue({ uid: 'user-a', status: 'complete' });
