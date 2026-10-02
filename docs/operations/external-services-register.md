@@ -128,7 +128,7 @@ Il cutover Vercel alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` �
 
 Vercel è il boundary **backend trusted Production** di TheLogBook. Il frontend/PWA Production è Firebase Hosting; Vercel mantiene soltanto le Functions native di account deletion/recovery, il cron giornaliero e il redirect del vecchio hostname verso `https://thelogbook.web.app/`.
 
-Il redirect del root legacy deve essere **permanente**: `vercel.json` usa `permanent: true` (HTTP 308 su Vercel), coerente con la migrazione URL Google; un redirect temporaneo 307 non è ammesso dal contratto. Gli endpoint `/api/*` restano esclusi da questo redirect e continuano a servire il backend trusted.
+Il redirect del root legacy deve usare **HTTP 301** esplicito: `vercel.json` usa `statusCode: 301`, così il pre-check dello strumento Search Console **Cambio di indirizzo** vede il codice richiesto da Google. Un redirect temporaneo 307 o il generico `permanent: true` di Vercel, che produce 308, non soddisfano questo contratto operativo specifico. Gli endpoint `/api/*` restano esclusi da questo redirect e continuano a servire il backend trusted.
 
 Il repository abilita i deploy Vercel soltanto da `main` e impone `framework: null` / Fluid Compute tramite `vercel.json`. I branch di sviluppo non devono generare Preview Deployment.
 
@@ -239,7 +239,7 @@ Il repository mantiene deliberatamente:
 
 Verifica live 2026-10-02: homepage, `robots.txt` e `sitemap.xml` rispondono HTTP 200; la homepage espone canonical autoreferenziale `https://thelogbook.web.app/`; la sitemap `https://thelogbook.web.app/sitemap.xml` è stata inviata tramite Search Console API con 0 warning e 0 errori iniziali ed è in attesa del primo download di Google. La prima URL Inspection della homepage riporta ancora `URL is unknown to Google`, stato atteso per una proprietà appena creata e non ancora scansionata.
 
-Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata accettata. Durante la migrazione mantenere inoltre il redirect permanente dal vecchio root Vercel al nuovo canonical e monitorare l'indicizzazione finché Google non ha elaborato il nuovo URL.
+Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata accettata. Durante la migrazione mantenere inoltre il redirect HTTP 301 dal vecchio root Vercel al nuovo canonical; dopo la verifica live del 301 eseguire il pre-check e la richiesta **Cambio di indirizzo** dalla vecchia proprietà, quindi monitorare l'indicizzazione finché Google non ha elaborato il nuovo URL.
 
 ## GitHub Pages — hosting ritirato
 

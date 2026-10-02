@@ -34,7 +34,8 @@ const legacyFrontendRedirect = vercel.redirects?.find(item => item.source === '/
 if (!legacyFrontendRedirect) failures.push('missing retired Vercel frontend root redirect');
 else {
   if (legacyFrontendRedirect.destination !== 'https://thelogbook.web.app/') failures.push('retired Vercel frontend root must redirect to the Firebase Hosting canonical origin');
-  if (legacyFrontendRedirect.permanent !== true) failures.push('retired Vercel frontend root redirect must be permanent for the Search site move');
+  if (legacyFrontendRedirect.statusCode !== 301) failures.push('retired Vercel frontend root redirect must use HTTP 301 for the Search Console Change of Address pre-check');
+  if ('permanent' in legacyFrontendRedirect) failures.push('retired Vercel frontend root redirect must use explicit statusCode 301 instead of permanent 307/308 mode');
 }
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');

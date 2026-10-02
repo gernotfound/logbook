@@ -27,7 +27,7 @@
     {
       "source": "/",
       "destination": "https://thelogbook.web.app/",
-      "permanent": true
+      "statusCode": 301
     }
   ],
   "fluid": true,
