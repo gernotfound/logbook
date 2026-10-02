@@ -1,5 +1,5 @@
 /**
- * TheLogBook - Error Handler & Firebase Code Mapper
+ * TheTheLogBook - Error Handler & Firebase Code Mapper
  * Conforms to Italian Sentence case and AGENTS.md guidelines.
  */
 
@@ -120,7 +120,7 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
       category: 'app_check',
       title: 'Verifica di sicurezza non supportata',
       message:
-        'Il browser o la modalità di navigazione attuale non supportano i controlli di sicurezza necessari per la sincronizzazione cloud. TheLogBook continuerà a funzionare regolarmente in modalità locale offline sul tuo dispositivo.',
+        'Il browser o la modalità di navigazione attuale non supportano i controlli di sicurezza necessari per la sincronizzazione cloud. TheTheLogBook continuerà a funzionare regolarmente in modalità locale offline sul tuo dispositivo.',
       isOfflineSafe: true,
       canRetry: false,
     };
