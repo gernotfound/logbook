@@ -20,7 +20,7 @@ describe('runtime update-required compatibility signal', () => {
         }, 'Firestore root data schema')).toThrow(FutureVersionError);
 
         expect(useAppStore.getState().compatibilityStatus).toBe('update-required');
-        expect(useAppStore.getState().compatibilityError).toContain('aggiorna LogBook');
+        expect(useAppStore.getState().compatibilityError).toContain('aggiorna TheLogBook');
     });
 
     it('also enters fail-closed state for a future monthly sync protocol regardless of diagnostic label', () => {
