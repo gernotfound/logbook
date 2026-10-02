@@ -17,7 +17,7 @@ Non vengono abilitati Sentry Session Replay, tracing, logging o Application Metr
 
 ## Privacy e minimizzazione
 
-Prima del boundary Sentry, LogBook sanitizza messaggi e stack rimuovendo pattern riconosciuti di email, IP presenti nel testo, Bearer/JWT, chiavi Firebase, path utente e chiavi sensibili. Lo SDK usa zero breadcrumbs, nessuna integrazione automatica e un `beforeSend` che elimina user/request/extra: gli errori vengono catturati manualmente dal boundary LogBook.
+Prima del boundary Sentry, TheLogBook sanitizza messaggi e stack rimuovendo pattern riconosciuti di email, IP presenti nel testo, Bearer/JWT, chiavi Firebase, path utente e chiavi sensibili. Lo SDK usa zero breadcrumbs, nessuna integrazione automatica e un `beforeSend` che elimina user/request/extra: gli errori vengono catturati manualmente dal boundary TheLogBook.
 
 Il Firebase UID serve solo come gate locale per mantenere la semantica autenticata del sistema precedente e **non viene deliberatamente inviato a Sentry**. Il contesto inviato è limitato a session ID tecnico, versione app, build SHA, piattaforma derivata, display mode, stato online, source, contatori/timestamp e component stack sanitizzato quando disponibile.
 
