@@ -299,16 +299,9 @@ export async function markDeletionFailed(
   });
 }
 
-export async function readDeletionStatus(uidValue: string, receiptValue: string): Promise<AccountDeletionPublicStatus | null> {
-  const uid = validateUid(uidValue);
-  const receipt = validateReceipt(receiptValue);
-  const snapshot = await jobRef(uid).get();
-  if (!snapshot.exists) return null;
-  const job = snapshot.data() as AccountDeletionJob;
-  if (!receiptMatches(receipt, job.receiptHash)) return null;
-
+function publicStatus(job: AccountDeletionJob): AccountDeletionPublicStatus {
   return {
-    uid,
+    uid: job.uid,
     status: job.status,
     attempts: Math.max(0, Number(job.attempts) || 0),
     cursor: job.cursor,
@@ -321,12 +314,36 @@ export async function readDeletionStatus(uidValue: string, receiptValue: string)
   };
 }
 
+export async function readDeletionStatusForUid(uidValue: string): Promise<AccountDeletionPublicStatus | null> {
+  const uid = validateUid(uidValue);
+  const snapshot = await jobRef(uid).get();
+  return snapshot.exists ? publicStatus(snapshot.data() as AccountDeletionJob) : null;
+}
+
+export async function readDeletionStatus(uidValue: string, receiptValue: string): Promise<AccountDeletionPublicStatus | null> {
+  const uid = validateUid(uidValue);
+  const receipt = validateReceipt(receiptValue);
+  const snapshot = await jobRef(uid).get();
+  if (!snapshot.exists) return null;
+  const job = snapshot.data() as AccountDeletionJob;
+  if (!receiptMatches(receipt, job.receiptHash)) return null;
+
+  return publicStatus(job);
+}
+
 export async function listRecoverableDeletionJobs(limitCount = 20): Promise<AccountDeletionJob[]> {
-  const snapshot = await adminDb().collection(JOB_COLLECTION)
-    .where('status', 'in', ['requested', 'deleting', 'verifying', 'failed'])
-    .limit(limitCount)
-    .get();
-  return snapshot.docs
-    .map((item: QueryDocumentSnapshot) => item.data() as AccountDeletionJob)
-    .filter((job: AccountDeletionJob) => job.status !== 'failed' || job.retryable !== false);
+  const boundedLimit = Math.max(1, Math.min(100, Math.floor(limitCount)));
+  const collection = adminDb().collection(JOB_COLLECTION);
+  const [active, retryableFailed] = await Promise.all([
+    collection.where('status', 'in', ['requested', 'deleting', 'verifying']).limit(boundedLimit).get(),
+    collection.where('status', '==', 'failed').where('retryable', '==', true).limit(boundedLimit).get(),
+  ]);
+
+  const unique = new Map<string, AccountDeletionJob>();
+  for (const item of [...active.docs, ...retryableFailed.docs] as QueryDocumentSnapshot[]) {
+    unique.set(item.id, item.data() as AccountDeletionJob);
+  }
+  return [...unique.values()]
+    .sort((left, right) => (timestampMillis(left.updatedAt) ?? 0) - (timestampMillis(right.updatedAt) ?? 0))
+    .slice(0, boundedLimit);
 }

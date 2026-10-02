@@ -12,6 +12,7 @@ import {
     type AccountDeletionMarker,
 } from '../sync/accountGate';
 import { waitForJournalIdle } from '../sync/replicateJournal';
+import { removeDeletionRecoveryCredential } from '../deletionDeviceRecovery';
 
 export type AccountDeletionOutcome =
     | { status: 'complete' }
@@ -50,7 +51,6 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         const prefix = 'logbook:v2:' + owner + ':';
         for (let index = 0; index < localStorage.length; index++) {
             const key = localStorage.key(index);
-            // Keep the server-deletion receipt until every other local purge succeeds.
             if (key?.startsWith(prefix) && !key.endsWith(':account-deletion')) keys.add(key);
         }
         if (owner === 'guest') keys.add('logbook_is_guest');
@@ -60,6 +60,13 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
         catch (error) { failures.push(error); }
     }
     if (failures.length) throw new AggregateError(failures, 'Pulizia locale incompleta. Alcuni dati sono ancora presenti su questo dispositivo.');
+}
+
+const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
+
+function accountDeletionUrl(): string {
+    if (!ACCOUNT_DELETION_API_ORIGIN) throw new Error('Backend cancellazione account non configurato.');
+    return ACCOUNT_DELETION_API_ORIGIN + '/api/account-deletion';
 }
 
 let deleting: Promise<AccountDeletionOutcome> | undefined;
@@ -76,8 +83,8 @@ function createReceiptToken(): string {
 
 async function appCheckToken(): Promise<string> {
     await ensureAppCheck();
-    const { getAppCheckToken } = await import('../appCheck');
-    const token = await getAppCheckToken(true);
+    const { getLimitedUseAppCheckToken } = await import('../appCheck');
+    const token = await getLimitedUseAppCheckToken();
     if (!token) throw new Error('Verifica App Check non disponibile. Cancellazione non avviata.');
     return token;
 }
@@ -88,7 +95,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionUrl(), {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -110,7 +117,7 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
 
 export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
-    const response = await fetch('/api/account-deletion', {
+    const response = await fetch(accountDeletionUrl(), {
         method: 'GET',
         headers: {
             'x-firebase-appcheck': await appCheckToken(),
@@ -135,8 +142,6 @@ function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
 }
 
 async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: DeletionContext): Promise<AccountDeletionOutcome> {
-    // A stale receipt from account A must never sign out, purge global drafts, or reset
-    // the in-memory view of account B (or an explicitly active guest) on a shared device.
     if (anotherLocalIdentityIsActive(marker)) {
         return {
             status: 'pending',
@@ -154,6 +159,7 @@ async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context:
 
     try {
         await context.purgeAllLocalUserData(marker.owner);
+        removeDeletionRecoveryCredential(marker.uid);
         context.resetCache();
         clearAccountDeletion(marker.owner);
         useAppStore.getState().resetStore();

@@ -24,22 +24,38 @@ function appCheckToken(request: Request): string {
   return token;
 }
 
-export async function verifyDeletionRequester(request: Request): Promise<{ uid: string }> {
-  const idToken = bearerToken(request);
-  const appToken = appCheckToken(request);
-
-  let decoded: DecodedIdToken;
+async function verifyConsumableAppCheck(request: Request): Promise<void> {
+  let result: Awaited<ReturnType<ReturnType<typeof adminAppCheck>['verifyToken']>>;
   try {
-    decoded = await adminAuth().verifyIdToken(idToken, true);
-  } catch {
-    throw new RequestAuthError('Sessione non valida o revocata. Effettua nuovamente il login.');
-  }
-
-  try {
-    await adminAppCheck().verifyToken(appToken);
-  } catch {
+    result = await adminAppCheck().verifyToken(appCheckToken(request), { consume: true });
+  } catch (error) {
+    if (error instanceof RequestAuthError) throw error;
     throw new RequestAuthError('Verifica App Check non valida.', 403);
   }
+  if (result.alreadyConsumed) {
+    throw new RequestAuthError('Verifica App Check già utilizzata. Riprova la richiesta.', 403);
+  }
+}
+
+async function verifyAuthenticatedRequester(request: Request): Promise<DecodedIdToken> {
+  const idToken = bearerToken(request);
+  try {
+    const decoded = await adminAuth().verifyIdToken(idToken, true);
+    await verifyConsumableAppCheck(request);
+    return decoded;
+  } catch (error) {
+    if (error instanceof RequestAuthError) throw error;
+    throw new RequestAuthError('Sessione non valida o revocata. Effettua nuovamente il login.');
+  }
+}
+
+export async function verifyRecoveryRegistrationRequester(request: Request): Promise<{ uid: string }> {
+  const decoded = await verifyAuthenticatedRequester(request);
+  return { uid: decoded.uid };
+}
+
+export async function verifyDeletionRequester(request: Request): Promise<{ uid: string }> {
+  const decoded = await verifyAuthenticatedRequester(request);
 
   const now = Math.floor(Date.now() / 1000);
   const authenticatedAt = Number(decoded.auth_time);
@@ -53,10 +69,5 @@ export async function verifyDeletionRequester(request: Request): Promise<{ uid: 
 }
 
 export async function verifyStatusAppCheck(request: Request): Promise<void> {
-  try {
-    await adminAppCheck().verifyToken(appCheckToken(request));
-  } catch (error) {
-    if (error instanceof RequestAuthError) throw error;
-    throw new RequestAuthError('Verifica App Check non valida.', 403);
-  }
+  await verifyConsumableAppCheck(request);
 }

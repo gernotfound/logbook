@@ -32,7 +32,7 @@ Sono **CRITICAL** almeno: dati utente, IndexedDB/persistenza, sincronizzazione, 
 
 ## Autonomia operativa
 
-Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Vercel.
+Quando il product owner autorizza a procedere, risolvere o completare un task, l'autorizzazione copre l'intero normale ciclo tecnico pertinente: analisi → root cause → branch → implementazione → test → commit → PR → correzione CI → review → merge → verifica post-merge → verifica Firebase Hosting e Vercel runtime.
 
 Non richiedere una nuova approvazione per scelte di implementazione, test falliti, CI rossa, conflitti tecnici o correzioni necessarie lungo quel ciclo. Fermarsi solo se serve una vera decisione di prodotto/UX non deducibile, un'azione distruttiva/irreversibile sui dati utente non già autorizzata, oppure mancano permessi/strumenti indispensabili.
 
@@ -42,8 +42,8 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 
 - **Framework:** React 19 + Vite 8 + TypeScript 7.
 - **Runtime CI/Vercel:** Node.js 24.x.
-- **Hosting:** Vercel, frontend Vite/PWA alla radice `/`.
-- **Boundary server trusted:** Vercel Functions native in `/api/` per Server Account Deletion; Firebase Admin è server-only.
+- **Hosting frontend/PWA:** Firebase Hosting, site `thelogbook`, frontend Vite/PWA alla radice `/`; il progetto Firebase resta sul piano Spark.
+- **Boundary server trusted:** Vercel Hobby resta backend-only con Functions native in `/api/` per Server Account Deletion e cron giornaliero; Firebase Admin è server-only.
 - **State management:** Zustand 5 (`src/store/useAppStore.ts`).
 - **Validazione runtime:** Zod 4 (`src/lib/schema.ts`, `src/lib/schemas/*.ts`).
 - **Persistenza:** IndexedDB (`idb-keyval`), `localStorage` sincrono e Firestore cloud.
@@ -51,7 +51,7 @@ Per task strutturali o CRITICAL preparare un piano di lavoro prima delle modific
 - **Styling:** CSS nativo modulare aggregato da `src/styles/global.css`, con token semantici in `src/styles/tokens.css`; **MUST:** niente Tailwind.
 - **Icone UI:** `lucide-react`.
 - **PWA:** `vite-plugin-pwa`; asset applicativi generati dalla pipeline `scripts/resize_icons.mjs` a partire dalla sorgente approvata.
-- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche, `@vercel/analytics`, `@vercel/speed-insights`. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti. Google/Firebase Analytics non fa parte del prodotto.
+- **Monitoring:** Sentry Error Monitoring per errori/anomalie tecniche. GA4/Firebase Analytics è analytics di utilizzo opzionale, lazy e provider-specific, attivato solo dopo opt-in esplicito; Vercel Analytics/Speed Insights sono ritirati dal frontend target. Le vecchie collection telemetriche Firestore restano solo per compatibilità/cleanup dei client precedenti.
 - **Testing:** Vitest + Testing Library, Playwright E2E, Firebase Emulator, oxlint; `npm audit` è un gate workflow separato dal comando canonico M8.
 
 ## File canonici del modello dati
@@ -144,7 +144,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 
 Esistono tre contratti separati:
 
-1. **Client Firebase:** sette env `VITE_FIREBASE_*` lette staticamente in `src/lib/firebase.ts`; tutte devono essere presenti/non vuote nel runtime corrente.
+1. **Client Firebase:** quattro env `VITE_FIREBASE_*` obbligatorie lette staticamente in `src/lib/firebase.ts` (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `APP_ID`); `VITE_FIREBASE_MEASUREMENT_ID` è opzionale per il core ed è usata soltanto dal modulo GA4 dopo consenso.
 2. **App Check client:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è l'unico nome runtime supportato; gli alias V3 legacy sono stati ritirati dopo il cutover Production verificato.
 3. **Server trusted:** `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` e, per il cron, `CRON_SECRET`. Nessuna di queste deve avere prefisso `VITE_`.
 
@@ -155,6 +155,7 @@ Esistono tre contratti separati:
 - Provider canonico: `ReCaptchaEnterpriseProvider`.
 - Il provider viene bootstrap-pato prima di Firestore; il token è acquisito separatamente e può essere ritentato dopo failure.
 - Il support check App Check è manuale (`window.crypto`, `window.fetch`); non dipende da Firebase Analytics.
+- **MUST:** le chiamate sensibili al backend custom di account deletion/recovery usano token App Check limited-use; Vercel li verifica consumandoli una sola volta e rifiuta il replay.
 - **MUST:** un `permission-denied` di sync resta `rejected` finché non è stata discriminata la causa; non etichettare genericamente Rules/Auth/App Check senza evidenza.
 
 ### Firestore Rules
@@ -194,13 +195,13 @@ La cancellazione account è un workflow CRITICAL server-mediated. Il client non 
 Distinguere due sistemi:
 
 1. **Telemetria tecnica LogBook:** gli errori e le anomalie tecniche sanitizzati vengono inviati a Sentry Error Monitoring soltanto in Production e per sessioni account autenticate. Il Firebase UID serve esclusivamente come gate locale e **non viene deliberatamente trasmesso a Sentry**; il payload include solo session ID tecnico, release/build SHA, contesto limitato, tipo/messaggio errore sanitizzato, contatori/timestamp e stack troncato/sanitizzato. Non vengono usati Sentry Replay, tracing, logging o metriche e non vengono inviati eventi comportamentali workout/PWA. Le collection Firestore `telemetry_*` restano legacy per client precedenti, cleanup e account deletion.
-2. **Vercel Analytics / Speed Insights:** renderizzati solo quando l'opt-in analytics è attivo. Google/Firebase Analytics non viene inizializzato né usato.
+2. **Google Analytics / GA4:** caricato dinamicamente soltanto dopo il nuovo opt-in `logbook_ga4_consent_v1`; il precedente consenso Vercel non autorizza GA4. Nessun User-ID, user property o evento sanitario/custom viene inviato.
 
 - **MUST:** l'opt-in Analytics resta disabilitato per default e revocabile dalle Impostazioni.
 - **MUST:** telemetria tecnica e analytics di utilizzo restano separati; non aggiungere eventi comportamentali workout/PWA alla telemetria tecnica per aggirare l'opt-in.
 - **MUST:** il client corrente non crea nuove scritture nelle collection Firestore `telemetry_errors`, `telemetry_events` o `telemetry_anomalies`; Rules e retention di 30 giorni restano attive per client precedenti e dati legacy finché il relativo cleanup non viene ritirato deliberatamente.
 - **MUST:** errori/stack sottoposti alla telemetria tecnica passano dai sanitizzatori che rimuovono email, IP, token, API key, path utente e chiavi sensibili riconosciute prima del boundary Sentry.
-- **MUST:** source map Sentry sono generate solo nella build Vercel Production, caricate con credenziale server-side `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
+- **MUST:** source map Sentry sono generate solo nella build frontend Firebase Hosting Production (`FIREBASE_HOSTING_DEPLOY=production`), caricate con `SENTRY_AUTH_TOKEN` e rimosse dagli asset pubblici dopo l'upload; il token non entra mai nel bundle client.
 - **MUST:** documentazione privacy, UI e codice devono usare terminologia coerente: non promettere anonimato se esiste un identificativo tecnico/pseudonimo.
 - **MUST:** nessun documento pubblico/normativo deve incorporare email, indirizzi o altre informazioni private del maintainer. Usare soltanto canali di contatto pubblicamente predisposti dall'app quando esistono.
 - **MUST:** una modifica materiale alla Privacy Policy richiede bump di `LEGAL_VERSIONS.privacy` e regressioni pertinenti, così gli utenti devono riaccettare la versione aggiornata.

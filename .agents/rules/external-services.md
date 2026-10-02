@@ -20,6 +20,7 @@ Il repository è pubblico.
 - **MUST:** non tracciare snapshot `.env.production` o equivalenti con valori reali del deployment. Il contratto pubblico vive in `.env.example`; i valori Production vivono nel provider di deployment.
 - **SHOULD:** evitare di duplicare nella documentazione identificativi/site key client pubblici quando nome e ruolo sono sufficienti.
 - **MUST:** esempi e fixture di test usano identità e path sintetici.
+- **MUST:** il deploy Firebase Hosting da GitHub usa Workload Identity Federation con impersonation limitata al repository; il service account Hosting ha soltanto `roles/firebasehosting.admin` + `roles/serviceusage.apiKeysViewer`. L'identità Firebase Admin di Vercel è separata e, quando consuma token App Check limited-use, deve possedere il permesso `firebaseappcheck.appCheckTokens.verify`; `roles/firebaseappcheck.tokenVerifier` è il ruolo minimo da preferire quando si assegna ex novo tale capacità, mentre un ruolo già presente che includa lo stesso permesso non va duplicato inutilmente.
 - **MUST:** se un valore privato viene esposto, ruotarlo/revocarlo presso il provider e ripulire lo stato repository corrente dove praticabile; cancellare un messaggio o aggiungere un commit successivo non sostituisce la rotazione.
 
 ## Ritiro servizi e allowlist
@@ -33,7 +34,7 @@ Il repository è pubblico.
 
 ### Firebase / Google Cloud
 
-Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud.
+Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary distinti anche quando condividono lo stesso progetto Google Cloud. Il frontend/PWA target è servito da Firebase Hosting statico sul piano Spark; Functions/Scheduler Firebase non fanno parte dell'architettura.
 
 - Seguire `.agents/rules/firebase-config.md` per contratti env client/server, App Check e Rules.
 - Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio Fraud Defense. LogBook usa attualmente il provider reCAPTCHA Enterprise tramite Firebase App Check; non dichiarare attive Account defense, SMS defense, transaction defense o API Fraud Defense dirette senza evidenza live.
@@ -41,7 +42,7 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 
 ### Vercel
 
-- Vercel è il boundary di hosting/runtime Production e contiene env Production, Functions e cron.
+- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA Production target è Firebase Hosting.
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
@@ -51,6 +52,13 @@ Firebase Authentication, Firestore, Firebase Admin e App Check sono boundary dis
 - GitHub è la fonte di verità per repository, PR/ruleset e CI canonica.
 - CodeQL fa parte di `Canonical Verification`; Snyk è supplementare e non deve diventare l'unico controllo SAST bloccante.
 - Ruleset e required check sono stato GitHub esterno: verificarli direttamente prima di cambiare nomi dei check o comportamento di merge.
+
+### Google Analytics / GA4
+
+- GA4 è analytics di utilizzo del frontend Firebase Hosting, separato dalla telemetria tecnica Sentry.
+- La raccolta resta OFF per default e viene abilitata soltanto da un consenso nuovo provider-specific.
+- **MUST:** niente User-ID, user property o eventi custom relativi a workout, nutrizione, misure o salute.
+- **VERIFY:** stream, Measurement ID, Signals, Ads/personalization, retention e data sharing sono stato esterno.
 
 ### Sentry
 

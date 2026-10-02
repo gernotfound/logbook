@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { rmSync, existsSync } from 'node:fs';
 
 console.log('Compiling server functions to JS for smoke test...');
-// Compile api and server folders to a temporary dist directory.
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 try {
   execFileSync(npxCommand, ['tsc', '--project', 'tsconfig.m7-server.json', '--outDir', '.smoke-test-dist', '--noEmit', 'false'], { stdio: 'inherit', shell: process.platform === 'win32' });
@@ -13,12 +12,17 @@ try {
 
 const runnerScript = `
 import { GET as getDeletion } from './.smoke-test-dist/api/account-deletion.js';
+import { GET as getDeletionDevice } from './.smoke-test-dist/api/account-deletion-device.js';
 import { GET as getCron } from './.smoke-test-dist/api/account-deletion-cron.js';
 
 async function run() {
-  const req1 = new Request('https://example.test/api/account-deletion');
+  const req1 = new Request('https://example.test/api/account-deletion', { headers: { origin: 'https://thelogbook.web.app' } });
   const res1 = await getDeletion(req1);
   if (res1.status !== 403) throw new Error('Expected 403 on /api/account-deletion, got ' + res1.status);
+
+  const deviceReq = new Request('https://example.test/api/account-deletion-device', { headers: { origin: 'https://thelogbook.web.app' } });
+  const deviceRes = await getDeletionDevice(deviceReq);
+  if (deviceRes.status !== 403) throw new Error('Expected 403 on /api/account-deletion-device without App Check, got ' + deviceRes.status);
 
   const req2 = new Request('https://example.test/api/account-deletion-cron');
   const res2 = await getCron(req2);
@@ -37,8 +41,6 @@ writeFileSync('.smoke-test-runner.mjs', runnerScript);
 console.log('Running compiled JS functions with require(ESM) disabled to match the Vercel dependency boundary...');
 let success = false;
 try {
-  // Vercel's serverless loader currently rejects the jwks-rsa -> jose v6 require(ESM)
-  // path. Disabling Node's require(ESM) support reproduces that boundary deterministically.
   execFileSync('node', ['--no-require-module', '.smoke-test-runner.mjs'], { stdio: 'inherit' });
   console.log('M7 smoke test passed: Vercel Functions loaded and returned controlled application responses.');
   success = true;

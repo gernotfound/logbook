@@ -6,23 +6,25 @@
 
 Non trattare tutte le variabili Firebase/App Check/Admin come un unico blocco obbligatorio. Esistono tre boundary differenti: client Firebase, App Check client e server trusted M7.
 
-### Client Firebase — fail-fast
+### Client Firebase — fail-fast minimo
 
-`src/lib/firebase.ts` controlla all'avvio sette variabili `VITE_FIREBASE_*`. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
+`src/lib/firebase.ts` controlla all'avvio quattro variabili Firebase Web obbligatorie. Se una manca o è vuota, il client lancia `Error` prima di `initializeApp`.
 
 | Variabile | Stato corrente | Note |
 |---|---|---|
 | `VITE_FIREBASE_API_KEY` | MUST | Chiave API pubblica Firebase |
-| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth |
-| `VITE_FIREBASE_DATABASE_URL` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il progetto usa Firestore, non Realtime Database, quindi la necessità futura del campo va verificata prima di rimuoverlo dal contratto |
+| `VITE_FIREBASE_AUTH_DOMAIN` | MUST | Dominio Auth; in Production Firebase Hosting deve essere `thelogbook.web.app` così popup/redirect usano lo stesso origin del frontend |
 | `VITE_FIREBASE_PROJECT_ID` | MUST | Project ID |
-| `VITE_FIREBASE_STORAGE_BUCKET` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Storage |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | MUST runtime / VERIFY necessità futura | Oggi è inclusa nel fail-fast/config; il runtime non importa Firebase Cloud Messaging |
 | `VITE_FIREBASE_APP_ID` | MUST | Config Firebase Web |
+| `VITE_FIREBASE_MEASUREMENT_ID` | OPTIONAL core / REQUIRED per GA4 Production | Letta esclusivamente dal modulo Analytics dopo consenso |
+
+Realtime Database, Firebase Storage e Cloud Messaging non sono importati dal runtime: `VITE_FIREBASE_DATABASE_URL`, `VITE_FIREBASE_STORAGE_BUCKET` e `VITE_FIREBASE_MESSAGING_SENDER_ID` sono ritirati dal contratto client.
+
+`VITE_ACCOUNT_DELETION_API_ORIGIN` è configurazione pubblica per raggiungere il backend trusted Vercel; non è una credenziale Firebase.
 
 **MUST:** l'accesso Vite alle env client resta statico (`import.meta.env.VITE_FIREBASE_API_KEY` ecc.). Non sostituirlo con `import.meta.env[key]`.
 
-Le chiavi Firebase Web sono configurazione pubblica inclusa nel bundle client; la protezione dei dati dipende da Security Rules, autenticazione, App Check e configurazione backend. Non descrivere le env `VITE_*` come segreti server.
+Le chiavi Firebase Web sono configurazione pubblica inclusa nel bundle client; la protezione dei dati dipende da Security Rules, autenticazione, App Check e configurazione backend.
 
 ## App Check — reCAPTCHA Enterprise
 
@@ -34,20 +36,27 @@ Google Cloud può presentare reCAPTCHA Enterprise dentro il prodotto più ampio 
 - **Support check:** manuale su runtime browser (`window.crypto`, `window.fetch`).
 - **Site key canonica:** `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
 - **Compatibilità:** il cutover Production alla variabile canonica `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` è stato completato e verificato il 2026-09-30; i precedenti alias `VITE_RECAPTCHA_V3_SITE_KEY` e `VITE_RECAPTCHA_SITE_KEY` non fanno più parte del contratto runtime e non devono essere reintrodotti.
-- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle sette env Firebase client e non impedisce `initializeApp` né il funzionamento locale/offline.
+- **Semantica se manca la site key:** App Check entra in stato `disabled/fallback`; questa condizione **non** fa parte del fail-fast delle quattro env Firebase core e non impedisce `initializeApp` né il funzionamento locale/offline.
 - **Token iniziale:** un failure di acquisizione porta a `token-error/fallback` e non viene dichiarato healthy. Non trasformare genericamente ogni `permission-denied` Firestore in “normale bootstrap noise”.
 
-**VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti.
+**MUST:** le richieste sensibili al backend custom Vercel (`account-deletion` e recovery device/status) usano token App Check limited-use; il server li verifica con `consume: true` e rifiuta token già consumati. I token standard restano appropriati per i servizi Firebase gestiti.
+
+**VERIFY:** registrazione della site key, enforcement App Check e stato della configurazione in Firebase/Google Cloud sono esterni al repository e devono essere verificati in console quando rilevanti. Il service account Firebase Admin usato da Vercel deve avere l'autorizzazione necessaria a consumare token App Check; verificare IAM live prima del cutover.
 
 **MUST:** nel percorso sync, un `permission-denied` osservato da `replicateJournal` resta `rejected` e non va mascherato. Retry bootstrap è accettabile solo quando la causa transitoria è identificata.
 
-## Analytics non essenziali
+## Analytics di utilizzo — GA4 opt-in
 
-Google/Firebase Analytics non fa parte del prodotto e `src/lib/firebase.ts` non deve importare `firebase/analytics`, configurare `measurementId` o richiedere `VITE_FIREBASE_MEASUREMENT_ID`.
+Google/Firebase Analytics fa parte dell'architettura target soltanto come analytics opzionale dopo consenso esplicito.
 
-L'opt-in `logbook_analytics_consent` governa esclusivamente Vercel Analytics e Speed Insights tramite `src/lib/analyticsConsent.ts`; resta disabilitato per default e revocabile.
+- `src/lib/firebase.ts` non importa `firebase/analytics`; il Firebase core resta indipendente da Analytics.
+- `src/lib/googleAnalytics.ts` esegue import dinamico solo dopo `logbook_ga4_consent_v1=true` e presenza di `VITE_FIREBASE_MEASUREMENT_ID`.
+- Il precedente consenso `logbook_analytics_consent` usato da Vercel Analytics/Speed Insights non abilita GA4.
+- La revoca disabilita la raccolta e viene propagata fra tab.
+- Il page view manuale usa `origin + pathname`, senza query/hash; niente User-ID, user property o eventi custom workout/nutrizione/misure/salute.
+- Un'inizializzazione fallita resta ritentabile.
 
-**MUST:** non reintrodurre Google/Firebase Analytics senza una nuova decisione di prodotto e una rivalutazione privacy esplicita.
+**MUST:** nessuna richiesta GA4 prima del consenso. Configurazione GA4 live, Signals, Ads, retention e Measurement ID sono stato esterno da verificare nel provider.
 
 ## Server trusted M7 — Firebase Admin
 
@@ -67,7 +76,7 @@ La private key supporta newline escaped (`\\n`) e viene normalizzata server-side
 
 **MUST:** tutte queste credenziali/config server restano server-only, senza prefisso `VITE_`, e non devono essere inserite nel bundle client o committate con valori reali.
 
-**VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account.
+**VERIFY:** il repository prova i nomi richiesti dal codice, non che i valori siano effettivamente provisionati in ogni environment Vercel né quali ruoli IAM siano assegnati al service account. In particolare, la replay protection App Check del backend richiede il permesso `firebaseappcheck.appCheckTokens.verify` sull'identità Admin usata da Vercel; `roles/firebaseappcheck.tokenVerifier` è il ruolo minimo da preferire se quel permesso deve essere aggiunto, ma un ruolo già assegnato che lo includa è sufficiente. Verificarlo direttamente in Google Cloud/Firebase.
 
 ## Contratto `.env.example`
 
@@ -115,7 +124,7 @@ Configurazione client/build:
 - `VITE_SENTRY_DSN`: DSN pubblico del progetto Sentry, incluso nel bundle Production;
 - `SENTRY_AUTH_TOKEN`: segreto build-only con scope CI per upload source map/release;
 - `SENTRY_ORG` e `SENTRY_PROJECT`: identificatori build-time;
-- `VERCEL_GIT_COMMIT_SHA`: release Sentry e SHA canonico della build Production.
+- `LOGBOOK_BUILD_SHA`: SHA exact-main passato dal workflow Firebase Hosting Production; `EXPECTED_SHA`/`GITHUB_SHA` restano fallback verificabili.
 
 **MUST:** `SENTRY_AUTH_TOKEN` resta server/build-only, senza prefisso `VITE_`, e non deve comparire in bundle, log, Markdown o fixture. Le source map Production vengono caricate a Sentry e rimosse dagli asset pubblici dopo l'upload.
 
@@ -134,21 +143,26 @@ Le Rules verificano gli invarianti top-level del protocollo che appartengono al 
 Se si cambia o si aggiunge un dominio di hosting:
 
 1. verificare Firebase Auth → Authorized domains;
-2. verificare le restrizioni applicabili della Browser API Key in Google Cloud.
+2. per Firebase Hosting su `web.app`, usare l'origin pubblico anche come `authDomain` Production e autorizzare `https://<origin>/__/auth/handler` nel client OAuth;
+3. verificare le restrizioni applicabili della Browser API Key in Google Cloud.
 
 Questi stati console sono **VERIFY**, non facts dimostrati dal repository.
 
-## CSP (Content Security Policy)
+## Hosting, CSP e deploy frontend
 
-La CSP è configurata in `vercel.json`. Prima di modificarla:
+La CSP e gli header del frontend Firebase Hosting sono configurati in `firebase.json`. Vercel non è più il provider degli header/browser asset del frontend target.
 
-1. leggere `vercel.json` e identificare la direttiva interessata;
-2. **MUST:** non rimuovere i domini Firebase/Vercel necessari al comportamento corrente senza una sostituzione verificata;
-3. verificare login, sync, Vercel Analytics/Speed Insights, API M7 e PWA dopo il cambiamento pertinente.
+Prima di modificarli:
+1. leggere `firebase.json`;
+2. **MUST:** mantenere l'allowlist minima necessaria a Firebase/Auth/App Check, Firebase Installations/Analytics, Sentry e backend Vercel; le API Google usate dal runtime sono elencate esplicitamente, senza `*.googleapis.com`;
+3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
+4. verificare login popup/redirect, sync, App Check, GA4, account deletion e PWA.
+
+Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy è limitato a `--only hosting`; Firestore Rules/indici restano operazioni distinte. Root app shell, `index.html`, manifest, service worker e Workbox devono essere esplicitamente revalidati/no-store; soltanto gli asset fingerprinted sotto `/assets/` sono immutable.
 
 ## Vercel branch deployment policy
 
-`vercel.json` contiene il contratto repository corrente per Git deployment:
+`vercel.json` contiene il contratto repository corrente per Git deployment, imposta `framework: null` per il preset **Other** (backend-only, senza dipendere dal preset Vite del progetto) e `fluid: true` per rendere esplicito Fluid Compute:
 
 - `main`: deployment abilitato;
 - altri branch: deployment disabilitato.
@@ -157,7 +171,7 @@ La CSP è configurata in `vercel.json`. Prima di modificarla:
 
 ## Sicurezza HTTP
 
-Gli header HTTP sono configurati in `vercel.json`; leggere la configurazione corrente prima di descriverne l'elenco come normativo, perché può cambiare indipendentemente da questa regola.
+Gli header browser del frontend sono configurati in `firebase.json`; `vercel.json` disciplina invece routing/runtime del backend Vercel. Leggere entrambi i file prima di descrivere il contratto HTTP corrente.
 
 ## File di credenziali
 

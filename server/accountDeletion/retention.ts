@@ -1,6 +1,7 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
 import type { AccountDeletionJob } from './types.js';
+import { purgeDeletionRecoveryDevices } from './deviceRecovery.js';
 
 const JOB_COLLECTION = 'account_deletions';
 
@@ -28,23 +29,32 @@ export async function purgeExpiredCompletedDeletionJobs(
   const boundedLimit = Math.max(1, Math.min(ACCOUNT_DELETION_RETENTION_PAGE_SIZE, Math.floor(limitCount)));
   const nowMs = now.toMillis();
   const snapshot = await adminDb().collection(JOB_COLLECTION)
+    .where('status', '==', 'complete')
     .where('purgeAfter', '<=', now)
     .limit(boundedLimit)
     .get();
 
   if (snapshot.empty) return 0;
 
-  const batch = adminDb().batch();
-  let deleted = 0;
+  const eligible: Array<{ uid: string; ref: DocumentReference }> = [];
   for (const item of snapshot.docs) {
     const job = item.data() as AccountDeletionJob;
     const purgeAtMs = timestampMillis(job.purgeAfter);
     if (job.status !== 'complete' || purgeAtMs === null || purgeAtMs > nowMs) continue;
-    batch.delete(item.ref);
-    deleted += 1;
+    eligible.push({ uid: job.uid, ref: item.ref });
   }
 
-  if (deleted === 0) return 0;
+  if (eligible.length === 0) return 0;
+
+  // Purge the recovery credential first. If this fails, keep the tombstone so a
+  // later cron run can retry; deleting the tombstone first could orphan the
+  // server-only recovery registry permanently.
+  for (const item of eligible) {
+    await purgeDeletionRecoveryDevices(item.uid);
+  }
+
+  const batch = adminDb().batch();
+  for (const item of eligible) batch.delete(item.ref);
   await batch.commit();
-  return deleted;
+  return eligible.length;
 }

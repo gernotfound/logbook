@@ -3,6 +3,7 @@ vi.unmock('../src/lib/db');
 import { TestDB as DB } from './testUtils';
 import * as idb from 'idb-keyval';
 import { useAppStore } from '../src/store/useAppStore';
+import { storageOwner } from '../src/lib/sync/session';
 
 vi.mock('idb-keyval', () => ({
     get: vi.fn(),
@@ -46,7 +47,7 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
 
         const deviceKeys = [
             'logbook_ios_install_prompt',
-            'logbook_analytics_consent'
+            'logbook_ga4_consent_v1'
         ];
 
         sensitiveKeys.forEach(k => localStorage.setItem(k, 'sensitive_data'));
@@ -131,6 +132,30 @@ describe('SEC-02: Logout Cleanup & Sensitive Data Purge', () => {
         
         expect(consoleWarnSpy).not.toHaveBeenCalled();
         consoleWarnSpy.mockRestore();
+    });
+
+    it('secureLogOut removes the account-deletion recovery credential only after local purge succeeds', async () => {
+        const recoveryKey = 'logbook_deletion_recovery_devices_v1';
+        const owner = storageOwner();
+        const uid = owner.startsWith('user:') ? owner.slice('user:'.length) : 'unexpected-guest';
+        localStorage.setItem(recoveryKey, JSON.stringify([{ uid, token: 'A'.repeat(43) }]));
+
+        await DB.secureLogOut();
+
+        expect(localStorage.getItem(recoveryKey)).toBeNull();
+    });
+
+    it('secureLogOut preserves the recovery credential if local purge fails after sign-out', async () => {
+        const recoveryKey = 'logbook_deletion_recovery_devices_v1';
+        const owner = storageOwner();
+        const uid = owner.startsWith('user:') ? owner.slice('user:'.length) : 'unexpected-guest';
+        localStorage.setItem(recoveryKey, JSON.stringify([{ uid, token: 'A'.repeat(43) }]));
+        const purgeSpy = vi.spyOn(DB, 'purgeAllLocalUserData').mockRejectedValueOnce(new Error('local purge failed'));
+
+        await expect(DB.secureLogOut()).rejects.toThrow('local purge failed');
+        expect(localStorage.getItem(recoveryKey)).not.toBeNull();
+
+        purgeSpy.mockRestore();
     });
 
     it('secureLogOut preserves the local archive and rejects when auth.signOut fails', async () => {

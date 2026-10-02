@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ANALYTICS_CONSENT_KEY = 'logbook_analytics_consent';
+const ANALYTICS_CONSENT_KEY = 'logbook_ga4_consent_v1';
 
 function dispatchStorageChange(
     key: string | null,
