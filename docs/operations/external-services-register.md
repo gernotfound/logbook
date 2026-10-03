@@ -208,6 +208,8 @@ La scelta iniziale è stata fatta per restare sul piano gratuito: Spike Protecti
 
 Il primo errore controllato è stato ricevuto correttamente da Sentry il 2026-09-30 con environment Production e release Git SHA. La verifica di simbolicazione source-map può avvenire sul primo errore naturale originato dal codice applicativo.
 
+Verifica live 2026-10-03: in Project Settings → Client Security, `Allowed Domains` conteneva `https://thelogbook.web.app` e il legacy `https://logbook-gnf.vercel.app`. Il dominio Vercel è stato rimosso dalla allowlist; resta autorizzato soltanto il frontend Production Firebase `https://thelogbook.web.app`. Le altre opzioni della sezione non sono state modificate.
+
 ## GitHub, Actions e CodeQL
 
 Il repository è pubblico: questo è un vincolo di sicurezza e privacy, non solo una scelta di collaborazione.
@@ -336,7 +338,7 @@ Questa sezione conserva le operazioni e verifiche esterne eseguite **prima** del
 - Nei log Vercel successivi allo smoke, `/api/account-deletion-device` ha risposto con 200 alle richieste applicative e 204 ai preflight; le sonde senza origin autorizzata hanno prodotto 403. Questo verifica il boundary CORS del nuovo origin e il percorso di registrazione recovery autenticato/App Check limited-use.
 - Nessun runtime error Vercel è emerso nella finestra post-cutover osservata.
 - Le segnalazioni Chrome `runtime.lastError` / `background.js` osservate durante il login non corrispondono a file del repository TheLogBook e sono compatibili con messaggistica di estensioni browser. Gli avvisi Firebase Auth `Cross-Origin-Opener-Policy ... window.closed` sono stati osservati con login riuscito; il frontend non configura un header COOP globale e non viene introdotto un workaround che potrebbe alterare il popup OAuth.
-- Pulizia Firebase/Google Cloud del 2026-10-02: vecchio origin Vercel rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise; App Check portato in enforcement. Restano **VERIFY-LIVE** l'eventuale origin/redirect Vercel nel Web OAuth client, la rimozione Vercel dalla allowlist Sentry e la proprietà Search Console del nuovo origin. Il callback email Auth resta deliberatamente sul dominio Firebase predefinito finché il provider rifiuta il cambio con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
+- Pulizia Firebase/Google Cloud del 2026-10-02: vecchio origin Vercel rimosso da Firebase Auth Authorized domains, Browser API key e reCAPTCHA Enterprise; App Check portato in enforcement. Completamento post-cutover 2026-10-03: Web OAuth client verificato senza origin/redirect Vercel, dominio Vercel rimosso da Sentry Allowed Domains e Search Console configurata con proprietà Firebase indicizzata e Cambio di indirizzo avviato dal legacy origin. Il callback email Auth resta deliberatamente sul dominio Firebase predefinito finché il provider rifiuta il cambio con `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`.
 
 ## Archivio decisionale — candidato PR #191
 
