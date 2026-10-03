@@ -54,14 +54,18 @@ export async function loadAuthenticatedData({
             const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null);
             useAppStore.setState({
                 userData: localEnvelope.data,
+                dataOwner: expectedOwner,
                 localWorkout,
                 localPersistenceBlocked: false,
             });
             markTabSnapshotClean(session, localEnvelope.data);
-        } else if (useAppStore.getState().userData) {
-            // The pre-auth snapshot came from another/obsolete owner hint. Never let it
-            // become the base for this account.
-            useAppStore.setState({ userData: null, localWorkout: null });
+        } else {
+            const current = useAppStore.getState();
+            // Only a dataset explicitly tagged to another owner is stale. Untagged
+            // in-memory state (tests/first-run transient state) is not destroyed here.
+            if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner) {
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+            }
         }
     } catch (error) {
         if (!isCurrent()) return;
@@ -116,7 +120,7 @@ export async function loadAuthenticatedData({
             if (!isCurrent()) return;
             if (stillAbsent) {
                 const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null);
-                useAppStore.setState({ userData: stillAbsent.data, localWorkout });
+                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout });
                 markTabSnapshotClean(session, stillAbsent.data);
                 return;
             }
