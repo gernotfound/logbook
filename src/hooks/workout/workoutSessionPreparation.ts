@@ -16,13 +16,13 @@ export interface WorkoutCompletionDraft {
 
 export interface WorkoutPreparationRuntime {
     generateId: (prefix: string) => string;
-    getLocalDateString: () => string;
+    getLocalDateString: (value?: Date | string | number) => string;
     now: () => number;
 }
 
 const defaultRuntime: WorkoutPreparationRuntime = {
     generateId: (prefix) => Logic.generateId(prefix),
-    getLocalDateString: () => Logic.getLocalDateString(),
+    getLocalDateString: (value) => Logic.getLocalDateString(value),
     now: () => new Date().getTime(),
 };
 
@@ -223,7 +223,7 @@ export function prepareHistoricalWorkoutForSave(
         fatigueRating: valRes.fatigue,
         waterLiters: water ? parseFloat(String(water).replace(',', '.')) : undefined,
         pains: Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [],
-        date: currentWorkout.date || runtime.getLocalDateString(),
+        date: normalizedWorkout.date || runtime.getLocalDateString(startTime),
     };
 
     if (updatedWorkout.waterLiters === undefined) delete updatedWorkout.waterLiters;
