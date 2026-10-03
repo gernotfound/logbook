@@ -161,8 +161,11 @@ if (!firestoreWorkflow.includes('git ls-remote --exit-code origin refs/heads/mai
 if (!firestoreWorkflow.includes('GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT') || firestoreWorkflow.includes('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}')) {
   failures.push('Firestore Production must use a dedicated deployer identity instead of the Hosting service account');
 }
-if (!firestoreWorkflow.includes('firestore.rules') || !firestoreWorkflow.includes('firestore.indexes.json') || !firestoreWorkflow.includes("jq -S -c '.firestore // null'")) {
-  failures.push('Firestore Production workflow must deploy only when the Firestore contract changed');
+if (firestoreWorkflow.includes('git rev-parse "${EXPECTED_SHA}^"') || firestoreWorkflow.includes('git diff --quiet "${parent}"')) {
+  failures.push('Firestore Production must not use the immediate parent commit as the deployment baseline');
+}
+if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs status') || !firestoreWorkflow.includes("steps.reconcile.outputs.deploy == 'true'")) {
+  failures.push('Firestore Production workflow must reconcile the desired exact-main state against the live provider before deciding to deploy');
 }
 if (!firestoreWorkflow.includes('firebase-tools@15.30.2 deploy') || !firestoreWorkflow.includes('--only firestore:rules,firestore:indexes') || !firestoreWorkflow.includes('--non-interactive')) {
   failures.push('Firestore Production workflow must use the pinned Firebase CLI and deploy only Rules/indexes');
@@ -173,8 +176,11 @@ if (firestoreWorkflow.includes('--force')) {
 for (const actionPin of requiredHostingActionPins) {
   if (!firestoreWorkflow.includes(actionPin)) failures.push(`Firestore Production workflow must pin privileged action: ${actionPin}`);
 }
-if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs preflight') || !firestoreWorkflow.includes('scripts/verify-firestore-production.mjs verify')) {
-  failures.push('Firestore Production workflow must preflight and verify the live target');
+if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs status') || !firestoreWorkflow.includes('scripts/verify-firestore-production.mjs verify')) {
+  failures.push('Firestore Production workflow must reconcile and verify the live target');
+}
+if (!firestoreVerifier.includes("process.exit(10)") || !firestoreVerifier.includes("process.exit(11)")) {
+  failures.push('Firestore Production verifier must distinguish deploy-required drift from index convergence');
 }
 if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifier.includes('/indexes') || !firestoreVerifier.includes('Authorization:')) {
   failures.push('Firestore Production verifier must read back authenticated live Rules and composite indexes');
