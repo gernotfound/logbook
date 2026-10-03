@@ -998,3 +998,29 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       let savePromise: any;
       await act(async () => {
         savePromise = useAppStore.getState().saveUserData((prev) => ({
+          ...prev!,
+          profile: { ...prev?.profile, name: 'Offline Lifter' }
+        })).catch((err) => { caughtError5 = err; });
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100);
+      });
+      await savePromise;
+      expect(caughtError5).not.toBeNull();
+
+      expect(screen.getByText(/Quota limit or offline/i)).toBeDefined();
+
+      // Reconnection replays the durable journal before clearing the error.
+      vi.mocked(DB.saveUserData).mockResolvedValueOnce({ ok: true, status: 'synced' });
+      await act(async () => {
+        window.dispatchEvent(new Event('online'));
+        await useAppStore.getState().flushPendingSyncs();
+      });
+
+      expect(useAppStore.getState().saveError).toBeNull();
+      expect(screen.queryByText(/dati sono stati salvati/i)).toBeNull();
+      expect(container.querySelector('#sync-overlay')).toBeNull();
+    });
+  });
+});
