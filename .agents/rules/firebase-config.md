@@ -158,7 +158,11 @@ Prima di modificarli:
 3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
 4. verificare login popup/redirect, sync, App Check, GA4, account deletion e PWA.
 
-Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy è limitato a `--only hosting`; Firestore Rules/indici restano operazioni distinte. Root app shell, `index.html`, manifest, service worker e Workbox devono essere esplicitamente revalidati/no-store; soltanto gli asset fingerprinted sotto `/assets/` sono immutable.
+Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy resta limitato a `--only hosting`.
+
+Il workflow separato `.github/workflows/firebase-firestore-production.yml` gestisce esclusivamente Firestore Rules/indici quando cambia `firestore.rules`, `firestore.indexes.json`, la sezione `firestore` di `firebase.json` o il relativo contratto di deploy/verifica. Anche questo workflow parte solo dopo il gate canonico sul push a `main`, rifiuta SHA stantii, usa una identità WIF dedicata e non usa `--force`. La verifica post-deploy legge nuovamente Rules e indici dal provider; le Rules devono coincidere con la sorgente dell'exact SHA e gli indici desiderati devono essere `READY`.
+
+Root app shell, `index.html`, manifest, service worker e Workbox devono essere esplicitamente revalidati/no-store; soltanto gli asset fingerprinted sotto `/assets/` sono immutable.
 
 ## Vercel branch deployment policy
 

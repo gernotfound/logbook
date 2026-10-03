@@ -1,0 +1,149 @@
+name: Firebase Firestore Production
+
+on:
+  workflow_run:
+    workflows:
+      - Milestone Verification
+    types:
+      - completed
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: firebase-firestore-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy exact main Firestore config
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout exact verified main SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          git fetch origin main --depth=1
+          current_main="$(git rev-parse origin/main)"
+          echo "Verified workflow SHA: ${EXPECTED_SHA}"
+          echo "Checkout SHA:          ${actual_sha}"
+          echo "Current origin/main:    ${current_main}"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ] || [ "${current_main}" != "${EXPECTED_SHA}" ]; then
+            echo "Refusing to deploy a stale or mismatched main SHA" >&2
+            exit 1
+          fi
+
+      - name: Detect Firestore-relevant change
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          deploy=false
+          parent="$(git rev-parse "${EXPECTED_SHA}^" 2>/dev/null || true)"
+
+          if [ -z "${parent}" ]; then
+            deploy=true
+          else
+            if ! git diff --quiet "${parent}" "${EXPECTED_SHA}" --               firestore.rules               firestore.indexes.json               .github/workflows/firebase-firestore-production.yml               scripts/verify-firestore-production.mjs; then
+              deploy=true
+            fi
+
+            before_firestore="$(git show "${parent}:firebase.json" 2>/dev/null | jq -S -c '.firestore // null' || printf 'null')"
+            after_firestore="$(jq -S -c '.firestore // null' firebase.json)"
+            if [ "${before_firestore}" != "${after_firestore}" ]; then
+              deploy=true
+            fi
+          fi
+
+          echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
+          echo "Firestore deployment required: ${deploy}"
+
+      - name: Require Firestore production configuration
+        if: steps.changes.outputs.deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            FIREBASE_PROJECT_ID
+            GCP_WORKLOAD_IDENTITY_PROVIDER
+            GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then missing+=("${name}"); fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf 'Missing Firestore production configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.deploy == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+
+      - name: Authenticate dedicated Firestore deployer
+        if: steps.changes.outputs.deploy == 'true'
+        id: gcp_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Preflight live Firestore target
+        if: steps.changes.outputs.deploy == 'true'
+        env:
+          GCP_ACCESS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+        run: node scripts/verify-firestore-production.mjs preflight
+
+      - name: Deploy Firestore Rules and indexes
+        if: steps.changes.outputs.deploy == 'true'
+        run: >-
+          npx --yes firebase-tools@15.30.2 deploy
+          --only firestore:rules,firestore:indexes
+          --project "${FIREBASE_PROJECT_ID}"
+          --non-interactive
+          -m "GitHub ${EXPECTED_SHA}"
+
+      - name: Verify live Firestore Rules and indexes
+        if: steps.changes.outputs.deploy == 'true'
+        env:
+          GCP_ACCESS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 1200))
+          while true; do
+            if node scripts/verify-firestore-production.mjs verify; then
+              break
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "Firestore Production did not converge within 20 minutes" >&2
+              exit 1
+            fi
+            echo "Firestore indexes are still converging; retrying in 15 seconds..."
+            sleep 15
+          done

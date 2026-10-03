@@ -5,6 +5,8 @@ const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
 const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
 const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
+const firestoreWorkflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
+const firestoreVerifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
 const vite = readFileSync('vite.config.ts', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
@@ -115,6 +117,40 @@ if (!hostingWorkflow.includes('GCP_WORKLOAD_IDENTITY_PROVIDER')) {
 }
 if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.includes('thelogbook.web.app')) {
   failures.push('Firebase Hosting production workflow must enforce the Firebase Hosting origin as authDomain');
+}
+
+if (!firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+  failures.push('Firestore Production workflow must only activate after the canonical push-to-main verification run');
+}
+if (!firestoreWorkflow.includes('git rev-parse origin/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
+  failures.push('Firestore Production workflow must re-check the exact current main SHA before any live operation');
+}
+if (!firestoreWorkflow.includes('GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT') || firestoreWorkflow.includes('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}')) {
+  failures.push('Firestore Production must use a dedicated deployer identity instead of the Hosting service account');
+}
+if (!firestoreWorkflow.includes('firestore.rules') || !firestoreWorkflow.includes('firestore.indexes.json') || !firestoreWorkflow.includes("jq -S -c '.firestore // null'")) {
+  failures.push('Firestore Production workflow must deploy only when the Firestore contract changed');
+}
+if (!firestoreWorkflow.includes('firebase-tools@15.30.2 deploy') || !firestoreWorkflow.includes('--only firestore:rules,firestore:indexes') || !firestoreWorkflow.includes('--non-interactive')) {
+  failures.push('Firestore Production workflow must use the pinned Firebase CLI and deploy only Rules/indexes');
+}
+if (firestoreWorkflow.includes('--force')) {
+  failures.push('Firestore Production workflow must never force-delete unmanaged indexes');
+}
+for (const actionPin of requiredHostingActionPins) {
+  if (!firestoreWorkflow.includes(actionPin)) failures.push(`Firestore Production workflow must pin privileged action: ${actionPin}`);
+}
+if (!firestoreWorkflow.includes('scripts/verify-firestore-production.mjs preflight') || !firestoreWorkflow.includes('scripts/verify-firestore-production.mjs verify')) {
+  failures.push('Firestore Production workflow must preflight and verify the live target');
+}
+if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifier.includes('/indexes') || !firestoreVerifier.includes('Authorization:')) {
+  failures.push('Firestore Production verifier must read back authenticated live Rules and composite indexes');
+}
+if (!firestoreVerifier.includes("fieldOverrides.length !== 0")) {
+  failures.push('Firestore Production verifier must fail closed until fieldOverrides verification is explicitly supported');
+}
+if (!firestoreVerifier.includes("status.state !== 'READY'")) {
+  failures.push('Firestore Production verifier must require desired composite indexes to be READY');
 }
 
 if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
