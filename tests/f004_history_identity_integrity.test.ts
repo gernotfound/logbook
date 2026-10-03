@@ -88,13 +88,13 @@ describe('F-004 training history identity integrity', () => {
         const base = UserDataSchema.parse({}) as unknown as UserData;
         const remoteDocuments = new Map<string, Record<string, unknown>>([
             ['history_months/2026-09', {
-                valid: validWorkout,
+                'workout-ok': validWorkout,
                 empty: { ...validWorkout, id: '' },
                 missing: { date: '2026-09-29', exercises: [] },
                 invalidType: { ...validWorkout, id: true },
                 invalidPath: { ...validWorkout, id: 'bad/id' },
                 duplicate: { ...validWorkout, id: 'workout-ok', routineName: 'Duplicate' },
-                numeric: { ...validWorkout, id: 42, routineName: 'Numeric id' },
+                '42': { ...validWorkout, id: 42, routineName: 'Numeric id' },
                 recoverable: { id: 'recoverable', date: '2026-09-29', waterLiters: '2.5', exercises: 'corrupted' },
             }],
         ]);
