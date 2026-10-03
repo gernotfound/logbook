@@ -34,9 +34,9 @@ export function diffDocuments(
         if (op.docPath !== '' || op.path[0] !== 'activeWorkout') continue;
         const dRoot: DocumentData = desired.get('') ?? {};
         const bRoot: DocumentData = base.get('') ?? {};
-        const aw = op.path.length === 1 && op.isDelete
+        const aw = op.path.length === 1
             ? bRoot.activeWorkout
-            : op.path.length > 1 ? (dRoot.activeWorkout ?? bRoot.activeWorkout) : undefined;
+            : (dRoot.activeWorkout ?? bRoot.activeWorkout);
         if (!isRecord(aw)) continue;
         const awId = normalizeBusinessId(aw.id);
         if (awId) op.guard = { path: ['activeWorkout', 'id'], equals: awId };
