@@ -64,17 +64,13 @@ function alignActiveWorkout(
     localWorkout: AppState['localWorkout'],
 ): { persisted: UserData['activeWorkout']; local: AppState['localWorkout'] } {
     const parsedIncoming = DomainParsers.parseActiveWorkout(incoming) ?? null;
-    if (!localWorkout) return { persisted: parsedIncoming, local: parsedIncoming };
-    if (localWorkout.isEditingHistory) return { persisted: parsedIncoming, local: localWorkout };
-    if (parsedIncoming && parsedIncoming.id === localWorkout.id) {
-        return { persisted: localWorkout, local: localWorkout };
-    }
-    if (!parsedIncoming) {
-        // Completion/clear is authoritative for cloud-facing state. The device draft
-        // remains until the workflow that owns it explicitly clears localWorkout.
-        return { persisted: null, local: localWorkout };
-    }
-    return { persisted: parsedIncoming, local: parsedIncoming };
+    // Persisted business state and the device draft are separate authorities.
+    // Bulk hydration may seed a missing device draft, but it must never copy the
+    // device draft back into UserData: ordinary live edits already use DomainOperations.
+    return {
+        persisted: parsedIncoming,
+        local: localWorkout ?? parsedIncoming,
+    };
 }
 
 export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
