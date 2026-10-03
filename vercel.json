@@ -15,6 +15,9 @@
     },
     "api/account-deletion-device.ts": {
       "maxDuration": 30
+    },
+    "api/legacy-service-worker.ts": {
+      "maxDuration": 10
     }
   },
   "crons": [
@@ -32,5 +35,26 @@
   ],
   "fluid": true,
   "framework": null,
-  "ignoreCommand": "node scripts/vercel-ignore-build.mjs"
+  "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
+  "rewrites": [
+    {
+      "source": "/sw.js",
+      "destination": "/api/legacy-service-worker"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, max-age=0"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    }
+  ]
 }
