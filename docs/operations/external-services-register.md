@@ -237,9 +237,11 @@ Il repository mantiene deliberatamente:
 - `public/robots.txt` con crawling consentito e riferimento alla sitemap;
 - `public/sitemap.xml` con URL canonico Production.
 
-Verifica live 2026-10-02: homepage, `robots.txt` e `sitemap.xml` rispondono HTTP 200; la homepage espone canonical autoreferenziale `https://thelogbook.web.app/`; la sitemap `https://thelogbook.web.app/sitemap.xml` è stata inviata tramite Search Console API con 0 warning e 0 errori iniziali ed è in attesa del primo download di Google. La prima URL Inspection della homepage riporta ancora `URL is unknown to Google`, stato atteso per una proprietà appena creata e non ancora scansionata.
+Verifica live 2026-10-02: homepage, `robots.txt` e `sitemap.xml` rispondono HTTP 200; la homepage espone canonical autoreferenziale `https://thelogbook.web.app/`; la sitemap `https://thelogbook.web.app/sitemap.xml` è stata inviata tramite Search Console API con 0 warning e 0 errori iniziali.
 
-Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata accettata. Durante la migrazione mantenere inoltre il redirect HTTP 301 dal vecchio root Vercel al nuovo canonical; dopo la verifica live del 301 eseguire il pre-check e la richiesta **Cambio di indirizzo** dalla vecchia proprietà, quindi monitorare l'indicizzazione finché Google non ha elaborato il nuovo URL.
+Aggiornamento 2026-10-03: la URL Inspection della homepage `https://thelogbook.web.app/` riporta `Submitted and indexed`, fetch riuscito e indicizzazione consentita. Nella proprietà legacy `https://logbook-gnf.vercel.app/`, il product owner ha completato dalla UI Search Console la procedura **Cambio di indirizzo** verso `https://thelogbook.web.app/`; la UI conferma che lo spostamento è in corso con data di inizio 3 ottobre 2026. Il redirect HTTP 301 dal vecchio root Vercel al nuovo canonical resta intenzionalmente attivo durante la migrazione.
+
+Non rimuovere i meccanismi di verifica solo perché la proprietà è già stata accettata. Mantenere la proprietà legacy e il redirect 301 per l'intera finestra di migrazione Search Console e monitorare l'indicizzazione del nuovo origin prima di qualsiasi rimozione definitiva.
 
 ## GitHub Pages — hosting ritirato
 
