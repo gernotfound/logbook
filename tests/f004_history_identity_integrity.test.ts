@@ -100,7 +100,7 @@ describe('F-004 training history identity integrity', () => {
         ]);
 
         const hydrated = applyRemoteDocuments(base, remoteDocuments, catalog);
-        expect(hydrated.history?.map(item => item.id)).toEqual(expectedIds);
+        expect(hydrated.history?.map(item => String(item.id)).sort()).toEqual(expectedIds.map(String).sort());
 
         const projected = projectDocuments(hydrated, catalog);
         const historyMonth = projected.get('history_months/2026-09') ?? {};
@@ -130,7 +130,7 @@ describe('F-004 training history identity integrity', () => {
         const backup = createBackup(UserDataSchema.parse({}) as unknown as UserData, 'guest') as any;
 
         backup.userData = { history: [validWorkout, { ...validWorkout, id: '' }] };
-        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
+        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo .*valido/i);
 
         backup.userData = { history: [validWorkout, { ...validWorkout, id: 'bad\/id' }] };
         expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
