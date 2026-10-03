@@ -41,8 +41,15 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         if (!Array.isArray(items)) throw new Error(`${path}: atteso un elenco.`);
         const ids = new Set<string>();
         for (const item of items) {
-            const id = isRecord(item) ? normalizeBusinessId(item.id) : null;
-            if (!id) throw new Error(`${path}: elemento senza identificativo valido.`);
+            const rawId = isRecord(item) ? item.id : undefined;
+            const id = normalizeBusinessId(rawId);
+            if (!id) {
+                const supplied = (typeof rawId === 'string' && rawId.trim().length > 0)
+                    || (typeof rawId === 'number' && Number.isFinite(rawId));
+                throw new Error(supplied
+                    ? `${path}: identificativo non valido.`
+                    : `${path}: elemento senza identificativo valido.`);
+            }
             if (ids.has(id)) throw new Error(`${path}: identificativo duplicato ${id}.`);
             ids.add(id);
         }
@@ -71,8 +78,8 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         for (const exercise of routine.exercises) {
             if (!isRecord(exercise)) throw new Error(`routines.${index}.exercises: elemento senza identificativo valido.`);
             const exId = exercise.exId;
-            const normalized = typeof exId === 'number' && Number.isFinite(exId) ? String(exId) : typeof exId === 'string' ? exId.trim() : '';
-            if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) {
+            const normalized = normalizeBusinessId(exId);
+            if (!normalized) {
                 throw new Error(`routines.${index}.exercises: esercizio senza identificativo valido.`);
             }
             if (seen.has(normalized)) throw new Error(`routines.${index}.exercises: identificativo duplicato ${normalized}.`);
@@ -109,16 +116,14 @@ export function validateImportData(value: unknown): asserts value is Record<stri
             for (const item of day[key] as unknown[]) {
                 if (!isRecord(item)) continue;
                 const id = item.id;
-                const normalizedId = typeof id === 'number' && Number.isFinite(id) ? String(id) : typeof id === 'string' ? id.trim() : '';
-                if (!normalizedId || normalizedId === 'undefined' || normalizedId === 'null' || normalizedId.includes('/')) {
+                const normalizedId = normalizeBusinessId(id);
+                if (!normalizedId) {
                     throw new Error(`nutrition.${date}.${key}: identificativo non valido.`);
                 }
                 if (key === 'supplementsIntake') {
                     const supplementId = item.supplementId;
-                    const normalizedSupplementId = typeof supplementId === 'number' && Number.isFinite(supplementId)
-                        ? String(supplementId)
-                        : typeof supplementId === 'string' ? supplementId.trim() : '';
-                    if (!normalizedSupplementId || normalizedSupplementId === 'undefined' || normalizedSupplementId === 'null' || normalizedSupplementId.includes('/')) {
+                    const normalizedSupplementId = normalizeBusinessId(supplementId);
+                    if (!normalizedSupplementId) {
                         throw new Error(`nutrition.${date}.supplementsIntake: integratore senza identificativo valido.`);
                     }
                 }
