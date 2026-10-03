@@ -27,6 +27,7 @@ import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
 import { PASSWORD_POLICY_SUMMARY } from '../lib/auth/passwordPolicy';
+import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_MIGRATION_POLICY_KEY = 'guest_migration_policy';
@@ -247,6 +248,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 tryRemoveBrowserValue(AWAITING_REDIRECT_KEY);
+                try {
+                    rememberAuthenticatedOwner(user.uid);
+                } catch (error) {
+                    console.error('Owner autenticato locale non persistibile:', error);
+                    useAppStore.setState({
+                        localPersistenceBlocked: true,
+                        syncHealth: 'failed',
+                        saveError: 'Archivio del dispositivo non disponibile. Riprova prima di continuare.',
+                    });
+                    setCurrentUser(user);
+                    setLoading(false);
+                    return;
+                }
             }
             setCurrentUser(user);
             setLoading(false);
@@ -314,6 +328,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setGuestMigrationStatus('idle');
                 const isGuestActive = isGuestRef.current || isStoredGuest();
                 if (!isGuestActive) {
+                    try {
+                        clearAuthenticatedOwnerHint();
+                    } catch (error) {
+                        console.warn('Impossibile pulire l’owner autenticato locale:', error);
+                    }
                     DB.resetCache();
                     useAppStore.getState().resetStore();
                 }
@@ -414,6 +433,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Accesso guest: solo localStorage, zero Firebase
     const loginAsGuest = useCallback(async () => {
         try {
+            clearAuthenticatedOwnerHint();
             writeBrowserValue(GUEST_KEY, 'true');
         } catch {
             setSaveError('Impossibile avviare la modalità locale: archivio del dispositivo non disponibile.');
@@ -642,6 +662,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             try {
                 useAppStore.getState().cancelPendingSyncs();
                 await DB.secureLogOut();
+                if (initialUid) clearAuthenticatedOwnerHint(userOwner(initialUid));
                 DB.resetCache();
                 useAppStore.getState().resetStore({ force: true });
                 if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
