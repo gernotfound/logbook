@@ -10,6 +10,7 @@ const firestoreVerifier = readFileSync('scripts/verify-firestore-production.mjs'
 const vite = readFileSync('vite.config.ts', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
+const accountClient = readFileSync('src/lib/db/db_account.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf8');
 const vercelBackendBuild = readFileSync('scripts/prepare-vercel-backend-static.mjs', 'utf8');
@@ -93,6 +94,10 @@ else if (deletionCron.schedule !== '0 3 * * *') failures.push('account deletion 
 if (!accountApi.includes('const POST_BUDGET_MS = 5_000;')) failures.push('POST deletion budget must remain bounded to 5s for the interactive request');
 if (!accountApi.includes('const GET_PROGRESS_BUDGET_MS = 5_000;')) failures.push('GET deletion progress budget must remain bounded to 5s for the interactive request');
 if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
+if (accountClient.includes("store/useAppStore")) failures.push('account deletion infrastructure must not import the Zustand store');
+if (!accountClient.includes('context.cancelPendingSyncs()') || !accountClient.includes('context.resetStore()')) {
+  failures.push('account deletion infrastructure must receive application lifecycle callbacks through its context');
+}
 if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
 const hostingSecurityHeaders = firebase.hosting?.headers?.find(item => item.source === '/**')?.headers ?? [];
 const csp = hostingSecurityHeaders.find(item => item.key === 'Content-Security-Policy')?.value ?? '';
