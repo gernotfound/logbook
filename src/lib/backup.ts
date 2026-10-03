@@ -1,5 +1,5 @@
 import equal from 'fast-deep-equal';
-import { UserDataSchema } from './schema';
+import { DomainParsers, UserDataSchema } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
 import { normalizeBusinessId } from './businessIdentity';
@@ -44,7 +44,7 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         for (const item of items) {
             const rawId = isRecord(item) ? item.id : undefined;
             const id = normalizeBusinessId(rawId);
-            if (!id) throw new Error(`${path}: elemento senza identificativo valido.`);
+            if (!id) throw new Error(`${path}: identificativo non valido.`);
             if (ids.has(id)) throw new Error(`${path}: identificativo duplicato ${id}.`);
             ids.add(id);
         }
@@ -65,11 +65,6 @@ export function validateImportData(value: unknown): asserts value is Record<stri
             assertWorkoutSessionIdentities(item as any, `history.${id}`);
             requireCanonicalWorkoutDate(item as any, `history.${id}`);
         }
-    }
-
-    if (value.activeWorkout !== undefined && value.activeWorkout !== null) {
-        if (!isRecord(value.activeWorkout)) throw new Error('activeWorkout: oggetto non valido.');
-        assertWorkoutSessionIdentities(value.activeWorkout as any, 'activeWorkout');
     }
 
     if (Array.isArray(value.routines)) for (const [index, routine] of value.routines.entries()) {
@@ -169,9 +164,19 @@ export function decodeImport(payload: unknown, owner: string) {
 
     const data = normalized.userData;
     validateImportData(data);
+    const sanitizedData = structuredClone(data);
+    if (sanitizedData.activeWorkout !== undefined && sanitizedData.activeWorkout !== null) {
+        const activeWorkout = DomainParsers.parseActiveWorkout(sanitizedData.activeWorkout);
+        try {
+            if (activeWorkout) assertWorkoutSessionIdentities(activeWorkout, 'activeWorkout');
+            sanitizedData.activeWorkout = activeWorkout;
+        } catch {
+            sanitizedData.activeWorkout = null;
+        }
+    }
     const selected = share
-        ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]]))
-        : data;
+        ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))
+        : sanitizedData;
 
     return {
         data: selected,
