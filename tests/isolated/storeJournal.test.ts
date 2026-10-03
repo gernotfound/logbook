@@ -83,6 +83,62 @@ describe('store with real IndexedDB commits', () => {
         expect(store.getState().syncHealth).toBe('rejected');
         expect((await readLocal('user:A'))?.pending).toHaveLength(1);
     });
+    it('keeps an offline completed workout durable and replays it after reconnection without duplication', async () => {
+        const workout = {
+            id: 'offline-workout',
+            routineName: 'Offline workout',
+            date: '2026-10-03',
+            globalStartTime: 1_791_014_400_000,
+            globalEndTime: 1_791_017_100_000,
+            globalDurationStr: '00:45:00',
+            exercises: [],
+        };
+        const base = UserDataSchema.parse({
+            ...data(170),
+            activeWorkout: workout,
+            history: [],
+            activePains: [],
+        }) as unknown as UserData;
+
+        store.setState({ userData: base, localWorkout: workout });
+        await initializeLocal('user:A', base);
+
+        sdk.save.mockResolvedValueOnce({
+            ok: false,
+            status: 'local-pending',
+            error: new Error('Connessione assente'),
+        });
+
+        const completing = store.getState().dispatchDomainOperation({
+            type: 'workout.complete',
+            workout,
+            activePains: [],
+        });
+        await store.getState().flushPendingSyncs();
+        await expect(completing).resolves.toMatchObject({ ok: false, status: 'local-pending' });
+
+        const offlineEnvelope = await readLocal('user:A');
+        expect(offlineEnvelope?.data.activeWorkout).toBeNull();
+        expect(offlineEnvelope?.data.history?.filter(item => item.id === workout.id)).toHaveLength(1);
+        expect(offlineEnvelope?.pending.length).toBeGreaterThan(0);
+        expect(store.getState().syncHealth).toBe('local-pending');
+
+        // Mirrors useWorkoutSession.endWorkout(): once the local-first completion settles,
+        // the device-local draft can be cleared even though cloud replication is pending.
+        store.getState().setLocalWorkout(null);
+        expect(store.getState().localWorkout).toBeNull();
+        expect(store.getState().userData?.activeWorkout).toBeNull();
+
+        await store.getState().flushPendingSyncs();
+
+        const replayedEnvelope = await readLocal('user:A');
+        expect(replayedEnvelope?.pending).toEqual([]);
+        expect(replayedEnvelope?.data.activeWorkout).toBeNull();
+        expect(replayedEnvelope?.data.history?.filter(item => item.id === workout.id)).toHaveLength(1);
+        expect(store.getState().syncHealth).toBe('synced');
+        expect(store.getState().saveError).toBeNull();
+    });
+
     it('keeps a newer edit dirty while an older remote request completes', async () => {
         const remote = deferred<{ ok: true; status: 'synced' }>();
         sdk.save.mockReturnValueOnce(remote.promise);
