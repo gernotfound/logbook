@@ -319,6 +319,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             get().cancelPendingSyncs();
             set({
                 userData: null,
+                dataOwner: null,
                 localWorkout: null,
                 saveError: null,
                 syncing: false,
