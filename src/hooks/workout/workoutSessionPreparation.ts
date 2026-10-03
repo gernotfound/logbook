@@ -223,7 +223,7 @@ export function prepareHistoricalWorkoutForSave(
         fatigueRating: valRes.fatigue,
         waterLiters: water ? parseFloat(String(water).replace(',', '.')) : undefined,
         pains: Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [],
-        date: currentWorkout.date || (currentWorkout.globalStartTime ? runtime.getLocalDateString(currentWorkout.globalStartTime) : undefined),
+        date: currentWorkout.date || (currentWorkout.globalStartTime ? runtime.getLocalDateString(currentWorkout.globalStartTime) : runtime.getLocalDateString()),
     };
 
     if (updatedWorkout.waterLiters === undefined) delete updatedWorkout.waterLiters;
