@@ -60,32 +60,28 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(parsed).not.toHaveProperty('extension');
     });
 
-    it('quarantines nested workout ghosts before semantic synchronization', () => {
-        const parsed = parse({
-            history: [{
-                id: 'w-1',
-                date: '2026-10-03',
-                exercises: [
-                    { exId: 'bench', sessionNote: '', sets: [] },
-                    {
-                        id: 'se-1',
-                        exId: 'bench',
-                        sessionNote: '',
-                        sets: [
-                            { kg: '80', reps: '8' },
-                            { id: 's-1', kg: '80', reps: '8' },
-                            { id: 's-1', kg: '82', reps: '8' },
-                        ],
-                    },
-                    { id: 'se-1', exId: 'squat', sessionNote: '', sets: [] },
-                ],
-            }],
-        });
+    it('rejects nested workout ghosts at the domain persistence boundary', () => {
+        const malformed = {
+            id: 'w-1',
+            date: '2026-10-03',
+            exercises: [
+                { exId: 'bench', sessionNote: '', sets: [] },
+                {
+                    id: 'se-1',
+                    exId: 'bench',
+                    sessionNote: '',
+                    sets: [
+                        { kg: '80', reps: '8' },
+                        { id: 's-1', kg: '80', reps: '8' },
+                    ],
+                },
+            ],
+        } as WorkoutSession;
 
-        expect(parsed.history?.[0]?.exercises).toHaveLength(1);
-        expect(parsed.history?.[0]?.exercises[0]).toMatchObject({ id: 'se-1', exId: 'bench' });
-        expect(parsed.history?.[0]?.exercises[0].sets).toHaveLength(1);
-        expect(parsed.history?.[0]?.exercises[0].sets[0].id).toBe('s-1');
+        expect(() => applyDomainOperations(parse({}), {
+            type: 'active-workout.set',
+            workout: malformed,
+        })).toThrow(/identificativo non valido/i);
     });
 
     it('keys workout exercise instances by SessionExercise.id even when exId is repeated', () => {
