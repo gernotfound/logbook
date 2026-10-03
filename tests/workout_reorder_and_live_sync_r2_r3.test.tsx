@@ -169,12 +169,12 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
             expect(active?.exercises[0].id).toMatch(/^se_/);
         });
 
-        it('1.6: getInitialLocalWorkout quarantines device exercises without persisted identity', () => {
+        it('1.6: getInitialLocalWorkout repairs device-only missing identities once and persists them', () => {
             const malformedWorkout = {
                 id: 'w_malformed',
                 routineName: 'Malformed',
                 exercises: [
-                    { exId: 'ex_bench', sessionNote: '', sets: [{ id: 's-rir', kg: '80', reps: '8', rir: 0 }] },
+                    { exId: 'ex_bench', sessionNote: '', sets: [{ kg: '80', reps: '8', rir: 0 }] },
                     { id: 'se_preserved', exId: 'ex_squat', sessionNote: '', sets: [] }
                 ]
             };
@@ -182,9 +182,12 @@ describe('Workout Reorder (R2) and Live Sync & Badges (R3) Suite', () => {
 
             const initial = getInitialLocalWorkout();
             expect(initial).not.toBeNull();
-            expect(initial?.exercises).toHaveLength(1);
-            expect(initial?.exercises[0].id).toBe('se_preserved');
-            expect(initial?.exercises[0].exId).toBe('ex_squat');
+            expect(initial?.exercises).toHaveLength(2);
+            expect(initial?.exercises[0].id).toMatch(/^se_/);
+            expect(initial?.exercises[0].sets[0].id).toMatch(/^s_/);
+            expect(initial?.exercises[0].sets[0].rir).toBe(0);
+            expect(initial?.exercises[1].id).toBe('se_preserved');
+            expect(JSON.parse(localStorage.getItem(deviceKey('workout'))!).exercises[0].id).toBe(initial?.exercises[0].id);
         });
     });
 
