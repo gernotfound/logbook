@@ -18,9 +18,6 @@ vi.mock('../../src/lib/firebase', () => ({
     waitForPendingWrites: vi.fn(),
 }));
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
-vi.mock('../../src/store/useAppStore', () => ({
-    useAppStore: { getState: () => ({ cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset }) },
-}));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: vi.fn() }));
 
 import { resumeAccountDeletion } from '../../src/lib/db/db_account';
@@ -31,6 +28,7 @@ const receipt = 'A'.repeat(43);
 const context = {
     purgeAllLocalUserData: boundary.purge,
     resetCache: boundary.resetCache,
+    resetStore: boundary.reset,
 };
 
 function completeResponse() {

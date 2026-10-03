@@ -178,7 +178,10 @@ export function useSettings() {
                 throw new Error('Nessun metodo di autenticazione disponibile per confermare la cancellazione.');
             }
 
-            const outcome = await DB.deleteAccount();
+            const outcome = await DB.deleteAccount({
+                cancelPendingSyncs: () => useAppStore.getState().cancelPendingSyncs(),
+                resetStore: () => useAppStore.getState().resetStore(),
+            });
             if (outcome.status === 'pending') await showAlert(outcome.message);
         } catch (error) {
             if (isSensitiveReauthCancellation(error)) return;

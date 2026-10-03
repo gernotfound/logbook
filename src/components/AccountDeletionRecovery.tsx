@@ -3,6 +3,7 @@ import { DB } from '../lib/db';
 import { resumeAccountDeletion } from '../lib/db/db_account';
 import { findPendingAccountDeletion } from '../lib/sync/accountGate';
 import { useDialogStore } from '../store/useDialogStore';
+import { useAppStore } from '../store/useAppStore';
 import { recoverDeletedAccountOnThisDevice } from '../lib/deletionDeviceRecovery';
 
 /**
@@ -27,6 +28,7 @@ export function AccountDeletionRecovery() {
                 const outcome = await resumeAccountDeletion({
                     purgeAllLocalUserData: owner => DB.purgeAllLocalUserData(owner),
                     resetCache: () => DB.resetCache(),
+                    resetStore: () => useAppStore.getState().resetStore(),
                 });
                 if (!disposed && outcome?.status === 'pending') {
                     await useDialogStore.getState().showAlert(outcome.message);
