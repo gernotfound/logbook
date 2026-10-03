@@ -1,6 +1,7 @@
 import { auth } from '../firebase';
 import { readBrowserValueStrict } from './browserStorage';
 import { userOwner } from './owner';
+import { readAuthenticatedOwnerHint } from './authOwnerHint';
 
 export { userOwner, normalizeStorageOwner } from './owner';
 
@@ -14,7 +15,12 @@ export function storageOwner(): string {
     // authoritative owner handoff. This prevents store hydration during crash
     // recovery from persisting authenticated data back into the guest archive.
     if (uid && recoveryUid === uid) return userOwner(uid);
-    return !guest && uid ? userOwner(uid) : 'guest';
+    if (guest) return 'guest';
+    if (uid) return userOwner(uid);
+    // During authenticated cold boot Firebase Auth may still be refreshing over the
+    // network. Keep the same locally fenced owner used by main.tsx so early offline
+    // mutations cannot fall through into the guest envelope.
+    return readAuthenticatedOwnerHint() ?? 'guest';
 }
 export const captureSession = () => ({ owner: storageOwner(), epoch });
 export const isCurrentSession = (session: ReturnType<typeof captureSession>) => session.epoch === epoch && session.owner === storageOwner();
