@@ -230,6 +230,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
           finalPromise = useAppStore.getState().dispatchDomainOperation({
             type: 'workout.complete',
             workout,
+            expectedActiveWorkoutId: String(workout.id),
             activePains: [],
           });
         });
