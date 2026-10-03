@@ -65,12 +65,13 @@ function alignActiveWorkout(
 ): { persisted: UserData['activeWorkout']; local: AppState['localWorkout'] } {
     const parsedIncoming = DomainParsers.parseActiveWorkout(incoming) ?? null;
     // Persisted business state and the device draft are separate authorities.
-    // Bulk hydration may seed a missing device draft, but it must never copy the
-    // device draft back into UserData: ordinary live edits already use DomainOperations.
-    return {
-        persisted: parsedIncoming,
-        local: localWorkout ?? parsedIncoming,
-    };
+    // Bulk hydration may preserve only the same live session (device keystrokes can
+    // be newer than IndexedDB) or a deliberately isolated history edit.
+    if (localWorkout?.isEditingHistory) return { persisted: parsedIncoming, local: localWorkout };
+    if (parsedIncoming && localWorkout?.id === parsedIncoming.id) {
+        return { persisted: parsedIncoming, local: localWorkout };
+    }
+    return { persisted: parsedIncoming, local: parsedIncoming };
 }
 
 export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
