@@ -12,6 +12,7 @@ const backendPaths = [
   'tsconfig.json',
   'tsconfig.m7-server.json',
   'scripts/vercel-ignore-build.mjs',
+  'scripts/prepare-vercel-backend-static.mjs',
 ];
 
 if (!previousSha) {

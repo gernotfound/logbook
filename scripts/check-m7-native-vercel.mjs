@@ -12,6 +12,7 @@ const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
 const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf8');
+const vercelBackendBuild = readFileSync('scripts/prepare-vercel-backend-static.mjs', 'utf8');
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 for (const forbidden of ['nitro', 'workflow']) {
@@ -36,7 +37,7 @@ if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.pu
 if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
 else {
   const vercelIgnoreBuild = readFileSync('scripts/vercel-ignore-build.mjs', 'utf8');
-  for (const requiredPath of ['api', 'server', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json']) {
+  for (const requiredPath of ['api', 'server', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json', 'scripts/prepare-vercel-backend-static.mjs']) {
     if (!vercelIgnoreBuild.includes(`'${requiredPath}'`)) failures.push(`Vercel selective deployment guard missing backend-sensitive path: ${requiredPath}`);
   }
   if (!vercelIgnoreBuild.includes('VERCEL_GIT_PREVIOUS_SHA') || !vercelIgnoreBuild.includes('VERCEL_GIT_COMMIT_SHA')) {
@@ -47,6 +48,15 @@ else {
   }
 }
 if (vercel.framework !== null) failures.push('Vercel must use the Other framework preset so Production is backend-only instead of rebuilding the Vite frontend');
+if (vercel.buildCommand !== 'node scripts/prepare-vercel-backend-static.mjs') failures.push('Vercel must override the project build command with the backend-only static-output preparer');
+if (vercel.outputDirectory !== 'vercel-backend-static') failures.push('Vercel must publish only the dedicated backend static output instead of the Vite dist directory');
+if (!existsSync('scripts/prepare-vercel-backend-static.mjs')) failures.push('missing Vercel backend-only static-output preparer');
+for (const marker of ["const outputDirectory = 'vercel-backend-static'", 'rmSync(outputDirectory', 'mkdirSync(outputDirectory', 'backend-only.txt']) {
+  if (!vercelBackendBuild.includes(marker)) failures.push(`Vercel backend-only build preparer missing marker: ${marker}`);
+}
+if (vercelBackendBuild.includes('npm run build') || vercelBackendBuild.includes('vite build') || vercel.outputDirectory === 'dist') {
+  failures.push('Vercel backend deployment must never build or publish the Firebase/Vite frontend');
+}
 if (vercel.fluid !== true) failures.push('Vercel Fluid compute must be explicitly enabled to preserve the 300s Hobby function ceiling');
 
 const legacyFrontendRedirect = vercel.redirects?.find(item => item.source === '/');

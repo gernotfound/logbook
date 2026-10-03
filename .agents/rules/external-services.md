@@ -47,6 +47,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 ### Vercel
 
 - Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA Production target è Firebase Hosting.
+- **MUST:** il deployment Vercel non deve eseguire né pubblicare il build Vite/Firebase del frontend. Il suo output statico è un artefatto backend-only dedicato; in particolare non deve esporre il Service Worker PWA generato per Firebase.
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
