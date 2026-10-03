@@ -14,11 +14,13 @@ import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
 
 export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
+export type SyncPresentation = 'normal' | 'quiet-workout';
 export type CompatibilityStatus = 'ok' | 'update-required';
 export interface SyncSlice {
     saveError: string | null;
     syncing: boolean;
     syncHealth: SyncHealth;
+    syncPresentation: SyncPresentation;
     syncGeneration: number;
     localPersistenceBlocked: boolean;
     compatibilityStatus: CompatibilityStatus;
@@ -91,6 +93,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             compatibilityError: message,
             syncing: false,
             syncHealth: 'failed',
+            syncPresentation: 'normal',
             saveError: null,
             syncGeneration: get().syncGeneration + 1,
         });
@@ -192,6 +195,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         saveError: null,
         syncing: false,
         syncHealth: 'synced',
+        syncPresentation: 'normal',
         syncGeneration: 0,
         localPersistenceBlocked: false,
         compatibilityStatus: 'ok',
@@ -216,7 +220,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const generation = get().syncGeneration + 1;
             const session = captureSession();
             if (userData) markTabSnapshotDirty(session, userData);
-            set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
+            set({ userData: data, syncing: true, syncHealth: 'saving', syncPresentation: 'normal', saveError: null, syncGeneration: generation });
             // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
             const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
                 .then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
@@ -243,8 +247,12 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const data = applyDomainOperations(userData, operation);
             const generation = get().syncGeneration + 1;
             const session = captureSession();
+            const operations = Array.isArray(operation) ? operation : [operation];
+            const syncPresentation: SyncPresentation = operations.length > 0 && operations.every(item => item.type === 'active-workout.set')
+                ? 'quiet-workout'
+                : 'normal';
             markTabSnapshotDirty(session, userData);
-            set({ userData: data, syncing: true, syncHealth: 'saving', saveError: null, syncGeneration: generation });
+            set({ userData: data, syncing: true, syncHealth: 'saving', syncPresentation, saveError: null, syncGeneration: generation });
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
             const cache = commitDomainOperations(session.owner, operation, userData)
@@ -293,7 +301,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             clearWorkoutTimer();
             [...pending, ...active].forEach(job => job.reject(new Error('Sincronizzazione annullata per cambio sessione')));
             clearSyncTimers();
-            set({ syncing: false, syncGeneration: get().syncGeneration + 1 });
+            set({ syncing: false, syncPresentation: 'normal', syncGeneration: get().syncGeneration + 1 });
         },
         resetStore: options => {
             // Preserve the recovery view only for the deletion that belongs to the active
@@ -311,6 +319,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 saveError: null,
                 syncing: false,
                 syncHealth: 'synced',
+                syncPresentation: 'normal',
                 localPersistenceBlocked: false,
                 compatibilityStatus: 'ok',
                 compatibilityError: null,
