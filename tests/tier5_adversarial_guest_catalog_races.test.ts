@@ -174,7 +174,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
             const { getDoc } = await import('firebase/firestore');
             vi.mocked(getDoc).mockResolvedValueOnce({
                 exists: () => true,
-                data: () => createMockData('Initial')
+                data: () => ({ profile: { name: 'Initial' }, library: [], customFoods: [], catalogOverrides: {}, routines: [], trainingCycles: [], activeCycleId: null, supplements: [], activeWorkout: null })
             } as any);
 
             const result = await DB.saveUserData(createMockData('DirectSaveFail'));
