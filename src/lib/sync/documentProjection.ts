@@ -3,7 +3,7 @@ import { UserDataSchema } from '../schema';
 import type { UserData, CachedGlobalCatalog } from '../../types';
 import { extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides, resolveEffectiveExercises, resolveEffectiveFoods } from '../catalog/deltaResolver';
 import { getLocalDateString } from '../utils/date';
-import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanonicalWorkoutDate } from './monthlyIntegrity';
+import { requireCanonicalWorkoutDate, sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './monthlyIntegrity';
 import { removeUndefinedValues } from '../utils/object';
 
 export type DocumentData = Record<string, unknown>;
@@ -78,15 +78,15 @@ export function applyRemoteDocuments(local: UserData, documents: Map<string, Doc
     for (const [path, data] of documents) {
         const [collection, month] = path.split('/');
         if (collection === 'history_months') {
-            assertHistoryMonthDocument(month, data);
+            const sanitized = sanitizeHistoryMonthDocument(month, data);
             const preserved = (next.history ?? []).filter(workout => {
                 try { return requireCanonicalWorkoutDate(workout).slice(0, 7) !== month; }
                 catch { return true; }
             });
-            next.history = [...preserved, ...Object.values(data)] as UserData['history'];
+            next.history = [...preserved, ...Object.values(sanitized)] as UserData['history'];
         } else if (collection === 'nutrition_months') {
-            assertNutritionMonthDocument(month, data);
-            next.nutrition = { ...Object.fromEntries(Object.entries(next.nutrition ?? {}).filter(([date]) => date.slice(0, 7) !== month)), ...data } as UserData['nutrition'];
+            const sanitized = sanitizeNutritionMonthDocument(month, data);
+            next.nutrition = { ...Object.fromEntries(Object.entries(next.nutrition ?? {}).filter(([date]) => date.slice(0, 7) !== month)), ...sanitized } as UserData['nutrition'];
         }
     }
     return UserDataSchema.parse(next) as unknown as UserData;
