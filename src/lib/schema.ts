@@ -1,6 +1,7 @@
 import { z } from './zod';
 import type { UserData } from '../types';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
+import { isValidBusinessId, normalizeBusinessId } from './businessIdentity';
 import { reportZodSchemaFallback, safeString } from './schemas/schema_utils';
 
 export * from './schemas/schema_utils';
@@ -17,12 +18,7 @@ import { CatalogOverridesSchema } from './schemas/schema_catalog';
 
 const normalizePersistedWorkoutId = (record: unknown): string | null => {
     if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-    const rawId = (record as { id?: unknown }).id;
-    if (typeof rawId === 'number') return Number.isFinite(rawId) ? String(rawId) : null;
-    if (typeof rawId !== 'string') return null;
-    const id = rawId.trim();
-    if (!id || id === 'undefined' || id === 'null' || id.includes('/')) return null;
-    return id;
+    return normalizeBusinessId((record as { id?: unknown }).id);
 };
 
 const sanitizeWorkoutHistory = (data: unknown): unknown[] => {
@@ -130,7 +126,7 @@ export const UserDataSchema = z.object({
         nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined)
     }).optional().catch(undefined),
 
-}).passthrough().catch((ctx) => {
+}).catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'UserDataSchema',
         fallbackUsed: 'defaultUserDataFallback',
@@ -139,8 +135,7 @@ export const UserDataSchema = z.object({
     return defaultUserDataFallback as any;
 }).default(defaultUserDataFallback as any);
 
-const isValidParsedId = (id: unknown) =>
-    (typeof id === 'string' && id.trim().length > 0) || (typeof id === 'number' && Number.isFinite(id));
+const isValidParsedId = isValidBusinessId;
 
 export function quarantineCorruptedRecord(context: {
     collection: string;
