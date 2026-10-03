@@ -122,8 +122,8 @@ if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.i
 if (!firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
   failures.push('Firestore Production workflow must only activate after the canonical push-to-main verification run');
 }
-if (!firestoreWorkflow.includes('git rev-parse origin/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
-  failures.push('Firestore Production workflow must re-check the exact current main SHA before any live operation');
+if (!firestoreWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
+  failures.push('Firestore Production workflow must re-check the exact current main SHA without mutating checkout history before any live operation');
 }
 if (!firestoreWorkflow.includes('GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT') || firestoreWorkflow.includes('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}')) {
   failures.push('Firestore Production must use a dedicated deployer identity instead of the Hosting service account');
