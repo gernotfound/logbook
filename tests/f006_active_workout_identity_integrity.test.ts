@@ -170,6 +170,7 @@ describe('F-006 active workout persisted business identity', () => {
         const completed = applyDomainOperations(modified, {
             type: 'workout.complete',
             workout: finishedWorkout,
+            expectedActiveWorkoutId: String(finishedWorkout.id),
             activePains: [],
         });
 
