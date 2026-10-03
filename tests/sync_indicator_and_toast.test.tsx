@@ -21,6 +21,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       userData: { ...defaultMockUserData },
       localWorkout: null,
       syncing: false,
+      syncHealth: 'synced',
+      syncPresentation: 'normal',
       saveError: null,
     });
     vi.clearAllMocks();
@@ -164,6 +166,30 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         const indicator = querySyncIndicator(container);
         expect(indicator).toBeNull();
       });
+
+      test('T1.10a_R2: active-workout background sync stays visually quiet during set entry', async () => {
+        const { container } = await renderSettledApp();
+        act(() => {
+          useAppStore.setState({
+            syncing: true,
+            syncHealth: 'saving',
+            syncPresentation: 'quiet-workout',
+          });
+        });
+        expect(querySyncIndicator(container)).toBeNull();
+      });
+
+      test('T1.10b_R2: normal final-session sync remains visible', async () => {
+        await renderSettledApp();
+        act(() => {
+          useAppStore.setState({
+            syncing: true,
+            syncHealth: 'saving',
+            syncPresentation: 'normal',
+          });
+        });
+        expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
+      });
     });
 
     // --- Feature R3: Gestione Errori (Toast Auto-scomparente) ---
@@ -172,6 +198,33 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         const { container } = await renderSettledApp();
         const toast = querySyncErrorToast(container);
         expect(toast).toBeNull();
+      });
+
+      test('T1.11a_R3: durable offline workout pending state does not distract during set entry', async () => {
+        const { container } = await renderSettledApp();
+        act(() => {
+          useAppStore.setState({
+            syncing: false,
+            syncHealth: 'local-pending',
+            syncPresentation: 'quiet-workout',
+            saveError: 'Salvato localmente. Sincronizzazione in attesa.',
+          });
+        });
+        expect(querySyncErrorToast(container)).toBeNull();
+      });
+
+      test('T1.11b_R3: rejected workout writes still surface even in quiet mode', async () => {
+        const { container } = await renderSettledApp();
+        act(() => {
+          useAppStore.setState({
+            syncing: false,
+            syncHealth: 'rejected',
+            syncPresentation: 'quiet-workout',
+            saveError: 'Sincronizzazione rifiutata dal server.',
+          });
+        });
+        expect(querySyncErrorToast(container)).not.toBeNull();
+        expect(screen.getByText(/Sincronizzazione rifiutata dal server/i)).toBeDefined();
       });
 
       test('T1.12_R3: .sync-error-toast renders with error message when saveError is set', async () => {
