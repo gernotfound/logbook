@@ -1,6 +1,7 @@
 import type { NutritionDay, WorkoutSession } from '../../types';
 import { normalizeBusinessId } from '../businessIdentity';
 import { getLocalDateString } from '../utils/date';
+import { assertWorkoutSessionIdentities } from './domainOperations/validation';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -31,6 +32,7 @@ export function assertHistoryMonthDocument(month: string, data: Record<string, u
         if (!embeddedId || embeddedId !== id) {
             throw new Error(`Shard storico ${month}: identità ${key} incoerente`);
         }
+        assertWorkoutSessionIdentities(workout, `Shard storico ${month}/${key}`);
         const date = requireCanonicalWorkoutDate(workout, `Shard storico ${month}/${key}`);
         if (date.slice(0, 7) !== month) {
             throw new Error(`Shard storico ${month}: workout ${key} appartiene a ${date.slice(0, 7)}`);
@@ -61,6 +63,7 @@ export function sanitizeHistoryMonthDocument(month: string, data: Record<string,
         const embeddedId = normalizeBusinessId(workout.id);
         if (!embeddedId || embeddedId !== id) continue;
         try {
+            assertWorkoutSessionIdentities(workout, `Shard storico ${month}/${key}`);
             if (requireCanonicalWorkoutDate(workout).slice(0, 7) !== month) continue;
         } catch {
             continue;
