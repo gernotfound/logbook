@@ -30,7 +30,7 @@ Il repository è pubblico.
 - **MUST:** origin e domini di deployment ritirati vengono rimossi dalla configurazione applicativa e dalle allowlist esterne quando non sono più necessari.
 - **MUST:** non mantenere autorizzato un vecchio origin per sola compatibilità storica se nessun runtime reale lo usa.
 - **MUST:** il ritiro di un origin che ha ospitato una PWA deve considerare anche i Service Worker già installati: un redirect HTTP del root non basta se un worker legacy può ancora servire l'app shell dalla propria cache.
-- **MUST:** durante la finestra di dismissione dell'origin Vercel, `/sw.js` deve servire un worker di ritiro non cacheabile che prende controllo, elimina le cache legacy, si deregistra e riporta le finestre al root 301 verso Firebase. Non re-autorizzare il vecchio origin in Firebase Auth/App Check per rendere funzionante una copia PWA obsoleta.
+- **MUST:** durante la finestra di dismissione dell'origin Vercel, il deployment Vercel è backend-only: non deve generare o pubblicare il frontend/PWA. L'unico asset statico ammesso è `/sw.js`, un worker di ritiro non cacheabile che prende controllo, elimina le cache legacy, si deregistra e riporta le finestre al root 301 verso Firebase. Non re-autorizzare il vecchio origin in Firebase Auth/App Check per rendere funzionante una copia PWA obsoleta.
 - **MUST:** prima di eliminare una funzione generica di portabilità, dimostrare che sia specifica del provider ritirato. Il supporto generico a base path/subpath non è automaticamente codice legacy di deployment.
 - **VERIFY:** restrizioni referrer API key, origin/redirect OAuth, domini autorizzati Firebase Auth, domini reCAPTCHA/Fraud Defense e proprietà Search Console sono stato esterno.
 
@@ -46,7 +46,7 @@ Firebase Hosting, Firebase Authentication, Firestore, Firebase Admin e App Check
 
 ### Vercel
 
-- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA Production target è Firebase Hosting.
+- Vercel è il boundary backend trusted Production: contiene env server-only, Functions e cron; il frontend/PWA Production target è Firebase Hosting. Il build Vercel usa un output statico dedicato separato dal build Vite e pubblica soltanto il worker di ritiro `/sw.js` finché serve la dismissione del vecchio origin.
 - `main` resta l'unico branch abilitato al deployment salvo cambio deliberato del contratto repository.
 - Le credenziali server-only non devono mai avere prefisso `VITE_`.
 - Un deployment Vercel verde non prova la CI GitHub; la CI verde non prova il deployment Production.
