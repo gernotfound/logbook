@@ -38,15 +38,6 @@ vi.mock('../src/lib/sync/session', () => ({
     isCurrentSession: (session: { owner: string }) => session.owner === 'user:test-user-id',
 }));
 
-vi.mock('../src/store/useAppStore', () => ({
-    useAppStore: {
-        getState: () => ({
-            cancelPendingSyncs: boundary.cancelPendingSyncs,
-            resetStore: boundary.resetStore,
-        }),
-    },
-}));
-
 import { auth } from '../src/lib/firebase';
 import { deleteAccount } from '../src/lib/db/db_account';
 import { isAccountDeletionPending, readAccountDeletionMarker } from '../src/lib/sync/accountGate';
@@ -62,6 +53,8 @@ function context() {
     return {
         purgeAllLocalUserData: vi.fn().mockResolvedValue(undefined),
         resetCache: vi.fn(),
+        cancelPendingSyncs: boundary.cancelPendingSyncs,
+        resetStore: boundary.resetStore,
     };
 }
 
