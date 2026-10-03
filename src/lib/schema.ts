@@ -106,18 +106,56 @@ export const defaultUserDataFallback: UserData = {
     catalogOverrides: { exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }
 };
 
+function sanitizeTopLevelIdentityCollection(
+    value: unknown,
+    schema: { safeParse: (input: unknown) => { success: boolean; data?: any; error?: unknown } },
+    collection: string,
+): unknown[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) {
+        reportZodSchemaFallback({
+            schema: 'UserDataSchema',
+            field: collection,
+            fallbackUsed: 'empty_collection',
+            receivedType: typeof value,
+            issueCode: 'invalid_type',
+            expectedType: 'array',
+        });
+        return [];
+    }
+    const result: unknown[] = [];
+    const seen = new Set<string>();
+    for (const raw of value) {
+        const parsed = schema.safeParse(raw);
+        const id = parsed.success ? normalizeBusinessId(parsed.data?.id) : null;
+        if (!parsed.success || !id || seen.has(id)) {
+            reportZodSchemaFallback({
+                schema: collection,
+                field: 'id',
+                fallbackUsed: 'record_quarantined',
+                issueCode: parsed.success && id ? 'duplicate_id' : 'invalid_identity',
+                error: parsed.success ? undefined : parsed.error,
+            });
+            continue;
+        }
+        seen.add(id);
+        result.push({ ...parsed.data, id });
+    }
+    return result;
+}
+
 export const UserDataSchema = z.object({
     profile: UserProfileSchema.optional().catch({}).default({}),
-    library: z.array(ExerciseSchema).optional().catch([]).default([]),
-    routines: z.array(WorkoutRoutineSchema).optional().catch([]).default([]),
+    library: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, ExerciseSchema, 'library'), z.array(ExerciseSchema)).default([]),
+    routines: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, WorkoutRoutineSchema, 'routines'), z.array(WorkoutRoutineSchema)).default([]),
     history: WorkoutHistorySchema, // Actually stored in history_months in Firebase
     nutrition: z.record(z.string(), NutritionDaySchema).optional().catch({}).default({}), // nutrition_months
-    customFoods: z.array(FoodSchema).optional().catch([]).default([]),
+    customFoods: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, FoodSchema, 'customFoods'), z.array(FoodSchema)).default([]),
     activeWorkout: PersistedActiveWorkoutSchema,
     nutritionPlanning: NutritionPlanningSchema.optional().catch(undefined),
-    trainingCycles: z.array(TrainingCycleSchema).optional().catch([]).default([]),
+    trainingCycles: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, TrainingCycleSchema, 'trainingCycles'), z.array(TrainingCycleSchema)).default([]),
     activeCycleId: z.union([z.string(), z.null()]).optional().catch(null).default(null),
-    supplements: z.array(SupplementSchema).optional().catch([]).default([]),
+    supplements: z.preprocess(value => sanitizeTopLevelIdentityCollection(value, SupplementSchema, 'supplements'), z.array(SupplementSchema)).default([]),
     activePains: z.array(safeString('')).optional().catch([]).default([]),
     catalogOverrides: CatalogOverridesSchema.optional().catch({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }).default({ exercises: {}, foods: {}, hiddenExerciseIds: [], hiddenFoodIds: [] }),
     legalConsent: LegalConsentSchema,
