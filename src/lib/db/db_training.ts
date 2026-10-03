@@ -7,6 +7,7 @@ import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
+import { assertHistoryMonthDocument, requireCanonicalWorkoutDate } from '../sync/monthlyIntegrity';
 
 export async function loadHistoryMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const historyDocs = await withTimeout(
@@ -18,6 +19,7 @@ export async function loadHistoryMonths(user: any, targetMonths: string[], state
         if (d && typeof d.exists === 'function' && d.exists()) {
             const normalized = normalizeCloudDocument(d.data(), `History ${d.id} data schema`);
             const monthData = normalized.business;
+            assertHistoryMonthDocument(d.id, monthData);
             if (normalized.sync !== undefined && cloudDocuments) {
                 cloudDocuments.set('history_months/' + d.id, { ...monthData, _sync: normalized.sync });
             }
@@ -32,18 +34,14 @@ export function syncHistoryMonths(batch: any, user: any, state: any, oldState: a
     let hasWrites = false;
     const newHistMonths: Record<string, any> = {};
     state.history.forEach((h: any) => {
-        const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
-            ? h.date.substring(0, 7)
-            : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
+        const monthKey = requireCanonicalWorkoutDate(h).substring(0, 7);
         if (!newHistMonths[monthKey]) newHistMonths[monthKey] = {};
         newHistMonths[monthKey][h.id] = h;
     });
 
     const oldHistMonths: Record<string, any> = {};
     (oldState.history || []).forEach((h: any) => {
-        const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
-            ? h.date.substring(0, 7)
-            : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
+        const monthKey = requireCanonicalWorkoutDate(h).substring(0, 7);
         if (!oldHistMonths[monthKey]) oldHistMonths[monthKey] = {};
         oldHistMonths[monthKey][h.id] = h;
     });
