@@ -6,6 +6,7 @@ import {
 } from './catalog/deltaResolver';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
 import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
+import { normalizeBusinessId } from './businessIdentity';
 import type {
     UserData,
     UserProfile,
@@ -51,14 +52,6 @@ export function filterCustomFoods(foods?: Food[] | null): Food[] {
  * Preserves items with non-matching valid IDs and quarantines entities
  * whose business identity is missing or invalid.
  */
-function normalizeBusinessId(id: unknown): string | null {
-    if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
-    if (typeof id !== 'string') return null;
-    const normalized = id.trim();
-    if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
-    return normalized;
-}
-
 function sanitizeIdentityCollection<T extends { id?: string | number }>(
     items?: T[] | null,
     extraIdentity?: (item: T) => unknown,
@@ -444,8 +437,12 @@ export function mergeUserData(
         nutritionPlanningOrigin: mergedNutrition.activeOrigin,
         pendingConflicts: mergedNutrition.pendingConflict ? {
             ...(cloud.pendingConflicts || {}),
+            ...(guest.pendingConflicts || {}),
             nutritionPlanning: mergedNutrition.pendingConflict
-        } : cloud.pendingConflicts,
+        } : {
+            ...(cloud.pendingConflicts || {}),
+            ...(guest.pendingConflicts || {}),
+        },
         trainingCycles: mergeArrayById(cloud.trainingCycles, guest.trainingCycles),
         activeCycleId: (guest.activeCycleId !== undefined && guest.activeCycleId !== null && guest.activeCycleId !== '')
             ? guest.activeCycleId
