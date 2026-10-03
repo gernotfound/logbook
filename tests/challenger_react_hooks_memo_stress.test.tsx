@@ -50,6 +50,7 @@ describe('Empirical Challenger: React Hooks, Memoization & Re-render Loop Stress
                 date: '2026-08-10',
                 exercises: [
                     {
+                        id: 'se_hist_1_bench',
                         exId: 'ex_bench',
                         sessionNote: 'Spinta forte',
                         sets: [{ id: 's_old_1', kg: '80', reps: '8' }]
