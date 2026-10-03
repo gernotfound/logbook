@@ -662,10 +662,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             try {
                 useAppStore.getState().cancelPendingSyncs();
                 await DB.secureLogOut();
-                if (initialUid) clearAuthenticatedOwnerHint(userOwner(initialUid));
                 DB.resetCache();
                 useAppStore.getState().resetStore({ force: true });
-                if (initialUid) clearGuestMigrationSyncRecovery(initialUid);
+                if (initialUid) {
+                    clearAuthenticatedOwnerHint(userOwner(initialUid));
+                    clearGuestMigrationSyncRecovery(initialUid);
+                }
                 setGuestMigrationStatus('idle');
             } catch (error: any) {
                 console.error("Errore durante il logout:", error);
