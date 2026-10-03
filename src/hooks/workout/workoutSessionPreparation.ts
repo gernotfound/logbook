@@ -291,7 +291,7 @@ export function prepareCompletedWorkout(
         fatigueRating: valRes.fatigue,
         waterLiters: normalizedWorkout.waterLiters !== undefined && normalizedWorkout.waterLiters !== null && String(normalizedWorkout.waterLiters).trim() !== '' ? parseFloat(String(normalizedWorkout.waterLiters).replace(',', '.')) : undefined,
         pains: sessionPains,
-        date: currentWorkout.date || runtime.getLocalDateString(),
+        date: normalizedWorkout.date || runtime.getLocalDateString(startTime),
     };
 
     if (finishedWorkout.waterLiters === undefined) delete finishedWorkout.waterLiters;
