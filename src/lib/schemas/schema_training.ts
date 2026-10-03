@@ -163,34 +163,8 @@ function sanitizeSetSegments(value: unknown): unknown[] {
     return result;
 }
 
-function sanitizeSessionExerciseSets(value: unknown): unknown[] {
-    if (value === undefined) return [];
-    if (!Array.isArray(value)) {
-        reportZodSchemaFallback({ schema: 'SessionExerciseSchema', field: 'sets', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
-        return [];
-    }
-    const result: unknown[] = [];
-    const seen = new Set<string>();
-    for (const raw of value) {
-        const parsed = SessionExerciseSetSchema.safeParse(raw);
-        if (!parsed.success || seen.has(parsed.data.id)) {
-            reportZodSchemaFallback({
-                schema: 'SessionExerciseSetSchema',
-                field: 'id',
-                fallbackUsed: 'record_quarantined',
-                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
-                error: parsed.success ? undefined : parsed.error,
-            });
-            continue;
-        }
-        seen.add(parsed.data.id);
-        result.push(parsed.data);
-    }
-    return result;
-}
-
 export const SessionExerciseSetSchema = z.object({
-    id: TrainingEntityIdSchema,
+    id: safeString(''),
     kg: safeString(''),
     reps: safeString(''),
     rir: z.number().int().min(0).max(10).optional().catch(undefined),
@@ -210,44 +184,18 @@ export const SessionExerciseSetSchema = z.object({
     if (set.rir !== undefined) return set;
     const { rir: _rir, ...withoutRir } = set;
     return withoutRir;
-});
+}).catch({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] }).default({ id: '', kg: '', reps: '', dropsets: [], isometrics: [] });
 
 export const SessionExerciseSchema = z.object({
-    id: TrainingEntityIdSchema,
-    exId: TrainingEntityIdSchema,
+    id: safeOptionalString(),
+    exId: safeString(''),
     sessionNote: safeString(''),
-    sets: z.preprocess(sanitizeSessionExerciseSets, z.array(SessionExerciseSetSchema)).default([]),
+    sets: z.array(SessionExerciseSetSchema).catch([]).default([]),
     minReps: safeOptionalNumber(),
     maxReps: safeOptionalNumber(),
     technicalStandard: safeOptionalString(),
     progressionContract: ProgressionContractSchema.optional().catch(undefined),
-}).passthrough();
-
-function sanitizeSessionExercises(value: unknown): unknown[] {
-    if (value === undefined) return [];
-    if (!Array.isArray(value)) {
-        reportZodSchemaFallback({ schema: 'WorkoutSessionSchema', field: 'exercises', fallbackUsed: 'empty_collection', issueCode: 'invalid_type' });
-        return [];
-    }
-    const result: unknown[] = [];
-    const seen = new Set<string>();
-    for (const raw of value) {
-        const parsed = SessionExerciseSchema.safeParse(raw);
-        if (!parsed.success || seen.has(parsed.data.id)) {
-            reportZodSchemaFallback({
-                schema: 'SessionExerciseSchema',
-                field: 'id',
-                fallbackUsed: 'record_quarantined',
-                issueCode: parsed.success ? 'duplicate_id' : 'invalid_record',
-                error: parsed.success ? undefined : parsed.error,
-            });
-            continue;
-        }
-        seen.add(parsed.data.id);
-        result.push(parsed.data);
-    }
-    return result;
-}
+}).passthrough().catch({ exId: '', sessionNote: '', sets: [] }).default({ exId: '', sessionNote: '', sets: [] });
 
 export const TrainingCycleStrategySchema = z.object({
     intent: z.enum(['development', 'maintenance', 'deload']).optional(),
@@ -285,7 +233,7 @@ export const WorkoutSessionSchema = z.object({
     fatigueRating: safeOptionalNullableNumber(),
     waterLiters: safeOptionalNumber(),
     endTime: safeOptionalNumber(),
-    exercises: z.preprocess(sanitizeSessionExercises, z.array(SessionExerciseSchema)).default([]),
+    exercises: z.array(SessionExerciseSchema).catch([]).default([]),
     isEditingHistory: safeOptionalBoolean(),
     originalHistoryId: safeOptionalString(),
     pains: z.array(safeString('')).optional().catch([]).default([]),
