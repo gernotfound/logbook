@@ -53,7 +53,7 @@ Flusso normativo:
 
 **MUST:** Le credenziali Firebase Admin e `CRON_SECRET` sono server-only, mai `VITE_*`, mai committate. `service-account.json` resta ignorato e non deve entrare nel repository.
 
-Le Functions native account deletion hanno `maxDuration = 300`; il runner usa un budget interno inferiore. Il cron giornaliero è recovery, non il percorso primario. **VERIFY:** piano Vercel effettivo, limiti commerciali e configurazione runtime sono esterni al repository e non vanno assunti senza verifica. Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una migrazione di piattaforma/backend senza un nuovo piano esplicito.
+Le Functions native account deletion mantengono `maxDuration = 300`; le richieste interattive POST/GET usano budget riprendibili di 5 secondi e il client applica un timeout HTTP bounded, conservando receipt e copia locale in caso di risposta incerta. Il cron giornaliero è recovery, non il percorso primario. **VERIFY:** piano Vercel effettivo, limiti commerciali e configurazione runtime sono esterni al repository e non vanno assunti senza verifica. Non introdurre Nitro, Workflow, `waitUntil` come sostituto di durability, o una migrazione di piattaforma/backend senza un nuovo piano esplicito.
 
 ## Logout e pulizia locale
 

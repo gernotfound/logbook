@@ -9,6 +9,14 @@ import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { markTabSnapshotClean, readTabSnapshotState } from './tabSnapshotCausality';
 
+export function prepareForRequiredUpdateReload() {
+    const session = captureSession();
+    const state = useAppStore.getState();
+    writeDeviceValue('workout', state.localWorkout ? JSON.stringify(state.localWorkout) : null, session.owner);
+    if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
+    return session;
+}
+
 export async function prepareForReload() {
     const session = captureSession();
     flushSync(() => draftRegistry.flushAll({ strict: true }));

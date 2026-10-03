@@ -11,8 +11,8 @@ import { accountDeletionCorsHeaders, requireAccountDeletionOrigin } from '../ser
 
 export const maxDuration = 300;
 
-const POST_BUDGET_MS = 275_000;
-const GET_PROGRESS_BUDGET_MS = 20_000;
+const POST_BUDGET_MS = 5_000;
+const GET_PROGRESS_BUDGET_MS = 5_000;
 const ALLOWED_HEADERS = 'authorization, content-type, x-firebase-appcheck, x-account-deletion-uid, x-account-deletion-receipt';
 
 function json(body: unknown, init: ResponseInit = {}, origin: string | null = null): Response {

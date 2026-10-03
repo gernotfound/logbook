@@ -3,6 +3,11 @@
   "private": true,
   "version": "1.1.0",
   "type": "module",
+  "packageManager": "npm@11.21.0",
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  },
   "scripts": {
     "icons:generate": "node scripts/resize_icons.mjs",
     "predev": "npm run icons:generate",

@@ -10,6 +10,14 @@ if (!existsSync(workflowPath)) {
 
 const workflow = readFileSync(workflowPath, 'utf8');
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+const nvmrc = existsSync('.nvmrc') ? readFileSync('.nvmrc', 'utf8').trim() : '';
+const nodeVersionFile = existsSync('.node-version') ? readFileSync('.node-version', 'utf8').trim() : '';
+
+if (packageJson.engines?.node !== '24.x') failures.push(`package engines.node: expected 24.x, got ${packageJson.engines?.node ?? 'missing'}`);
+if (packageJson.engines?.npm !== '11.x') failures.push(`package engines.npm: expected 11.x, got ${packageJson.engines?.npm ?? 'missing'}`);
+if (packageJson.packageManager !== 'npm@11.21.0') failures.push(`packageManager: expected npm@11.21.0, got ${packageJson.packageManager ?? 'missing'}`);
+if (nvmrc !== '24') failures.push(`.nvmrc: expected 24, got ${nvmrc || 'missing'}`);
+if (nodeVersionFile !== '24') failures.push(`.node-version: expected 24, got ${nodeVersionFile || 'missing'}`);
 
 function requirePattern(label, source, pattern) {
   if (!pattern.test(source)) failures.push(`${label}: missing structure matching ${pattern}`);

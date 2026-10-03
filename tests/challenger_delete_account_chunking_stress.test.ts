@@ -126,6 +126,24 @@ describe('M7 client boundary: durable server-coordinated account deletion', () =
         expect(boundary.signOut).not.toHaveBeenCalled();
     });
 
+    it('returns pending after the bounded interactive wait while preserving local recovery', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.mocked(fetch).mockImplementationOnce(() => new Promise<Response>(() => {}));
+            const ctx = context();
+            const deletion = deleteAccount(ctx);
+
+            await vi.advanceTimersByTimeAsync(7_501);
+
+            await expect(deletion).resolves.toMatchObject({ status: 'pending' });
+            expect(isAccountDeletionPending('user:test-user-id')).toBe(true);
+            expect(ctx.purgeAllLocalUserData).not.toHaveBeenCalled();
+            expect(boundary.signOut).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('clears a pre-request marker on definitive authentication/App Check rejection', async () => {
         vi.mocked(fetch).mockResolvedValueOnce(response(401, { error: 'Sessione non valida.' }));
         const ctx = context();

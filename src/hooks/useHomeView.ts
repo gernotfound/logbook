@@ -162,7 +162,10 @@ export function useHomeView(): HomeViewState {
         const nextPains = activePains.includes(muscleId)
             ? activePains.filter(p => p !== muscleId)
             : [...activePains, muscleId];
-        void dispatchDomainOperation({ type: 'active-pains.set', pains: nextPains });
+        void dispatchDomainOperation({ type: 'active-pains.set', pains: nextPains }).catch(() => {
+            // The sync slice reconciles the optimistic state and exposes saveError/syncHealth.
+            // Attach a rejection handler here so a failed local commit never becomes unhandled.
+        });
     }, [activePains, dispatchDomainOperation]);
 
     // useMemo hooks MUST be called unconditionally (before any conditional return)

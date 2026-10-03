@@ -20,7 +20,7 @@ import type {
   NutritionSubTab,
   DataSubTab
 } from './types';
-import { safeHardReload } from './lib/sync/safeReload';
+import { requiredUpdateHardReload } from './lib/sync/safeReload';
 
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
@@ -68,6 +68,7 @@ function App() {
   const saveError = useAppStore(state => state.saveError);
   const syncHealth = useAppStore(state => state.syncHealth);
   const syncPresentation = useAppStore(state => state.syncPresentation);
+  const localPersistenceBlocked = useAppStore(state => state.localPersistenceBlocked);
   const setSaveError = useAppStore(state => state.setSaveError);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
@@ -76,6 +77,8 @@ function App() {
   const [nutritionSubTab, setNutritionSubTab] = useLocalStorage<NutritionSubTab>(LOCAL_STORAGE_NUTRITION_TAB, 'meals', NutritionSubTabSchema);
   const [dataSubTab, setDataSubTab] = useLocalStorage<DataSubTab>(LOCAL_STORAGE_DATA_TAB, 'measurements', DataSubTabSchema);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [requiredUpdateReloading, setRequiredUpdateReloading] = useState(false);
+  const [requiredUpdateReloadError, setRequiredUpdateReloadError] = useState<string | null>(null);
 
   const [showGuestLogin, setShowGuestLogin] = useState(readGuestLoginOverlayState);
 
@@ -127,14 +130,15 @@ function App() {
     }
   }, [activeTab, setActiveTab]);
 
-  // Auto-dismiss save error toast after 5 seconds
+  // Transient save errors auto-dismiss. A local persistence failure is a durable
+  // write barrier and must remain visible until the app lifecycle resets it.
   useEffect(() => {
-    if (!saveError) return;
+    if (!saveError || localPersistenceBlocked) return;
     const timer = setTimeout(() => {
       setSaveError(null);
     }, 5000);
     return () => clearTimeout(timer);
-  }, [saveError, setSaveError]);
+  }, [saveError, localPersistenceBlocked, setSaveError]);
 
   // Clear saveError on online event if it was due to missing connection during save
   useEffect(() => {
@@ -241,6 +245,22 @@ function App() {
     };
   }, []);
 
+  const handleRequiredUpdateReload = async () => {
+    if (requiredUpdateReloading) return;
+    setRequiredUpdateReloading(true);
+    setRequiredUpdateReloadError(null);
+    try {
+      await requiredUpdateHardReload();
+    } catch (error) {
+      setRequiredUpdateReloadError(
+        error instanceof Error
+          ? error.message
+          : 'Impossibile preparare il dispositivo al ricaricamento. Riprova.',
+      );
+      setRequiredUpdateReloading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div id="auth-overlay">
@@ -264,8 +284,18 @@ function App() {
           <p className="text-muted">
             {compatibilityError ?? 'Aggiorna TheLogBook alla versione più recente prima di continuare.'}
           </p>
-          <button type="button" onClick={() => { void safeHardReload().catch(() => {}); }} className="btn btn-primary">
-            Ricarica TheLogBook
+          {requiredUpdateReloadError && (
+            <p role="alert" className="text-muted">
+              {requiredUpdateReloadError}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => { void handleRequiredUpdateReload(); }}
+            className="btn btn-primary"
+            disabled={requiredUpdateReloading}
+          >
+            {requiredUpdateReloading ? 'Aggiornamento…' : 'Ricarica TheLogBook'}
           </button>
         </div>
       </div>
@@ -354,14 +384,16 @@ function App() {
         >
           <AlertTriangle className="sync-error-icon" size={20} aria-hidden="true" />
           <span className="sync-error-text">{saveError}</span>
-          <button
-            type="button"
-            className="sync-error-close"
-            aria-label="Chiudi avviso"
-            onClick={() => setSaveError(null)}
-          >
-            <X size={20} aria-hidden="true" />
-          </button>
+          {!localPersistenceBlocked && (
+            <button
+              type="button"
+              className="sync-error-close"
+              aria-label="Chiudi avviso"
+              onClick={() => setSaveError(null)}
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
+          )}
         </div>
       )}
 

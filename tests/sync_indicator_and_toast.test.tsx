@@ -11,6 +11,12 @@ import { useDialogStore } from '../src/store/useDialogStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { commitDomainOperations, initializeLocal } from '../src/lib/sync/localRepository';
 
+const reloadMocks = vi.hoisted(() => ({
+  requiredUpdateHardReload: vi.fn(),
+  safeHardReload: vi.fn(),
+}));
+vi.mock('../src/lib/sync/safeReload', () => reloadMocks);
+
 describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
   beforeEach(() => {
@@ -18,6 +24,10 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
     clearSyncTimers();
     vi.mocked(DB.saveUserData).mockReset();
     vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
+    reloadMocks.requiredUpdateHardReload.mockReset();
+    reloadMocks.requiredUpdateHardReload.mockResolvedValue(undefined);
+    reloadMocks.safeHardReload.mockReset();
+    reloadMocks.safeHardReload.mockResolvedValue(undefined);
     useAppStore.setState({
       userData: { ...defaultMockUserData },
       localWorkout: null,
@@ -560,6 +570,52 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         expect(useAppStore.getState().saveError).toBeNull();
       });
 
+      test('T2.13b_R3: Local persistence failure remains visible and cannot be dismissed', async () => {
+        const { container } = await renderSettledApp();
+        const message = 'Archivio locale non leggibile: riapri TheLogBook.';
+
+        act(() => {
+          useAppStore.setState({
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            saveError: message,
+          });
+        });
+
+        expect(screen.getByText(message)).toBeDefined();
+        expect(container.querySelector('.sync-error-close')).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(10_000);
+        });
+
+        expect(useAppStore.getState().saveError).toBe(message);
+        expect(screen.getByText(message)).toBeDefined();
+      });
+
+      test('T2.13c_R3: Update-required reload surfaces a device snapshot failure instead of swallowing it', async () => {
+        await renderSettledApp();
+        reloadMocks.requiredUpdateHardReload.mockRejectedValueOnce(new Error('quota update snapshot'));
+
+        act(() => {
+          useAppStore.setState({
+            localWorkout: { id: 'active-update', exercises: [] } as any,
+            compatibilityStatus: 'update-required',
+            compatibilityError: 'Versione dati futura.',
+          });
+        });
+
+        const reloadButton = screen.getByRole('button', { name: /Ricarica TheLogBook/i });
+        fireEvent.click(reloadButton);
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        expect(reloadMocks.requiredUpdateHardReload).toHaveBeenCalledTimes(1);
+        expect(screen.getByText(/quota update snapshot/i)).toBeDefined();
+        expect((reloadButton as HTMLButtonElement).disabled).toBe(false);
+      });
+
       test('T2.14_R3: Network online event alone does not confirm recovery', async () => {
         await renderSettledApp();
         act(() => {
@@ -688,7 +744,8 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
     test('T3.4_cross: Guest mode banner, sync indicator, and error toast stack cleanly', async () => {
       // Mock unauthenticated auth state to keep isGuest active
-      vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth, callback: any) => {
+      vi.mocked(onAuthStateChanged).mockImplementationOnce((_auth: any, callback: any) => {
+        _auth.currentUser = null;
         callback(null);
         return () => {};
       });

@@ -156,6 +156,54 @@ it('keeps the same receipt across a lost POST acknowledgement and an idempotent 
     expect(isAccountDeletionPending('user:a')).toBe(false);
 });
 
+it('treats a lost POST acknowledgement as pending within the interactive timeout and preserves recovery data', async () => {
+    vi.useFakeTimers();
+    try {
+        boundary.fetch.mockImplementation(() => new Promise<Response>(() => {}));
+
+        const operation = deleteAccount(context);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(boundary.fetch).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(7_500);
+        const outcome = await operation;
+        vi.useRealTimers();
+
+        expect(outcome).toMatchObject({ status: 'pending' });
+        expect(await get('logbook:v2:user:a')).toBeDefined();
+        expect(isAccountDeletionPending('user:a')).toBe(true);
+        expect(readAccountDeletionMarker('user:a')?.receiptToken).toBeTruthy();
+        expect(boundary.auth.signOut).not.toHaveBeenCalled();
+        expect(boundary.reset).not.toHaveBeenCalled();
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('bounds auth-less recovery polling and keeps the local copy when the status request hangs', async () => {
+    vi.useFakeTimers();
+    try {
+        boundary.auth.currentUser = null;
+        const receipt = 'A'.repeat(43);
+        markAccountDeletion('user:a', { receiptToken: receipt });
+        boundary.fetch.mockImplementation(() => new Promise<Response>(() => {}));
+
+        const operation = resumeAccountDeletion(context);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(boundary.fetch).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(7_500);
+        const outcome = await operation;
+        vi.useRealTimers();
+
+        expect(outcome).toMatchObject({ status: 'pending' });
+        expect(await get('logbook:v2:user:a')).toBeDefined();
+        expect(isAccountDeletionPending('user:a')).toBe(true);
+        expect(boundary.auth.signOut).not.toHaveBeenCalled();
+        expect(boundary.reset).not.toHaveBeenCalled();
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
 it('preserves local recovery and Auth session when the durable job reports failed', async () => {
     boundary.fetch.mockImplementation(async (_input, init?: RequestInit) => {
         if (init?.method === 'POST') return response(202, { uid: 'a', status: 'requested' });
