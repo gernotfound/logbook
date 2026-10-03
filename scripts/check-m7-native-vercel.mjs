@@ -11,7 +11,8 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
-const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf8');
+const vercelBackendBuilder = readFileSync('scripts/build-vercel-backend.mjs', 'utf8');
+const gitignore = readFileSync('.gitignore', 'utf8');
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 for (const forbidden of ['nitro', 'workflow']) {
@@ -29,14 +30,12 @@ for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) 
 }
 if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
 if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
-if (!existsSync('api/legacy-service-worker.ts')) failures.push('missing legacy Vercel service-worker retirement endpoint');
-if (vercel.functions?.['api/legacy-service-worker.ts']?.maxDuration !== 10) failures.push('api/legacy-service-worker.ts must use the minimal 10s function ceiling');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
 if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.push('Vercel must skip Git deployments that do not change the backend contract');
 if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
 else {
   const vercelIgnoreBuild = readFileSync('scripts/vercel-ignore-build.mjs', 'utf8');
-  for (const requiredPath of ['api', 'server', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json']) {
+  for (const requiredPath of ['api', 'server', 'vercel.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.m7-server.json', 'scripts/build-vercel-backend.mjs']) {
     if (!vercelIgnoreBuild.includes(`'${requiredPath}'`)) failures.push(`Vercel selective deployment guard missing backend-sensitive path: ${requiredPath}`);
   }
   if (!vercelIgnoreBuild.includes('VERCEL_GIT_PREVIOUS_SHA') || !vercelIgnoreBuild.includes('VERCEL_GIT_COMMIT_SHA')) {
@@ -57,9 +56,17 @@ else {
   if ('permanent' in legacyFrontendRedirect) failures.push('retired Vercel frontend root redirect must use explicit statusCode 301 instead of permanent 307/308 mode');
 }
 
-const legacySwRewrite = vercel.rewrites?.find(item => item.source === '/sw.js');
-if (legacySwRewrite?.destination !== '/api/legacy-service-worker') {
-  failures.push('retired Vercel origin must replace the old PWA worker at /sw.js with the retirement endpoint');
+if (vercel.buildCommand !== 'node scripts/build-vercel-backend.mjs') {
+  failures.push('Vercel must use the dedicated backend-only build instead of the frontend Vite build');
+}
+if (vercel.outputDirectory !== '.vercel-static') {
+  failures.push('Vercel backend-only deployment must publish only the dedicated .vercel-static directory');
+}
+if (Array.isArray(vercel.rewrites) && vercel.rewrites.some(item => item.source === '/sw.js')) {
+  failures.push('retired Vercel /sw.js must be a real static retirement artifact, not a rewrite competing with the old static worker');
+}
+if (!gitignore.split(/\r?\n/).includes('.vercel-static')) {
+  failures.push('generated Vercel backend-only static output must stay out of Git');
 }
 const legacySwHeaders = vercel.headers?.find(item => item.source === '/sw.js')?.headers ?? [];
 const legacySwCacheControl = legacySwHeaders.find(item => item.key === 'Cache-Control')?.value ?? '';
@@ -69,8 +76,11 @@ if (!legacySwCacheControl.includes('no-store') || !legacySwCacheControl.includes
 if (!legacySwHeaders.some(item => item.key === 'Service-Worker-Allowed' && item.value === '/')) {
   failures.push('retired Vercel /sw.js must preserve root scope while replacing the legacy worker');
 }
-for (const marker of ['caches.keys()', 'self.registration.unregister()', "client.navigate('/')", 'self.skipWaiting()']) {
-  if (!legacyServiceWorkerApi.includes(marker)) failures.push(`legacy service-worker retirement endpoint missing cleanup marker: ${marker}`);
+for (const marker of ['caches.keys()', 'self.clients.claim()', 'self.registration.unregister()', "client.navigate('/')", 'self.skipWaiting()']) {
+  if (!vercelBackendBuilder.includes(marker)) failures.push(`Vercel backend-only builder missing retirement worker marker: ${marker}`);
+}
+if (!vercelBackendBuilder.includes("writeFileSync(resolve(outputDirectory, 'sw.js')") || !vercelBackendBuilder.includes('rmSync(outputDirectory')) {
+  failures.push('Vercel backend-only builder must recreate the static output and emit only the retirement service worker');
 }
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
