@@ -90,7 +90,8 @@ const deletionCron = vercel.crons?.find(item => item.path === '/api/account-dele
 if (!deletionCron) failures.push('missing daily account deletion recovery cron');
 else if (deletionCron.schedule !== '0 3 * * *') failures.push('account deletion recovery cron must run once daily at 03:00 UTC');
 
-if (!accountApi.includes('const POST_BUDGET_MS = 275_000;')) failures.push('POST deletion budget must remain below the 300s platform ceiling');
+if (!accountApi.includes('const POST_BUDGET_MS = 5_000;')) failures.push('POST deletion budget must remain bounded to 5s for the interactive request');
+if (!accountApi.includes('const GET_PROGRESS_BUDGET_MS = 5_000;')) failures.push('GET deletion progress budget must remain bounded to 5s for the interactive request');
 if (!accountApi.includes('export async function POST') || !accountApi.includes('export async function GET')) failures.push('account deletion API must expose native POST and GET handlers');
 if (!cronApi.includes('CRON_SECRET')) failures.push('cron endpoint must require CRON_SECRET');
 const hostingSecurityHeaders = firebase.hosting?.headers?.find(item => item.source === '/**')?.headers ?? [];
