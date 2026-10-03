@@ -62,7 +62,6 @@ const loadLiveIndexes = async collectionGroup => {
   do {
     const parent = `projects/${projectId}/databases/(default)/collectionGroups/${encodeURIComponent(collectionGroup)}`;
     const url = new URL(`https://firestore.googleapis.com/v1/${parent}/indexes`);
-    url.searchParams.set('pageSize', '100');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const payload = await requestJson(url.toString());
