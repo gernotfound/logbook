@@ -14,6 +14,7 @@ import { storageOwner } from './sync/session';
 import { classifySyncFailure } from './sync/syncFailure';
 import { replicateJournal } from './sync/replicateJournal';
 import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
+import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
 
 export const DB = {
     resetCache() {
@@ -112,7 +113,10 @@ export const DB = {
                         );
                         for (const d of page.docs) {
                             const normalized = normalizeCloudDocument(d.data(), `${colName}/${d.id} data schema`);
-                            const mData = normalized.business as Record<string, any>;
+                            const rawMonthData = normalized.business as Record<string, any>;
+                            const mData = colName === 'history_months'
+                                ? sanitizeHistoryMonthDocument(d.id, rawMonthData)
+                                : sanitizeNutritionMonthDocument(d.id, rawMonthData);
                             if (normalized.sync !== undefined) cloudDocuments.set(`${colName}/${d.id}`, { ...mData, _sync: normalized.sync });
                             if (!completeMonths.includes(d.id)) completeMonths.push(d.id);
                             if (colName === 'history_months') {
