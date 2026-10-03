@@ -12,6 +12,7 @@ import type { DomainOperation, DomainOperationBatch } from './contracts';
 import {
     applyPatch,
     assertUnique,
+    assertWorkoutSessionIdentities,
     deleteById,
     reorderByIds,
     requireDate,
@@ -258,6 +259,7 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             break;
         case 'history.upsert': {
             const workout = { ...operation.workout, id: requireId(operation.workout.id, 'Allenamento') };
+            assertWorkoutSessionIdentities(workout, 'Allenamento storico');
             requireDate(workout.date ?? (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : ''));
             const current = data.history ?? [];
             assertUnique(current, item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
@@ -271,12 +273,15 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             data.history = deleteById(data.history, requireId(operation.id, 'Allenamento'), item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
             break;
         case 'active-workout.set':
-            if (operation.workout) requireId(operation.workout.id, 'Allenamento attivo');
+            if (operation.workout) assertWorkoutSessionIdentities(operation.workout, 'Allenamento attivo');
             data.activeWorkout = operation.workout ? structuredClone(operation.workout) : null;
             break;
         case 'workout.complete': {
             const workout = { ...operation.workout, id: requireId(operation.workout.id, 'Allenamento') };
+            assertWorkoutSessionIdentities(workout, 'Allenamento completato');
             requireDate(workout.date ?? (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : ''));
+            const activeId = data.activeWorkout ? requireId(data.activeWorkout.id, 'Allenamento attivo corrente') : null;
+            if (activeId !== workout.id) throw new Error('Allenamento completato non corrisponde alla sessione attiva');
             const current = data.history ?? [];
             assertUnique(current, item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
             data.history = [workout, ...current.filter(item => item.id !== workout.id)];
@@ -315,19 +320,21 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
         case 'catalog.exercise.patch': {
             const id = requireId(operation.id, 'Override esercizio');
             const overrides = data.catalogOverrides ?? {};
-            data.catalogOverrides = {
-                ...overrides,
-                exercises: { ...(overrides.exercises ?? {}), [id]: { ...(overrides.exercises?.[id] ?? {}), ...operation.patch } },
-            };
+            const exercises = { ...(overrides.exercises ?? {}) };
+            const patched = applyPatch(exercises[id] ?? {}, operation.patch);
+            if (Object.keys(patched).length) exercises[id] = patched;
+            else delete exercises[id];
+            data.catalogOverrides = { ...overrides, exercises };
             break;
         }
         case 'catalog.food.patch': {
             const id = requireId(operation.id, 'Override alimento');
             const overrides = data.catalogOverrides ?? {};
-            data.catalogOverrides = {
-                ...overrides,
-                foods: { ...(overrides.foods ?? {}), [id]: { ...(overrides.foods?.[id] ?? {}), ...operation.patch } },
-            };
+            const foods = { ...(overrides.foods ?? {}) };
+            const patched = applyPatch(foods[id] ?? {}, operation.patch);
+            if (Object.keys(patched).length) foods[id] = patched;
+            else delete foods[id];
+            data.catalogOverrides = { ...overrides, foods };
             break;
         }
         case 'catalog.exercise.visibility': {
