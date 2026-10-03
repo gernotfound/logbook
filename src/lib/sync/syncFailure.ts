@@ -22,6 +22,7 @@ export function classifySyncFailure(error: unknown, options?: { retryable?: bool
         || error instanceof SyncTimeoutError
         || code === 'unavailable'
         || code === 'deadline-exceeded'
+        || code === 'app-check-unavailable'
     ) {
         return { ok: false, status: 'local-pending', error };
     }
