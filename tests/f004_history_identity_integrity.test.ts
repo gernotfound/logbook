@@ -133,7 +133,7 @@ describe('F-004 training history identity integrity', () => {
         expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo .*valido/i);
 
         backup.userData = { history: [validWorkout, { ...validWorkout, id: 'bad\/id' }] };
-        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
+        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo .*valido/i);
 
         backup.userData = { history: [validWorkout, { ...validWorkout, routineName: 'Duplicate' }] };
         expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo duplicato/i);
