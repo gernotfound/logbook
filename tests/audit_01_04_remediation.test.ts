@@ -10,6 +10,8 @@ import { useAppStore } from '../src/store/useAppStore';
 import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
 import { deviceKey } from '../src/lib/sync/deviceStorage';
 import { clearAuthenticatedOwnerHint, readAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../src/lib/sync/authOwnerHint';
+import { storageOwner } from '../src/lib/sync/session';
+import { auth } from '../src/lib/firebase';
 
 const parse = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
 
@@ -173,6 +175,18 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(readAuthenticatedOwnerHint()).toBe('user:abc');
         clearAuthenticatedOwnerHint('user:abc');
         expect(readAuthenticatedOwnerHint()).toBeNull();
+    });
+
+    it('keeps the hinted authenticated owner authoritative while Firebase Auth is still unresolved', () => {
+        const previous = (auth as any).currentUser;
+        try {
+            (auth as any).currentUser = null;
+            rememberAuthenticatedOwner('offline-user');
+            expect(storageOwner()).toBe('user:offline-user');
+        } finally {
+            (auth as any).currentUser = previous;
+            clearAuthenticatedOwnerHint();
+        }
     });
 
     it('keeps setLocalWorkout strictly device-local and leaves cloud-facing UserData untouched', () => {
