@@ -115,6 +115,7 @@ describe('AUDIT 01-04 remediation invariants', () => {
         expect(() => applyDomainOperations(before, {
             type: 'workout.complete',
             workout: workout('w-stale'),
+            expectedActiveWorkoutId: 'w-stale',
             activePains: [],
         })).toThrow(/non corrisponde alla sessione attiva/i);
 
