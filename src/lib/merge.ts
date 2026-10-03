@@ -221,7 +221,7 @@ export function mergeNutritionPlanning(
  * - Dates unique to cloud or guest are preserved.
  * - For matching dates:
  *   - `meals` sub-array is merged by item ID (guest priority).
- *   - `supplementsIntake`, `cardioSessions` and `contextEvents` are merged by stable ID (guest priority).
+ *   - `supplementsIntake` and `cardioSessions` are merged by stable ID (guest priority).
  *   - Daily steps and their provenance metadata move together; an explicit guest value, including 0, wins.
  *   - Daily macros (kcal, carbs, pro, fat) are recalculated from combined meals if meals exist;
  *     otherwise guest macros take priority if non-zero, else cloud.
@@ -247,7 +247,6 @@ export function mergeNutrition(
                     supplementsIntake: sanitizeIdentityCollection(day.supplementsIntake, item => item.supplementId),
                 } : {}),
                 ...(day.cardioSessions !== undefined ? { cardioSessions: sanitizeIdentityCollection(day.cardioSessions) } : {}),
-                ...(day.contextEvents !== undefined ? { contextEvents: sanitizeIdentityCollection(day.contextEvents) } : {}),
             };
         };
 
@@ -264,7 +263,6 @@ export function mergeNutrition(
             const mergedMeals = mergeArrayById(cloudDay.meals, guestDay.meals);
             const mergedSupplementsIntake = mergeArrayById(cloudDay.supplementsIntake, guestDay.supplementsIntake);
             const mergedCardioSessions = mergeArrayById(cloudDay.cardioSessions, guestDay.cardioSessions);
-            const mergedContextEvents = mergeArrayById(cloudDay.contextEvents, guestDay.contextEvents);
 
             let kcal = guestDay.kcal || cloudDay.kcal || 0;
             let carbs = guestDay.carbs || cloudDay.carbs || 0;
@@ -294,7 +292,6 @@ export function mergeNutrition(
                 meals: mergedMeals,
                 supplementsIntake: mergedSupplementsIntake,
                 cardioSessions: mergedCardioSessions,
-                contextEvents: mergedContextEvents,
             };
 
             const stepsDay = guestDay.steps !== undefined ? guestDay : cloudDay;
