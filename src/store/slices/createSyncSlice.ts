@@ -208,7 +208,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
             assertLocalPersistenceWritable();
-            const { userData, localWorkout } = get();
+            const { userData } = get();
             const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
             if (!next) {
                 // A reset clears only the view; deletion requires the explicit purge flow.
@@ -216,7 +216,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 set({ userData: null, dataOwner: null, saveError: null });
                 return synced;
             }
-            const data = UserDataSchema.parse({ ...next, activeWorkout: next.activeWorkout !== undefined ? next.activeWorkout : localWorkout }) as unknown as UserData;
+            const data = UserDataSchema.parse(next) as unknown as UserData;
             const generation = get().syncGeneration + 1;
             const session = captureSession();
             if (userData) markTabSnapshotDirty(session, userData);
