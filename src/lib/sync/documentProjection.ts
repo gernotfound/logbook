@@ -3,6 +3,7 @@ import { UserDataSchema } from '../schema';
 import type { UserData, CachedGlobalCatalog } from '../../types';
 import { extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides, resolveEffectiveExercises, resolveEffectiveFoods } from '../catalog/deltaResolver';
 import { getLocalDateString } from '../utils/date';
+import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanonicalWorkoutDate } from './monthlyIntegrity';
 import { removeUndefinedValues } from '../utils/object';
 
 export type DocumentData = Record<string, unknown>;
@@ -41,11 +42,13 @@ export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog):
         documents.set(path, document);
     };
     for (const workout of (data.history ?? [])) {
-        const date = workout.date || (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : getLocalDateString());
+        const date = requireCanonicalWorkoutDate(workout);
         add('history_months', date.slice(0, 7), String(workout.id ?? ''), workout);
     }
     for (const [date, day] of Object.entries(data.nutrition ?? {})) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date) throw new Error('Data nutrizione non valida');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date || day.date !== date) {
+            throw new Error('Data nutrizione non valida o incoerente con la chiave');
+        }
         add('nutrition_months', date.slice(0, 7), date, day);
     }
     return documents;
@@ -75,9 +78,14 @@ export function applyRemoteDocuments(local: UserData, documents: Map<string, Doc
     for (const [path, data] of documents) {
         const [collection, month] = path.split('/');
         if (collection === 'history_months') {
-            const preserved = (next.history ?? []).filter(workout => (workout.date || (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : '')).slice(0, 7) !== month);
+            assertHistoryMonthDocument(month, data);
+            const preserved = (next.history ?? []).filter(workout => {
+                try { return requireCanonicalWorkoutDate(workout).slice(0, 7) !== month; }
+                catch { return true; }
+            });
             next.history = [...preserved, ...Object.values(data)] as UserData['history'];
         } else if (collection === 'nutrition_months') {
+            assertNutritionMonthDocument(month, data);
             next.nutrition = { ...Object.fromEntries(Object.entries(next.nutrition ?? {}).filter(([date]) => date.slice(0, 7) !== month)), ...data } as UserData['nutrition'];
         }
     }
