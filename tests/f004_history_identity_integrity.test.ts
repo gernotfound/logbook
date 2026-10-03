@@ -163,7 +163,7 @@ describe('F-004 training history identity integrity', () => {
         };
         const completed = applyDomainOperations(
             { ...deleted, activeWorkout: finished },
-            { type: 'workout.complete', workout: finished, activePains: [] },
+            { type: 'workout.complete', workout: finished, expectedActiveWorkoutId: String(finished.id), activePains: [] },
         );
         expect(completed.activeWorkout).toBeNull();
         expect(completed.history?.some(item => item.id === 'workout-complete')).toBe(true);
