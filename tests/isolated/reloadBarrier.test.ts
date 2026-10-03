@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear } from 'idb-keyval';
+import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
@@ -9,7 +9,7 @@ vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
 vi.mock('../../src/lib/firebase', () => ({ auth: app.auth }));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { prepareForReload } from '../../src/lib/sync/reloadBarrier';
-import { safeHardReload } from '../../src/lib/sync/safeReload';
+import { requiredUpdateHardReload, safeHardReload } from '../../src/lib/sync/safeReload';
 import { commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { captureSession, invalidateSession } from '../../src/lib/sync/session';
@@ -93,6 +93,25 @@ it('never hard reloads when the durable reload barrier rejects', async () => {
     app.flush.mockRejectedValue(new Error('offline'));
     const reload = vi.fn();
     await expect(safeHardReload(reload)).rejects.toThrow('non sono ancora salvate');
+    expect(reload).not.toHaveBeenCalled();
+});
+it('reloads an update-required app without parsing a future local envelope and preserves the active workout snapshot', async () => {
+    const raw = await get<any>('logbook:v2:user:a');
+    await set('logbook:v2:user:a', { ...raw, dataSchemaVersion: 99 });
+
+    await expect(prepareForReload()).rejects.toThrow(/aggiorna TheLogBook/i);
+
+    const reload = vi.fn();
+    await requiredUpdateHardReload(reload);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
+});
+it('still blocks update-required reload when the device-critical workout snapshot cannot be persisted', async () => {
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+    const reload = vi.fn();
+
+    await expect(requiredUpdateHardReload(reload)).rejects.toThrow('quota');
     expect(reload).not.toHaveBeenCalled();
 });
 it('does not delete an authenticated change written by another tab when this tab is clean and stale', async () => {

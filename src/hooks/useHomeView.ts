@@ -467,5 +467,3 @@ export function useHomeView(): HomeViewState {
         userWeight: resolvedUserWeight
     };
 }
-
-[executed on device: OMEN-Gerardo (9ceff213-2598-4074-9299-c667adb1c6f0)]

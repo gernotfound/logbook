@@ -63,6 +63,34 @@ export async function purgeAllLocalUserData(owner = storageOwner()) {
 }
 
 const ACCOUNT_DELETION_API_ORIGIN = (import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/, '');
+const ACCOUNT_DELETION_HTTP_TIMEOUT_MS = 7500;
+const ACCOUNT_DELETION_INITIAL_OBSERVE_MS = 7500;
+
+class AccountDeletionRequestTimeoutError extends Error {
+    constructor() {
+        super('Il server di cancellazione non ha risposto entro il limite interattivo.');
+        this.name = 'AccountDeletionRequestTimeoutError';
+    }
+}
+
+async function fetchAccountDeletion(input: RequestInfo | URL, init: RequestInit, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<Response> {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+            controller.abort();
+            reject(new AccountDeletionRequestTimeoutError());
+        }, Math.max(1, timeoutMs));
+    });
+    try {
+        return await Promise.race([
+            fetch(input, { ...init, signal: controller.signal }),
+            timeout,
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
 
 function accountDeletionUrl(): string {
     if (!ACCOUNT_DELETION_API_ORIGIN) throw new Error('Backend cancellazione account non configurato.');
@@ -95,7 +123,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 async function requestServerDeletion(marker: AccountDeletionMarker, idToken: string, appToken: string): Promise<void> {
-    const response = await fetch(accountDeletionUrl(), {
+    const response = await fetchAccountDeletion(accountDeletionUrl(), {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
@@ -115,9 +143,9 @@ async function requestServerDeletion(marker: AccountDeletionMarker, idToken: str
     markAccountDeletion(marker.owner, { receiptToken: marker.receiptToken, serverAcceptedAt: Date.now() });
 }
 
-export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker): Promise<ServerDeletionStatus> {
+export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<ServerDeletionStatus> {
     if (!marker.receiptToken) throw new Error('Cancellazione in sospeso senza ricevuta server. Riprendi l’operazione dalle impostazioni.');
-    const response = await fetch(accountDeletionUrl(), {
+    const response = await fetchAccountDeletion(accountDeletionUrl(), {
         method: 'GET',
         headers: {
             'x-firebase-appcheck': await appCheckToken(),
@@ -125,7 +153,7 @@ export async function fetchAccountDeletionStatus(marker: AccountDeletionMarker):
             'x-account-deletion-receipt': marker.receiptToken,
         },
         cache: 'no-store',
-    });
+    }, timeoutMs);
     const body = await readJson(response);
     if (!response.ok) {
         throw new Error(typeof body.error === 'string'
@@ -169,22 +197,37 @@ async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context:
     }
 }
 
+function pendingDeletionOutcome(message = 'Richiesta acquisita: la cancellazione cloud è ancora in corso. Puoi chiudere LogBook; i successivi avvii e il recovery giornaliero del server riprenderanno automaticamente il job.'): AccountDeletionOutcome {
+    return { status: 'pending', message };
+}
+
 async function observeDeletion(marker: AccountDeletionMarker, context: DeletionContext, maxWaitMs: number): Promise<AccountDeletionOutcome> {
-    const deadline = Date.now() + maxWaitMs;
+    const deadline = Date.now() + Math.max(0, maxWaitMs);
     do {
-        const status = await fetchAccountDeletionStatus(marker);
+        const remaining = Math.max(1, deadline - Date.now());
+        const timeoutMs = maxWaitMs > 0
+            ? Math.min(ACCOUNT_DELETION_HTTP_TIMEOUT_MS, remaining)
+            : ACCOUNT_DELETION_HTTP_TIMEOUT_MS;
+        let status: ServerDeletionStatus;
+        try {
+            status = await fetchAccountDeletionStatus(marker, timeoutMs);
+        } catch (error) {
+            if (error instanceof AccountDeletionRequestTimeoutError) {
+                return pendingDeletionOutcome('La verifica della cancellazione ha superato il limite interattivo. La copia locale e la ricevuta restano conservate; LogBook riprenderà automaticamente la verifica.');
+            }
+            throw error;
+        }
         if (status.status === 'complete') return finalizeCompletedDeletion(marker, context);
         if (status.status === 'failed') {
             throw new Error(status.error ?? 'Cancellazione non completata: alcuni dati cloud potrebbero essere già eliminati. Copia locale conservata; riprendi l’operazione dalle impostazioni.');
         }
-        if (Date.now() >= deadline) break;
-        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const waitMs = deadline - Date.now();
+        if (waitMs <= 0) break;
+        await new Promise(resolve => setTimeout(resolve, Math.min(1000, waitMs)));
     } while (Date.now() <= deadline);
 
-    return {
-        status: 'pending',
-        message: 'Richiesta acquisita: la cancellazione cloud è ancora in corso. Puoi chiudere LogBook; il polling, i successivi avvii e il recovery giornaliero del server riprenderanno automaticamente il job.',
-    };
+    return pendingDeletionOutcome();
 }
 
 export function deleteAccount(context: DeletionContext): Promise<AccountDeletionOutcome> {
@@ -224,6 +267,9 @@ async function performDeletion(context: DeletionContext): Promise<AccountDeletio
     try {
         await requestServerDeletion(marker, token.token, appToken);
     } catch (error) {
+        if (error instanceof AccountDeletionRequestTimeoutError) {
+            return pendingDeletionOutcome('La richiesta di cancellazione è stata inviata, ma il server non ha risposto entro il limite interattivo. La copia locale e la ricevuta sono state conservate; LogBook verificherà lo stato automaticamente e puoi riprendere l’operazione dalle impostazioni.');
+        }
         const definitive = Boolean(error && typeof error === 'object' && 'definitiveRejection' in error
             && (error as { definitiveRejection?: boolean }).definitiveRejection);
         if (definitive) clearAccountDeletion(owner);
@@ -232,7 +278,7 @@ async function performDeletion(context: DeletionContext): Promise<AccountDeletio
             : new Error('Cancellazione non avviata. Verifica la connessione e riprova.', { cause: error });
     }
 
-    return observeDeletion(markAccountDeletion(owner), context, 15000);
+    return observeDeletion(markAccountDeletion(owner), context, ACCOUNT_DELETION_INITIAL_OBSERVE_MS);
 }
 
 export async function resumeAccountDeletion(context: DeletionContext): Promise<AccountDeletionOutcome | null> {

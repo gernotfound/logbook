@@ -113,6 +113,19 @@ describe('M7 native account deletion HTTP boundary', () => {
     expect(await response.json()).toMatchObject({ uid: 'u', status: 'deleting' });
   });
 
+  it('bounds interactive POST and GET processing budgets to five seconds', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    try {
+      await POST(request('POST', { receiptToken: 'receipt' }));
+      await GET(request('GET'));
+
+      expect(runner.processAccountDeletion).toHaveBeenCalledWith('u', 105_000);
+      expect(runner.progressAndReadStatus).toHaveBeenCalledWith('u', 'receipt', 105_000);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('progresses an authorized incomplete job during GET polling', async () => {
     const response = await GET(request('GET'));
     expect(response.status).toBe(200);
