@@ -168,7 +168,8 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
         try {
-            await ensureAppCheck();
+            // replicateJournal handles the offline fast-path before App Check and
+            // classifies temporary App Check unavailability as local-pending.
             const result = await replicateJournal();
             if (result.ok) setLastSavedStateStr(JSON.stringify(state));
             return result;
