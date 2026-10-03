@@ -5,6 +5,8 @@ import type { WorkoutSession, SessionExercise, SessionExerciseSet, SyncResult } 
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import type { AppState } from '../useAppStore';
+import { normalizeBusinessId } from '../../lib/businessIdentity';
+import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
 
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
@@ -19,6 +21,32 @@ function persistLocalWorkout(workout: WorkoutSession | null, owner?: string): vo
     else writeDeviceValue('workout', null, owner);
 }
 
+function normalizeDeviceWorkoutIdentities(workout: WorkoutSession): WorkoutSession {
+    return {
+        ...workout,
+        exercises: (workout.exercises ?? []).map((exercise: SessionExercise) => ({
+            ...exercise,
+            id: normalizeBusinessId(exercise.id) ?? Logic.generateId('se'),
+            sets: (exercise.sets ?? []).map((set: SessionExerciseSet) => ({
+                ...set,
+                id: normalizeBusinessId(set.id) ?? Logic.generateId('s'),
+                segments: (set.segments ?? []).map(segment => ({
+                    ...segment,
+                    id: normalizeBusinessId(segment.id) ?? Logic.generateId('seg'),
+                })),
+                dropsets: (set.dropsets ?? []).map(dropset => ({
+                    ...dropset,
+                    id: normalizeBusinessId(dropset.id) ?? Logic.generateId('ds'),
+                })),
+                isometrics: (set.isometrics ?? []).map(isometric => ({
+                    ...isometric,
+                    id: normalizeBusinessId(isometric.id) ?? Logic.generateId('iso'),
+                })),
+            })),
+        })),
+    };
+}
+
 export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null): WorkoutSession | null => {
     const recoverFallback = (): WorkoutSession | null => {
         if (!fallback) return null;
@@ -31,7 +59,11 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         if (!saved) return recoverFallback();
         const parsed = JSON.parse(saved);
         if (!parsed || typeof parsed !== 'object') return recoverFallback();
-        return (DomainParsers.parseActiveWorkout(parsed) as WorkoutSession | null) ?? recoverFallback();
+        const normalized = normalizeDeviceWorkoutIdentities(parsed as WorkoutSession);
+        const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
+        if (!validated) return recoverFallback();
+        persistLocalWorkout(validated, owner);
+        return validated;
     } catch {
         return recoverFallback();
     }
@@ -59,12 +91,7 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
 
         if (nextWorkout === currentWorkout) return { ok: true, status: 'synced' };
         if (!get().userData) throw new Error('Dati utente non caricati');
-        if (nextWorkout) {
-            const id = String(nextWorkout.id ?? '').trim();
-            if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
-                throw new Error('Allenamento attivo: identificativo non valido');
-            }
-        }
+        if (nextWorkout) assertWorkoutSessionIdentities(nextWorkout, 'Allenamento attivo');
 
         // Device-critical durability precedes the optimistic in-memory update.
         persistLocalWorkout(nextWorkout);
