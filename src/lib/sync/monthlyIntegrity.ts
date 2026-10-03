@@ -50,3 +50,33 @@ export function assertNutritionMonthDocument(month: string, data: Record<string,
         }
     }
 }
+
+export function sanitizeHistoryMonthDocument(month: string, data: Record<string, unknown>): Record<string, unknown> {
+    if (!MONTH_RE.test(month)) return {};
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, raw] of Object.entries(data)) {
+        const id = normalizeBusinessId(key);
+        if (!id || !raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const workout = raw as WorkoutSession;
+        const embeddedId = normalizeBusinessId(workout.id);
+        if (!embeddedId || embeddedId !== id) continue;
+        try {
+            if (requireCanonicalWorkoutDate(workout).slice(0, 7) !== month) continue;
+        } catch {
+            continue;
+        }
+        sanitized[id] = raw;
+    }
+    return sanitized;
+}
+
+export function sanitizeNutritionMonthDocument(month: string, data: Record<string, unknown>): Record<string, unknown> {
+    if (!MONTH_RE.test(month)) return {};
+    const sanitized: Record<string, unknown> = {};
+    for (const [date, raw] of Object.entries(data)) {
+        if (!isCanonicalLocalDate(date) || date.slice(0, 7) !== month || !raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        if ((raw as NutritionDay).date !== date) continue;
+        sanitized[date] = raw;
+    }
+    return sanitized;
+}
