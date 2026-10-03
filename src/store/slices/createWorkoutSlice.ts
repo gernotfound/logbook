@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { DomainParsers } from '../../lib/schema';
+import { Logic } from '../../lib/logic';
+import { normalizeBusinessId } from '../../lib/businessIdentity';
 import type { WorkoutSession, SyncResult } from '../../types';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import type { AppState } from '../useAppStore';
@@ -18,10 +20,58 @@ function persistLocalWorkout(workout: WorkoutSession | null, owner?: string): vo
     else writeDeviceValue('workout', null, owner);
 }
 
+function uniqueRecoveredId(raw: unknown, prefix: string, seen: Set<string>): string {
+    let id = normalizeBusinessId(raw);
+    if (!id || seen.has(id)) {
+        do { id = Logic.generateId(prefix); } while (seen.has(id));
+    }
+    seen.add(id);
+    return id;
+}
+
+function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
+    const workoutId = normalizeBusinessId(raw.id);
+    if (!workoutId) return null;
+
+    const exerciseIds = new Set<string>();
+    const exercises = (Array.isArray(raw.exercises) ? raw.exercises : []).flatMap(exercise => {
+        const exId = normalizeBusinessId(exercise?.exId);
+        if (!exId) return [];
+        const setIds = new Set<string>();
+        const sets = (Array.isArray(exercise.sets) ? exercise.sets : []).map(set => {
+            const segmentIds = new Set<string>();
+            const dropIds = new Set<string>();
+            const isometricIds = new Set<string>();
+            return {
+                ...set,
+                id: uniqueRecoveredId(set?.id, 's', setIds),
+                segments: Array.isArray(set?.segments)
+                    ? set.segments.map(segment => ({ ...segment, id: uniqueRecoveredId(segment?.id, 'seg', segmentIds) }))
+                    : set?.segments,
+                dropsets: Array.isArray(set?.dropsets)
+                    ? set.dropsets.map(drop => ({ ...drop, id: uniqueRecoveredId(drop?.id, 'ds', dropIds) }))
+                    : set?.dropsets,
+                isometrics: Array.isArray(set?.isometrics)
+                    ? set.isometrics.map(item => ({ ...item, id: uniqueRecoveredId(item?.id, 'iso', isometricIds) }))
+                    : set?.isometrics,
+            };
+        });
+        return [{
+            ...exercise,
+            id: uniqueRecoveredId(exercise?.id, 'se', exerciseIds),
+            exId,
+            sets,
+        }];
+    });
+
+    return { ...raw, id: workoutId, exercises };
+}
+
 export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null): WorkoutSession | null => {
     const recoverFallback = (): WorkoutSession | null => {
         if (!fallback) return null;
-        const validated = DomainParsers.parseActiveWorkout(fallback) as WorkoutSession | null;
+        const normalized = normalizeDeviceWorkout(fallback);
+        const validated = normalized ? DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null : null;
         if (validated) persistLocalWorkout(validated, owner);
         return validated;
     };
@@ -30,7 +80,9 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         if (!saved) return recoverFallback();
         const parsed = JSON.parse(saved);
         if (!parsed || typeof parsed !== 'object') return recoverFallback();
-        const validated = DomainParsers.parseActiveWorkout(parsed) as WorkoutSession | null;
+        const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
+        if (!normalized) return recoverFallback();
+        const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
         if (!validated) return recoverFallback();
         persistLocalWorkout(validated, owner);
         return validated;
