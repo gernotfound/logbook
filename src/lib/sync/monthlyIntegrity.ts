@@ -2,6 +2,7 @@ import type { NutritionDay, WorkoutSession } from '../../types';
 import { normalizeBusinessId } from '../businessIdentity';
 import { getLocalDateString } from '../utils/date';
 import { assertWorkoutSessionIdentities } from './domainOperations/validation';
+import { WorkoutSessionSchema } from '../schemas/schema_training';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -59,16 +60,17 @@ export function sanitizeHistoryMonthDocument(month: string, data: Record<string,
     for (const [key, raw] of Object.entries(data)) {
         const id = normalizeBusinessId(key);
         if (!id || !raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-        const workout = raw as WorkoutSession;
-        const embeddedId = normalizeBusinessId(workout.id);
+        const rawWorkout = raw as WorkoutSession;
+        const embeddedId = normalizeBusinessId(rawWorkout.id);
         if (!embeddedId || embeddedId !== id) continue;
         try {
+            const workout = WorkoutSessionSchema.parse(raw) as WorkoutSession;
             assertWorkoutSessionIdentities(workout, `Shard storico ${month}/${key}`);
             if (requireCanonicalWorkoutDate(workout).slice(0, 7) !== month) continue;
+            sanitized[id] = { ...workout, id };
         } catch {
             continue;
         }
-        sanitized[id] = raw;
     }
     return sanitized;
 }
