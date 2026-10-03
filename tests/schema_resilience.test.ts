@@ -126,7 +126,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             const parsed = UserDataSchema.parse({ library: corruptedLibrary }) as unknown as UserData;
             expect(parsed.library).toBeDefined();
             expect(Array.isArray(parsed.library)).toBe(true);
-            expect(parsed.library!.length).toBe(4);
+            expect(parsed.library!.length).toBe(1);
             // Exercise 0
             expect(parsed.library![0].id).toBe('123');
             expect(parsed.library![0].name).toBe('Bench Press');
@@ -154,7 +154,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
 
             const parsed = UserDataSchema.parse({ routines: corruptedRoutines }) as unknown as UserData;
             expect(Array.isArray(parsed.routines)).toBe(true);
-            expect(parsed.routines!.length).toBe(2);
+            expect(parsed.routines!.length).toBe(1);
             expect(parsed.routines![0].name).toBe('Leg Day');
             expect(parsed.routines![0].exercises[0].minReps).toBe(8);
             expect(parsed.routines![0].exercises[0].maxReps).toBe(12);
@@ -277,7 +277,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
 
             const parsed = UserDataSchema.parse({ customFoods: corruptedFoods }) as unknown as UserData;
             expect(parsed.customFoods).toBeDefined();
-            expect(parsed.customFoods!.length).toBe(3);
+            expect(parsed.customFoods!.length).toBe(1);
             expect(parsed.customFoods![0].name).toBe('Chicken Breast');
             expect(parsed.customFoods![0].kcal).toBe(165);
             expect(parsed.customFoods![0].pro).toBe(31);
@@ -285,8 +285,6 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(parsed.customFoods![0].satFat).toBe(1.0);
             expect(parsed.customFoods![0].fiber).toBeNull();
             expect(parsed.customFoods![0].isCustom).toBe(true);
-            expect(parsed.customFoods![1].name).toBe('');
-            expect(parsed.customFoods![1].kcal).toBe(0);
         });
 
         it('defensively sanitizes corrupted TrainingCycles and activeCycleId', () => {
@@ -311,7 +309,7 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
 
             const parsed = UserDataSchema.parse(corruptedData) as unknown as UserData;
             expect(Array.isArray(parsed.trainingCycles)).toBe(true);
-            expect(parsed.trainingCycles!.length).toBe(2);
+            expect(parsed.trainingCycles!.length).toBe(1);
             expect(parsed.trainingCycles![0].durationWeeks).toBe(8);
             expect(parsed.trainingCycles![0].sessionsPerWeek).toBe(4);
             expect(parsed.trainingCycles![0].progressionMode).toBe('fixed');

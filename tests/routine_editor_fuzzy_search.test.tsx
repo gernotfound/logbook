@@ -590,10 +590,12 @@ describe('Intelligent Exercise Search & Dropdown Suite (M3: R4 & R6)', () => {
                 globalStartTime: Date.now() - 3600000,
                 exercises: [
                     {
+                        id: 'se_bench',
                         exId: 'ex_bench',
                         sets: [{ id: 's_1', kg: '90', reps: '6', done: true }]
                     },
                     {
+                        id: 'se_treadmill',
                         exId: 'ex_treadmill',
                         sets: [{ id: 's_2', time: '900', dist: '2.5', speed: '10', done: true }]
                     }

@@ -125,8 +125,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                             if (current() && get().syncGeneration === last.generation) {
                                 if (!durable) blockLocalPersistence = true;
                                 else {
-                                    const aligned = { ...durable.data, activeWorkout: get().localWorkout } as UserData;
-                                    set({ userData: aligned });
+                                    const aligned = durable.data;
+                                    set({ userData: aligned, dataOwner: session.owner });
                                     markTabSnapshotClean(session, aligned);
                                 }
                             }
@@ -145,8 +145,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 if (result.ok) {
                     const saved = await readLocal(session.owner);
                     if (saved && current() && get().syncGeneration === last.generation) {
-                        const aligned = { ...saved.data, activeWorkout: get().localWorkout } as UserData;
-                        set({ userData: aligned });
+                        const aligned = saved.data;
+                        set({ userData: aligned, dataOwner: session.owner });
                         markTabSnapshotClean(session, aligned);
                     }
                 } else if (result.status === 'local-pending') {
@@ -155,8 +155,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                     // workflows (notably legal consent) can keep their intentional rollback view.
                     const saved = await readLocal(session.owner);
                     if (saved && current() && get().syncGeneration === last.generation) {
-                        const aligned = { ...saved.data, activeWorkout: get().localWorkout } as UserData;
-                        set({ userData: aligned });
+                        const aligned = saved.data;
+                        set({ userData: aligned, dataOwner: session.owner });
                         markTabSnapshotClean(session, aligned);
                     }
                 } else {
@@ -208,19 +208,19 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
             assertLocalPersistenceWritable();
-            const { userData, localWorkout } = get();
+            const { userData } = get();
             const next = typeof dataOrUpdater === 'function' ? dataOrUpdater(userData) : dataOrUpdater;
             if (!next) {
                 // A reset clears only the view; deletion requires the explicit purge flow.
                 get().cancelPendingSyncs();
-                set({ userData: null, saveError: null });
+                set({ userData: null, dataOwner: null, saveError: null });
                 return synced;
             }
-            const data = UserDataSchema.parse({ ...next, activeWorkout: next.activeWorkout !== undefined ? next.activeWorkout : localWorkout }) as unknown as UserData;
+            const data = UserDataSchema.parse(next) as unknown as UserData;
             const generation = get().syncGeneration + 1;
             const session = captureSession();
             if (userData) markTabSnapshotDirty(session, userData);
-            set({ userData: data, syncing: true, syncHealth: 'saving', syncPresentation: 'normal', saveError: null, syncGeneration: generation });
+            set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation: 'normal', saveError: null, syncGeneration: generation });
             // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
             const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
                 .then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
@@ -252,7 +252,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
                 ? 'quiet-workout'
                 : 'normal';
             markTabSnapshotDirty(session, userData);
-            set({ userData: data, syncing: true, syncHealth: 'saving', syncPresentation, saveError: null, syncGeneration: generation });
+            set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation, saveError: null, syncGeneration: generation });
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
             const cache = commitDomainOperations(session.owner, operation, userData)
@@ -319,6 +319,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             get().cancelPendingSyncs();
             set({
                 userData: null,
+                dataOwner: null,
                 localWorkout: null,
                 saveError: null,
                 syncing: false,

@@ -86,7 +86,7 @@ describe('M8 Domain Operations V4', () => {
         const active: WorkoutSession = { id: 'w-2', date: '2026-09-15', globalStartTime: 100, exercises: [] };
         const finished: WorkoutSession = { ...active, globalEndTime: 200, globalDurationStr: '00:01:40' };
         const before = base({ activeWorkout: active, activePains: ['old'], history: [] });
-        const { after, operations, replay } = compile(before, { type: 'workout.complete', workout: finished, activePains: ['new'] });
+        const { after, operations, replay } = compile(before, { type: 'workout.complete', workout: finished, expectedActiveWorkoutId: String(finished.id), activePains: ['new'] });
 
         expect(after.activeWorkout).toBeNull();
         expect(after.history?.[0]?.id).toBe('w-2');
@@ -202,7 +202,7 @@ describe('M8 Domain Operations V4', () => {
         const historical: WorkoutSession = {
             id: 'w-delete-regression',
             date: '2026-09-20',
-            exercises: [{ exId: 'e-delete', sessionNote: '', sets: [] }],
+            exercises: [{ id: 'se-delete-history', exId: 'e-delete', sessionNote: '', sets: [] }],
         };
         const before = base({
             library: [deletedExercise, keptExercise],
@@ -277,7 +277,7 @@ describe('M8 Domain Operations V4', () => {
     it('projects readiness with the active workout and preserves it on completion/history edits', () => {
         const active: WorkoutSession = {
             id: 'live-ready', date: '2026-09-24', globalStartTime: 100,
-            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8', rir: 0 }] }],
+            exercises: [{ id: 'se-bench', exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8', rir: 0 }] }],
             readiness: { capturedAt: 100, energy: 2, stress: 5 },
         };
         const before = base({ activeWorkout: null });
@@ -286,7 +286,7 @@ describe('M8 Domain Operations V4', () => {
         expect((activeResult.after.activeWorkout as WorkoutSession).exercises[0].sets[0].rir).toBe(0);
         expect(activeResult.operations).toContainEqual(expect.objectContaining({ path: ['activeWorkout'] }));
 
-        const completed = compile(activeResult.after, { type: 'workout.complete', workout: active, activePains: [] });
+        const completed = compile(activeResult.after, { type: 'workout.complete', workout: active, expectedActiveWorkoutId: String(active.id), activePains: [] });
         expect(completed.after.history?.[0].readiness).toEqual(active.readiness);
         expect(completed.after.history?.[0].exercises[0].sets[0].rir).toBe(0);
         expect((completed.replay.get('history_months/2026-09')?.['live-ready'] as WorkoutSession).exercises[0].sets[0].rir).toBe(0);

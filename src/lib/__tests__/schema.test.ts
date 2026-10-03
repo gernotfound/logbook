@@ -10,13 +10,13 @@ describe('UserDataSchema', () => {
         expect(parsed.routines).toEqual([]);
     });
 
-    it('should use passthrough to keep extra keys', () => {
+    it('should strip unknown top-level keys', () => {
         const data = {
             extraKey: 'should be preserved',
             profile: { height: '180' }
         };
         const parsed = UserDataSchema.parse(data) as any;
-        expect(parsed.extraKey).toBe('should be preserved');
+        expect(parsed.extraKey).toBeUndefined();
         expect(parsed.profile.height).toBe('180');
     });
 

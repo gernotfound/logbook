@@ -15,6 +15,7 @@ import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 
 export interface DataSlice {
     userData: UserData | null;
+    dataOwner: string | null;
     setUserData: (data: UserData | null | ((prev: UserData | null) => UserData | null)) => void;
     resolveNutritionConflict: (input: import('../../types').ResolveNutritionConflictInput) => Promise<import('../../types').SyncResult>;
 }
@@ -58,8 +59,21 @@ export const saveUserDataToCache = async (data: UserData | null, base?: UserData
         return null;
 };
 
+function alignActiveWorkout(
+    incoming: UserData['activeWorkout'],
+    localWorkout: AppState['localWorkout'],
+): { persisted: UserData['activeWorkout']; local: AppState['localWorkout'] } {
+    const parsedIncoming = DomainParsers.parseActiveWorkout(incoming) ?? null;
+    // Persisted business state and the device draft are separate authorities.
+    // Bulk hydration may preserve only the same live session (device keystrokes can
+    // be newer than IndexedDB) or a deliberately isolated history edit.
+    if (localWorkout) return { persisted: parsedIncoming, local: localWorkout };
+    return { persisted: parsedIncoming, local: parsedIncoming };
+}
+
 export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, get) => ({
     userData: getInitialUserData(),
+    dataOwner: null,
 
     setUserData: (dataOrUpdater) => {
         const state = get();
@@ -71,40 +85,27 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
 
         if (!rawNextData) {
             // Resetting the view must not erase a durable journal.
-            set({ userData: null, localWorkout: state.localWorkout });
+            set({ userData: null, dataOwner: null, localWorkout: state.localWorkout });
             return;
         }
 
-        let syncedLocalWorkout = state.localWorkout;
-
-        // PWA BUG FIX: Never let a network fetch overwrite our active local workout!
-        // The local device's localStorage is the source of truth for an ongoing workout.
-        if (state.localWorkout) {
-            syncedLocalWorkout = state.localWorkout;
-        } else if (rawNextData.activeWorkout !== undefined) {
-            syncedLocalWorkout = DomainParsers.parseActiveWorkout(rawNextData.activeWorkout) ?? null;
-            if (syncedLocalWorkout) {
-                try {
-                    writeDeviceValue('workout', JSON.stringify(syncedLocalWorkout));
-                } catch (e) {
-                    console.error("Errore salvataggio localWorkout in localStorage:", e);
-                }
-            } else {
-                try {
-                    writeDeviceValue('workout', null);
-                } catch {
-                    // Ignore removal error
-                }
+        const session = captureSession();
+        const aligned = alignActiveWorkout(rawNextData.activeWorkout, state.localWorkout);
+        if (aligned.local !== state.localWorkout) {
+            try {
+                if (aligned.local) writeDeviceValue('workout', JSON.stringify(aligned.local), session.owner);
+                else writeDeviceValue('workout', null, session.owner);
+            } catch (e) {
+                console.error("Errore allineamento localWorkout in localStorage:", e);
             }
         }
 
         const nextData = UserDataSchema.parse({
             ...rawNextData,
-            activeWorkout: syncedLocalWorkout ?? null
+            activeWorkout: aligned.persisted,
         }) as unknown as UserData;
-        const session = captureSession();
         if (state.userData) markTabSnapshotDirty(session, state.userData);
-        set({ userData: nextData, localWorkout: syncedLocalWorkout });
+        set({ userData: nextData, dataOwner: session.owner, localWorkout: aligned.local });
 
         void saveUserDataToCache(nextData, state.userData ?? undefined)
             .then(durable => {
@@ -114,12 +115,13 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
                 // reconcile the async durable result. A later direct/store update can be
                 // structurally equal while representing a newer lifecycle decision.
                 if (current.userData !== nextData) return;
-                const aligned = UserDataSchema.parse({
+                const reconciled = alignActiveWorkout(durable.activeWorkout, current.localWorkout);
+                const alignedData = UserDataSchema.parse({
                     ...durable,
-                    activeWorkout: current.localWorkout ?? durable.activeWorkout ?? null,
+                    activeWorkout: reconciled.persisted,
                 }) as unknown as UserData;
-                set({ userData: aligned });
-                markTabSnapshotClean(session, aligned);
+                set({ userData: alignedData, dataOwner: session.owner, localWorkout: reconciled.local });
+                markTabSnapshotClean(session, alignedData);
             })
             .catch(error => {
                 if (!isCurrentSession(session)) return;

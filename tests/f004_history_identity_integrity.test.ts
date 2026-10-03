@@ -88,19 +88,19 @@ describe('F-004 training history identity integrity', () => {
         const base = UserDataSchema.parse({}) as unknown as UserData;
         const remoteDocuments = new Map<string, Record<string, unknown>>([
             ['history_months/2026-09', {
-                valid: validWorkout,
+                'workout-ok': validWorkout,
                 empty: { ...validWorkout, id: '' },
                 missing: { date: '2026-09-29', exercises: [] },
                 invalidType: { ...validWorkout, id: true },
                 invalidPath: { ...validWorkout, id: 'bad/id' },
                 duplicate: { ...validWorkout, id: 'workout-ok', routineName: 'Duplicate' },
-                numeric: { ...validWorkout, id: 42, routineName: 'Numeric id' },
+                '42': { ...validWorkout, id: 42, routineName: 'Numeric id' },
                 recoverable: { id: 'recoverable', date: '2026-09-29', waterLiters: '2.5', exercises: 'corrupted' },
             }],
         ]);
 
         const hydrated = applyRemoteDocuments(base, remoteDocuments, catalog);
-        expect(hydrated.history?.map(item => item.id)).toEqual(expectedIds);
+        expect(hydrated.history?.map(item => String(item.id)).sort()).toEqual(expectedIds.map(String).sort());
 
         const projected = projectDocuments(hydrated, catalog);
         const historyMonth = projected.get('history_months/2026-09') ?? {};
@@ -130,10 +130,10 @@ describe('F-004 training history identity integrity', () => {
         const backup = createBackup(UserDataSchema.parse({}) as unknown as UserData, 'guest') as any;
 
         backup.userData = { history: [validWorkout, { ...validWorkout, id: '' }] };
-        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
+        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo .*valido/i);
 
         backup.userData = { history: [validWorkout, { ...validWorkout, id: 'bad\/id' }] };
-        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
+        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo .*valido/i);
 
         backup.userData = { history: [validWorkout, { ...validWorkout, routineName: 'Duplicate' }] };
         expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo duplicato/i);
@@ -163,7 +163,7 @@ describe('F-004 training history identity integrity', () => {
         };
         const completed = applyDomainOperations(
             { ...deleted, activeWorkout: finished },
-            { type: 'workout.complete', workout: finished, activePains: [] },
+            { type: 'workout.complete', workout: finished, expectedActiveWorkoutId: String(finished.id), activePains: [] },
         );
         expect(completed.activeWorkout).toBeNull();
         expect(completed.history?.some(item => item.id === 'workout-complete')).toBe(true);

@@ -5,15 +5,20 @@ import { removeUndefinedValues } from '../utils/object';
 import { normalizeCloudDocument, withCurrentDataSchema } from '../schemaEvolution';
 import { rootDocument, type DocumentData } from './documentProjection';
 import type { UserData } from '../../types';
+import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
 import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
 import { compactSyncMetas } from './causalCompaction';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
     if (path.startsWith('history_months/')) {
+        const month = path.split('/')[1];
+        assertHistoryMonthDocument(month, raw);
         const parsed = UserDataSchema.parse({ history: Object.values(raw) }) as unknown as UserData;
         return Object.fromEntries(Object.keys(raw).map((key, index) => [key, (parsed.history ?? [])[index]]));
     }
+    const month = path.split('/')[1];
+    assertNutritionMonthDocument(month, raw);
     const parsed = UserDataSchema.parse({ nutrition: raw }) as unknown as UserData;
     return parsed.nutrition as unknown as DocumentData;
 }
@@ -77,13 +82,10 @@ export class CloudDataIntegrityError extends Error {
 }
 
 function assertRemoteBusinessPreserved(path: string, raw: DocumentData, normalized: DocumentData): void {
-    // The root document intentionally excludes application-only/monthly keys such as
-    // history, nutrition and pendingConflicts. Only root fields that survive the
-    // canonical root projection belong to this Firestore document contract.
-    const protectedRaw = path === ''
-        ? Object.fromEntries(Object.entries(raw).filter(([key]) => Object.hasOwn(normalized, key)))
-        : raw;
-    const mismatch = findLossyNormalization(protectedRaw, normalized);
+    // normalizeCloudDocument has already removed protocol/schema metadata. Any
+    // remaining root key is business data and must survive the canonical projection;
+    // unknown same-schema fields are therefore an integrity error, not silent loss.
+    const mismatch = findLossyNormalization(raw, normalized);
     if (mismatch) throw new CloudDataIntegrityError(path, mismatch);
 }
 

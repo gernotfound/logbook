@@ -1,11 +1,11 @@
 import type { StateCreator } from 'zustand';
-import { Logic } from '../../lib/logic';
 import { DomainParsers } from '../../lib/schema';
-import type { WorkoutSession, SessionExercise, SessionExerciseSet, SyncResult } from '../../types';
-import { DEBOUNCE_DELAY_LOCAL } from '../../constants';
+import { Logic } from '../../lib/logic';
+import { normalizeBusinessId } from '../../lib/businessIdentity';
+import type { WorkoutSession, SyncResult } from '../../types';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
-import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import type { AppState } from '../useAppStore';
+import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
 
 export interface WorkoutSlice {
     localWorkout: WorkoutSession | null;
@@ -13,65 +13,81 @@ export interface WorkoutSlice {
     setSyncedLocalWorkout: (workout: WorkoutSession | null | ((prev: WorkoutSession | null) => WorkoutSession | null)) => Promise<SyncResult>;
 }
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null;
+export const clearWorkoutTimer = () => {};
 
-export const clearWorkoutTimer = () => {
-    if (saveTimer) {
-        clearTimeout(saveTimer);
-        saveTimer = null;
+function persistLocalWorkout(workout: WorkoutSession | null, owner?: string): void {
+    if (workout) writeDeviceValue('workout', JSON.stringify(workout), owner);
+    else writeDeviceValue('workout', null, owner);
+}
+
+function uniqueRecoveredId(raw: unknown, prefix: string, seen: Set<string>): string {
+    let id = normalizeBusinessId(raw);
+    if (!id || seen.has(id)) {
+        do { id = Logic.generateId(prefix); } while (seen.has(id));
     }
-};
+    seen.add(id);
+    return id;
+}
 
-const debouncedSaveLocalStorage = (workout: WorkoutSession | null) => {
-    const session = captureSession();
-    if (saveTimer) clearTimeout(saveTimer);
-    if (!workout) {
-        saveTimer = null;
-        try {
-            writeDeviceValue('workout', null, session.owner);
-        } catch (error) {
-            console.error('Impossibile rimuovere il workout locale:', error);
-            throw error;
-        }
-        return;
-    }
-    saveTimer = setTimeout(() => {
-        if (!isCurrentSession(session)) return;
-        try {
-            if (workout) {
-                writeDeviceValue('workout', JSON.stringify(workout), session.owner);
-            } else {
-                writeDeviceValue('workout', null, session.owner);
-            }
-        } catch (e) {
-            console.error("Errore salvataggio localWorkout:", e);
-        }
-    }, DEBOUNCE_DELAY_LOCAL);
-};
+function normalizeDeviceWorkout(raw: WorkoutSession): WorkoutSession | null {
+    const workoutId = normalizeBusinessId(raw.id);
+    if (!workoutId) return null;
 
-export const getInitialLocalWorkout = (): WorkoutSession | null => {
+    const exerciseIds = new Set<string>();
+    const exercises = (Array.isArray(raw.exercises) ? raw.exercises : []).flatMap(exercise => {
+        const exId = normalizeBusinessId(exercise?.exId);
+        if (!exId) return [];
+        const setIds = new Set<string>();
+        const sets = (Array.isArray(exercise.sets) ? exercise.sets : []).map(set => {
+            const segmentIds = new Set<string>();
+            const dropIds = new Set<string>();
+            const isometricIds = new Set<string>();
+            return {
+                ...set,
+                id: uniqueRecoveredId(set?.id, 's', setIds),
+                segments: Array.isArray(set?.segments)
+                    ? set.segments.map(segment => ({ ...segment, id: uniqueRecoveredId(segment?.id, 'seg', segmentIds) }))
+                    : set?.segments,
+                dropsets: Array.isArray(set?.dropsets)
+                    ? set.dropsets.map(drop => ({ ...drop, id: uniqueRecoveredId(drop?.id, 'ds', dropIds) }))
+                    : set?.dropsets,
+                isometrics: Array.isArray(set?.isometrics)
+                    ? set.isometrics.map(item => ({ ...item, id: uniqueRecoveredId(item?.id, 'iso', isometricIds) }))
+                    : set?.isometrics,
+            };
+        });
+        return [{
+            ...exercise,
+            id: uniqueRecoveredId(exercise?.id, 'se', exerciseIds),
+            exId,
+            sets,
+        }];
+    });
+
+    return { ...raw, id: workoutId, exercises };
+}
+
+export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession | null): WorkoutSession | null => {
+    const recoverFallback = (): WorkoutSession | null => {
+        if (!fallback) return null;
+        const normalized = normalizeDeviceWorkout(fallback);
+        const validated = normalized ? DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null : null;
+        if (validated) persistLocalWorkout(validated, owner);
+        return validated;
+    };
     try {
-        const saved = readDeviceValue('workout');
-        if (!saved) return null;
+        const saved = readDeviceValue('workout', owner);
+        if (!saved) return recoverFallback();
         const parsed = JSON.parse(saved);
-        if (!parsed || typeof parsed !== 'object') return null;
-        const validated = DomainParsers.parseActiveWorkout(parsed) as WorkoutSession | null;
-        if (!validated) return null;
-        if (Array.isArray(validated.exercises)) {
-            validated.exercises = validated.exercises.map((ex: SessionExercise) => ({
-                ...ex,
-                id: ex.id || Logic.generateId('se'),
-                sets: (ex.sets || []).map((s: SessionExerciseSet) => ({
-                    ...s,
-                    id: s.id || Logic.generateId('s'),
-                    dropsets: (s.dropsets || []).map((ds: any) => ({ ...ds, id: ds.id || Logic.generateId('ds') })),
-                    isometrics: (s.isometrics || []).map((iso: any) => ({ ...iso, id: iso.id || Logic.generateId('iso') }))
-                }))
-            }));
-        }
+        if (!parsed || typeof parsed !== 'object') return recoverFallback();
+        const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
+        if (!normalized) return recoverFallback();
+        const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
+        if (!validated) return recoverFallback();
+        persistLocalWorkout(validated, owner);
         return validated;
     } catch {
-        return null;
+        return recoverFallback();
     }
 };
 
@@ -84,9 +100,8 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
             const nextWorkout = typeof workoutOrUpdater === 'function'
                 ? (workoutOrUpdater as (prev: WorkoutSession | null) => WorkoutSession | null)(state.localWorkout)
                 : workoutOrUpdater;
-            debouncedSaveLocalStorage(nextWorkout);
-            const nextUserData = state.userData ? { ...state.userData, activeWorkout: nextWorkout || null } : null;
-            return { localWorkout: nextWorkout, userData: nextUserData };
+            persistLocalWorkout(nextWorkout);
+            return { localWorkout: nextWorkout };
         });
     },
 
@@ -98,17 +113,16 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
 
         if (nextWorkout === currentWorkout) return { ok: true, status: 'synced' };
         if (!get().userData) throw new Error('Dati utente non caricati');
-        if (nextWorkout) {
-            const id = String(nextWorkout.id ?? '').trim();
-            if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
-                throw new Error('Allenamento attivo: identificativo non valido');
-            }
-        }
 
-        // Persist the device-local draft first, but leave userData untouched until the
-        // DomainOperation reducer runs. This preserves the old snapshot as compiler base.
-        debouncedSaveLocalStorage(nextWorkout);
-        set({ localWorkout: nextWorkout });
-        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: nextWorkout });
+        // The transition from transient/device state to persisted activeWorkout is
+        // the one authorized repair point for missing instance identities.
+        const persistedWorkout = nextWorkout ? normalizeDeviceWorkout(nextWorkout) : null;
+        if (nextWorkout && !persistedWorkout) throw new Error('Allenamento attivo: identificativo non valido');
+        if (persistedWorkout) assertWorkoutSessionIdentities(persistedWorkout, 'Allenamento attivo');
+
+        // Device-critical durability precedes the optimistic in-memory update.
+        persistLocalWorkout(persistedWorkout);
+        set({ localWorkout: persistedWorkout });
+        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout });
     },
 });

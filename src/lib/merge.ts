@@ -6,6 +6,7 @@ import {
 } from './catalog/deltaResolver';
 import { createDefaultNutritionPlanning } from './nutritionDefaults';
 import { calculateLoggedMealTotals } from './nutrition/calculateLoggedMealTotals';
+import { normalizeBusinessId } from './businessIdentity';
 import type {
     UserData,
     UserProfile,
@@ -51,14 +52,6 @@ export function filterCustomFoods(foods?: Food[] | null): Food[] {
  * Preserves items with non-matching valid IDs and quarantines entities
  * whose business identity is missing or invalid.
  */
-function normalizeBusinessId(id: unknown): string | null {
-    if (typeof id === 'number') return Number.isFinite(id) ? String(id) : null;
-    if (typeof id !== 'string') return null;
-    const normalized = id.trim();
-    if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) return null;
-    return normalized;
-}
-
 function sanitizeIdentityCollection<T extends { id?: string | number }>(
     items?: T[] | null,
     extraIdentity?: (item: T) => unknown,
@@ -429,6 +422,11 @@ export function mergeUserData(
     let mergedOverrides = mergeCatalogOverrides(cloud.catalogOverrides, guest.catalogOverrides);
 
     const mergedNutrition = mergeNutritionPlanning(cloud.nutritionPlanning, guest.nutritionPlanning, cloud.nutritionPlanningOrigin, guest.nutritionPlanningOrigin);
+    const mergedPendingConflicts = {
+        ...(cloud.pendingConflicts || {}),
+        ...(guest.pendingConflicts || {}),
+        ...(mergedNutrition.pendingConflict ? { nutritionPlanning: mergedNutrition.pendingConflict } : {}),
+    };
 
     const rawMerged: UserData = {
         profile: mergeProfile(cloud.profile, guest.profile),
@@ -442,10 +440,7 @@ export function mergeUserData(
             : (cloud.activeWorkout || null),
         nutritionPlanning: mergedNutrition.activePlan,
         nutritionPlanningOrigin: mergedNutrition.activeOrigin,
-        pendingConflicts: mergedNutrition.pendingConflict ? {
-            ...(cloud.pendingConflicts || {}),
-            nutritionPlanning: mergedNutrition.pendingConflict
-        } : cloud.pendingConflicts,
+        pendingConflicts: Object.keys(mergedPendingConflicts).length ? mergedPendingConflicts : undefined,
         trainingCycles: mergeArrayById(cloud.trainingCycles, guest.trainingCycles),
         activeCycleId: (guest.activeCycleId !== undefined && guest.activeCycleId !== null && guest.activeCycleId !== '')
             ? guest.activeCycleId

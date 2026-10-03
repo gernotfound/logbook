@@ -64,7 +64,7 @@ describe('activity data model and domain operations', () => {
     });
 
     it('keeps existing workout cardio fields untouched', () => {
-        const data = parse({ history: [{ id: 'w1', date: '2026-09-24', exercises: [{ exId: 'run', sessionNote: '', sets: [{ id: 's1', kg: '', reps: '', time: '1200', distance: '2.1', speed: '6', incline: '2', kcal: '140' }] }] }] });
+        const data = parse({ history: [{ id: 'w1', date: '2026-09-24', exercises: [{ id: 'se-run', exId: 'run', sessionNote: '', sets: [{ id: 's1', kg: '', reps: '', time: '1200', distance: '2.1', speed: '6', incline: '2', kcal: '140' }] }] }] });
         expect(data.history?.[0]?.exercises[0]?.sets[0]).toMatchObject({ time: '1200', distance: '2.1', speed: '6', incline: '2', kcal: '140' });
     });
 });

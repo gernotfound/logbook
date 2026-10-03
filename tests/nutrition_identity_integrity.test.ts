@@ -170,7 +170,7 @@ describe('F-003 nutrition identity integrity', () => {
             },
         };
 
-        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo valido/i);
+        expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo .*valido/i);
 
         backup.userData.nutrition['2026-09-29'].meals = [{ ...validMeal, id: 'bad/id' }];
         expect(() => decodeImport(backup, 'guest')).toThrow(/identificativo non valido/i);

@@ -352,7 +352,7 @@ export const defaultMockUserData: UserData = {
       fatigueRating: 3,
       waterLiters: 2,
       exercises: [
-        { exId: 'ex1', sets: [{ id: 's1', kg: '80', reps: '10' }], sessionNote: 'Ottimo allenamento' }
+        { id: 'se-w1-ex1', exId: 'ex1', sets: [{ id: 's1', kg: '80', reps: '10' }], sessionNote: 'Ottimo allenamento' }
       ]
     }
   ],

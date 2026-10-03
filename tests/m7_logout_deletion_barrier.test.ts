@@ -33,6 +33,6 @@ describe('M7 logout isolation with stale deletion receipts', () => {
     expect(authContext).toContain('await DB.secureLogOut();');
     expect(authContext).toMatch(/await DB\.secureLogOut\(\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
     expect(authContext).toMatch(/setIsGuest\(false\);[\s\S]{0,200}resetStore\(\{ force: true \}\)/);
-    expect(authContext).toMatch(/if \(!isGuestActive\) \{[\s\S]{0,160}resetStore\(\);/);
+    expect(authContext).toMatch(/if \(!isGuestActive\) \{[\s\S]{0,500}clearAuthenticatedOwnerHint\(\);[\s\S]{0,300}resetStore\(\);/);
   });
 });

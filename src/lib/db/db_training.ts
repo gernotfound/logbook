@@ -1,12 +1,12 @@
 import { getDb } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import deepEqual from 'fast-deep-equal';
-import { getLocalDateString } from '../utils/date';
 import { removeUndefinedValues } from '../utils/object';
 import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
+import { assertHistoryMonthDocument, requireCanonicalWorkoutDate, sanitizeHistoryMonthDocument } from '../sync/monthlyIntegrity';
 
 export async function loadHistoryMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const historyDocs = await withTimeout(
@@ -14,12 +14,13 @@ export async function loadHistoryMonths(user: any, targetMonths: string[], state
         6000,
         "Timeout recupero storico"
     );
-    historyDocs.forEach(d => {
+    historyDocs.forEach((d, index) => {
+        const month = targetMonths[index];
         if (d && typeof d.exists === 'function' && d.exists()) {
-            const normalized = normalizeCloudDocument(d.data(), `History ${d.id} data schema`);
-            const monthData = normalized.business;
+            const normalized = normalizeCloudDocument(d.data(), `History ${month} data schema`);
+            const monthData = sanitizeHistoryMonthDocument(month, normalized.business);
             if (normalized.sync !== undefined && cloudDocuments) {
-                cloudDocuments.set('history_months/' + d.id, { ...monthData, _sync: normalized.sync });
+                cloudDocuments.set('history_months/' + month, { ...monthData, _sync: normalized.sync });
             }
             Object.values(monthData).forEach((h: any) => {
                 state.history.push(h);
@@ -32,24 +33,21 @@ export function syncHistoryMonths(batch: any, user: any, state: any, oldState: a
     let hasWrites = false;
     const newHistMonths: Record<string, any> = {};
     state.history.forEach((h: any) => {
-        const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
-            ? h.date.substring(0, 7)
-            : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
+        const monthKey = requireCanonicalWorkoutDate(h).substring(0, 7);
         if (!newHistMonths[monthKey]) newHistMonths[monthKey] = {};
         newHistMonths[monthKey][h.id] = h;
     });
 
     const oldHistMonths: Record<string, any> = {};
     (oldState.history || []).forEach((h: any) => {
-        const monthKey = (h.date && typeof h.date === 'string' && h.date.length >= 7)
-            ? h.date.substring(0, 7)
-            : (h.globalStartTime ? getLocalDateString(h.globalStartTime).substring(0, 7) : getLocalDateString().substring(0, 7));
+        const monthKey = requireCanonicalWorkoutDate(h).substring(0, 7);
         if (!oldHistMonths[monthKey]) oldHistMonths[monthKey] = {};
         oldHistMonths[monthKey][h.id] = h;
     });
 
     Object.keys(newHistMonths).forEach(month => {
         if (!deepEqual(newHistMonths[month], oldHistMonths[month])) {
+            assertHistoryMonthDocument(month, newHistMonths[month]);
             const cleanDoc = removeUndefinedValues(newHistMonths[month]);
             checkDocSize(cleanDoc, `History ${month}`);
             batch.set(doc(getDb(), "users", user.uid, "history_months", month), cleanDoc);

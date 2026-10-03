@@ -14,6 +14,19 @@ import { storageOwner } from './sync/session';
 import { classifySyncFailure } from './sync/syncFailure';
 import { replicateJournal } from './sync/replicateJournal';
 import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
+import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
+import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
+
+function parsePersistedActiveWorkout(value: unknown) {
+    const parsed = DomainParsers.parseActiveWorkout(value);
+    if (!parsed) return null;
+    try {
+        assertWorkoutSessionIdentities(parsed, 'Allenamento attivo cloud');
+        return parsed;
+    } catch {
+        return null;
+    }
+}
 
 export const DB = {
     resetCache() {
@@ -90,7 +103,7 @@ export const DB = {
                 state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
                 state.supplements = DomainParsers.parseSupplements(state.supplements);
                 state.activePains = DomainParsers.parseActivePains(state.activePains);
-                if (state.activeWorkout) state.activeWorkout = DomainParsers.parseActiveWorkout(state.activeWorkout);
+                if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
@@ -112,7 +125,10 @@ export const DB = {
                         );
                         for (const d of page.docs) {
                             const normalized = normalizeCloudDocument(d.data(), `${colName}/${d.id} data schema`);
-                            const mData = normalized.business as Record<string, any>;
+                            const rawMonthData = normalized.business as Record<string, any>;
+                            const mData = colName === 'history_months'
+                                ? sanitizeHistoryMonthDocument(d.id, rawMonthData)
+                                : sanitizeNutritionMonthDocument(d.id, rawMonthData);
                             if (normalized.sync !== undefined) cloudDocuments.set(`${colName}/${d.id}`, { ...mData, _sync: normalized.sync });
                             if (!completeMonths.includes(d.id)) completeMonths.push(d.id);
                             if (colName === 'history_months') {
@@ -149,7 +165,7 @@ export const DB = {
             state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
             state.supplements = DomainParsers.parseSupplements(state.supplements);
             state.activePains = DomainParsers.parseActivePains(state.activePains);
-            if (state.activeWorkout) state.activeWorkout = DomainParsers.parseActiveWorkout(state.activeWorkout);
+            if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
@@ -168,7 +184,8 @@ export const DB = {
         const user = auth.currentUser;
         if (!user) return { ok: true, status: 'synced' };
         try {
-            await ensureAppCheck();
+            // replicateJournal handles the offline fast-path before App Check and
+            // classifies temporary App Check unavailability as local-pending.
             const result = await replicateJournal();
             if (result.ok) setLastSavedStateStr(JSON.stringify(state));
             return result;

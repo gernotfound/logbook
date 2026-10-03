@@ -23,6 +23,7 @@ vi.mock('react-dom/client', () => ({
 describe('Storage Bootstrap & Telemetry Integration Flow', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('logbook_authenticated_owner', 'user:test-user-id');
     window.__INITIAL_USER_DATA__ = null;
     useAppStore.setState({
       userData: null,
@@ -91,7 +92,7 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
 
-  it('Flow 2: IndexedDB read_error does NOT update marker and does NOT dispatch anomaly', async () => {
+  it('Flow 2: IndexedDB read_error enters the fail-safe storage barrier without generating writes', async () => {
     updateStorageMarker(1000)!;
     vi.spyOn(idbKeyval, 'get').mockRejectedValue(new Error('IndexedDB blocked'));
     const dispatchSpy = vi.spyOn(storageTelemetryModule, 'dispatchStorageRecoveryAnomaly');
@@ -101,6 +102,9 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(window.__INITIAL_USER_DATA__).toBeNull();
     expect(getStorageMarker()?.timestamp).toBe(1000);
     expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
+    expect(useAppStore.getState().syncHealth).toBe('failed');
+    expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
   });
 
   it('Flow 3: Invalid cache does NOT update marker and does NOT dispatch anomaly', async () => {

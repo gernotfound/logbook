@@ -43,6 +43,35 @@ describe('activeWorkout lifecycle guard', () => {
         expect(ops[0].guard).toBeUndefined();
     });
 
+
+    it('guards a parent clear against replacing a newer active session', () => {
+        const base = new Map();
+        base.set('', {
+            activeWorkout: { id: 'w-1', date: '2026-09-01', exercises: [] }
+        });
+        const desired = new Map();
+        desired.set('', { activeWorkout: null });
+
+        const [clear] = diffDocuments(base, desired, 'A', 1, { A: 1 });
+        expect(clear).toMatchObject({
+            path: ['activeWorkout'],
+            value: null,
+            isDelete: false,
+            guard: { path: ['activeWorkout', 'id'], equals: 'w-1' }
+        });
+
+        const remote = new Map();
+        remote.set('', {
+            activeWorkout: { id: 'w-2', date: '2026-09-02', exercises: [] }
+        });
+        const result = applySemanticOperations(remote, [clear]);
+        expect(result.documents.get('')?.activeWorkout).toEqual({
+            id: 'w-2',
+            date: '2026-09-02',
+            exercises: []
+        });
+    });
+
     it('does not let a stale child from session A mutate replacement session B', () => {
         const base = new Map();
         base.set('', {

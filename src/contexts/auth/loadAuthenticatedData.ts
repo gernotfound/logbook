@@ -7,6 +7,9 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
+import { readLocal, hydrateLocal } from '../../lib/sync/localRepository';
+import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
+import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 
 type LoadAuthenticatedDataOptions = {
     user: User;
@@ -39,25 +42,56 @@ export async function loadAuthenticatedData({
 
     if (!isCurrent()) return;
 
-    const currentData = useAppStore.getState().userData;
-    if (!currentData) setSyncing(true);
+    if (!useAppStore.getState().userData) setSyncing(true);
+
+    try {
+        // Once Firebase identifies the authenticated owner, fence any pre-auth snapshot
+        // and install exactly that owner's durable envelope before doing network work.
+        const localEnvelope = await readLocal(expectedOwner);
+        if (!isCurrent()) return;
+
+        if (localEnvelope) {
+            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null);
+            useAppStore.setState({
+                userData: localEnvelope.data,
+                dataOwner: expectedOwner,
+                localWorkout,
+                localPersistenceBlocked: false,
+            });
+            markTabSnapshotClean(session, localEnvelope.data);
+        } else {
+            const current = useAppStore.getState();
+            // Only a dataset explicitly tagged to another owner is stale. Untagged
+            // in-memory state (tests/first-run transient state) is not destroyed here.
+            if (current.userData && current.dataOwner && current.dataOwner !== expectedOwner) {
+                useAppStore.setState({ userData: null, dataOwner: null, localWorkout: null });
+            }
+        }
+    } catch (error) {
+        if (!isCurrent()) return;
+        console.error('Archivio locale autenticato non leggibile; bootstrap bloccato:', error);
+        useAppStore.setState({
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            saveError: 'Archivio locale non disponibile. Riprova prima di modificare i dati.',
+        });
+        setSyncing(false);
+        return;
+    }
 
     try {
         const payload = await DB.loadCloudPayload();
         if (!isCurrent()) return;
 
         if (payload) {
-            const cloudData = payload.data;
             try {
-                const { hydrateLocal } = await import('../../lib/sync/localRepository');
-                if (!isCurrent()) return;
                 const hydratedEnv = await hydrateLocal(
                     user.uid,
-                    cloudData,
+                    payload.data,
                     payload.completeMonths,
                     payload.cloudDocuments,
                     'window',
-                    isCurrent
+                    isCurrent,
                 );
                 if (!isCurrent()) return;
                 setUserData(hydratedEnv.data);
@@ -67,7 +101,7 @@ export async function loadAuthenticatedData({
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
                     console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
                 } else {
-                    console.error('Zod parse failed during hydration merge, preserving local valid state:', mergeError);
+                    console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
                 }
             }
         }
@@ -77,8 +111,19 @@ export async function loadAuthenticatedData({
         if (error?.code === 'unavailable' || !navigator.onLine) {
             setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
         }
+
+        // Only a positively absent local envelope may initialize a fresh default dataset.
+        // A read failure returned earlier and can never reach this branch.
         const latestData = useAppStore.getState().userData;
         if (!latestData) {
+            const stillAbsent = await readLocal(expectedOwner);
+            if (!isCurrent()) return;
+            if (stillAbsent) {
+                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null);
+                useAppStore.setState({ userData: stillAbsent.data, dataOwner: expectedOwner, localWorkout });
+                markTabSnapshotClean(session, stillAbsent.data);
+                return;
+            }
             const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
             if (!isCurrent()) return;
             const fallbackData = getResolvedDefaultUserData(catalog);

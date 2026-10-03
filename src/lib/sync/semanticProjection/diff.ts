@@ -2,6 +2,7 @@ import equal from 'fast-deep-equal';
 import type { DocumentData } from '../documentProjection';
 import type { SemanticOperation, VectorClock } from './contracts';
 import { getMergePolicy, resolveIdentity } from './policy';
+import { normalizeBusinessId } from '../../businessIdentity';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -27,20 +28,18 @@ export function diffDocuments(
         }
     }
 
-    // Active workout children are valid only while the same session is active.
+    // Active-workout mutations are lifecycle-bound. Child edits target the current
+    // session, while a parent delete targets the session that existed in the base.
     for (const op of ops) {
-        if (op.docPath === '' && op.path[0] === 'activeWorkout' && op.path.length > 1) {
-            const dRoot: DocumentData = desired.get('') ?? {};
-            const bRoot: DocumentData = base.get('') ?? {};
-            const aw = dRoot.activeWorkout ?? bRoot.activeWorkout;
-            if (isRecord(aw)) {
-                const awId = aw.id;
-                const hasStableId =
-                    (typeof awId === 'string' && awId.trim().length > 0) ||
-                    (typeof awId === 'number' && Number.isFinite(awId));
-                if (hasStableId) op.guard = { path: ['activeWorkout', 'id'], equals: awId };
-            }
-        }
+        if (op.docPath !== '' || op.path[0] !== 'activeWorkout') continue;
+        const dRoot: DocumentData = desired.get('') ?? {};
+        const bRoot: DocumentData = base.get('') ?? {};
+        const aw = op.path.length === 1
+            ? bRoot.activeWorkout
+            : (dRoot.activeWorkout ?? bRoot.activeWorkout);
+        if (!isRecord(aw)) continue;
+        const awId = normalizeBusinessId(aw.id);
+        if (awId) op.guard = { path: ['activeWorkout', 'id'], equals: awId };
     }
 
     return ops;

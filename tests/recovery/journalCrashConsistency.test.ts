@@ -154,6 +154,28 @@ describe('M3 journal crash consistency', () => {
         expect(remote.apply).not.toHaveBeenCalled();
     });
 
+    it('keeps the entire M8 envelope unchanged when IndexedDB aborts asynchronously after put is queued', async () => {
+        const before = await readLocal(owner);
+        const originalPut = IDBObjectStore.prototype.put;
+        const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementationOnce(function (this: IDBObjectStore, ...args: any[]) {
+            const request = (originalPut as any).apply(this, args);
+            queueMicrotask(() => {
+                try { this.transaction.abort(); } catch { /* transaction may already be inactive */ }
+            });
+            return request;
+        } as any);
+
+        await expect(commitDomainOperations(
+            owner,
+            { type: 'profile.patch', patch: { height: '171' } },
+            data(170),
+        )).rejects.toBeDefined();
+        put.mockRestore();
+
+        expect(await readLocal(owner)).toEqual(before);
+        expect(remote.apply).not.toHaveBeenCalled();
+    });
+
     it('retains and idempotently replays the journal when remote commit succeeds but local acknowledgement fails', async () => {
         await commitLocal(owner, data(171), data(170));
         installReplaySafeRemote();

@@ -1,7 +1,10 @@
 import equal from 'fast-deep-equal';
-import { UserDataSchema } from './schema';
+import { DomainParsers, UserDataSchema } from './schema';
 import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
+import { normalizeBusinessId } from './businessIdentity';
+import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
+import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
 import {
     CURRENT_BACKUP_SCHEMA,
     CURRENT_DATA_SCHEMA,
@@ -39,10 +42,9 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         if (!Array.isArray(items)) throw new Error(`${path}: atteso un elenco.`);
         const ids = new Set<string>();
         for (const item of items) {
-            if (!isRecord(item) || !((typeof item.id === 'string' && item.id.trim()) || (typeof item.id === 'number' && Number.isFinite(item.id)))) {
-                throw new Error(`${path}: elemento senza identificativo valido.`);
-            }
-            const id = String(item.id);
+            const rawId = isRecord(item) ? item.id : undefined;
+            const id = normalizeBusinessId(rawId);
+            if (!id) throw new Error(`${path}: identificativo non valido.`);
             if (ids.has(id)) throw new Error(`${path}: identificativo duplicato ${id}.`);
             ids.add(id);
         }
@@ -53,14 +55,15 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         const ids = new Set<string>();
         for (const item of value.history) {
             const rawId = isRecord(item) ? item.id : undefined;
-            const id = typeof rawId === 'number' && Number.isFinite(rawId)
-                ? String(rawId)
-                : typeof rawId === 'string' ? rawId.trim() : '';
-            if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
+            const id = normalizeBusinessId(rawId);
+            if (!id) {
                 throw new Error('history: elemento senza identificativo valido.');
             }
             if (ids.has(id)) throw new Error(`history: identificativo duplicato ${id}.`);
             ids.add(id);
+            if (!isRecord(item)) throw new Error('history: elemento non valido.');
+            assertWorkoutSessionIdentities(item as any, `history.${id}`);
+            requireCanonicalWorkoutDate(item as any, `history.${id}`);
         }
     }
 
@@ -71,8 +74,8 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         for (const exercise of routine.exercises) {
             if (!isRecord(exercise)) throw new Error(`routines.${index}.exercises: elemento senza identificativo valido.`);
             const exId = exercise.exId;
-            const normalized = typeof exId === 'number' && Number.isFinite(exId) ? String(exId) : typeof exId === 'string' ? exId.trim() : '';
-            if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) {
+            const normalized = normalizeBusinessId(exId);
+            if (!normalized) {
                 throw new Error(`routines.${index}.exercises: esercizio senza identificativo valido.`);
             }
             if (seen.has(normalized)) throw new Error(`routines.${index}.exercises: identificativo duplicato ${normalized}.`);
@@ -87,8 +90,8 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         for (const routine of cycle.routines) {
             if (!isRecord(routine)) throw new Error(`trainingCycles.${index}.routines: elemento senza identificativo valido.`);
             const routineId = routine.routineId;
-            const normalized = typeof routineId === 'number' && Number.isFinite(routineId) ? String(routineId) : typeof routineId === 'string' ? routineId.trim() : '';
-            if (!normalized || normalized === 'undefined' || normalized === 'null' || normalized.includes('/')) {
+            const normalized = normalizeBusinessId(routineId);
+            if (!normalized) {
                 throw new Error(`trainingCycles.${index}.routines: routine senza identificativo valido.`);
             }
             if (seen.has(normalized)) throw new Error(`trainingCycles.${index}.routines: identificativo duplicato ${normalized}.`);
@@ -100,8 +103,8 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         if (value[key] !== undefined && !isRecord(value[key])) throw new Error(`${key}: atteso un oggetto.`);
     }
     if (isRecord(value.nutrition)) for (const [date, day] of Object.entries(value.nutrition)) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date || !isRecord(day)) {
-            throw new Error(`Giornata nutrizione non valida: ${date}.`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || getLocalDateString(new Date(`${date}T12:00:00`)) !== date || !isRecord(day) || day.date !== date) {
+            throw new Error(`Giornata nutrizione non valida o incoerente: ${date}.`);
         }
         for (const key of ['meals', 'supplementsIntake', 'cardioSessions']) {
             if (day[key] === undefined) continue;
@@ -109,16 +112,14 @@ export function validateImportData(value: unknown): asserts value is Record<stri
             for (const item of day[key] as unknown[]) {
                 if (!isRecord(item)) continue;
                 const id = item.id;
-                const normalizedId = typeof id === 'number' && Number.isFinite(id) ? String(id) : typeof id === 'string' ? id.trim() : '';
-                if (!normalizedId || normalizedId === 'undefined' || normalizedId === 'null' || normalizedId.includes('/')) {
+                const normalizedId = normalizeBusinessId(id);
+                if (!normalizedId) {
                     throw new Error(`nutrition.${date}.${key}: identificativo non valido.`);
                 }
                 if (key === 'supplementsIntake') {
                     const supplementId = item.supplementId;
-                    const normalizedSupplementId = typeof supplementId === 'number' && Number.isFinite(supplementId)
-                        ? String(supplementId)
-                        : typeof supplementId === 'string' ? supplementId.trim() : '';
-                    if (!normalizedSupplementId || normalizedSupplementId === 'undefined' || normalizedSupplementId === 'null' || normalizedSupplementId.includes('/')) {
+                    const normalizedSupplementId = normalizeBusinessId(supplementId);
+                    if (!normalizedSupplementId) {
                         throw new Error(`nutrition.${date}.supplementsIntake: integratore senza identificativo valido.`);
                     }
                 }
@@ -163,9 +164,19 @@ export function decodeImport(payload: unknown, owner: string) {
 
     const data = normalized.userData;
     validateImportData(data);
+    const sanitizedData = structuredClone(data);
+    if (sanitizedData.activeWorkout !== undefined && sanitizedData.activeWorkout !== null) {
+        const activeWorkout = DomainParsers.parseActiveWorkout(sanitizedData.activeWorkout);
+        try {
+            if (activeWorkout) assertWorkoutSessionIdentities(activeWorkout, 'activeWorkout');
+            sanitizedData.activeWorkout = activeWorkout;
+        } catch {
+            sanitizedData.activeWorkout = null;
+        }
+    }
     const selected = share
-        ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && data[key] !== undefined).map(key => [key, data[key]]))
-        : data;
+        ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))
+        : sanitizedData;
 
     return {
         data: selected,

@@ -166,7 +166,7 @@ describe('M8 domain commit durability', () => {
             history: [{
                 id: 'w1',
                 date: '2026-09-20',
-                exercises: [{ exId: 'e-delete', sessionNote: '', sets: [] }],
+                exercises: [{ id: 'se-delete-history', exId: 'e-delete', sessionNote: '', sets: [] }],
             }],
         }) as unknown as UserData;
         await initializeLocal('user:a', initial);

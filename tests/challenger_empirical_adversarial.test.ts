@@ -491,7 +491,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(writtenRef?.path || '').not.toContain('2026-08');
         });
 
-        it('2.5: Derives timezone-safe monthKey from date string or fallback timestamp seamlessly', async () => {
+        it('2.5: Derives monthKey from explicit date or timestamp and rejects missing temporal identity', async () => {
             const stateWithTimestamps = {
                 profile: {},
                 library: [],
@@ -503,16 +503,24 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
                 supplements: [],
                 activeWorkout: null,
                 history: [
-                    { id: 'h_str', date: '2026-08-15', exercises: [] }, // String date
-                    { id: 'h_ts', date: null, globalStartTime: 1723766400000, exercises: [] }, // Timestamp
-                    { id: 'h_none', date: null, globalStartTime: null, exercises: [] } // Fallback to current date
+                    { id: 'h_str', date: '2026-08-15', exercises: [] },
+                    { id: 'h_ts', date: null, globalStartTime: 1723766400000, exercises: [] }
                 ],
                 nutrition: {}
             };
 
-            await DB.saveUserData(stateWithTimestamps);
+            const validResult = await DB.saveUserData(stateWithTimestamps);
+            expect(validResult.ok).toBe(true);
             expect(mockBatch.set).toHaveBeenCalled();
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
+
+            mockBatch.set.mockClear();
+            mockBatch.commit.mockClear();
+            await expect(DB.saveUserData({
+                ...stateWithTimestamps,
+                history: [...stateWithTimestamps.history, { id: 'h_none', date: null, globalStartTime: null, exercises: [] }]
+            })).rejects.toThrow(/identità temporale/i);
+            expect(mockBatch.commit).not.toHaveBeenCalled();
         });
     });
 

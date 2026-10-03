@@ -194,8 +194,8 @@ describe('RIR reale per singola serie', () => {
         expect(JSON.stringify(clearRoot!.activeWorkout)).not.toContain('"rir"');
 
         const finished = prepareCompletedWorkout(active, 1_700_000_060_000).finishedWorkout;
-        const afterComplete = applyDomainOperations(afterActive, { type: 'workout.complete', workout: finished, activePains: [] });
-        const completeOps = compileDomainOperations(afterActive, afterComplete, { type: 'workout.complete', workout: finished, activePains: [] }, catalog, 'actor-rir', 2, { 'actor-rir': 2 });
+        const afterComplete = applyDomainOperations(afterActive, { type: 'workout.complete', workout: finished, expectedActiveWorkoutId: String(finished.id), activePains: [] });
+        const completeOps = compileDomainOperations(afterActive, afterComplete, { type: 'workout.complete', workout: finished, expectedActiveWorkoutId: String(finished.id), activePains: [] }, catalog, 'actor-rir', 2, { 'actor-rir': 2 });
         const completeReplay = applySemanticOperations(projectDocuments(afterActive, catalog), completeOps).documents;
         const historyDoc = completeReplay.get('history_months/2026-09');
         expect(historyDoc).toBeDefined();

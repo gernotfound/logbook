@@ -9,6 +9,7 @@ import {
     safeOptionalNullableNumber,
     reportZodSchemaFallback 
 } from './schema_utils';
+import { normalizeBusinessId } from '../businessIdentity';
 
 export const ExerciseSetSchema = z.object({
     weight: safeString(''),
@@ -60,9 +61,9 @@ export const ProgressionContractSchema = z.object({
 
 const TrainingEntityIdSchema = z.union([
     z.string(),
-    z.number().finite().transform(value => String(value)),
-]).transform(id => id.trim()).refine(
-    id => id.length > 0 && id.length <= 160 && id !== 'undefined' && id !== 'null' && !id.includes('/'),
+    z.number().finite(),
+]).transform(value => normalizeBusinessId(value) ?? '').refine(
+    id => id.length > 0,
     'Identificativo allenamento non valido',
 );
 

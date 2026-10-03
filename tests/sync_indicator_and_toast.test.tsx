@@ -230,6 +230,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
           finalPromise = useAppStore.getState().dispatchDomainOperation({
             type: 'workout.complete',
             workout,
+            expectedActiveWorkoutId: String(workout.id),
             activePains: [],
           });
         });
@@ -893,19 +894,19 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
       await act(async () => {
         p1 = useAppStore.getState().saveUserData((prev) => ({
           ...prev!,
-          nutrition: { '2026-08-22': { weight: 75, kcal: 500, pro: 30, carbs: 60, fat: 15 } }
+          nutrition: { '2026-08-22': { date: '2026-08-22', weight: 75, kcal: 500, pro: 30, carbs: 60, fat: 15 } }
         }));
         await vi.advanceTimersByTimeAsync(100);
 
         p2 = useAppStore.getState().saveUserData((prev) => ({
           ...prev!,
-          nutrition: { '2026-08-22': { weight: 75, kcal: 1100, pro: 70, carbs: 120, fat: 35 } }
+          nutrition: { '2026-08-22': { date: '2026-08-22', weight: 75, kcal: 1100, pro: 70, carbs: 120, fat: 35 } }
         }));
         await vi.advanceTimersByTimeAsync(100);
 
         p3 = useAppStore.getState().saveUserData((prev) => ({
           ...prev!,
-          nutrition: { '2026-08-22': { weight: 75, kcal: 1800, pro: 120, carbs: 200, fat: 55 } }
+          nutrition: { '2026-08-22': { date: '2026-08-22', weight: 75, kcal: 1800, pro: 120, carbs: 200, fat: 55 } }
         }));
       });
 

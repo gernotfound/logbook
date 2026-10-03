@@ -1,3 +1,4 @@
+import { requireBusinessId } from '../../businessIdentity';
 import type { MergePolicy } from './contracts';
 
 export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
@@ -67,20 +68,18 @@ export function getMergePolicy(docPath: string, path: string[]): MergePolicy {
 export function resolveIdentity(path: string[], item: any): string {
     const collection = path[path.length - 1];
     let id: any;
-    if (collection === 'exercises') id = item.exId ?? item.id;
+    if (collection === 'exercises' && path[0] === 'routines') id = item.exId;
+    else if (collection === 'exercises') id = item.id;
     else if (path[0] === 'trainingCycles' && collection === 'routines') id = item.routineId;
     else id = item.id ?? item.exId ?? item.routineId;
 
-    const strId = String(id);
-    if (id === undefined || id === null || strId === '' || strId === 'undefined' || strId === 'null') {
-        throw new Error(`Invalid identity in ${collection}`);
-    }
-    return strId;
+    return requireBusinessId(id, `Invalid identity in ${collection}`);
 }
 
 export function identitySeed(path: string[], itemId: string): Record<string, string> {
     const collection = path[path.length - 1];
-    if (collection === 'exercises') return { exId: itemId };
+    if (collection === 'exercises' && path[0] === 'routines') return { exId: itemId };
+    if (collection === 'exercises') return { id: itemId };
     if (path[0] === 'trainingCycles' && collection === 'routines') return { routineId: itemId };
     return { id: itemId };
 }
