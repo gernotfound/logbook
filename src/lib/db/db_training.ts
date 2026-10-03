@@ -6,7 +6,7 @@ import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
-import { assertHistoryMonthDocument, requireCanonicalWorkoutDate } from '../sync/monthlyIntegrity';
+import { assertHistoryMonthDocument, requireCanonicalWorkoutDate, sanitizeHistoryMonthDocument } from '../sync/monthlyIntegrity';
 
 export async function loadHistoryMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const historyDocs = await withTimeout(
@@ -17,8 +17,7 @@ export async function loadHistoryMonths(user: any, targetMonths: string[], state
     historyDocs.forEach(d => {
         if (d && typeof d.exists === 'function' && d.exists()) {
             const normalized = normalizeCloudDocument(d.data(), `History ${d.id} data schema`);
-            const monthData = normalized.business;
-            assertHistoryMonthDocument(d.id, monthData);
+            const monthData = sanitizeHistoryMonthDocument(d.id, normalized.business);
             if (normalized.sync !== undefined && cloudDocuments) {
                 cloudDocuments.set('history_months/' + d.id, { ...monthData, _sync: normalized.sync });
             }
