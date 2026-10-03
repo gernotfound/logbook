@@ -66,6 +66,8 @@ function App() {
   const syncing = useAppStore(state => state.syncing);
   const userData = useAppStore(state => state.userData);
   const saveError = useAppStore(state => state.saveError);
+  const syncHealth = useAppStore(state => state.syncHealth);
+  const syncPresentation = useAppStore(state => state.syncPresentation);
   const setSaveError = useAppStore(state => state.setSaveError);
   const compatibilityStatus = useAppStore(state => state.compatibilityStatus);
   const compatibilityError = useAppStore(state => state.compatibilityError);
@@ -82,6 +84,9 @@ function App() {
   const guestLoginMigrationPending = !!currentUser && guestMigrationStatus === 'pending';
   const guestLoginMigrationFailed = !!currentUser && guestMigrationStatus === 'failed';
   const hideBottomNav = guestLoginOverlayVisible;
+  const quietWorkoutSync = syncPresentation === 'quiet-workout';
+  const showSyncIndicator = syncing && !quietWorkoutSync;
+  const showSaveError = Boolean(saveError) && !(quietWorkoutSync && syncHealth === 'local-pending');
 
   const openGuestLogin = () => {
     persistGuestLoginOverlayState(true);
@@ -329,7 +334,7 @@ function App() {
           </button>
         </div>
       )}
-      {syncing && (
+      {showSyncIndicator && (
         <div
           className="sync-indicator"
           role="status"
@@ -341,7 +346,7 @@ function App() {
         </div>
       )}
 
-      {saveError && (
+      {showSaveError && saveError && (
         <div
           className="sync-error-toast"
           role="alert"
