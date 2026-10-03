@@ -202,7 +202,7 @@ describe('M8 Domain Operations V4', () => {
         const historical: WorkoutSession = {
             id: 'w-delete-regression',
             date: '2026-09-20',
-            exercises: [{ exId: 'e-delete', sessionNote: '', sets: [] }],
+            exercises: [{ id: 'se-delete-history', exId: 'e-delete', sessionNote: '', sets: [] }],
         };
         const before = base({
             library: [deletedExercise, keptExercise],
@@ -277,7 +277,7 @@ describe('M8 Domain Operations V4', () => {
     it('projects readiness with the active workout and preserves it on completion/history edits', () => {
         const active: WorkoutSession = {
             id: 'live-ready', date: '2026-09-24', globalStartTime: 100,
-            exercises: [{ exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8', rir: 0 }] }],
+            exercises: [{ id: 'se-bench', exId: 'bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '8', rir: 0 }] }],
             readiness: { capturedAt: 100, energy: 2, stress: 5 },
         };
         const before = base({ activeWorkout: null });
