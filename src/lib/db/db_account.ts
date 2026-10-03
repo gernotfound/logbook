@@ -1,6 +1,5 @@
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import { del } from 'idb-keyval';
-import { useAppStore } from '../../store/useAppStore';
 import { withTimeout } from './db_core';
 import { readBrowserValueStrict } from '../sync/browserStorage';
 import { storageOwner, captureSession, isCurrentSession } from '../sync/session';
@@ -18,9 +17,14 @@ export type AccountDeletionOutcome =
     | { status: 'complete' }
     | { status: 'pending'; message: string };
 
-type DeletionContext = {
+export type AccountDeletionCompletionContext = {
     purgeAllLocalUserData: (owner: string) => Promise<void>;
     resetCache: () => void;
+    resetStore: () => void;
+};
+
+export type AccountDeletionContext = AccountDeletionCompletionContext & {
+    cancelPendingSyncs: () => void;
 };
 
 type ServerDeletionStatus = {
@@ -169,7 +173,7 @@ function anotherLocalIdentityIsActive(marker: AccountDeletionMarker): boolean {
     return Boolean(currentUid && currentUid !== marker.uid);
 }
 
-async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: DeletionContext): Promise<AccountDeletionOutcome> {
+async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context: AccountDeletionCompletionContext): Promise<AccountDeletionOutcome> {
     if (anotherLocalIdentityIsActive(marker)) {
         return {
             status: 'pending',
@@ -190,7 +194,7 @@ async function finalizeCompletedDeletion(marker: AccountDeletionMarker, context:
         removeDeletionRecoveryCredential(marker.uid);
         context.resetCache();
         clearAccountDeletion(marker.owner);
-        useAppStore.getState().resetStore();
+        context.resetStore();
         return { status: 'complete' };
     } catch (error) {
         throw new Error('Account cloud eliminato, ma pulizia locale incompleta. Riapri LogBook per completare la pulizia dei dati su questo dispositivo.', { cause: error });
@@ -201,7 +205,7 @@ function pendingDeletionOutcome(message = 'Richiesta acquisita: la cancellazione
     return { status: 'pending', message };
 }
 
-async function observeDeletion(marker: AccountDeletionMarker, context: DeletionContext, maxWaitMs: number): Promise<AccountDeletionOutcome> {
+async function observeDeletion(marker: AccountDeletionMarker, context: AccountDeletionCompletionContext, maxWaitMs: number): Promise<AccountDeletionOutcome> {
     const deadline = Date.now() + Math.max(0, maxWaitMs);
     do {
         const remaining = Math.max(1, deadline - Date.now());
@@ -230,7 +234,7 @@ async function observeDeletion(marker: AccountDeletionMarker, context: DeletionC
     return pendingDeletionOutcome();
 }
 
-export function deleteAccount(context: DeletionContext): Promise<AccountDeletionOutcome> {
+export function deleteAccount(context: AccountDeletionContext): Promise<AccountDeletionOutcome> {
     if (deleting) return deleting;
     const work = performDeletion(context);
     deleting = work;
@@ -238,7 +242,7 @@ export function deleteAccount(context: DeletionContext): Promise<AccountDeletion
     return work;
 }
 
-async function performDeletion(context: DeletionContext): Promise<AccountDeletionOutcome> {
+async function performDeletion(context: AccountDeletionContext): Promise<AccountDeletionOutcome> {
     const user = auth.currentUser;
     if (!user) throw new Error('Nessun utente autenticato.');
     const before = captureSession();
@@ -262,7 +266,7 @@ async function performDeletion(context: DeletionContext): Promise<AccountDeletio
 
     const existing = readAccountDeletionMarker(owner);
     const marker = markAccountDeletion(owner, { receiptToken: existing?.receiptToken ?? createReceiptToken() });
-    useAppStore.getState().cancelPendingSyncs();
+    context.cancelPendingSyncs();
 
     try {
         await requestServerDeletion(marker, token.token, appToken);
@@ -281,7 +285,7 @@ async function performDeletion(context: DeletionContext): Promise<AccountDeletio
     return observeDeletion(markAccountDeletion(owner), context, ACCOUNT_DELETION_INITIAL_OBSERVE_MS);
 }
 
-export async function resumeAccountDeletion(context: DeletionContext): Promise<AccountDeletionOutcome | null> {
+export async function resumeAccountDeletion(context: AccountDeletionCompletionContext): Promise<AccountDeletionOutcome | null> {
     const marker = findPendingAccountDeletion();
     if (!marker) return null;
     if (!marker.receiptToken) {
