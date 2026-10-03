@@ -113,11 +113,16 @@ export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = 
 
         if (nextWorkout === currentWorkout) return { ok: true, status: 'synced' };
         if (!get().userData) throw new Error('Dati utente non caricati');
-        if (nextWorkout) assertWorkoutSessionIdentities(nextWorkout, 'Allenamento attivo');
+
+        // The transition from transient/device state to persisted activeWorkout is
+        // the one authorized repair point for missing instance identities.
+        const persistedWorkout = nextWorkout ? normalizeDeviceWorkout(nextWorkout) : null;
+        if (nextWorkout && !persistedWorkout) throw new Error('Allenamento attivo: identificativo non valido');
+        if (persistedWorkout) assertWorkoutSessionIdentities(persistedWorkout, 'Allenamento attivo');
 
         // Device-critical durability precedes the optimistic in-memory update.
-        persistLocalWorkout(nextWorkout);
-        set({ localWorkout: nextWorkout });
-        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: nextWorkout });
+        persistLocalWorkout(persistedWorkout);
+        set({ localWorkout: persistedWorkout });
+        return get().dispatchDomainOperation({ type: 'active-workout.set', workout: persistedWorkout });
     },
 });
