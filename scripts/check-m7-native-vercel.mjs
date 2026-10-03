@@ -122,8 +122,8 @@ if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.i
 if (!firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
   failures.push('Firestore Production workflow must only activate after the canonical push-to-main verification run');
 }
-if (!firestoreWorkflow.includes('git rev-parse origin/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
-  failures.push('Firestore Production workflow must re-check the exact current main SHA before any live operation');
+if (!firestoreWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
+  failures.push('Firestore Production workflow must re-check the exact current main SHA without mutating checkout history before any live operation');
 }
 if (!firestoreWorkflow.includes('GCP_FIRESTORE_DEPLOY_SERVICE_ACCOUNT') || firestoreWorkflow.includes('service_account: ${{ env.GCP_FIREBASE_DEPLOY_SERVICE_ACCOUNT }}')) {
   failures.push('Firestore Production must use a dedicated deployer identity instead of the Hosting service account');
@@ -151,6 +151,9 @@ if (!firestoreVerifier.includes("fieldOverrides.length !== 0")) {
 }
 if (!firestoreVerifier.includes("status.state !== 'READY'")) {
   failures.push('Firestore Production verifier must require desired composite indexes to be READY');
+}
+if (firestoreVerifier.includes("searchParams.set('pageSize'")) {
+  failures.push('Firestore Production verifier must not send unsupported pageSize when listing composite indexes');
 }
 
 if (!vite.includes("process.env.FIREBASE_HOSTING_DEPLOY === 'production'")) failures.push('Sentry production source-map build must be bound to Firebase Hosting production');
