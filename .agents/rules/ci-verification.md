@@ -119,7 +119,8 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 - VERIFY: Vercel Deployment Checks è configurazione esterna; non assumere che blocchi il deploy solo perché il job GitHub si chiama `Canonical Verification`.
 - MUST: Firebase Hosting Production parte soltanto dopo `Milestone Verification` verde su push a `main`, usa lo stesso exact SHA e rifiuta di deployare se `origin/main` è già avanzato.
 - MUST: il workflow Hosting usa `firebase deploy --only hosting`; Rules e indici Firestore non sono side effect del deploy frontend.
-- MUST: Firebase Firestore Production è un workflow separato, parte soltanto dopo lo stesso gate canonico su push a `main`, ricontrolla l'exact SHA e si attiva soltanto per modifiche al contratto Firestore/deploy pertinente.
+- MUST: Firebase Firestore Production è un workflow separato, parte soltanto dopo lo stesso gate canonico su push a `main`, ricontrolla l'exact SHA e riconcilia sempre lo stato desiderato con il provider live; non usa il commit padre come proxy dell'ultimo stato distribuito.
+- MUST: il deploy Firestore avviene solo quando la riconciliazione rileva Rules divergenti o indici desiderati mancanti; indici già presenti ma non `READY` richiedono attesa/verifica senza un deploy ridondante, mentre uno stato live non determinabile è failure.
 - MUST: il deploy Firestore usa `--only firestore:rules,firestore:indexes`, non usa `--force`, autentica una identità WIF dedicata distinta dall'Hosting deployer e verifica il provider dopo la mutazione.
 - MUST: le action privilegiate dei workflow Hosting e Firestore sono pin-nate a commit SHA immutabili; il commento di versione serve solo alla manutenzione/Dependabot.
 - VERIFY: Vercel Preview verifica build/routing ma non sostituisce il gate repository.
