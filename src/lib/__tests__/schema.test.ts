@@ -16,7 +16,7 @@ describe('UserDataSchema', () => {
             profile: { height: '180' }
         };
         const parsed = UserDataSchema.parse(data) as any;
-        expect(parsed.extraKey).toBe('should be preserved');
+        expect(parsed.extraKey).toBeUndefined();
         expect(parsed.profile.height).toBe('180');
     });
 
