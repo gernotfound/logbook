@@ -26,6 +26,53 @@ const defaultRuntime: WorkoutPreparationRuntime = {
     now: () => new Date().getTime(),
 };
 
+function repairWorkoutInstanceIdentities(
+    workout: WorkoutSession,
+    runtime: WorkoutPreparationRuntime,
+): WorkoutSession {
+    const unique = (raw: unknown, prefix: string, seen: Set<string>): string => {
+        let id = typeof raw === 'string' ? raw.trim() : '';
+        if (!id || id === 'undefined' || id === 'null' || id.includes('/') || seen.has(id)) {
+            do { id = runtime.generateId(prefix); } while (seen.has(id));
+        }
+        seen.add(id);
+        return id;
+    };
+
+    const exerciseIds = new Set<string>();
+    return {
+        ...workout,
+        exercises: (workout.exercises ?? []).map(exercise => {
+            const setIds = new Set<string>();
+            return {
+                ...exercise,
+                id: unique(exercise.id, 'se', exerciseIds),
+                sets: (exercise.sets ?? []).map(set => {
+                    const segmentIds = new Set<string>();
+                    const dropIds = new Set<string>();
+                    const isometricIds = new Set<string>();
+                    return {
+                        ...set,
+                        id: unique(set.id, 's', setIds),
+                        segments: set.segments?.map(segment => ({
+                            ...segment,
+                            id: unique(segment.id, 'seg', segmentIds),
+                        })),
+                        dropsets: set.dropsets?.map(drop => ({
+                            ...drop,
+                            id: unique(drop.id, 'ds', dropIds),
+                        })),
+                        isometrics: set.isometrics?.map(item => ({
+                            ...item,
+                            id: unique(item.id, 'iso', isometricIds),
+                        })),
+                    };
+                }),
+            };
+        }),
+    };
+}
+
 export function buildRoutineWorkout(
     userData: UserData | null | undefined,
     routine: WorkoutRoutine,
@@ -222,26 +269,27 @@ export function prepareCompletedWorkout(
     durationStr: string;
     sessionPains: string[];
 } {
-    const ratingScale = currentWorkout.ratingScale ?? 10;
+    const normalizedWorkout = repairWorkoutInstanceIdentities(currentWorkout, runtime);
+    const ratingScale = normalizedWorkout.ratingScale ?? 10;
     const valRes = Logic.validateWorkoutRatings(
-        String(currentWorkout.moodRating ?? ''),
-        String(currentWorkout.pumpRating ?? ''),
-        String(currentWorkout.fatigueRating ?? ''),
+        String(normalizedWorkout.moodRating ?? ''),
+        String(normalizedWorkout.pumpRating ?? ''),
+        String(normalizedWorkout.fatigueRating ?? ''),
         ratingScale,
     );
-    const startTime = currentWorkout.globalStartTime || endTime;
+    const startTime = normalizedWorkout.globalStartTime || endTime;
     const diff = Math.max(0, Math.floor((endTime - startTime) / 1000));
     const durationStr = Logic.formatDuration(diff);
-    const sessionPains = Array.isArray(currentWorkout.pains) ? currentWorkout.pains : [];
+    const sessionPains = Array.isArray(normalizedWorkout.pains) ? normalizedWorkout.pains : [];
 
     const finishedWorkout: WorkoutSession = {
-        ...currentWorkout,
+        ...normalizedWorkout,
         globalEndTime: endTime,
         globalDurationStr: durationStr,
         moodRating: valRes.mood,
         pumpRating: valRes.pump,
         fatigueRating: valRes.fatigue,
-        waterLiters: currentWorkout.waterLiters !== undefined && currentWorkout.waterLiters !== null && String(currentWorkout.waterLiters).trim() !== '' ? parseFloat(String(currentWorkout.waterLiters).replace(',', '.')) : undefined,
+        waterLiters: normalizedWorkout.waterLiters !== undefined && normalizedWorkout.waterLiters !== null && String(normalizedWorkout.waterLiters).trim() !== '' ? parseFloat(String(normalizedWorkout.waterLiters).replace(',', '.')) : undefined,
         pains: sessionPains,
         date: currentWorkout.date || runtime.getLocalDateString(),
     };
