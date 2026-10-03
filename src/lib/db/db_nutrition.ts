@@ -6,6 +6,7 @@ import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
 import { normalizeCloudDocument } from '../schemaEvolution';
 import { withTimeout } from './db_core';
+import { assertNutritionMonthDocument } from '../sync/monthlyIntegrity';
 
 export async function loadNutritionMonths(user: any, targetMonths: string[], state: any, cloudDocuments?: Map<string, any>) {
     const nutritionDocs = await withTimeout(
@@ -17,6 +18,7 @@ export async function loadNutritionMonths(user: any, targetMonths: string[], sta
         if (d && typeof d.exists === 'function' && d.exists()) {
             const normalized = normalizeCloudDocument(d.data(), `Nutrition ${d.id} data schema`);
             const monthData = normalized.business;
+            assertNutritionMonthDocument(d.id, monthData);
             if (normalized.sync !== undefined && cloudDocuments) {
                 cloudDocuments.set('nutrition_months/' + d.id, { ...monthData, _sync: normalized.sync });
             }
