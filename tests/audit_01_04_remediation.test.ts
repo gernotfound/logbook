@@ -7,6 +7,9 @@ import { applyDomainOperations } from '../src/lib/sync/domainOperations';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument, requireCanonicalWorkoutDate } from '../src/lib/sync/monthlyIntegrity';
 import { classifySyncFailure } from '../src/lib/sync/syncFailure';
 import { useAppStore } from '../src/store/useAppStore';
+import { getInitialLocalWorkout } from '../src/store/slices/createWorkoutSlice';
+import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { clearAuthenticatedOwnerHint, readAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../src/lib/sync/authOwnerHint';
 
 const parse = (value: unknown): UserData => UserDataSchema.parse(value) as unknown as UserData;
 
@@ -152,6 +155,24 @@ describe('AUDIT 01-04 remediation invariants', () => {
     it('treats App Check unavailability as durable local-pending rather than failed', () => {
         const error = Object.assign(new Error('App Check unavailable'), { code: 'app-check-unavailable' });
         expect(classifySyncFailure(error).status).toBe('local-pending');
+    });
+
+    it('recovers the device workout synchronously from the durable envelope shadow when device storage is missing', () => {
+        const owner = 'user:recovery';
+        const durable = workout('w-recovered', [['se-1', 'bench']]);
+
+        const recovered = getInitialLocalWorkout(owner, durable);
+
+        expect(recovered?.id).toBe('w-recovered');
+        expect(JSON.parse(localStorage.getItem(deviceKey('workout', owner))!)).toMatchObject({ id: 'w-recovered' });
+    });
+
+    it('persists and clears a strict authenticated owner hint without consulting Firebase Auth', () => {
+        expect(readAuthenticatedOwnerHint()).toBeNull();
+        expect(rememberAuthenticatedOwner('abc')).toBe('user:abc');
+        expect(readAuthenticatedOwnerHint()).toBe('user:abc');
+        clearAuthenticatedOwnerHint('user:abc');
+        expect(readAuthenticatedOwnerHint()).toBeNull();
     });
 
     it('keeps setLocalWorkout strictly device-local and leaves cloud-facing UserData untouched', () => {
