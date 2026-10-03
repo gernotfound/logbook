@@ -34,6 +34,22 @@ for (const [file, expected] of allowedSnapshotSelectors) {
   if (expected < 1) violations.push(`${file}: invalid allowlist count`);
 }
 
+// Persisted UserData may only be installed/mutated by the data/sync implementation
+// boundaries. A device-local slice must never mirror cloud-facing business state.
+const allowedUserDataWriterSlices = new Set([
+  'src/store/slices/createDataSlice.ts',
+  'src/store/slices/createSyncSlice.ts',
+]);
+for (const entry of fs.readdirSync('src/store/slices', { withFileTypes: true })) {
+  if (!entry.isFile() || !/\.ts$/.test(entry.name)) continue;
+  const file = `src/store/slices/${entry.name}`;
+  if (allowedUserDataWriterSlices.has(file)) continue;
+  const source = fs.readFileSync(file, 'utf8');
+  if (/\buserData\s*:/.test(source)) {
+    violations.push(`${file}: unauthorized UserData write outside data/sync boundary`);
+  }
+}
+
 const workoutSession = fs.readFileSync('src/hooks/useWorkoutSession.ts', 'utf8');
 const workoutSlice = fs.readFileSync('src/store/slices/createWorkoutSlice.ts', 'utf8');
 for (const [label, source, pattern] of [
@@ -51,4 +67,4 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log(`M8 Domain Operation boundary OK (${files.length} hook/component files checked).`);
+console.log(`M8 Domain Operation boundary OK (${files.length} hook/component files + store-slice ownership checked).`);
