@@ -67,10 +67,7 @@ function alignActiveWorkout(
     // Persisted business state and the device draft are separate authorities.
     // Bulk hydration may preserve only the same live session (device keystrokes can
     // be newer than IndexedDB) or a deliberately isolated history edit.
-    if (localWorkout?.isEditingHistory) return { persisted: parsedIncoming, local: localWorkout };
-    if (parsedIncoming && localWorkout?.id === parsedIncoming.id) {
-        return { persisted: parsedIncoming, local: localWorkout };
-    }
+    if (localWorkout) return { persisted: parsedIncoming, local: localWorkout };
     return { persisted: parsedIncoming, local: parsedIncoming };
 }
 
