@@ -79,9 +79,12 @@ if (!legacySwCacheControl.includes('no-store') || !legacySwCacheControl.includes
 if (!legacySwHeaders.some(item => item.key === 'Service-Worker-Allowed' && item.value === '/')) {
   failures.push('retired Vercel /sw.js must preserve root scope while replacing the legacy worker');
 }
-for (const marker of ['caches.keys()', 'self.registration.unregister()', "client.navigate('/')", 'self.skipWaiting()']) {
+for (const marker of ['caches.keys()', 'self.clients.claim()', 'self.registration.unregister()', 'self.skipWaiting()']) {
   if (!legacyServiceWorkerApi.includes(marker)) failures.push(`legacy service-worker retirement endpoint missing cleanup marker: ${marker}`);
 }
+if (!legacyServiceWorkerApi.includes("cacheName.startsWith('workbox-')")) failures.push('legacy service-worker retirement must limit cache cleanup to Workbox caches');
+if (legacyServiceWorkerApi.includes('client.navigate(')) failures.push('legacy service-worker retirement must not force-navigate an already open client');
+if (legacyServiceWorkerApi.includes('indexedDB') || legacyServiceWorkerApi.includes('localStorage')) failures.push('legacy service-worker retirement must not touch user-data storage');
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
 if (!deletionCron) failures.push('missing daily account deletion recovery cron');

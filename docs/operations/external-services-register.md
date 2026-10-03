@@ -50,6 +50,8 @@ La correzione definitiva separa quindi anche **fisicamente** i due delivery: Ver
 
 Verifica live post-merge 2026-10-03 sullo SHA `6db65e721dda4a3eb545c03f2ad8d2516a208bf6`: deployment Vercel Production `dpl_EzuP5wdjrJdpF1PUsv9ZyGY8sXbU` in stato READY; `/sw.js` risponde HTTP 200 con il worker di ritiro, `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` e `Service-Worker-Allowed: /`, senza Workbox/precache; un asset del precedente frontend Vercel risponde HTTP 404; il root legacy risponde HTTP 301 verso Firebase Hosting; `/api/account-deletion-device` resta raggiungibile e rifiuta correttamente una sonda priva di origin autorizzata con HTTP 403; nessun runtime error Vercel rilevato nella finestra osservata.
 
+Hardening successivo: il worker di ritiro viene reso non distruttivo per una finestra legacy già aperta. Prende controllo, elimina soltanto le cache Workbox e si deregistra, ma non forza la navigazione e non tocca IndexedDB/localStorage; al caricamento successivo il root raggiunge il 301 verso Firebase. **VERIFY-LIVE:** dopo il merge di questo hardening verificare nuovamente il contenuto di `/sw.js`, il redirect root e la raggiungibilità del backend.
+
 Preparazione live verificata il 2026-10-01:
 
 - è stato creato e scelto come hostname target `thelogbook.web.app`;

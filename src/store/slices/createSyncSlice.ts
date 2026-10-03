@@ -289,7 +289,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             const saved = await readLocal(session.owner);
             if (!isCurrentSession(session) || !saved?.pending.length) return;
             const generation = get().syncGeneration + 1;
-            set({ syncing: true, syncHealth: 'saving', syncGeneration: generation });
+            const localWorkout = get().localWorkout;
+            const syncPresentation: SyncPresentation = localWorkout && !localWorkout.isEditingHistory
+                ? 'quiet-workout'
+                : 'normal';
+            set({ syncing: true, syncHealth: 'saving', syncPresentation, syncGeneration: generation });
             const completion = new Promise<SyncResult>((resolve, reject) => pending.push({ session, generation, cache: Promise.resolve({ ok: true }), resolve, reject }));
             const observed = completion.then(() => undefined, error => { throw error; });
             void observed.catch(() => {});
