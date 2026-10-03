@@ -11,6 +11,7 @@ const vite = readFileSync('vite.config.ts', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
 const accountApi = readFileSync('api/account-deletion.ts', 'utf8');
 const cronApi = readFileSync('api/account-deletion-cron.ts', 'utf8');
+const legacyServiceWorkerApi = readFileSync('api/legacy-service-worker.ts', 'utf8');
 
 const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
 for (const forbidden of ['nitro', 'workflow']) {
@@ -28,6 +29,8 @@ for (const path of ['api/account-deletion.ts', 'api/account-deletion-cron.ts']) 
 }
 if (!existsSync('api/account-deletion-device.ts')) failures.push('missing native Vercel Function: api/account-deletion-device.ts');
 if (vercel.functions?.['api/account-deletion-device.ts']?.maxDuration !== 30) failures.push('api/account-deletion-device.ts must have maxDuration 30');
+if (!existsSync('api/legacy-service-worker.ts')) failures.push('missing legacy Vercel service-worker retirement endpoint');
+if (vercel.functions?.['api/legacy-service-worker.ts']?.maxDuration !== 10) failures.push('api/legacy-service-worker.ts must use the minimal 10s function ceiling');
 if (vercel.git?.deploymentEnabled?.main !== true || vercel.git?.deploymentEnabled?.['**'] !== false) failures.push('Vercel Git deployments must remain enabled only for main');
 if (vercel.ignoreCommand !== 'node scripts/vercel-ignore-build.mjs') failures.push('Vercel must skip Git deployments that do not change the backend contract');
 if (!existsSync('scripts/vercel-ignore-build.mjs')) failures.push('missing Vercel selective deployment guard');
@@ -52,6 +55,22 @@ else {
   if (legacyFrontendRedirect.destination !== 'https://thelogbook.web.app/') failures.push('retired Vercel frontend root must redirect to the Firebase Hosting canonical origin');
   if (legacyFrontendRedirect.statusCode !== 301) failures.push('retired Vercel frontend root redirect must use HTTP 301 for the Search Console Change of Address pre-check');
   if ('permanent' in legacyFrontendRedirect) failures.push('retired Vercel frontend root redirect must use explicit statusCode 301 instead of permanent 307/308 mode');
+}
+
+const legacySwRewrite = vercel.rewrites?.find(item => item.source === '/sw.js');
+if (legacySwRewrite?.destination !== '/api/legacy-service-worker') {
+  failures.push('retired Vercel origin must replace the old PWA worker at /sw.js with the retirement endpoint');
+}
+const legacySwHeaders = vercel.headers?.find(item => item.source === '/sw.js')?.headers ?? [];
+const legacySwCacheControl = legacySwHeaders.find(item => item.key === 'Cache-Control')?.value ?? '';
+if (!legacySwCacheControl.includes('no-store') || !legacySwCacheControl.includes('must-revalidate')) {
+  failures.push('retired Vercel /sw.js must never be served from a stale browser/CDN cache');
+}
+if (!legacySwHeaders.some(item => item.key === 'Service-Worker-Allowed' && item.value === '/')) {
+  failures.push('retired Vercel /sw.js must preserve root scope while replacing the legacy worker');
+}
+for (const marker of ['caches.keys()', 'self.registration.unregister()', "client.navigate('/')", 'self.skipWaiting()']) {
+  if (!legacyServiceWorkerApi.includes(marker)) failures.push(`legacy service-worker retirement endpoint missing cleanup marker: ${marker}`);
 }
 
 const deletionCron = vercel.crons?.find(item => item.path === '/api/account-deletion-cron');
