@@ -30,7 +30,7 @@ Il repository è pubblico.
 - **MUST:** origin e domini di deployment ritirati vengono rimossi dalla configurazione applicativa e dalle allowlist esterne quando non sono più necessari.
 - **MUST:** non mantenere autorizzato un vecchio origin per sola compatibilità storica se nessun runtime reale lo usa.
 - **MUST:** il ritiro di un origin che ha ospitato una PWA deve considerare anche i Service Worker già installati: un redirect HTTP del root non basta se un worker legacy può ancora servire l'app shell dalla propria cache.
-- **MUST:** durante la finestra di dismissione dell'origin Vercel, `/sw.js` deve servire un worker di ritiro non cacheabile che prende controllo, elimina le cache legacy, si deregistra e riporta le finestre al root 301 verso Firebase. Non re-autorizzare il vecchio origin in Firebase Auth/App Check per rendere funzionante una copia PWA obsoleta.
+- **MUST:** durante la finestra di dismissione dell'origin Vercel, `/sw.js` deve servire un worker di ritiro non cacheabile che prende controllo, elimina soltanto le cache Workbox legacy e si deregistra senza forzare la navigazione delle finestre già aperte né toccare IndexedDB/localStorage; al caricamento successivo il root raggiunge il 301 verso Firebase. Non re-autorizzare il vecchio origin in Firebase Auth/App Check per rendere funzionante una copia PWA obsoleta.
 - **MUST:** prima di eliminare una funzione generica di portabilità, dimostrare che sia specifica del provider ritirato. Il supporto generico a base path/subpath non è automaticamente codice legacy di deployment.
 - **VERIFY:** restrizioni referrer API key, origin/redirect OAuth, domini autorizzati Firebase Auth, domini reCAPTCHA/Fraud Defense e proprietà Search Console sono stato esterno.
 

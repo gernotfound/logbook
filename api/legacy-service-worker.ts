@@ -1,26 +1,20 @@
 const LEGACY_SERVICE_WORKER = `
-self.addEventListener('install', () => {
-  self.skipWaiting();
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    await self.clients.claim();
+
     const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    await Promise.all(
+      cacheNames
+        .filter((cacheName) => cacheName.startsWith('workbox-'))
+        .map((cacheName) => caches.delete(cacheName)),
+    );
+
     await self.registration.unregister();
-
-    const windows = await self.clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true,
-    });
-
-    await Promise.all(windows.map(async (client) => {
-      try {
-        await client.navigate('/');
-      } catch {
-        // The root request is intentionally handled by the Vercel 301 redirect.
-      }
-    }));
   })());
 });
 `.trim();

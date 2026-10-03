@@ -9,6 +9,7 @@ import { DB } from '../src/lib/db';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { commitDomainOperations, initializeLocal } from '../src/lib/sync/localRepository';
 
 describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
@@ -224,6 +225,52 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         });
         void finalPromise?.catch(() => {});
         expect(useAppStore.getState().syncPresentation).toBe('normal');
+      });
+
+
+      test('T1.10d_R2: restart-style durable workout replay stays quiet while a workout is active', async () => {
+        const { container } = await renderSettledApp();
+        const owner = 'user:test-user-id';
+        const workout = {
+          id: 'workout-replay-quiet',
+          routineName: 'Replay quiet',
+          exercises: [],
+        };
+
+        const baseData = { ...defaultMockUserData, activeWorkout: null };
+        await initializeLocal(owner, baseData);
+        await commitDomainOperations(owner, { type: 'active-workout.set', workout }, baseData);
+
+        useAppStore.setState({
+          userData: { ...defaultMockUserData, activeWorkout: workout },
+          localWorkout: workout,
+          syncing: false,
+          syncHealth: 'local-pending',
+          syncPresentation: 'normal',
+          saveError: null,
+        });
+
+        let resolveRemote!: (value: { ok: true; status: 'synced' }) => void;
+        vi.mocked(DB.saveUserData).mockImplementationOnce(() => new Promise<any>(resolve => {
+          resolveRemote = value => resolve(value);
+        }));
+
+        let replayPromise!: Promise<void>;
+        await act(async () => {
+          replayPromise = useAppStore.getState().flushPendingSyncs();
+          await Promise.resolve();
+        });
+
+        expect(useAppStore.getState().syncing).toBe(true);
+        expect(useAppStore.getState().syncPresentation).toBe('quiet-workout');
+        expect(querySyncIndicator(container)).toBeNull();
+
+        await act(async () => {
+          resolveRemote({ ok: true, status: 'synced' });
+          await replayPromise;
+        });
+
+        expect(useAppStore.getState().syncing).toBe(false);
       });
     });
 

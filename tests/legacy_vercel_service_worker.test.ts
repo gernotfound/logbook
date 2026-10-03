@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GET } from '../api/legacy-service-worker';
 
 describe('legacy Vercel service-worker retirement endpoint', () => {
-  it('serves a non-cacheable worker that clears legacy caches, unregisters and returns clients to the root redirect', async () => {
+  it('retires the old worker without forcing navigation or touching user-data storage', async () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
@@ -13,9 +13,13 @@ describe('legacy Vercel service-worker retirement endpoint', () => {
 
     const body = await response.text();
     expect(body).toContain('self.skipWaiting()');
+    expect(body).toContain('self.clients.claim()');
     expect(body).toContain('caches.keys()');
+    expect(body).toContain("cacheName.startsWith('workbox-')");
     expect(body).toContain('self.registration.unregister()');
-    expect(body).toContain("client.navigate('/')");
+    expect(body).not.toContain('client.navigate(');
+    expect(body).not.toContain('indexedDB');
+    expect(body).not.toContain('localStorage');
     expect(body).not.toContain('precacheAndRoute');
     expect(body).not.toContain('__WB_MANIFEST');
   });
