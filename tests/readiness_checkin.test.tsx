@@ -20,7 +20,7 @@ function session(readiness?: WorkoutSession['readiness']): WorkoutSession {
         date: '2026-09-24',
         routineName: 'Push',
         globalStartTime: 1_700_000_000_000,
-        exercises: [{ exId: 'bench', name: 'Panca', sets: [{ id: 's1', kg: '100', reps: '8' }] }],
+        exercises: [{ id: 'se-readiness-bench', exId: 'bench', name: 'Panca', sets: [{ id: 's1', kg: '100', reps: '8' }] }],
         ...(readiness ? { readiness } : {}),
     };
 }
