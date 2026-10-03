@@ -6,7 +6,7 @@ const accessToken = process.env.GCP_ACCESS_TOKEN;
 
 if (!projectId) throw new Error('FIREBASE_PROJECT_ID is required');
 if (!accessToken) throw new Error('GCP_ACCESS_TOKEN is required');
-if (!['preflight', 'verify'].includes(mode)) throw new Error(`Unsupported mode: ${mode}`);
+if (!['preflight', 'status', 'verify'].includes(mode)) throw new Error(`Unsupported mode: ${mode}`);
 
 const rulesSource = readFileSync('firestore.rules', 'utf8');
 const indexConfig = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
@@ -87,6 +87,13 @@ const release = await requestJson(
 );
 if (!release.rulesetName) throw new Error('Live Cloud Firestore release has no rulesetName');
 
+const ruleset = await requestJson(
+  `https://firebaserules.googleapis.com/v1/${release.rulesetName}`,
+);
+const liveRulesFile = (ruleset.source?.files ?? []).find(file => file.name === 'firestore.rules')
+  ?? (ruleset.source?.files ?? [])[0];
+if (!liveRulesFile?.content) throw new Error('Live Cloud Firestore ruleset source is unavailable');
+
 const indexStatuses = [];
 for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
   const liveIndexes = await loadLiveIndexes(collectionGroup);
@@ -108,22 +115,40 @@ for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
   }
 }
 
+const rulesMatch = normalizeText(liveRulesFile.content) === normalizeText(rulesSource);
+const missingIndexes = indexStatuses.filter(status => !status.found);
+const pendingIndexes = indexStatuses.filter(status => status.found && status.state !== 'READY');
+
 if (mode === 'preflight') {
   console.log(`Firestore deploy preflight OK for project ${projectId}: authenticated Rules/Index read access confirmed.`);
+  console.log(`- rules: ${rulesMatch ? 'MATCH' : 'DIFFERS'}`);
   for (const status of indexStatuses) {
-    console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING (will be created)'}`);
+    console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING'}`);
   }
   process.exit(0);
 }
 
-const ruleset = await requestJson(
-  `https://firebaserules.googleapis.com/v1/${release.rulesetName}`,
-);
-const liveRulesFile = (ruleset.source?.files ?? []).find(file => file.name === 'firestore.rules')
-  ?? (ruleset.source?.files ?? [])[0];
-if (!liveRulesFile?.content) throw new Error('Live Cloud Firestore ruleset source is unavailable');
+if (mode === 'status') {
+  if (!rulesMatch || missingIndexes.length) {
+    if (!rulesMatch) console.log('Firestore reconciliation required: live Rules differ from firestore.rules.');
+    for (const status of missingIndexes) {
+      console.log(`Firestore reconciliation required: missing desired index ${status.collectionGroup}.`);
+    }
+    process.exit(10);
+  }
 
-if (normalizeText(liveRulesFile.content) !== normalizeText(rulesSource)) {
+  if (pendingIndexes.length) {
+    console.log(
+      `Firestore deployment already contains the desired configuration, but indexes are still converging: ${pendingIndexes.map(item => `${item.collectionGroup}/${item.state ?? 'UNKNOWN'}`).join(', ')}`,
+    );
+    process.exit(11);
+  }
+
+  console.log(`Firestore Production is already reconciled for project ${projectId}: live Rules match source and ${indexStatuses.length} desired composite indexes are READY.`);
+  process.exit(0);
+}
+
+if (!rulesMatch) {
   throw new Error('Live Cloud Firestore rules do not match firestore.rules from the deployed SHA');
 }
 
