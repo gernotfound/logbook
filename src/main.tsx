@@ -1,10 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { auth } from './lib/firebase'
 import { readLocal } from './lib/sync/localRepository'
 import { readBrowserValueStrict } from './lib/sync/browserStorage'
 import { captureSession, storageOwner } from './lib/sync/session'
-import { findPendingAccountDeletion, readAccountDeletionMarker } from './lib/sync/accountGate'
+import { readAuthenticatedOwnerHint } from './lib/sync/authOwnerHint'
 import App from './App'
 import { AuthProvider } from './contexts/AuthContext'
 import ErrorBoundary from './components/UI/ErrorBoundary'
@@ -105,27 +104,30 @@ export const initApp = async () => {
   }
 
   let marker: ReturnType<typeof getStorageMarker> = null;
-  let bootstrapOwner: string | null = isGuest ? 'guest' : null;
+  let bootstrapOwner: string | null = null;
   let cached: UserData | undefined = undefined;
   let readError: unknown = null;
 
   try {
+    bootstrapOwner = isGuest ? 'guest' : readAuthenticatedOwnerHint();
+  } catch (error) {
+    console.warn('Bootstrap bloccato: owner autenticato locale non leggibile.', error);
+    renderStorageUnavailable(rootElement);
+    return;
+  }
+
+  try {
     const catalog = await getCachedCatalog();
     try {
-      if (!isGuest && typeof auth.authStateReady === 'function') await auth.authStateReady();
-      // A pending deletion marker can outlive Firebase Auth. Reuse it only when there is
-      // no authenticated user, or when it belongs to the currently authenticated UID.
-      // A stale marker from account A must never select A's envelope while account B is active.
-      const currentUid = isGuest ? null : auth.currentUser?.uid ?? null;
-      const pendingDeletion = isGuest
-        ? null
-        : currentUid
-          ? readAccountDeletionMarker('user:' + currentUid)
-          : findPendingAccountDeletion();
-      bootstrapOwner = isGuest ? 'guest' : (pendingDeletion?.owner ?? storageOwner());
-      marker = getStorageMarker(undefined, bootstrapOwner);
-      cached = (await readLocal(bootstrapOwner))?.data;
-      useAppStore.setState({ localWorkout: getInitialLocalWorkout() });
+      if (bootstrapOwner) {
+        marker = getStorageMarker(undefined, bootstrapOwner);
+        cached = (await readLocal(bootstrapOwner))?.data;
+        useAppStore.setState({
+          localWorkout: getInitialLocalWorkout(bootstrapOwner, cached?.activeWorkout ?? null),
+        });
+      } else {
+        useAppStore.setState({ localWorkout: null });
+      }
     } catch (err) {
       readError = err;
       console.warn("Errore recupero cache da IndexedDB:", err);
@@ -137,6 +139,11 @@ export const initApp = async () => {
       marker,
       isGuest,
     });
+
+    if (status === 'read_error') {
+      renderStorageUnavailable(rootElement);
+      return;
+    }
 
     if (status === 'valid' && cached) {
       cached = {
