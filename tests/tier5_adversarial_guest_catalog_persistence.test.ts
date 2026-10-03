@@ -155,6 +155,7 @@ describe('Tier 5: Adversarial Coverage Hardening Suite', () => {
                     routineName: `Routine ${i % 50}`,
                     exercises: [
                         {
+                            id: `se_${i}_1`,
                             exId: `stress_custom_ex_${i % 100}`,
                             sessionNote: 'Good session',
                             sets: [{ id: `s_${i}_1`, kg: '80', reps: '10', done: true }]
