@@ -280,8 +280,12 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             const workout = { ...operation.workout, id: requireId(operation.workout.id, 'Allenamento') };
             assertWorkoutSessionIdentities(workout, 'Allenamento completato');
             requireDate(workout.date ?? (workout.globalStartTime ? getLocalDateString(workout.globalStartTime) : ''));
+            const expectedActiveId = requireId(operation.expectedActiveWorkoutId, 'Sessione attesa');
+            if (expectedActiveId !== workout.id) throw new Error('Allenamento completato non corrisponde alla sessione attesa');
             const activeId = data.activeWorkout ? requireId(data.activeWorkout.id, 'Allenamento attivo corrente') : null;
-            if (activeId !== workout.id) throw new Error('Allenamento completato non corrisponde alla sessione attiva');
+            if (activeId !== null && activeId !== expectedActiveId) {
+                throw new Error('Allenamento completato non corrisponde alla sessione attiva');
+            }
             const current = data.history ?? [];
             assertUnique(current, item => requireId(item.id, 'Allenamento'), 'Storico allenamenti');
             data.history = [workout, ...current.filter(item => item.id !== workout.id)];
