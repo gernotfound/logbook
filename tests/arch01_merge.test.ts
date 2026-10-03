@@ -270,7 +270,7 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
                 const finalState = useAppStore.getState().userData;
                 expect(finalState?.profile?.name).toBe('Valid Local');
                 expect(consoleSpy).toHaveBeenCalledWith(
-                    "Zod parse failed during hydration merge, preserving local valid state:",
+                    "Hydration cloud non valida; stato locale preservato:",
                     expect.any(Error)
                 );
             } finally {
