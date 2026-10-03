@@ -2,7 +2,6 @@ import type { StateCreator } from 'zustand';
 import { DomainParsers } from '../../lib/schema';
 import type { WorkoutSession, SyncResult } from '../../types';
 import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
-import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import type { AppState } from '../useAppStore';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
 
