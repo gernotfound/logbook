@@ -10,6 +10,10 @@ const dbState = vi.hoisted(() => ({
     loadCloudPayload: vi.fn(),
 }));
 
+const storeState = vi.hoisted(() => ({
+    current: { userData: { profile: { height: '170' } } as UserData | null, localWorkout: null as any, localPersistenceBlocked: false },
+}));
+
 vi.mock('../src/lib/firebase', () => ({
     auth: authState,
 }));
@@ -22,7 +26,13 @@ vi.mock('../src/lib/db', () => ({
 
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: {
-        getState: () => ({ userData: { profile: { height: '170' } } }),
+        getState: () => storeState.current,
+        setState: (patch: any) => {
+            storeState.current = {
+                ...storeState.current,
+                ...(typeof patch === 'function' ? patch(storeState.current) : patch),
+            };
+        },
     },
 }));
 
@@ -61,6 +71,11 @@ describe('authenticated hydration session fencing', () => {
     beforeEach(() => {
         localStorage.clear();
         authState.currentUser = { uid: 'user-a' };
+        storeState.current = {
+            userData: { profile: { height: '170' } } as UserData,
+            localWorkout: null,
+            localPersistenceBlocked: false,
+        };
         dbState.loadCloudPayload.mockReset();
     });
 
