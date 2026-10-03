@@ -9,7 +9,7 @@ import { del } from 'idb-keyval';
 import { withTimeout, setLastSavedStateStr } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
-import { purgeAllLocalUserData, deleteAccount } from './db/db_account';
+import { purgeAllLocalUserData, deleteAccount, type AccountDeletionContext } from './db/db_account';
 import { storageOwner } from './sync/session';
 import { classifySyncFailure } from './sync/syncFailure';
 import { replicateJournal } from './sync/replicateJournal';
@@ -189,7 +189,11 @@ export const DB = {
         if (uid) removeDeletionRecoveryCredential(uid);
         this.resetCache();
     },
-    async deleteAccount() {
-        return deleteAccount(this);
+    async deleteAccount(lifecycle: Pick<AccountDeletionContext, 'cancelPendingSyncs' | 'resetStore'>) {
+        return deleteAccount({
+            purgeAllLocalUserData: owner => this.purgeAllLocalUserData(owner),
+            resetCache: () => this.resetCache(),
+            ...lifecycle,
+        });
     }
 };
