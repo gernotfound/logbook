@@ -15,6 +15,18 @@ import { classifySyncFailure } from './sync/syncFailure';
 import { replicateJournal } from './sync/replicateJournal';
 import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
 import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
+import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
+
+function parsePersistedActiveWorkout(value: unknown) {
+    const parsed = DomainParsers.parseActiveWorkout(value);
+    if (!parsed) return null;
+    try {
+        assertWorkoutSessionIdentities(parsed, 'Allenamento attivo cloud');
+        return parsed;
+    } catch {
+        return null;
+    }
+}
 
 export const DB = {
     resetCache() {
@@ -91,7 +103,7 @@ export const DB = {
                 state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
                 state.supplements = DomainParsers.parseSupplements(state.supplements);
                 state.activePains = DomainParsers.parseActivePains(state.activePains);
-                if (state.activeWorkout) state.activeWorkout = DomainParsers.parseActiveWorkout(state.activeWorkout);
+                if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
                 if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
                 if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
@@ -153,7 +165,7 @@ export const DB = {
             state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
             state.supplements = DomainParsers.parseSupplements(state.supplements);
             state.activePains = DomainParsers.parseActivePains(state.activePains);
-            if (state.activeWorkout) state.activeWorkout = DomainParsers.parseActiveWorkout(state.activeWorkout);
+            if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
             if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
             if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
 
