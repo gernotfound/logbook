@@ -1,13 +1,26 @@
 import { getLocalDateString } from '../../utils/date';
+import type { WorkoutSession } from '../../../types';
+import { requireBusinessId } from '../../businessIdentity';
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function requireId(value: unknown, label: string): string {
-    const id = String(value ?? '').trim();
-    if (!id || id === 'undefined' || id === 'null' || id.includes('/')) {
-        throw new Error(`${label}: identificativo non valido`);
+    return requireBusinessId(value, label);
+}
+
+export function assertWorkoutSessionIdentities(workout: WorkoutSession, label = 'Allenamento'): void {
+    requireId(workout.id, label);
+    const exercises = workout.exercises ?? [];
+    assertUnique(exercises, exercise => requireId(exercise.id, `${label} esercizio`), `${label} esercizi`);
+    for (const exercise of exercises) {
+        requireId(exercise.exId, `${label} esercizio catalogo`);
+        const sets = exercise.sets ?? [];
+        assertUnique(sets, set => requireId(set.id, `${label} set`), `${label} set`);
+        for (const set of sets) {
+            const segments = set.segments ?? [];
+            assertUnique(segments, segment => requireId(segment.id, `${label} segmento`), `${label} segmenti`);
+        }
     }
-    return id;
 }
 
 export function requireDate(date: string): string {
