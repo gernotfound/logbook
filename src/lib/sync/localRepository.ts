@@ -286,10 +286,25 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
 
 export async function revertRejectedConsent(owner: string, expected: UserData['legalConsent'], previous: UserData['legalConsent']): Promise<void> {
     owner = normalizeStorageOwner(owner);
-    const revert = (data: UserData): UserData => equal(data.legalConsent, expected) ? parse({ ...data, legalConsent: previous }) : data;
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
-        if (!current) return raw!;
-        return { ...current, data: revert(current.data) };
+        if (!current || !equal(current.data.legalConsent, expected)) return raw!;
+
+        const legalConsentOps = current.pending.filter(op =>
+            op.docPath === ''
+            && op.path[0] === 'legalConsent'
+            && op.actorId === current.actorId
+        );
+        const rejectedSeq = legalConsentOps.reduce((max, op) => Math.max(max, op.seq), -1);
+        const pending = rejectedSeq < 0
+            ? current.pending
+            : current.pending.filter(op => !(
+                op.docPath === ''
+                && op.path[0] === 'legalConsent'
+                && op.actorId === current.actorId
+                && op.seq === rejectedSeq
+            ));
+        const data = parse({ ...current.data, legalConsent: previous });
+        return { ...current, data, pending };
     });
 }
