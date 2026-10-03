@@ -190,6 +190,41 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
         });
         expect(screen.getByText(/Salvataggio in corso/i)).toBeDefined();
       });
+
+      test('T1.10c_R2: sync presentation is derived from the domain operation, not from the screen', async () => {
+        await renderSettledApp();
+        const workout = {
+          id: 'workout-sync-presentation',
+          routineName: 'Test',
+          exercises: [],
+        };
+
+        let quietPromise: Promise<unknown> | undefined;
+        act(() => {
+          quietPromise = useAppStore.getState().dispatchDomainOperation({
+            type: 'active-workout.set',
+            workout,
+          });
+        });
+        void quietPromise?.catch(() => {});
+        expect(useAppStore.getState().syncPresentation).toBe('quiet-workout');
+
+        act(() => {
+          clearSyncTimers();
+          useAppStore.setState({ syncing: false, syncPresentation: 'normal' });
+        });
+
+        let finalPromise: Promise<unknown> | undefined;
+        act(() => {
+          finalPromise = useAppStore.getState().dispatchDomainOperation({
+            type: 'workout.complete',
+            workout,
+            activePains: [],
+          });
+        });
+        void finalPromise?.catch(() => {});
+        expect(useAppStore.getState().syncPresentation).toBe('normal');
+      });
     });
 
     // --- Feature R3: Gestione Errori (Toast Auto-scomparente) ---
