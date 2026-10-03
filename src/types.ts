@@ -489,4 +489,4 @@ export type AppTab = 'home' | 'training' | 'nutrition' | 'data';
 export type MainTab = AppTab;
 export type TrainingSubTab = 'session' | 'planning' | 'routines' | 'exercises' | 'history';
 export type NutritionSubTab = 'meals' | 'planning' | 'archive' | 'history' | 'supplements';
-export type DataSubTab = 'measurements' | 'sleep' | 'activity' | 'context' | 'biometry' | 'history';
+export type DataSubTab = 'measurements' | 'sleep' | 'activity' | 'biometry' | 'history';
