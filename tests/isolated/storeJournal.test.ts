@@ -112,6 +112,7 @@ describe('store with real IndexedDB commits', () => {
         const completing = store.getState().dispatchDomainOperation({
             type: 'workout.complete',
             workout,
+            expectedActiveWorkoutId: String(workout.id),
             activePains: [],
         });
         await store.getState().flushPendingSyncs();
