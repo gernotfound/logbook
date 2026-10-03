@@ -14,12 +14,13 @@ export async function loadNutritionMonths(user: any, targetMonths: string[], sta
         6000,
         "Timeout recupero nutrizione"
     );
-    nutritionDocs.forEach(d => {
+    nutritionDocs.forEach((d, index) => {
+        const month = targetMonths[index];
         if (d && typeof d.exists === 'function' && d.exists()) {
-            const normalized = normalizeCloudDocument(d.data(), `Nutrition ${d.id} data schema`);
-            const monthData = sanitizeNutritionMonthDocument(d.id, normalized.business);
+            const normalized = normalizeCloudDocument(d.data(), `Nutrition ${month} data schema`);
+            const monthData = sanitizeNutritionMonthDocument(month, normalized.business);
             if (normalized.sync !== undefined && cloudDocuments) {
-                cloudDocuments.set('nutrition_months/' + d.id, { ...monthData, _sync: normalized.sync });
+                cloudDocuments.set('nutrition_months/' + month, { ...monthData, _sync: normalized.sync });
             }
             Object.entries(monthData).forEach(([date, day]) => {
                 (state.nutrition as any)[date] = day;
