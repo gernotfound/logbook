@@ -7,7 +7,7 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { readLocal } from '../../lib/sync/localRepository';
+import { readLocal, hydrateLocal } from '../../lib/sync/localRepository';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 
@@ -42,67 +42,26 @@ export async function loadAuthenticatedData({
 
     if (!isCurrent()) return;
 
-    let currentData = useAppStore.getState().userData;
-    if (!currentData) setSyncing(true);
+    if (!useAppStore.getState().userData) setSyncing(true);
 
     try {
-        // The authenticated owner is now known locally. Fence any pre-auth snapshot
-        // and install this owner's durable envelope before touching the network.
+        // Once Firebase identifies the authenticated owner, fence any pre-auth snapshot
+        // and install exactly that owner's durable envelope before doing network work.
         const localEnvelope = await readLocal(expectedOwner);
         if (!isCurrent()) return;
+
         if (localEnvelope) {
             const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null);
-            useAppStore.setState({ userData: localEnvelope.data, localWorkout, localPersistenceBlocked: false });
+            useAppStore.setState({
+                userData: localEnvelope.data,
+                localWorkout,
+                localPersistenceBlocked: false,
+            });
             markTabSnapshotClean(session, localEnvelope.data);
-            currentData = localEnvelope.data;
-        } else if (currentData) {
+        } else if (useAppStore.getState().userData) {
+            // The pre-auth snapshot came from another/obsolete owner hint. Never let it
+            // become the base for this account.
             useAppStore.setState({ userData: null, localWorkout: null });
-            currentData = null;
-        }
-
-        try {
-        const payload = await DB.loadCloudPayload();
-        if (!isCurrent()) return;
-
-        if (payload) {
-            const cloudData = payload.data;
-            try {
-                const { hydrateLocal } = await import('../../lib/sync/localRepository');
-                if (!isCurrent()) return;
-                const hydratedEnv = await hydrateLocal(
-                    user.uid,
-                    cloudData,
-                    payload.completeMonths,
-                    payload.cloudDocuments,
-                    'window',
-                    isCurrent
-                );
-                if (!isCurrent()) return;
-                setUserData(hydratedEnv.data);
-            } catch (mergeError) {
-                if (!isCurrent()) return;
-                if ((mergeError as { code?: unknown })?.code === 'invalid-cloud-sync-metadata') {
-                    setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
-                    console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
-                } else {
-                    console.error('Zod parse failed during hydration merge, preserving local valid state:', mergeError);
-                }
-            }
-        }
-        } catch (error: any) {
-            if (!isCurrent()) return;
-            console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
-            if (error?.code === 'unavailable' || !navigator.onLine) {
-                setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
-            }
-            const latestData = useAppStore.getState().userData;
-            if (!latestData) {
-                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-                if (!isCurrent()) return;
-                const fallbackData = getResolvedDefaultUserData(catalog);
-                if (!isCurrent()) return;
-                setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
-            }
         }
     } catch (error) {
         if (!isCurrent()) return;
@@ -112,14 +71,62 @@ export async function loadAuthenticatedData({
             syncHealth: 'failed',
             saveError: 'Archivio locale non disponibile. Riprova prima di modificare i dati.',
         });
+        setSyncing(false);
         return;
     }
-    /*
-     * The network catch above intentionally lives inside the local-storage try.
-     * A local read failure must never fall through to default data or create a journal.
-     */
-    /*
 
-*/
-    if (isCurrent()) setSyncing(false);
+    try {
+        const payload = await DB.loadCloudPayload();
+        if (!isCurrent()) return;
+
+        if (payload) {
+            try {
+                const hydratedEnv = await hydrateLocal(
+                    user.uid,
+                    payload.data,
+                    payload.completeMonths,
+                    payload.cloudDocuments,
+                    'window',
+                    isCurrent,
+                );
+                if (!isCurrent()) return;
+                setUserData(hydratedEnv.data);
+            } catch (mergeError) {
+                if (!isCurrent()) return;
+                if ((mergeError as { code?: unknown })?.code === 'invalid-cloud-sync-metadata') {
+                    setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
+                    console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
+                } else {
+                    console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
+                }
+            }
+        }
+    } catch (error: any) {
+        if (!isCurrent()) return;
+        console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
+        if (error?.code === 'unavailable' || !navigator.onLine) {
+            setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
+        }
+
+        // Only a positively absent local envelope may initialize a fresh default dataset.
+        // A read failure returned earlier and can never reach this branch.
+        const latestData = useAppStore.getState().userData;
+        if (!latestData) {
+            const stillAbsent = await readLocal(expectedOwner);
+            if (!isCurrent()) return;
+            if (stillAbsent) {
+                const localWorkout = getInitialLocalWorkout(expectedOwner, stillAbsent.data.activeWorkout ?? null);
+                useAppStore.setState({ userData: stillAbsent.data, localWorkout });
+                markTabSnapshotClean(session, stillAbsent.data);
+                return;
+            }
+            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+            if (!isCurrent()) return;
+            const fallbackData = getResolvedDefaultUserData(catalog);
+            if (!isCurrent()) return;
+            setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
+        }
+    } finally {
+        if (isCurrent()) setSyncing(false);
+    }
 }
