@@ -4,6 +4,7 @@ import type { UserData } from '../types';
 import { getLocalDateString } from './utils/date';
 import { normalizeBusinessId } from './businessIdentity';
 import { requireCanonicalWorkoutDate } from './sync/monthlyIntegrity';
+import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
 import {
     CURRENT_BACKUP_SCHEMA,
     CURRENT_DATA_SCHEMA,
@@ -43,13 +44,7 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         for (const item of items) {
             const rawId = isRecord(item) ? item.id : undefined;
             const id = normalizeBusinessId(rawId);
-            if (!id) {
-                const supplied = (typeof rawId === 'string' && rawId.trim().length > 0)
-                    || (typeof rawId === 'number' && Number.isFinite(rawId));
-                throw new Error(supplied
-                    ? `${path}: identificativo non valido.`
-                    : `${path}: elemento senza identificativo valido.`);
-            }
+            if (!id) throw new Error(`${path}: elemento senza identificativo valido.`);
             if (ids.has(id)) throw new Error(`${path}: identificativo duplicato ${id}.`);
             ids.add(id);
         }
@@ -67,8 +62,14 @@ export function validateImportData(value: unknown): asserts value is Record<stri
             if (ids.has(id)) throw new Error(`history: identificativo duplicato ${id}.`);
             ids.add(id);
             if (!isRecord(item)) throw new Error('history: elemento non valido.');
+            assertWorkoutSessionIdentities(item as any, `history.${id}`);
             requireCanonicalWorkoutDate(item as any, `history.${id}`);
         }
+    }
+
+    if (value.activeWorkout !== undefined && value.activeWorkout !== null) {
+        if (!isRecord(value.activeWorkout)) throw new Error('activeWorkout: oggetto non valido.');
+        assertWorkoutSessionIdentities(value.activeWorkout as any, 'activeWorkout');
     }
 
     if (Array.isArray(value.routines)) for (const [index, routine] of value.routines.entries()) {
