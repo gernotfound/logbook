@@ -516,12 +516,10 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
-            const invalidResult = await DB.saveUserData({
+            await expect(DB.saveUserData({
                 ...stateWithTimestamps,
                 history: [...stateWithTimestamps.history, { id: 'h_none', date: null, globalStartTime: null, exercises: [] }]
-            });
-            expect(invalidResult.ok).toBe(false);
-            expect(String(invalidResult.error)).toMatch(/identità temporale/i);
+            })).rejects.toThrow(/identità temporale/i);
             expect(mockBatch.commit).not.toHaveBeenCalled();
         });
     });
