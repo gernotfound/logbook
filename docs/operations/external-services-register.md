@@ -44,7 +44,9 @@ Durante lo smoke offline post-cutover è emerso un caso reale su un browser desk
 
 Verifica live del provider prima della correzione: il root Vercel continuava a reindirizzare verso Firebase, ma `https://logbook-gnf.vercel.app/sw.js` rispondeva ancora HTTP 200 con il precedente Workbox Service Worker completo, incluso precache dell'app shell e navigation fallback. Un Service Worker già installato poteva quindi servire la vecchia PWA dalla cache prima che il browser raggiungesse il redirect HTTP.
 
-La correzione mantiene il 301 necessario alla migrazione Search Console e sostituisce soltanto `/sw.js` sul vecchio origin con un worker di ritiro non cacheabile: prende controllo, elimina le cache legacy, si deregistra e naviga le finestre al root, che viene poi trasferito a Firebase. Il vecchio origin **non** viene riaggiunto a Firebase Authentication, App Check, API key, reCAPTCHA o Sentry. **VERIFY-LIVE:** dopo il merge verificare che il deployment Vercel Production serva effettivamente il worker di ritiro e non il precedente Workbox bundle.
+Il primo tentativo di ritiro tramite rewrite di `/sw.js` non ha modificato la risposta live: nonostante il deployment Vercel sullo SHA corretto fosse READY, il vecchio origin continuava a servire il Workbox Service Worker generato dal build frontend. La soluzione definitiva separa quindi i due target di delivery: Firebase continua a eseguire il normale build Vite/PWA, mentre Vercel usa un build dedicato backend-only che non genera né pubblica il frontend. L'unico asset statico Vercel ammesso è `/sw.js`, generato come worker di ritiro non cacheabile; Functions, cron e redirect 301 restano invariati.
+
+Il worker di ritiro prende controllo, elimina le cache legacy, si deregistra e naviga le finestre al root, che viene poi trasferito a Firebase. Il vecchio origin **non** viene riaggiunto a Firebase Authentication, App Check, API key, reCAPTCHA o Sentry. **VERIFY-LIVE:** dopo il merge verificare che il nuovo deployment Vercel Production non esponga più il precedente Workbox bundle e che `/sw.js` contenga il worker di ritiro.
 
 Preparazione live verificata il 2026-10-01:
 
