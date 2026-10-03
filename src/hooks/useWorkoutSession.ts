@@ -264,6 +264,7 @@ export function useWorkoutSession() {
             await dispatchDomainOperation({
                 type: 'workout.complete',
                 workout: finishedWorkout,
+                expectedActiveWorkoutId: expectedId,
                 activePains: finalActivePains,
             });
             if (auth.currentUser?.uid !== expectedUid || useAppStore.getState().localWorkout?.id !== expectedId) return null;
