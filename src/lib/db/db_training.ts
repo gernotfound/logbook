@@ -1,7 +1,6 @@
 import { getDb } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import deepEqual from 'fast-deep-equal';
-import { getLocalDateString } from '../utils/date';
 import { removeUndefinedValues } from '../utils/object';
 import { checkDocSize } from '../checkDocSize';
 import { wrapInFirestoreDocument } from '../firestore-rest';
