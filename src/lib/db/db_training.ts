@@ -14,12 +14,13 @@ export async function loadHistoryMonths(user: any, targetMonths: string[], state
         6000,
         "Timeout recupero storico"
     );
-    historyDocs.forEach(d => {
+    historyDocs.forEach((d, index) => {
+        const month = targetMonths[index];
         if (d && typeof d.exists === 'function' && d.exists()) {
-            const normalized = normalizeCloudDocument(d.data(), `History ${d.id} data schema`);
-            const monthData = sanitizeHistoryMonthDocument(d.id, normalized.business);
+            const normalized = normalizeCloudDocument(d.data(), `History ${month} data schema`);
+            const monthData = sanitizeHistoryMonthDocument(month, normalized.business);
             if (normalized.sync !== undefined && cloudDocuments) {
-                cloudDocuments.set('history_months/' + d.id, { ...monthData, _sync: normalized.sync });
+                cloudDocuments.set('history_months/' + month, { ...monthData, _sync: normalized.sync });
             }
             Object.values(monthData).forEach((h: any) => {
                 state.history.push(h);
