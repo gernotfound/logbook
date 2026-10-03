@@ -242,16 +242,6 @@ export interface BodyFatProvenance {
     };
 }
 
-export type ContextEventType = 'training' | 'nutrition' | 'recovery' | 'schedule' | 'travel' | 'reentry' | 'deload' | 'other';
-
-export interface ContextEvent {
-    id: string;
-    type: ContextEventType;
-    label: string;
-    note?: string;
-    createdAt?: number;
-}
-
 export interface NutritionDay {
     date: string;
     kcal: number;
@@ -283,7 +273,6 @@ export interface NutritionDay {
     stepsSource?: ActivitySource;
     stepsCapturedAt?: number;
     cardioSessions?: CardioSession[];
-    contextEvents?: ContextEvent[];
 }
 
 export interface Food {
