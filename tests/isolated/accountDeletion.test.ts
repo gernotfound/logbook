@@ -20,9 +20,6 @@ vi.mock('../../src/lib/firebase', () => ({
     waitForPendingWrites: boundary.pending,
 }));
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
-vi.mock('../../src/store/useAppStore', () => ({
-    useAppStore: { getState: () => ({ cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset }) },
-}));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: boundary.idle }));
 
 import { deleteAccount, purgeAllLocalUserData, resumeAccountDeletion } from '../../src/lib/db/db_account';
@@ -33,7 +30,7 @@ import {
     readAccountDeletionMarker,
 } from '../../src/lib/sync/accountGate';
 
-const context = { purgeAllLocalUserData, resetCache: vi.fn() };
+const context = { purgeAllLocalUserData, resetCache: vi.fn(), cancelPendingSyncs: boundary.cancel, resetStore: boundary.reset };
 let disk: Map<string, string>;
 
 function response(status: number, body: Record<string, unknown>): Response {
