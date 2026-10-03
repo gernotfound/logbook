@@ -15,9 +15,6 @@
     },
     "api/account-deletion-device.ts": {
       "maxDuration": 30
-    },
-    "api/legacy-service-worker.ts": {
-      "maxDuration": 10
     }
   },
   "crons": [
@@ -36,12 +33,6 @@
   "fluid": true,
   "framework": null,
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
-  "rewrites": [
-    {
-      "source": "/sw.js",
-      "destination": "/api/legacy-service-worker"
-    }
-  ],
   "headers": [
     {
       "source": "/sw.js",
@@ -56,5 +47,7 @@
         }
       ]
     }
-  ]
+  ],
+  "buildCommand": "node scripts/build-vercel-backend.mjs",
+  "outputDirectory": ".vercel-static"
 }
