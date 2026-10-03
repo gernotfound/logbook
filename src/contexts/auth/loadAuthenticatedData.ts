@@ -7,6 +7,9 @@ import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/sess
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
+import { readLocal } from '../../lib/sync/localRepository';
+import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
+import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 
 type LoadAuthenticatedDataOptions = {
     user: User;
@@ -39,10 +42,25 @@ export async function loadAuthenticatedData({
 
     if (!isCurrent()) return;
 
-    const currentData = useAppStore.getState().userData;
+    let currentData = useAppStore.getState().userData;
     if (!currentData) setSyncing(true);
 
     try {
+        // The authenticated owner is now known locally. Fence any pre-auth snapshot
+        // and install this owner's durable envelope before touching the network.
+        const localEnvelope = await readLocal(expectedOwner);
+        if (!isCurrent()) return;
+        if (localEnvelope) {
+            const localWorkout = getInitialLocalWorkout(expectedOwner, localEnvelope.data.activeWorkout ?? null);
+            useAppStore.setState({ userData: localEnvelope.data, localWorkout, localPersistenceBlocked: false });
+            markTabSnapshotClean(session, localEnvelope.data);
+            currentData = localEnvelope.data;
+        } else if (currentData) {
+            useAppStore.setState({ userData: null, localWorkout: null });
+            currentData = null;
+        }
+
+        try {
         const payload = await DB.loadCloudPayload();
         if (!isCurrent()) return;
 
@@ -71,21 +89,37 @@ export async function loadAuthenticatedData({
                 }
             }
         }
-    } catch (error: any) {
+        } catch (error: any) {
+            if (!isCurrent()) return;
+            console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
+            if (error?.code === 'unavailable' || !navigator.onLine) {
+                setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
+            }
+            const latestData = useAppStore.getState().userData;
+            if (!latestData) {
+                const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
+                if (!isCurrent()) return;
+                const fallbackData = getResolvedDefaultUserData(catalog);
+                if (!isCurrent()) return;
+                setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
+            }
+        }
+    } catch (error) {
         if (!isCurrent()) return;
-        console.warn('Errore caricamento dati in AuthContext (uso dati locali/offline):', error);
-        if (error?.code === 'unavailable' || !navigator.onLine) {
-            setSaveError('📶 Offline: visualizzando dati locali. I dati verranno sincronizzati al ripristino della connessione.');
-        }
-        const latestData = useAppStore.getState().userData;
-        if (!latestData) {
-            const catalog = isCatalogInMemory() ? getInMemoryCatalog() : (await getCachedCatalog());
-            if (!isCurrent()) return;
-            const fallbackData = getResolvedDefaultUserData(catalog);
-            if (!isCurrent()) return;
-            setUserData(UserDataSchema.parse(fallbackData) as unknown as UserData);
-        }
-    } finally {
-        if (isCurrent()) setSyncing(false);
+        console.error('Archivio locale autenticato non leggibile; bootstrap bloccato:', error);
+        useAppStore.setState({
+            localPersistenceBlocked: true,
+            syncHealth: 'failed',
+            saveError: 'Archivio locale non disponibile. Riprova prima di modificare i dati.',
+        });
+        return;
     }
+    /*
+     * The network catch above intentionally lives inside the local-storage try.
+     * A local read failure must never fall through to default data or create a journal.
+     */
+    /*
+
+*/
+    if (isCurrent()) setSyncing(false);
 }
