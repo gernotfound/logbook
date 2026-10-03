@@ -160,7 +160,7 @@ export const initApp = async () => {
       const initialData = getInitialUserData();
       if (initialData) {
         if (!useAppStore.getState().userData) {
-          useAppStore.setState({ userData: initialData });
+          useAppStore.setState({ userData: initialData, dataOwner: bootstrapOwner });
         }
         const session = captureSession();
         if (bootstrapOwner === session.owner) markTabSnapshotClean(session, initialData);
