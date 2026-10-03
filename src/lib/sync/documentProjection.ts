@@ -4,7 +4,6 @@ import type { UserData, CachedGlobalCatalog } from '../../types';
 import { extractCustomExercisesAndOverrides, extractCustomFoodsAndOverrides, resolveEffectiveExercises, resolveEffectiveFoods } from '../catalog/deltaResolver';
 import { getLocalDateString } from '../utils/date';
 import { requireCanonicalWorkoutDate, sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './monthlyIntegrity';
-import { assertWorkoutSessionIdentities } from './domainOperations/validation';
 import { removeUndefinedValues } from '../utils/object';
 
 export type DocumentData = Record<string, unknown>;
@@ -18,8 +17,6 @@ export function rootDocument(data: UserData): DocumentData {
 
 export function projectDocuments(input: UserData, catalog: CachedGlobalCatalog): Map<string, DocumentData> {
     const data = UserDataSchema.parse(input) as unknown as UserData;
-    if (data.activeWorkout) assertWorkoutSessionIdentities(data.activeWorkout, 'Allenamento attivo');
-    for (const workout of data.history ?? []) assertWorkoutSessionIdentities(workout, 'Storico allenamenti');
     const exercises = extractCustomExercisesAndOverrides(data.library, catalog.exercises);
     const foods = extractCustomFoodsAndOverrides(data.customFoods, catalog.foods);
     // Recompute visible catalog overrides: a restored default must not inherit a stale override.
