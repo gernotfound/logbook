@@ -129,10 +129,44 @@ describe('Schema Evolution registry', () => {
         };
         const normalized = normalizeCloudDocument(raw);
         expect(normalized.sync).toEqual({
-            ...raw._sync,
             protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: raw._sync.clock,
+            fields: {
+                'profile/name': {
+                    actorId: 'A',
+                    seq: 2,
+                    clock: { A: 2 },
+                    legacyClock: { A: 2, B: 1 },
+                },
+            },
         });
         expect(raw._sync.protocolVersion).toBe(1);
+    });
+
+    it('separates a polluted protocol-1 tombstone frontier from its immutable event dot', () => {
+        const normalized = normalizeCloudDocument({
+            _sync: {
+                protocolVersion: 1,
+                clock: { C: 1, B: 1 },
+                fields: {
+                    profile: { actorId: 'C', seq: 1, clock: { C: 1, B: 1 }, deleted: true },
+                },
+            },
+        });
+        expect(normalized.sync).toEqual({
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { C: 1, B: 1 },
+            fields: {
+                profile: {
+                    actorId: 'C',
+                    seq: 1,
+                    clock: { C: 1 },
+                    legacyClock: { C: 1, B: 1 },
+                    deleted: true,
+                    deleteClock: { C: 1 },
+                },
+            },
+        });
     });
 
     it('migrates protocol-1 local and raw backup recovery metadata without bumping their containers', () => {
