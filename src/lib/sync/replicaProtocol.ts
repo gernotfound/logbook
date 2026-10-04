@@ -1,6 +1,5 @@
 import {
     doc,
-    getDocFromServer,
     runTransaction,
     type Firestore,
 } from 'firebase/firestore';
@@ -30,7 +29,7 @@ export interface ReplicaIdentity {
     checkpointAtMs: number;
 }
 
-export interface ReplicaControlEntry extends ReplicaIdentity {
+export interface ReplicaControlEntry extends Omit<ReplicaIdentity, 'slot'> {
     status: 'active' | 'retired';
     lastSeq: number;
     checkpointClock: VectorClock;
@@ -106,8 +105,9 @@ function parseReplicaEntry(slot: string, raw: unknown): ReplicaControlEntry {
     const identity = parseReplicaIdentity({ ...raw, slot });
     if (!identity) throw new Error('Replica control entry non valida');
     if (raw.status !== 'active' && raw.status !== 'retired') throw new Error('Stato replica non valido');
+    const { slot: _slot, ...storedIdentity } = identity;
     return {
-        ...identity,
+        ...storedIdentity,
         status: raw.status,
         lastSeq: parseSafeInteger(raw.lastSeq, 'Replica lastSeq'),
         checkpointClock: parseVectorClock(raw.checkpointClock, 'replica checkpoint clock'),
@@ -190,23 +190,23 @@ export function advanceReplicaControl(control: ReplicaControl, identity: Replica
 export async function retireExpiredReplicas(db: Firestore, uid: string, now = Date.now()): Promise<void> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     const ref = doc(db, `users/${uid}/sync_control/state`);
-    let initial: ReplicaControl;
-    const snapshot = await getDocFromServer(ref);
-    if (!snapshot.exists()) return;
-    initial = parseReplicaControl(snapshot.data());
 
-    const locallyExpired = Object.entries(initial.replicas)
-        .filter(([, entry]) => entry.status === 'active' && entry.leaseUntilMs + REPLICA_CLOCK_SKEW_MARGIN_MS < now)
-        .map(([slot]) => slot);
-
-    for (const slot of locallyExpired) {
+    // Retire at most one slot per transaction because Security Rules deliberately
+    // constrain every control mutation to one replica entry. Repeat until no locally
+    // expired entry remains. Server request.time is still the authoritative proof.
+    for (let attempt = 0; attempt < REPLICA_SLOT_COUNT; attempt += 1) {
+        let retired = false;
         try {
             await runTransaction(db, async transaction => {
-                const currentSnapshot = await transaction.get(ref);
-                if (!currentSnapshot.exists()) return;
-                const current = parseReplicaControl(currentSnapshot.data());
-                const entry = current.replicas[slot];
-                if (!entry || entry.status !== 'active' || entry.leaseUntilMs + REPLICA_CLOCK_SKEW_MARGIN_MS >= Date.now()) return;
+                const snapshot = await transaction.get(ref);
+                if (!snapshot.exists()) return;
+                const current = parseReplicaControl(snapshot.data());
+                const candidate = Object.entries(current.replicas).find(([, entry]) =>
+                    entry.status === 'active' && entry.leaseUntilMs + REPLICA_CLOCK_SKEW_MARGIN_MS < now
+                );
+                if (!candidate) return;
+
+                const [slot, entry] = candidate;
                 transaction.set(ref, {
                     protocolVersion: 3,
                     replicas: {
@@ -215,13 +215,15 @@ export async function retireExpiredReplicas(db: Firestore, uid: string, now = Da
                     },
                     mutation: { slot, action: 'retire' },
                 });
+                retired = true;
             });
         } catch (error) {
-            // The server-side Rules use request.time as the authoritative expiry proof.
-            // A client clock ahead of the server is therefore rejected and leaves the
-            // replica active, conservatively blocking GC until a later checkpoint.
+            // A client clock ahead of server time can only delay retirement. Rules reject
+            // the mutation and the still-active replica continues to block stable-frontier GC.
             if ((error as { code?: unknown })?.code !== 'permission-denied') throw error;
+            return;
         }
+        if (!retired) return;
     }
 }
 
@@ -284,7 +286,10 @@ export async function claimReplicaCheckpoint(
         const leaseUntilMs = now + REPLICA_LEASE_MS;
         const identity: ReplicaIdentity = { slot, replicaId: replicaId!, generation: generation!, leaseUntilMs, checkpointAtMs };
         const entry: ReplicaControlEntry = {
-            ...identity,
+            replicaId: identity.replicaId,
+            generation: identity.generation,
+            leaseUntilMs: identity.leaseUntilMs,
+            checkpointAtMs: identity.checkpointAtMs,
             status: 'active',
             lastSeq: baseSeq,
             checkpointClock: normalizedCheckpoint,

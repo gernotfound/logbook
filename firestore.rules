@@ -110,13 +110,17 @@ service cloud.firestore {
     }
 
     function isAuthorizedSyncWrite(userId, docData) {
-      return '_sync' in docData
-        && (
-          (
-            !syncControlExists(userId)
-            && (docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2)
+      return (
+          !syncControlExists(userId)
+          && (
+            !('_sync' in docData)
+            || docData._sync.protocolVersion == 1
+            || docData._sync.protocolVersion == 2
           )
-          || hasProtocol3Writer(userId, docData)
+        )
+        || (
+          '_sync' in docData
+          && hasProtocol3Writer(userId, docData)
         );
     }
 
