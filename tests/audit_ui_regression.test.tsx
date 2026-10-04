@@ -1,4 +1,5 @@
 import { deviceKey } from '../src/lib/sync/deviceStorage';
+import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
@@ -69,7 +70,7 @@ describe('audit interaction regressions', () => {
 
     it('does not confirm completion when synchronous storage removal fails', () => {
         vi.spyOn(localStorage, 'removeItem').mockImplementationOnce(() => { throw new Error('Storage unavailable'); });
-        expect(() => useAppStore.getState().setLocalWorkout(null)).toThrow('Storage unavailable');
+        expect(() => useAppStore.getState().setLocalWorkout(null)).toThrow(BrowserStorageError);
         expect(useAppStore.getState().localWorkout?.id).toBe(workout.id);
     });
 
