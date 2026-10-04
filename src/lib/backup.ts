@@ -157,10 +157,12 @@ export function createBackup(userData: UserData, owner: string | null, coverage:
 }
 
 export function decodeImport(payload: unknown, owner: string) {
-    if (!isRecord(payload) || payload.format !== 'logbook-backup') {
+    if (!isRecord(payload)) {
         throw new Error('Formato file non valido o non supportato.');
     }
 
+    // The version discriminator is authoritative before current-container fields.
+    // Future backup schemas may change format/type while remaining valid containers.
     const normalized = normalizeBackupRecord(payload);
     if (normalized.format !== 'logbook-backup') throw new Error('Formato file non valido o non supportato.');
     if (normalized.type !== 'backup' && normalized.type !== 'share') throw new Error('Tipo file non valido o non supportato.');
