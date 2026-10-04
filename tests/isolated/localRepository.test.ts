@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { hydrateLocal, commitLocal, initializeLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -140,6 +140,62 @@ describe('durable owner-scoped journal', () => {
         expect(hydrated.data.nutrition?.['2025-01-01']).toBeUndefined();
         expect(hydrated.data.nutrition?.['2026-09-01']?.weight).toBe(81);
         expect(hydrated.completeMonths).toEqual(['2026-09']);
+    });
+
+    it('does not let a delayed older acknowledgement roll back a newer durable acknowledgement', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const first = data(171);
+        await commitLocal('a', first, base);
+        const actor = (await readLocal('a'))!.actorId;
+        const meta1 = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [actor]: 1 },
+            fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
+        };
+        await acknowledgeThrough('a', 1, first, base, [], { '': meta1 });
+
+        const second = data(172);
+        await commitLocal('a', second, first);
+        const meta2 = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [actor]: 2 },
+            fields: { 'profile/height': { actorId: actor, seq: 2, clock: { [actor]: 2 } } },
+        };
+        await acknowledgeThrough('a', 2, second, first, [], { '': meta2 });
+        await acknowledgeThrough('a', 1, first, base, [], { '': meta1 });
+
+        const stored = await readLocal('a');
+        expect(stored?.data.profile.height).toBe('172');
+        expect(stored?.baseline.profile.height).toBe('172');
+        expect(stored?.syncMetaByDocument[''].clock[actor]).toBe(2);
+    });
+
+    it('does not let an older hydration snapshot replace a causally newer durable state', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const newer = data(172);
+        await commitLocal('a', newer, base);
+        const actor = (await readLocal('a'))!.actorId;
+        const meta2 = {
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+            clock: { [actor]: 1 },
+            fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
+        };
+        await acknowledgeThrough('a', 1, newer, base, [], { '': meta2 });
+
+        const stale = data(170);
+        const staleDocuments = new Map<string, any>([
+            ['', { profile: stale.profile, _sync: {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: {},
+                fields: {},
+            } }],
+        ]);
+        const hydrated = await hydrateLocal('a', stale, [], staleDocuments, 'window');
+
+        expect(hydrated.data.profile.height).toBe('172');
+        expect((await readLocal('a'))?.data.profile.height).toBe('172');
     });
 
     it('emits parent tombstones when a workout or nutrition day is deleted', async () => {

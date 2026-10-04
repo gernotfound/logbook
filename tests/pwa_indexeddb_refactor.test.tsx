@@ -350,7 +350,7 @@ describe('PWA IndexedDB Cache & Sync Lock Refactor Suite', () => {
         exercises: []
       };
 
-      useAppStore.setState({ localWorkout: mockWorkout });
+      useAppStore.setState({ localWorkout: mockWorkout, dataOwner: 'user:test-user-id' });
 
       // Simulate visibility change to hidden
       Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });

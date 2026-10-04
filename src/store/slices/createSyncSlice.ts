@@ -255,7 +255,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation, saveError: null, syncGeneration: generation });
 
             // The business state and compiled SemanticOperation batch are committed by one IndexedDB update.
-            const cache = commitDomainOperations(session.owner, operation, userData)
+            const cache = commitDomainOperations(session.owner, operation, userData, () => isCurrentSession(session))
                 .then<CacheResult>(() => ({ ok: true }))
                 .catch<CacheResult>(error => ({ ok: false, error }));
             return enqueue(session, generation, cache);
