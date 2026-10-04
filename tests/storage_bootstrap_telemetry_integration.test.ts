@@ -32,6 +32,8 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
       syncing: false,
       syncHealth: 'synced',
       localPersistenceBlocked: false,
+      compatibilityStatus: 'ok',
+      compatibilityError: null,
     });
     vi.clearAllMocks();
     vi.useRealTimers();
@@ -105,6 +107,22 @@ describe('Storage Bootstrap & Telemetry Integration Flow', () => {
     expect(useAppStore.getState().localPersistenceBlocked).toBe(true);
     expect(useAppStore.getState().syncHealth).toBe('failed');
     expect(useAppStore.getState().saveError).toContain('Archivio del dispositivo non disponibile');
+  });
+
+  it('Flow 2b: Future local envelope reaches the update-required barrier instead of storage-unavailable', async () => {
+    vi.spyOn(idbKeyval, 'get').mockResolvedValue({
+      version: CURRENT_LOCAL_ENVELOPE + 1,
+      ownerV2: 'user:test-user-id',
+    } as any);
+
+    await initApp();
+
+    expect(window.__INITIAL_USER_DATA__).toBeNull();
+    expect(useAppStore.getState().compatibilityStatus).toBe('update-required');
+    expect(useAppStore.getState().compatibilityError).toContain('aggiorna TheLogBook');
+    expect(useAppStore.getState().localPersistenceBlocked).toBe(false);
+    expect(useAppStore.getState().saveError).toBeNull();
+    expect(createRoot).toHaveBeenCalledTimes(1);
   });
 
   it('Flow 3: Invalid cache does NOT update marker and does NOT dispatch anomaly', async () => {
