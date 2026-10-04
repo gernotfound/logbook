@@ -16,28 +16,28 @@ npm run verify:m4
 
 ## What is collected
 
-A deleted ancestor field is a hierarchical causal barrier. Under Sync Protocol 2, a descendant `FieldStamp` may be removed only when the ancestor's persisted delete barrier (`deleteClock`, or the legacy tombstone event clock during migration) componentwise covers the descendant stamp and every hidden candidate clock.
+A deleted ancestor field is a hierarchical causal barrier. Under Sync Protocol 3, a descendant `FieldStamp` may be removed only when the ancestor's persisted delete barrier (`deleteClock`, or the legacy tombstone event clock during migration) componentwise covers the descendant stamp and every hidden candidate clock.
 
 `FieldStamp.clock` is the immutable event clock of the winner. A blocked contender advances only the cumulative document frontier `SyncMeta.clock`; it must not mutate the ancestor winner clock and thereby manufacture a false proof of subtree subsumption. Recreation can change the visible winner while the remove-wins delete barrier remains available for future arbitration.
 
 Compaction is deterministic and idempotent. Zero-valued vector entries are canonicalized away because missing and zero coordinates are equivalent in vector comparisons.
 
-## What is deliberately NOT collected
+## Terminal GC under Protocol 3
 
-M4 does **not** delete terminal tombstones merely because they are old. It also does not retire positive actor coordinates from the document frontier.
+M4's age-based prohibitions remain unchanged: terminal tombstones are never collected because they are old. Protocol 3 can retire them only when the stable frontier — the componentwise minimum of every active replica checkpoint — covers the winner, delete barrier, legacy context and hidden candidates.
 
-The current protocol has no replica-membership registry, stable frontier, or actor-retirement/fencing mechanism. A device can therefore return after an arbitrarily long offline interval with an old operation. Removing the final tombstone or forgetting a live actor coordinate on an age/TTL heuristic could resurrect deleted data or change conflict resolution.
+Replica membership is bounded to 16 slots. Expired/retired generations are fenced; slot reuse increments generation and continues the slot sequence. This is what makes removal of a stable terminal barrier safe against a stale device returning later.
 
-Terminal tombstone retirement requires a future protocol that can prove every potentially stale replica is either causally past the deletion or fenced and forced to rebase. Until then, retaining the terminal barrier is the safe behavior.
-
+After the per-account Protocol 3 cutover, a client never turns terminal GC into a physical Firestore delete. If the last field disappears, the writer persists an empty `_schemaVersion` + `_sync.writer` shell so the transition remains attributable to the active replica generation.
 ## Required properties
 
 The M4 suite checks:
 
-- terminal tombstones remain;
+- terminal tombstones remain without a stable frontier and are retired only when the stable frontier covers their complete causal state;
 - descendants are removed only when the ancestor delete barrier covers the visible stamp and all hidden candidates;
 - concurrent/unobserved descendants remain;
-- positive document-frontier actor coordinates remain;
+- bounded replica coordinates remain monotone; retired generations cannot publish stale journals;
 - compaction is idempotent and deterministic;
 - stale, concurrent, delete, recreation and out-of-order future deliveries produce the same business state and compacted causal state from original vs already-compacted metadata;
-- the Firestore write boundary persists compacted `_sync` and returns the same compacted metadata to local acknowledgement.
+- the Firestore write boundary persists compacted `_sync`, returns the same causal state to acknowledgement, and keeps a fenced empty shell instead of issuing a post-cutover physical delete;
+- Firestore Rules fence stale replica generations and legacy Protocol 1/2 writers after the per-account cutover.
