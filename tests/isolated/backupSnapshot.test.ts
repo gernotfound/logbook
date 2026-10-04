@@ -31,17 +31,21 @@ it('collects every page of historical documents beyond the 3-month view and reta
     const base = parse({ profile: { height: '170', gender: 'M' } });
     await initializeLocal('user:a', base);
     const months = Array.from({ length: 105 }, (_, index) => (2017 + Math.floor(index / 12)) + '-' + String(index % 12 + 1).padStart(2, '0'));
+    let mutated = false;
     sdk.page.mockImplementation(async ({ path, after, count }) => {
         if (path.endsWith('nutrition_months')) return { size: 0, docs: [] };
         const ids = months.filter(id => !after || id > after).slice(0, count);
-        if (after) await commitLocal('user:a', parse({ profile: { height: '175', gender: 'M' } }), base);
+        if (after && !mutated) {
+            mutated = true;
+            await commitLocal('user:a', parse({ profile: { height: '175', gender: 'M' } }), base);
+        }
         return { size: ids.length, docs: ids.map(id => ({ id, data: () => ({ ['h' + id]: { id: 'h' + id, date: id + '-01' } }) })) };
     });
     const backup = await collectBackupSnapshot(base, true);
     expect(backup.data.history).toHaveLength(105);
     expect(backup.data.profile.height).toBe('175');
     expect(backup.coverage).toMatchObject({ scope: 'cloud-and-device', months });
-    expect(sdk.page).toHaveBeenCalledTimes(4);
+    expect(sdk.page).toHaveBeenCalledTimes(8);
     expect(backup.recovery.envelope?.pending.length).toBeGreaterThan(0);
 });
 
