@@ -50,6 +50,15 @@ export class InvalidCloudSyncMetadataError extends Error {
     }
 }
 
+export class StaleLocalRevisionError extends Error {
+    readonly code = 'stale-local-revision';
+
+    constructor(readonly expectedRevision: number, readonly actualRevision: number | null) {
+        super('I dati locali sono cambiati durante l’operazione. Ripeti l’anteprima.');
+        this.name = 'StaleLocalRevisionError';
+    }
+}
+
 const currentEnvelopeVersions = () => ({
     version: CURRENT_LOCAL_ENVELOPE,
     dataSchemaVersion: CURRENT_DATA_SCHEMA,
@@ -74,10 +83,8 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
     if (!value) return undefined;
 
     const canonicalOwner = normalizeStorageOwner(owner);
-    if (value.owner !== canonicalOwner) {
-        throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
-    }
-
+    // Dispatch on the container version before assuming the current envelope shape.
+    // A future envelope may legitimately rename/move current-version fields such as owner.
     const migrated = normalizeLocalEnvelopeRecord(value);
     const record = migrated as Record<string, unknown>;
     if (record.owner !== canonicalOwner) throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
@@ -152,7 +159,7 @@ export async function readLocal(owner: string): Promise<LocalEnvelope | undefine
     return validate(await get<any>(keyFor(owner)), owner);
 }
 
-export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard): Promise<SemanticOperation[]> {
+export async function commitLocal(owner: string, data: UserData, initialBase: UserData, guard?: LocalWriteGuard, expectedRevision?: number): Promise<SemanticOperation[]> {
     owner = normalizeStorageOwner(owner);
     const desired = structuredClone(parse(data));
     const callerBase = structuredClone(parse(initialBase));
@@ -161,6 +168,9 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
+        if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
+            throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
+        }
         const currentData = structuredClone(parse(current?.data ?? callerBase));
         const baseDocs = projectDocuments(callerBase, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
