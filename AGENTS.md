@@ -162,7 +162,7 @@ Esistono tre contratti separati:
 ### Firestore Rules
 
 - **MUST:** ogni modifica a `firestore.rules` deve passare i test emulator pertinenti e il gate canonico.
-- Il test Rules e il deploy Rules sono operazioni diverse. Il deploy Production è consentito soltanto dopo `Milestone Verification` verde sul push a `main`, sullo stesso exact SHA ancora corrente, tramite il workflow Firestore dedicato.
+- Il test Rules e il deploy Rules sono operazioni diverse. Il deploy Production è consentito soltanto dopo `Milestone Verification` verde sul push a `main`, sullo stesso exact SHA ancora corrente, tramite il workflow Firestore dedicato. Il deploy Hosting dello stesso release SHA segue il completamento verde della riconciliazione Firestore, così un cutover coordinato client/Rules non pubblica prima il client.
 - **MUST:** il workflow Firestore usa una identità WIF distinta dal deployer Hosting e con privilegi limitati a Rules, indici e requisiti Firebase CLI; non estendere il service account Hosting con ruoli Firestore.
 - **MUST:** il deploy Firestore non usa `--force`: indici live non gestiti non vengono cancellati implicitamente. Dopo il deploy, leggere nuovamente il provider e verificare che le Rules live corrispondano alla sorgente approvata e che tutti gli indici compositi desiderati siano `READY`.
 - **MUST:** `service-account.json` resta ignorato e nessuna credenziale privata viene committata.
