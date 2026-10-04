@@ -52,7 +52,7 @@ Questa regola rende una tombstone antenata un causal summary effettivo dei disce
 
 **MUST:** `T` stessa resta persistita.
 
-**MUST:** uno stamp concorrente/non osservato resta persistito.
+**MUST:** uno stamp concorrente/non osservato che è ancora semanticamente visibile dopo l'arbitration Protocol 2 resta persistito; la compaction non può eliminarlo usando il solo tie-break.
 
 **MUST:** sibling e path non discendenti restano invariati.
 
