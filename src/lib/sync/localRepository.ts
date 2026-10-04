@@ -329,18 +329,7 @@ export async function adoptReplicaCheckpoint(
     return saved;
 }
 
-export async function acknowledgeLocal(owner: string, _id: string, remote: UserData): Promise<void> {
-    owner = normalizeStorageOwner(owner);
-    const parsed = parse(remote);
-    await update<any>(keyFor(owner), raw => {
-        const current = validate(raw, owner);
-        if (!current || current.pending[0] === undefined) throw new Error('Conferma obsoleta o fuori ordine');
-        const pending = current.pending.slice(1);
-        return { ...current, baseline: parsed, data: pending.length ? current.data : parsed, pending };
-    });
-}
-
-export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, _expected?: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
+export async function acknowledgeThrough(owner: string, expectedSeq: number, remote: UserData, months: string[] = [], syncMeta?: Record<string, SyncMeta>): Promise<void> {
     owner = normalizeStorageOwner(owner);
     const parsed = parse(remote);
     const catalog = await getCachedCatalog();
