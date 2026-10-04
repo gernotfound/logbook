@@ -89,9 +89,14 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             if (!coversVectorClock(clock, deleteClock)) throw new Error('Document clock does not cover delete barrier');
             fieldStamp.deleteClock = deleteClock;
         } else if (fieldStamp.deleted) {
-            // Protocol-1 tombstones migrate losslessly: their event clock is also
-            // the initial remove-wins barrier in protocol 2.
-            fieldStamp.deleteClock = { ...fieldStamp.clock };
+            fieldStamp.deleteClock = { [fieldStamp.actorId]: fieldStamp.seq };
+        }
+
+        if ('legacyClock' in stampRaw) {
+            const legacyClock = parseVectorClock(stampRaw.legacyClock, 'legacy field clock');
+            assertDotCovered(legacyClock, stampRaw.actorId, seq, 'legacy FieldStamp');
+            if (!coversVectorClock(clock, legacyClock)) throw new Error('Document clock does not cover legacy FieldStamp frontier');
+            fieldStamp.legacyClock = legacyClock;
         }
 
         const guard = parseGuard(stampRaw.guard, 'FieldStamp');
