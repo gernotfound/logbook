@@ -106,6 +106,19 @@ describe('Zod Schema Resilience & Defensive Catches', () => {
             expect(res.extraField).toBe('kept_by_passthrough');
         });
 
+        it('bounds modeled profile strings while preserving intentional passthrough fields', () => {
+            const oversized = 'x'.repeat(129);
+            const res = UserProfileSchema.parse({
+                height: oversized,
+                waist: 85,
+                extraField: oversized,
+            }) as any;
+
+            expect(res.height).toBeUndefined();
+            expect(res.waist).toBe('85');
+            expect(res.extraField).toBe(oversized);
+        });
+
         it('defensively sanitizes corrupted ExerciseLibrary items', () => {
             const corruptedLibrary = [
                 {
