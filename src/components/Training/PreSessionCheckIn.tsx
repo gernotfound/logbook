@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { Logic } from '../../lib/logic';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
+import { draftRegistry } from '../../lib/utils/draftRegistry';
 import type { WorkoutReadiness } from '../../types';
 
 interface PreSessionCheckInProps {
+    workoutId: string;
     routineName?: string;
     date?: string;
     onStart: (readiness?: Omit<WorkoutReadiness, 'capturedAt'>) => Promise<boolean>;
@@ -29,27 +34,80 @@ function formatSleep(value: string | number | undefined): string | null {
     return `${hours} h ${minutes} min`;
 }
 
-export default function PreSessionCheckIn({ routineName, date, onStart, onCancel }: PreSessionCheckInProps) {
+function parseReadinessDraft(raw: string | null): ReadinessDraft {
+    if (!raw) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        const result: ReadinessDraft = {};
+        for (const key of ['energy', 'stress', 'motivation', 'muscleRecovery'] as const) {
+            const value = (parsed as Record<string, unknown>)[key];
+            if (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5) result[key] = value;
+        }
+        return result;
+    } catch {
+        return {};
+    }
+}
+
+export default function PreSessionCheckIn({ workoutId, routineName, date, onStart, onCancel }: PreSessionCheckInProps) {
     const nutrition = useAppStore(state => state.userData?.nutrition);
     const activePains = useAppStore(state => state.userData?.activePains || []);
-    const [values, setValues] = useState<ReadinessDraft>({});
+    const session = useRef(captureSession());
+    const recoveryName = useRef(`draft:pre-session:${workoutId}`);
+    const recovered = useRef(parseReadinessDraft(readDeviceValue(recoveryName.current, session.current.owner)));
+    const [values, setValues] = useState<ReadinessDraft>(recovered.current);
+    const valuesRef = useRef<ReadinessDraft>(recovered.current);
+    const dirtyRef = useRef(Object.keys(recovered.current).length > 0);
     const [starting, setStarting] = useState(false);
     const sessionDate = date || Logic.getLocalDateString();
     const sleep = formatSleep(nutrition?.[sessionDate]?.sleepHours);
     const painNames = useMemo(() => activePains.map(id => Logic.getMuscleName(id) || id), [activePains]);
 
+    const persistDraft = useCallback(() => {
+        if (!dirtyRef.current) return;
+        if (!isCurrentSession(session.current)) throw new Error('Sessione cambiata prima del salvataggio del check-in.');
+        writeDeviceValue(recoveryName.current, JSON.stringify(valuesRef.current), session.current.owner);
+    }, []);
+
+    const clearDraft = useCallback(() => {
+        writeDeviceValue(recoveryName.current, null, session.current.owner);
+        dirtyRef.current = false;
+    }, []);
+
+    useEffect(() => {
+        draftRegistry.register(persistDraft);
+        const unregisterRecovery = requiredUpdateRecoveryRegistry.register(persistDraft);
+        return () => {
+            unregisterRecovery();
+            draftRegistry.unregister(persistDraft);
+        };
+    }, [persistDraft]);
+
     const setMetric = (key: ReadinessKey, value: number) => {
-        setValues(current => ({ ...current, [key]: current[key] === value ? undefined : value }));
+        setValues(current => {
+            const next = { ...current, [key]: current[key] === value ? undefined : value };
+            valuesRef.current = next;
+            dirtyRef.current = true;
+            return next;
+        });
     };
 
     const start = async (includeReadiness: boolean) => {
         if (starting) return;
         setStarting(true);
         try {
-            await onStart(includeReadiness ? values : undefined);
+            const started = await onStart(includeReadiness ? valuesRef.current : undefined);
+            if (started) clearDraft();
         } finally {
             setStarting(false);
         }
+    };
+
+    const cancel = async () => {
+        if (starting) return;
+        await onCancel();
+        clearDraft();
     };
 
     return (
@@ -91,7 +149,7 @@ export default function PreSessionCheckIn({ routineName, date, onStart, onCancel
             <div className="pre-session-actions">
                 <div className="pre-session-primary-actions">
                     <button type="button" className="btn btn-primary" disabled={starting} onClick={() => void start(true)}>{starting ? 'Avvio…' : 'Inizia allenamento'}</button>
-                    <button type="button" className="btn btn-danger" disabled={starting} onClick={() => void onCancel()}>Annulla allenamento</button>
+                    <button type="button" className="btn btn-danger" disabled={starting} onClick={() => void cancel()}>Annulla allenamento</button>
                 </div>
                 <button type="button" className="btn btn-secondary" disabled={starting} onClick={() => void start(false)}>Salta check-in e inizia</button>
             </div>
