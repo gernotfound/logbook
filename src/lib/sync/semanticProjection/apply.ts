@@ -388,6 +388,7 @@ export function applySemanticOperations(
                 key,
                 canonicalStamp(stamp),
             ])),
+            ...(meta.writer ? { writer: { ...meta.writer } } : {}),
         };
     }
 
