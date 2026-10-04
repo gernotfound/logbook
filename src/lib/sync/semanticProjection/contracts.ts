@@ -4,12 +4,21 @@ export interface VectorClock {
     [actorId: string]: number;
 }
 
+export interface FieldCandidate {
+    clock: VectorClock;
+    actorId: string;
+    seq: number;
+    value: unknown;
+    guard?: OperationGuard;
+}
+
 export interface FieldStamp {
     clock: VectorClock;
     actorId: string;
     seq: number;
     deleted?: boolean;
     deleteClock?: VectorClock;
+    candidates?: FieldCandidate[];
 }
 
 export interface SyncMeta {
