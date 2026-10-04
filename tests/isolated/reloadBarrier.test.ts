@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
+const app = vi.hoisted(() => ({ state: { userData: null as any, localWorkout: null as any, dataOwner: 'user:a' as string | null }, flush: vi.fn(), auth: { currentUser: { uid: 'a' } } }));
 vi.mock('../../src/store/useAppStore', () => ({ useAppStore: {
     getState: () => ({ ...app.state, flushPendingSyncs: app.flush }),
     setState: (patch: any) => { app.state = { ...app.state, ...(typeof patch === 'function' ? patch(app.state) : patch) }; },
@@ -22,7 +22,7 @@ beforeEach(async () => {
     await clear(); invalidateSession(); vi.resetAllMocks(); app.auth.currentUser = { uid: 'a' };
     disk = new Map();
     vi.stubGlobal('localStorage', { getItem: (key: string) => disk.get(key) ?? null, setItem: (key: string, value: string) => disk.set(key, value), removeItem: (key: string) => disk.delete(key) });
-    app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] } };
+    app.state = { userData: parse(170), localWorkout: { id: 'active', exercises: [] }, dataOwner: 'user:a' };
     await initializeLocal('user:a', app.state.userData);
     markTabSnapshotClean(captureSession(), app.state.userData);
 });
@@ -49,6 +49,7 @@ it('repairs a lagging guest snapshot without creating a cloud journal', async ()
     invalidateSession();
     const base = parse(170);
     app.state.userData = base;
+    app.state.dataOwner = 'guest';
     await initializeLocal('guest', base);
     markTabSnapshotClean(captureSession(), base);
     markTabSnapshotDirty(captureSession(), base);
@@ -107,6 +108,15 @@ it('reloads an update-required app without parsing a future local envelope and p
     expect(reload).toHaveBeenCalledTimes(1);
     expect(JSON.parse(disk.get('logbook:v2:user:a:workout')!)).toEqual(app.state.localWorkout);
 });
+it('blocks required-update snapshot when the installed dataset belongs to another owner', async () => {
+    app.state.dataOwner = 'guest';
+    const reload = vi.fn();
+
+    await expect(requiredUpdateHardReload(reload)).rejects.toThrow('non attribuibile');
+    expect(reload).not.toHaveBeenCalled();
+    expect(disk.get('logbook:v2:user:a:workout')).toBeUndefined();
+});
+
 it('still blocks update-required reload when the device-critical workout snapshot cannot be persisted', async () => {
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
     const reload = vi.fn();
