@@ -6,7 +6,7 @@ import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
 import { getCachedCatalog } from '../catalog/catalogService';
-import { withTimeout } from '../db/db_core';
+import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
 import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
@@ -17,6 +17,17 @@ class DurableAcknowledgementPendingError extends Error {
         this.name = 'DurableAcknowledgementPendingError';
     }
 }
+
+class UnsafeDeliveredBatchError extends Error {
+    constructor(cause: unknown) {
+        super('Esito remoto ambiguo senza prova di un journal locale completo e verificabile', { cause });
+        this.name = 'UnsafeDeliveredBatchError';
+    }
+}
+
+type DeliveryState = {
+    delivered: SemanticOperation[] | null;
+};
 
 function sameDeliveredOperation(left: SemanticOperation, right: SemanticOperation): boolean {
     return equal(left, right);
@@ -32,13 +43,42 @@ function containsDeliveredBatch(pending: SemanticOperation[], delivered: Semanti
     return true;
 }
 
+function isWritableSession(session: ReturnType<typeof captureSession>): boolean {
+    return isCurrentSession(session)
+        && auth.currentUser?.uid === session.owner.slice(5)
+        && !isAccountDeletionPending(session.owner);
+}
+
+async function requireDurableDeliveredBatch(
+    session: ReturnType<typeof captureSession>,
+    delivered: SemanticOperation[],
+    cause: unknown,
+): Promise<never> {
+    if (!isWritableSession(session)) throw new UnsafeDeliveredBatchError(cause);
+
+    let retained: Awaited<ReturnType<typeof readLocal>>;
+    try {
+        retained = await readLocal(session.owner);
+    } catch {
+        throw new UnsafeDeliveredBatchError(cause);
+    }
+
+    if (!isWritableSession(session)) throw new UnsafeDeliveredBatchError(cause);
+    if (retained && containsDeliveredBatch(retained.pending, delivered)) {
+        throw new DurableAcknowledgementPendingError(cause);
+    }
+    throw new UnsafeDeliveredBatchError(cause);
+}
+
 const running = new Map<string, Promise<void>>();
+const deliveryStates = new Map<string, DeliveryState>();
 export async function waitForJournalIdle(owner: string): Promise<void> {
     const work = running.get(owner);
     if (work) { try { await work; } catch { /* Cancellation/rejection has settled; no writer remains active. */ } }
 }
-async function drain(session: ReturnType<typeof captureSession>): Promise<void> {
-    const current = () => isCurrentSession(session) && auth.currentUser?.uid === session.owner.slice(5) && !isAccountDeletionPending(session.owner);
+async function drain(session: ReturnType<typeof captureSession>, deliveryState: DeliveryState): Promise<void> {
+    const current = () => isWritableSession(session);
+    deliveryState.delivered = null;
     if (!current()) throw new Error('Sessione cambiata');
     await ensureAppCheck();
     await waitForPendingWrites(getDb());
@@ -49,8 +89,19 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
 
-        const delivered = envelope.pending;
-        const outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current);
+        const delivered = structuredClone(envelope.pending);
+        deliveryState.delivered = delivered;
+
+        let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;
+        try {
+            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current);
+        } catch (error) {
+            const failure = classifySyncFailure(error);
+            if (failure.status === 'local-pending') {
+                await requireDurableDeliveredBatch(session, delivered, error);
+            }
+            throw error;
+        }
 
         if (!current()) throw new Error('Sessione cambiata');
 
@@ -62,24 +113,43 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
         try {
             await acknowledgeThrough(session.owner, seq, remote, envelope.data, changedMonths, outcome.syncMeta);
         } catch (error) {
-            // A remote transaction may already be committed when the local acknowledgement write fails.
-            // Only downgrade this to retryable when IndexedDB proves the entire delivered batch is still
-            // durable. Missing/corrupt/incompatible/partial local state remains a hard failure.
-            if (!current()) throw error;
-            let retained: Awaited<ReturnType<typeof readLocal>>;
-            try {
-                retained = await readLocal(session.owner);
-            } catch {
-                throw error;
-            }
-            if (!current()) throw error;
-            const fullBatchRetained = retained !== undefined
-                && containsDeliveredBatch(retained.pending, delivered);
-            if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
-            throw error;
+            // A remote transaction is already confirmed here. An acknowledgement failure is retryable
+            // only when a fresh, validated IndexedDB read proves that the exact delivered batch remains.
+            await requireDurableDeliveredBatch(session, delivered, error);
         }
+
+        deliveryState.delivered = null;
     }
     throw new Error('Sessione cambiata');
+}
+
+async function classifyTimedOutWork(
+    session: ReturnType<typeof captureSession>,
+    error: SyncTimeoutError,
+): Promise<SyncResult> {
+    if (!isWritableSession(session)) return { ok: false, status: 'failed', error };
+
+    let retained: Awaited<ReturnType<typeof readLocal>>;
+    try {
+        retained = await readLocal(session.owner);
+    } catch {
+        return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
+    }
+
+    if (!isWritableSession(session) || !retained) {
+        return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
+    }
+
+    const delivered = deliveryStates.get(session.owner)?.delivered;
+    if (delivered?.length) {
+        if (!containsDeliveredBatch(retained.pending, delivered)) {
+            return { ok: false, status: 'failed', error: new UnsafeDeliveredBatchError(error) };
+        }
+        return { ok: false, status: 'local-pending', error };
+    }
+
+    if (!retained.pending.length) return { ok: true, status: 'synced' };
+    return { ok: false, status: 'local-pending', error };
 }
 
 export async function replicateJournal(expectedOwner?: string): Promise<SyncResult> {
@@ -93,15 +163,27 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
         if (session.owner === 'guest' || !envelope.pending?.length) return { ok: true, status: 'synced' };
         if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, status: 'local-pending', error: new Error('Connessione assente') };
         const previous = running.get(session.owner);
+        const deliveryState = deliveryStates.get(session.owner) ?? { delivered: null };
+        deliveryStates.set(session.owner, deliveryState);
         const work = (async () => {
             if (previous) { try { await previous; } catch { /* A new epoch retries its own remaining journal. */ } }
-            await drain(session);
+            await drain(session, deliveryState);
         })();
         running.set(session.owner, work);
         // The actual task keeps its lock and acknowledgement path after a UI timeout.
-        void work.finally(() => { if (running.get(session.owner) === work) running.delete(session.owner); }).catch(() => {});
-        await withTimeout(work, 7000, 'Sincronizzazione in attesa; copia locale conservata');
-        return { ok: true, status: 'synced' };
+        void work.finally(() => {
+            if (running.get(session.owner) === work) {
+                running.delete(session.owner);
+                deliveryStates.delete(session.owner);
+            }
+        }).catch(() => {});
+        try {
+            await withTimeout(work, 7000, 'Sincronizzazione in attesa; copia locale conservata');
+            return { ok: true, status: 'synced' };
+        } catch (error) {
+            if (error instanceof SyncTimeoutError) return classifyTimedOutWork(session, error);
+            throw error;
+        }
     } catch (error) {
         return classifySyncFailure(error, { retryable: error instanceof DurableAcknowledgementPendingError });
     }

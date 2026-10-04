@@ -60,6 +60,21 @@ it('retains one writer after timeout and acknowledges its late commit before ret
     expect(remote.apply).toHaveBeenCalledTimes(1);
 });
 
+it('hard-fails a timeout when the in-flight delivered batch is no longer durable', async () => {
+    const completion = deferred<any>();
+    remote.apply.mockReturnValue(completion.promise);
+    const first = replicateJournal();
+
+    await vi.waitFor(() => expect(remote.apply).toHaveBeenCalledTimes(1));
+    await clear();
+
+    await vi.advanceTimersByTimeAsync(7001);
+    expect((await first).status).toBe('failed');
+
+    completion.resolve({ documents: new Map(), syncMeta: {} });
+    await waitForJournalIdle('user:a');
+});
+
 it('does not acknowledge a late result after A to B to A even though the uid matches again', async () => {
     const completion = deferred<any>();
     remote.apply.mockReturnValue(completion.promise);

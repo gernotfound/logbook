@@ -30,7 +30,7 @@ Firestore applica il batch semantico tramite transazione.
 
 **MUST:** in questo caso la pending operation resta durevole e può essere reinviata.
 
-**MUST:** `replicateJournal()` classifica il risultato come `local-pending` solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation appena consegnato al cloud sia ancora presente nel journal con payload semantico completo identico, inclusi value, clock e guard. Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'errore resta `failed`.
+**MUST:** `replicateJournal()` classifica il risultato come `local-pending` dopo qualunque esito remoto ambiguo — inclusi perdita della risposta di `runTransaction`, `unavailable`/`deadline-exceeded` dopo la consegna e timeout del chiamante — solo dopo aver riletto IndexedDB e verificato che l'intero batch di operation consegnato sia ancora presente nel journal con payload semantico completo identico, inclusi value, clock e guard. Se l'envelope è assente, corrotto, incompatibile o conserva solo una parte del batch consegnato, l'esito è `failed`. Un timeout non cancella il writer in-flight e deve quindi usare la stessa prova durevole del batch prima di essere presentato come pending sicuro.
 
 **MUST:** il replay della stessa operation non deve modificare nuovamente il business winner né produrre causal metadata differenti.
 
@@ -69,6 +69,8 @@ I test M3 in `tests/recovery/` devono usare failure deterministici, non timing c
 Sono boundary valide da iniettare:
 - IndexedDB `put` prima del local journal commit;
 - remote error prima del commit;
+- remote commit seguito da risposta persa/errore di trasporto ambiguo;
+- timeout del chiamante mentre il batch è in-flight;
 - IndexedDB `put` durante acknowledgement dopo remote commit;
 - session/process epoch change tra local commit e replay;
 - nuovo local commit tra remote commit e acknowledgement;
