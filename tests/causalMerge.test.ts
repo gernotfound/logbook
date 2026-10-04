@@ -69,9 +69,10 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents, syncMetas } = applySemanticOperations(base, ops, remoteSyncMetas);
-        // B wins tie-break (B > A). BUT the clock in the resulting stamp MUST incorporate both branches.
+        // B wins the concurrent tie-break. Protocol 2 keeps the winner event clock immutable and observes both branches at document frontier.
         expect(documents.get('')?.profile).toEqual({ height: '182' });
-        expect(syncMetas[''].fields['profile/height'].clock).toEqual({ A: 1, B: 1 });
+        expect(syncMetas[''].fields['profile/height'].clock).toEqual({ B: 1 });
+        expect(syncMetas[''].clock).toEqual({ A: 1, B: 1 });
     });
 
     it('5. nuova op creata dopo l\'hydration domina correttamente il cloud osservato', () => {
