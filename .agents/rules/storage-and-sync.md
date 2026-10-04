@@ -147,7 +147,7 @@ La regressione è coperta anche attraverso il reale path transazionale Firestore
 
 Un timeout/rejection del chiamante non dimostra che il server non abbia applicato la write.
 
-**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal. Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
+**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal con payload semantico completo identico (`value`, `clock` e `guard` inclusi). Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
 
 Vedi anche `.agents/rules/crash-consistency.md`.
 
