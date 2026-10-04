@@ -6,6 +6,7 @@ import {
     type SemanticOperation
 } from '../src/lib/sync/semanticProjection';
 import type { DocumentData } from '../src/lib/sync/documentProjection';
+import { CURRENT_SYNC_PROTOCOL } from '../src/lib/schemaEvolution';
 
 const nutritionPath = 'nutrition_months/2026-09';
 const date = '2026-09-13';
@@ -85,13 +86,13 @@ describe('Semantic Merge V3 regressions', () => {
         expect(recreated.documents.get(nutritionPath)?.[date]).toMatchObject({ date, weight: 82 });
     });
 
-    it('requires a complete protocol-1 SyncMeta shape', () => {
-        expect(() => parseSyncMeta({ protocolVersion: 1, clock: {} })).toThrow('fields');
-        expect(() => parseSyncMeta({ protocolVersion: 1, fields: {} })).toThrow('clock');
-        expect(() => parseSyncMeta({ protocolVersion: 1, clock: {}, fields: {
+    it('requires a complete current SyncMeta shape', () => {
+        expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {} })).toThrow('fields');
+        expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {} })).toThrow('clock');
+        expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {
             'profile/name': { actorId: 'A', seq: 1 }
         } })).toThrow('field clock');
-        expect(() => parseSyncMeta({ protocolVersion: 1, clock: { A: 1.5 }, fields: {} })).toThrow('seq');
-        expect(() => parseSyncMeta({ protocolVersion: 2, clock: {}, fields: {} })).toThrow('Unsupported protocolVersion');
+        expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { A: 1.5 }, fields: {} })).toThrow('seq');
+        expect(() => parseSyncMeta({ protocolVersion: CURRENT_SYNC_PROTOCOL + 1, clock: {}, fields: {} })).toThrow('Unsupported protocolVersion');
     });
 });
