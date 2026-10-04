@@ -20,13 +20,7 @@ vi.mock('../src/hooks/useAuth', () => ({
     useAuth: () => authState,
 }));
 
-vi.mock('@vercel/analytics/react', () => ({
-    Analytics: () => null,
-}));
 
-vi.mock('@vercel/speed-insights/react', () => ({
-    SpeedInsights: () => null,
-}));
 
 vi.mock('../src/components/UI/ErrorBoundary', () => ({
     default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
