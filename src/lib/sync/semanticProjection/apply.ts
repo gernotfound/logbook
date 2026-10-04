@@ -249,6 +249,15 @@ function canonicalStamp(stamp: FieldStamp): FieldStamp {
         seq: stamp.seq,
         ...(stamp.deleted ? { deleted: true } : {}),
         ...(barrier ? { deleteClock: { ...barrier } } : {}),
+        ...(stamp.candidates?.length ? {
+            candidates: stamp.candidates.map(candidate => ({
+                clock: { ...candidate.clock },
+                actorId: candidate.actorId,
+                seq: candidate.seq,
+                value: structuredClone(candidate.value),
+                ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
+            })),
+        } : {}),
     };
 }
 
