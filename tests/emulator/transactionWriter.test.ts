@@ -91,7 +91,9 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
     ];
 
     const promise = applyDocumentChanges(db, 'a', ops, () => true, replica);
-    await setDoc(doc(db, 'users/a'), { profile: { name: 'Interfering' } });
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a'), { profile: { name: 'Interfering' } });
+    });
     await promise;
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
@@ -164,9 +166,9 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
             profile: { height: '190' },
             _sync: {
                 protocolVersion: 1,
-                clock: { B: 1 },
+                clock: { z: 1 },
                 fields: {
-                    'profile/height': { clock: { B: 1 }, actorId: 'B', seq: 1 }
+                    'profile/height': { clock: { z: 1 }, actorId: 'z', seq: 1 }
                 }
             }
         });
