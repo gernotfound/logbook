@@ -6,6 +6,8 @@ on:
       - Milestone Verification
     types:
       - completed
+    branches:
+      - main
 
 permissions:
   contents: read

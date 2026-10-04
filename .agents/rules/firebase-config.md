@@ -132,7 +132,7 @@ Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_an
 
 ### Metadati `_sync`
 
-Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione: chiavi ammesse (`protocolVersion`, `clock`, `fields`), versione corrente e tipo map per clock/fields. La validazione completa di Vector Clock e `FieldStamp` resta nel parser TypeScript; non duplicare l'intero parser nelle Security Rules.
+Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione: chiavi ammesse (`protocolVersion`, `clock`, `fields`) e tipo map per clock/fields. Durante il rolling cutover Sync Protocol 1→2 accettano entrambe le versioni, ma `preservesSyncProtocol()` vieta il downgrade di un documento già portato a 2. La validazione completa di Vector Clock e `FieldStamp` resta nel parser TypeScript; non duplicare l'intero parser nelle Security Rules.
 
 ### Sintomo di Rules/Auth/App Check
 
@@ -158,7 +158,7 @@ Prima di modificarli:
 3. **MUST:** non introdurre wildcard `script-src`, `connect-src` Google API o CORS `*`;
 4. verificare login popup/redirect, sync, App Check, GA4, account deletion e PWA.
 
-Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo `Milestone Verification` verde su push a `main`, ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy resta limitato a `--only hosting`.
+Il workflow `.github/workflows/firebase-hosting-production.yml` deploya Hosting soltanto dopo che `Firebase Firestore Production` ha completato con successo la riconciliazione dello stesso exact SHA di `main`; questo serializza i cutover che cambiano contemporaneamente client e Rules. Ricontrolla l'exact SHA e usa Workload Identity Federation. Il deploy resta limitato a `--only hosting`.
 
 Il workflow separato `.github/workflows/firebase-firestore-production.yml` gestisce esclusivamente Firestore Rules/indici. Dopo ogni gate canonico verde sul push a `main`, ricontrolla l'exact SHA e riconcilia lo stato desiderato di quello SHA con il provider live: se le Rules differiscono o manca un indice desiderato esegue il deploy, se gli indici desiderati esistono ma stanno ancora convergendo attende e verifica, se Rules e indici sono già allineati termina senza mutazioni. Il confronto con il solo commit padre non è una baseline valida perché può perdere una modifica approvata ma non ancora distribuita. Il workflow usa una identità WIF dedicata, non usa `--force` e fallisce chiuso se non riesce a determinare lo stato live. La verifica finale legge nuovamente Rules e indici dal provider; le Rules devono coincidere con la sorgente dell'exact SHA e gli indici desiderati devono essere `READY`.
 

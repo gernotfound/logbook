@@ -44,7 +44,7 @@ La suite deve esercitare almeno:
 
 **MUST:** i test di convergenza confrontano sia `documents` sia `syncMetas`. Due repliche con lo stesso valore visibile ma `FieldStamp.clock` differenti non sono considerate convergenti, perché una mutation futura può risolvere diversamente il conflitto.
 
-Quando più operation sullo stesso field vengono risolte nello stesso batch, il winner determina valore/tombstone e actor stamp, ma il causal clock risultante deve osservare tutti i contender già risolti. Questo rende il risultato indipendente dal confine artificiale dei batch di rete.
+Quando più operation sullo stesso field vengono risolte nello stesso batch, il winner determina valore/tombstone e conserva il proprio `FieldStamp.clock` immutabile. Tutti i contender avanzano invece `SyncMeta.clock`. Il fuzz deve includere DAG misti, non soltanto antichain completamente concorrenti o catene totalmente causali, per provare l'indipendenza da delivery order e batch partition.
 
 ## Gate
 

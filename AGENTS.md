@@ -84,7 +84,7 @@ Prima di modificare un dato, classificarlo come effimero, application/local-only
 | **`localStorage`** | Persistenza sincrona/device-critical, preferenze e code boundary-specific |
 | **Firestore** | Replica remota e sincronizzazione cloud |
 
-Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Local Envelope 4, Backup Schema 3. Non incrementare una dimensione per compensare modifiche in un'altra.
+Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 2, Local Envelope 4, Backup Schema 3. Non incrementare una dimensione per compensare modifiche in un'altra.
 
 - **MUST:** offline l'app deve potersi avviare e operare dai dati locali.
 - **MUST:** le normali mutazioni business UI/hook attraversano Domain Operations. Snapshot-save è riservato ai boundary bulk/compatibility allowlisted.
@@ -93,7 +93,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 1, Loc
 - **MUST:** le Promise di persistenza critica rigettano in caso di failure; vietato trasformare un errore critico in successo silenzioso.
 - **MUST:** il reload barrier è fail-safe: dati in memoria senza envelope leggibile = sessione unsafe, quindi niente reload automatico.
 - **MUST:** una conferma cloud attraverso `acknowledgeThrough()` elimina solo le operation con `seq <= expectedSeq`, assorbe il causal context remoto e rigioca sullo snapshot remoto soltanto le operation locali ancora pending. Una modifica locale avvenuta fra remote commit e acknowledge non può essere sovrascritta da uno snapshot remoto stantio.
-- **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal; stato assente/corrotto/parziale è failure, non pending sicuro.
+- **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal con payload semantico completo identico; stato assente/corrotto/parziale è failure, non pending sicuro.
 
 ### Accesso browser storage
 
@@ -162,7 +162,7 @@ Esistono tre contratti separati:
 ### Firestore Rules
 
 - **MUST:** ogni modifica a `firestore.rules` deve passare i test emulator pertinenti e il gate canonico.
-- Il test Rules e il deploy Rules sono operazioni diverse. Il deploy Production è consentito soltanto dopo `Milestone Verification` verde sul push a `main`, sullo stesso exact SHA ancora corrente, tramite il workflow Firestore dedicato.
+- Il test Rules e il deploy Rules sono operazioni diverse. Il deploy Production è consentito soltanto dopo `Milestone Verification` verde sul push a `main`, sullo stesso exact SHA ancora corrente, tramite il workflow Firestore dedicato. Il deploy Hosting dello stesso release SHA segue il completamento verde della riconciliazione Firestore, così un cutover coordinato client/Rules non pubblica prima il client.
 - **MUST:** il workflow Firestore usa una identità WIF distinta dal deployer Hosting e con privilegi limitati a Rules, indici e requisiti Firebase CLI; non estendere il service account Hosting con ruoli Firestore.
 - **MUST:** il deploy Firestore non usa `--force`: indici live non gestiti non vengono cancellati implicitamente. Dopo il deploy, leggere nuovamente il provider e verificare che le Rules live corrispondano alla sorgente approvata e che tutti gli indici compositi desiderati siano `READY`.
 - **MUST:** `service-account.json` resta ignorato e nessuna credenziale privata viene committata.

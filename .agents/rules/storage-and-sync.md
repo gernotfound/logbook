@@ -37,7 +37,7 @@ Non dedurre da questa regola che ogni singolo accesso `localStorage` debba neces
 
 ```ts
 CURRENT_DATA_SCHEMA = 1
-CURRENT_SYNC_PROTOCOL = 1
+CURRENT_SYNC_PROTOCOL = 2
 CURRENT_LOCAL_ENVELOPE = 4
 CURRENT_BACKUP_SCHEMA = 3
 ```
@@ -100,11 +100,24 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 5. `replicateJournal.ts` drena lo stesso journal V4 verso Firestore. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
+
+### Sync Protocol 2 — timestamp evento e frontier osservato
+
+`FieldStamp.clock` è il timestamp causale immutabile dell'evento vincitore del field. `SyncMeta.clock` è invece il frontier cumulativo degli eventi osservati nel documento.
+
+**MUST:** un contender perdente, una retry o una operation respinta da lifecycle guard può avanzare `SyncMeta.clock`, ma non può modificare retroattivamente `FieldStamp.clock` del winner.
+
+**MUST:** `stampWins()` usa un ordine totale compatibile con happens-before: causal dominance; peso monotono del vector clock (somma delle coordinate); delete bias solo a parità di peso; actor/seq; vector order canonico. Questa relazione deve restare transitiva.
+
+**MUST:** ancestor e descendant vengono riconciliati con lo stesso ordine totale. Una write ancestor preserva e riapplica soltanto i descendant stamp che la superano; i descendant shadowed vengono rimossi semanticamente. Guard fallite vengono escluse prima dell'arbitration del field.
+
+Il protocollo 1 viene normalizzato a 2 prima del semantic merge. Poiché Protocol 1 poteva avere `FieldStamp.clock` già contaminati da contender perdenti, la migrazione separa il dot certo del winner (`actorId`/`seq`) dal vecchio frontier in `legacyClock`: i retry già risolti non possono cambiare il winner storico, mentre una nuova operation che dimostra di aver osservato il dot del winner può supersederlo senza ereditare dipendenze spurie. Client futuri restano fail-closed secondo le regole di schema evolution.
+
 I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente. L'allowlist canonica e il boundary checker sono documentati in `.agents/rules/domain-operations.md`.
 
 **MUST:** nuovi consumer business ordinari non possono introdurre bypass snapshot fuori dall'allowlist verificata dal gate M8.
 
-**MUST:** Domain Operations V4 non cambia Data Schema 1, Sync Protocol 1, Local Envelope 4 o Backup Schema 3.
+**MUST:** la remediation del protocollo causale mantiene Data Schema 1, Local Envelope 4 e Backup Schema 3, ma porta Sync Protocol a 2. Il passaggio 1→2 usa il registry di schema evolution senza accoppiare le altre dimensioni.
 
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 
@@ -134,7 +147,7 @@ La regressione è coperta anche attraverso il reale path transazionale Firestore
 
 Un timeout/rejection del chiamante non dimostra che il server non abbia applicato la write.
 
-**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal. Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
+**MUST:** prima di classificare un batch come `local-pending` dopo un esito ambiguo, `replicateJournal` deve rileggere l'envelope IndexedDB e verificare che **l'intero batch appena consegnato** sia ancora presente nel journal con payload semantico completo identico (`value`, `clock` e `guard` inclusi). Se envelope/journal è assente, corrotto o contiene solo una parte del batch, l'esito non è un pending sicuro e deve essere classificato come failure secondo il contratto corrente.
 
 Vedi anche `.agents/rules/crash-consistency.md`.
 

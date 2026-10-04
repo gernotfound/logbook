@@ -27,7 +27,7 @@ M8 NON modifica le versioni persistite:
 
 ```text
 CURRENT_DATA_SCHEMA = 1
-CURRENT_SYNC_PROTOCOL = 1
+CURRENT_SYNC_PROTOCOL = 2
 CURRENT_LOCAL_ENVELOPE = 4
 CURRENT_BACKUP_SCHEMA = 3
 ```
@@ -151,9 +151,9 @@ M8 non introduce memoria volatile come fonte di durabilità.
 
 M8 eredita integralmente M2/M4:
 
-- vector clock e `stampWins()` restano invariati;
-- ancestor-first reconciliation resta invariata;
-- delete-vs-edit concorrente usa le tombstone correnti;
+- vector clock resta la base causale; `stampWins()` usa l'ordine totale transitivo di Sync Protocol 2;
+- ancestor-first reconciliation preserva solo descendant causalmente o totalmente più nuovi dell'ancestor;
+- delete-vs-edit concorrente mantiene delete bias quando i contender hanno pari cardinalità causale, senza introdurre una relazione pairwise non transitiva;
 - causal compaction resta dopo il merge e prima della write Firestore;
 - nessun TTL/wall-clock GC viene introdotto.
 

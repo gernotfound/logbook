@@ -8,7 +8,7 @@ import {
 import type { DocumentData } from '../../src/lib/sync/documentProjection';
 
 const tombstonedProfileMeta = (): SyncMeta => ({
-    protocolVersion: 1,
+    protocolVersion: 2,
     clock: { A: 2, B: 1, C: 1, ZERO: 0 },
     fields: {
         profile: { actorId: 'A', seq: 2, clock: { A: 2, B: 1, ZERO: 0 }, deleted: true },
@@ -59,9 +59,36 @@ describe('M4 causal metadata compaction', () => {
         expect(compacted.clock).toEqual({ A: 2, B: 1, C: 1 });
     });
 
+    it('does not compact a descendant when a hidden candidate is not covered by the ancestor delete barrier', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 2,
+            clock: { A: 2, B: 1 },
+            fields: {
+                profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true, deleteClock: { A: 2 } },
+                'profile/name': {
+                    actorId: 'A',
+                    seq: 1,
+                    clock: { A: 1 },
+                    candidates: [{
+                        actorId: 'B',
+                        seq: 1,
+                        clock: { B: 1 },
+                        value: 'hidden',
+                    }],
+                },
+            },
+        };
+
+        const compacted = compactSyncMeta(meta);
+        expect(compacted.fields['profile/name']).toBeDefined();
+        expect(compacted.fields['profile/name'].candidates).toEqual([
+            expect.objectContaining({ actorId: 'B', seq: 1, clock: { B: 1 }, value: 'hidden' }),
+        ]);
+    });
+
     it('never retires positive actor-frontier coordinates or terminal tombstones', () => {
         const meta: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 9, B: 7, C: 3 },
             fields: {
                 'history/old': { actorId: 'A', seq: 9, clock: { A: 9, B: 7 }, deleted: true },
@@ -80,9 +107,9 @@ describe('M4 causal metadata compaction', () => {
         expect(compactSyncMeta(tombstonedProfileMeta())).toEqual(once);
     });
 
-    it('makes a blocking ancestor absorb the causal context of a rejected child contender', () => {
+    it('keeps a blocking ancestor stamp immutable while the document frontier observes the rejected child', () => {
         const meta: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
@@ -101,16 +128,18 @@ describe('M4 causal metadata compaction', () => {
 
         const outcome = applyOne(meta, concurrentUpdate);
         expect(outcome.documents.get('')).toEqual({});
-        expect(outcome.syncMetas[''].fields.profile.clock).toEqual({ A: 2, B: 1 });
+        expect(outcome.syncMetas[''].fields.profile.clock).toEqual({ A: 2 });
+        expect(outcome.syncMetas[''].clock).toEqual({ A: 2, B: 1 });
 
         const compacted = compactSyncMeta(outcome.syncMetas['']);
-        expect(compacted.fields.profile.clock).toEqual({ A: 2, B: 1 });
+        expect(compacted.fields.profile.clock).toEqual({ A: 2 });
+        expect(compacted.clock).toEqual({ A: 2, B: 1 });
         expect(compacted.fields['profile/name']).toBeUndefined();
     });
 
     it('preserves future merge results across stale, concurrent and causally newer writes', () => {
         const original: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
@@ -147,7 +176,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('preserves equivalence across a multi-step out-of-order descendant sequence', () => {
         const original: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
