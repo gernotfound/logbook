@@ -168,14 +168,12 @@ export async function applyDocumentChanges(
             checkDocSize(finalData, path || 'User Profile');
 
             const refIndex = pathsToRead.indexOf(path);
-            const hasBusinessData = Object.keys(business).length > 0;
-            const hasFields = Boolean(meta && Object.keys(meta.fields).length > 0);
 
-            if (!hasBusinessData && !hasFields) {
-                transaction.delete(refs[refIndex]);
-            } else {
-                transaction.set(refs[refIndex], finalData);
-            }
+            // Protocol 3 never physically deletes sync-owned documents from the client.
+            // Even after stable-frontier GC removes the final tombstone, the empty shell
+            // carries the fenced writer identity. This prevents a stale generation from
+            // turning an un-attributed Firestore delete into a causal state transition.
+            transaction.set(refs[refIndex], finalData);
         }
 
         transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq));
