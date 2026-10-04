@@ -3,7 +3,7 @@ name: Firebase Hosting Production
 on:
   workflow_run:
     workflows:
-      - Milestone Verification
+      - Firebase Firestore Production
     types:
       - completed
 
@@ -20,7 +20,7 @@ jobs:
     name: Deploy exact main SHA
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.event == 'workflow_run' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
