@@ -195,8 +195,12 @@ describe('pre-session readiness contract', () => {
         });
         await Exporter.exportToCSV([session({ capturedAt: 123, energy: 5, stress: 1, muscleRecovery: 3 })], {}, []);
         expect(content.split('\n')[0]).toContain('Energia pre-sessione,Stress pre-sessione,Motivazione pre-sessione,Recupero muscolare pre-sessione');
+        const headers = content.split('\n')[0].split(',');
         const columns = content.split('\n')[1].split(',');
-        expect(columns.slice(-4)).toEqual(['5', '1', '""', '3']);
+        expect(columns[headers.indexOf('Energia pre-sessione')]).toBe('5');
+        expect(columns[headers.indexOf('Stress pre-sessione')]).toBe('1');
+        expect(columns[headers.indexOf('Motivazione pre-sessione')]).toBe('""');
+        expect(columns[headers.indexOf('Recupero muscolare pre-sessione')]).toBe('3');
         vi.restoreAllMocks();
     });
 });
