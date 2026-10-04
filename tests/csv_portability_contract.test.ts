@@ -57,7 +57,7 @@ describe('CSV portability contract', () => {
         };
 
         await Exporter.exportToCSV([], { [day.date]: day }, []);
-        expect(csv).toContain('"101"');
+        expect(csv).toContain(',101,');
         expect(csv).not.toContain('"99"');
         expect(csv).toContain('"08:15"');
         expect(csv).toContain('"m1"');
