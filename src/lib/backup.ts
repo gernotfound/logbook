@@ -35,6 +35,31 @@ export interface BackupPayload {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const arrays = ['library', 'routines', 'history', 'customFoods', 'trainingCycles', 'supplements'] as const;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function parseBackupCoverage(value: unknown): BackupCoverage {
+    if (!isRecord(value)) throw new Error('Coverage del backup mancante o non valida.');
+    if (value.scope !== 'device' && value.scope !== 'cloud-and-device') {
+        throw new Error('Coverage del backup non valida: scope sconosciuto.');
+    }
+    if (!Array.isArray(value.months) || value.months.some(month => typeof month !== 'string' || !MONTH_RE.test(month))) {
+        throw new Error('Coverage del backup non valida: mesi non validi.');
+    }
+    const months = value.months as string[];
+    if (new Set(months).size !== months.length) throw new Error('Coverage del backup non valida: mesi duplicati.');
+    if (value.readStartedAt !== undefined && typeof value.readStartedAt !== 'string') {
+        throw new Error('Coverage del backup non valida: inizio lettura non valido.');
+    }
+    if (value.readCompletedAt !== undefined && typeof value.readCompletedAt !== 'string') {
+        throw new Error('Coverage del backup non valida: fine lettura non valida.');
+    }
+    return {
+        scope: value.scope,
+        months: [...months],
+        ...(value.readStartedAt !== undefined ? { readStartedAt: value.readStartedAt } : {}),
+        ...(value.readCompletedAt !== undefined ? { readCompletedAt: value.readCompletedAt } : {}),
+    };
+}
 
 export function validateImportData(value: unknown): asserts value is Record<string, unknown> {
     if (!isRecord(value)) throw new Error('Dati del backup non validi. Il file originale non è stato modificato.');
@@ -56,9 +81,7 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         for (const item of value.history) {
             const rawId = isRecord(item) ? item.id : undefined;
             const id = normalizeBusinessId(rawId);
-            if (!id) {
-                throw new Error('history: elemento senza identificativo valido.');
-            }
+            if (!id) throw new Error('history: elemento senza identificativo valido.');
             if (ids.has(id)) throw new Error(`history: identificativo duplicato ${id}.`);
             ids.add(id);
             if (!isRecord(item)) throw new Error('history: elemento non valido.');
@@ -73,11 +96,8 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         const seen = new Set<string>();
         for (const exercise of routine.exercises) {
             if (!isRecord(exercise)) throw new Error(`routines.${index}.exercises: elemento senza identificativo valido.`);
-            const exId = exercise.exId;
-            const normalized = normalizeBusinessId(exId);
-            if (!normalized) {
-                throw new Error(`routines.${index}.exercises: esercizio senza identificativo valido.`);
-            }
+            const normalized = normalizeBusinessId(exercise.exId);
+            if (!normalized) throw new Error(`routines.${index}.exercises: esercizio senza identificativo valido.`);
             if (seen.has(normalized)) throw new Error(`routines.${index}.exercises: identificativo duplicato ${normalized}.`);
             seen.add(normalized);
         }
@@ -89,11 +109,8 @@ export function validateImportData(value: unknown): asserts value is Record<stri
         const seen = new Set<string>();
         for (const routine of cycle.routines) {
             if (!isRecord(routine)) throw new Error(`trainingCycles.${index}.routines: elemento senza identificativo valido.`);
-            const routineId = routine.routineId;
-            const normalized = normalizeBusinessId(routineId);
-            if (!normalized) {
-                throw new Error(`trainingCycles.${index}.routines: routine senza identificativo valido.`);
-            }
+            const normalized = normalizeBusinessId(routine.routineId);
+            if (!normalized) throw new Error(`trainingCycles.${index}.routines: routine senza identificativo valido.`);
             if (seen.has(normalized)) throw new Error(`trainingCycles.${index}.routines: identificativo duplicato ${normalized}.`);
             seen.add(normalized);
         }
@@ -111,14 +128,10 @@ export function validateImportData(value: unknown): asserts value is Record<stri
             checkIds(day[key], `nutrition.${date}.${key}`);
             for (const item of day[key] as unknown[]) {
                 if (!isRecord(item)) continue;
-                const id = item.id;
-                const normalizedId = normalizeBusinessId(id);
-                if (!normalizedId) {
-                    throw new Error(`nutrition.${date}.${key}: identificativo non valido.`);
-                }
+                const normalizedId = normalizeBusinessId(item.id);
+                if (!normalizedId) throw new Error(`nutrition.${date}.${key}: identificativo non valido.`);
                 if (key === 'supplementsIntake') {
-                    const supplementId = item.supplementId;
-                    const normalizedSupplementId = normalizeBusinessId(supplementId);
+                    const normalizedSupplementId = normalizeBusinessId(item.supplementId);
                     if (!normalizedSupplementId) {
                         throw new Error(`nutrition.${date}.supplementsIntake: integratore senza identificativo valido.`);
                     }
@@ -148,15 +161,12 @@ export function decodeImport(payload: unknown, owner: string) {
         throw new Error('Formato file non valido o non supportato.');
     }
 
-    // Container, data schema and sync protocol are normalized as independent dimensions.
     const normalized = normalizeBackupRecord(payload);
     if (normalized.format !== 'logbook-backup') throw new Error('Formato file non valido o non supportato.');
-
-    if (normalized.type !== 'backup' && normalized.type !== 'share') {
-        throw new Error('Tipo file non valido o non supportato.');
-    }
+    if (normalized.type !== 'backup' && normalized.type !== 'share') throw new Error('Tipo file non valido o non supportato.');
 
     const share = normalized.type === 'share';
+    const coverage = share ? undefined : parseBackupCoverage(normalized.coverage);
     const sourceOwner = typeof normalized.owner === 'string' ? normalized.owner : null;
     if (!share && sourceOwner && sourceOwner !== owner) {
         throw new Error('Sicurezza: Non puoi importare il backup di un altro utente. Accedi con il proprietario del backup.');
@@ -178,12 +188,7 @@ export function decodeImport(payload: unknown, owner: string) {
         ? Object.fromEntries(arrays.filter(key => ['library', 'routines', 'trainingCycles'].includes(key) && sanitizedData[key] !== undefined).map(key => [key, sanitizedData[key]]))
         : sanitizedData;
 
-    return {
-        data: selected,
-        share,
-        ownerUnknown: !share && !sourceOwner,
-        coverage: !share && isRecord(normalized.coverage) ? normalized.coverage : undefined,
-    };
+    return { data: selected, share, ownerUnknown: !share && !sourceOwner, coverage };
 }
 
 function mergeMissing(local: unknown, incoming: unknown): unknown {
@@ -196,22 +201,48 @@ function mergeMissing(local: unknown, incoming: unknown): unknown {
         }
         return [...new Set([...local, ...incoming])];
     }
-    if (isRecord(local) && isRecord(incoming)) return Object.fromEntries([...new Set([...Object.keys(local), ...Object.keys(incoming)])].map(key =>
-        [key, Object.hasOwn(incoming, key) ? mergeMissing(local[key], incoming[key]) : structuredClone(local[key])]));
+    if (isRecord(local) && isRecord(incoming)) {
+        return Object.fromEntries([...new Set([...Object.keys(local), ...Object.keys(incoming)])].map(key =>
+            [key, Object.hasOwn(incoming, key) ? mergeMissing(local[key], incoming[key]) : structuredClone(local[key])]));
+    }
     return structuredClone(local);
 }
 
-export function prepareImport(current: UserData, incoming: Record<string, unknown>, mode: ImportMode): { data: UserData; collisions: number } {
+function restoreWithCoverage(current: UserData, incoming: Record<string, unknown>, coverage?: BackupCoverage): Record<string, unknown> {
+    const restored = { ...structuredClone(current), ...structuredClone(incoming) } as Record<string, unknown>;
+    if (coverage?.scope !== 'cloud-and-device') {
+        if (Array.isArray(incoming.history)) {
+            const historyById = new Map<string, unknown>();
+            for (const item of current.history ?? []) {
+                const id = normalizeBusinessId(item.id);
+                if (id) historyById.set(id, structuredClone(item));
+            }
+            for (const item of incoming.history) {
+                const id = isRecord(item) ? normalizeBusinessId(item.id) : null;
+                if (id) historyById.set(id, structuredClone(item));
+            }
+            restored.history = [...historyById.values()];
+        }
+        if (isRecord(incoming.nutrition)) {
+            restored.nutrition = { ...structuredClone(current.nutrition ?? {}), ...structuredClone(incoming.nutrition) };
+        }
+    }
+    return restored;
+}
+
+export function prepareImport(current: UserData, incoming: Record<string, unknown>, mode: ImportMode, coverage?: BackupCoverage): { data: UserData; collisions: number } {
     let collisions = 0;
     for (const key of arrays) {
         if (!Array.isArray(incoming[key])) continue;
         const local = new Map((current[key] ?? []).map(item => [String(item.id), item]));
-        for (const item of incoming[key] as Array<{ id: string }>) if (local.has(String(item.id)) && !equal(local.get(String(item.id)), item)) collisions++;
+        for (const item of incoming[key] as Array<{ id: string }>) {
+            if (local.has(String(item.id)) && !equal(local.get(String(item.id)), item)) collisions++;
+        }
     }
     for (const [date, day] of Object.entries(isRecord(incoming.nutrition) ? incoming.nutrition : {})) {
         if (current.nutrition?.[date] && !equal(current.nutrition[date], day)) collisions++;
     }
-    const raw = mode === 'restore' ? { ...structuredClone(current), ...structuredClone(incoming) } : mergeMissing(current, incoming);
+    const raw = mode === 'restore' ? restoreWithCoverage(current, incoming, coverage) : mergeMissing(current, incoming);
     const data = UserDataSchema.parse({ ...(raw as Record<string, unknown>), legalConsent: current.legalConsent }) as unknown as UserData;
     if (mode === 'merge') for (const [date, day] of Object.entries(data.nutrition ?? {})) {
         if (!isRecord(incoming.nutrition) || !incoming.nutrition[date] || equal(day.meals, current.nutrition?.[date]?.meals) || !day.meals?.length) continue;
@@ -220,7 +251,12 @@ export function prepareImport(current: UserData, incoming: Record<string, unknow
             const base = meal.baseQty && meal.baseQty > 0 ? meal.baseQty : (meal.unit === 'porzione' || meal.meal === 'quick' ? 1 : 100);
             for (const key of ['kcal', 'carbs', 'pro', 'fat'] as const) totals[key] += Number(meal[key]) * Number(meal.quantity) / base;
         }
-        Object.assign(day, { kcal: Math.round(totals.kcal), carbs: Math.round(totals.carbs * 10) / 10, pro: Math.round(totals.pro * 10) / 10, fat: Math.round(totals.fat * 10) / 10 });
+        Object.assign(day, {
+            kcal: Math.round(totals.kcal),
+            carbs: Math.round(totals.carbs * 10) / 10,
+            pro: Math.round(totals.pro * 10) / 10,
+            fat: Math.round(totals.fat * 10) / 10
+        });
     }
     return { data, collisions };
 }

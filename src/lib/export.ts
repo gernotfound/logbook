@@ -367,11 +367,14 @@ export const Exporter = {
             const snapshot = structuredClone(useAppStore.getState().userData);
             if (!snapshot) throw new Error('Dati locali non ancora disponibili.');
             const selectedMode = decoded.share ? 'merge' : mode;
-            const prepared = prepareImport(snapshot, decoded.data, selectedMode);
+            const prepared = prepareImport(snapshot, decoded.data, selectedMode, decoded.coverage);
             const summary = (selectedMode === 'restore' ? 'Ripristino' : 'Importazione incrementale') +
                 ': ' + (prepared.data.history?.length ?? 0) + ' allenamenti, ' + Object.keys(prepared.data.nutrition ?? {}).length +
                 ' giornate, ' + (prepared.data.library?.length ?? 0) + ' esercizi.\n' + prepared.collisions + ' collisioni su identificativi o giornate.\n' +
                 (selectedMode === 'restore' ? 'I campi presenti nel file sostituiranno i dati locali corrispondenti.' : 'In caso di collisione saranno conservati i valori locali.') +
+                (selectedMode === 'restore' && decoded.coverage?.scope === 'device'
+                    ? '\nIl backup è parziale: storico e nutrizione non presenti nel file saranno conservati.'
+                    : '') +
                 (decoded.ownerUnknown ? '\nIl backup non identifica un proprietario. Conferma solo se questi dati sono tuoi.' : '') +
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
