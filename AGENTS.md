@@ -80,7 +80,7 @@ Prima di modificare un dato, classificarlo come effimero, application/local-only
 | Livello | Ruolo |
 |---|---|
 | **Zustand** | Stato operativo in memoria, source of truth per React |
-| **IndexedDB** | Persistenza locale principale: Local Envelope V4 + journal semantico |
+| **IndexedDB** | Persistenza locale principale: Local Envelope V5 + journal semantico |
 | **`localStorage`** | Persistenza sincrona/device-critical, preferenze e code boundary-specific |
 | **Firestore** | Replica remota e sincronizzazione cloud |
 
