@@ -46,12 +46,19 @@ function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClo
     if (!coversVectorClock(documentClock, clock)) throw new Error('Document clock does not cover FieldCandidate');
     if (deleteClock && !coversVectorClock(clock, deleteClock)) throw new Error('FieldCandidate does not cover delete barrier');
     if (!Object.hasOwn(raw, 'value')) throw new Error('Invalid FieldCandidate value');
+    let legacyClock: VectorClock | undefined;
+    if ('legacyClock' in raw) {
+        legacyClock = parseVectorClock(raw.legacyClock, 'legacy candidate clock');
+        assertDotCovered(legacyClock, raw.actorId, seq, 'legacy FieldCandidate');
+        if (!coversVectorClock(documentClock, legacyClock)) throw new Error('Document clock does not cover legacy FieldCandidate frontier');
+    }
     const guard = parseGuard(raw.guard, 'FieldCandidate');
     return {
         clock,
         actorId: raw.actorId,
         seq,
         value: structuredClone(raw.value),
+        ...(legacyClock ? { legacyClock } : {}),
         ...(guard ? { guard } : {}),
     };
 }
