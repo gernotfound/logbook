@@ -317,7 +317,7 @@ describe('Sync Protocol 2 causal convergence regressions', () => {
         expect((together.documents.get('')?.routines as any[]).map(item => item.id)).toEqual(['r3', 'r2', 'r1']);
     });
 
-    it('keeps protocol-2 SyncMeta internally covered after every regression scenario', () => {
+    it('keeps current-protocol SyncMeta internally covered after every regression scenario', () => {
         const meta: SyncMeta = {
             protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { A: 2, B: 1 },
@@ -325,6 +325,6 @@ describe('Sync Protocol 2 causal convergence regressions', () => {
                 'profile/name': { actorId: 'A', seq: 2, clock: { A: 2, B: 1 } },
             },
         };
-        expect(meta.protocolVersion).toBe(2);
+        expect(meta.protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
     });
 });
