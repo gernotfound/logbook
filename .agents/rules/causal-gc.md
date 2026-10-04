@@ -36,21 +36,21 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 
 **MUST:** la scelta del winner continua a confrontare il clock originale dell'evento contender; un clock già joinato non deve essere usato retroattivamente per alterare il winner.
 
-**MUST:** se un ancestor blocca il contender, l'identity del winner (`actorId`, `seq`, `deleted`) resta quella dell'ancestor, ma il suo clock assorbe il causal context osservato.
+**MUST:** se un ancestor blocca un contender, l'evento ancestor resta immutabile: il contender avanza soltanto il frontier documentale `SyncMeta.clock`; non viene incorporato retroattivamente in `FieldStamp.clock`.
 
-**MUST:** se il contender supera l'ancestor, il clock dell'ancestor viene comunque incluso nel `jointClock` che potrà diventare il nuovo same-field stamp.
+**MUST:** una delete conserva una barriera remove-wins separata in `deleteClock`, composta dai dot delle delete osservate. Una recreation può cambiare il winner visibile senza cancellare la barriera: qualunque update successivo deve dimostrare di aver osservato tutte le delete coperte.
 
-Questa regola rende una tombstone antenata un causal summary effettivo dei discendenti che copre.
+**MUST:** quando una write ancestor diventa visibile, ogni descendant viene rivalutato. Sopravvivono soltanto il winner/candidate descendant che coprono il boundary causale dell'ancestor; candidate nascosti ancora validi devono poter riemergere senza dipendere dall'ordine di delivery.
 
 ## Subtree compaction
 
-`compactSyncMeta()` può eliminare uno stamp discendente `D` sotto una tombstone antenata `T` solo quando:
+`compactSyncMeta()` può eliminare uno stamp discendente `D` sotto un ancestor `T` con barriera delete solo quando:
 
-1. `T.deleted === true`;
+1. `T.deleted === true` oppure `T.deleteClock` è presente dopo una recreation;
 2. la chiave di `D` è realmente discendente della chiave di `T` (`T + '/'` come prefisso di segmenti già URI-encoded);
-3. `T.clock` copre completamente `D.clock`.
+3. la barriera `T.deleteClock` (o il clock della tombstone legacy quando necessario) copre completamente `D.clock`.
 
-**MUST:** `T` stessa resta persistita.
+**MUST:** `T` stessa e la sua barriera delete restano persistite.
 
 **MUST:** uno stamp concorrente/non osservato che è ancora semanticamente visibile dopo l'arbitration Protocol 2 resta persistito; la compaction non può eliminarlo usando il solo tie-break.
 
