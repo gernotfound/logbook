@@ -192,7 +192,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 
 export interface DomainCommitResult { operations: SemanticOperation[]; data: UserData; }
 
-export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData): Promise<DomainCommitResult> {
+export async function commitDomainOperations(owner: string, batch: DomainOperationBatch, initialBase: UserData, guard?: LocalWriteGuard): Promise<DomainCommitResult> {
     owner = normalizeStorageOwner(owner);
     const domainOperations = normalizeDomainOperationBatch(batch);
     const fallback = structuredClone(parse(initialBase));
@@ -200,6 +200,7 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     let operations: SemanticOperation[] = [];
     let savedData = fallback;
     await update<any>(keyFor(owner), raw => {
+        if (guard && !guard()) throw new Error('Commit locale invalidato dal cambio sessione');
         const current = validate(raw, owner);
         const base = current?.data ?? fallback;
         const desired = applyDomainOperations(base, domainOperations);
@@ -234,6 +235,17 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato');
         const pending = current.pending.filter(op => op.seq > expectedSeq);
+        const incomingMeta = syncMeta ?? {};
+        const incomingIsStale = Object.entries(incomingMeta).some(([path, meta]) => {
+            const durable = current.syncMetaByDocument[path];
+            return durable !== undefined
+                && coversVectorClock(durable.clock, meta.clock)
+                && !coversVectorClock(meta.clock, durable.clock);
+        });
+        // Another tab may already have installed a causally newer acknowledgement.
+        // Never let an older remote snapshot replace that durable business state after
+        // the newer journal entries have already been acknowledged and removed.
+        if (incomingIsStale) return current;
         const newClock = { ...current.clock };
         if (syncMeta) for (const meta of Object.values(syncMeta)) for (const [actor, seq] of Object.entries(meta.clock)) newClock[actor] = Math.max(newClock[actor] || 0, seq);
         const newSyncMeta = { ...current.syncMetaByDocument, ...(syncMeta || {}) };
@@ -278,10 +290,24 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
             if (coverageMode === 'window') for (const [path, meta] of Object.entries(current.syncMetaByDocument ?? {})) if (!authoritativePaths.has(path)) syncMeta[path] = meta;
             const updatedClock = { ...current.clock };
+            let staleCloudSnapshot = false;
             if (cloudDocuments) for (const [path, doc] of cloudDocuments.entries()) if (doc._sync) {
                 const meta = parseCloudSyncMeta(path, doc._sync);
+                const durable = current.syncMetaByDocument[path];
+                if (authoritativePaths.has(path) && durable
+                    && coversVectorClock(durable.clock, meta.clock)
+                    && !coversVectorClock(meta.clock, durable.clock)) {
+                    staleCloudSnapshot = true;
+                }
                 syncMeta[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) updatedClock[actor] = Math.max(updatedClock[actor] || 0, seq);
+            }
+            // A foreground request started in another tab can complete after a newer
+            // acknowledgement has already become durable. Its older snapshot is not
+            // authoritative anymore; keep the durable envelope rather than rolling it back.
+            if (staleCloudSnapshot) {
+                saved = current;
+                return current;
             }
             const localDocs = projectDocuments(current.data, catalog);
             const cloudDocsForHydration = projectDocuments(cloud, catalog);
