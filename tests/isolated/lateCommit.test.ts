@@ -9,7 +9,7 @@ vi.mock('../../src/lib/catalog/catalogService', () => ({ getCachedCatalog: async
 vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: remote.apply }));
 
 import { replicateJournal, waitForJournalIdle } from '../../src/lib/sync/replicateJournal';
-import { initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { invalidateSession } from '../../src/lib/sync/session';
 import type { UserData } from '../../src/types';
@@ -29,7 +29,19 @@ beforeEach(async () => {
     });
     invalidateSession(); await clear();
     remote.auth.currentUser = { uid: 'a' }; remote.apply.mockReset();
-    await initializeLocal('user:a', data(170)); await commitLocal('user:a', data(171), data(170));
+    await initializeLocal('user:a', data(170));
+    const now = Date.now();
+    await adoptReplicaCheckpoint('user:a', {
+        identity: {
+            slot: 's00',
+            replicaId: 'replica-a',
+            generation: 1,
+            checkpointAtMs: now,
+            leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        },
+        baseSeq: 0,
+    }, { clock: {}, syncMetaByDocument: {} });
+    await commitLocal('user:a', data(171), data(170));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });

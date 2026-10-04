@@ -15,13 +15,32 @@ vi.mock('firebase/firestore', () => ({
         const runAttempt = async () => {
             const writes: Array<{ path: string, data?: any, deleted?: boolean }> = [];
             const transaction = {
-                get: async (_ref: { path: string }) => ({
-                    exists: () => true,
-                    data: () => ({
-                        profile: { height: '170' },
-                        _sync: { protocolVersion: 1, clock: {}, fields: {} }
+                get: async (ref: { path: string }) => ref.path.endsWith('/sync_control/state')
+                    ? ({
+                        exists: () => true,
+                        data: () => ({
+                            protocolVersion: 3,
+                            replicas: {
+                                s00: {
+                                    replicaId: 'replica-a',
+                                    generation: 1,
+                                    status: 'active',
+                                    lastSeq: 0,
+                                    leaseUntilMs: Date.now() + 360 * 24 * 60 * 60 * 1000,
+                                    checkpointAtMs: Date.now(),
+                                    checkpointClock: {},
+                                },
+                            },
+                            mutation: { slot: 's00', action: 'checkpoint' },
+                        }),
                     })
-                }),
+                    : ({
+                        exists: () => true,
+                        data: () => ({
+                            profile: { height: '170' },
+                            _sync: { protocolVersion: 1, clock: {}, fields: {} }
+                        })
+                    }),
                 set: (ref: { path: string }, data: any) => writes.push({ path: ref.path, data: structuredClone(data) }),
                 delete: (ref: { path: string }) => writes.push({ path: ref.path, deleted: true })
             };
@@ -48,28 +67,41 @@ describe('transaction writer retry safety', () => {
             path: ['profile', 'height'],
             value: '171',
             isDelete: false,
-            actorId: 'A',
+            actorId: 's00',
             seq: 1,
-            clock: { A: 1 }
+            clock: { s00: 1 }
         }];
 
-        const outcome = await applyDocumentChanges({} as any, 'user-a', ops, () => true);
+        const now = Date.now();
+        const outcome = await applyDocumentChanges({} as any, 'user-a', ops, () => true, {
+            slot: 's00',
+            replicaId: 'replica-a',
+            generation: 1,
+            checkpointAtMs: now,
+            leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+        });
 
         expect(harness.attempts).toHaveLength(2);
         expect(harness.attempts[1]).toEqual(harness.attempts[0]);
-        expect(harness.attempts[0]).toHaveLength(1);
-        expect(harness.attempts[0][0].data.profile.height).toBe('171');
-        expect(harness.attempts[0][0].data._sync.fields['profile/height']).toMatchObject({
-            actorId: 'A',
+        expect(harness.attempts[0]).toHaveLength(2);
+        const businessWrite = harness.attempts[0].find(write => write.path === 'users/user-a');
+        const controlWrite = harness.attempts[0].find(write => write.path.endsWith('/sync_control/state'));
+        expect(businessWrite?.data.profile.height).toBe('171');
+        expect(controlWrite?.data.replicas.s00.lastSeq).toBe(1);
+        expect(businessWrite?.data._sync.writer).toMatchObject({
+            slot: 's00', replicaId: 'replica-a', generation: 1, seq: 1,
+        });
+        expect(businessWrite?.data._sync.fields['profile/height']).toMatchObject({
+            actorId: 's00',
             seq: 1,
-            clock: { A: 1 }
+            clock: { s00: 1 }
         });
         expect(outcome.syncMeta[''].fields['profile/height'].seq).toBe(1);
 
         // Size checks happen once per callback attempt, after _sync has been attached.
         expect(harness.checkDocSize).toHaveBeenCalledTimes(2);
         for (const [payload] of harness.checkDocSize.mock.calls) {
-            expect(payload._sync.fields['profile/height']).toMatchObject({ actorId: 'A', seq: 1 });
+            expect(payload._sync.fields['profile/height']).toMatchObject({ actorId: 's00', seq: 1 });
         }
     });
 });
