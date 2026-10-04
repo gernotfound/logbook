@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Logic } from './logic';
 import { createBackup, decodeImport, prepareImport, type BackupCoverage, type ImportMode } from './backup';
 import { captureSession, isCurrentSession } from './sync/session';
+import { readLocal } from './sync/localRepository';
 import equal from 'fast-deep-equal';
 import type { ExportShareOptions, TrainingCycle, UserData, WorkoutRoutine } from '../types';
 
@@ -347,7 +348,10 @@ export const Exporter = {
     async importFromJson(
         file: File,
         _currentUser: { uid: string } | null,
-        saveUserData: (update: (previous: UserData | null) => UserData) => Promise<unknown>,
+        saveUserData: (
+            update: (previous: UserData | null) => UserData,
+            options?: { expectedRevision?: number },
+        ) => Promise<unknown>,
         mode: ImportMode = 'merge'
     ) {
         const session = captureSession();
@@ -364,8 +368,15 @@ export const Exporter = {
             });
             assertCurrent();
             const decoded = decodeImport(JSON.parse(content), session.owner);
-            const snapshot = structuredClone(useAppStore.getState().userData);
-            if (!snapshot) throw new Error('Dati locali non ancora disponibili.');
+            const durableEnvelope = await readLocal(session.owner);
+            assertCurrent();
+            if (!durableEnvelope) throw new Error('Dati locali non ancora disponibili.');
+            const storeSnapshot = structuredClone(useAppStore.getState().userData);
+            if (!storeSnapshot || !equal(storeSnapshot, durableEnvelope.data)) {
+                throw new Error('I dati locali stanno ancora cambiando. Attendi il salvataggio e ripeti l’importazione.');
+            }
+            const snapshot = structuredClone(durableEnvelope.data);
+            const expectedRevision = durableEnvelope.revision;
             const selectedMode = decoded.share ? 'merge' : mode;
             const prepared = prepareImport(snapshot, decoded.data, selectedMode, decoded.coverage);
             const summary = (selectedMode === 'restore' ? 'Ripristino' : 'Importazione incrementale') +
@@ -379,11 +390,16 @@ export const Exporter = {
                 '\nI consensi importati non verranno applicati.\nProcedere?';
             if (!(await useDialogStore.getState().showConfirm(summary, 'Anteprima importazione'))) return;
             assertCurrent();
+            const latestEnvelope = await readLocal(session.owner);
+            assertCurrent();
+            if (!latestEnvelope || latestEnvelope.revision !== expectedRevision) {
+                throw new Error('I dati sono cambiati durante l’anteprima. Ripeti l’importazione.');
+            }
             await saveUserData(previous => {
                 assertCurrent();
                 if (!equal(previous, snapshot)) throw new Error('I dati sono cambiati durante l’anteprima. Ripeti l’importazione.');
                 return prepared.data;
-            });
+            }, { expectedRevision });
             assertCurrent();
             const status = useAppStore.getState().syncHealth;
             void useDialogStore.getState().showAlert(status === 'local-pending'
