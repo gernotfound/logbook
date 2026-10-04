@@ -10,6 +10,7 @@ import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
 import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
+import { ReplicaFencedError } from './replicaProtocol';
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -88,13 +89,20 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
+        if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
+        if (envelope.actorId !== envelope.replica.slot || envelope.pending.some(operation => operation.actorId !== envelope.replica!.slot)) {
+            throw new ReplicaFencedError('Journal appartenente a una replica precedente: checkpoint completo richiesto.');
+        }
+        if (envelope.replica.leaseUntilMs < Date.now()) {
+            throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
+        }
 
         const delivered = structuredClone(envelope.pending);
         deliveryState.delivered = delivered;
 
         let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;
         try {
-            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current);
+            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica);
         } catch (error) {
             const failure = classifySyncFailure(error);
             if (failure.status === 'local-pending') {

@@ -1,6 +1,7 @@
 export const PRIVATE_ACCOUNT_COLLECTIONS = [
   'history_months',
   'nutrition_months',
+  'sync_control',
   'telemetry_errors',
   'telemetry_events',
   'telemetry_anomalies',
