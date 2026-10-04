@@ -7,6 +7,7 @@ import {
     type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { claimReplicaCheckpoint } from '../../src/lib/sync/replicaProtocol';
 
 let env: RulesTestEnvironment;
 
@@ -22,6 +23,23 @@ beforeAll(async () => {
 
 beforeEach(() => env.clearFirestore());
 afterAll(async () => { await env?.cleanup(); });
+
+it('deduplicates concurrent first claims from tabs sharing one local actor identity', async () => {
+    const uid = 'a';
+    const db = env.authenticatedContext(uid).firestore();
+    const candidate = 'shared-local-actor';
+    const [left, right] = await Promise.all([
+        claimReplicaCheckpoint(db, uid, null, {}, 0, candidate),
+        claimReplicaCheckpoint(db, uid, null, {}, 0, candidate),
+    ]);
+    expect(left.identity.slot).toBe(right.identity.slot);
+    expect(left.identity.replicaId).toBe(candidate);
+    expect(right.identity.replicaId).toBe(candidate);
+    expect(left.identity.generation).toBe(1);
+    expect(right.identity.generation).toBe(1);
+    const control = (await getDoc(doc(db, 'users/' + uid + '/sync_control/state'))).data()!;
+    expect(Object.keys(control.replicas)).toEqual(['s00']);
+});
 
 it('fences an old replica generation after an expired slot is reused', async () => {
     const uid = 'a';
