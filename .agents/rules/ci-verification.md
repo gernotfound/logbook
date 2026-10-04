@@ -117,7 +117,7 @@ ${{ matrix.command }} 2>&1 | tee "verification-${{ matrix.id }}.log"
 - NOTE: `npm audit --audit-level=high` è registry-dependent e può cambiare senza commit; resta bloccante nel workflow ma non fa parte della semantica deterministica del comando repository `verify:m8`.
 - VERIFY: required status checks/rulesets sono configurazione GitHub esterna; non dichiararli required senza leggere il ruleset effettivo.
 - VERIFY: Vercel Deployment Checks è configurazione esterna; non assumere che blocchi il deploy solo perché il job GitHub si chiama `Canonical Verification`.
-- MUST: Firebase Hosting Production parte soltanto dopo `Milestone Verification` verde su push a `main`, usa lo stesso exact SHA e rifiuta di deployare se `origin/main` è già avanzato.
+- MUST: Firebase Hosting Production parte soltanto dopo il completamento riuscito di `Firebase Firestore Production`, che a sua volta deriva da `Milestone Verification` verde su push a `main`; usa lo stesso exact SHA e rifiuta di deployare se `origin/main` è già avanzato. Questo serializza i cutover che cambiano contemporaneamente Rules e client.
 - MUST: il workflow Hosting usa `firebase deploy --only hosting`; Rules e indici Firestore non sono side effect del deploy frontend.
 - MUST: Firebase Firestore Production è un workflow separato, parte soltanto dopo lo stesso gate canonico su push a `main`, ricontrolla l'exact SHA e riconcilia sempre lo stato desiderato con il provider live; non usa il commit padre come proxy dell'ultimo stato distribuito.
 - MUST: il deploy Firestore avviene solo quando la riconciliazione rileva Rules divergenti o indici desiderati mancanti; indici già presenti ma non `READY` richiedono attesa/verifica senza un deploy ridondante, mentre uno stato live non determinabile è failure.
