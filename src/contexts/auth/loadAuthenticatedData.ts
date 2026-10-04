@@ -124,9 +124,13 @@ export async function loadAuthenticatedData({
                 setUserData(hydratedEnv.data);
             } catch (mergeError) {
                 if (!isCurrent()) return;
-                if ((mergeError as { code?: unknown })?.code === 'invalid-cloud-sync-metadata') {
+                const code = (mergeError as { code?: unknown })?.code;
+                if (code === 'invalid-cloud-sync-metadata') {
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
                     console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
+                } else if (code === 'replica-capacity' || code === 'replica-fenced') {
+                    setSaveError(mergeError instanceof Error ? mergeError.message : 'Sincronizzazione sospesa: questa copia deve completare un nuovo checkpoint cloud.');
+                    console.warn('Checkpoint replica non completato; stato locale preservato:', mergeError);
                 } else {
                     console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
                 }
