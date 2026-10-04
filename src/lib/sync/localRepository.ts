@@ -236,7 +236,7 @@ export async function acknowledgeThrough(owner: string, expectedSeq: number, rem
         if (!current) throw new Error('Archivio locale non trovato');
         const pending = current.pending.filter(op => op.seq > expectedSeq);
         const incomingMeta = syncMeta ?? {};
-        const incomingIsStale = Object.entries(incomingMeta).some(([path, meta]) => {
+        const incomingIsStale = Object.keys(incomingMeta).length > 0 && Object.entries(incomingMeta).some(([path, meta]) => {
             const durable = current.syncMetaByDocument[path];
             return durable !== undefined
                 && coversVectorClock(durable.clock, meta.clock)
