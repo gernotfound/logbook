@@ -9,7 +9,7 @@ L'app utilizza quattro livelli di storage con ruoli distinti:
 | Livello | Tecnologia | Ruolo | Dati principali |
 |---|---|---|---|
 | **Stato operativo** | Zustand 5 (`useAppStore`) | Stato in memoria, single source of truth per i componenti React | Tutto `UserData`, `localWorkout`, `syncing`, `saveError`, `compatibilityStatus` |
-| **Persistenza locale principale** | IndexedDB (`idb-keyval`) | Copia locale transazionale asincrona dell'envelope dati V4 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
+| **Persistenza locale principale** | IndexedDB (`idb-keyval`) | Copia locale transazionale asincrona dell'envelope dati V5 | Chiave `logbook:v2:${owner}`; `v2` è namespace storage storico e NON è la versione dell'envelope |
 | **Persistenza sincrona** | `localStorage` | Dati che richiedono salvataggio sincrono, preferenze e code boundary-specific | Namespace owner-scoped `logbook:v2:${owner}:*`, flag auth/guest, workout/timer, bozze e telemetria queued |
 | **Replica remota** | Firestore | Sincronizzazione cloud e condivisione cross-device | Documento utente + subcollection mensilizzate |
 
@@ -37,8 +37,8 @@ Non dedurre da questa regola che ogni singolo accesso `localStorage` debba neces
 
 ```ts
 CURRENT_DATA_SCHEMA = 1
-CURRENT_SYNC_PROTOCOL = 2
-CURRENT_LOCAL_ENVELOPE = 4
+CURRENT_SYNC_PROTOCOL = 3
+CURRENT_LOCAL_ENVELOPE = 5
 CURRENT_BACKUP_SCHEMA = 3
 ```
 
@@ -101,7 +101,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
 
-### Sync Protocol 2 — timestamp evento e frontier osservato
+### Sync Protocol 3 — causal core e replica fencing
 
 `FieldStamp.clock` è il timestamp causale immutabile dell'evento vincitore del field. `SyncMeta.clock` è invece il frontier cumulativo degli eventi osservati nel documento.
 
@@ -111,18 +111,31 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** ancestor e descendant vengono riconciliati con lo stesso ordine totale. Una write ancestor preserva e riapplica soltanto i descendant stamp che la superano; i descendant shadowed vengono rimossi semanticamente. Guard fallite vengono escluse prima dell'arbitration del field.
 
-Il protocollo 1 viene normalizzato a 2 prima del semantic merge. Poiché Protocol 1 poteva avere `FieldStamp.clock` già contaminati da contender perdenti, la migrazione separa il dot certo del winner (`actorId`/`seq`) dal vecchio frontier in `legacyClock`: i retry già risolti non possono cambiare il winner storico, mentre una nuova operation che dimostra di aver osservato il dot del winner può supersederlo senza ereditare dipendenze spurie. Client futuri restano fail-closed secondo le regole di schema evolution.
+Il protocollo 1 viene normalizzato sequenzialmente 1→2→3 prima del semantic merge. Poiché Protocol 1 poteva avere `FieldStamp.clock` già contaminati da contender perdenti, la migrazione separa il dot certo del winner (`actorId`/`seq`) dal vecchio frontier in `legacyClock`: i retry già risolti non possono cambiare il winner storico, mentre una nuova operation che dimostra di aver osservato il dot del winner può supersederlo senza ereditare dipendenze spurie. Client futuri restano fail-closed secondo le regole di schema evolution.
 
 I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente. L'allowlist canonica e il boundary checker sono documentati in `.agents/rules/domain-operations.md`.
 
 **MUST:** nuovi consumer business ordinari non possono introdurre bypass snapshot fuori dall'allowlist verificata dal gate M8.
 
-**MUST:** la remediation del protocollo causale mantiene Data Schema 1, Local Envelope 4 e Backup Schema 3, ma porta Sync Protocol a 2. Il passaggio 1→2 usa il registry di schema evolution senza accoppiare le altre dimensioni.
+**MUST:** Data Schema resta 1 e Backup Schema resta 3. Sync Protocol 3 richiede Local Envelope 5 perché l'envelope persiste l'identità replica; le migrazioni 1→2→3 e 4→5 restano dimensioni esplicite e indipendenti.
 
 **MUST:** nessuna ottimizzazione del debounce cloud può posticipare la persistenza IndexedDB immediata.
 
 **MUST:** gli helper legacy `syncHistoryMonths` / `syncNutritionMonths` non costituiscono la pipeline normativa di write. Le write utente correnti passano da journal + `transactionWriter`.
 
+### Replica checkpoint, lease e stable frontier
+
+Protocol 3 limita i nuovi actor a 16 slot `s00`…`s15` registrati in `users/{uid}/sync_control/state`. Ogni incarnazione di un device ha `replicaId` e `generation`; il riuso dello slot incrementa la generation e continua la sequence monotona.
+
+- **MUST:** una replica assente, con checkpoint oltre 30 giorni o prossima alla fine lease esegue `loadCloudPayload({ allMonths: true })` e hydration `all` prima di ottenere/rinnovare lo slot.
+- **MUST:** `adoptReplicaCheckpoint()` ribasa eventuali pending locali sul nuovo slot senza perderle.
+- **MUST:** `replicateJournal()` rifiuta journal appartenenti a slot/generation precedenti.
+- **MUST:** `transactionWriter` aggiorna documenti business e `sync_control.lastSeq` nella stessa transazione e persiste `_sync.writer` con slot/replicaId/generation/seq.
+- **MUST:** la stable frontier usata per terminal GC è il minimo componente-per-componente dei checkpoint delle sole repliche active.
+- **MUST:** la lease/retirement usa il wall clock solo per membership/fencing; non costituisce mai prova causale per rimuovere una tombstone.
+- **MUST:** dopo il cutover Protocol 3 i client non eliminano fisicamente i documenti sync root/mensili; un documento causalmente vuoto resta come empty shell fenced con `_schemaVersion` e `_sync.writer`.
+
+Le Rules rendono autorevoli membership, generation e scadenza lease tramite `request.time`. La completezza del checkpoint deriva invece dal full scan obbligatorio del client ed è un'invariante di protocollo coperta dai test, non una prova di lettura verificabile crittograficamente dalle Rules.
 ## Acknowledge causale e race remote commit → local edit → acknowledge
 
 `acknowledgeThrough(owner, expectedSeq, remote, ..., syncMeta)` è un boundary CRITICAL.
