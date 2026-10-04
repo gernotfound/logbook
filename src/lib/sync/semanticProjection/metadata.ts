@@ -255,8 +255,8 @@ function compareCanonicalClock(left: VectorClock, right: VectorClock): number {
  * Protocol 2 winner order.
  *
  * Causal dominance remains authoritative. Concurrent events are then placed in a
- * single deterministic total order: observed-frontier cardinality, delete bias
- * for equal frontiers, actor, sequence and canonical vector order. Because causal
+ * single deterministic total order: monotone vector-clock weight, delete bias
+ * for equal weight, actor, sequence and canonical vector order. Because causal
  * dominance strictly increases the vector-clock weight, this order extends
  * happens-before and is transitive, so delivery order and batch partitioning cannot
  * create pairwise winner cycles.
