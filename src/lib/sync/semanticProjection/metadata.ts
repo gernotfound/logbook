@@ -154,7 +154,7 @@ function compareCanonicalClock(left: VectorClock, right: VectorClock): number {
  *
  * Causal dominance remains authoritative. Concurrent events are then placed in a
  * single deterministic total order: observed-frontier cardinality, delete bias
- * for equal frontiers, canonical vector order, actor and sequence. Because causal
+ * for equal frontiers, actor, sequence and canonical vector order. Because causal
  * dominance strictly increases the vector-clock weight, this order extends
  * happens-before and is transitive, so delivery order and batch partitioning cannot
  * create pairwise winner cycles.
@@ -171,11 +171,11 @@ export function compareStamps(left: StampLike, right: StampLike): number {
     const rightDelete = Boolean(right.isDelete);
     if (leftDelete !== rightDelete) return leftDelete ? 1 : -1;
 
-    const vectorOrder = compareCanonicalClock(left.clock, right.clock);
-    if (vectorOrder !== 0) return vectorOrder;
-
     if (left.actorId !== right.actorId) return left.actorId > right.actorId ? 1 : -1;
     if (left.seq !== right.seq) return left.seq > right.seq ? 1 : -1;
+
+    const vectorOrder = compareCanonicalClock(left.clock, right.clock);
+    if (vectorOrder !== 0) return vectorOrder;
     return 0;
 }
 
