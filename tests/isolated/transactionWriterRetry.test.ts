@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
     attempts: [] as Array<Array<{ path: string, data?: any, deleted?: boolean }>>,
-    checkDocSize: vi.fn()
+    checkDocSize: vi.fn(),
+    now: 1_791_114_651_000,
 }));
 
 vi.mock('../../src/lib/checkDocSize', () => ({
@@ -26,8 +27,8 @@ vi.mock('firebase/firestore', () => ({
                                     generation: 1,
                                     status: 'active',
                                     lastSeq: 0,
-                                    leaseUntilMs: Date.now() + 360 * 24 * 60 * 60 * 1000,
-                                    checkpointAtMs: Date.now(),
+                                    leaseUntilMs: harness.now + 360 * 24 * 60 * 60 * 1000,
+                                    checkpointAtMs: harness.now,
                                     checkpointClock: {},
                                 },
                             },
