@@ -233,9 +233,14 @@ export async function claimReplicaCheckpoint(
     currentReplica: ReplicaIdentity | null | undefined,
     checkpointClock: VectorClock,
     localActorSeq = 0,
+    candidateReplicaId?: string,
 ): Promise<ReplicaCheckpoint> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     const normalizedCheckpoint = parseVectorClock(checkpointClock, 'checkpoint cloud clock');
+    const normalizedCandidate = candidateReplicaId?.trim();
+    if (normalizedCandidate !== undefined && (!normalizedCandidate || normalizedCandidate.length > 128)) {
+        throw new Error('Replica candidate ID non valido');
+    }
     const ref = doc(db, `users/${uid}/sync_control/state`);
 
     return runTransaction(db, async transaction => {
@@ -260,6 +265,22 @@ export async function claimReplicaCheckpoint(
             }
         }
 
+        if (!slot && normalizedCandidate) {
+            const concurrentClaim = Object.entries(control.replicas).find(([, entry]) =>
+                entry.status === 'active'
+                && entry.replicaId === normalizedCandidate
+                && entry.leaseUntilMs + REPLICA_CLOCK_SKEW_MARGIN_MS >= now
+            );
+            if (concurrentClaim) {
+                const [claimedSlot, entry] = concurrentClaim;
+                slot = claimedSlot;
+                action = 'checkpoint';
+                replicaId = entry.replicaId;
+                generation = entry.generation;
+                baseSeq = Math.max(entry.lastSeq, localActorSeq, normalizedCheckpoint[claimedSlot] ?? 0);
+            }
+        }
+
         if (!slot) {
             slot = SLOT_IDS.find(candidate => control.replicas[candidate] === undefined);
             action = 'register';
@@ -277,7 +298,9 @@ export async function claimReplicaCheckpoint(
             if (!slot) throw new ReplicaCapacityError();
 
             const previous = control.replicas[slot];
-            replicaId = generateId('replica');
+            const candidateAlreadyUsed = normalizedCandidate
+                && Object.values(control.replicas).some(entry => entry.replicaId === normalizedCandidate);
+            replicaId = normalizedCandidate && !candidateAlreadyUsed ? normalizedCandidate : generateId('replica');
             generation = (previous?.generation ?? 0) + 1;
             baseSeq = Math.max(previous?.lastSeq ?? 0, normalizedCheckpoint[slot] ?? 0);
         }
