@@ -339,27 +339,63 @@ export function applySemanticOperations(
             barrier = mergeVectors(barrier ?? {}, ...deleteOperations.map(operation => operation.clock));
         }
 
-        const updateCandidates: FieldCandidate[] = [];
-        if (remoteStamp && !remoteStamp.deleted && (!barrier || coversVectorClock(remoteStamp.clock, barrier))) {
-            updateCandidates.push({ stamp: fieldStamp(remoteStamp), remote: true });
+        const rawUpdateCandidates: UpdateCandidate[] = [];
+        if (remoteStamp && !remoteStamp.deleted) {
+            rawUpdateCandidates.push({
+                stamp: fieldStamp(remoteStamp),
+                value: structuredClone(readSemanticValue(doc, docPath, opList[0].path)),
+                source: 'visible',
+            });
+            for (const candidate of remoteStamp.candidates ?? []) {
+                rawUpdateCandidates.push({
+                    stamp: {
+                        clock: candidate.clock,
+                        isDelete: false,
+                        actorId: candidate.actorId,
+                        seq: candidate.seq,
+                    },
+                    value: structuredClone(candidate.value),
+                    guard: candidate.guard ? structuredClone(candidate.guard) : undefined,
+                    source: 'hidden',
+                });
+            }
         }
         for (const operation of eligible) {
             if (operation.isDelete) continue;
-            if (barrier && !coversVectorClock(operation.clock, barrier)) continue;
-            updateCandidates.push({
+            rawUpdateCandidates.push({
                 stamp: operationStamp(operation),
+                value: structuredClone(operation.value),
+                guard: operation.guard ? structuredClone(operation.guard) : undefined,
                 operation,
-                remote: false,
+                source: 'new',
             });
         }
 
-        let selected: FieldCandidate;
+        const updateCandidates = normalizeUpdateCandidates(rawUpdateCandidates, barrier, doc);
+        let selectedStamp: StampLike;
+        let selectedOperation: SemanticOperation | undefined;
+        let hiddenCandidates: ReturnType<typeof persistHiddenCandidates> = [];
+
         if (updateCandidates.length) {
-            // Every eligible update causally supersedes the complete delete barrier.
-            // Concurrent updates then use the transitive protocol-2 total order.
-            selected = maxCandidate(updateCandidates);
+            const selected = maxCandidate(updateCandidates);
+            selectedStamp = selected.stamp;
+            hiddenCandidates = persistHiddenCandidates(updateCandidates, selected);
+            if (selected.source === 'new') {
+                selectedOperation = selected.operation;
+            } else if (selected.source === 'hidden') {
+                selectedOperation = {
+                    docPath,
+                    path: [...opList[0].path],
+                    value: structuredClone(selected.value),
+                    isDelete: false,
+                    actorId: selected.stamp.actorId,
+                    seq: selected.stamp.seq,
+                    clock: { ...selected.stamp.clock },
+                    ...(selected.guard ? { guard: structuredClone(selected.guard) } : {}),
+                };
+            }
         } else {
-            const deleteCandidates: FieldCandidate[] = [];
+            const deleteCandidates: DeleteCandidate[] = [];
             if (remoteStamp?.deleted) {
                 deleteCandidates.push({ stamp: fieldStamp(remoteStamp), remote: true });
             }
@@ -374,15 +410,18 @@ export function applySemanticOperations(
                 resultDocs.set(docPath, doc);
                 continue;
             }
-            selected = maxCandidate(deleteCandidates);
+            const selected = maxCandidate(deleteCandidates);
+            selectedStamp = selected.stamp;
+            selectedOperation = selected.operation;
         }
 
         const nextStamp: FieldStamp = {
-            clock: { ...selected.stamp.clock },
-            actorId: selected.stamp.actorId,
-            seq: selected.stamp.seq,
-            ...(selected.stamp.isDelete ? { deleted: true } : {}),
+            clock: { ...selectedStamp.clock },
+            actorId: selectedStamp.actorId,
+            seq: selectedStamp.seq,
+            ...(selectedStamp.isDelete ? { deleted: true } : {}),
             ...(barrier ? { deleteClock: { ...barrier } } : {}),
+            ...(hiddenCandidates.length ? { candidates: hiddenCandidates } : {}),
         };
 
         if (!nextStamp.deleted && nextStamp.deleteClock && !coversVectorClock(nextStamp.clock, nextStamp.deleteClock)) {
@@ -390,7 +429,7 @@ export function applySemanticOperations(
         }
 
         let protectedDescendants: ProtectedDescendant[] = [];
-        if (selected.operation) {
+        if (selectedOperation) {
             const prefix = `${fk}/`;
             protectedDescendants = Object.entries(meta.fields)
                 .filter(([key, stamp]) => key.startsWith(prefix) && descendantSurvivesAncestor(stamp, nextStamp))
@@ -406,7 +445,7 @@ export function applySemanticOperations(
                     };
                 });
 
-            applyWinnerToDocument(doc, selected.operation, ordersToApply);
+            applyWinnerToDocument(doc, selectedOperation, ordersToApply);
 
             for (const [key] of Object.entries(meta.fields)) {
                 if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) {
@@ -417,7 +456,7 @@ export function applySemanticOperations(
 
         meta.fields[fk] = nextStamp;
 
-        if (selected.operation) {
+        if (selectedOperation) {
             protectedDescendants
                 .sort((left, right) => left.path.length - right.path.length || left.key.localeCompare(right.key))
                 .forEach(item => applyWinnerToDocument(doc, {
