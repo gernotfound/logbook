@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
 
 let env: RulesTestEnvironment;
 beforeAll(async () => {
@@ -105,13 +106,13 @@ it('rejects unknown root fields, invalid origin and malformed month paths', asyn
 it('rejects malformed sync envelopes while allowing the current structural contract', async () => {
     const db = env.authenticatedContext('a').firestore();
     const root = doc(db, 'users/a');
-    const validSync = { protocolVersion: 1, clock: {}, fields: {} };
+    const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
 
     await assertSucceeds(setDoc(root, { profile: { name: 'valid' }, _schemaVersion: 1, _sync: validSync }));
-    await assertFails(setDoc(root, { profile: { name: 'wrong protocol' }, _schemaVersion: 1, _sync: { ...validSync, protocolVersion: 2 } }));
-    await assertFails(setDoc(root, { profile: { name: 'missing clock' }, _schemaVersion: 1, _sync: { protocolVersion: 1, fields: {} } }));
-    await assertFails(setDoc(root, { profile: { name: 'bad clock' }, _schemaVersion: 1, _sync: { protocolVersion: 1, clock: [], fields: {} } }));
-    await assertFails(setDoc(root, { profile: { name: 'bad fields' }, _schemaVersion: 1, _sync: { protocolVersion: 1, clock: {}, fields: [] } }));
+    await assertFails(setDoc(root, { profile: { name: 'wrong protocol' }, _schemaVersion: 1, _sync: { ...validSync, protocolVersion: CURRENT_SYNC_PROTOCOL + 1 } }));
+    await assertFails(setDoc(root, { profile: { name: 'missing clock' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {} } }));
+    await assertFails(setDoc(root, { profile: { name: 'bad clock' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: [], fields: {} } }));
+    await assertFails(setDoc(root, { profile: { name: 'bad fields' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: [] } }));
     await assertFails(setDoc(root, { profile: { name: 'extra sync key' }, _schemaVersion: 1, _sync: { ...validSync, unexpected: true } }));
 });
 
