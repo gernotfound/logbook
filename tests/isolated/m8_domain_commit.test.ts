@@ -209,6 +209,25 @@ describe('M8 domain commit durability', () => {
         expect(stored?.pending).toEqual([]);
     });
 
+    it('rejects a domain commit invalidated before the IndexedDB transaction and does not recreate purged state', async () => {
+        const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
+        const initial = base();
+        await initializeLocal('user:a', initial);
+
+        let current = false;
+        await expect(commitDomainOperations(
+            'user:a',
+            { type: 'profile.patch', patch: { height: '171' } },
+            initial,
+            () => current,
+        )).rejects.toThrow(/invalidato/i);
+
+        const stored = await readLocal('user:a');
+        expect(stored?.data.profile?.height).toBe('170');
+        expect(stored?.pending).toEqual([]);
+        expect(stored?.actorSeq).toBe(0);
+    });
+
     it('does not enqueue cloud journal operations for guest ownership', async () => {
         const { initializeLocal, commitDomainOperations, readLocal } = await import('../../src/lib/sync/localRepository');
         const initial = base();
