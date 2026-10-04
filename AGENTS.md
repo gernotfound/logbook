@@ -93,7 +93,7 @@ Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 2, Loc
 - **MUST:** le Promise di persistenza critica rigettano in caso di failure; vietato trasformare un errore critico in successo silenzioso.
 - **MUST:** il reload barrier è fail-safe: dati in memoria senza envelope leggibile = sessione unsafe, quindi niente reload automatico.
 - **MUST:** una conferma cloud attraverso `acknowledgeThrough()` elimina solo le operation con `seq <= expectedSeq`, assorbe il causal context remoto e rigioca sullo snapshot remoto soltanto le operation locali ancora pending. Una modifica locale avvenuta fra remote commit e acknowledge non può essere sovrascritta da uno snapshot remoto stantio.
-- **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal; stato assente/corrotto/parziale è failure, non pending sicuro.
+- **MUST:** una classificazione `local-pending` dopo un possibile lost-ack richiede evidenza che l'intero batch consegnato sia ancora presente nel journal con payload semantico completo identico; stato assente/corrotto/parziale è failure, non pending sicuro.
 
 ### Accesso browser storage
 
