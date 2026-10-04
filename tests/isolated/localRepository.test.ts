@@ -40,6 +40,37 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toEqual(future);
     });
 
+    it('migrates a protocol-1 local envelope in memory and preserves its causal state', async () => {
+        const payload = data(170);
+        await set('logbook:v2:user:a', {
+            version: CURRENT_LOCAL_ENVELOPE,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: 1,
+            owner: 'user:a',
+            actorId: 'actor-a',
+            actorSeq: 1,
+            clock: { 'actor-a': 1 },
+            data: payload,
+            baseline: payload,
+            completeMonths: [],
+            pending: [],
+            syncMetaByDocument: {
+                '': {
+                    protocolVersion: 1,
+                    clock: { 'actor-a': 1 },
+                    fields: {
+                        'profile/height': { actorId: 'actor-a', seq: 1, clock: { 'actor-a': 1 } },
+                    },
+                },
+            },
+            revision: 1,
+        });
+
+        const migrated = await readLocal('a');
+        expect(migrated?.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect(migrated?.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+    });
+
     it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
         const base = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 80 },
