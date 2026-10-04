@@ -86,7 +86,7 @@ describe('M4 transaction write-boundary compaction', () => {
             clock: { legacy: 2 },
             deleteClock: { legacy: 2 },
         });
-        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.clock).toEqual({ legacy: 2, B: 1 });
+        expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.clock).toEqual({ legacy: 2, s00: 1 });
         expect(harness.writes.find(write => write.path.includes('nutrition_months'))!.data._sync.fields['2026-09-14/weight']).toBeUndefined();
 
         expect(outcome.syncMeta['']).toBeUndefined();
@@ -95,7 +95,7 @@ describe('M4 transaction write-boundary compaction', () => {
             clock: { legacy: 2 },
             deleteClock: { legacy: 2 },
         });
-        expect(outcome.syncMeta['nutrition_months/2026-09'].clock).toEqual({ legacy: 2, B: 1 });
+        expect(outcome.syncMeta['nutrition_months/2026-09'].clock).toEqual({ legacy: 2, s00: 1 });
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields['2026-09-14/weight']).toBeUndefined();
         expect(harness.checkDocSize).toHaveBeenCalledTimes(1);
     });

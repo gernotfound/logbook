@@ -57,7 +57,7 @@ it('1c. refuses a future remote schema before semantic merge or write', async ()
 
     await expect(applyDocumentChanges(db, 'a', [
         { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
-    ], () => true)).rejects.toThrow(FutureVersionError);
+    ], () => true, replica)).rejects.toThrow(FutureVersionError);
 
     await env.withSecurityRulesDisabled(async context => {
         const saved = (await getDoc(doc(context.firestore(), 'users/a'))).data()!;
@@ -101,6 +101,7 @@ it('2b. V3 API: contention smoke test converges to the semantic operation', asyn
 
 it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causally later recreation', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const replica = await registerReplica(db, 'a');
     const createOps: SemanticOperation[] = [
         {
             docPath: 'nutrition_months/2026-09',
@@ -112,7 +113,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
             clock: { s00: 1 }
         }
     ];
-    await applyDocumentChanges(db, 'a', createOps, () => true);
+    await applyDocumentChanges(db, 'a', createOps, () => true, replica);
 
     const deleteOps: SemanticOperation[] = [
         {
@@ -124,7 +125,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
             clock: { s00: 2 }
         }
     ];
-    await applyDocumentChanges(db, 'a', deleteOps, () => true);
+    await applyDocumentChanges(db, 'a', deleteOps, () => true, replica);
 
     const ref = doc(db, 'users/a/nutrition_months/2026-09');
     const deleted = (await getDoc(ref)).data();
@@ -133,6 +134,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
     expect(deleted!['2026-09-13']).toBeUndefined();
     expect(deleted!._sync.fields['2026-09-13']).toMatchObject({ deleted: true, actorId: 's00', seq: 2 });
 
+    const secondReplica = await registerReplica(db, 'a', 's01', 'replica-s01', { s00: 2 });
     const recreateOps: SemanticOperation[] = [
         {
             docPath: 'nutrition_months/2026-09',
@@ -144,7 +146,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
             clock: { s00: 2, s01: 1 }
         }
     ];
-    await applyDocumentChanges(db, 'a', recreateOps, () => true);
+    await applyDocumentChanges(db, 'a', recreateOps, () => true, secondReplica);
 
     const recreated = (await getDoc(ref)).data()!;
     expect(recreated['2026-09-13'].weight).toBe(82);
@@ -164,7 +166,7 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
                 protocolVersion: 1,
                 clock: { B: 1 },
                 fields: {
-                    'profile/height': { clock: { B: 1 }, actorId: 's01', seq: 1 }
+                    'profile/height': { clock: { B: 1 }, actorId: 'B', seq: 1 }
                 }
             }
         });
