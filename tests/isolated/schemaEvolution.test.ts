@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     CURRENT_DATA_SCHEMA,
+    CURRENT_LOCAL_ENVELOPE,
     CURRENT_SYNC_PROTOCOL,
     FutureVersionError,
     LegacyVersionError,
