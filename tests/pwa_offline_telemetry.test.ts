@@ -24,6 +24,7 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
 
     telemetryHub.reset();
+    window.dispatchEvent(new Event('appinstalled'));
   });
 
   afterEach(() => {
@@ -40,6 +41,23 @@ describe('Milestone 2: PWA, offline workout and telemetry boundaries', () => {
   // 1. PWA Install Funnel Analytics
   // =========================================================================
   describe('1. PWA install behavior without proprietary usage telemetry', () => {
+    it('retains beforeinstallprompt even when it fires before Settings/usePWAInstall mounts', () => {
+      const earlyEvent = new Event('beforeinstallprompt');
+      Object.assign(earlyEvent, {
+        prompt: vi.fn().mockResolvedValue(undefined),
+        userChoice: Promise.resolve({ outcome: 'dismissed', platform: 'web' }),
+      });
+      act(() => {
+        window.dispatchEvent(earlyEvent);
+      });
+
+      const { result } = renderHook(() => usePWAInstall());
+      expect(result.current.isInstallable).toBe(true);
+      act(() => {
+        window.dispatchEvent(new Event('appinstalled'));
+      });
+    });
+
     it('handles beforeinstallprompt without emitting a proprietary usage event', async () => {
       telemetryHub.init();
       telemetryHub.setUserId('user_pwa_test');
