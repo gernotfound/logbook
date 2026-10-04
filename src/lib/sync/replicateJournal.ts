@@ -1,7 +1,7 @@
 import equal from 'fast-deep-equal';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
-import { readLocal, acknowledgeThrough } from './localRepository';
+import { readLocal, acknowledgeThrough, markReplicaCheckpointRequired } from './localRepository';
 import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
@@ -193,6 +193,15 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
             throw error;
         }
     } catch (error) {
+        if (error instanceof ReplicaFencedError && session.owner.startsWith('user:')) {
+            try {
+                const durable = await readLocal(session.owner);
+                await markReplicaCheckpointRequired(session.owner, durable?.replica ?? undefined);
+            } catch {
+                // The original fencing error remains authoritative. A local storage
+                // failure is handled by the caller's normal persistence safety path.
+            }
+        }
         return classifySyncFailure(error, { retryable: error instanceof DurableAcknowledgementPendingError });
     }
 }
