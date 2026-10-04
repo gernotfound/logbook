@@ -172,18 +172,73 @@ function applyWinnerToDocument(
     else current[lastSeg] = operation.value;
 }
 
-type FieldCandidate = {
+type UpdateCandidate = {
+    stamp: StampLike;
+    value: unknown;
+    guard?: SemanticOperation['guard'];
+    operation?: SemanticOperation;
+    source: 'visible' | 'hidden' | 'new';
+};
+
+type DeleteCandidate = {
     stamp: StampLike;
     operation?: SemanticOperation;
     remote: boolean;
 };
 
-function maxCandidate(candidates: FieldCandidate[]): FieldCandidate {
+function maxCandidate<T extends { stamp: StampLike }>(candidates: T[]): T {
     let winner = candidates[0];
     for (let i = 1; i < candidates.length; i++) {
         if (compareStamps(candidates[i].stamp, winner.stamp) > 0) winner = candidates[i];
     }
     return winner;
+}
+
+function candidateGuardMatches(doc: DocumentData, guard: SemanticOperation['guard'] | undefined): boolean {
+    if (!guard) return true;
+    let target: any = doc;
+    for (const segment of guard.path) {
+        if (target === null || target === undefined) return false;
+        target = target[segment];
+    }
+    return target === guard.equals;
+}
+
+function normalizeUpdateCandidates(
+    candidates: UpdateCandidate[],
+    barrier: VectorClock | undefined,
+    doc: DocumentData,
+): UpdateCandidate[] {
+    const byDot = new Map<string, UpdateCandidate>();
+    for (const candidate of candidates) {
+        if (barrier && !coversVectorClock(candidate.stamp.clock, barrier)) continue;
+        if (!candidateGuardMatches(doc, candidate.guard)) continue;
+        const key = `${candidate.stamp.actorId}:${candidate.stamp.seq}`;
+        const existing = byDot.get(key);
+        if (!existing || candidate.source === 'visible' || (existing.source === 'hidden' && candidate.source === 'new')) {
+            byDot.set(key, candidate);
+        }
+    }
+
+    const unique = [...byDot.values()];
+    return unique.filter((candidate, index) =>
+        !unique.some((other, otherIndex) =>
+            index !== otherIndex && coversVectorClock(other.stamp.clock, candidate.stamp.clock)
+            && !coversVectorClock(candidate.stamp.clock, other.stamp.clock)));
+}
+
+function persistHiddenCandidates(candidates: UpdateCandidate[], winner: UpdateCandidate) {
+    return candidates
+        .filter(candidate => candidate !== winner)
+        .sort((left, right) =>
+            left.stamp.actorId.localeCompare(right.stamp.actorId) || left.stamp.seq - right.stamp.seq)
+        .map(candidate => ({
+            clock: { ...candidate.stamp.clock },
+            actorId: candidate.stamp.actorId,
+            seq: candidate.stamp.seq,
+            value: structuredClone(candidate.value),
+            ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
+        }));
 }
 
 function canonicalStamp(stamp: FieldStamp): FieldStamp {
