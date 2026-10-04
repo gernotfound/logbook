@@ -71,6 +71,22 @@ describe('durable owner-scoped journal', () => {
         expect(migrated?.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
     });
 
+    it('keeps pending sequence numbers when renewing the same replica', async () => {
+        await initializeLocal('a', data(170));
+        const now = Date.now();
+        const identity = { slot: 's00', replicaId: 'replica-a', generation: 1, checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000 };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        await commitLocal('a', data(171), data(170));
+        await commitLocal('a', data(172), data(171));
+        const renewed = { ...identity, checkpointAtMs: now + 1000, leaseUntilMs: identity.leaseUntilMs + 1000 };
+        await adoptReplicaCheckpoint('a', { identity: renewed, baseSeq: 1 }, { clock: { remote: 3 }, syncMetaByDocument: {} });
+        const after = await readLocal('a');
+        expect(after?.actorSeq).toBe(2);
+        expect(after?.pending.map(operation => operation.seq)).toEqual([1, 2]);
+        expect(after?.clock).toMatchObject({ s00: 2, remote: 3 });
+        expect(after?.replica).toEqual(renewed);
+    });
+
     it('rejects a pending operation whose causal dot is not covered by its operation clock', async () => {
         await commitLocal('a', data(171), data(170));
         const raw = await get('logbook:v2:user:a') as any;
