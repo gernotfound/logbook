@@ -108,6 +108,7 @@ export const Exporter = {
         }
 
         let str = String(value);
+        if (str === '') return "";
         const trimmed = str.replace(/^[\s\uFEFF\u00A0]+/, '');
         if (/^[=+\-@]/.test(trimmed)) {
             str = "'" + str;
@@ -327,7 +328,7 @@ export const Exporter = {
 
         for (const [filename, content] of outputs) {
             const saved = await this.downloadFile(filename, content, 'text/csv;charset=utf-8;');
-            if (!saved) return false;
+            if (saved === false) return false;
         }
         return true;
     },
