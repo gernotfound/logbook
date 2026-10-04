@@ -4,7 +4,7 @@ import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, parseSyncMeta } from './semanticProjection';
+import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
@@ -79,8 +79,53 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
     }
 
     const migrated = normalizeLocalEnvelopeRecord(value);
-    const v4 = migrated as unknown as LocalEnvelopeV4;
-    return { ...v4, data: parse(v4.data), baseline: parse(v4.baseline) };
+    const record = migrated as Record<string, unknown>;
+    if (record.owner !== canonicalOwner) throw new Error('Archivio locale non riconosciuto: conservato per il recupero');
+    if (typeof record.actorId !== 'string' || !record.actorId.trim()) throw new Error('Archivio locale causale non valido');
+    if (typeof record.actorSeq !== 'number' || !Number.isSafeInteger(record.actorSeq) || record.actorSeq < 0) {
+        throw new Error('Archivio locale causale non valido');
+    }
+
+    const clock = parseVectorClock(record.clock, 'local envelope clock');
+    if ((clock[record.actorId] ?? 0) !== record.actorSeq) throw new Error('Archivio locale causale non valido');
+
+    if (!Array.isArray(record.pending)) throw new Error('Journal locale non valido');
+    const pending = record.pending.map(parseSemanticOperation);
+    for (const operation of pending) {
+        if (operation.actorId !== record.actorId || operation.seq > record.actorSeq || !coversVectorClock(clock, operation.clock)) {
+            throw new Error('Journal locale causale non valido');
+        }
+    }
+
+    if (!record.syncMetaByDocument || typeof record.syncMetaByDocument !== 'object' || Array.isArray(record.syncMetaByDocument)) {
+        throw new Error('Metadati sync locali non validi');
+    }
+    const syncMetaByDocument: Record<string, SyncMeta> = {};
+    for (const [path, rawMeta] of Object.entries(record.syncMetaByDocument as Record<string, unknown>)) {
+        const meta = parseSyncMeta(rawMeta);
+        if (!coversVectorClock(clock, meta.clock)) throw new Error('Metadati sync locali fuori dal frontier');
+        syncMetaByDocument[path] = meta;
+    }
+
+    if (!Array.isArray(record.completeMonths) || record.completeMonths.some(month => typeof month !== 'string' || !/^\\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
+        throw new Error('Copertura mensile locale non valida');
+    }
+    if (typeof record.revision !== 'number' || !Number.isSafeInteger(record.revision) || record.revision < 0) {
+        throw new Error('Revisione locale non valida');
+    }
+
+    return {
+        ...(record as unknown as LocalEnvelopeV4),
+        actorId: record.actorId,
+        actorSeq: record.actorSeq,
+        clock,
+        data: parse(record.data),
+        baseline: parse(record.baseline),
+        completeMonths: [...record.completeMonths] as string[],
+        pending,
+        syncMetaByDocument,
+        revision: record.revision,
+    };
 }
 
 function enforceMonthlyEntityTombstones(
