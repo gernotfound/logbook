@@ -1,5 +1,5 @@
 import { CURRENT_SYNC_PROTOCOL } from '../../schemaEvolution';
-import type { FieldStamp, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
+import type { FieldCandidate, FieldStamp, OperationGuard, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -26,6 +26,34 @@ export function coversVectorClock(cover: VectorClock, covered: VectorClock): boo
 
 function assertDotCovered(clock: VectorClock, actorId: string, seq: number, context: string): void {
     if ((clock[actorId] ?? 0) < seq) throw new Error(`Invalid causal dot in ${context}`);
+}
+
+function parseGuard(raw: unknown, context: string): OperationGuard | undefined {
+    if (raw === undefined) return undefined;
+    if (!isRecord(raw)) throw new Error(`Invalid ${context} guard`);
+    return {
+        path: parsePath(raw.path, `${context} guard path`),
+        equals: structuredClone(raw.equals),
+    };
+}
+
+function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClock: VectorClock | undefined): FieldCandidate {
+    if (!isRecord(raw)) throw new Error('Invalid FieldCandidate');
+    if (typeof raw.actorId !== 'string' || !raw.actorId.trim()) throw new Error('Invalid actorId in FieldCandidate');
+    const seq = parseSafeSeq(raw.seq, 'FieldCandidate');
+    const clock = parseVectorClock(raw.clock, 'candidate clock');
+    assertDotCovered(clock, raw.actorId, seq, 'FieldCandidate');
+    if (!coversVectorClock(documentClock, clock)) throw new Error('Document clock does not cover FieldCandidate');
+    if (deleteClock && !coversVectorClock(clock, deleteClock)) throw new Error('FieldCandidate does not cover delete barrier');
+    if (!Object.hasOwn(raw, 'value')) throw new Error('Invalid FieldCandidate value');
+    const guard = parseGuard(raw.guard, 'FieldCandidate');
+    return {
+        clock,
+        actorId: raw.actorId,
+        seq,
+        value: structuredClone(raw.value),
+        ...(guard ? { guard } : {}),
+    };
 }
 
 export function parseSyncMeta(raw: unknown): SyncMeta {
@@ -70,6 +98,31 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             throw new Error('Visible FieldStamp does not cover delete barrier');
         }
 
+        if ('candidates' in stampRaw) {
+            if (!Array.isArray(stampRaw.candidates)) throw new Error('Invalid FieldCandidate list');
+            if (fieldStamp.deleted && stampRaw.candidates.length) throw new Error('Deleted FieldStamp cannot retain update candidates');
+            const candidates = stampRaw.candidates.map(candidate => parseFieldCandidate(candidate, clock, fieldStamp.deleteClock));
+            const dots = new Set<string>();
+            for (const candidate of candidates) {
+                const dot = `${candidate.actorId}:${candidate.seq}`;
+                if (dots.has(dot) || (candidate.actorId === fieldStamp.actorId && candidate.seq === fieldStamp.seq)) {
+                    throw new Error('Duplicate FieldCandidate dot');
+                }
+                dots.add(dot);
+                if (dominates(fieldStamp.clock, candidate.clock) || dominates(candidate.clock, fieldStamp.clock)) {
+                    throw new Error('FieldCandidate is not concurrent with visible FieldStamp');
+                }
+            }
+            for (let i = 0; i < candidates.length; i++) {
+                for (let j = i + 1; j < candidates.length; j++) {
+                    if (dominates(candidates[i].clock, candidates[j].clock) || dominates(candidates[j].clock, candidates[i].clock)) {
+                        throw new Error('FieldCandidates are not a causal antichain');
+                    }
+                }
+            }
+            if (candidates.length) fieldStamp.candidates = candidates;
+        }
+
         fields[path] = fieldStamp;
     }
 
@@ -94,14 +147,7 @@ export function parseSemanticOperation(raw: unknown): SemanticOperation {
     const clock = parseVectorClock(raw.clock, 'SemanticOperation clock');
     assertDotCovered(clock, raw.actorId, seq, 'SemanticOperation');
 
-    let guard: SemanticOperation['guard'];
-    if (raw.guard !== undefined) {
-        if (!isRecord(raw.guard)) throw new Error('Invalid SemanticOperation guard');
-        guard = {
-            path: parsePath(raw.guard.path, 'SemanticOperation guard path'),
-            equals: structuredClone(raw.guard.equals),
-        };
-    }
+    const guard = parseGuard(raw.guard, 'SemanticOperation');
 
     return {
         docPath: raw.docPath,
