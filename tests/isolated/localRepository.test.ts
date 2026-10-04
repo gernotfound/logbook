@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { adoptReplicaCheckpoint, hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, markReplicaCheckpointRequired, hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -69,6 +69,29 @@ describe('durable owner-scoped journal', () => {
         const migrated = await readLocal('a');
         expect(migrated?.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
         expect(migrated?.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+    });
+
+    it('marks only the matching fenced replica as checkpoint-required without dropping its journal', async () => {
+        await initializeLocal('a', data(170));
+        const now = Date.now();
+        const identity = {
+            slot: 's00',
+            replicaId: 'replica-a',
+            generation: 1,
+            checkpointAtMs: now,
+            leaseUntilMs: now + 31_104_000_000,
+        };
+        await adoptReplicaCheckpoint('a', { identity, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        await commitLocal('a', data(171), data(170));
+
+        await markReplicaCheckpointRequired('a', { ...identity, generation: 2 });
+        expect((await readLocal('a'))?.replica?.leaseUntilMs).toBe(identity.leaseUntilMs);
+
+        await markReplicaCheckpointRequired('a', identity);
+        const fenced = await readLocal('a');
+        expect(fenced?.replica).toMatchObject({ slot: 's00', replicaId: 'replica-a', generation: 1, checkpointAtMs: 1, leaseUntilMs: 1 });
+        expect(fenced?.pending).toHaveLength(1);
+        expect(fenced?.actorSeq).toBe(1);
     });
 
     it('keeps pending sequence numbers when renewing the same replica', async () => {
