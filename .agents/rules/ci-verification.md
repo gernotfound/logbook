@@ -78,7 +78,7 @@ La parallelizzazione riguarda l'orchestrazione, non la semantica del gate. Unit,
 
 ## Domain Operations contract
 
-- MUST: le quattro versioni persistite correnti restano Data Schema 1, Sync Protocol 2, Local Envelope 4, Backup Schema 3 finché `schemaEvolution.ts` non viene modificato con una nuova migrazione approvata.
+- MUST: le quattro versioni persistite correnti restano Data Schema 1, Sync Protocol 3, Local Envelope 5, Backup Schema 3 finché `schemaEvolution.ts` non viene modificato con una nuova migrazione approvata.
 - MUST: `DomainOperation` è un layer di intento locale, non un nuovo protocollo persistito.
 - MUST: ordinary UI/hook mutations attraversano `dispatchDomainOperation()` salvo boundary bulk esplicitamente allowlisted da `.agents/rules/domain-operations.md`.
 - MUST: business state e `SemanticOperation` generate vengono rese durevoli nello stesso update IndexedDB.
