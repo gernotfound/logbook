@@ -35,7 +35,7 @@ function isExactEventDot(clock: VectorClock, actorId: string, seq: number): bool
 
 function parseGuard(raw: unknown, context: string): OperationGuard | undefined {
     if (raw === undefined) return undefined;
-    if (!isRecord(raw)) throw new Error(`Invalid ${context} guard`);
+    if (!isRecord(raw) || !Object.hasOwn(raw, 'equals') || raw.equals === undefined) throw new Error(`Invalid ${context} guard`);
     return {
         path: parsePath(raw.path, `${context} guard path`),
         equals: structuredClone(raw.equals),
