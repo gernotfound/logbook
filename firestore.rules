@@ -38,350 +38,7 @@ service cloud.firestore {
     // Security Rules enforce the persisted protocol envelope and the replica-fencing
     // boundary. Field-level causal validation remains the TypeScript source of truth.
     function isReplicaSlot(slot) {
-      return slot is string && slot.matches('^s(0[0-9]|1[0-5])function isStringAtMost(value, maxLength) {
-      return value is string && value.size() <= maxLength;
-    }
-
-    function isNonEmptyStringAtMost(value, maxLength) {
-      return isStringAtMost(value, maxLength) && value.size() > 0;
-    }
-
-    function isNonNegativeInt(value) {
-      return value is int && value >= 0;
-    }
-
-    function isValidTelemetryContext(context) {
-      return context is map
-        && context.keys().hasOnly(['appVersion', 'platform', 'displayMode', 'online'])
-        && 'appVersion' in context
-        && 'platform' in context
-        && 'displayMode' in context
-        && 'online' in context
-        && isNonEmptyStringAtMost(context.appVersion, 32)
-        && (context.platform == 'ios' || context.platform == 'ipados' || context.platform == 'other')
-        && (context.displayMode == 'standalone' || context.displayMode == 'browser')
-        && context.online is bool;
-    }
-
-    function isValidTelemetryDetails(details) {
-      return details is map
-        && details.size() <= 12
-        && details.keys().hasOnly([
-          'offline',
-          'routineId',
-          'duration',
-          'durationMinutes',
-          'exerciseCount',
-          'exercisesCount',
-          'outcome',
-          'schema',
-          'field',
-          'issueCode',
-          'expectedType',
-          'receivedType',
-          'fallbackUsed',
-          'platform',
-          'source',
-          'promptAvailable',
-          'durationSec',
-          'promptUsed'
-        ])
-        && (!('offline' in details) || details.offline is bool)
-        && (!('routineId' in details) || details.routineId == null || isStringAtMost(details.routineId, 128))
-        && (!('duration' in details) || isStringAtMost(details.duration, 32) || details.duration is int || details.duration is float)
-        && (!('durationMinutes' in details) || isNonNegativeInt(details.durationMinutes))
-        && (!('exerciseCount' in details) || isNonNegativeInt(details.exerciseCount))
-        && (!('exercisesCount' in details) || isNonNegativeInt(details.exercisesCount))
-        && (!('outcome' in details) || details.outcome == 'accepted' || details.outcome == 'dismissed')
-        && (!('schema' in details) || isStringAtMost(details.schema, 128))
-        && (!('field' in details) || isStringAtMost(details.field, 256))
-        && (!('issueCode' in details) || isStringAtMost(details.issueCode, 128))
-        && (!('expectedType' in details) || isStringAtMost(details.expectedType, 64))
-        && (!('receivedType' in details) || isStringAtMost(details.receivedType, 64))
-        && (!('fallbackUsed' in details) || isStringAtMost(details.fallbackUsed, 128))
-        && (!('platform' in details) || isStringAtMost(details.platform, 32))
-        && (!('source' in details) || isStringAtMost(details.source, 64))
-        && (!('promptAvailable' in details) || details.promptAvailable is bool)
-        && (!('durationSec' in details) || details.durationSec is int || details.durationSec is float)
-        && (!('promptUsed' in details) || details.promptUsed is bool);
-    }
-
-    function hasValidTelemetryUser(docData, userId) {
-      return !('userId' in docData)
-        || (isNonEmptyStringAtMost(docData.userId, 128) && docData.userId == userId);
-    }
-
-    // Telemetry must always carry an expiry. Old clients that omit it are rejected
-    // non-blockingly so they cannot create new telemetry outside the retention policy.
-    function isValidTelemetryExpiry(docData) {
-      return 'expireAt' in docData
-        && docData.expireAt is timestamp
-        && docData.expireAt <= request.time + duration.value(31, 'd');
-    }
-
-    function preservesTelemetryExpiry() {
-      return !('expireAt' in resource.data) || (
-        'expireAt' in incomingData()
-        && incomingData().expireAt >= resource.data.expireAt
-      );
-    }
-
-    function isIdenticalTelemetryRetryOrExpiryUpgrade() {
-      return incomingData() == resource.data || (
-        !('expireAt' in resource.data)
-        && 'expireAt' in incomingData()
-        && incomingData().diff(resource.data).affectedKeys().hasOnly(['expireAt'])
-      );
-    }
-
-    function isValidTelemetryError(docData, userId) {
-      return docData.keys().hasOnly([
-          'timestamp',
-          'type',
-          'message',
-          'stack',
-          'componentStack',
-          'source',
-          'context',
-          'userId',
-          'sessionId',
-          'count',
-          'firstSeen',
-          'lastSeen',
-          'expireAt'
-        ])
-        && 'timestamp' in docData
-        && 'type' in docData
-        && 'message' in docData
-        && 'source' in docData
-        && 'context' in docData
-        && 'sessionId' in docData
-        && 'count' in docData
-        && 'firstSeen' in docData
-        && 'lastSeen' in docData
-        && isNonNegativeInt(docData.timestamp)
-        && isNonEmptyStringAtMost(docData.type, 128)
-        && isStringAtMost(docData.message, 4096)
-        && (!('stack' in docData) || isStringAtMost(docData.stack, 1000))
-        && (!('componentStack' in docData) || isStringAtMost(docData.componentStack, 1000))
-        && isNonEmptyStringAtMost(docData.source, 64)
-        && isValidTelemetryContext(docData.context)
-        && hasValidTelemetryUser(docData, userId)
-        && isNonEmptyStringAtMost(docData.sessionId, 128)
-        && docData.count is int
-        && docData.count >= 1
-        && docData.count <= 1000000
-        && isNonNegativeInt(docData.firstSeen)
-        && isNonNegativeInt(docData.lastSeen)
-        && docData.lastSeen >= docData.firstSeen
-        && isValidTelemetryExpiry(docData);
-    }
-
-    function preservesTelemetryErrorIdentity() {
-      return (!('timestamp' in resource.data) || incomingData().timestamp == resource.data.timestamp)
-        && (!('type' in resource.data) || incomingData().type == resource.data.type)
-        && (!('message' in resource.data) || incomingData().message == resource.data.message)
-        && (!('stack' in resource.data) || incomingData().stack == resource.data.stack)
-        && (!('componentStack' in resource.data) || incomingData().componentStack == resource.data.componentStack)
-        && (!('source' in resource.data) || incomingData().source == resource.data.source)
-        && (!('context' in resource.data) || incomingData().context == resource.data.context)
-        && (!('userId' in resource.data) || incomingData().userId == resource.data.userId)
-        && (!('sessionId' in resource.data) || incomingData().sessionId == resource.data.sessionId)
-        && (!('firstSeen' in resource.data) || incomingData().firstSeen == resource.data.firstSeen)
-        && (!('count' in resource.data) || incomingData().count >= resource.data.count)
-        && (!('lastSeen' in resource.data) || incomingData().lastSeen >= resource.data.lastSeen)
-        && preservesTelemetryExpiry();
-    }
-
-    function isValidTelemetryEvent(docData, userId) {
-      return docData.keys().hasOnly([
-          'timestamp',
-          'type',
-          'context',
-          'userId',
-          'sessionId',
-          'details',
-          'expireAt'
-        ])
-        && 'timestamp' in docData
-        && 'type' in docData
-        && 'context' in docData
-        && 'sessionId' in docData
-        && isNonNegativeInt(docData.timestamp)
-        && isNonEmptyStringAtMost(docData.type, 128)
-        && isValidTelemetryContext(docData.context)
-        && hasValidTelemetryUser(docData, userId)
-        && isNonEmptyStringAtMost(docData.sessionId, 128)
-        && (!('details' in docData) || isValidTelemetryDetails(docData.details))
-        && isValidTelemetryExpiry(docData);
-    }
-
-    function isValidTelemetryAnomaly(docData) {
-      return docData.keys().hasOnly([
-          'type',
-          'reason',
-          'timestamp',
-          'elapsedMs',
-          'platform',
-          'standalone',
-          'persisted',
-          'expireAt'
-        ])
-        && 'type' in docData
-        && 'reason' in docData
-        && 'timestamp' in docData
-        && 'elapsedMs' in docData
-        && 'platform' in docData
-        && 'standalone' in docData
-        && 'persisted' in docData
-        && docData.type == 'storage_recovery_anomaly'
-        && isNonEmptyStringAtMost(docData.reason, 128)
-        && isNonNegativeInt(docData.timestamp)
-        && isNonNegativeInt(docData.elapsedMs)
-        && (docData.platform == 'ios' || docData.platform == 'ipados' || docData.platform == 'other')
-        && docData.standalone is bool
-        && (docData.persisted == null || docData.persisted is bool)
-        && isValidTelemetryExpiry(docData);
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    match /global_catalog/{document=**} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // Server-only administrative barrier. Clients cannot inspect or mutate deletion jobs;
-    // the trusted Admin SDK creates them and bypasses Firestore Security Rules.
-    match /account_deletions/{userId} {
-      allow read, write: if false;
-    }
-
-    match /users/{userId} {
-      // Root deletion is server-only. Client-side account deletion must always use
-      // the trusted account-deletion job so subcollections and Firebase Auth cannot
-      // be orphaned.
-      allow read: if isActiveOwner(userId);
-
-      allow create, update: if isActiveOwner(userId)
-        && incomingData().keys().hasOnly([
-          'profile',
-          'library',
-          'routines',
-          'customFoods',
-          'activeWorkout',
-          'trainingCycles',
-          'activeCycleId',
-          'nutritionPlanning',
-          'supplements',
-          'activePains',
-          'catalogOverrides',
-          'legalConsent',
-          'nutritionPlanningOrigin',
-          '_schemaVersion',
-          '_sync'
-        ])
-        && (!('profile' in incomingData()) || incomingData().profile == null || incomingData().profile is map)
-        && (!('library' in incomingData()) || incomingData().library is list)
-        && (!('routines' in incomingData()) || incomingData().routines is list)
-        && (!('customFoods' in incomingData()) || incomingData().customFoods is list)
-        && (!('activeWorkout' in incomingData()) || incomingData().activeWorkout == null || incomingData().activeWorkout is map)
-        && (!('trainingCycles' in incomingData()) || incomingData().trainingCycles is list)
-        && (!('activeCycleId' in incomingData()) || incomingData().activeCycleId == null || (incomingData().activeCycleId is string && incomingData().activeCycleId.size() <= 128))
-        && (!('nutritionPlanning' in incomingData()) || incomingData().nutritionPlanning == null || incomingData().nutritionPlanning is map)
-        && (!('supplements' in incomingData()) || incomingData().supplements is list)
-        && (!('activePains' in incomingData()) || incomingData().activePains is list)
-        && (!('catalogOverrides' in incomingData()) || incomingData().catalogOverrides == null || incomingData().catalogOverrides is map)
-        && (!('legalConsent' in incomingData()) || incomingData().legalConsent == null || incomingData().legalConsent is map)
-        && (!('nutritionPlanningOrigin' in incomingData())
-            || incomingData().nutritionPlanningOrigin == null
-            || incomingData().nutritionPlanningOrigin == 'generated-default'
-            || incomingData().nutritionPlanningOrigin == 'user-edited')
-        && isValidDataSchema(incomingData())
-        && preservesDataSchema()
-        && isValidSync(incomingData())
-        && isAuthorizedSyncWrite(userId, incomingData())
-        && preservesSyncProtocol()
-        && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
-
-      match /history_months/{monthId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
-        allow create, update: if isActiveOwner(userId)
-          && isValidMonthId(monthId)
-          && incomingData() is map
-          && isValidDataSchema(incomingData())
-          && preservesDataSchema()
-          && isValidSync(incomingData())
-          && isAuthorizedSyncWrite(userId, incomingData())
-          && preservesSyncProtocol()
-          && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
-      }
-
-      match /nutrition_months/{monthId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
-        allow create, update: if isActiveOwner(userId)
-          && isValidMonthId(monthId)
-          && incomingData() is map
-          && isValidDataSchema(incomingData())
-          && preservesDataSchema()
-          && isValidSync(incomingData())
-          && isAuthorizedSyncWrite(userId, incomingData())
-          && preservesSyncProtocol()
-          && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
-      }
-
-      match /sync_control/{controlId} {
-        allow read: if controlId == 'state' && isActiveOwner(userId);
-        allow create: if controlId == 'state'
-          && isActiveOwner(userId)
-          && validReplicaControlCreate(incomingData());
-        allow update: if controlId == 'state'
-          && isActiveOwner(userId)
-          && validReplicaControlUpdate(resource.data, incomingData());
-        allow delete: if false;
-      }
-
-      match /telemetry_errors/{errorId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
-        allow create: if isActiveOwner(userId)
-          && isValidTelemetryError(incomingData(), userId);
-        allow update: if isActiveOwner(userId)
-          && isValidTelemetryError(incomingData(), userId)
-          && preservesTelemetryErrorIdentity();
-      }
-
-      match /telemetry_events/{eventId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
-        allow create: if isActiveOwner(userId)
-          && isValidTelemetryEvent(incomingData(), userId);
-        // Events are append-only. Identical retries remain valid, and legacy
-        // documents may receive only the rollout expiry field without changing history.
-        allow update: if isActiveOwner(userId)
-          && isValidTelemetryEvent(incomingData(), userId)
-          && isIdenticalTelemetryRetryOrExpiryUpgrade();
-      }
-
-      match /telemetry_anomalies/{eventId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
-        allow create: if isActiveOwner(userId)
-          && isValidTelemetryAnomaly(incomingData());
-        // Storage anomalies are immutable after creation apart from a one-time
-        // legacy upgrade that adds only the rollout expiry field.
-        allow update: if isActiveOwner(userId)
-          && isValidTelemetryAnomaly(incomingData())
-          && isIdenticalTelemetryRetryOrExpiryUpgrade();
-      }
-    }
-  }
-}
-);
+      return slot is string && slot.matches('^s(0[0-9]|1[0-5])$');
     }
 
     function isValidReplicaWriter(writer) {
@@ -868,6 +525,7 @@ service cloud.firestore {
         && isValidDataSchema(incomingData())
         && preservesDataSchema()
         && isValidSync(incomingData())
+        && isAuthorizedSyncWrite(userId, incomingData())
         && preservesSyncProtocol()
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
 
@@ -899,9 +557,19 @@ service cloud.firestore {
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 
+      match /sync_control/{controlId} {
+        allow read: if controlId == 'state' && isActiveOwner(userId);
+        allow create: if controlId == 'state'
+          && isActiveOwner(userId)
+          && validReplicaControlCreate(incomingData());
+        allow update: if controlId == 'state'
+          && isActiveOwner(userId)
+          && validReplicaControlUpdate(resource.data, incomingData());
+        allow delete: if false;
+      }
+
       match /telemetry_errors/{errorId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow read, delete: if isActiveOwner(userId);
         allow create: if isActiveOwner(userId)
           && isValidTelemetryError(incomingData(), userId);
         allow update: if isActiveOwner(userId)
@@ -910,8 +578,7 @@ service cloud.firestore {
       }
 
       match /telemetry_events/{eventId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow read, delete: if isActiveOwner(userId);
         allow create: if isActiveOwner(userId)
           && isValidTelemetryEvent(incomingData(), userId);
         // Events are append-only. Identical retries remain valid, and legacy
@@ -922,8 +589,7 @@ service cloud.firestore {
       }
 
       match /telemetry_anomalies/{eventId} {
-        allow read: if isActiveOwner(userId);
-        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
+        allow read, delete: if isActiveOwner(userId);
         allow create: if isActiveOwner(userId)
           && isValidTelemetryAnomaly(incomingData());
         // Storage anomalies are immutable after creation apart from a one-time
