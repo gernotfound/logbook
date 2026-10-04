@@ -12,7 +12,7 @@ export interface FieldStamp {
 }
 
 export interface SyncMeta {
-    protocolVersion: 1;
+    protocolVersion: 2;
     clock: VectorClock;
     fields: Record<string, FieldStamp>;
 }
