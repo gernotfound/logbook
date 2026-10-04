@@ -137,11 +137,15 @@ export const safeString = (defaultVal = '') =>
         z.number().transform(v => String(v)),
     ]).catch(defaultVal).default(defaultVal);
 
-export const safeOptionalString = () =>
-    z.union([
-        z.string(),
-        z.number().transform(v => String(v)),
+export const safeOptionalString = (maxLength?: number) => {
+    const stringSchema = maxLength === undefined ? z.string() : z.string().max(maxLength);
+    return z.union([
+        stringSchema,
+        z.number()
+            .transform(v => String(v))
+            .refine(v => maxLength === undefined || v.length <= maxLength),
     ]).optional().catch(undefined);
+};
 
 export const safeBoolean = (defaultVal = false) =>
     z.union([
