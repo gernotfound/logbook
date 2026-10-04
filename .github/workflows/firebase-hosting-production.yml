@@ -131,7 +131,7 @@ jobs:
             local path="$1"
             local output="$2"
             curl --fail --location --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors \
-              -D "$output" -o /dev/null "https://thelogbook.web.app.github/workflows/firebase-hosting-production.yml"
+              -D "$output" -o /dev/null "https://thelogbook.web.app${path}"
           }
 
           assert_revalidated() {
