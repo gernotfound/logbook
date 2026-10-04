@@ -7,7 +7,9 @@ import {
     MissingMigrationError,
     assertCurrentVersion,
     migrateSequential,
+    normalizeBackupRecord,
     normalizeCloudDocument,
+    normalizeLocalEnvelopeRecord,
     withCurrentDataSchema,
     type CloudMigrationState,
     type DataMigrationCarrier,
@@ -112,6 +114,78 @@ describe('Schema Evolution registry', () => {
     it('refuses future and legacy current-only formats explicitly', () => {
         expect(() => assertCurrentVersion(2, 1, 'schema')).toThrow(FutureVersionError);
         expect(() => assertCurrentVersion(1, 2, 'schema')).toThrow(LegacyVersionError);
+    });
+
+    it('migrates protocol-1 cloud metadata to protocol 2 without changing causal payload', () => {
+        const raw = {
+            profile: { name: 'legacy' },
+            _sync: {
+                protocolVersion: 1,
+                clock: { A: 2, B: 1 },
+                fields: {
+                    'profile/name': { actorId: 'A', seq: 2, clock: { A: 2, B: 1 } },
+                },
+            },
+        };
+        const normalized = normalizeCloudDocument(raw);
+        expect(normalized.sync).toEqual({
+            ...raw._sync,
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
+        });
+        expect(raw._sync.protocolVersion).toBe(1);
+    });
+
+    it('migrates protocol-1 local and raw backup recovery metadata without bumping their containers', () => {
+        const syncMeta = {
+            protocolVersion: 1,
+            clock: { A: 1 },
+            fields: { 'profile/name': { actorId: 'A', seq: 1, clock: { A: 1 } } },
+        };
+        const envelope = {
+            version: 4,
+            dataSchemaVersion: 1,
+            syncProtocolVersion: 1,
+            owner: 'user:a',
+            actorId: 'A',
+            actorSeq: 1,
+            clock: { A: 1 },
+            data: {},
+            baseline: {},
+            completeMonths: [],
+            pending: [],
+            syncMetaByDocument: { '': syncMeta },
+            revision: 1,
+        };
+
+        const migratedEnvelope = normalizeLocalEnvelopeRecord(envelope);
+        expect(migratedEnvelope.version).toBe(4);
+        expect(migratedEnvelope.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect((migratedEnvelope.syncMetaByDocument as any)[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect(envelope.syncProtocolVersion).toBe(1);
+
+        const backup = {
+            format: 'logbook-backup',
+            version: 3,
+            dataSchemaVersion: 1,
+            syncProtocolVersion: 1,
+            type: 'backup',
+            owner: 'user:a',
+            userData: {},
+            recovery: {
+                envelope,
+                cloudDocuments: {
+                    '': { profile: { name: 'legacy' }, _sync: syncMeta },
+                },
+            },
+        };
+        const migratedBackup = normalizeBackupRecord(backup);
+        expect(migratedBackup.version).toBe(3);
+        expect(migratedBackup.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        const recovery = migratedBackup.recovery as any;
+        expect(recovery.envelope.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect(recovery.envelope.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect(recovery.cloudDocuments['']._sync.protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
+        expect(backup.syncProtocolVersion).toBe(1);
     });
 
     it('treats an unversioned Firestore document as the clean schema-1 baseline', () => {
