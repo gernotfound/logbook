@@ -256,12 +256,12 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         style={{ margin: '4px 0 10px', width: '100%', fontSize: '16px' }}
                     />
                     <label className="text-muted" style={{ fontSize: 'var(--font-size-meta)', fontWeight: 400 }} htmlFor={`setup-${exItem.exId}`}>Note esercizio</label>
-                    <input
+                    <BufferedInput
                         id={`setup-${exItem.exId}`}
                         type="text"
-                        defaultValue={exNotes}
+                        value={exNotes}
                         placeholder="Es. altezza sedile abituale"
-                        onBlur={(e) => onUpdateSetupNote(exItem.exId, e.target.value)}
+                        onChange={value => onUpdateSetupNote(exItem.exId, value)}
                         style={{ margin: '4px 0 0', width: '100%', fontSize: '16px' }}
                     />
                 </div>
@@ -280,6 +280,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block">Durata (min)</label>
                             <BufferedInput 
+                                id={`cardio-time-${exItem.id ?? exItem.exId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.time || ''} 
@@ -292,6 +293,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block">Distanza (km)</label>
                             <BufferedInput 
+                                id={`cardio-distance-${exItem.id ?? exItem.exId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.distance || ''} 
@@ -304,6 +306,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block">Velocità media</label>
                             <BufferedInput 
+                                id={`cardio-speed-${exItem.id ?? exItem.exId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.speed || ''} 
@@ -316,6 +319,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                         <div>
                             <label className="text-muted text-xs mb-4 block">Inclinazione (%)</label>
                             <BufferedInput 
+                                id={`cardio-incline-${exItem.id ?? exItem.exId}`}
                                 type="text" 
                                 inputMode="decimal"
                                 value={exItem.sets[0]?.incline || ''} 
@@ -329,6 +333,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                     <div>
                         <label className="text-muted text-xs mb-4 block">Kcal stimate</label>
                         <BufferedInput 
+                            id={`cardio-kcal-${exItem.id ?? exItem.exId}`}
                             type="text" 
                             inputMode="decimal"
                             value={exItem.sets[0]?.kcal || ''} 
@@ -393,6 +398,7 @@ const SessionExerciseCardInner: React.FC<SessionExerciseCardProps> = ({
                 <span aria-hidden="true">{isNextNoteOpen ? '−' : '+'}</span>
             </button>
             <BufferedTextarea
+                id={`session-note-${exItem.id ?? exItem.exId}`}
                 placeholder="Note per la prossima volta (dolori, feedback)..."
                 value={exItem.sessionNote || ''}
                 onChange={val => onUpdateSessionNote(exIndex, val)}
