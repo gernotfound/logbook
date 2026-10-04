@@ -114,6 +114,7 @@ export async function loadAuthenticatedData({
                         hydratedEnv.replica,
                         checkpoint.clock,
                         hydratedEnv.actorSeq,
+                        hydratedEnv.replica ? undefined : hydratedEnv.actorId,
                     );
                     if (!isCurrent()) return;
                     hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, isCurrent);
