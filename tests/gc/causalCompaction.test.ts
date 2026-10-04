@@ -86,6 +86,65 @@ describe('M4 causal metadata compaction', () => {
         ]);
     });
 
+    it('preserves the descendant tombstone identity when an ancestor only observes its context indirectly', () => {
+        const initial: SyncMeta = {
+            protocolVersion: 2,
+            clock: { B: 1, C: 1 },
+            fields: {
+                profile: {
+                    actorId: 'B',
+                    seq: 1,
+                    clock: { B: 1 },
+                    deleted: true,
+                    deleteClock: { B: 1 },
+                },
+                'profile/name': {
+                    actorId: 'C',
+                    seq: 1,
+                    clock: { C: 1 },
+                    deleted: true,
+                    deleteClock: { C: 1 },
+                },
+            },
+        };
+        const observedDescendantUpdate: SemanticOperation = {
+            docPath: '',
+            path: ['profile', 'name'],
+            value: 'observed-C',
+            isDelete: false,
+            actorId: 'A',
+            seq: 1,
+            clock: { A: 1, C: 1 },
+        };
+        const laterDelete: SemanticOperation = {
+            docPath: '',
+            path: ['profile', 'name'],
+            isDelete: true,
+            actorId: 'B',
+            seq: 2,
+            clock: { B: 2 },
+        };
+
+        const first = applySemanticOperations(rootBase(), [observedDescendantUpdate], { '': initial });
+        const afterFirstCompaction = compactSyncMeta(first.syncMetas['']);
+        expect(afterFirstCompaction.fields.profile.clock).toEqual({ B: 1 });
+        expect(afterFirstCompaction.fields.profile.deleteClock).toEqual({ B: 1 });
+        expect(afterFirstCompaction.fields['profile/name']).toBeDefined();
+
+        const split = applySemanticOperations(first.documents, [laterDelete], { '': afterFirstCompaction });
+        const splitMeta = compactSyncMeta(split.syncMetas['']);
+
+        const batched = applySemanticOperations(
+            rootBase(),
+            [observedDescendantUpdate, laterDelete],
+            { '': initial },
+        );
+        const batchedMeta = compactSyncMeta(batched.syncMetas['']);
+
+        expect(split.documents).toEqual(batched.documents);
+        expect(splitMeta).toEqual(batchedMeta);
+    });
+
     it('never retires positive actor-frontier coordinates or terminal tombstones', () => {
         const meta: SyncMeta = {
             protocolVersion: 2,
