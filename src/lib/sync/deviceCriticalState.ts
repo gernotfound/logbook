@@ -1,6 +1,8 @@
 import type { WorkoutSession } from '../../types';
 import { writeDeviceValue } from './deviceStorage';
-import { isCurrentSession, type SessionSnapshot } from './session';
+import { captureSession, isCurrentSession } from './session';
+
+type SessionSnapshot = ReturnType<typeof captureSession>;
 
 export function persistOwnerBoundWorkoutSnapshot(
     session: SessionSnapshot,
