@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 
 export type LogoutOptions = { mode: 'normal' | 'force' };
 export type GuestMigrationStatus = 'idle' | 'pending' | 'failed';
+export type GuestMigrationPolicy = 'merge' | 'skip';
 
 export interface AuthContextType {
     currentUser: User | null;
@@ -12,7 +13,7 @@ export interface AuthContextType {
     login: () => Promise<void>;
     loginAsGuest: () => Promise<void>;
     linkGoogleAccount: () => Promise<void>;
-    retryGuestMigration: () => Promise<void>;
+    retryGuestMigration: (policy?: GuestMigrationPolicy) => Promise<void>;
     logout: (options?: LogoutOptions) => Promise<void>;
     loginWithEmail: (email: string, pass: string) => Promise<void>;
     registerWithEmail: (email: string, pass: string) => Promise<void>;
