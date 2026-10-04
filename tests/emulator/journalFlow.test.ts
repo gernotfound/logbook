@@ -9,7 +9,8 @@ vi.mock('../../src/lib/firebase', () => ({ auth: sdk.auth, getDb: () => sdk.db, 
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { DB as RealDB } from '../../src/lib/db';
 import { dbState as __testDbState } from '../../src/lib/db/db_core';
-import { readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, readLocal, initializeLocal, commitLocal } from '../../src/lib/sync/localRepository';
+import { registerReplica } from './replicaHarness';
 const DB = {
     ...RealDB
 };
@@ -26,9 +27,15 @@ beforeAll(async () => {
 });
 beforeEach(async () => { await env.clearFirestore(); await clear(); DB.resetCache(); sdk.db = env.authenticatedContext('a').firestore(); sdk.auth.currentUser = { uid: 'a' }; });
 afterAll(async () => { await env?.cleanup(); vi.unstubAllGlobals(); });
+async function prepareReplica() {
+    const replica = await registerReplica(sdk.db, 'a');
+    await adoptReplicaCheckpoint('user:a', { identity: replica, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+}
+
 it('stages, replicates and acknowledges through the actual DB and SDK path', async () => {
     const base = data({});
     await initializeLocal('user:a', base);
+    await prepareReplica();
     const desired = data({ profile: { height: '171' } });
     await commitLocal('user:a', desired, base);
     expect(await DB.saveUserData(desired)).toEqual({ ok: true, status: 'synced' });
@@ -38,9 +45,10 @@ it('stages, replicates and acknowledges through the actual DB and SDK path', asy
     expect(await get('pending_sync_payload')).toBeUndefined();
 });
 it('keeps offline data durable and replays after reconnect without another edit', async () => {
-    vi.stubGlobal('navigator', { onLine: false });
     const base = data({});
     await initializeLocal('user:a', base);
+    await prepareReplica();
+    vi.stubGlobal('navigator', { onLine: false });
     const desired = data({ profile: { height: '171' } });
     await commitLocal('user:a', desired, base);
     expect((await DB.saveUserData(desired)).status).toBe('local-pending');
@@ -53,6 +61,7 @@ it('keeps offline data durable and replays after reconnect without another edit'
 it('retains the owner journal when real Rules reject a write', async () => {
     const base = data({});
     await initializeLocal('user:a', base);
+    await prepareReplica();
     sdk.db = env.authenticatedContext('b').firestore();
     const desired = data({ profile: { height: '171' } });
     await commitLocal('user:a', desired, base);
@@ -65,8 +74,9 @@ it('adopts independent remote fields without overwriting them with the old local
     const base = data({ profile: { height: '170', gender: 'M' } });
     const desired = data({ profile: { height: '171', gender: 'M' } });
     await initializeLocal('user:a', base);
-    await commitLocal('user:a', desired, base);
     await setDoc(doc(sdk.db, 'users/a'), projectDocuments(data({ profile: { height: '170', gender: 'F' } }), catalog).get('')!);
+    await prepareReplica();
+    await commitLocal('user:a', desired, base);
     expect((await DB.saveUserData(desired)).status).toBe('synced');
     expect((await readLocal('user:a'))?.data.profile).toMatchObject({ height: '171', gender: 'F' });
     expect((await readLocal('user:a'))?.pending).toEqual([]);
