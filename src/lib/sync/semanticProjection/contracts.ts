@@ -4,6 +4,11 @@ export interface VectorClock {
     [actorId: string]: number;
 }
 
+export interface OperationGuard {
+    path: string[];
+    equals: unknown;
+}
+
 export interface FieldCandidate {
     clock: VectorClock;
     actorId: string;
@@ -35,7 +40,7 @@ export interface SemanticOperation {
     actorId: string;
     seq: number;
     clock: VectorClock;
-    guard?: { path: string[], equals: any };
+    guard?: OperationGuard;
 }
 
 export interface StampLike {
