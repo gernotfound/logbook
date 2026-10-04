@@ -21,6 +21,7 @@ vi.mock('../../src/lib/sync/transactionWriter', () => ({ applyDocumentChanges: r
 import type { UserData } from '../../src/types';
 import { UserDataSchema } from '../../src/lib/schema';
 import {
+    adoptReplicaCheckpoint,
     commitDomainOperations,
     commitLocal,
     hydrateLocal,
@@ -92,6 +93,14 @@ beforeEach(async () => {
     remote.auth.currentUser = { uid: 'a' };
     remote.apply.mockReset();
     await initializeLocal(owner, data(170));
+    const now = Date.now();
+    await adoptReplicaCheckpoint(owner, {
+        identity: {
+            slot: 's00', replicaId: 'recovery-replica', generation: 1,
+            checkpointAtMs: now, leaseUntilMs: now + 31_104_000_000,
+        },
+        baseSeq: 0,
+    }, { clock: {}, syncMetaByDocument: {} });
     cloudDocuments = projectDocuments(data(170), catalog);
     cloudSyncMeta = {};
 });
