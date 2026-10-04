@@ -37,7 +37,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1 } }
             }
@@ -57,7 +57,7 @@ describe('Causal Semantic Merge', () => {
         // Remote has A:1
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1 } }
             }
@@ -78,7 +78,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1 } }
             }
@@ -152,7 +152,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1, deleted: true } }
             }
@@ -170,7 +170,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 2 }, // delete occurred at A:2
                 fields: { 'profile/height': { clock: { A: 2 }, actorId: 'A', seq: 2, deleted: true } }
             }
