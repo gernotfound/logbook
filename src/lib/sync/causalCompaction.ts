@@ -19,6 +19,18 @@ function cloneStamp(stamp: FieldStamp): FieldStamp {
     return {
         ...stamp,
         clock: compactVector(stamp.clock),
+        ...(stamp.deleteClock ? { deleteClock: compactVector(stamp.deleteClock) } : {}),
+        ...(stamp.legacyClock ? { legacyClock: compactVector(stamp.legacyClock) } : {}),
+        ...(stamp.guard ? { guard: structuredClone(stamp.guard) } : {}),
+        ...(stamp.candidates?.length ? {
+            candidates: stamp.candidates.map(candidate => ({
+                ...candidate,
+                clock: compactVector(candidate.clock),
+                ...(candidate.legacyClock ? { legacyClock: compactVector(candidate.legacyClock) } : {}),
+                ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
+                value: structuredClone(candidate.value),
+            })),
+        } : {}),
     };
 }
 
@@ -29,10 +41,10 @@ function pathDepth(fieldKey: string): number {
 /**
  * Lossless metadata compaction for the current hierarchical merge protocol.
  *
- * A deleted ancestor is a durable barrier for every descendant path. A descendant
- * stamp is redundant only when the ancestor's causal clock already covers the
- * descendant stamp's complete causal clock. Concurrent/unobserved descendants are
- * retained. Terminal tombstones and document-level actor coordinates are never
+ * A remove-wins delete barrier is durable for every descendant path, including after
+ * recreation. A descendant stamp is redundant only when that delete barrier already
+ * covers the descendant's complete causal clock. Concurrent/unobserved descendants
+ * are retained. Terminal barriers and document-level actor coordinates are never
  * retired here because the protocol has no replica-membership/stable-frontier proof.
  */
 export function compactSyncMeta(meta: SyncMeta): SyncMeta {
@@ -40,16 +52,21 @@ export function compactSyncMeta(meta: SyncMeta): SyncMeta {
         Object.entries(meta.fields).map(([key, stamp]) => [key, cloneStamp(stamp)]),
     );
 
-    const tombstones = Object.entries(fields)
-        .filter(([, stamp]) => stamp.deleted === true)
+    const deleteBarriers = Object.entries(fields)
+        .filter(([, stamp]) => stamp.deleted === true || stamp.deleteClock !== undefined)
         .sort(([left], [right]) => pathDepth(left) - pathDepth(right) || left.localeCompare(right));
 
-    for (const [ancestorKey, ancestorStamp] of tombstones) {
+    for (const [ancestorKey, ancestorStamp] of deleteBarriers) {
         if (!fields[ancestorKey]) continue;
+        const coverage = ancestorStamp.deleteClock ?? ancestorStamp.clock;
         const descendantPrefix = `${ancestorKey}/`;
         for (const [candidateKey, candidateStamp] of Object.entries(fields)) {
             if (!candidateKey.startsWith(descendantPrefix)) continue;
-            if (coversVector(ancestorStamp.clock, candidateStamp.clock)) {
+            const candidateClocks = [
+                candidateStamp.clock,
+                ...(candidateStamp.candidates ?? []).map(candidate => candidate.clock),
+            ];
+            if (candidateClocks.every(clock => coversVector(coverage, clock))) {
                 delete fields[candidateKey];
             }
         }

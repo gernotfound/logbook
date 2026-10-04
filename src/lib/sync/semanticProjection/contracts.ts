@@ -4,15 +4,33 @@ export interface VectorClock {
     [actorId: string]: number;
 }
 
+export interface OperationGuard {
+    path: string[];
+    equals: unknown;
+}
+
+export interface FieldCandidate {
+    clock: VectorClock;
+    actorId: string;
+    seq: number;
+    value: unknown;
+    legacyClock?: VectorClock;
+    guard?: OperationGuard;
+}
+
 export interface FieldStamp {
     clock: VectorClock;
     actorId: string;
     seq: number;
     deleted?: boolean;
+    deleteClock?: VectorClock;
+    legacyClock?: VectorClock;
+    guard?: OperationGuard;
+    candidates?: FieldCandidate[];
 }
 
 export interface SyncMeta {
-    protocolVersion: 1;
+    protocolVersion: 2;
     clock: VectorClock;
     fields: Record<string, FieldStamp>;
 }
@@ -25,7 +43,7 @@ export interface SemanticOperation {
     actorId: string;
     seq: number;
     clock: VectorClock;
-    guard?: { path: string[], equals: any };
+    guard?: OperationGuard;
 }
 
 export interface StampLike {

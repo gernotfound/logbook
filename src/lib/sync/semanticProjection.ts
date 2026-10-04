@@ -8,10 +8,15 @@ export type {
 } from './semanticProjection/contracts';
 
 export {
+    compareStamps,
+    coversVectorClock,
     dominates,
     fieldKey,
     mergeVectors,
+    parseSemanticOperation,
     parseSyncMeta,
+    parseVectorClock,
+    pathFromFieldKey,
     stampWins,
 } from './semanticProjection/metadata';
 

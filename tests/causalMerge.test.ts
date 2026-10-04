@@ -37,7 +37,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1 } }
             }
@@ -57,7 +57,7 @@ describe('Causal Semantic Merge', () => {
         // Remote has A:1
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1 } }
             }
@@ -69,16 +69,17 @@ describe('Causal Semantic Merge', () => {
         ];
 
         const { documents, syncMetas } = applySemanticOperations(base, ops, remoteSyncMetas);
-        // B wins tie-break (B > A). BUT the clock in the resulting stamp MUST incorporate both branches.
+        // B wins the concurrent tie-break. Protocol 2 keeps the winner event clock immutable and observes both branches at document frontier.
         expect(documents.get('')?.profile).toEqual({ height: '182' });
-        expect(syncMetas[''].fields['profile/height'].clock).toEqual({ A: 1, B: 1 });
+        expect(syncMetas[''].fields['profile/height'].clock).toEqual({ B: 1 });
+        expect(syncMetas[''].clock).toEqual({ A: 1, B: 1 });
     });
 
     it('5. nuova op creata dopo l\'hydration domina correttamente il cloud osservato', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1 } }
             }
@@ -152,7 +153,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 1 },
                 fields: { 'profile/height': { clock: { A: 1 }, actorId: 'A', seq: 1, deleted: true } }
             }
@@ -170,7 +171,7 @@ describe('Causal Semantic Merge', () => {
         const base = new Map<string, DocumentData>();
         const remoteSyncMetas = {
             '': {
-                protocolVersion: 1 as const,
+                protocolVersion: 2 as const,
                 clock: { A: 2 }, // delete occurred at A:2
                 fields: { 'profile/height': { clock: { A: 2 }, actorId: 'A', seq: 2, deleted: true } }
             }

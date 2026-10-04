@@ -133,8 +133,8 @@ if (csp.includes('*.googleapis.com')) failures.push('Firebase Hosting CSP must n
 for (const origin of requiredConnectOrigins) {
   if (!csp.includes(origin)) failures.push(`Firebase Hosting CSP missing required connect origin: ${origin}`);
 }
-if (!hostingWorkflow.includes("github.event.workflow_run.event == 'push'") || !hostingWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
-  failures.push('Firebase Hosting workflow must only activate after the canonical push-to-main verification run');
+if (!hostingWorkflow.includes('      - Firebase Firestore Production') || !hostingWorkflow.includes("github.event.workflow_run.event == 'workflow_run'") || !hostingWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+  failures.push('Firebase Hosting workflow must activate only after the exact-main Firestore production reconciliation');
 }
 if (!hostingWorkflow.includes('git rev-parse origin/main') || !hostingWorkflow.includes('firebase-tools@15.30.2 deploy --only hosting')) {
   failures.push('Firebase Hosting workflow must re-check exact main and deploy only Hosting with the pinned CLI');
@@ -157,7 +157,7 @@ if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.i
   failures.push('Firebase Hosting production workflow must enforce the Firebase Hosting origin as authDomain');
 }
 
-if (!firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+if (!firestoreWorkflow.includes('    branches:\n      - main') || !firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
   failures.push('Firestore Production workflow must only activate after the canonical push-to-main verification run');
 }
 if (!firestoreWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {

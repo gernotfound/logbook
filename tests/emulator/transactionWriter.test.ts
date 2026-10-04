@@ -6,7 +6,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
-import { CURRENT_DATA_SCHEMA, FutureVersionError } from '../../src/lib/schemaEvolution';
+import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
 
 let env: RulesTestEnvironment;
 
@@ -150,15 +150,17 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
 it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async () => {
     const db = env.authenticatedContext('a').firestore();
 
-    await setDoc(doc(db, 'users/a'), {
-        profile: { height: '190' },
-        _sync: {
-            protocolVersion: 1,
-            clock: { B: 1 },
-            fields: {
-                'profile/height': { clock: { B: 1 }, actorId: 'B', seq: 1 }
+    await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(), 'users/a'), {
+            profile: { height: '190' },
+            _sync: {
+                protocolVersion: 1,
+                clock: { B: 1 },
+                fields: {
+                    'profile/height': { clock: { B: 1 }, actorId: 'B', seq: 1 }
+                }
             }
-        }
+        });
     });
 
     const ops: SemanticOperation[] = [
@@ -171,6 +173,7 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
     expect(saved.profile.height).toBe('190');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(saved._sync.clock.A).toBe(1);
+    expect(saved._sync.protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
 });
 
 it('5. V3 API: checkDocSize receives a document that already contains schema and sync metadata', async () => {

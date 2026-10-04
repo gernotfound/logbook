@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
 import { readLocal, acknowledgeThrough } from './localRepository';
@@ -17,13 +18,18 @@ class DurableAcknowledgementPendingError extends Error {
     }
 }
 
-function sameOperationIdentity(left: SemanticOperation, right: SemanticOperation): boolean {
-    return left.actorId === right.actorId
-        && left.seq === right.seq
-        && left.docPath === right.docPath
-        && left.isDelete === right.isDelete
-        && left.path.length === right.path.length
-        && left.path.every((segment, index) => segment === right.path[index]);
+function sameDeliveredOperation(left: SemanticOperation, right: SemanticOperation): boolean {
+    return equal(left, right);
+}
+
+function containsDeliveredBatch(pending: SemanticOperation[], delivered: SemanticOperation[]): boolean {
+    const unmatched = [...pending];
+    for (const operation of delivered) {
+        const index = unmatched.findIndex(candidate => sameDeliveredOperation(operation, candidate));
+        if (index < 0) return false;
+        unmatched.splice(index, 1);
+    }
+    return true;
 }
 
 const running = new Map<string, Promise<void>>();
@@ -67,9 +73,8 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
                 throw error;
             }
             if (!current()) throw error;
-            const fullBatchRetained = retained !== undefined && delivered.every(operation =>
-                retained.pending.some(candidate => sameOperationIdentity(operation, candidate))
-            );
+            const fullBatchRetained = retained !== undefined
+                && containsDeliveredBatch(retained.pending, delivered);
             if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
             throw error;
         }

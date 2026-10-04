@@ -57,15 +57,19 @@ describe('M4 transaction write-boundary compaction', () => {
             actorId: 'A',
             seq: 2,
             deleted: true,
-            clock: { A: 2, B: 1 },
+            clock: { A: 2 },
+            deleteClock: { A: 2 },
         });
+        expect(harness.writes[0].data._sync.clock).toEqual({ A: 2, B: 1 });
         expect(harness.writes[0].data._sync.fields['2026-09-14/weight']).toBeUndefined();
 
         expect(outcome.syncMeta['']).toBeUndefined();
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields['2026-09-14']).toMatchObject({
             deleted: true,
-            clock: { A: 2, B: 1 },
+            clock: { A: 2 },
+            deleteClock: { A: 2 },
         });
+        expect(outcome.syncMeta['nutrition_months/2026-09'].clock).toEqual({ A: 2, B: 1 });
         expect(outcome.syncMeta['nutrition_months/2026-09'].fields['2026-09-14/weight']).toBeUndefined();
         expect(harness.checkDocSize).toHaveBeenCalledTimes(1);
     });
