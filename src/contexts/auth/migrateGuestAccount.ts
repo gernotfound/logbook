@@ -73,7 +73,14 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             await retireExpiredReplicas(getDb(), user.uid);
             assertCurrent();
             const checkpoint = checkpointFromCloudDocuments(cloudPayload?.cloudDocuments ?? new Map());
-            const claim = await claimReplicaCheckpoint(getDb(), user.uid, hydrated.replica, checkpoint.clock, hydrated.actorSeq);
+            const claim = await claimReplicaCheckpoint(
+                getDb(),
+                user.uid,
+                hydrated.replica,
+                checkpoint.clock,
+                hydrated.actorSeq,
+                hydrated.replica ? undefined : hydrated.actorId,
+            );
             assertCurrent();
             return adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
         };
