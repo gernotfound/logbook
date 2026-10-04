@@ -111,7 +111,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 
 **MUST:** ancestor e descendant vengono riconciliati con lo stesso ordine totale. Una write ancestor preserva e riapplica soltanto i descendant stamp che la superano; i descendant shadowed vengono rimossi semanticamente. Guard fallite vengono escluse prima dell'arbitration del field.
 
-Il protocollo 1 viene normalizzato a 2 prima del semantic merge; client futuri restano fail-closed secondo le regole di schema evolution.
+Il protocollo 1 viene normalizzato a 2 prima del semantic merge. Poiché Protocol 1 poteva avere `FieldStamp.clock` già contaminati da contender perdenti, la migrazione separa il dot certo del winner (`actorId`/`seq`) dal vecchio frontier in `legacyClock`: i retry già risolti non possono cambiare il winner storico, mentre una nuova operation che dimostra di aver osservato il dot del winner può supersederlo senza ereditare dipendenze spurie. Client futuri restano fail-closed secondo le regole di schema evolution.
 
 I boundary bulk — bootstrap/initialize, hydration, guest→account merge, import/restore e recovery — possono continuare a usare il percorso snapshot `saveUserData/updateUserData/commitLocal`. Non costituiscono il percorso normativo per una normale mutazione utente. L'allowlist canonica e il boundary checker sono documentati in `.agents/rules/domain-operations.md`.
 
