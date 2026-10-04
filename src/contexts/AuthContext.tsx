@@ -109,13 +109,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (auth.currentUser?.uid !== user.uid || isGuestRef.current || isStoredGuest()) return;
 
         const { readLocal } = await import('../lib/sync/localRepository');
-        const envelope = await readLocal(user.uid);
-        if (!envelope?.replica || !envelope.pending.length) return;
+        const drainCheckpointedJournal = async () => {
+            const envelope = await readLocal(user.uid);
+            if (!envelope?.replica || !envelope.pending.length) return;
+            await useAppStore.getState().flushPendingSyncs();
+        };
 
         // A Protocol 3 checkpoint can be the prerequisite that makes an offline or
         // migrated journal deliverable. Drain it after the checkpoint instead of
         // relying on listener ordering between the global replay and auth refresh.
-        await useAppStore.getState().flushPendingSyncs();
+        try {
+            await drainCheckpointedJournal();
+        } catch (error) {
+            if ((error as { code?: unknown })?.code !== 'replica-fenced') throw error;
+
+            // transactionWriter has already marked the durable identity as checkpoint-required.
+            // Re-enter the authenticated loader once: it performs a full cloud scan, obtains
+            // a current generation, rebases the journal, then the retry can be delivered.
+            await loadAuthenticatedData({
+                user,
+                isGuestActive: () => isGuestRef.current || isStoredGuest(),
+                setUserData,
+                setSyncing,
+                setSaveError,
+            });
+            await drainCheckpointedJournal();
+        }
     }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
