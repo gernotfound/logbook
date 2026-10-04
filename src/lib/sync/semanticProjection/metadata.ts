@@ -28,6 +28,11 @@ function assertDotCovered(clock: VectorClock, actorId: string, seq: number, cont
     if ((clock[actorId] ?? 0) < seq) throw new Error(`Invalid causal dot in ${context}`);
 }
 
+function isExactEventDot(clock: VectorClock, actorId: string, seq: number): boolean {
+    const entries = Object.entries(clock);
+    return entries.length === 1 && entries[0][0] === actorId && entries[0][1] === seq;
+}
+
 function parseGuard(raw: unknown, context: string): OperationGuard | undefined {
     if (raw === undefined) return undefined;
     if (!isRecord(raw)) throw new Error(`Invalid ${context} guard`);
@@ -49,6 +54,7 @@ function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClo
     let legacyClock: VectorClock | undefined;
     if ('legacyClock' in raw) {
         legacyClock = parseVectorClock(raw.legacyClock, 'legacy candidate clock');
+        if (!isExactEventDot(clock, raw.actorId, seq)) throw new Error('Legacy FieldCandidate must use its exact event dot');
         assertDotCovered(legacyClock, raw.actorId, seq, 'legacy FieldCandidate');
         if (!coversVectorClock(documentClock, legacyClock)) throw new Error('Document clock does not cover legacy FieldCandidate frontier');
     }
@@ -101,6 +107,7 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
 
         if ('legacyClock' in stampRaw) {
             const legacyClock = parseVectorClock(stampRaw.legacyClock, 'legacy field clock');
+            if (!isExactEventDot(fieldClock, stampRaw.actorId, seq)) throw new Error('Legacy FieldStamp must use its exact event dot');
             assertDotCovered(legacyClock, stampRaw.actorId, seq, 'legacy FieldStamp');
             if (!coversVectorClock(clock, legacyClock)) throw new Error('Document clock does not cover legacy FieldStamp frontier');
             fieldStamp.legacyClock = legacyClock;
@@ -132,6 +139,25 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
                 for (let j = i + 1; j < candidates.length; j++) {
                     if (dominates(candidates[i].clock, candidates[j].clock) || dominates(candidates[j].clock, candidates[i].clock)) {
                         throw new Error('FieldCandidates are not a causal antichain');
+                    }
+                }
+            }
+            const legacySources = [
+                ...(fieldStamp.legacyClock ? [{ clock: fieldStamp.clock, legacyClock: fieldStamp.legacyClock }] : []),
+                ...candidates.filter(candidate => candidate.legacyClock).map(candidate => ({
+                    clock: candidate.clock,
+                    legacyClock: candidate.legacyClock!,
+                })),
+            ];
+            const visibleAndHidden = [
+                { clock: fieldStamp.clock, actorId: fieldStamp.actorId, seq: fieldStamp.seq },
+                ...candidates,
+            ];
+            for (const source of legacySources) {
+                for (const contender of visibleAndHidden) {
+                    const dot = { [contender.actorId]: contender.seq };
+                    if (coversVectorClock(source.legacyClock, dot) && !coversVectorClock(contender.clock, source.clock)) {
+                        throw new Error('FieldCandidate was already resolved by legacy frontier');
                     }
                 }
             }
