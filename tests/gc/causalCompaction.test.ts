@@ -8,7 +8,7 @@ import {
 import type { DocumentData } from '../../src/lib/sync/documentProjection';
 
 const tombstonedProfileMeta = (): SyncMeta => ({
-    protocolVersion: 1,
+    protocolVersion: 2,
     clock: { A: 2, B: 1, C: 1, ZERO: 0 },
     fields: {
         profile: { actorId: 'A', seq: 2, clock: { A: 2, B: 1, ZERO: 0 }, deleted: true },
@@ -61,7 +61,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('never retires positive actor-frontier coordinates or terminal tombstones', () => {
         const meta: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 9, B: 7, C: 3 },
             fields: {
                 'history/old': { actorId: 'A', seq: 9, clock: { A: 9, B: 7 }, deleted: true },
@@ -82,7 +82,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('makes a blocking ancestor absorb the causal context of a rejected child contender', () => {
         const meta: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
@@ -110,7 +110,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('preserves future merge results across stale, concurrent and causally newer writes', () => {
         const original: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
@@ -147,7 +147,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('preserves equivalence across a multi-step out-of-order descendant sequence', () => {
         const original: SyncMeta = {
-            protocolVersion: 1,
+            protocolVersion: 2,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
