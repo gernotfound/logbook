@@ -1,21 +1,28 @@
 import { auth, getDb, ensureAppCheck } from './firebase';
-import { doc, getDoc, collection, getDocsFromServer, query, limit, orderBy, documentId, startAfter, type QueryDocumentSnapshot } from "firebase/firestore";
+import {
+    collection,
+    doc,
+    documentId,
+    getDoc,
+    getDocsFromServer,
+    limit,
+    orderBy,
+    query,
+    startAfter,
+    type QueryDocumentSnapshot,
+} from 'firebase/firestore';
+import { del } from 'idb-keyval';
+import type { UserData } from '../types';
 import { DomainParsers } from './schema';
-import type { UserData, SyncResult } from '../types';
 import { syncGlobalCatalog, getCachedCatalog } from './catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from './catalog/deltaResolver';
 import { normalizeCloudDocument } from './schemaEvolution';
-import { del } from 'idb-keyval';
 import { withTimeout, setLastSavedStateStr } from './db/db_core';
 import { loadHistoryMonths } from './db/db_training';
 import { loadNutritionMonths } from './db/db_nutrition';
-import { purgeAllLocalUserData, deleteAccount, type AccountDeletionContext } from './db/db_account';
-import { storageOwner } from './sync/session';
-import { classifySyncFailure } from './sync/syncFailure';
-import { replicateJournal } from './sync/replicateJournal';
-import { removeDeletionRecoveryCredential } from './deletionDeviceRecovery';
 import { sanitizeHistoryMonthDocument, sanitizeNutritionMonthDocument } from './sync/monthlyIntegrity';
 import { assertWorkoutSessionIdentities } from './sync/domainOperations/validation';
+import { DB as baseDB } from './_dbBase';
 
 function parsePersistedActiveWorkout(value: unknown) {
     const parsed = DomainParsers.parseActiveWorkout(value);
@@ -28,189 +35,150 @@ function parsePersistedActiveWorkout(value: unknown) {
     }
 }
 
-export const DB = {
-    resetCache() {
-        setLastSavedStateStr(null);
-    },
-    async loadCloudPayload(options?: { allMonths?: boolean }): Promise<{ data: UserData, cloudDocuments: Map<string, any>, completeMonths: string[] } | null> {
-        const user = auth.currentUser;
-        if (!user) return null;
-        try {
-            await Promise.all([
-                del('pending_sync_payload'),
-                del('pending_sync_token'),
-                del('sync_failed')
-            ]).catch(() => {});
+async function loadCloudPayload(options?: { allMonths?: boolean }): Promise<{
+    data: UserData;
+    cloudDocuments: Map<string, any>;
+    completeMonths: string[];
+} | null> {
+    const user = auth.currentUser;
+    if (!user) return null;
 
-            const cloudDocuments = new Map<string, any>();
-            let completeMonths: string[] = [];
+    await Promise.all([
+        del('pending_sync_payload'),
+        del('pending_sync_token'),
+        del('sync_failed'),
+    ]).catch(() => {});
 
-            const state: Record<string, any> = {
-                profile: {},
-                library: [],
-                routines: [],
-                history: [],
-                nutrition: {},
-                customFoods: [],
-                activeWorkout: null,
-                trainingCycles: [],
-                activeCycleId: null,
-                nutritionPlanning: null,
-                supplements: [],
-                activePains: [],
-                legalConsent: null
-            };
-            await ensureAppCheck();
-            const docRef = doc(getDb(), "users", user.uid);
-            const catalog = await getCachedCatalog();
-            syncGlobalCatalog(getDb()).catch(() => {});
+    const cloudDocuments = new Map<string, any>();
+    let completeMonths: string[] = [];
+    const state: Record<string, any> = {
+        profile: {},
+        library: [],
+        routines: [],
+        history: [],
+        nutrition: {},
+        customFoods: [],
+        activeWorkout: null,
+        trainingCycles: [],
+        activeCycleId: null,
+        nutritionPlanning: null,
+        supplements: [],
+        activePains: [],
+        legalConsent: null,
+        catalogOverrides: {},
+    };
 
-            const docSnap = await withTimeout(getDoc(docRef), 6000, "Timeout recupero profilo utente");
-            if (docSnap && typeof docSnap.exists === 'function' && docSnap.exists()) {
-                const normalizedRoot = normalizeCloudDocument(docSnap.data(), 'Firestore root data schema');
-                const data = normalizedRoot.business as Record<string, any>;
-                if (normalizedRoot.sync !== undefined) {
-                    cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
-                }
-                if (data.profile) state.profile = data.profile;
-                state.catalogOverrides = data.catalogOverrides || {};
+    try {
+        await ensureAppCheck();
+        const db = getDb();
+        const catalog = await getCachedCatalog();
+        syncGlobalCatalog(db).catch(() => {});
 
-                const customExercises = data.library || [];
-                const customFoods = data.customFoods || [];
-                state.library = resolveEffectiveExercises(catalog.exercises, customExercises, state.catalogOverrides);
-                state.customFoods = resolveEffectiveFoods(catalog.foods, customFoods, state.catalogOverrides);
+        const root = await withTimeout(
+            getDoc(doc(db, 'users', user.uid)),
+            6000,
+            'Timeout recupero profilo utente',
+        );
 
-                if (data.routines) state.routines = data.routines;
-                if (data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
-                if (data.trainingCycles) state.trainingCycles = data.trainingCycles;
-                if (data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
-                if (data.supplements) state.supplements = data.supplements;
-                if (data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
-                state.nutritionPlanningOrigin = (data.nutritionPlanningOrigin === 'generated-default' || data.nutritionPlanningOrigin === 'user-edited')
+        if (root && typeof root.exists === 'function' && root.exists()) {
+            const normalizedRoot = normalizeCloudDocument(root.data(), 'Firestore root data schema');
+            const data = normalizedRoot.business as Record<string, any>;
+            if (normalizedRoot.sync !== undefined) {
+                cloudDocuments.set('', { ...data, _sync: normalizedRoot.sync });
+            }
+            if (data.profile) state.profile = data.profile;
+            state.catalogOverrides = data.catalogOverrides || {};
+            state.library = resolveEffectiveExercises(catalog.exercises, data.library || [], state.catalogOverrides);
+            state.customFoods = resolveEffectiveFoods(catalog.foods, data.customFoods || [], state.catalogOverrides);
+            if (data.routines) state.routines = data.routines;
+            if (data.activeWorkout !== undefined) state.activeWorkout = data.activeWorkout;
+            if (data.trainingCycles) state.trainingCycles = data.trainingCycles;
+            if (data.activeCycleId !== undefined) state.activeCycleId = data.activeCycleId;
+            if (data.supplements) state.supplements = data.supplements;
+            if (data.nutritionPlanning) state.nutritionPlanning = data.nutritionPlanning;
+            state.nutritionPlanningOrigin =
+                data.nutritionPlanningOrigin === 'generated-default' || data.nutritionPlanningOrigin === 'user-edited'
                     ? data.nutritionPlanningOrigin
                     : undefined;
-                if (data.activePains) state.activePains = data.activePains;
-                if (data.legalConsent) state.legalConsent = data.legalConsent;
-            } else if (!docSnap || (typeof docSnap.exists === 'function' && !docSnap.exists())) {
-                state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
-                state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
-                state.profile = DomainParsers.parseProfile(state.profile);
-                state.library = DomainParsers.parseLibrary(state.library);
-                state.routines = DomainParsers.parseRoutines(state.routines);
-                state.history = DomainParsers.parseHistory(state.history);
-                state.nutrition = DomainParsers.parseNutrition(state.nutrition);
-                state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
-                state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
-                state.supplements = DomainParsers.parseSupplements(state.supplements);
-                state.activePains = DomainParsers.parseActivePains(state.activePains);
-                if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
-                if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
-                if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
-
-                setLastSavedStateStr(JSON.stringify(state));
-                return { data: state as unknown as UserData, cloudDocuments, completeMonths };
-            }
-
-            if (options?.allMonths) {
-                const db = getDb();
-                for (const colName of ['history_months', 'nutrition_months']) {
-                    let cursor: QueryDocumentSnapshot | undefined;
-                    do {
-                        const constraints: any[] = [orderBy(documentId()), limit(400)];
-                        if (cursor) constraints.push(startAfter(cursor));
-                        const page = await withTimeout(
-                            getDocsFromServer(query(collection(db, "users", user.uid, colName), ...constraints)),
-                            10000,
-                            `Timeout recupero ${colName} completo`
-                        );
-                        for (const d of page.docs) {
-                            const normalized = normalizeCloudDocument(d.data(), `${colName}/${d.id} data schema`);
-                            const rawMonthData = normalized.business as Record<string, any>;
-                            const mData = colName === 'history_months'
-                                ? sanitizeHistoryMonthDocument(d.id, rawMonthData)
-                                : sanitizeNutritionMonthDocument(d.id, rawMonthData);
-                            if (normalized.sync !== undefined) cloudDocuments.set(`${colName}/${d.id}`, { ...mData, _sync: normalized.sync });
-                            if (!completeMonths.includes(d.id)) completeMonths.push(d.id);
-                            if (colName === 'history_months') {
-                                Object.values(mData).forEach((h: any) => state.history.push(h));
-                            } else {
-                                Object.entries(mData).forEach(([date, day]) => {
-                                    (state.nutrition as any)[date] = day;
-                                });
-                            }
-                        }
-                        cursor = page.size === 400 ? page.docs[page.docs.length - 1] : undefined;
-                    } while (cursor);
-                }
-            } else {
-                const now = new Date();
-                const targetMonths = [0, 1, 2].map(offset => {
-                    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                });
-
-                await loadHistoryMonths(user, targetMonths, state, cloudDocuments);
-                await loadNutritionMonths(user, targetMonths, state, cloudDocuments);
-                completeMonths = targetMonths;
-            }
-
-            state.history.sort((a: any,b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
-
-            state.profile = DomainParsers.parseProfile(state.profile);
-            state.library = DomainParsers.parseLibrary(state.library);
-            state.routines = DomainParsers.parseRoutines(state.routines);
-            state.history = DomainParsers.parseHistory(state.history);
-            state.nutrition = DomainParsers.parseNutrition(state.nutrition);
-            state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
-            state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
-            state.supplements = DomainParsers.parseSupplements(state.supplements);
-            state.activePains = DomainParsers.parseActivePains(state.activePains);
-            if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
-            if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
-            if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
-
-            setLastSavedStateStr(JSON.stringify(state));
-            return { data: state as unknown as UserData, cloudDocuments, completeMonths };
-        } catch (error: any) {
-            console.error("Errore caricamento dati dal cloud:", error);
-            throw error;
+            if (data.activePains) state.activePains = data.activePains;
+            if (data.legalConsent) state.legalConsent = data.legalConsent;
+        } else {
+            // A Firestore parent document may be absent while its subcollections exist.
+            // Initialize root defaults, then keep acquiring the requested monthly coverage.
+            state.library = resolveEffectiveExercises(catalog.exercises, [], state.catalogOverrides);
+            state.customFoods = resolveEffectiveFoods(catalog.foods, [], state.catalogOverrides);
         }
-    },
+
+        if (options?.allMonths) {
+            for (const colName of ['history_months', 'nutrition_months']) {
+                let cursor: QueryDocumentSnapshot | undefined;
+                do {
+                    const constraints: any[] = [orderBy(documentId()), limit(400)];
+                    if (cursor) constraints.push(startAfter(cursor));
+                    const page = await withTimeout(
+                        getDocsFromServer(query(collection(db, 'users', user.uid, colName), ...constraints)),
+                        10000,
+                        `Timeout recupero ${colName} completo`,
+                    );
+                    for (const item of page.docs) {
+                        const normalized = normalizeCloudDocument(item.data(), `${colName}/${item.id} data schema`);
+                        const rawMonthData = normalized.business as Record<string, any>;
+                        const monthData = colName === 'history_months'
+                            ? sanitizeHistoryMonthDocument(item.id, rawMonthData)
+                            : sanitizeNutritionMonthDocument(item.id, rawMonthData);
+                        if (normalized.sync !== undefined) {
+                            cloudDocuments.set(`${colName}/${item.id}`, { ...monthData, _sync: normalized.sync });
+                        }
+                        if (!completeMonths.includes(item.id)) completeMonths.push(item.id);
+                        if (colName === 'history_months') {
+                            Object.values(monthData).forEach(historyItem => state.history.push(historyItem));
+                        } else {
+                            Object.entries(monthData).forEach(([date, day]) => {
+                                state.nutrition[date] = day;
+                            });
+                        }
+                    }
+                    cursor = page.size === 400 ? page.docs[page.docs.length - 1] : undefined;
+                } while (cursor);
+            }
+        } else {
+            const now = new Date();
+            const targetMonths = [0, 1, 2].map(offset => {
+                const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            });
+            await loadHistoryMonths(user, targetMonths, state, cloudDocuments);
+            await loadNutritionMonths(user, targetMonths, state, cloudDocuments);
+            completeMonths = targetMonths;
+        }
+
+        state.history.sort((a: any, b: any) => (b.globalStartTime || 0) - (a.globalStartTime || 0));
+        state.profile = DomainParsers.parseProfile(state.profile);
+        state.library = DomainParsers.parseLibrary(state.library);
+        state.routines = DomainParsers.parseRoutines(state.routines);
+        state.history = DomainParsers.parseHistory(state.history);
+        state.nutrition = DomainParsers.parseNutrition(state.nutrition);
+        state.customFoods = DomainParsers.parseCustomFoods(state.customFoods);
+        state.trainingCycles = DomainParsers.parseTrainingCycles(state.trainingCycles);
+        state.supplements = DomainParsers.parseSupplements(state.supplements);
+        state.activePains = DomainParsers.parseActivePains(state.activePains);
+        if (state.activeWorkout) state.activeWorkout = parsePersistedActiveWorkout(state.activeWorkout);
+        if (state.nutritionPlanning) state.nutritionPlanning = DomainParsers.parseNutritionPlanning(state.nutritionPlanning);
+        if (state.legalConsent) state.legalConsent = DomainParsers.parseLegalConsent(state.legalConsent);
+
+        setLastSavedStateStr(JSON.stringify(state));
+        return { data: state as UserData, cloudDocuments, completeMonths };
+    } catch (error) {
+        console.error('Errore caricamento dati dal cloud:', error);
+        throw error;
+    }
+}
+
+export const DB = {
+    ...baseDB,
+    loadCloudPayload,
     async loadUserData(options?: { allMonths?: boolean }): Promise<UserData | null> {
-        const payload = await this.loadCloudPayload(options);
+        const payload = await loadCloudPayload(options);
         return payload ? payload.data : null;
     },
-    async saveUserData(state: Record<string, any>, _revision?: any): Promise<SyncResult> {
-        const user = auth.currentUser;
-        if (!user) return { ok: true, status: 'synced' };
-        try {
-            // replicateJournal handles the offline fast-path before App Check and
-            // classifies temporary App Check unavailability as local-pending.
-            const result = await replicateJournal();
-            if (result.ok) setLastSavedStateStr(JSON.stringify(state));
-            return result;
-        } catch (error) {
-            console.error('Errore durante il salvataggio:', error);
-            return classifySyncFailure(error);
-        }
-    },
-    async purgeAllLocalUserData(owner?: string) {
-        return purgeAllLocalUserData(owner);
-    },
-    async secureLogOut() {
-        console.log("Eseguo il Log Out protetto...");
-        const owner = storageOwner();
-        const uid = owner.startsWith('user:') ? owner.slice('user:'.length) : null;
-        await auth.signOut();
-        await this.purgeAllLocalUserData(owner);
-        if (uid) removeDeletionRecoveryCredential(uid);
-        this.resetCache();
-    },
-    async deleteAccount(lifecycle: Pick<AccountDeletionContext, 'cancelPendingSyncs' | 'resetStore'>) {
-        return deleteAccount({
-            purgeAllLocalUserData: owner => this.purgeAllLocalUserData(owner),
-            resetCache: () => this.resetCache(),
-            ...lifecycle,
-        });
-    }
 };
