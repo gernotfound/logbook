@@ -143,16 +143,16 @@ function mixedCausalDag(rng: SeededRandom, seed: number): SemanticOperation[] {
         seq: 1,
         clock: { [ancestorActor]: 1, [descendantActor]: 1 },
     };
+    const isDelete = rng.bool(1, 4);
     const concurrent: SemanticOperation = {
         docPath: '',
         path,
-        ...(rng.bool(1, 4) ? {} : { value: `${seed}:concurrent:${concurrentActor}` }),
-        isDelete: rng.bool(1, 4),
+        ...(isDelete ? {} : { value: `${seed}:concurrent:${concurrentActor}` }),
+        isDelete,
         actorId: concurrentActor,
         seq: 1,
         clock: { [concurrentActor]: 1 },
     };
-    if (!concurrent.isDelete && concurrent.value === undefined) concurrent.value = `${seed}:concurrent:${concurrentActor}`;
     return [ancestor, descendant, concurrent];
 }
 
