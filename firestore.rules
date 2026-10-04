@@ -335,6 +335,7 @@ service cloud.firestore {
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
+          && preservesSyncProtocol()
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 
@@ -346,6 +347,7 @@ service cloud.firestore {
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
+          && preservesSyncProtocol()
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 
