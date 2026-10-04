@@ -9,6 +9,7 @@ export interface FieldStamp {
     actorId: string;
     seq: number;
     deleted?: boolean;
+    deleteClock?: VectorClock;
 }
 
 export interface SyncMeta {
