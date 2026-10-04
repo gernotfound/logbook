@@ -62,7 +62,11 @@ export function compactSyncMeta(meta: SyncMeta): SyncMeta {
         const descendantPrefix = `${ancestorKey}/`;
         for (const [candidateKey, candidateStamp] of Object.entries(fields)) {
             if (!candidateKey.startsWith(descendantPrefix)) continue;
-            if (coversVector(coverage, candidateStamp.clock)) {
+            const candidateClocks = [
+                candidateStamp.clock,
+                ...(candidateStamp.candidates ?? []).map(candidate => candidate.clock),
+            ];
+            if (candidateClocks.every(clock => coversVector(coverage, clock))) {
                 delete fields[candidateKey];
             }
         }
