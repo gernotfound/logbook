@@ -194,9 +194,17 @@ function operationDot(operation: SemanticOperation): VectorClock {
 }
 
 function legacyResolvedLoser(stamp: FieldStamp | undefined, operation: SemanticOperation): boolean {
-    if (!stamp?.legacyClock) return false;
-    return coversVectorClock(stamp.legacyClock, operationDot(operation))
-        && !coversVectorClock(operation.clock, stamp.clock);
+    if (!stamp) return false;
+    const dot = operationDot(operation);
+    const legacyWinners = [
+        ...(stamp.legacyClock ? [{ clock: stamp.clock, legacyClock: stamp.legacyClock }] : []),
+        ...(stamp.candidates ?? [])
+            .filter(candidate => candidate.legacyClock)
+            .map(candidate => ({ clock: candidate.clock, legacyClock: candidate.legacyClock! })),
+    ];
+    return legacyWinners.some(candidate =>
+        coversVectorClock(candidate.legacyClock, dot)
+        && !coversVectorClock(operation.clock, candidate.clock));
 }
 
 function maxCandidate<T extends { stamp: StampLike }>(candidates: T[]): T {
