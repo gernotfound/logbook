@@ -1,9 +1,12 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import {
     getPWAInstallPrompt,
+    initializePWAInstallLifecycle,
     promptPWAInstall,
     subscribePWAInstall,
 } from '../lib/pwaInstallLifecycle';
+
+initializePWAInstallLifecycle();
 
 export function usePWAInstall() {
     const deferredPrompt = useSyncExternalStore(
