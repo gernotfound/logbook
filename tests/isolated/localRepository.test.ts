@@ -254,6 +254,24 @@ describe('durable owner-scoped journal', () => {
         expect(await get('logbook:v2:user:a')).toEqual(corrupt);
     });
 
+    it('rejects a changed durable baseline even when actor revision did not advance', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const preview = await readLocal('a');
+        expect(preview?.revision).toBe(0);
+
+        await hydrateLocal('a', data(180), [], undefined, 'window');
+        const hydrated = await readLocal('a');
+        expect(hydrated?.revision).toBe(preview?.revision);
+        expect(hydrated?.data.profile.height).toBe('180');
+
+        await expect(
+            commitLocal('a', data(190), base, undefined, preview!.revision),
+        ).rejects.toThrow(StaleLocalRevisionError);
+
+        expect(await readLocal('a')).toEqual(hydrated);
+    });
+
     it('rejects a stale bulk-write revision atomically without changing durable state', async () => {
         const base = data(170);
         await initializeLocal('a', base);
