@@ -158,8 +158,11 @@ describe('guest login overlay lifecycle', () => {
         expect(screen.queryByTestId('bottom-nav')).toBeNull();
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Riprova' }));
-        await waitFor(() => expect(authState.retryGuestMigration).toHaveBeenCalledTimes(1));
+        fireEvent.click(screen.getByRole('button', { name: 'Trasferisci i progressi nell’account' }));
+        await waitFor(() => expect(authState.retryGuestMigration).toHaveBeenCalledWith('merge'));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Non trasferire i progressi' }));
+        await waitFor(() => expect(authState.retryGuestMigration).toHaveBeenCalledWith('skip'));
 
         expect(sessionStorage.getItem(OVERLAY_SESSION_KEY)).toBe('true');
     });
