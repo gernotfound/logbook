@@ -77,9 +77,9 @@ RAW STORAGE
 
 Non esistono utenti/account reali da migrare da build precedenti. Per questo M1 stabilisce una baseline intenzionalmente clean-cut:
 
-- nessuna migrazione prodotto da local envelope V3 a V4;
+- la baseline M1 non introdusse una migrazione prodotto da local envelope V3 a V4;
 - nessuna importazione compatibile di backup V1/V2;
-- i registry storici sono vuoti finché non esiste un vero bump futuro N→N+1;
+- i registry contengono ora migrazioni reali sequenziali per Sync 1→2→3 e Local Envelope 4→5; non aggiungere step sintetici senza una reale evoluzione persistita;
 - vecchi formati locali/backup vengono rifiutati e non riscritti;
 - la vecchia cache locale non attribuita `logbook_cached_user_data` non viene letta, preservata né esportata dal prodotto corrente;
 - il timer legge esclusivamente lo snapshot owner-scoped `timer`; eventuali chiavi timer obsolete possono essere eliminate best-effort ma non vengono mai usate come fallback;
@@ -97,7 +97,7 @@ La pipeline V4 mantiene debounce e protocollo causale delle milestone precedenti
 2. Il reducer puro calcola il nuovo `UserData`; `commitDomainOperations()` compila soltanto lo scope dichiarato in `SemanticOperation` e persiste business state + journal nello stesso update IndexedDB.
 3. `documentProjection.ts` proietta `UserData` in root + shard mensili; `semanticProjection.ts` è la fonte di merge policy, Vector Clock, tombstone, `$order` e active-workout guard.
 4. `transactionWriter.ts` legge i documenti Firestore toccati, normalizza data schema + sync protocol, valida `_sync`, confronta `FieldStamp` remoto e operation locale, quindi esegue al massimo una write per documento toccato.
-5. `replicateJournal.ts` drena lo stesso journal V4 verso Firestore. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
+5. `replicateJournal.ts` drena lo stesso journal Envelope V5 verso Firestore. In assenza di rete o dopo timeout sicuro, le operation restano durevoli nel journal.
 6. `hydrateLocal()` assorbe il causal context remoto senza modificare gli stamp delle pending già esistenti e riproduce il journal localmente.
 
 
