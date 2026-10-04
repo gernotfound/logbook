@@ -7,6 +7,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
 import { type SemanticOperation } from '../../src/lib/sync/semanticProjection';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
+import { registerReplica } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -20,25 +21,27 @@ afterAll(async () => { await env?.cleanup(); });
 
 it('1. V3 API: writes business data, FieldStamp metadata and the current data schema marker', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const replica = await registerReplica(db, 'a');
     const ops: SemanticOperation[] = [
-        { docPath: '', path: ['profile', 'height'], value: '185', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+        { docPath: '', path: ['profile', 'height'], value: '185', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ];
 
-    await applyDocumentChanges(db, 'a', ops, () => true);
+    await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.height).toBe('185');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
-    expect(saved._sync.fields['profile/height']).toMatchObject({ actorId: 'A', seq: 1, clock: { A: 1 } });
+    expect(saved._sync.fields['profile/height']).toMatchObject({ actorId: 's00', seq: 1, clock: { s00: 1 } });
 });
 
 it('1b. accepts an unversioned schema-1 document and lazily marks it on the next legitimate write', async () => {
     const db = env.authenticatedContext('a').firestore();
     await setDoc(doc(db, 'users/a'), { profile: { name: 'Baseline' } });
+    const replica = await registerReplica(db, 'a');
 
     await applyDocumentChanges(db, 'a', [
-        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
-    ], () => true);
+        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
+    ], () => true, replica);
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile).toMatchObject({ name: 'Baseline', height: '180' });
@@ -50,9 +53,10 @@ it('1c. refuses a future remote schema before semantic merge or write', async ()
         await setDoc(doc(context.firestore(), 'users/a'), { profile: { height: '999' }, _schemaVersion: CURRENT_DATA_SCHEMA + 1 });
     });
     const db = env.authenticatedContext('a').firestore();
+    const replica = await registerReplica(db, 'a');
 
     await expect(applyDocumentChanges(db, 'a', [
-        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ], () => true)).rejects.toThrow(FutureVersionError);
 
     await env.withSecurityRulesDisabled(async context => {
@@ -63,12 +67,13 @@ it('1c. refuses a future remote schema before semantic merge or write', async ()
 
 it('2. V3 API: replay is idempotent', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const replica = await registerReplica(db, 'a');
     const ops: SemanticOperation[] = [
-        { docPath: '', path: ['profile', 'name'], value: 'Test', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+        { docPath: '', path: ['profile', 'name'], value: 'Test', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ];
 
-    await applyDocumentChanges(db, 'a', ops, () => true);
-    await applyDocumentChanges(db, 'a', ops, () => true);
+    await applyDocumentChanges(db, 'a', ops, () => true, replica);
+    await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.name).toBe('Test');
@@ -79,12 +84,13 @@ it('2. V3 API: replay is idempotent', async () => {
 it('2b. V3 API: contention smoke test converges to the semantic operation', async () => {
     const db = env.authenticatedContext('a').firestore();
     await setDoc(doc(db, 'users/a'), { profile: { name: 'Initial' } });
+    const replica = await registerReplica(db, 'a');
 
     const ops: SemanticOperation[] = [
-        { docPath: '', path: ['profile', 'name'], value: 'TestRetry', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+        { docPath: '', path: ['profile', 'name'], value: 'TestRetry', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ];
 
-    const promise = applyDocumentChanges(db, 'a', ops, () => true);
+    const promise = applyDocumentChanges(db, 'a', ops, () => true, replica);
     await setDoc(doc(db, 'users/a'), { profile: { name: 'Interfering' } });
     await promise;
 
@@ -101,9 +107,9 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
             path: ['2026-09-13'],
             value: { date: '2026-09-13', weight: 80, meals: [] },
             isDelete: false,
-            actorId: 'A',
+            actorId: 's00',
             seq: 1,
-            clock: { A: 1 }
+            clock: { s00: 1 }
         }
     ];
     await applyDocumentChanges(db, 'a', createOps, () => true);
@@ -113,9 +119,9 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
             docPath: 'nutrition_months/2026-09',
             path: ['2026-09-13'],
             isDelete: true,
-            actorId: 'A',
+            actorId: 's00',
             seq: 2,
-            clock: { A: 2 }
+            clock: { s00: 2 }
         }
     ];
     await applyDocumentChanges(db, 'a', deleteOps, () => true);
@@ -125,7 +131,7 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
     expect(deleted).toBeDefined();
     expect(deleted!._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(deleted!['2026-09-13']).toBeUndefined();
-    expect(deleted!._sync.fields['2026-09-13']).toMatchObject({ deleted: true, actorId: 'A', seq: 2 });
+    expect(deleted!._sync.fields['2026-09-13']).toMatchObject({ deleted: true, actorId: 's00', seq: 2 });
 
     const recreateOps: SemanticOperation[] = [
         {
@@ -133,9 +139,9 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
             path: ['2026-09-13'],
             value: { date: '2026-09-13', weight: 82, meals: [] },
             isDelete: false,
-            actorId: 'B',
+            actorId: 's01',
             seq: 1,
-            clock: { A: 2, B: 1 }
+            clock: { s00: 2, s01: 1 }
         }
     ];
     await applyDocumentChanges(db, 'a', recreateOps, () => true);
@@ -144,11 +150,12 @@ it('3. V3 API: parent tombstone keeps an otherwise empty shard and permits causa
     expect(recreated['2026-09-13'].weight).toBe(82);
     expect(recreated._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
     expect(recreated._sync.fields['2026-09-13'].deleted).toBeUndefined();
-    expect(recreated._sync.fields['2026-09-13'].clock).toEqual({ A: 2, B: 1 });
+    expect(recreated._sync.fields['2026-09-13'].clock).toEqual({ s00: 2, s01: 1 });
 });
 
 it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const replica = await registerReplica(db, 'a');
 
     await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(context.firestore(), 'users/a'), {
@@ -157,32 +164,33 @@ it('4. V3 API: remote FieldStamp can defeat a concurrent local operation', async
                 protocolVersion: 1,
                 clock: { B: 1 },
                 fields: {
-                    'profile/height': { clock: { B: 1 }, actorId: 'B', seq: 1 }
+                    'profile/height': { clock: { B: 1 }, actorId: 's01', seq: 1 }
                 }
             }
         });
     });
 
     const ops: SemanticOperation[] = [
-        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+        { docPath: '', path: ['profile', 'height'], value: '180', isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ];
 
-    await applyDocumentChanges(db, 'a', ops, () => true);
+    await applyDocumentChanges(db, 'a', ops, () => true, replica);
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;
     expect(saved.profile.height).toBe('190');
     expect(saved._schemaVersion).toBe(CURRENT_DATA_SCHEMA);
-    expect(saved._sync.clock.A).toBe(1);
+    expect(saved._sync.clock.s00).toBe(1);
     expect(saved._sync.protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
 });
 
 it('5. V3 API: checkDocSize receives a document that already contains schema and sync metadata', async () => {
     const db = env.authenticatedContext('a').firestore();
+    const replica = await registerReplica(db, 'a');
     const ops: SemanticOperation[] = [
-        { docPath: '', path: ['profile', 'name'], value: 'A'.repeat(500), isDelete: false, actorId: 'A', seq: 1, clock: { A: 1 } }
+        { docPath: '', path: ['profile', 'name'], value: 'A'.repeat(500), isDelete: false, actorId: 's00', seq: 1, clock: { s00: 1 } }
     ];
 
-    const result = await applyDocumentChanges(db, 'a', ops, () => true);
+    const result = await applyDocumentChanges(db, 'a', ops, () => true, replica);
     expect(result.syncMeta[''].fields['profile/name']).toBeDefined();
 
     const saved = (await getDoc(doc(db, 'users/a'))).data()!;

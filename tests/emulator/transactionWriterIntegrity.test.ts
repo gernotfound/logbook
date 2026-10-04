@@ -7,6 +7,7 @@ vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn
 
 import { applyDocumentChanges, CloudDataIntegrityError } from '../../src/lib/sync/transactionWriter';
 import type { SemanticOperation } from '../../src/lib/sync/semanticProjection';
+import { registerReplica } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 
@@ -26,9 +27,9 @@ const profileHeightOp = (seq = 1): SemanticOperation => ({
     path: ['profile', 'height'],
     value: '180',
     isDelete: false,
-    actorId: 'A',
+    actorId: 's00',
     seq,
-    clock: { A: seq },
+    clock: { s00: seq },
 });
 
 it('blocks an unrelated root write instead of replacing malformed existing cloud data with a Zod fallback', async () => {
@@ -42,7 +43,8 @@ it('blocks an unrelated root write instead of replacing malformed existing cloud
     });
 
     const db = env.authenticatedContext('a').firestore();
-    await expect(applyDocumentChanges(db, 'a', [profileHeightOp()], () => true))
+    const replica = await registerReplica(db, 'a');
+    await expect(applyDocumentChanges(db, 'a', [profileHeightOp()], () => true, replica))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
     await env.withSecurityRulesDisabled(async context => {
@@ -70,13 +72,14 @@ it('blocks a monthly write when another entity in the same shard would be destru
         path: ['2026-09-14'],
         value: { date: '2026-09-14', weight: 81, meals: [], supplementsIntake: [] },
         isDelete: false,
-        actorId: 'A',
+        actorId: 's00',
         seq: 1,
-        clock: { A: 1 },
+        clock: { s00: 1 },
     };
 
     const db = env.authenticatedContext('a').firestore();
-    await expect(applyDocumentChanges(db, 'a', [op], () => true))
+    const replica = await registerReplica(db, 'a');
+    await expect(applyDocumentChanges(db, 'a', [op], () => true, replica))
         .rejects.toBeInstanceOf(CloudDataIntegrityError);
 
     await env.withSecurityRulesDisabled(async context => {
@@ -104,13 +107,14 @@ it('allows an explicitly lossless scalar normalization while applying the semant
         path: ['2026-09-14'],
         value: { date: '2026-09-14', weight: 81, meals: [], supplementsIntake: [] },
         isDelete: false,
-        actorId: 'A',
+        actorId: 's00',
         seq: 1,
-        clock: { A: 1 },
+        clock: { s00: 1 },
     };
 
     const db = env.authenticatedContext('a').firestore();
-    await applyDocumentChanges(db, 'a', [op], () => true);
+    const replica = await registerReplica(db, 'a');
+    await applyDocumentChanges(db, 'a', [op], () => true, replica);
 
     const saved = (await getDoc(doc(db, 'users/a/nutrition_months/2026-09'))).data()!;
     expect(saved['2026-09-13'].weight).toBe(80.5);
