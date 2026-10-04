@@ -1,7 +1,8 @@
+import { CURRENT_SYNC_PROTOCOL } from '../../schemaEvolution';
 import type { DocumentData } from '../documentProjection';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
-import type { SemanticOperation, StampLike, SyncMeta } from './contracts';
-import { fieldKey, mergeVectors, stampWins } from './metadata';
+import type { FieldStamp, SemanticOperation, StampLike, SyncMeta } from './contracts';
+import { compareStamps, fieldKey, mergeVectors, pathFromFieldKey, stampWins } from './metadata';
 import { getMergePolicy, identitySeed, resolveIdentity } from './policy';
 
 export function normalizeDomainData(docs: Map<string, DocumentData>) {
@@ -25,6 +26,191 @@ export function normalizeDomainData(docs: Map<string, DocumentData>) {
     }
 }
 
+function operationStamp(operation: SemanticOperation): StampLike {
+    return {
+        clock: operation.clock,
+        isDelete: operation.isDelete,
+        actorId: operation.actorId,
+        seq: operation.seq,
+    };
+}
+
+function fieldStamp(stamp: FieldStamp): StampLike {
+    return {
+        clock: stamp.clock,
+        isDelete: stamp.deleted,
+        actorId: stamp.actorId,
+        seq: stamp.seq,
+    };
+}
+
+function guardMatches(doc: DocumentData, operation: SemanticOperation): boolean {
+    if (!operation.guard) return true;
+    let target: any = doc;
+    for (const segment of operation.guard.path) {
+        if (target === null || target === undefined) return false;
+        target = target[segment];
+    }
+    return target === operation.guard.equals;
+}
+
+function blockedByAncestor(meta: SyncMeta, operation: SemanticOperation): boolean {
+    const local = operationStamp(operation);
+    for (let i = 1; i < operation.path.length; i++) {
+        const ancestor = meta.fields[fieldKey(operation.path.slice(0, i))];
+        if (ancestor && stampWins(fieldStamp(ancestor), local)) return true;
+    }
+    return false;
+}
+
+function readSemanticValue(doc: DocumentData, docPath: string, path: string[]): unknown {
+    if (!path.length) return undefined;
+    if (path[path.length - 1] === '$order') {
+        const collection = readSemanticValue(doc, docPath, path.slice(0, -1));
+        if (!Array.isArray(collection)) return [];
+        return collection.map(item => resolveIdentity(path.slice(0, -1), item));
+    }
+
+    let current: any = doc;
+    for (let i = 0; i < path.length; i++) {
+        if (current === null || current === undefined) return undefined;
+        const currentPath = path.slice(0, i + 1);
+        const policy = getMergePolicy(docPath, currentPath);
+
+        if (policy === 'keyed' || policy === 'ordered-keyed') {
+            const arr = current[path[i]];
+            if (!Array.isArray(arr)) return undefined;
+            if (i + 1 >= path.length) return arr;
+            const itemId = path[i + 1];
+            const item = arr.find((value: any) => resolveIdentity(currentPath, value) === String(itemId));
+            if (item === undefined) return undefined;
+            if (i + 1 === path.length - 1) return item;
+            current = item;
+            i++;
+        } else {
+            if (i === path.length - 1) return current[path[i]];
+            current = current[path[i]];
+        }
+    }
+    return current;
+}
+
+function applyWinnerToDocument(
+    doc: DocumentData,
+    operation: SemanticOperation,
+    ordersToApply: Map<any[], { path: string[], orderIds: string[] }>,
+): void {
+    const p = operation.path;
+    const isOrderPayload = p[p.length - 1] === '$order';
+
+    let current: any = doc;
+    let parentIsArray = false;
+    let arrRef: any[] = [];
+    let itemIndex = -1;
+
+    for (let i = 0; i < p.length - 1; i++) {
+        const currentPath = p.slice(0, i + 1);
+        const pol = getMergePolicy(operation.docPath, currentPath);
+
+        if (pol === 'keyed' || pol === 'ordered-keyed') {
+            if (!Array.isArray(current[p[i]])) current[p[i]] = [];
+            const arr = current[p[i]] as any[];
+            const itemId = p[i + 1];
+
+            if (i + 1 === p.length - 1) {
+                if (isOrderPayload) {
+                    ordersToApply.set(arr, { path: currentPath, orderIds: operation.value as string[] });
+                    parentIsArray = false;
+                    break;
+                }
+                parentIsArray = true;
+                arrRef = arr;
+                itemIndex = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
+                break;
+            }
+
+            let idx = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
+            if (idx < 0) {
+                arr.push(identitySeed(currentPath, itemId));
+                idx = arr.length - 1;
+            }
+            current = arr[idx];
+            i++;
+        } else {
+            if (current[p[i]] === undefined || current[p[i]] === null) current[p[i]] = {};
+            current = current[p[i]];
+        }
+    }
+
+    const lastSeg = p[p.length - 1];
+    if (isOrderPayload) {
+        return;
+    }
+    if (parentIsArray) {
+        if (operation.isDelete) {
+            if (itemIndex >= 0) arrRef.splice(itemIndex, 1);
+        } else if (itemIndex >= 0) {
+            if (typeof operation.value === 'object' && operation.value !== null) arrRef[itemIndex] = { ...arrRef[itemIndex], ...operation.value };
+            else arrRef[itemIndex] = operation.value;
+        } else {
+            arrRef.push(operation.value);
+        }
+        return;
+    }
+    if (operation.isDelete) delete current[lastSeg];
+    else current[lastSeg] = operation.value;
+}
+
+type ProtectedDescendant = {
+    key: string;
+    path: string[];
+    stamp: FieldStamp;
+    value?: unknown;
+};
+
+function reconcileDescendantsAfterWinner(
+    doc: DocumentData,
+    meta: SyncMeta,
+    winner: SemanticOperation,
+    winnerStamp: FieldStamp,
+    ordersToApply: Map<any[], { path: string[], orderIds: string[] }>,
+): void {
+    const winnerKey = fieldKey(winner.path);
+    const prefix = `${winnerKey}/`;
+    const protectedDescendants: ProtectedDescendant[] = [];
+
+    for (const [key, stamp] of Object.entries(meta.fields)) {
+        if (!key.startsWith(prefix)) continue;
+        if (stampWins(fieldStamp(stamp), fieldStamp(winnerStamp))) {
+            const path = pathFromFieldKey(key);
+            protectedDescendants.push({
+                key,
+                path,
+                stamp,
+                ...(stamp.deleted ? {} : { value: structuredClone(readSemanticValue(doc, winner.docPath, path)) }),
+            });
+        }
+    }
+
+    for (const [key] of Object.entries(meta.fields)) {
+        if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) delete meta.fields[key];
+    }
+
+    protectedDescendants
+        .sort((left, right) => left.path.length - right.path.length || left.key.localeCompare(right.key))
+        .forEach(item => {
+            applyWinnerToDocument(doc, {
+                docPath: winner.docPath,
+                path: item.path,
+                isDelete: item.stamp.deleted === true,
+                ...(item.stamp.deleted ? {} : { value: item.value }),
+                actorId: item.stamp.actorId,
+                seq: item.stamp.seq,
+                clock: item.stamp.clock,
+            }, ordersToApply);
+        });
+}
+
 export function applySemanticOperations(
     base: Map<string, DocumentData>,
     ops: SemanticOperation[],
@@ -36,17 +222,20 @@ export function applySemanticOperations(
     const resultMetas: Record<string, SyncMeta> = {};
     for (const [path, meta] of Object.entries(remoteSyncMetas)) {
         resultMetas[path] = {
-            protocolVersion: 1,
+            protocolVersion: CURRENT_SYNC_PROTOCOL,
             clock: { ...meta.clock },
-            fields: { ...meta.fields }
+            fields: Object.fromEntries(Object.entries(meta.fields).map(([key, stamp]) => [
+                key,
+                { ...stamp, clock: { ...stamp.clock } },
+            ])),
         };
     }
 
     for (const [path] of base.entries()) {
-        if (!resultMetas[path]) resultMetas[path] = { protocolVersion: 1, clock: {}, fields: {} };
+        if (!resultMetas[path]) resultMetas[path] = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
     }
     for (const op of ops) {
-        if (!resultMetas[op.docPath]) resultMetas[op.docPath] = { protocolVersion: 1, clock: {}, fields: {} };
+        if (!resultMetas[op.docPath]) resultMetas[op.docPath] = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
     }
 
     const grouped = new Map<string, SemanticOperation[]>();
@@ -57,172 +246,109 @@ export function applySemanticOperations(
         grouped.set(key, existing);
     }
 
-    const groupedEntries = Array.from(grouped.entries()).sort((a, b) => a[1][0].path.length - b[1][0].path.length);
+    const groupedEntries = Array.from(grouped.entries()).sort((a, b) =>
+        a[1][0].path.length - b[1][0].path.length || a[0].localeCompare(b[0]));
     const ordersToApply = new Map<any[], { path: string[], orderIds: string[] }>();
 
     for (const [, opList] of groupedEntries) {
-        let winner = opList[0];
-        for (let i = 1; i < opList.length; i++) {
-            if (stampWins(opList[i], winner)) winner = opList[i];
-        }
+        const docPath = opList[0].docPath;
+        const meta = resultMetas[docPath];
+        const doc = resultDocs.get(docPath) || {};
 
-        // The winner decides the value, but every contender is causally observed.
-        // Without this join, the same operations delivered in one batch vs multiple
-        // batches produce different FieldStamp clocks and can diverge on later retries.
-        const observedGroupClock = mergeVectors(...opList.map(operation => operation.clock));
-        const fk = fieldKey(winner.path);
-        const meta = resultMetas[winner.docPath];
+        // Every delivered event advances only the document frontier. Field stamps
+        // remain immutable timestamps of the actual winning event in protocol 2.
+        meta.clock = mergeVectors(meta.clock, ...opList.map(operation => operation.clock));
 
-        const localStampLike: StampLike = {
-            clock: winner.clock,
-            isDelete: winner.isDelete,
-            actorId: winner.actorId,
-            seq: winner.seq
-        };
+        const eligible = opList.filter(operation =>
+            guardMatches(doc, operation) && !blockedByAncestor(meta, operation));
 
-        let jointClock = observedGroupClock;
-        let blockedByAncestor = false;
-
-        // Ancestors are the canonical reconciliation boundary for hierarchical paths.
-        // Always observe every ancestor clock before consulting the same-field stamp.
-        // This makes a deleted ancestor a safe causal summary for descendants that it
-        // already covers, which is required for lossless subtree metadata compaction.
-        for (let i = 1; i < winner.path.length; i++) {
-            const ancKey = fieldKey(winner.path.slice(0, i));
-            const ancStamp = meta.fields[ancKey];
-            if (!ancStamp) continue;
-
-            jointClock = mergeVectors(jointClock, ancStamp.clock);
-            const ancLike: StampLike = {
-                clock: ancStamp.clock,
-                isDelete: ancStamp.deleted,
-                actorId: ancStamp.actorId,
-                seq: ancStamp.seq
-            };
-
-            if (stampWins(ancLike, localStampLike)) {
-                blockedByAncestor = true;
-                // The blocking ancestor has observed this contender. Keep its winner
-                // identity, but retain the joined causal context for future retries.
-                meta.fields[ancKey] = {
-                    ...ancStamp,
-                    clock: jointClock
-                };
-                break;
-            }
-        }
-
-        if (blockedByAncestor) {
-            meta.clock = mergeVectors(meta.clock, jointClock);
+        if (!eligible.length) {
+            resultDocs.set(docPath, doc);
             continue;
         }
 
+        let winner = eligible[0];
+        for (let i = 1; i < eligible.length; i++) {
+            if (compareStamps(operationStamp(eligible[i]), operationStamp(winner)) > 0) winner = eligible[i];
+        }
+
+        const fk = fieldKey(winner.path);
         const remoteStamp = meta.fields[fk];
-        if (remoteStamp) {
-            const remoteStampLike: StampLike = {
-                clock: remoteStamp.clock,
-                isDelete: remoteStamp.deleted,
-                actorId: remoteStamp.actorId,
-                seq: remoteStamp.seq
-            };
-            if (!stampWins(localStampLike, remoteStampLike)) {
-                const observedClock = mergeVectors(remoteStamp.clock, jointClock);
-                meta.fields[fk] = {
-                    ...remoteStamp,
-                    clock: observedClock
-                };
-                meta.clock = mergeVectors(meta.clock, observedClock);
-                continue;
-            }
-            jointClock = mergeVectors(remoteStamp.clock, jointClock);
+        if (remoteStamp && !stampWins(operationStamp(winner), fieldStamp(remoteStamp))) {
+            resultDocs.set(docPath, doc);
+            continue;
         }
 
-        const doc = resultDocs.get(winner.docPath) || {};
-
-        if (winner.guard) {
-            let guardPass = true;
-            let target: any = doc;
-            for (const p of winner.guard.path) {
-                if (!target) { guardPass = false; break; }
-                target = target[p];
-            }
-            if (!guardPass || target !== winner.guard.equals) {
-                // The operation belongs to another lifecycle. Observe its causal clock,
-                // but do not let a stale session become the stamp of the current field.
-                meta.clock = mergeVectors(meta.clock, jointClock);
-                continue;
-            }
-        }
-
-        const p = winner.path;
-        const isOrderPayload = p[p.length - 1] === '$order';
-
-        let current: any = doc;
-        let parentIsArray = false;
-        let arrRef: any[] = [];
-        let itemIndex = -1;
-
-        for (let i = 0; i < p.length - 1; i++) {
-            const currentPath = p.slice(0, i + 1);
-            const pol = getMergePolicy(winner.docPath, currentPath);
-
-            if (pol === 'keyed' || pol === 'ordered-keyed') {
-                if (!Array.isArray(current[p[i]])) current[p[i]] = [];
-                const arr = current[p[i]] as any[];
-                const itemId = p[i + 1];
-
-                if (i + 1 === p.length - 1) {
-                    if (isOrderPayload) {
-                        ordersToApply.set(arr, { path: currentPath, orderIds: winner.value as string[] });
-                        parentIsArray = false;
-                        break;
-                    }
-                    parentIsArray = true;
-                    arrRef = arr;
-                    itemIndex = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
-                    break;
-                } else {
-                    let idx = arr.findIndex((x: any) => resolveIdentity(currentPath, x) === String(itemId));
-                    if (idx < 0) {
-                        arr.push(identitySeed(currentPath, itemId));
-                        idx = arr.length - 1;
-                    }
-                    current = arr[idx];
-                    i++;
-                }
-            } else {
-                if (current[p[i]] === undefined) current[p[i]] = {};
-                current = current[p[i]];
-            }
-        }
-
-        const lastSeg = p[p.length - 1];
-
-        if (isOrderPayload) {
-            // Applied after all entity operations.
-        } else if (parentIsArray) {
-            if (winner.isDelete) {
-                if (itemIndex >= 0) arrRef.splice(itemIndex, 1);
-            } else if (itemIndex >= 0) {
-                if (typeof winner.value === 'object' && winner.value !== null) arrRef[itemIndex] = { ...arrRef[itemIndex], ...winner.value };
-                else arrRef[itemIndex] = winner.value;
-            } else {
-                arrRef.push(winner.value);
-            }
-        } else if (winner.isDelete) {
-            delete current[lastSeg];
-        } else {
-            current[lastSeg] = winner.value;
-        }
-
-        resultDocs.set(winner.docPath, doc);
-        meta.fields[fk] = {
-            clock: jointClock,
+        const nextStamp: FieldStamp = {
+            clock: { ...winner.clock },
             actorId: winner.actorId,
             seq: winner.seq,
-            ...(winner.isDelete ? { deleted: true } : {})
+            ...(winner.isDelete ? { deleted: true } : {}),
         };
-        meta.clock = mergeVectors(meta.clock, jointClock);
+
+        // Preserve descendants whose own total causal timestamp outranks an
+        // ancestor write. Lower-ranked descendants are semantically shadowed and
+        // their stamps are removed, so parent-before-child and child-before-parent
+        // delivery converge to the same business and causal state.
+        const protectedBefore = Object.entries(meta.fields)
+            .filter(([key, stamp]) => key.startsWith(`${fk}/`) && stampWins(fieldStamp(stamp), fieldStamp(nextStamp)))
+            .map(([key]) => key);
+
+        const preservedValues = new Map<string, unknown>();
+        for (const key of protectedBefore) {
+            const stamp = meta.fields[key];
+            if (!stamp.deleted) {
+                const path = pathFromFieldKey(key);
+                preservedValues.set(key, structuredClone(readSemanticValue(doc, winner.docPath, path)));
+            }
+        }
+
+        applyWinnerToDocument(doc, winner, ordersToApply);
+        meta.fields[fk] = nextStamp;
+
+        // Temporarily restore the captured values for descendants before the shared
+        // reconciliation helper applies them through semantic path handling.
+        for (const key of protectedBefore) {
+            const stamp = meta.fields[key];
+            if (stamp && !stamp.deleted && preservedValues.has(key)) {
+                // The helper reads the current document; keep the captured value on a
+                // transient property of the stamp map is deliberately avoided.
+            }
+        }
+
+        const prefix = `${fk}/`;
+        const protectedDescendants: ProtectedDescendant[] = [];
+        for (const [key, stamp] of Object.entries(meta.fields)) {
+            if (!key.startsWith(prefix)) continue;
+            if (stampWins(fieldStamp(stamp), fieldStamp(nextStamp))) {
+                protectedDescendants.push({
+                    key,
+                    path: pathFromFieldKey(key),
+                    stamp,
+                    ...(stamp.deleted ? {} : {
+                        value: preservedValues.has(key)
+                            ? preservedValues.get(key)
+                            : structuredClone(readSemanticValue(doc, winner.docPath, pathFromFieldKey(key))),
+                    }),
+                });
+            }
+        }
+        for (const [key] of Object.entries(meta.fields)) {
+            if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) delete meta.fields[key];
+        }
+        protectedDescendants
+            .sort((left, right) => left.path.length - right.path.length || left.key.localeCompare(right.key))
+            .forEach(item => applyWinnerToDocument(doc, {
+                docPath: winner.docPath,
+                path: item.path,
+                isDelete: item.stamp.deleted === true,
+                ...(item.stamp.deleted ? {} : { value: item.value }),
+                actorId: item.stamp.actorId,
+                seq: item.stamp.seq,
+                clock: item.stamp.clock,
+            }, ordersToApply));
+
+        resultDocs.set(docPath, doc);
     }
 
     for (const [arr, { path, orderIds }] of ordersToApply.entries()) {
