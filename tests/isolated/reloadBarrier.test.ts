@@ -165,6 +165,7 @@ it('does not erase a concurrent guest change from a clean stale tab', async () =
     invalidateSession();
     const base = parse(170);
     app.state.userData = base;
+    app.state.dataOwner = 'guest';
     await initializeLocal('guest', base);
     markTabSnapshotClean(captureSession(), base);
     const concurrent = UserDataSchema.parse({
