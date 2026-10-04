@@ -302,7 +302,11 @@ export async function claimReplicaCheckpoint(
                 && Object.values(control.replicas).some(entry => entry.replicaId === normalizedCandidate);
             replicaId = normalizedCandidate && !candidateAlreadyUsed ? normalizedCandidate : generateId('replica');
             generation = (previous?.generation ?? 0) + 1;
-            baseSeq = Math.max(previous?.lastSeq ?? 0, normalizedCheckpoint[slot] ?? 0);
+            baseSeq = Math.max(
+                previous?.lastSeq ?? 0,
+                normalizedCheckpoint[slot] ?? 0,
+                currentReplica?.slot === slot ? localActorSeq : 0,
+            );
         }
 
         const checkpointAtMs = now;
