@@ -121,23 +121,47 @@ export type SyncProtocolMigrationCarrier =
 // Future N->N+1 migrations are added only when the corresponding CURRENT_* constant is bumped.
 // Data/sync migration steps receive a storage-scope carrier so one version dimension can advance
 // independently of the local-envelope or backup container version without coupling those bumps.
+function migrateSyncMeta1To2(raw: unknown): unknown {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    const meta = structuredClone(raw as Record<string, unknown>);
+    const fields = meta.fields;
+    if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
+        meta.fields = Object.fromEntries(Object.entries(fields as Record<string, unknown>).map(([path, rawStamp]) => {
+            if (!rawStamp || typeof rawStamp !== 'object' || Array.isArray(rawStamp)) return [path, rawStamp];
+            const stamp = structuredClone(rawStamp as Record<string, unknown>);
+            const actorId = stamp.actorId;
+            const seq = stamp.seq;
+            const legacyClock = stamp.clock;
+            if (typeof actorId === 'string' && typeof seq === 'number' && legacyClock && typeof legacyClock === 'object' && !Array.isArray(legacyClock)) {
+                const dot = { [actorId]: seq };
+                stamp.clock = dot;
+                stamp.legacyClock = structuredClone(legacyClock);
+                if (stamp.deleted === true) stamp.deleteClock = dot;
+            }
+            return [path, stamp];
+        }));
+    }
+    meta.protocolVersion = 2;
+    return meta;
+}
+
 export const DATA_MIGRATIONS: MigrationRegistry<DataMigrationCarrier> = {};
 export const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCarrier> = {
     1: carrier => {
         if (carrier.scope === 'cloud') {
             return {
                 scope: 'cloud',
-                sync: { ...carrier.sync, protocolVersion: 2 },
+                sync: migrateSyncMeta1To2(carrier.sync) as PersistedRecord,
             };
         }
 
         const record = structuredClone(carrier.record);
         const upgradeMetaMap = (raw: unknown): unknown => {
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
-            return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([path, meta]) => {
-                if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return [path, meta];
-                return [path, { ...(meta as Record<string, unknown>), protocolVersion: 2 }];
-            }));
+            return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([path, meta]) => [
+                path,
+                migrateSyncMeta1To2(meta),
+            ]));
         };
 
         if (carrier.scope === 'local-envelope') {
@@ -162,9 +186,7 @@ export const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCa
                     Object.entries(cloudDocuments as Record<string, unknown>).map(([path, rawDoc]) => {
                         if (!rawDoc || typeof rawDoc !== 'object' || Array.isArray(rawDoc)) return [path, rawDoc];
                         const doc = { ...(rawDoc as Record<string, unknown>) };
-                        if (doc._sync && typeof doc._sync === 'object' && !Array.isArray(doc._sync)) {
-                            doc._sync = { ...(doc._sync as Record<string, unknown>), protocolVersion: 2 };
-                        }
+                        if (doc._sync !== undefined) doc._sync = migrateSyncMeta1To2(doc._sync);
                         return [path, doc];
                     }),
                 );
