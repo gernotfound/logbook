@@ -40,9 +40,11 @@ function parsePostSessionRecovery(raw: string | null, workoutId: string): { pend
         const draft = parsed?.draft;
         if (!draft || draft.workoutId !== workoutId) return null;
         if (!Array.isArray(draft.pains) || draft.pains.some(value => typeof value !== 'string')) return null;
-        for (const key of ['mood', 'pump', 'fatigue', 'water'] as const) {
-            if (typeof draft[key] !== 'string') return null;
-        }
+        const mood = draft.mood;
+        const pump = draft.pump;
+        const fatigue = draft.fatigue;
+        const water = draft.water;
+        if (typeof mood !== 'string' || typeof pump !== 'string' || typeof fatigue !== 'string' || typeof water !== 'string') return null;
         const pendingEndTime = parsed.pendingEndTime === null
             ? null
             : typeof parsed.pendingEndTime === 'number' && Number.isFinite(parsed.pendingEndTime)
@@ -52,10 +54,10 @@ function parsePostSessionRecovery(raw: string | null, workoutId: string): { pend
             pendingEndTime,
             draft: {
                 workoutId,
-                mood: draft.mood,
-                pump: draft.pump,
-                fatigue: draft.fatigue,
-                water: draft.water,
+                mood,
+                pump,
+                fatigue,
+                water,
                 pains: [...draft.pains],
             },
         };
