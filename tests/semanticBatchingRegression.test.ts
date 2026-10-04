@@ -40,6 +40,7 @@ describe('Semantic merge batching regression', () => {
         expect(splitBA.documents).toEqual(batched.documents);
         expect(splitAB.syncMetas).toEqual(batched.syncMetas);
         expect(splitBA.syncMetas).toEqual(batched.syncMetas);
-        expect(batched.syncMetas[''].fields['profile/height'].clock).toEqual({ A: 1, B: 1 });
+        expect(batched.syncMetas[''].fields['profile/height']).toMatchObject({ actorId: 'B', seq: 1, clock: { B: 1 } });
+        expect(batched.syncMetas[''].clock).toEqual({ A: 1, B: 1 });
     });
 });
