@@ -46,6 +46,33 @@ it('allows the clean-cut unversioned schema-1 baseline, marks it lazily, and pre
     }
 });
 
+it('allows legacy monthly physical deletion only before the Protocol 3 account cutover', async () => {
+    const db = env.authenticatedContext('a').firestore();
+    const monthRef = doc(db, 'users/a/nutrition_months/2026-09');
+
+    await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
+    await assertSucceeds(deleteDoc(monthRef));
+
+    await assertSucceeds(setDoc(monthRef, { _schemaVersion: 1 }));
+    await registerReplica(db, 'a');
+
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const control = (await getDoc(controlRef)).data()!;
+    const forgedDeleteBatch = writeBatch(db);
+    forgedDeleteBatch.set(controlRef, {
+        ...control,
+        replicas: {
+            ...control.replicas,
+            s00: { ...control.replicas.s00, lastSeq: control.replicas.s00.lastSeq + 1 },
+        },
+        mutation: { slot: 's00', action: 'advance' },
+    });
+    forgedDeleteBatch.delete(monthRef);
+
+    await assertFails(forgedDeleteBatch.commit());
+    expect((await getDoc(monthRef)).exists()).toBe(true);
+});
+
 it.each(['anonymous', 'b'])('denies %s all operations on another user and their private collections', async identity => {
     const db = identity === 'anonymous' ? env.unauthenticatedContext().firestore() : env.authenticatedContext(identity).firestore();
     for (const path of ['users/a', 'users/a/history_months/2026-09', 'users/a/nutrition_months/2026-09', 'users/a/telemetry_events/e', 'users/a/telemetry_errors/e', 'users/a/telemetry_anomalies/e']) {
