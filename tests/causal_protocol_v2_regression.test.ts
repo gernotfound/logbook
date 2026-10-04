@@ -129,10 +129,16 @@ describe('Sync Protocol 2 causal convergence regressions', () => {
         for (const outcome of outcomes.slice(1)) expect(snapshot(outcome)).toEqual(snapshot(outcomes[0]));
 
         expect((outcomes[0].documents.get('')?.profile as any).name).toBe('X');
-        expect(outcomes[0].syncMetas[''].fields['profile/name']).toEqual({
+        expect(outcomes[0].syncMetas[''].fields['profile/name']).toMatchObject({
             actorId: 'A',
             seq: 1,
             clock: { C: 1, A: 1 },
+            candidates: [{
+                actorId: 'B',
+                seq: 1,
+                clock: { B: 1 },
+                value: 'Z',
+            }],
         });
         expect(outcomes[0].syncMetas[''].clock).toEqual({ A: 1, B: 1, C: 1 });
     });
