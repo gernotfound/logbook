@@ -266,20 +266,75 @@ vi.mock('firebase/app-check', () => ({
   isSupported: vi.fn().mockResolvedValue(true),
 }));
 
+export const firestoreMockStore: Record<string, any> = {};
+beforeEach(() => {
+  for (const key of Object.keys(firestoreMockStore)) delete firestoreMockStore[key];
+});
+
 vi.mock('firebase/firestore', () => {
-  const getDoc = vi.fn().mockResolvedValue({ exists: () => false });
-  const writeBatch = vi.fn().mockReturnValue({ set: vi.fn(), delete: vi.fn(), commit: vi.fn().mockResolvedValue(undefined) });
+  const refPath = (ref: any) => typeof ref?.path === 'string' ? ref.path : '';
+  const snapshot = (data: any) => ({
+    exists: () => data !== undefined,
+    data: () => data,
+  });
+  const defaultControl = () => {
+    const now = Date.now();
+    return {
+      protocolVersion: 3,
+      replicas: {
+        s00: {
+          replicaId: 'test-replica',
+          generation: 1,
+          status: 'active',
+          lastSeq: 0,
+          checkpointAtMs: now,
+          leaseUntilMs: now + 360 * 24 * 60 * 60 * 1000,
+          checkpointClock: {},
+        },
+      },
+      mutation: { slot: 's00', action: 'checkpoint' },
+    };
+  };
+  const getDoc = vi.fn(async (ref: any) => snapshot(firestoreMockStore[refPath(ref)]));
+  const createBatch = () => {
+    const staged: Array<{ kind: 'set' | 'delete'; ref: any; data?: any }> = [];
+    return {
+      set: vi.fn((ref: any, data: any) => staged.push({ kind: 'set', ref, data: structuredClone(data) })),
+      delete: vi.fn((ref: any) => staged.push({ kind: 'delete', ref })),
+      commit: vi.fn(async () => {
+        for (const item of staged) {
+          const path = refPath(item.ref);
+          if (!path) continue;
+          if (item.kind === 'delete') delete firestoreMockStore[path];
+          else firestoreMockStore[path] = structuredClone(item.data);
+        }
+      }),
+    };
+  };
+  const writeBatch = vi.fn(() => createBatch());
   return {
     getFirestore: vi.fn(() => ({})), initializeFirestore: vi.fn(() => ({})),
     memoryLocalCache: vi.fn(() => ({})),
     waitForPendingWrites: vi.fn().mockResolvedValue(undefined),
-    doc: vi.fn(), getDoc, setDoc: vi.fn().mockResolvedValue(undefined),
-    deleteDoc: vi.fn().mockResolvedValue(undefined), collection: vi.fn(),
-    getDocs: vi.fn().mockResolvedValue({ docs: [] }), deleteField: vi.fn(), writeBatch,
-    // Adapter for UI/contract tests only. Real retries and authorization run in test:rules.
+    doc: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })), getDoc,
+    setDoc: vi.fn(async (ref: any, data: any) => { firestoreMockStore[refPath(ref)] = structuredClone(data); }),
+    deleteDoc: vi.fn(async (ref: any) => { delete firestoreMockStore[refPath(ref)]; }),
+    collection: vi.fn((_db: unknown, ...parts: string[]) => ({ path: parts.join('/') })),
+    getDocs: vi.fn().mockResolvedValue({ docs: [] }),
+    getDocsFromServer: vi.fn().mockResolvedValue({ docs: [], size: 0 }),
+    documentId: vi.fn(() => '__name__'), orderBy: vi.fn(() => ({})),
+    limit: vi.fn(() => ({})), startAfter: vi.fn(() => ({})), query: vi.fn((ref: any) => ref),
+    deleteField: vi.fn(), writeBatch,
+    // Adapter for UI/contract tests only. Emulator suites exercise real Rules/fencing.
     runTransaction: vi.fn(async (_db, callback) => {
       const batch = writeBatch();
-      const result = await callback({ get: getDoc, set: batch.set, delete: batch.delete });
+      const txGet = async (ref: any) => {
+        const path = refPath(ref);
+        if (firestoreMockStore[path] !== undefined) return snapshot(firestoreMockStore[path]);
+        if (path.endsWith('/sync_control/state')) return snapshot(defaultControl());
+        return getDoc(ref);
+      };
+      const result = await callback({ get: txGet, set: batch.set, delete: batch.delete });
       if (!result?.conflicts?.length) await batch.commit();
       return result;
     }),
