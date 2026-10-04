@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
