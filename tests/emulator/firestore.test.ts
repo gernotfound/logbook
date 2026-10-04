@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { CURRENT_SYNC_PROTOCOL } from '../../src/lib/schemaEvolution';
+import { registerReplica } from './replicaHarness';
 
 let env: RulesTestEnvironment;
 beforeAll(async () => {
@@ -106,17 +107,38 @@ it('rejects unknown root fields, invalid origin and malformed month paths', asyn
 it('rejects malformed sync envelopes while allowing the current structural contract', async () => {
     const db = env.authenticatedContext('a').firestore();
     const root = doc(db, 'users/a');
-    const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
-    const legacySync = { ...validSync, protocolVersion: 1 };
+    const legacySync = { protocolVersion: 1, clock: {}, fields: {} };
 
     await assertSucceeds(setDoc(root, { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
-    await assertSucceeds(setDoc(root, { profile: { name: 'valid' }, _schemaVersion: 1, _sync: validSync }));
+
+    const replica = await registerReplica(db, 'a');
+    const controlRef = doc(db, 'users/a/sync_control/state');
+    const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: 1 };
+    const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 1 }, fields: {}, writer };
+    const authorizedWrite = async (sync: any, name: string, seq = 1) => {
+        const control = (await getDoc(controlRef)).data()!;
+        const batch = writeBatch(db);
+        batch.set(controlRef, {
+            ...control,
+            replicas: {
+                ...control.replicas,
+                s00: { ...control.replicas.s00, lastSeq: seq },
+            },
+            mutation: { slot: 's00', action: 'advance' },
+        });
+        batch.set(root, { profile: { name }, _schemaVersion: 1, _sync: sync });
+        await batch.commit();
+    };
+
+    await assertSucceeds(authorizedWrite(validSync, 'valid'));
     await assertFails(setDoc(root, { profile: { name: 'downgrade' }, _schemaVersion: 1, _sync: legacySync }));
-    await assertFails(setDoc(root, { profile: { name: 'wrong protocol' }, _schemaVersion: 1, _sync: { ...validSync, protocolVersion: CURRENT_SYNC_PROTOCOL + 1 } }));
-    await assertFails(setDoc(root, { profile: { name: 'missing clock' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {} } }));
-    await assertFails(setDoc(root, { profile: { name: 'bad clock' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: [], fields: {} } }));
-    await assertFails(setDoc(root, { profile: { name: 'bad fields' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: [] } }));
-    await assertFails(setDoc(root, { profile: { name: 'extra sync key' }, _schemaVersion: 1, _sync: { ...validSync, unexpected: true } }));
+
+    const nextWriter = { ...writer, seq: 2 };
+    await assertFails(authorizedWrite({ ...validSync, protocolVersion: CURRENT_SYNC_PROTOCOL + 1, writer: nextWriter }, 'wrong protocol', 2));
+    await assertFails(authorizedWrite({ protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {}, writer: nextWriter }, 'missing clock', 2));
+    await assertFails(authorizedWrite({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: [], fields: {}, writer: nextWriter }, 'bad clock', 2));
+    await assertFails(authorizedWrite({ protocolVersion: CURRENT_SYNC_PROTOCOL, clock: { s00: 2 }, fields: [], writer: nextWriter }, 'bad fields', 2));
+    await assertFails(authorizedWrite({ ...validSync, clock: { s00: 2 }, writer: nextWriter, unexpected: true }, 'extra sync key', 2));
 });
 
 it('permits public catalog reads but denies client writes', async () => {
