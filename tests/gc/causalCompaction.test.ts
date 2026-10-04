@@ -59,6 +59,33 @@ describe('M4 causal metadata compaction', () => {
         expect(compacted.clock).toEqual({ A: 2, B: 1, C: 1 });
     });
 
+    it('does not compact a descendant when a hidden candidate is not covered by the ancestor delete barrier', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 2,
+            clock: { A: 2, B: 1 },
+            fields: {
+                profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true, deleteClock: { A: 2 } },
+                'profile/name': {
+                    actorId: 'A',
+                    seq: 1,
+                    clock: { A: 1 },
+                    candidates: [{
+                        actorId: 'B',
+                        seq: 1,
+                        clock: { B: 1 },
+                        value: 'hidden',
+                    }],
+                },
+            },
+        };
+
+        const compacted = compactSyncMeta(meta);
+        expect(compacted.fields['profile/name']).toBeDefined();
+        expect(compacted.fields['profile/name'].candidates).toEqual([
+            expect.objectContaining({ actorId: 'B', seq: 1, clock: { B: 1 }, value: 'hidden' }),
+        ]);
+    });
+
     it('never retires positive actor-frontier coordinates or terminal tombstones', () => {
         const meta: SyncMeta = {
             protocolVersion: 2,
