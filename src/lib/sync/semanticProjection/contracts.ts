@@ -23,6 +23,7 @@ export interface FieldStamp {
     seq: number;
     deleted?: boolean;
     deleteClock?: VectorClock;
+    legacyClock?: VectorClock;
     guard?: OperationGuard;
     candidates?: FieldCandidate[];
 }
