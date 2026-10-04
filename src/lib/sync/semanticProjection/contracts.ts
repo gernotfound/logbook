@@ -14,6 +14,7 @@ export interface FieldCandidate {
     actorId: string;
     seq: number;
     value: unknown;
+    legacyClock?: VectorClock;
     guard?: OperationGuard;
 }
 
