@@ -81,6 +81,35 @@ describe('durable owner-scoped journal', () => {
         expect(((await get('logbook:v2:user:a')) as any).pending[0].clock).toEqual({});
     });
 
+    it('rejects local sync metadata whose document frontier does not cover a FieldStamp', async () => {
+        const payload = data(170);
+        await set('logbook:v2:user:a', {
+            version: CURRENT_LOCAL_ENVELOPE,
+            dataSchemaVersion: CURRENT_DATA_SCHEMA,
+            syncProtocolVersion: CURRENT_SYNC_PROTOCOL,
+            owner: 'user:a',
+            actorId: 'actor-a',
+            actorSeq: 1,
+            clock: { 'actor-a': 1 },
+            data: payload,
+            baseline: payload,
+            completeMonths: [],
+            pending: [],
+            syncMetaByDocument: {
+                '': {
+                    protocolVersion: CURRENT_SYNC_PROTOCOL,
+                    clock: {},
+                    fields: {
+                        'profile/height': { actorId: 'actor-a', seq: 1, clock: { 'actor-a': 1 } },
+                    },
+                },
+            },
+            revision: 1,
+        });
+
+        await expect(readLocal('a')).rejects.toThrow();
+    });
+
     it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
         const base = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 80 },
