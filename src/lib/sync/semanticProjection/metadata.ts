@@ -94,6 +94,9 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             fieldStamp.deleteClock = { ...fieldStamp.clock };
         }
 
+        const guard = parseGuard(stampRaw.guard, 'FieldStamp');
+        if (guard) fieldStamp.guard = guard;
+
         if (!fieldStamp.deleted && fieldStamp.deleteClock && !coversVectorClock(fieldStamp.clock, fieldStamp.deleteClock)) {
             throw new Error('Visible FieldStamp does not cover delete barrier');
         }
