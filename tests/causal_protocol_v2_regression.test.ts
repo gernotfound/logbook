@@ -277,6 +277,7 @@ describe('Sync Protocol 2 causal convergence regressions', () => {
             actorId: 'Z',
             seq: 1,
             clock: { Z: 1 },
+            guard: { path: ['activeWorkout', 'id'], equals: 's2' },
         });
         expect(validThenStale.syncMetas[''].clock).toEqual({ A: 1, Z: 1 });
 
