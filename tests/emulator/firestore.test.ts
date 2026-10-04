@@ -107,8 +107,11 @@ it('rejects malformed sync envelopes while allowing the current structural contr
     const db = env.authenticatedContext('a').firestore();
     const root = doc(db, 'users/a');
     const validSync = { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: {}, fields: {} };
+    const legacySync = { ...validSync, protocolVersion: 1 };
 
+    await assertSucceeds(setDoc(root, { profile: { name: 'legacy' }, _schemaVersion: 1, _sync: legacySync }));
     await assertSucceeds(setDoc(root, { profile: { name: 'valid' }, _schemaVersion: 1, _sync: validSync }));
+    await assertFails(setDoc(root, { profile: { name: 'downgrade' }, _schemaVersion: 1, _sync: legacySync }));
     await assertFails(setDoc(root, { profile: { name: 'wrong protocol' }, _schemaVersion: 1, _sync: { ...validSync, protocolVersion: CURRENT_SYNC_PROTOCOL + 1 } }));
     await assertFails(setDoc(root, { profile: { name: 'missing clock' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, fields: {} } }));
     await assertFails(setDoc(root, { profile: { name: 'bad clock' }, _schemaVersion: 1, _sync: { protocolVersion: CURRENT_SYNC_PROTOCOL, clock: [], fields: {} } }));
