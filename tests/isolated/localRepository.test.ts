@@ -71,6 +71,16 @@ describe('durable owner-scoped journal', () => {
         expect(migrated?.syncMetaByDocument[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
     });
 
+    it('rejects a pending operation whose causal dot is not covered by its operation clock', async () => {
+        await commitLocal('a', data(171), data(170));
+        const raw = await get('logbook:v2:user:a') as any;
+        raw.pending[0] = { ...raw.pending[0], clock: {} };
+        await set('logbook:v2:user:a', raw);
+
+        await expect(readLocal('a')).rejects.toThrow();
+        expect(((await get('logbook:v2:user:a')) as any).pending[0].clock).toEqual({});
+    });
+
     it('does not resurrect a remote deletion in a complete window and preserves unloaded history', async () => {
         const base = UserDataSchema.parse({ nutrition: {
             '2026-09-01': { date: '2026-09-01', weight: 80 },
