@@ -143,6 +143,60 @@ describe('Sync Protocol 2 causal convergence regressions', () => {
         expect(outcomes[0].syncMetas[''].clock).toEqual({ A: 1, B: 1, C: 1 });
     });
 
+    it('preserves a protocol-1 resolved winner while allowing a true post-winner protocol-2 edit', () => {
+        const base = new Map<string, DocumentData>([['', { profile: { name: 'legacy-winner' } }]]);
+        const migratedMeta: Record<string, SyncMeta> = {
+            '': {
+                protocolVersion: CURRENT_SYNC_PROTOCOL,
+                clock: { C: 1, B: 1 },
+                fields: {
+                    'profile/name': {
+                        actorId: 'C',
+                        seq: 1,
+                        clock: { C: 1 },
+                        legacyClock: { C: 1, B: 1 },
+                    },
+                },
+            },
+        };
+        const staleResolvedLoser: SemanticOperation = {
+            docPath: '',
+            path: ['profile', 'name'],
+            value: 'stale-loser',
+            isDelete: false,
+            actorId: 'B',
+            seq: 1,
+            clock: { B: 1 },
+        };
+
+        const afterRetry = applySemanticOperations(base, [staleResolvedLoser], migratedMeta);
+        expect((afterRetry.documents.get('')?.profile as any).name).toBe('legacy-winner');
+        expect(afterRetry.syncMetas[''].fields['profile/name']).toMatchObject({
+            actorId: 'C',
+            seq: 1,
+            clock: { C: 1 },
+            legacyClock: { C: 1, B: 1 },
+        });
+
+        const causalSuccessor: SemanticOperation = {
+            docPath: '',
+            path: ['profile', 'name'],
+            value: 'successor',
+            isDelete: false,
+            actorId: 'A',
+            seq: 1,
+            clock: { C: 1, A: 1 },
+        };
+        const afterSuccessor = applySemanticOperations(afterRetry.documents, [causalSuccessor], afterRetry.syncMetas);
+        expect((afterSuccessor.documents.get('')?.profile as any).name).toBe('successor');
+        expect(afterSuccessor.syncMetas[''].fields['profile/name']).toMatchObject({
+            actorId: 'A',
+            seq: 1,
+            clock: { C: 1, A: 1 },
+        });
+        expect(afterSuccessor.syncMetas[''].fields['profile/name'].legacyClock).toBeUndefined();
+    });
+
     it('recovers a hidden descendant that observed a late-delivered ancestor', () => {
         const path = 'nutrition_months/2026-09';
         const date = '2026-09-15';
