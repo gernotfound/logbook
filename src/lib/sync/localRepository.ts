@@ -235,6 +235,32 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
     return { operations, data: savedData };
 }
 
+export async function markReplicaCheckpointRequired(
+    owner: string,
+    expectedReplica?: ReplicaIdentity,
+): Promise<void> {
+    owner = normalizeStorageOwner(owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
+        if (!current?.replica) return current;
+        if (expectedReplica && (
+            current.replica.slot !== expectedReplica.slot
+            || current.replica.replicaId !== expectedReplica.replicaId
+            || current.replica.generation !== expectedReplica.generation
+        )) return current;
+
+        return {
+            ...current,
+            replica: {
+                ...current.replica,
+                checkpointAtMs: 1,
+                leaseUntilMs: 1,
+            },
+            revision: current.revision + 1,
+        };
+    });
+}
+
 export async function adoptReplicaCheckpoint(
     owner: string,
     claim: ReplicaCheckpoint,
