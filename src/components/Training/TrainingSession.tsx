@@ -8,6 +8,9 @@ import SessionRatings from './session/SessionRatings';
 import type { WorkoutSession } from '../../types';
 import { Logic } from '../../lib/logic';
 import { draftRegistry } from '../../lib/utils/draftRegistry';
+import { captureSession, isCurrentSession } from '../../lib/sync/session';
+import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 import type { WorkoutCompletionDraft } from '../../hooks/workout/workoutSessionPreparation';
 
 interface TrainingSessionProps {
@@ -30,16 +33,93 @@ function createPostSessionDraft(workout: WorkoutSession): PostSessionDraft {
     };
 }
 
+function parsePostSessionRecovery(raw: string | null, workoutId: string): { pendingEndTime: number | null; draft: PostSessionDraft } | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw) as { pendingEndTime?: unknown; draft?: Partial<PostSessionDraft> };
+        const draft = parsed?.draft;
+        if (!draft || draft.workoutId !== workoutId) return null;
+        if (!Array.isArray(draft.pains) || draft.pains.some(value => typeof value !== 'string')) return null;
+        const mood = draft.mood;
+        const pump = draft.pump;
+        const fatigue = draft.fatigue;
+        const water = draft.water;
+        if (typeof mood !== 'string' || typeof pump !== 'string' || typeof fatigue !== 'string' || typeof water !== 'string') return null;
+        const pendingEndTime = parsed.pendingEndTime === null
+            ? null
+            : typeof parsed.pendingEndTime === 'number' && Number.isFinite(parsed.pendingEndTime)
+                ? parsed.pendingEndTime
+                : null;
+        return {
+            pendingEndTime,
+            draft: {
+                workoutId,
+                mood,
+                pump,
+                fatigue,
+                water,
+                pains: [...draft.pains],
+            },
+        };
+    } catch {
+        return null;
+    }
+}
+
 const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: TrainingSessionProps) => {
     const {
         activeWorkout, history, library, confirmWorkoutStart, deleteWorkout, endWorkout,
     } = useWorkoutSession();
     const [reportWorkout, setReportWorkout] = useState<WorkoutSession | null>(null);
     const [pendingEndTime, setPendingEndTime] = useState<number | null>(null);
+    const pendingEndTimeRef = useRef<number | null>(null);
     const [postSessionDraft, setPostSessionDraft] = useState<PostSessionDraft | null>(null);
     const postSessionDraftRef = useRef<PostSessionDraft | null>(null);
+    const postSessionSessionRef = useRef(captureSession());
+    const postSessionRecoveryName = activeWorkout?.id ? `draft:post-session:${activeWorkout.id}` : null;
     const wasStartedRef = useRef(Boolean(activeWorkout?.globalStartTime));
     const isPostSession = pendingEndTime !== null;
+
+    const persistPostSessionSnapshot = useCallback((draft = postSessionDraftRef.current, endTime = pendingEndTimeRef.current) => {
+        if (!draft || !postSessionRecoveryName) return;
+        const session = postSessionSessionRef.current;
+        if (!isCurrentSession(session)) throw new Error('Sessione cambiata prima del salvataggio della valutazione finale.');
+        writeDeviceValue(
+            postSessionRecoveryName,
+            JSON.stringify({ pendingEndTime: endTime, draft }),
+            session.owner,
+        );
+    }, [postSessionRecoveryName]);
+
+    const clearPostSessionRecovery = useCallback(() => {
+        if (!postSessionRecoveryName) return;
+        writeDeviceValue(postSessionRecoveryName, null, postSessionSessionRef.current.owner);
+    }, [postSessionRecoveryName]);
+
+    useEffect(() => {
+        const workoutId = String(activeWorkout?.id ?? '');
+        if (!workoutId || activeWorkout?.isEditingHistory || !postSessionRecoveryName) return;
+        const session = captureSession();
+        postSessionSessionRef.current = session;
+        const recovered = parsePostSessionRecovery(
+            readDeviceValue(postSessionRecoveryName, session.owner),
+            workoutId,
+        );
+        if (!recovered) return;
+        postSessionDraftRef.current = recovered.draft;
+        setPostSessionDraft(recovered.draft);
+        pendingEndTimeRef.current = recovered.pendingEndTime;
+        setPendingEndTime(recovered.pendingEndTime);
+    }, [activeWorkout?.id, activeWorkout?.isEditingHistory, postSessionRecoveryName]);
+
+    useEffect(() => {
+        draftRegistry.register(persistPostSessionSnapshot);
+        const unregisterRecovery = requiredUpdateRecoveryRegistry.register(persistPostSessionSnapshot);
+        return () => {
+            unregisterRecovery();
+            draftRegistry.unregister(persistPostSessionSnapshot);
+        };
+    }, [persistPostSessionSnapshot]);
 
     const updatePostSessionDraft = useCallback((patch: Partial<WorkoutCompletionDraft>) => {
         const current = postSessionDraftRef.current;
@@ -47,7 +127,8 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
         const next = { ...current, ...patch };
         postSessionDraftRef.current = next;
         setPostSessionDraft(next);
-    }, []);
+        persistPostSessionSnapshot(next, pendingEndTimeRef.current);
+    }, [persistPostSessionSnapshot]);
 
     const togglePostSessionPain = useCallback((muscleId: string) => {
         const current = postSessionDraftRef.current;
@@ -61,14 +142,17 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     const handleRequestEnd = useCallback(() => {
         if (!activeWorkout || activeWorkout.isEditingHistory) return;
         const workoutId = String(activeWorkout.id ?? '');
-        const current = postSessionDraftRef.current;
+        let current = postSessionDraftRef.current;
         if (!current || current.workoutId !== workoutId) {
-            const next = createPostSessionDraft(activeWorkout);
-            postSessionDraftRef.current = next;
-            setPostSessionDraft(next);
+            current = createPostSessionDraft(activeWorkout);
+            postSessionDraftRef.current = current;
+            setPostSessionDraft(current);
         }
-        setPendingEndTime(Date.now());
-    }, [activeWorkout]);
+        const endTime = Date.now();
+        pendingEndTimeRef.current = endTime;
+        setPendingEndTime(endTime);
+        persistPostSessionSnapshot(current, endTime);
+    }, [activeWorkout, persistPostSessionSnapshot]);
 
     useEffect(() => {
         const isStarted = Boolean(activeWorkout?.globalStartTime);
@@ -105,8 +189,10 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
             };
             const finished = await endWorkout(false, pendingEndTime, completionDraft);
             if (finished) {
+                clearPostSessionRecovery();
                 postSessionDraftRef.current = null;
                 setPostSessionDraft(null);
+                pendingEndTimeRef.current = null;
                 setPendingEndTime(null);
                 setReportWorkout(finished);
             }
@@ -156,7 +242,17 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
                 )}
                 <div className="pre-session-actions">
                     <button type="button" className="btn btn-success" onClick={() => void finish()}>Salva e termina</button>
-                    <button type="button" className="btn btn-secondary" onClick={() => setPendingEndTime(null)}>Torna all’allenamento</button>
+                    <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                            pendingEndTimeRef.current = null;
+                            setPendingEndTime(null);
+                            persistPostSessionSnapshot(postSessionDraftRef.current, null);
+                        }}
+                    >
+                        Torna all’allenamento
+                    </button>
                 </div>
             </section>
         );
@@ -177,6 +273,7 @@ const TrainingSession = ({ onNavigateToHistory, onNavigateToPlanning }: Training
     if (activeWorkout && !activeWorkout.isEditingHistory && !activeWorkout.globalStartTime) {
         return (
             <PreSessionCheckIn
+                workoutId={String(activeWorkout.id ?? '')}
                 routineName={activeWorkout.routineName}
                 date={activeWorkout.date}
                 onStart={confirmWorkoutStart}

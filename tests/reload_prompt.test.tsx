@@ -67,6 +67,17 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  test('a dirty buffered field leaves an owner-scoped recovery copy before session invalidation', () => {
+    const update = vi.fn();
+    const { unmount } = render(<BufferedInput id="recoverable-draft" value="" onChange={update} aria-label="Recoverable" />);
+    fireEvent.change(screen.getByLabelText('Recoverable'), { target: { value: '82,5' } });
+    expect([...Array(localStorage.length)].map((_, index) => localStorage.key(index))
+      .some(key => key?.endsWith(':draft:buffered:input:recoverable-draft'))).toBe(true);
+    invalidateSession();
+    unmount();
+    expect(update).not.toHaveBeenCalled();
+  });
+
   test('R1 & R2: ReloadPrompt renders non-invasive dark glassmorphic banner when needRefresh is true', () => {
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
@@ -318,17 +329,17 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
     vi.useRealTimers();
   });
 
-  test('R3: ReloadPrompt is mounted globally in App and renders update banner when needRefresh is true', async () => {
+  test('R3: the global ReloadPrompt coexists with App and renders the update banner', async () => {
     vi.mocked(useRegisterSW).mockReturnValue({
       needRefresh: [true, mockSetNeedRefresh],
       offlineReady: [false, vi.fn()],
       updateServiceWorker: mockUpdateServiceWorker,
     });
 
-    const { container } = renderWithProviders(<App />);
+    const { container } = renderWithProviders(<><ReloadPrompt /><App /></>);
     expect(container).toBeDefined();
 
-    // Verify prompt appears globally inside App
+    // Verify the root-level prompt is independent from App early-return states
     expect(screen.getByText('Nuova versione disponibile')).toBeDefined();
     expect(screen.getByRole('button', { name: /Aggiorna/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /Chiudi/i })).toBeDefined();
@@ -354,7 +365,7 @@ describe('Service Worker Update Lifecycle (ReloadPrompt) Suite', () => {
       updateServiceWorker: mockUpdateServiceWorker,
     });
 
-    renderWithProviders(<App />, { localWorkout: mockActiveWorkout });
+    renderWithProviders(<><ReloadPrompt /><App /></>, { localWorkout: mockActiveWorkout });
 
     // Verify workout is still preserved in store and active in memory
     const state = useAppStore.getState();

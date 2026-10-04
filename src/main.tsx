@@ -33,6 +33,10 @@ import { initSentry } from './lib/sentryClient';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
 import { isUpdateRequiredError } from './lib/schemaEvolution';
 import { initOptionalGoogleAnalytics } from './lib/googleAnalytics';
+import ReloadPrompt from './components/UI/ReloadPrompt';
+import { initializePWAInstallLifecycle } from './lib/pwaInstallLifecycle';
+
+initializePWAInstallLifecycle();
 
 const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. TheLogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
 
@@ -220,6 +224,7 @@ export const initApp = async () => {
         <ErrorBoundary>
           <AuthProvider>
             <AccountDeletionRecovery />
+            <ReloadPrompt />
             <App />
           </AuthProvider>
         </ErrorBoundary>

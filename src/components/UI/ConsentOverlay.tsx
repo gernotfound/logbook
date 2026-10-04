@@ -13,7 +13,7 @@ import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 export const ConsentOverlay: React.FC = () => {
     useScrollLock();
     const { isGuest } = useAuth();
-    const { handleExportCSV, handleDeleteAccount } = useSettings();
+    const { handleExportBackup, handleDeleteAccount, exportingData } = useSettings();
     const submitLegalConsent = useAppStore(state => state.submitLegalConsent);
     const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [acceptedHealth, setAcceptedHealth] = useState(false);
@@ -103,8 +103,12 @@ export const ConsentOverlay: React.FC = () => {
                         Se non desideri accettare, puoi comunque esercitare i tuoi diritti sui dati:
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                        <button className="btn ui-consent-overlay-13"  onClick={handleExportCSV}>
-                            <span aria-hidden="true">📥</span> Esporta i miei dati (CSV)
+                        <button
+                            className="btn ui-consent-overlay-13"
+                            onClick={() => void handleExportBackup()}
+                            disabled={exportingData}
+                        >
+                            <span aria-hidden="true">📥</span> {exportingData ? 'Preparazione backup…' : (isGuest ? 'Backup JSON dei dati locali' : 'Backup JSON completo')}
                         </button>
                         <button className="btn ui-consent-overlay-14"  onClick={handleDeleteAccount}>
                             <Trash2 size={16} aria-hidden="true" /> {isGuest ? 'Elimina dati locali' : 'Elimina account permanentemente'}

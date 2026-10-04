@@ -14,7 +14,7 @@ UI / hook
 → reducer business puro
 → commit IndexedDB atomico
 → SemanticOperation esistenti
-→ journal LocalEnvelope V4
+→ journal LocalEnvelope V5
 → transactionWriter
 → Firestore
 ```
@@ -27,12 +27,12 @@ M8 NON modifica le versioni persistite:
 
 ```text
 CURRENT_DATA_SCHEMA = 1
-CURRENT_SYNC_PROTOCOL = 2
-CURRENT_LOCAL_ENVELOPE = 4
+CURRENT_SYNC_PROTOCOL = 3
+CURRENT_LOCAL_ENVELOPE = 5
 CURRENT_BACKUP_SCHEMA = 3
 ```
 
-La sigla “V4” di Domain Operations indica che il layer opera sopra il journal/envelope V4 corrente. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
+La sigla “V4” di Domain Operations indica che il layer opera sopra il journal/envelope V5 corrente. Le DomainOperation vengono compilate in `SemanticOperation` prima della persistenza del journal.
 
 ## Boundary normativo
 

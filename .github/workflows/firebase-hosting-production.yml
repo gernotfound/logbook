@@ -122,12 +122,42 @@ jobs:
       - name: Deploy Firebase Hosting only
         run: npx --yes firebase-tools@15.30.2 deploy --only hosting --project "${VITE_FIREBASE_PROJECT_ID}" --non-interactive -m "GitHub ${EXPECTED_SHA}"
 
-      - name: Verify public Hosting shell and service-worker cache policy
+      - name: Verify public Hosting PWA cache policy
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors -D /tmp/thelogbook-index-headers.txt https://thelogbook.web.app/ -o /tmp/thelogbook-index.html
+
+          fetch_headers() {
+            local path="$1"
+            local output="$2"
+            curl --fail --location --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors \
+              -D "$output" -o /dev/null "https://thelogbook.web.app.github/workflows/firebase-hosting-production.yml"
+          }
+
+          assert_revalidated() {
+            local path="$1"
+            local output="$2"
+            fetch_headers "$path" "$output"
+            grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' "$output"
+          }
+
+          curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors \
+            -D /tmp/thelogbook-root-headers.txt https://thelogbook.web.app/ -o /tmp/thelogbook-index.html
           grep -F 'rel="canonical" href="https://thelogbook.web.app/"' /tmp/thelogbook-index.html
-          grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-index-headers.txt
-          curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors -D /tmp/thelogbook-sw-headers.txt -o /tmp/thelogbook-sw.js https://thelogbook.web.app/sw.js
-          grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-sw-headers.txt
+          grep -iE '^cache-control: .*no-cache.*no-store.*must-revalidate' /tmp/thelogbook-root-headers.txt
+
+          assert_revalidated "/index.html" /tmp/thelogbook-index-headers.txt
+          assert_revalidated "/manifest.webmanifest" /tmp/thelogbook-manifest-headers.txt
+          assert_revalidated "/sw.js" /tmp/thelogbook-sw-headers.txt
+          assert_revalidated "/appearance.js" /tmp/thelogbook-appearance-js-headers.txt
+          assert_revalidated "/appearance.css" /tmp/thelogbook-appearance-css-headers.txt
+
+          workbox_file="$(find dist -maxdepth 1 -type f -name 'workbox-*.js' -printf '%f\n' | head -n 1 || true)"
+          if [ -n "$workbox_file" ]; then
+            assert_revalidated "/$workbox_file" /tmp/thelogbook-workbox-headers.txt
+          fi
+
+          asset_file="$(find dist/assets -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' \) -printf '%P\n' | head -n 1)"
+          test -n "$asset_file"
+          fetch_headers "/assets/$asset_file" /tmp/thelogbook-asset-headers.txt
+          grep -iE '^cache-control: .*max-age=31536000.*immutable' /tmp/thelogbook-asset-headers.txt

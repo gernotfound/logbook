@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { captureSession, isCurrentSession } from '../lib/sync/session';
 import { deviceKey } from '../lib/sync/deviceStorage';
 import { draftRegistry } from '../lib/utils/draftRegistry';
+import { requiredUpdateRecoveryRegistry } from '../lib/sync/requiredUpdateRecovery';
 import { useAppStore } from '../store/useAppStore';
 
 // Only named string fields enter form state. Unowned legacy drafts remain untouched.
@@ -51,10 +52,16 @@ export function useDatedDraft<T extends Record<string, string>>(kind: string, da
     useEffect(() => {
         const flush = () => {
             const draft = current.current;
-            if (draft.dirty && isCurrentSession(draft.session)) persist(draft.key, draft.values);
+            if (!draft.dirty) return;
+            if (!isCurrentSession(draft.session)) throw new Error('Sessione cambiata prima del salvataggio della bozza.');
+            persist(draft.key, draft.values);
         };
         draftRegistry.register(flush);
-        return () => draftRegistry.unregister(flush);
+        const unregisterRecovery = requiredUpdateRecoveryRegistry.register(flush);
+        return () => {
+            unregisterRecovery();
+            draftRegistry.unregister(flush);
+        };
     }, []);
     return { values, setField, clear };
 }

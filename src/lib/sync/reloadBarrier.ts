@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { draftRegistry } from '../utils/draftRegistry';
 import { commitLocal, readLocal } from './localRepository';
 import { captureSession, isCurrentSession } from './session';
-import { writeDeviceValue } from './deviceStorage';
+import { persistOwnerBoundWorkoutSnapshot } from './deviceCriticalState';
 import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { markTabSnapshotClean, readTabSnapshotState } from './tabSnapshotCausality';
@@ -12,7 +12,7 @@ import { markTabSnapshotClean, readTabSnapshotState } from './tabSnapshotCausali
 export function prepareForRequiredUpdateReload() {
     const session = captureSession();
     const state = useAppStore.getState();
-    writeDeviceValue('workout', state.localWorkout ? JSON.stringify(state.localWorkout) : null, session.owner);
+    persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
     if (!isCurrentSession(session)) throw new Error('Sessione cambiata. Ripeti l’aggiornamento.');
     return session;
 }
@@ -53,6 +53,6 @@ export async function prepareForReload() {
         throw new Error('Le ultime modifiche non sono ancora salvate sul dispositivo. Riprova tra poco.');
     }
     if (state.userData && envelope) markTabSnapshotClean(session, state.userData);
-    writeDeviceValue('workout', state.localWorkout ? JSON.stringify(state.localWorkout) : null, session.owner);
+    persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
     return session;
 }

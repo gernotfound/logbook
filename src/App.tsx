@@ -25,7 +25,6 @@ import { requiredUpdateHardReload } from './lib/sync/safeReload';
 import ErrorBoundary from './components/UI/ErrorBoundary';
 import BottomNav from './components/UI/BottomNav';
 import { GlobalDialog } from './components/UI/GlobalDialog';
-import ReloadPrompt from './components/UI/ReloadPrompt';
 import { ConsentOverlay } from './components/UI/ConsentOverlay';
 import { needsLegalUpdate } from './lib/legalVersions';
 import { LoginBox } from './components/UI/LoginBox';
@@ -370,7 +369,6 @@ function App() {
     <>
       <GlobalDialog />
       {showConsentOverlay && <ConsentOverlay />}
-      <ReloadPrompt />
       {guestLoginOverlayVisible && (
         <div id="auth-overlay" style={{ zIndex: 10001 }}>
           <LoginBox onCancel={closeGuestLogin} />

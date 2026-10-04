@@ -29,6 +29,7 @@ describe('Milestone 2 Challenger Suite: PWA and Offline Workout Stress Tests', (
     });
 
     telemetryHub.reset();
+    window.dispatchEvent(new Event('appinstalled'));
   });
 
   afterEach(() => {

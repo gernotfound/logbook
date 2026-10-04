@@ -10,17 +10,20 @@ import { UserDataSchema } from '../schema';
 import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
+import equal from 'fast-deep-equal';
 
 const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
 const isRecoveryDeviceKey = (name: string) => RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:');
 
-export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean) {
+export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean, consistencyAttempt = 0) {
     const session = captureSession();
     const assertCurrent = () => { if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.'); };
     const coverage: BackupCoverage = { scope: 'device', months: [] };
     const documents = new Map<string, DocumentData>();
     const businessDocuments = new Map<string, DocumentData>();
     const syncMetaByDocument: Record<string, SyncMeta> = {};
+    const localBaseline = includeCloud ? await readLocal(session.owner) : undefined;
+    assertCurrent();
 
     const addRawDoc = (path: string, raw: unknown) => {
         documents.set(path, structuredClone((raw ?? {}) as DocumentData));
@@ -66,6 +69,12 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     // made during pagination. Cross-document reads are not a point-in-time snapshot.
     const envelope = await readLocal(session.owner);
     assertCurrent();
+    if (includeCloud && !equal(localBaseline, envelope)) {
+        if (consistencyAttempt === 0) {
+            return collectBackupSnapshot(fallback, includeCloud, 1);
+        }
+        throw new Error('I dati locali sono cambiati durante il backup. Riprova quando le modifiche sono stabili.');
+    }
     const local = envelope?.data ?? fallback;
     let mergedValue = local;
     if (cloud) {

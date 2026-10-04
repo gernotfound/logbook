@@ -176,48 +176,8 @@ describe('Empirical Challenger: PWA Resilience & Accessibility Stress Suite', ()
         });
     });
 
-    describe('3. vite:preloadError Listener Lifecycle Hardening', () => {
-        let originalLocation: Location;
-
-        beforeEach(() => {
-            originalLocation = window.location;
-        });
-
-        afterEach(() => {
-            Object.defineProperty(window, 'location', {
-                value: originalLocation,
-                configurable: true,
-                writable: true,
-            });
-        });
-
-        it('registers vite:preloadError event listener and triggers reload on chunk load failure', () => {
-            const reloadMock = vi.fn();
-            Object.defineProperty(window, 'location', {
-                value: { ...originalLocation, reload: reloadMock },
-                configurable: true,
-                writable: true,
-            });
-
-            // Simulate the exact useEffect in App.tsx
-            const handlePreloadError = () => {
-                window.location.reload();
-            };
-            window.addEventListener('vite:preloadError', handlePreloadError);
-
-            // Dispatch synthetic vite:preloadError event
-            window.dispatchEvent(new Event('vite:preloadError'));
-
-            expect(reloadMock).toHaveBeenCalledTimes(1);
-
-            // Cleanup listener
-            window.removeEventListener('vite:preloadError', handlePreloadError);
-
-            // Dispatch again after removal -> should not trigger additional reload
-            window.dispatchEvent(new Event('vite:preloadError'));
-            expect(reloadMock).toHaveBeenCalledTimes(1);
-        });
-    });
+    // Chunk-load recovery is exercised against the real ReloadPrompt in
+    // tests/reload_prompt.test.tsx. Do not recreate obsolete reload handlers here.
 
     describe('4. Workbox & Precache Manifest Verification', () => {
         it('verifies sw.js and workbox exist and do not contain pruned orphan files', () => {

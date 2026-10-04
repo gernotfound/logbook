@@ -3,8 +3,8 @@ import type { UserProfile, NutritionPlanning, UserData } from '../types';
 import { createDataSlice, getInitialUserData, type DataSlice } from './slices/createDataSlice';
 import { createWorkoutSlice, type WorkoutSlice } from './slices/createWorkoutSlice';
 import { createSyncSlice, type SyncSlice } from './slices/createSyncSlice';
-import { writeDeviceValue } from '../lib/sync/deviceStorage';
-import { captureSession, isCurrentSession } from '../lib/sync/session';
+import { captureSession } from '../lib/sync/session';
+import { persistOwnerBoundWorkoutSnapshot } from '../lib/sync/deviceCriticalState';
 import { draftRegistry } from '../lib/utils/draftRegistry';
 import { UPDATE_REQUIRED_EVENT } from '../lib/schemaEvolution';
 
@@ -36,15 +36,7 @@ if (typeof document !== 'undefined') {
             const state = useAppStore.getState();
             const session = captureSession();
             try {
-                // Bind the snapshot to the owner whose dataset is actually installed.
-                // During an auth handoff, storageOwner() can already point at the new
-                // account while Zustand still contains the previous account's workout.
-                if (state.dataOwner !== session.owner || !isCurrentSession(session)) return;
-                if (state.localWorkout) {
-                    writeDeviceValue('workout', JSON.stringify(state.localWorkout), session.owner);
-                } else {
-                    writeDeviceValue('workout', null, session.owner);
-                }
+                persistOwnerBoundWorkoutSnapshot(session, state.dataOwner, state.localWorkout);
             } catch (e) {
                 console.error("Errore salvataggio localWorkout su visibilitychange:", e);
             }

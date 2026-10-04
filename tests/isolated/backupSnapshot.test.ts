@@ -11,7 +11,7 @@ vi.mock('firebase/firestore', () => ({
     query: (path: string, ...parts: object[]) => Object.assign({ path }, ...parts), getDocFromServer: sdk.root, getDocsFromServer: sdk.page,
 }));
 import { collectBackupSnapshot } from '../../src/lib/db/backupSnapshot';
-import { initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
+import { acknowledgeThrough, initializeLocal, commitLocal, readLocal } from '../../src/lib/sync/localRepository';
 import { UserDataSchema } from '../../src/lib/schema';
 import { CURRENT_DATA_SCHEMA, CURRENT_SYNC_PROTOCOL, FutureVersionError } from '../../src/lib/schemaEvolution';
 import { invalidateSession } from '../../src/lib/sync/session';
@@ -31,18 +31,46 @@ it('collects every page of historical documents beyond the 3-month view and reta
     const base = parse({ profile: { height: '170', gender: 'M' } });
     await initializeLocal('user:a', base);
     const months = Array.from({ length: 105 }, (_, index) => (2017 + Math.floor(index / 12)) + '-' + String(index % 12 + 1).padStart(2, '0'));
+    let mutated = false;
     sdk.page.mockImplementation(async ({ path, after, count }) => {
         if (path.endsWith('nutrition_months')) return { size: 0, docs: [] };
         const ids = months.filter(id => !after || id > after).slice(0, count);
-        if (after) await commitLocal('user:a', parse({ profile: { height: '175', gender: 'M' } }), base);
+        if (after && !mutated) {
+            mutated = true;
+            await commitLocal('user:a', parse({ profile: { height: '175', gender: 'M' } }), base);
+        }
         return { size: ids.length, docs: ids.map(id => ({ id, data: () => ({ ['h' + id]: { id: 'h' + id, date: id + '-01' } }) })) };
     });
     const backup = await collectBackupSnapshot(base, true);
     expect(backup.data.history).toHaveLength(105);
     expect(backup.data.profile.height).toBe('175');
     expect(backup.coverage).toMatchObject({ scope: 'cloud-and-device', months });
-    expect(sdk.page).toHaveBeenCalledTimes(4);
+    expect(sdk.page).toHaveBeenCalledTimes(8);
     expect(backup.recovery.envelope?.pending.length).toBeGreaterThan(0);
+});
+
+it('retries when an edit is acknowledged while the cloud scan is in flight', async () => {
+    const base = parse({ profile: { height: '170', gender: 'M' } });
+    const updated = parse({ profile: { height: '175', gender: 'M' } });
+    await initializeLocal('user:a', base);
+    let advanced = false;
+
+    sdk.page.mockImplementation(async ({ path }) => {
+        if (!advanced && path.endsWith('history_months')) {
+            advanced = true;
+            await commitLocal('user:a', updated, base);
+            const envelope = await readLocal('user:a');
+            expect(envelope?.pending.length).toBeGreaterThan(0);
+            sdk.root.mockResolvedValue({ exists: () => true, data: () => ({ profile: { height: '175', gender: 'M' } }) });
+            await acknowledgeThrough('user:a', envelope!.actorSeq, updated);
+            expect((await readLocal('user:a'))?.pending).toHaveLength(0);
+        }
+        return { size: 0, docs: [] };
+    });
+
+    const backup = await collectBackupSnapshot(base, true);
+    expect(backup.data.profile.height).toBe('175');
+    expect(sdk.root).toHaveBeenCalledTimes(2);
 });
 
 it('uses root _sync metadata when replaying pending local operations', async () => {
