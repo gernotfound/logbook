@@ -175,6 +175,7 @@ function applyWinnerToDocument(
 type UpdateCandidate = {
     stamp: StampLike;
     value: unknown;
+    legacyClock?: VectorClock;
     guard?: SemanticOperation['guard'];
     operation?: SemanticOperation;
     source: 'visible' | 'hidden' | 'new';
@@ -182,10 +183,21 @@ type UpdateCandidate = {
 
 type DeleteCandidate = {
     stamp: StampLike;
+    legacyClock?: VectorClock;
     guard?: SemanticOperation['guard'];
     operation?: SemanticOperation;
     remote: boolean;
 };
+
+function operationDot(operation: SemanticOperation): VectorClock {
+    return { [operation.actorId]: operation.seq };
+}
+
+function legacyResolvedLoser(stamp: FieldStamp | undefined, operation: SemanticOperation): boolean {
+    if (!stamp?.legacyClock) return false;
+    return coversVectorClock(stamp.legacyClock, operationDot(operation))
+        && !coversVectorClock(operation.clock, stamp.clock);
+}
 
 function maxCandidate<T extends { stamp: StampLike }>(candidates: T[]): T {
     let winner = candidates[0];
@@ -238,6 +250,7 @@ function persistHiddenCandidates(candidates: UpdateCandidate[], winner: UpdateCa
             actorId: candidate.stamp.actorId,
             seq: candidate.stamp.seq,
             value: structuredClone(candidate.value),
+            ...(candidate.legacyClock ? { legacyClock: { ...candidate.legacyClock } } : {}),
             ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
         }));
 }
@@ -250,6 +263,7 @@ function canonicalStamp(stamp: FieldStamp): FieldStamp {
         seq: stamp.seq,
         ...(stamp.deleted ? { deleted: true } : {}),
         ...(barrier ? { deleteClock: { ...barrier } } : {}),
+        ...(stamp.legacyClock ? { legacyClock: { ...stamp.legacyClock } } : {}),
         ...(stamp.guard ? { guard: structuredClone(stamp.guard) } : {}),
         ...(stamp.candidates?.length ? {
             candidates: stamp.candidates.map(candidate => ({
@@ -303,6 +317,7 @@ function reconcileCapturedDescendant(
     const candidates: UpdateCandidate[] = [{
         stamp: fieldStamp(stamp),
         value: structuredClone(captured.visibleValue),
+        legacyClock: stamp.legacyClock ? { ...stamp.legacyClock } : undefined,
         guard: stamp.guard ? structuredClone(stamp.guard) : undefined,
         source: 'visible',
     }];
@@ -315,6 +330,7 @@ function reconcileCapturedDescendant(
                 seq: candidate.seq,
             },
             value: structuredClone(candidate.value),
+            legacyClock: candidate.legacyClock ? { ...candidate.legacyClock } : undefined,
             guard: candidate.guard ? structuredClone(candidate.guard) : undefined,
             source: 'hidden',
         });
@@ -334,6 +350,7 @@ function reconcileCapturedDescendant(
         actorId: selected.stamp.actorId,
         seq: selected.stamp.seq,
         ...(descendantBarrier ? { deleteClock: { ...descendantBarrier } } : {}),
+        ...(selected.legacyClock ? { legacyClock: { ...selected.legacyClock } } : {}),
         ...(selected.guard ? { guard: structuredClone(selected.guard) } : {}),
         ...(hidden.length ? { candidates: hidden } : {}),
     };
@@ -403,13 +420,14 @@ export function applySemanticOperations(
 
         const fk = fieldKey(opList[0].path);
         const remoteStamp = meta.fields[fk];
-        const deleteOperations = eligible.filter(operation => operation.isDelete);
+        const deleteOperations = eligible.filter(operation =>
+            operation.isDelete && !legacyResolvedLoser(remoteStamp, operation));
 
         // A delete barrier is monotone and survives later recreation. Any update
         // that has not observed every delete remains permanently stale for this field.
         let barrier = deleteBarrier(remoteStamp);
         if (deleteOperations.length) {
-            barrier = mergeVectors(barrier ?? {}, ...deleteOperations.map(operation => operation.clock));
+            barrier = mergeVectors(barrier ?? {}, ...deleteOperations.map(operationDot));
         }
 
         const rawUpdateCandidates: UpdateCandidate[] = [];
@@ -417,6 +435,7 @@ export function applySemanticOperations(
             rawUpdateCandidates.push({
                 stamp: fieldStamp(remoteStamp),
                 value: structuredClone(readSemanticValue(doc, docPath, opList[0].path)),
+                legacyClock: remoteStamp.legacyClock ? { ...remoteStamp.legacyClock } : undefined,
                 guard: remoteStamp.guard ? structuredClone(remoteStamp.guard) : undefined,
                 source: 'visible',
             });
@@ -429,13 +448,14 @@ export function applySemanticOperations(
                         seq: candidate.seq,
                     },
                     value: structuredClone(candidate.value),
+                    legacyClock: candidate.legacyClock ? { ...candidate.legacyClock } : undefined,
                     guard: candidate.guard ? structuredClone(candidate.guard) : undefined,
                     source: 'hidden',
                 });
             }
         }
         for (const operation of eligible) {
-            if (operation.isDelete) continue;
+            if (operation.isDelete || legacyResolvedLoser(remoteStamp, operation)) continue;
             rawUpdateCandidates.push({
                 stamp: operationStamp(operation),
                 value: structuredClone(operation.value),
@@ -447,6 +467,7 @@ export function applySemanticOperations(
 
         const updateCandidates = normalizeUpdateCandidates(rawUpdateCandidates, barrier, doc);
         let selectedStamp: StampLike;
+        let selectedLegacyClock: VectorClock | undefined;
         let selectedGuard: SemanticOperation['guard'] | undefined;
         let selectedOperation: SemanticOperation | undefined;
         let hiddenCandidates: ReturnType<typeof persistHiddenCandidates> = [];
@@ -454,6 +475,7 @@ export function applySemanticOperations(
         if (updateCandidates.length) {
             const selected = maxCandidate(updateCandidates);
             selectedStamp = selected.stamp;
+            selectedLegacyClock = selected.legacyClock ? { ...selected.legacyClock } : undefined;
             selectedGuard = selected.guard ? structuredClone(selected.guard) : undefined;
             hiddenCandidates = persistHiddenCandidates(updateCandidates, selected);
             if (selected.source === 'new') {
@@ -475,6 +497,7 @@ export function applySemanticOperations(
             if (remoteStamp?.deleted) {
                 deleteCandidates.push({
                     stamp: fieldStamp(remoteStamp),
+                    legacyClock: remoteStamp.legacyClock ? { ...remoteStamp.legacyClock } : undefined,
                     guard: remoteStamp.guard ? structuredClone(remoteStamp.guard) : undefined,
                     remote: true,
                 });
@@ -493,6 +516,7 @@ export function applySemanticOperations(
             }
             const selected = maxCandidate(deleteCandidates);
             selectedStamp = selected.stamp;
+            selectedLegacyClock = selected.legacyClock ? { ...selected.legacyClock } : undefined;
             selectedGuard = selected.guard ? structuredClone(selected.guard) : undefined;
             selectedOperation = selected.operation;
         }
@@ -503,6 +527,7 @@ export function applySemanticOperations(
             seq: selectedStamp.seq,
             ...(selectedStamp.isDelete ? { deleted: true } : {}),
             ...(barrier ? { deleteClock: { ...barrier } } : {}),
+            ...(selectedLegacyClock ? { legacyClock: selectedLegacyClock } : {}),
             ...(selectedGuard ? { guard: selectedGuard } : {}),
             ...(hiddenCandidates.length ? { candidates: hiddenCandidates } : {}),
         };
