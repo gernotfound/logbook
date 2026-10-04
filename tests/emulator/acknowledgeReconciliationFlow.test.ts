@@ -39,6 +39,7 @@ vi.mock('../../src/lib/sync/localRepository', async () => {
 import type { UserData } from '../../src/types';
 import { UserDataSchema } from '../../src/lib/schema';
 import {
+    adoptReplicaCheckpoint,
     commitLocal,
     initializeLocal,
     readLocal,
@@ -49,9 +50,10 @@ import { invalidateSession } from '../../src/lib/sync/session';
 import { projectDocuments, type DocumentData } from '../../src/lib/sync/documentProjection';
 import { diffDocuments } from '../../src/lib/sync/semanticProjection';
 import { applyDocumentChanges } from '../../src/lib/sync/transactionWriter';
+import { registerReplica } from './replicaHarness';
 
 const owner = 'user:a';
-const remoteActor = 'remote-actor';
+const remoteActor = 's01';
 
 function data(height: number, name?: string): UserData {
     return UserDataSchema.parse({
@@ -104,6 +106,9 @@ describe('remote commit to local acknowledgement reconciliation', () => {
         const userRef = doc(db, 'users/a');
 
         await setDoc(userRef, projectDocuments(initial, catalog).get('')!);
+        const localReplica = await registerReplica(db, 'a', 's00', 'replica-local');
+        await adoptReplicaCheckpoint(owner, { identity: localReplica, baseSeq: 0 }, { clock: {}, syncMetaByDocument: {} });
+        const remoteReplica = await registerReplica(db, 'a', 's01', 'replica-remote');
         const remoteSeedOps = diffDocuments(
             projectDocuments(initial, catalog),
             projectDocuments(remoteDesired, catalog),
@@ -111,7 +116,7 @@ describe('remote commit to local acknowledgement reconciliation', () => {
             1,
             { [remoteActor]: 1 },
         );
-        const seeded = await applyDocumentChanges(db, 'a', remoteSeedOps, () => true);
+        const seeded = await applyDocumentChanges(db, 'a', remoteSeedOps, () => true, remoteReplica);
         expect(seeded.syncMeta[''].fields['profile/name']).toMatchObject({
             actorId: remoteActor,
             seq: 1,
