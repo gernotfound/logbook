@@ -49,7 +49,8 @@ function parseReplicaWriter(raw: unknown): ReplicaWriter | undefined {
     if (typeof raw.replicaId !== 'string' || !raw.replicaId.trim()) throw new Error('Invalid replica writer id');
     const generation = parseSafeSeq(raw.generation, 'replica writer generation');
     if (generation < 1) throw new Error('Invalid replica writer generation');
-    return { slot: raw.slot, replicaId: raw.replicaId, generation };
+    const seq = parseSafeSeq(raw.seq, 'replica writer sequence');
+    return { slot: raw.slot, replicaId: raw.replicaId, generation, seq };
 }
 
 function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClock: VectorClock | undefined): FieldCandidate {

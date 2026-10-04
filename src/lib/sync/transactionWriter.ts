@@ -150,7 +150,8 @@ export async function applyDocumentChanges(
 
         const { documents: newDocs, syncMetas: mergedSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
         const compactedSyncMetas = compactSyncMetas(mergedSyncMetas, stableFrontier);
-        const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation };
+        const deliveredSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), replicaEntry!.lastSeq);
+        const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: deliveredSeq };
         const newSyncMetas: Record<string, SyncMeta> = Object.fromEntries(
             Object.entries(compactedSyncMetas).map(([path, meta]) => [path, { ...meta, writer }]),
         );
@@ -177,7 +178,6 @@ export async function applyDocumentChanges(
             }
         }
 
-        const deliveredSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), replicaEntry!.lastSeq);
         transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq));
 
         return { documents: newDocs, syncMeta: newSyncMetas };

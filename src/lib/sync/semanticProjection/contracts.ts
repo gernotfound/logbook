@@ -33,6 +33,7 @@ export interface ReplicaWriter {
     slot: string;
     replicaId: string;
     generation: number;
+    seq: number;
 }
 
 export interface SyncMeta {
