@@ -47,15 +47,18 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   it('keeps Firestore data/sync rules aligned with current version constants and forbids marker downgrade', () => {
     expect(rulesContent).toContain("function isValidDataSchema(docData)");
     expect(rulesContent).toContain(`!('_schemaVersion' in docData) || docData._schemaVersion == ${CURRENT_DATA_SCHEMA}`);
-    expect(rulesContent).toContain(`docData._sync.protocolVersion == ${CURRENT_SYNC_PROTOCOL}`);
+    expect(rulesContent).toContain(`docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == ${CURRENT_SYNC_PROTOCOL}`);
     expect(rulesContent).toContain("docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])");
     expect(rulesContent).toContain('docData._sync.clock is map');
     expect(rulesContent).toContain('docData._sync.fields is map');
     expect(rulesContent).toContain('function preservesDataSchema()');
+    expect(rulesContent).toContain('function preservesSyncProtocol()');
+    expect(rulesContent).toContain('incomingData()._sync.protocolVersion >= resource.data._sync.protocolVersion');
     expect(rulesContent).toContain("!('_schemaVersion' in resource.data)");
     expect(rulesContent).toContain("'_schemaVersion' in incomingData()");
     expect(rulesContent.match(/isValidDataSchema\(incomingData\(\)\)/g)?.length).toBe(3);
     expect(rulesContent.match(/preservesDataSchema\(\)/g)?.length).toBe(4);
+    expect(rulesContent.match(/preservesSyncProtocol\(\)/g)?.length).toBe(4);
   });
 
   it('users/{userId} whitelist contains all root UserData payload keys plus sync/schema metadata', () => {
