@@ -107,7 +107,7 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         syncMetaByDocument[path] = meta;
     }
 
-    if (!Array.isArray(record.completeMonths) || record.completeMonths.some(month => typeof month !== 'string' || !/^\\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
+    if (!Array.isArray(record.completeMonths) || record.completeMonths.some(month => typeof month !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month))) {
         throw new Error('Copertura mensile locale non valida');
     }
     if (typeof record.revision !== 'number' || !Number.isSafeInteger(record.revision) || record.revision < 0) {
