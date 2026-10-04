@@ -56,6 +56,16 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
             fieldStamp.deleted = stampRaw.deleted;
         }
 
+        if ('deleteClock' in stampRaw) {
+            const deleteClock = parseVectorClock(stampRaw.deleteClock, 'delete clock');
+            if (!coversVectorClock(clock, deleteClock)) throw new Error('Document clock does not cover delete barrier');
+            fieldStamp.deleteClock = deleteClock;
+        } else if (fieldStamp.deleted) {
+            // Protocol-1 tombstones migrate losslessly: their event clock is also
+            // the initial remove-wins barrier in protocol 2.
+            fieldStamp.deleteClock = { ...fieldStamp.clock };
+        }
+
         fields[path] = fieldStamp;
     }
 
