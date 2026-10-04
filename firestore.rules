@@ -125,18 +125,11 @@ service cloud.firestore {
     }
 
     function hasAuthorizedSyncDelete(userId) {
-      let control = getAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state).data;
-      let slot = control.mutation.slot;
-      return !syncControlExists(userId)
-        || (
-          syncControlExistsAfter(userId)
-          && control.protocolVersion == 3
-          && control.mutation.action == 'advance'
-          && isReplicaSlot(slot)
-          && slot in control.replicas
-          && control.replicas[slot].status == 'active'
-          && control.replicas[slot].leaseUntilMs >= request.time.toMillis()
-        );
+      // Legacy clients may delete monthly documents only before this account has
+      // crossed the Protocol 3 control barrier. After cutover, client sync persists
+      // an empty fenced shell instead, so every causal state transition is attributable
+      // to an exact replica id/generation through _sync.writer.
+      return !syncControlExists(userId);
     }
 
     function isValidReplicaEntry(entry) {
