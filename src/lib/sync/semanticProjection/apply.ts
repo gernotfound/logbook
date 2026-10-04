@@ -1,8 +1,8 @@
 import { CURRENT_SYNC_PROTOCOL } from '../../schemaEvolution';
 import type { DocumentData } from '../documentProjection';
 import { calculateLoggedMealTotals } from '../../nutrition/calculateLoggedMealTotals';
-import type { FieldStamp, SemanticOperation, StampLike, SyncMeta } from './contracts';
-import { compareStamps, fieldKey, mergeVectors, pathFromFieldKey, stampWins } from './metadata';
+import type { FieldStamp, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
+import { compareStamps, coversVectorClock, fieldKey, mergeVectors, pathFromFieldKey } from './metadata';
 import { getMergePolicy, identitySeed, resolveIdentity } from './policy';
 
 export function normalizeDomainData(docs: Map<string, DocumentData>) {
@@ -54,11 +54,22 @@ function guardMatches(doc: DocumentData, operation: SemanticOperation): boolean 
     return target === operation.guard.equals;
 }
 
+function deleteBarrier(stamp: FieldStamp | undefined): VectorClock | undefined {
+    if (!stamp) return undefined;
+    if (stamp.deleteClock) return stamp.deleteClock;
+    return stamp.deleted ? stamp.clock : undefined;
+}
+
+function requiredAncestorClock(stamp: FieldStamp): VectorClock {
+    const barrier = deleteBarrier(stamp);
+    return barrier ? mergeVectors(stamp.clock, barrier) : stamp.clock;
+}
+
 function blockedByAncestor(meta: SyncMeta, operation: SemanticOperation): boolean {
-    const local = operationStamp(operation);
     for (let i = 1; i < operation.path.length; i++) {
         const ancestor = meta.fields[fieldKey(operation.path.slice(0, i))];
-        if (ancestor && stampWins(fieldStamp(ancestor), local)) return true;
+        if (!ancestor) continue;
+        if (!coversVectorClock(operation.clock, requiredAncestorClock(ancestor))) return true;
     }
     return false;
 }
