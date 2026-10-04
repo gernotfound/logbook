@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { UserDataSchema } from '../../src/lib/schema';
 import type { UserData } from '../../src/types';
-import { hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough } from '../../src/lib/sync/localRepository';
+import { hydrateLocal, commitLocal, initializeLocal, readLocal, acknowledgeThrough, StaleLocalRevisionError } from '../../src/lib/sync/localRepository';
 import {
     CURRENT_DATA_SCHEMA,
     CURRENT_LOCAL_ENVELOPE,
@@ -34,7 +34,7 @@ describe('durable owner-scoped journal', () => {
         await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
         expect(await get('logbook:v2:user:a')).toEqual(legacy);
 
-        const future = { owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE + 1 };
+        const future = { ownerV2: 'user:a', version: CURRENT_LOCAL_ENVELOPE + 1 };
         await set('logbook:v2:user:a', future);
         await expect(readLocal('a')).rejects.toThrow(FutureVersionError);
         expect(await get('logbook:v2:user:a')).toEqual(future);
@@ -246,11 +246,28 @@ describe('durable owner-scoped journal', () => {
         expect((await readLocal('guest'))?.pending).toEqual([]);
     });
 
-    it('rejects corrupt envelope ownership and preserves the original bytes', async () => {
-        const corrupt = { owner: 'user:b', version: 3, revision: 1, data: 'corrupt' };
+    it('rejects corrupt current-envelope ownership and preserves the original bytes', async () => {
+        await initializeLocal('b', data(170));
+        const corrupt = await get('logbook:v2:user:b');
         await set('logbook:v2:user:a', corrupt);
         await expect(commitLocal('a', data(171), data(170))).rejects.toThrow('recupero');
         expect(await get('logbook:v2:user:a')).toEqual(corrupt);
+    });
+
+    it('rejects a stale bulk-write revision atomically without changing durable state', async () => {
+        const base = data(170);
+        await initializeLocal('a', base);
+        const preview = await readLocal('a');
+        expect(preview).toBeDefined();
+
+        await commitLocal('a', data(171), base);
+        const concurrent = await readLocal('a');
+
+        await expect(
+            commitLocal('a', data(180), base, undefined, preview!.revision),
+        ).rejects.toThrow(StaleLocalRevisionError);
+
+        expect(await readLocal('a')).toEqual(concurrent);
     });
     it('replays a stale snapshot delta over the latest envelope without deleting concurrent entities', async () => {
         const base = UserDataSchema.parse({
