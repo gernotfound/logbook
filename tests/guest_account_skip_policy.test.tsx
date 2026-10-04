@@ -24,6 +24,29 @@ describe('guest -> account skip policy', () => {
         });
     });
 
+    it.each([undefined, 'corrupt'])('fails closed when migration policy is %s', async storedPolicy => {
+        const guest = parse({
+            profile: { height: '175' },
+            routines: [{ id: 'guest-routine', name: 'Guest', exercises: [] }],
+        });
+
+        await initializeLocal('guest', guest);
+        localStorage.setItem('logbook_is_guest', 'true');
+        if (storedPolicy !== undefined) localStorage.setItem('guest_migration_policy', storedPolicy);
+        useAppStore.getState().setUserData(guest);
+
+        render(<AuthProvider><div>app</div></AuthProvider>);
+
+        await waitFor(() => {
+            expect(useAppStore.getState().saveError).toContain('scelta di trasferimento');
+        });
+
+        expect(DB.loadCloudPayload).not.toHaveBeenCalled();
+        expect(await readLocal('user:skip-user')).toBeUndefined();
+        expect((await readLocal('guest'))?.data.routines.map(routine => routine.id)).toContain('guest-routine');
+        expect(localStorage.getItem('logbook_is_guest')).toBe('true');
+    });
+
     it('loads account data without merging guest progress and preserves the guest archive', async () => {
         const cloud = parse({
             profile: { gender: 'M' },
