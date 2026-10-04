@@ -182,6 +182,7 @@ type UpdateCandidate = {
 
 type DeleteCandidate = {
     stamp: StampLike;
+    guard?: SemanticOperation['guard'];
     operation?: SemanticOperation;
     remote: boolean;
 };
@@ -249,6 +250,7 @@ function canonicalStamp(stamp: FieldStamp): FieldStamp {
         seq: stamp.seq,
         ...(stamp.deleted ? { deleted: true } : {}),
         ...(barrier ? { deleteClock: { ...barrier } } : {}),
+        ...(stamp.guard ? { guard: structuredClone(stamp.guard) } : {}),
         ...(stamp.candidates?.length ? {
             candidates: stamp.candidates.map(candidate => ({
                 clock: { ...candidate.clock },
@@ -261,9 +263,12 @@ function canonicalStamp(stamp: FieldStamp): FieldStamp {
     };
 }
 
-function descendantSurvivesAncestor(descendant: FieldStamp, ancestor: FieldStamp): boolean {
-    return coversVectorClock(descendant.clock, requiredAncestorClock(ancestor));
-}
+type CapturedDescendant = {
+    key: string;
+    path: string[];
+    stamp: FieldStamp;
+    visibleValue?: unknown;
+};
 
 type ProtectedDescendant = {
     key: string;
@@ -271,6 +276,74 @@ type ProtectedDescendant = {
     stamp: FieldStamp;
     value?: unknown;
 };
+
+function captureDescendant(doc: DocumentData, docPath: string, key: string, stamp: FieldStamp): CapturedDescendant {
+    const path = pathFromFieldKey(key);
+    return {
+        key,
+        path,
+        stamp: canonicalStamp(stamp),
+        ...(stamp.deleted ? {} : { visibleValue: structuredClone(readSemanticValue(doc, docPath, path)) }),
+    };
+}
+
+function reconcileCapturedDescendant(
+    captured: CapturedDescendant,
+    ancestor: FieldStamp,
+    doc: DocumentData,
+): ProtectedDescendant | undefined {
+    const required = requiredAncestorClock(ancestor);
+    const stamp = captured.stamp;
+
+    if (stamp.deleted) {
+        if (!coversVectorClock(stamp.clock, required) || !candidateGuardMatches(doc, stamp.guard)) return undefined;
+        return { key: captured.key, path: captured.path, stamp: canonicalStamp(stamp) };
+    }
+
+    const candidates: UpdateCandidate[] = [{
+        stamp: fieldStamp(stamp),
+        value: structuredClone(captured.visibleValue),
+        guard: stamp.guard ? structuredClone(stamp.guard) : undefined,
+        source: 'visible',
+    }];
+    for (const candidate of stamp.candidates ?? []) {
+        candidates.push({
+            stamp: {
+                clock: candidate.clock,
+                isDelete: false,
+                actorId: candidate.actorId,
+                seq: candidate.seq,
+            },
+            value: structuredClone(candidate.value),
+            guard: candidate.guard ? structuredClone(candidate.guard) : undefined,
+            source: 'hidden',
+        });
+    }
+
+    const descendantBarrier = deleteBarrier(stamp);
+    const requiredBarrier = descendantBarrier
+        ? mergeVectors(descendantBarrier, required)
+        : required;
+    const survivors = normalizeUpdateCandidates(candidates, requiredBarrier, doc);
+    if (!survivors.length) return undefined;
+
+    const selected = maxCandidate(survivors);
+    const hidden = persistHiddenCandidates(survivors, selected);
+    const nextStamp: FieldStamp = {
+        clock: { ...selected.stamp.clock },
+        actorId: selected.stamp.actorId,
+        seq: selected.stamp.seq,
+        ...(descendantBarrier ? { deleteClock: { ...descendantBarrier } } : {}),
+        ...(selected.guard ? { guard: structuredClone(selected.guard) } : {}),
+        ...(hidden.length ? { candidates: hidden } : {}),
+    };
+    return {
+        key: captured.key,
+        path: captured.path,
+        stamp: nextStamp,
+        value: structuredClone(selected.value),
+    };
+}
 
 export function applySemanticOperations(
     base: Map<string, DocumentData>,
@@ -344,6 +417,7 @@ export function applySemanticOperations(
             rawUpdateCandidates.push({
                 stamp: fieldStamp(remoteStamp),
                 value: structuredClone(readSemanticValue(doc, docPath, opList[0].path)),
+                guard: remoteStamp.guard ? structuredClone(remoteStamp.guard) : undefined,
                 source: 'visible',
             });
             for (const candidate of remoteStamp.candidates ?? []) {
@@ -373,12 +447,14 @@ export function applySemanticOperations(
 
         const updateCandidates = normalizeUpdateCandidates(rawUpdateCandidates, barrier, doc);
         let selectedStamp: StampLike;
+        let selectedGuard: SemanticOperation['guard'] | undefined;
         let selectedOperation: SemanticOperation | undefined;
         let hiddenCandidates: ReturnType<typeof persistHiddenCandidates> = [];
 
         if (updateCandidates.length) {
             const selected = maxCandidate(updateCandidates);
             selectedStamp = selected.stamp;
+            selectedGuard = selected.guard ? structuredClone(selected.guard) : undefined;
             hiddenCandidates = persistHiddenCandidates(updateCandidates, selected);
             if (selected.source === 'new') {
                 selectedOperation = selected.operation;
@@ -397,11 +473,16 @@ export function applySemanticOperations(
         } else {
             const deleteCandidates: DeleteCandidate[] = [];
             if (remoteStamp?.deleted) {
-                deleteCandidates.push({ stamp: fieldStamp(remoteStamp), remote: true });
+                deleteCandidates.push({
+                    stamp: fieldStamp(remoteStamp),
+                    guard: remoteStamp.guard ? structuredClone(remoteStamp.guard) : undefined,
+                    remote: true,
+                });
             }
             for (const operation of deleteOperations) {
                 deleteCandidates.push({
                     stamp: operationStamp(operation),
+                    guard: operation.guard ? structuredClone(operation.guard) : undefined,
                     operation,
                     remote: false,
                 });
@@ -412,6 +493,7 @@ export function applySemanticOperations(
             }
             const selected = maxCandidate(deleteCandidates);
             selectedStamp = selected.stamp;
+            selectedGuard = selected.guard ? structuredClone(selected.guard) : undefined;
             selectedOperation = selected.operation;
         }
 
@@ -421,6 +503,7 @@ export function applySemanticOperations(
             seq: selectedStamp.seq,
             ...(selectedStamp.isDelete ? { deleted: true } : {}),
             ...(barrier ? { deleteClock: { ...barrier } } : {}),
+            ...(selectedGuard ? { guard: selectedGuard } : {}),
             ...(hiddenCandidates.length ? { candidates: hiddenCandidates } : {}),
         };
 
@@ -431,27 +514,20 @@ export function applySemanticOperations(
         let protectedDescendants: ProtectedDescendant[] = [];
         if (selectedOperation) {
             const prefix = `${fk}/`;
-            protectedDescendants = Object.entries(meta.fields)
-                .filter(([key, stamp]) => key.startsWith(prefix) && descendantSurvivesAncestor(stamp, nextStamp))
-                .map(([key, stamp]) => {
-                    const path = pathFromFieldKey(key);
-                    return {
-                        key,
-                        path,
-                        stamp,
-                        ...(stamp.deleted ? {} : {
-                            value: structuredClone(readSemanticValue(doc, docPath, path)),
-                        }),
-                    };
-                });
+            const capturedDescendants = Object.entries(meta.fields)
+                .filter(([key]) => key.startsWith(prefix))
+                .map(([key, stamp]) => captureDescendant(doc, docPath, key, stamp));
 
             applyWinnerToDocument(doc, selectedOperation, ordersToApply);
 
+            protectedDescendants = capturedDescendants
+                .map(captured => reconcileCapturedDescendant(captured, nextStamp, doc))
+                .filter((item): item is ProtectedDescendant => item !== undefined);
+
             for (const [key] of Object.entries(meta.fields)) {
-                if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) {
-                    delete meta.fields[key];
-                }
+                if (key.startsWith(prefix)) delete meta.fields[key];
             }
+            for (const item of protectedDescendants) meta.fields[item.key] = item.stamp;
         }
 
         meta.fields[fk] = nextStamp;
@@ -467,6 +543,7 @@ export function applySemanticOperations(
                     actorId: item.stamp.actorId,
                     seq: item.stamp.seq,
                     clock: item.stamp.clock,
+                    ...(item.stamp.guard ? { guard: structuredClone(item.stamp.guard) } : {}),
                 }, ordersToApply));
         }
 
