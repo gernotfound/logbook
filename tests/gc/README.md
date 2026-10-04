@@ -16,9 +16,9 @@ npm run verify:m4
 
 ## What is collected
 
-A deleted ancestor field is a hierarchical causal barrier. A descendant `FieldStamp` may be removed only when the ancestor tombstone's vector clock componentwise covers the descendant stamp's complete vector clock.
+A deleted ancestor field is a hierarchical causal barrier. Under Sync Protocol 2, a descendant `FieldStamp` may be removed only when the ancestor's persisted delete barrier (`deleteClock`, or the legacy tombstone event clock during migration) componentwise covers the descendant stamp and every hidden candidate clock.
 
-Before same-field reconciliation, `applySemanticOperations()` now observes ancestor stamps first. A blocking ancestor absorbs the contender's causal clock; a contender that passes the ancestor carries the ancestor clock into the eventual same-field stamp. This makes the ancestor a real causal summary rather than merely a business-value blocker.
+`FieldStamp.clock` is the immutable event clock of the winner. A blocked contender advances only the cumulative document frontier `SyncMeta.clock`; it must not mutate the ancestor winner clock and thereby manufacture a false proof of subtree subsumption. Recreation can change the visible winner while the remove-wins delete barrier remains available for future arbitration.
 
 Compaction is deterministic and idempotent. Zero-valued vector entries are canonicalized away because missing and zero coordinates are equivalent in vector comparisons.
 
@@ -35,7 +35,7 @@ Terminal tombstone retirement requires a future protocol that can prove every po
 The M4 suite checks:
 
 - terminal tombstones remain;
-- causally covered descendant stamps are removed;
+- descendants are removed only when the ancestor delete barrier covers the visible stamp and all hidden candidates;
 - concurrent/unobserved descendants remain;
 - positive document-frontier actor coordinates remain;
 - compaction is idempotent and deterministic;
