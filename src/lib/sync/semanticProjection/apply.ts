@@ -271,6 +271,7 @@ function canonicalStamp(stamp: FieldStamp): FieldStamp {
                 actorId: candidate.actorId,
                 seq: candidate.seq,
                 value: structuredClone(candidate.value),
+                ...(candidate.legacyClock ? { legacyClock: { ...candidate.legacyClock } } : {}),
                 ...(candidate.guard ? { guard: structuredClone(candidate.guard) } : {}),
             })),
         } : {}),
