@@ -3,8 +3,9 @@ import { UserDataSchema } from '../schema';
 import type { UserData } from '../../types';
 import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
+import { parseReplicaIdentity, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
+import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
@@ -21,7 +22,7 @@ import {
     normalizeLocalEnvelopeRecord,
 } from '../schemaEvolution';
 
-export interface LocalEnvelopeV4 {
+export interface LocalEnvelopeV5 {
     version: typeof CURRENT_LOCAL_ENVELOPE;
     dataSchemaVersion: typeof CURRENT_DATA_SCHEMA;
     syncProtocolVersion: typeof CURRENT_SYNC_PROTOCOL;
@@ -34,10 +35,11 @@ export interface LocalEnvelopeV4 {
     completeMonths: string[];
     pending: SemanticOperation[];
     syncMetaByDocument: Record<string, SyncMeta>;
+    replica: ReplicaIdentity | null;
     revision: number;
 }
 
-export type LocalEnvelope = LocalEnvelopeV4;
+export type LocalEnvelope = LocalEnvelopeV5;
 export type CloudCoverageMode = 'window' | 'all';
 export type LocalWriteGuard = () => boolean;
 
@@ -121,8 +123,10 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         throw new Error('Revisione locale non valida');
     }
 
+    const replica = parseReplicaIdentity(record.replica);
+
     return {
-        ...(record as unknown as LocalEnvelopeV4),
+        ...(record as unknown as LocalEnvelopeV5),
         actorId: record.actorId,
         actorSeq: record.actorSeq,
         clock,
@@ -131,6 +135,7 @@ function validate(value: any, owner: string): LocalEnvelope | undefined {
         completeMonths: [...record.completeMonths] as string[],
         pending,
         syncMetaByDocument,
+        replica,
         revision: record.revision,
     };
 }
@@ -178,7 +183,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         const currentData = structuredClone(parse(current?.data ?? callerBase));
         const baseDocs = projectDocuments(callerBase, catalog);
         const desiredDocs = projectDocuments(desired, catalog);
-        const actorId = current?.actorId ?? generateId('actor');
+        const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
         const nextSeq = (current?.actorSeq ?? 0) + 1;
         const testClock = { ...(current?.clock ?? {}) };
         testClock[actorId] = nextSeq;
@@ -187,7 +192,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
 
         if (operations.length === 0) {
             const stableData = current?.data ?? desired;
-            return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: stableData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: current?.revision ?? 0 };
+            return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: stableData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
         }
 
         // Snapshot boundaries express intent relative to the caller's observed base.
@@ -199,7 +204,7 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
         reconciled.pendingConflicts = currentData.pendingConflicts;
         const savedData = parse(reconciled);
 
-        return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: savedData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: nextSeq };
+        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: testClock, data: savedData, baseline: current?.baseline ?? callerBase, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return operations;
 }
@@ -218,16 +223,110 @@ export async function commitDomainOperations(owner: string, batch: DomainOperati
         const current = validate(raw, owner);
         const base = current?.data ?? fallback;
         const desired = applyDomainOperations(base, domainOperations);
-        const actorId = current?.actorId ?? generateId('actor');
+        const actorId = current?.replica?.slot ?? current?.actorId ?? generateId('actor');
         const nextSeq = (current?.actorSeq ?? 0) + 1;
         const nextClock = { ...(current?.clock ?? {}) };
         nextClock[actorId] = nextSeq;
         operations = compileDomainOperations(base, desired, domainOperations, catalog, actorId, nextSeq, nextClock);
         savedData = desired;
-        if (operations.length === 0) return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: current?.revision ?? 0 };
-        return { ...(current ?? { completeMonths: [] }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: nextClock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: nextSeq };
+        if (operations.length === 0) return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: current?.pending ?? [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
+        return { ...(current ?? { completeMonths: [], replica: null }), ...currentEnvelopeVersions(), owner, actorId, actorSeq: nextSeq, clock: nextClock, data: desired, baseline: current?.baseline ?? fallback, completeMonths: current?.completeMonths ?? [], pending: owner === 'guest' ? [] : [...(current?.pending ?? []), ...operations], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: (current?.revision ?? 0) + 1 };
     });
     return { operations, data: savedData };
+}
+
+export async function markReplicaCheckpointRequired(
+    owner: string,
+    expectedReplica?: ReplicaIdentity,
+): Promise<void> {
+    owner = normalizeStorageOwner(owner);
+    await update<any>(keyFor(owner), raw => {
+        const current = validate(raw, owner);
+        if (!current?.replica) return current;
+        if (expectedReplica && (
+            current.replica.slot !== expectedReplica.slot
+            || current.replica.replicaId !== expectedReplica.replicaId
+            || current.replica.generation !== expectedReplica.generation
+        )) return current;
+
+        return {
+            ...current,
+            replica: {
+                ...current.replica,
+                checkpointAtMs: 1,
+                leaseUntilMs: 1,
+            },
+            revision: current.revision + 1,
+        };
+    });
+}
+
+export async function adoptReplicaCheckpoint(
+    owner: string,
+    claim: ReplicaCheckpoint,
+    checkpoint: CloudCheckpoint,
+    guard?: LocalWriteGuard,
+): Promise<LocalEnvelope> {
+    owner = normalizeStorageOwner(owner);
+    const catalog = await getCachedCatalog();
+    let saved: LocalEnvelope | undefined;
+
+    await update<any>(keyFor(owner), raw => {
+        if (guard && !guard()) return raw;
+        const current = validate(raw, owner);
+        if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
+
+        const sameReplica = current.replica
+            && current.replica.slot === claim.identity.slot
+            && current.replica.replicaId === claim.identity.replicaId
+            && current.replica.generation === claim.identity.generation;
+
+        if (sameReplica) {
+            saved = {
+                ...current,
+                ...currentEnvelopeVersions(),
+                clock: mergeVectors(current.clock, checkpoint.clock),
+                replica: claim.identity,
+                revision: current.revision + 1,
+            };
+            return saved;
+        }
+
+        const baseline = structuredClone(parse(current.baseline));
+        const desired = structuredClone(parse(current.data));
+        const baseDocs = projectDocuments(baseline, catalog);
+        const desiredDocs = projectDocuments(desired, catalog);
+        const actorId = claim.identity.slot;
+        const nextSeq = claim.baseSeq + 1;
+        const nextClock: VectorClock = { ...checkpoint.clock, [actorId]: nextSeq };
+
+        let operations = diffDocuments(baseDocs, desiredDocs, actorId, nextSeq, nextClock);
+        operations = enforceMonthlyEntityTombstones(baseDocs, desiredDocs, operations, actorId, nextSeq, nextClock);
+
+        const actorSeq = operations.length ? nextSeq : claim.baseSeq;
+        const clock: VectorClock = {
+            ...checkpoint.clock,
+            ...(actorSeq > 0 ? { [actorId]: Math.max(checkpoint.clock[actorId] ?? 0, actorSeq) } : {}),
+        };
+
+        saved = {
+            ...current,
+            ...currentEnvelopeVersions(),
+            actorId,
+            actorSeq,
+            clock,
+            data: desired,
+            baseline,
+            pending: operations,
+            syncMetaByDocument: structuredClone(checkpoint.syncMetaByDocument),
+            replica: claim.identity,
+            revision: current.revision + 1,
+        };
+        return saved;
+    });
+
+    if (!saved) throw new Error('Checkpoint replica invalidato o non riuscito');
+    return saved;
 }
 
 export async function acknowledgeLocal(owner: string, _id: string, remote: UserData): Promise<void> {
@@ -278,7 +377,7 @@ export async function initializeLocal(owner: string, data: UserData, completeMon
     await update<any>(keyFor(owner), raw => {
         const current = validate(raw, owner);
         if (current?.pending.length) return current;
-        return { ...current, ...currentEnvelopeVersions(), owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, revision: 0 };
+        return { ...current, ...currentEnvelopeVersions(), owner, actorId: current?.actorId ?? generateId('actor'), actorSeq: current?.actorSeq ?? 0, clock: current?.clock ?? {}, data: parsed, baseline: parsed, completeMonths: completeMonths ?? current?.completeMonths ?? [], pending: [], syncMetaByDocument: current?.syncMetaByDocument ?? {}, replica: current?.replica ?? null, revision: current?.revision ?? 0 };
     });
 }
 
@@ -298,7 +397,7 @@ export async function hydrateLocal(owner: string, cloudData: UserData, months: s
                 syncMetaByDocument[path] = meta;
                 for (const [actor, seq] of Object.entries(meta.clock)) clock[actor] = Math.max(clock[actor] || 0, seq);
             }
-            saved = { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, revision: 0 };
+            saved = { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock, data: cloud, baseline: cloud, completeMonths: months, pending: [], syncMetaByDocument, replica: null, revision: 0 };
         } else {
             const syncMeta: Record<string, SyncMeta> = {};
             const authoritativePaths = new Set(['', ...months.map(m => `history_months/${m}`), ...months.map(m => `nutrition_months/${m}`)]);
@@ -364,7 +463,7 @@ export async function clearNutritionConflict(owner: string, fingerprint: string,
         const data = current?.data ?? fallback;
         if (getNutritionConflictFingerprint(data.pendingConflicts?.nutritionPlanning) !== fingerprint) throw new Error('Conflitto cambiato durante la risoluzione');
         saved = parse(clear(data));
-        return { ...(current ?? { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, completeMonths: [], pending: [], syncMetaByDocument: {}, revision: 0 }), data: saved, baseline: clear(current?.baseline ?? data) };
+        return { ...(current ?? { ...currentEnvelopeVersions(), owner, actorId: generateId('actor'), actorSeq: 0, clock: {}, completeMonths: [], pending: [], syncMetaByDocument: {}, replica: null, revision: 0 }), data: saved, baseline: clear(current?.baseline ?? data) };
     });
     return saved;
 }

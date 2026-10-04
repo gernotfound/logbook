@@ -24,6 +24,11 @@ vi.mock('../src/lib/db', () => ({
     },
 }));
 
+vi.mock('../src/lib/sync/replicaProtocol', async importOriginal => {
+    const actual = await importOriginal<typeof import('../src/lib/sync/replicaProtocol')>();
+    return { ...actual, needsReplicaCheckpoint: () => false };
+});
+
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: {
         getState: () => storeState.current,

@@ -47,7 +47,23 @@ function pathDepth(fieldKey: string): number {
  * are retained. Terminal barriers and document-level actor coordinates are never
  * retired here because the protocol has no replica-membership/stable-frontier proof.
  */
-export function compactSyncMeta(meta: SyncMeta): SyncMeta {
+function stampClocks(stamp: FieldStamp): VectorClock[] {
+    return [
+        stamp.clock,
+        ...(stamp.deleteClock ? [stamp.deleteClock] : []),
+        ...(stamp.legacyClock ? [stamp.legacyClock] : []),
+        ...(stamp.candidates ?? []).flatMap(candidate => [
+            candidate.clock,
+            ...(candidate.legacyClock ? [candidate.legacyClock] : []),
+        ]),
+    ];
+}
+
+function stableCoversStamp(stableFrontier: VectorClock, stamp: FieldStamp): boolean {
+    return stampClocks(stamp).every(clock => coversVector(stableFrontier, clock));
+}
+
+export function compactSyncMeta(meta: SyncMeta, stableFrontier?: VectorClock): SyncMeta {
     const fields: Record<string, FieldStamp> = Object.fromEntries(
         Object.entries(meta.fields).map(([key, stamp]) => [key, cloneStamp(stamp)]),
     );
@@ -72,15 +88,37 @@ export function compactSyncMeta(meta: SyncMeta): SyncMeta {
         }
     }
 
+    if (stableFrontier) {
+        for (const [key, stamp] of Object.entries(fields)) {
+            if (!fields[key]) continue;
+
+            if (!stamp.deleted && stamp.deleteClock && stableCoversStamp(stableFrontier, stamp)) {
+                const { deleteClock: _retiredBarrier, ...withoutBarrier } = stamp;
+                fields[key] = withoutBarrier;
+            }
+        }
+
+        const byDepthDesc = Object.keys(fields)
+            .sort((left, right) => pathDepth(right) - pathDepth(left) || right.localeCompare(left));
+        for (const key of byDepthDesc) {
+            const stamp = fields[key];
+            if (!stamp?.deleted || !stableCoversStamp(stableFrontier, stamp)) continue;
+            const descendantPrefix = `${key}/`;
+            if (Object.keys(fields).some(other => other !== key && other.startsWith(descendantPrefix))) continue;
+            delete fields[key];
+        }
+    }
+
     return {
         protocolVersion: meta.protocolVersion,
         clock: compactVector(meta.clock),
         fields,
+        ...(meta.writer ? { writer: { ...meta.writer } } : {}),
     };
 }
 
-export function compactSyncMetas(metas: Record<string, SyncMeta>): Record<string, SyncMeta> {
+export function compactSyncMetas(metas: Record<string, SyncMeta>, stableFrontier?: VectorClock): Record<string, SyncMeta> {
     return Object.fromEntries(
-        Object.entries(metas).map(([path, meta]) => [path, compactSyncMeta(meta)]),
+        Object.entries(metas).map(([path, meta]) => [path, compactSyncMeta(meta, stableFrontier)]),
     );
 }

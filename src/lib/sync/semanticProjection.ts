@@ -1,6 +1,7 @@
 export type {
     FieldStamp,
     MergePolicy,
+    ReplicaWriter,
     SemanticOperation,
     StampLike,
     SyncMeta,

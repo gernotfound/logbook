@@ -39,8 +39,8 @@ const compile = (before: UserData, operation: DomainOperation | DomainOperation[
 describe('M8 Domain Operations V4', () => {
     it('keeps all persisted version dimensions unchanged', () => {
         expect(CURRENT_DATA_SCHEMA).toBe(1);
-        expect(CURRENT_SYNC_PROTOCOL).toBe(2);
-        expect(CURRENT_LOCAL_ENVELOPE).toBe(4);
+        expect(CURRENT_SYNC_PROTOCOL).toBe(3);
+        expect(CURRENT_LOCAL_ENVELOPE).toBe(5);
         expect(CURRENT_BACKUP_SCHEMA).toBe(3);
     });
 

@@ -4,8 +4,8 @@ export const BASELINE_LOCAL_ENVELOPE = 4 as const;
 export const BASELINE_BACKUP_SCHEMA = 3 as const;
 
 export const CURRENT_DATA_SCHEMA = 1 as const;
-export const CURRENT_SYNC_PROTOCOL = 2 as const;
-export const CURRENT_LOCAL_ENVELOPE = 4 as const;
+export const CURRENT_SYNC_PROTOCOL = 3 as const;
+export const CURRENT_LOCAL_ENVELOPE = 5 as const;
 export const CURRENT_BACKUP_SCHEMA = 3 as const;
 
 export const UPDATE_REQUIRED_EVENT = 'logbook:update-required' as const;
@@ -121,6 +121,13 @@ export type SyncProtocolMigrationCarrier =
 // Future N->N+1 migrations are added only when the corresponding CURRENT_* constant is bumped.
 // Data/sync migration steps receive a storage-scope carrier so one version dimension can advance
 // independently of the local-envelope or backup container version without coupling those bumps.
+function migrateSyncMeta2To3(raw: unknown): unknown {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    const meta = structuredClone(raw as Record<string, unknown>);
+    meta.protocolVersion = 3;
+    return meta;
+}
+
 function migrateSyncMeta1To2(raw: unknown): unknown {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
     const meta = structuredClone(raw as Record<string, unknown>);
@@ -196,8 +203,59 @@ export const SYNC_PROTOCOL_MIGRATIONS: MigrationRegistry<SyncProtocolMigrationCa
 
         return { scope: carrier.scope, record };
     },
+    2: carrier => {
+        if (carrier.scope === 'cloud') {
+            return {
+                scope: 'cloud',
+                sync: migrateSyncMeta2To3(carrier.sync) as PersistedRecord,
+            };
+        }
+
+        const record = structuredClone(carrier.record);
+        const upgradeMetaMap = (raw: unknown): unknown => {
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+            return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([path, meta]) => [
+                path,
+                migrateSyncMeta2To3(meta),
+            ]));
+        };
+
+        if (carrier.scope === 'local-envelope') {
+            record.syncMetaByDocument = upgradeMetaMap(record.syncMetaByDocument);
+            return { scope: carrier.scope, record };
+        }
+
+        const recovery = record.recovery;
+        if (recovery && typeof recovery === 'object' && !Array.isArray(recovery)) {
+            const nextRecovery = structuredClone(recovery as Record<string, unknown>);
+            const envelope = nextRecovery.envelope;
+            if (envelope && typeof envelope === 'object' && !Array.isArray(envelope)) {
+                const nextEnvelope = { ...(envelope as Record<string, unknown>) };
+                nextEnvelope.syncProtocolVersion = 3;
+                nextEnvelope.syncMetaByDocument = upgradeMetaMap(nextEnvelope.syncMetaByDocument);
+                nextRecovery.envelope = nextEnvelope;
+            }
+
+            const cloudDocuments = nextRecovery.cloudDocuments;
+            if (cloudDocuments && typeof cloudDocuments === 'object' && !Array.isArray(cloudDocuments)) {
+                nextRecovery.cloudDocuments = Object.fromEntries(
+                    Object.entries(cloudDocuments as Record<string, unknown>).map(([path, rawDoc]) => {
+                        if (!rawDoc || typeof rawDoc !== 'object' || Array.isArray(rawDoc)) return [path, rawDoc];
+                        const doc = { ...(rawDoc as Record<string, unknown>) };
+                        if (doc._sync !== undefined) doc._sync = migrateSyncMeta2To3(doc._sync);
+                        return [path, doc];
+                    }),
+                );
+            }
+            record.recovery = nextRecovery;
+        }
+
+        return { scope: carrier.scope, record };
+    },
 };
-export const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
+export const LOCAL_ENVELOPE_MIGRATIONS: MigrationRegistry<PersistedRecord> = {
+    4: record => ({ ...structuredClone(record), replica: null }),
+};
 export const BACKUP_MIGRATIONS: MigrationRegistry<PersistedRecord> = {};
 
 export interface NormalizedCloudDocument {

@@ -80,11 +80,11 @@ Prima di modificare un dato, classificarlo come effimero, application/local-only
 | Livello | Ruolo |
 |---|---|
 | **Zustand** | Stato operativo in memoria, source of truth per React |
-| **IndexedDB** | Persistenza locale principale: Local Envelope V4 + journal semantico |
+| **IndexedDB** | Persistenza locale principale: Local Envelope V5 + journal semantico |
 | **`localStorage`** | Persistenza sincrona/device-critical, preferenze e code boundary-specific |
 | **Firestore** | Replica remota e sincronizzazione cloud |
 
-Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 2, Local Envelope 4, Backup Schema 3. Non incrementare una dimensione per compensare modifiche in un'altra.
+Versioni persistite correnti e indipendenti: Data Schema 1, Sync Protocol 3, Local Envelope 5, Backup Schema 3. Non incrementare una dimensione per compensare modifiche in un'altra.
 
 - **MUST:** offline l'app deve potersi avviare e operare dai dati locali.
 - **MUST:** le normali mutazioni business UI/hook attraversano Domain Operations. Snapshot-save è riservato ai boundary bulk/compatibility allowlisted.

@@ -35,28 +35,226 @@ service cloud.firestore {
         || ('_schemaVersion' in incomingData() && incomingData()._schemaVersion >= resource.data._schemaVersion);
     }
 
-    // Security Rules intentionally enforce only the structural invariants that
-    // belong at the authorization boundary. The complete FieldStamp/VectorClock
-    // parser remains the TypeScript source of truth.
+    // Security Rules enforce the persisted protocol envelope and the replica-fencing
+    // boundary. Field-level causal validation remains the TypeScript source of truth.
+    function isReplicaSlot(slot) {
+      return slot is string && slot.matches('^s(0[0-9]|1[0-5])$');
+    }
+
+    function isValidReplicaWriter(writer) {
+      return writer is map
+        && writer.keys().hasOnly(['slot', 'replicaId', 'generation', 'seq'])
+        && isReplicaSlot(writer.slot)
+        && writer.replicaId is string
+        && writer.replicaId.size() > 0
+        && writer.replicaId.size() <= 128
+        && writer.generation is int
+        && writer.generation >= 1
+        && writer.seq is int
+        && writer.seq >= 0;
+    }
+
     function isValidSync(docData) {
       return !('_sync' in docData) || (
         docData._sync is map
-        && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])
-        && (docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2)
+        && docData._sync.protocolVersion is int
         && docData._sync.clock is map
         && docData._sync.fields is map
+        && (
+          (
+            (docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2)
+            && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])
+          )
+          || (
+            docData._sync.protocolVersion == 3
+            && docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])
+            && 'writer' in docData._sync
+            && isValidReplicaWriter(docData._sync.writer)
+          )
+        )
       );
     }
 
-    // Rolling Sync Protocol 1 -> 2 compatibility. Existing protocol-1 documents
-    // remain writable by an old client until a protocol-2 client upgrades that
-    // specific document. Once upgraded, a stale client may not downgrade it.
     function preservesSyncProtocol() {
       return resource == null
         || !('_sync' in resource.data)
         || (
           '_sync' in incomingData()
           && incomingData()._sync.protocolVersion >= resource.data._sync.protocolVersion
+        );
+    }
+
+    function syncControlExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/sync_control/state);
+    }
+
+    function syncControlExistsAfter(userId) {
+      return existsAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state);
+    }
+
+    function hasProtocol3Writer(userId, docData) {
+      let writer = docData._sync.writer;
+      let control = getAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state).data;
+      return docData._sync.protocolVersion == 3
+        && syncControlExistsAfter(userId)
+        && control.protocolVersion == 3
+        && control.mutation is map
+        && control.mutation.action == 'advance'
+        && control.mutation.slot == writer.slot
+        && writer.slot in control.replicas
+        && control.replicas[writer.slot].status == 'active'
+        && control.replicas[writer.slot].replicaId == writer.replicaId
+        && control.replicas[writer.slot].generation == writer.generation
+        && control.replicas[writer.slot].lastSeq >= writer.seq
+        && control.replicas[writer.slot].leaseUntilMs >= request.time.toMillis();
+    }
+
+    function isAuthorizedSyncWrite(userId, docData) {
+      return (
+          !syncControlExists(userId)
+          && (
+            !('_sync' in docData)
+            || docData._sync.protocolVersion == 1
+            || docData._sync.protocolVersion == 2
+          )
+        )
+        || (
+          '_sync' in docData
+          && hasProtocol3Writer(userId, docData)
+        );
+    }
+
+    function hasAuthorizedSyncDelete(userId) {
+      // Legacy clients may delete monthly documents only before this account has
+      // crossed the Protocol 3 control barrier. After cutover, client sync persists
+      // an empty fenced shell instead, so every causal state transition is attributable
+      // to an exact replica id/generation through _sync.writer.
+      return !syncControlExists(userId);
+    }
+
+    function isValidReplicaEntry(entry) {
+      return entry is map
+        && entry.keys().hasOnly([
+          'replicaId',
+          'generation',
+          'status',
+          'lastSeq',
+          'leaseUntilMs',
+          'checkpointAtMs',
+          'checkpointClock'
+        ])
+        && entry.replicaId is string
+        && entry.replicaId.size() > 0
+        && entry.replicaId.size() <= 128
+        && entry.generation is int
+        && entry.generation >= 1
+        && (entry.status == 'active' || entry.status == 'retired')
+        && entry.lastSeq is int
+        && entry.lastSeq >= 0
+        && entry.leaseUntilMs is int
+        && entry.leaseUntilMs >= 1
+        && entry.checkpointAtMs is int
+        && entry.checkpointAtMs >= 1
+        && entry.checkpointClock is map
+        && entry.checkpointClock.size() <= 128;
+    }
+
+    function isFreshReplicaLease(entry) {
+      return entry.status == 'active'
+        && entry.checkpointAtMs <= request.time.toMillis() + 600000
+        && entry.checkpointAtMs >= request.time.toMillis() - 600000
+        && entry.leaseUntilMs > request.time.toMillis()
+        && entry.leaseUntilMs <= request.time.toMillis() + 31968000000;
+    }
+
+    function hasValidReplicaControlShape(data) {
+      return data is map
+        && data.keys().hasOnly(['protocolVersion', 'replicas', 'mutation'])
+        && data.protocolVersion == 3
+        && data.replicas is map
+        && data.replicas.size() <= 16
+        && data.replicas.keys().hasOnly([
+          's00','s01','s02','s03','s04','s05','s06','s07',
+          's08','s09','s10','s11','s12','s13','s14','s15'
+        ])
+        && data.mutation is map
+        && data.mutation.keys().hasOnly(['slot', 'action'])
+        && isReplicaSlot(data.mutation.slot)
+        && (
+          data.mutation.action == 'register'
+          || data.mutation.action == 'checkpoint'
+          || data.mutation.action == 'advance'
+          || data.mutation.action == 'retire'
+          || data.mutation.action == 'reuse-expired'
+        )
+        && data.mutation.slot in data.replicas
+        && isValidReplicaEntry(data.replicas[data.mutation.slot]);
+    }
+
+    function validReplicaControlCreate(data) {
+      let slot = data.mutation.slot;
+      let entry = data.replicas[slot];
+      return hasValidReplicaControlShape(data)
+        && data.mutation.action == 'register'
+        && data.replicas.size() == 1
+        && entry.generation == 1
+        && isFreshReplicaLease(entry);
+    }
+
+    function validReplicaControlUpdate(oldData, newData) {
+      let slot = newData.mutation.slot;
+      let next = newData.replicas[slot];
+      let existed = slot in oldData.replicas;
+      return hasValidReplicaControlShape(newData)
+        && newData.diff(oldData).affectedKeys().hasOnly(['replicas', 'mutation'])
+        && newData.replicas.diff(oldData.replicas).affectedKeys().hasOnly([slot])
+        && (
+          (
+            newData.mutation.action == 'register'
+            && !existed
+            && next.generation == 1
+            && isFreshReplicaLease(next)
+          )
+          || (
+            existed
+            && newData.mutation.action == 'checkpoint'
+            && oldData.replicas[slot].status == 'active'
+            && oldData.replicas[slot].leaseUntilMs >= request.time.toMillis()
+            && next.status == 'active'
+            && next.replicaId == oldData.replicas[slot].replicaId
+            && next.generation == oldData.replicas[slot].generation
+            && next.lastSeq >= oldData.replicas[slot].lastSeq
+            && isFreshReplicaLease(next)
+          )
+          || (
+            existed
+            && newData.mutation.action == 'advance'
+            && oldData.replicas[slot].status == 'active'
+            && oldData.replicas[slot].leaseUntilMs >= request.time.toMillis()
+            && next.diff(oldData.replicas[slot]).affectedKeys().hasOnly(['lastSeq'])
+            && next.lastSeq >= oldData.replicas[slot].lastSeq
+          )
+          || (
+            existed
+            && newData.mutation.action == 'retire'
+            && oldData.replicas[slot].status == 'active'
+            && oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
+            && next.diff(oldData.replicas[slot]).affectedKeys().hasOnly(['status'])
+            && next.status == 'retired'
+          )
+          || (
+            existed
+            && newData.mutation.action == 'reuse-expired'
+            && (
+              oldData.replicas[slot].status == 'retired'
+              || oldData.replicas[slot].leaseUntilMs < request.time.toMillis()
+            )
+            && next.status == 'active'
+            && next.replicaId != oldData.replicas[slot].replicaId
+            && next.generation == oldData.replicas[slot].generation + 1
+            && next.lastSeq >= oldData.replicas[slot].lastSeq
+            && isFreshReplicaLease(next)
+          )
         );
     }
 
@@ -324,31 +522,47 @@ service cloud.firestore {
         && isValidDataSchema(incomingData())
         && preservesDataSchema()
         && isValidSync(incomingData())
+        && isAuthorizedSyncWrite(userId, incomingData())
         && preservesSyncProtocol()
         && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
 
       match /history_months/{monthId} {
-        allow read, delete: if isActiveOwner(userId);
+        allow read: if isActiveOwner(userId);
+        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
         allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
+          && isAuthorizedSyncWrite(userId, incomingData())
           && preservesSyncProtocol()
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
       }
 
       match /nutrition_months/{monthId} {
-        allow read, delete: if isActiveOwner(userId);
+        allow read: if isActiveOwner(userId);
+        allow delete: if isActiveOwner(userId) && hasAuthorizedSyncDelete(userId);
         allow create, update: if isActiveOwner(userId)
           && isValidMonthId(monthId)
           && incomingData() is map
           && isValidDataSchema(incomingData())
           && preservesDataSchema()
           && isValidSync(incomingData())
+          && isAuthorizedSyncWrite(userId, incomingData())
           && preservesSyncProtocol()
           && (resource == null || !('_sync' in resource.data) || '_sync' in incomingData());
+      }
+
+      match /sync_control/{controlId} {
+        allow read: if controlId == 'state' && isActiveOwner(userId);
+        allow create: if controlId == 'state'
+          && isActiveOwner(userId)
+          && validReplicaControlCreate(incomingData());
+        allow update: if controlId == 'state'
+          && isActiveOwner(userId)
+          && validReplicaControlUpdate(resource.data, incomingData());
+        allow delete: if false;
       }
 
       match /telemetry_errors/{errorId} {

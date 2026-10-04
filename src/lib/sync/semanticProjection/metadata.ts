@@ -1,5 +1,5 @@
 import { CURRENT_SYNC_PROTOCOL } from '../../schemaEvolution';
-import type { FieldCandidate, FieldStamp, OperationGuard, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
+import type { FieldCandidate, FieldStamp, OperationGuard, ReplicaWriter, SemanticOperation, StampLike, SyncMeta, VectorClock } from './contracts';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -42,6 +42,17 @@ function parseGuard(raw: unknown, context: string): OperationGuard | undefined {
     };
 }
 
+function parseReplicaWriter(raw: unknown): ReplicaWriter | undefined {
+    if (raw === undefined) return undefined;
+    if (!isRecord(raw)) throw new Error('Invalid replica writer');
+    if (typeof raw.slot !== 'string' || !/^s(?:0[0-9]|1[0-5])$/.test(raw.slot)) throw new Error('Invalid replica writer slot');
+    if (typeof raw.replicaId !== 'string' || !raw.replicaId.trim()) throw new Error('Invalid replica writer id');
+    const generation = parseSafeSeq(raw.generation, 'replica writer generation');
+    if (generation < 1) throw new Error('Invalid replica writer generation');
+    const seq = parseSafeSeq(raw.seq, 'replica writer sequence');
+    return { slot: raw.slot, replicaId: raw.replicaId, generation, seq };
+}
+
 function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClock: VectorClock | undefined): FieldCandidate {
     if (!isRecord(raw)) throw new Error('Invalid FieldCandidate');
     if (typeof raw.actorId !== 'string' || !raw.actorId.trim()) throw new Error('Invalid actorId in FieldCandidate');
@@ -74,6 +85,7 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
     if (raw.protocolVersion !== CURRENT_SYNC_PROTOCOL) throw new Error('Unsupported protocolVersion');
 
     const clock = parseVectorClock(raw.clock, 'clock');
+    const writer = parseReplicaWriter(raw.writer);
     if (!isRecord(raw.fields)) throw new Error('Invalid fields map');
 
     const fields: Record<string, FieldStamp> = {};
@@ -167,7 +179,12 @@ export function parseSyncMeta(raw: unknown): SyncMeta {
         fields[path] = fieldStamp;
     }
 
-    return { protocolVersion: CURRENT_SYNC_PROTOCOL, clock, fields };
+    return {
+        protocolVersion: CURRENT_SYNC_PROTOCOL,
+        clock,
+        fields,
+        ...(writer ? { writer } : {}),
+    };
 }
 
 function parsePath(raw: unknown, context: string): string[] {
@@ -252,7 +269,7 @@ function compareCanonicalClock(left: VectorClock, right: VectorClock): number {
 }
 
 /**
- * Protocol 2 winner order.
+ * Protocol 3 field winner order.
  *
  * Causal dominance remains authoritative. Concurrent events are then placed in a
  * single deterministic total order: monotone vector-clock weight, delete bias

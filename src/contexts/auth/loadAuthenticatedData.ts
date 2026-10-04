@@ -1,13 +1,19 @@
 import type { User } from 'firebase/auth';
 import type { UserData } from '../../types';
-import { auth } from '../../lib/firebase';
+import { auth, getDb } from '../../lib/firebase';
 import { DB } from '../../lib/db';
 import { UserDataSchema } from '../../lib/schema';
 import { captureSession, isCurrentSession, userOwner } from '../../lib/sync/session';
 import { useAppStore } from '../../store/useAppStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../lib/catalog/catalogService';
 import { getResolvedDefaultUserData } from './defaultUserData';
-import { readLocal, hydrateLocal } from '../../lib/sync/localRepository';
+import { adoptReplicaCheckpoint, readLocal, hydrateLocal } from '../../lib/sync/localRepository';
+import {
+    checkpointFromCloudDocuments,
+    claimReplicaCheckpoint,
+    needsReplicaCheckpoint,
+    retireExpiredReplicas,
+} from '../../lib/sync/replicaProtocol';
 import { getInitialLocalWorkout } from '../../store/slices/createWorkoutSlice';
 import { markTabSnapshotClean } from '../../lib/sync/tabSnapshotCausality';
 
@@ -80,26 +86,51 @@ export async function loadAuthenticatedData({
     }
 
     try {
-        const payload = await DB.loadCloudPayload();
+        const durableBeforeCloud = await readLocal(expectedOwner);
+        if (!isCurrent()) return;
+        const checkpointDue = needsReplicaCheckpoint(durableBeforeCloud?.replica);
+        const payload = await DB.loadCloudPayload({ allMonths: checkpointDue });
         if (!isCurrent()) return;
 
         if (payload) {
             try {
-                const hydratedEnv = await hydrateLocal(
+                let hydratedEnv = await hydrateLocal(
                     user.uid,
                     payload.data,
                     payload.completeMonths,
                     payload.cloudDocuments,
-                    'window',
+                    checkpointDue ? 'all' : 'window',
                     isCurrent,
                 );
                 if (!isCurrent()) return;
+
+                if (checkpointDue) {
+                    await retireExpiredReplicas(getDb(), user.uid);
+                    if (!isCurrent()) return;
+                    const checkpoint = checkpointFromCloudDocuments(payload.cloudDocuments);
+                    const claim = await claimReplicaCheckpoint(
+                        getDb(),
+                        user.uid,
+                        hydratedEnv.replica,
+                        checkpoint.clock,
+                        hydratedEnv.actorSeq,
+                        hydratedEnv.replica ? undefined : hydratedEnv.actorId,
+                    );
+                    if (!isCurrent()) return;
+                    hydratedEnv = await adoptReplicaCheckpoint(expectedOwner, claim, checkpoint, isCurrent);
+                    if (!isCurrent()) return;
+                }
+
                 setUserData(hydratedEnv.data);
             } catch (mergeError) {
                 if (!isCurrent()) return;
-                if ((mergeError as { code?: unknown })?.code === 'invalid-cloud-sync-metadata') {
+                const code = (mergeError as { code?: unknown })?.code;
+                if (code === 'invalid-cloud-sync-metadata') {
                     setSaveError('Sincronizzazione cloud sospesa: i metadati di sincronizzazione remoti non sono validi. I dati locali validi sono stati preservati e TheLogBook non sovrascriverà il cloud finché il problema non viene risolto.');
                     console.error('Metadati di sincronizzazione cloud non validi; stato locale preservato:', mergeError);
+                } else if (code === 'replica-capacity' || code === 'replica-fenced') {
+                    setSaveError(mergeError instanceof Error ? mergeError.message : 'Sincronizzazione sospesa: questa copia deve completare un nuovo checkpoint cloud.');
+                    console.warn('Checkpoint replica non completato; stato locale preservato:', mergeError);
                 } else {
                     console.error('Hydration cloud non valida; stato locale preservato:', mergeError);
                 }

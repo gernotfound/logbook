@@ -400,8 +400,10 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
 
             await DB.saveUserData(updatedState);
 
-            // Only August history doc should be written
-            expect(mockBatch.set).toHaveBeenCalledTimes(1);
+            // Only August history is a business-document write; Protocol 3 also advances sync_control atomically.
+            const businessWrites = mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'));
+            expect(businessWrites).toHaveLength(1);
+            expect(businessWrites[0][0]?.path || '').toContain('history_months/2026-08');
             expect(mockBatch.delete).not.toHaveBeenCalled();
         });
 
@@ -429,9 +431,10 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             await DB.saveUserData(multiMonthState);
 
             expect(mockBatch.set).toHaveBeenCalled();
-            const setCalls = mockBatch.set.mock.calls;
+            const setCalls = mockBatch.set.mock.calls
+                .filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'));
 
-            // 1 user doc + 5 history month docs = 6 set calls
+            // 1 user doc + 5 history month docs = 6 business-document writes.
             expect(setCalls).toHaveLength(6);
 
             const monthDocsWritten = setCalls
@@ -445,7 +448,7 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             expect(monthDocsWritten.some(p => p.includes('2026-08'))).toBe(true);
         });
 
-        it('2.4: Deleting the last entity in a month persists a V3 parent tombstone instead of physically deleting the shard', async () => {
+        it('2.4: Deleting the last entity in a month persists a causal parent tombstone instead of physically deleting the shard', async () => {
             const stateWithTwoMonths = {
                 profile: {},
                 library: [],
@@ -479,10 +482,11 @@ describe('Empirical Challenger: Persistence, Save Amnesia, 3-Month Windowing & D
             const result = await DB.saveUserData(stateAugustOnly);
             expect(result.ok).toBe(true);
 
-            // V3 keeps a tombstone-only monthly doc until causal GC can prove physical deletion safe.
+            // Protocol 3 keeps a tombstone-only monthly doc until stable-frontier GC can retire it.
             expect(mockBatch.delete).not.toHaveBeenCalled();
-            expect(mockBatch.set).toHaveBeenCalledTimes(1);
-            const [writtenRef, writtenData] = mockBatch.set.mock.calls[0];
+            const businessWrites = mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'));
+            expect(businessWrites).toHaveLength(1);
+            const [writtenRef, writtenData] = businessWrites[0];
             expect(writtenRef?.path || '').toContain('history_months/2026-07');
             expect(writtenData.h_jul_1).toBeUndefined();
             expect(writtenData._sync?.fields?.['h_jul_1']).toMatchObject({ deleted: true });

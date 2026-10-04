@@ -1,7 +1,7 @@
 import equal from 'fast-deep-equal';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
-import { readLocal, acknowledgeThrough } from './localRepository';
+import { readLocal, acknowledgeThrough, markReplicaCheckpointRequired } from './localRepository';
 import { captureSession, isCurrentSession } from './session';
 import { applyRemoteDocuments } from './documentProjection';
 import { applyDocumentChanges } from './transactionWriter';
@@ -10,6 +10,7 @@ import { SyncTimeoutError, withTimeout } from '../db/db_core';
 import { isAccountDeletionPending } from './accountGate';
 import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
+import { ReplicaFencedError } from './replicaProtocol';
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -88,13 +89,20 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
         if (!current()) throw new Error('Sessione cambiata');
         if (!envelope) throw new Error('Archivio locale non disponibile');
         if (!envelope.pending?.length) return;
+        if (!envelope.replica) throw new ReplicaFencedError('Replica non registrata: attendi il checkpoint cloud completo.');
+        if (envelope.actorId !== envelope.replica.slot || envelope.pending.some(operation => operation.actorId !== envelope.replica!.slot)) {
+            throw new ReplicaFencedError('Journal appartenente a una replica precedente: checkpoint completo richiesto.');
+        }
+        if (envelope.replica.leaseUntilMs < Date.now()) {
+            throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
+        }
 
         const delivered = structuredClone(envelope.pending);
         deliveryState.delivered = delivered;
 
         let outcome: Awaited<ReturnType<typeof applyDocumentChanges>>;
         try {
-            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current);
+            outcome = await applyDocumentChanges(getDb(), session.owner.slice(5), delivered, current, envelope.replica);
         } catch (error) {
             const failure = classifySyncFailure(error);
             if (failure.status === 'local-pending') {
@@ -185,6 +193,15 @@ export async function replicateJournal(expectedOwner?: string): Promise<SyncResu
             throw error;
         }
     } catch (error) {
+        if (error instanceof ReplicaFencedError && session.owner.startsWith('user:')) {
+            try {
+                const durable = await readLocal(session.owner);
+                await markReplicaCheckpointRequired(session.owner, durable?.replica ?? undefined);
+            } catch {
+                // The original fencing error remains authoritative. A local storage
+                // failure is handled by the caller's normal persistence safety path.
+            }
+        }
         return classifySyncFailure(error, { retryable: error instanceof DurableAcknowledgementPendingError });
     }
 }

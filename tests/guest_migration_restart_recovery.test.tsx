@@ -26,6 +26,8 @@ import * as localRepository from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
 
+const defaultRunTransaction = vi.mocked(runTransaction).getMockImplementation();
+
 const GUEST_KEY = 'logbook_is_guest';
 const GUEST_POLICY_KEY = 'guest_migration_policy';
 const OVERLAY_SESSION_KEY = 'logbook_guest_login_overlay';
@@ -42,6 +44,8 @@ function fixtures() {
 
 beforeEach(async () => {
     vi.clearAllMocks();
+    vi.mocked(runTransaction).mockReset();
+    if (defaultRunTransaction) vi.mocked(runTransaction).mockImplementation(defaultRunTransaction);
     localStorage.clear();
     sessionStorage.clear();
     useAppStore.getState().resetStore({ force: true });

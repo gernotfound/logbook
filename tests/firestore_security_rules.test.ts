@@ -39,7 +39,8 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
 
   it('allows only an active owner to access private month and telemetry collections', () => {
     expect(rulesContent).toMatch(/match\s+\/history_months\/\{monthId\}/);
-    expect(rulesContent).toMatch(/allow\s+read,\s*delete:\s*if\s+isActiveOwner\(userId\);/);
+    expect(rulesContent).toMatch(/allow\s+read:\s*if\s+isActiveOwner\(userId\);/);
+    expect(rulesContent).toContain('hasAuthorizedSyncDelete(userId)');
     expect(rulesContent).toMatch(/match\s+\/nutrition_months\/\{monthId\}/);
     expect(rulesContent).toMatch(/match\s+\/telemetry_anomalies\/\{eventId\}/);
   });
@@ -47,8 +48,13 @@ describe('Firestore Security Rules Whitelist & Parity Verification', () => {
   it('keeps Firestore data/sync rules aligned with current version constants and forbids marker downgrade', () => {
     expect(rulesContent).toContain("function isValidDataSchema(docData)");
     expect(rulesContent).toContain(`!('_schemaVersion' in docData) || docData._schemaVersion == ${CURRENT_DATA_SCHEMA}`);
-    expect(rulesContent).toContain(`docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == ${CURRENT_SYNC_PROTOCOL}`);
-    expect(rulesContent).toContain("docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields'])");
+    expect(CURRENT_SYNC_PROTOCOL).toBe(3);
+    expect(rulesContent).toContain("docData._sync.protocolVersion == 1 || docData._sync.protocolVersion == 2");
+    expect(rulesContent).toContain("docData._sync.protocolVersion == 3");
+    expect(rulesContent).toContain("docData._sync.keys().hasOnly(['protocolVersion', 'clock', 'fields', 'writer'])");
+    expect(rulesContent).toContain('function hasProtocol3Writer(userId, docData)');
+    expect(rulesContent).toContain('function validReplicaControlUpdate(oldData, newData)');
+    expect(rulesContent).toContain("match /sync_control/{controlId}");
     expect(rulesContent).toContain('docData._sync.clock is map');
     expect(rulesContent).toContain('docData._sync.fields is map');
     expect(rulesContent).toContain('function preservesDataSchema()');

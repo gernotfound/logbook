@@ -8,6 +8,14 @@ import type { UserData } from '../../types';
 import { assertHistoryMonthDocument, assertNutritionMonthDocument } from './monthlyIntegrity';
 import { type SemanticOperation, type SyncMeta, applySemanticOperations, parseSyncMeta } from './semanticProjection';
 import { compactSyncMetas } from './causalCompaction';
+import {
+    ReplicaFencedError,
+    advanceReplicaControl,
+    matchesReplica,
+    parseReplicaControl,
+    stableFrontierFromControl,
+    type ReplicaIdentity,
+} from './replicaProtocol';
 
 function normalizeRemote(path: string, raw: DocumentData): DocumentData {
     if (path === '') return rootDocument(UserDataSchema.parse(raw) as unknown as UserData);
@@ -91,7 +99,13 @@ function assertRemoteBusinessPreserved(path: string, raw: DocumentData, normaliz
 
 export interface TransactionOutcome { documents: Map<string, DocumentData>; syncMeta: Record<string, SyncMeta> }
 
-export async function applyDocumentChanges(db: Firestore, uid: string, ops: SemanticOperation[], isCurrent: () => boolean): Promise<TransactionOutcome> {
+export async function applyDocumentChanges(
+    db: Firestore,
+    uid: string,
+    ops: SemanticOperation[],
+    isCurrent: () => boolean,
+    replica: ReplicaIdentity,
+): Promise<TransactionOutcome> {
     if (!uid || uid.includes('/')) throw new Error('Identità non valida');
     if (!isCurrent()) throw new Error('Sessione cambiata');
     if (!ops.length) return { documents: new Map(), syncMeta: {} };
@@ -101,9 +115,22 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
 
         const pathsToRead = [...new Set(ops.map(op => op.docPath))];
         const refs = pathsToRead.map(path => doc(db, `users/${uid}${path ? '/' + path : ''}`));
-        const snapshots = await Promise.all(refs.map(ref => transaction.get(ref)));
+        const controlRef = doc(db, `users/${uid}/sync_control/state`);
+        const [controlSnapshot, ...snapshots] = await Promise.all([
+            transaction.get(controlRef),
+            ...refs.map(ref => transaction.get(ref)),
+        ]);
 
         if (!isCurrent()) throw new Error('Sessione cambiata');
+        if (!controlSnapshot.exists()) throw new ReplicaFencedError('Registro replica assente: checkpoint completo richiesto.');
+        const control = parseReplicaControl(controlSnapshot.data());
+        const replicaEntry = control.replicas[replica.slot];
+        if (!matchesReplica(replicaEntry, replica)) throw new ReplicaFencedError();
+        if (replicaEntry!.leaseUntilMs < Date.now()) throw new ReplicaFencedError('Lease replica scaduta: checkpoint completo richiesto.');
+        if (ops.some(op => op.actorId !== replica.slot)) {
+            throw new ReplicaFencedError('Il journal locale appartiene a una replica precedente e deve essere ribasato.');
+        }
+        const stableFrontier = stableFrontierFromControl(control);
 
         const baseDocs = new Map<string, DocumentData>();
         const remoteSyncMetas: Record<string, SyncMeta> = {};
@@ -122,7 +149,12 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
         });
 
         const { documents: newDocs, syncMetas: mergedSyncMetas } = applySemanticOperations(baseDocs, ops, remoteSyncMetas);
-        const newSyncMetas = compactSyncMetas(mergedSyncMetas);
+        const compactedSyncMetas = compactSyncMetas(mergedSyncMetas, stableFrontier);
+        const deliveredSeq = ops.reduce((max, operation) => Math.max(max, operation.seq), replicaEntry!.lastSeq);
+        const writer = { slot: replica.slot, replicaId: replica.replicaId, generation: replica.generation, seq: deliveredSeq };
+        const newSyncMetas: Record<string, SyncMeta> = Object.fromEntries(
+            Object.entries(compactedSyncMetas).map(([path, meta]) => [path, { ...meta, writer }]),
+        );
 
         for (const [path, docData] of newDocs.entries()) {
             let business = removeUndefinedValues(docData) as DocumentData;
@@ -136,15 +168,15 @@ export async function applyDocumentChanges(db: Firestore, uid: string, ops: Sema
             checkDocSize(finalData, path || 'User Profile');
 
             const refIndex = pathsToRead.indexOf(path);
-            const hasBusinessData = Object.keys(business).length > 0;
-            const hasFields = Boolean(meta && Object.keys(meta.fields).length > 0);
 
-            if (!hasBusinessData && !hasFields) {
-                transaction.delete(refs[refIndex]);
-            } else {
-                transaction.set(refs[refIndex], finalData);
-            }
+            // Protocol 3 never physically deletes sync-owned documents from the client.
+            // Even after stable-frontier GC removes the final tombstone, the empty shell
+            // carries the fenced writer identity. This prevents a stale generation from
+            // turning an un-attributed Firestore delete into a causal state transition.
+            transaction.set(refs[refIndex], finalData);
         }
+
+        transaction.set(controlRef, advanceReplicaControl(control, replica, deliveredSeq));
 
         return { documents: newDocs, syncMeta: newSyncMetas };
     }, { maxAttempts: 5 });

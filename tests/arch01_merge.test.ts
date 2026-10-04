@@ -1,4 +1,4 @@
-import { initializeLocal } from '../src/lib/sync/localRepository';
+import { adoptReplicaCheckpoint, initializeLocal } from '../src/lib/sync/localRepository';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mergeCloudIntoLocal, mergeHistoryNonDestructive, mergeNutritionNonDestructive } from '../src/lib/merge';
 import { DB } from '../src/lib/db';
@@ -115,6 +115,17 @@ describe('ARCH-01: Non-destructive Cache Merge', () => {
             initialLocal.history = [{ id: 'local-old', date: '2025-01-10', exercises: [] } as any];
             useAppStore.setState({ userData: initialLocal });
             await initializeLocal('user:user123', initialLocal);
+            const checkpointNow = Date.now();
+            await adoptReplicaCheckpoint('user:user123', {
+                identity: {
+                    slot: 's00',
+                    replicaId: 'window-test-replica',
+                    generation: 1,
+                    checkpointAtMs: checkpointNow,
+                    leaseUntilMs: checkpointNow + 360 * 24 * 60 * 60 * 1000,
+                },
+                baseSeq: 0,
+            }, { clock: {}, syncMetaByDocument: {} });
 
             // Setup cloud response for a different, complete month.
             const cloudResponse = getEmptyUserData();

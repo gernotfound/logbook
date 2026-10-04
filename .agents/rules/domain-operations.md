@@ -151,7 +151,7 @@ M8 non introduce memoria volatile come fonte di durabilità.
 
 M8 eredita integralmente M2/M4:
 
-- vector clock resta la base causale; `stampWins()` usa l'ordine totale transitivo di Sync Protocol 2;
+- vector clock resta la base causale; `stampWins()` usa l'ordine totale transitivo introdotto da Sync Protocol 2 e invariato in Protocol 3;
 - ancestor-first reconciliation preserva solo descendant causalmente o totalmente più nuovi dell'ancestor;
 - delete-vs-edit concorrente mantiene delete bias quando i contender hanno pari cardinalità causale, senza introdurre una relazione pairwise non transitiva;
 - causal compaction resta dopo il merge e prima della write Firestore;

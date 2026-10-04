@@ -112,7 +112,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
 
             // The catch block logs warn and does not re-throw for timeout
             await DB.saveUserData(mutatedData1);
-            expect(mockBatch.set).toHaveBeenCalledTimes(1);
+            expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
@@ -124,7 +124,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(mutatedData1);
 
-            expect(mockBatch.set).toHaveBeenCalledTimes(1);
+            expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
             mockBatch.set.mockClear();
             mockBatch.commit.mockClear();
@@ -162,7 +162,7 @@ describe('Empirical Challenger: Architectural Hardening Stress Suite', () => {
             // Next attempt must still detect that state is uncommitted
             mockBatch.commit.mockResolvedValueOnce(undefined);
             await DB.saveUserData(state);
-            expect(mockBatch.set).toHaveBeenCalledTimes(1);
+            expect(mockBatch.set.mock.calls.filter((call: any[]) => !String(call[0]?.path || '').includes('sync_control'))).toHaveLength(1);
             expect(mockBatch.commit).toHaveBeenCalledTimes(1);
         });
 

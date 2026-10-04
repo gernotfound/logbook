@@ -1,6 +1,7 @@
 import type { User } from 'firebase/auth';
 import type { SyncResult, UserData } from '../../types';
 import { DB } from '../../lib/db';
+import { getDb } from '../../lib/firebase';
 import { UserDataSchema } from '../../lib/schema';
 import { hasUserData, mergeUserData } from '../../lib/merge';
 import { useAppStore } from '../../store/useAppStore';
@@ -8,6 +9,12 @@ import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../../l
 import { replicateJournal } from '../../lib/sync/replicateJournal';
 import { userOwner } from '../../lib/sync/session';
 import { getResolvedDefaultUserData } from './defaultUserData';
+import {
+    checkpointFromCloudDocuments,
+    claimReplicaCheckpoint,
+    retireExpiredReplicas,
+} from '../../lib/sync/replicaProtocol';
+import type { LocalEnvelope } from '../../lib/sync/localRepository';
 
 type GuestMigrationPolicy = 'merge' | 'skip';
 
@@ -60,6 +67,24 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const cloudData = cloudPayload?.data || null;
         const cloudHasData = hasUserData(cloudData);
         const guestHasData = hasUserData(guestData);
+        const prepareReplica = async (hydrated: LocalEnvelope): Promise<LocalEnvelope> => {
+            assertCurrent();
+            const { adoptReplicaCheckpoint } = await import('../../lib/sync/localRepository');
+            await retireExpiredReplicas(getDb(), user.uid);
+            assertCurrent();
+            const checkpoint = checkpointFromCloudDocuments(cloudPayload?.cloudDocuments ?? new Map());
+            const claim = await claimReplicaCheckpoint(
+                getDb(),
+                user.uid,
+                hydrated.replica,
+                checkpoint.clock,
+                hydrated.actorSeq,
+                hydrated.replica ? undefined : hydrated.actorId,
+            );
+            assertCurrent();
+            return adoptReplicaCheckpoint(user.uid, claim, checkpoint, isCurrent);
+        };
+
         const resolveAuthenticatedBase = async (): Promise<UserData> => {
             assertCurrent();
             if (cloudData) return cloudData;
@@ -72,7 +97,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             const { hydrateLocal } = await import('../../lib/sync/localRepository');
             assertCurrent();
             const authenticatedBase = await resolveAuthenticatedBase();
-            const hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+            let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+            assertCurrent();
+            hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
             markLocalReady();
             applyLocalData(hydratedEnv.data);
@@ -82,7 +109,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         if (cloudHasData && !guestHasData) {
             const { hydrateLocal } = await import('../../lib/sync/localRepository');
             assertCurrent();
-            const hydratedEnv = await hydrateLocal(user.uid, cloudData!, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+            let hydratedEnv = await hydrateLocal(user.uid, cloudData!, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+            assertCurrent();
+            hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
             markLocalReady();
             applyLocalData(hydratedEnv.data);
@@ -93,7 +122,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
             const { hydrateLocal, commitLocal, readLocal } = await import('../../lib/sync/localRepository');
             assertCurrent();
             const authenticatedBase = await resolveAuthenticatedBase();
-            const hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+            let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+            assertCurrent();
+            hydratedEnv = await prepareReplica(hydratedEnv);
             assertCurrent();
             const mergedData = mergeUserData(hydratedEnv.data, guestData);
             await commitLocal(user.uid, mergedData, hydratedEnv.data, isCurrent);
@@ -123,7 +154,9 @@ export async function migrateGuestAccount({ user, guestData, policy, setUserData
         const { hydrateLocal } = await import('../../lib/sync/localRepository');
         assertCurrent();
         const authenticatedBase = await resolveAuthenticatedBase();
-        const hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+        let hydratedEnv = await hydrateLocal(user.uid, authenticatedBase, cloudPayload?.completeMonths || [], cloudPayload?.cloudDocuments, 'all', isCurrent);
+        assertCurrent();
+        hydratedEnv = await prepareReplica(hydratedEnv);
         assertCurrent();
         markLocalReady();
         applyLocalData(hydratedEnv.data);

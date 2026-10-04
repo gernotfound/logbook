@@ -29,10 +29,18 @@ export interface FieldStamp {
     candidates?: FieldCandidate[];
 }
 
+export interface ReplicaWriter {
+    slot: string;
+    replicaId: string;
+    generation: number;
+    seq: number;
+}
+
 export interface SyncMeta {
-    protocolVersion: 2;
+    protocolVersion: 3;
     clock: VectorClock;
     fields: Record<string, FieldStamp>;
+    writer?: ReplicaWriter;
 }
 
 export interface SemanticOperation {
