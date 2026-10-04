@@ -5,7 +5,7 @@ import { generateId } from '../utils/date';
 import { getNutritionConflictFingerprint } from '../utils/object';
 import { parseReplicaIdentity, type CloudCheckpoint, type ReplicaCheckpoint, type ReplicaIdentity } from './replicaProtocol';
 import equal from 'fast-deep-equal';
-import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
+import { type SemanticOperation, type VectorClock, type SyncMeta, diffDocuments, applySemanticOperations, coversVectorClock, mergeVectors, parseSemanticOperation, parseSyncMeta, parseVectorClock } from './semanticProjection';
 import { projectDocuments, applyRemoteDocuments, type DocumentData } from './documentProjection';
 import { getCachedCatalog } from '../catalog/catalogService';
 import { normalizeStorageOwner } from './owner';
@@ -249,6 +249,22 @@ export async function adoptReplicaCheckpoint(
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
         if (!current) throw new Error('Archivio locale non trovato durante il checkpoint replica');
+
+        const sameReplica = current.replica
+            && current.replica.slot === claim.identity.slot
+            && current.replica.replicaId === claim.identity.replicaId
+            && current.replica.generation === claim.identity.generation;
+
+        if (sameReplica) {
+            saved = {
+                ...current,
+                ...currentEnvelopeVersions(),
+                clock: mergeVectors(current.clock, checkpoint.clock),
+                replica: claim.identity,
+                revision: current.revision + 1,
+            };
+            return saved;
+        }
 
         const baseline = structuredClone(parse(current.baseline));
         const desired = structuredClone(parse(current.data));
