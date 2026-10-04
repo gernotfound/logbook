@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { clear } from 'idb-keyval';
+import { clear, get, set } from 'idb-keyval';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const remote = vi.hoisted(() => ({
@@ -210,6 +210,32 @@ describe('M3 journal crash consistency', () => {
 
         expect(result.status).toBe('failed');
         expect(await readLocal(owner)).toBeUndefined();
+        expect(currentCloudData().profile.height).toBe('171');
+    });
+
+    it('hard-fails a lost acknowledgement when the retained operation payload changed', async () => {
+        await commitLocal(owner, data(171), data(170));
+        installReplaySafeRemote(async () => {
+            const raw = await get<any>('logbook:v2:user:a');
+            raw.pending[0] = { ...raw.pending[0], value: 'corrupted-after-delivery' };
+            await set('logbook:v2:user:a', raw);
+        });
+
+        const originalPut = IDBObjectStore.prototype.put;
+        let putCount = 0;
+        const put = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: any[]) {
+            putCount += 1;
+            if (putCount === 2) throw new DOMException('Injected acknowledgement failure', 'UnknownError');
+            return (originalPut as any).apply(this, args);
+        } as any);
+
+        const result = await replicateJournal();
+        put.mockRestore();
+
+        expect(result.status).toBe('failed');
+        const retained = await readLocal(owner);
+        expect(retained?.pending).toHaveLength(1);
+        expect(retained?.pending[0].value).toBe('corrupted-after-delivery');
         expect(currentCloudData().profile.height).toBe('171');
     });
 
