@@ -252,8 +252,8 @@ export function applySemanticOperations(
         const meta = resultMetas[docPath];
         const doc = resultDocs.get(docPath) || {};
 
-        // Every delivered event advances only the document frontier. Field stamps
-        // remain immutable timestamps of the actual winning event in protocol 2.
+        // Every delivered event advances the document frontier. Guard/ancestor
+        // rejection never mutates the winning field timestamp.
         meta.clock = mergeVectors(meta.clock, ...opList.map(operation => operation.clock));
 
         const eligible = opList.filter(operation =>
@@ -264,76 +264,108 @@ export function applySemanticOperations(
             continue;
         }
 
-        let winner = eligible[0];
-        for (let i = 1; i < eligible.length; i++) {
-            if (compareStamps(operationStamp(eligible[i]), operationStamp(winner)) > 0) winner = eligible[i];
+        const fk = fieldKey(opList[0].path);
+        const remoteStamp = meta.fields[fk];
+        const deleteOperations = eligible.filter(operation => operation.isDelete);
+
+        // A delete barrier is monotone and survives later recreation. Any update
+        // that has not observed every delete remains permanently stale for this field.
+        let barrier = deleteBarrier(remoteStamp);
+        if (deleteOperations.length) {
+            barrier = mergeVectors(barrier ?? {}, ...deleteOperations.map(operation => operation.clock));
         }
 
-        const fk = fieldKey(winner.path);
-        const remoteStamp = meta.fields[fk];
-        if (remoteStamp && !stampWins(operationStamp(winner), fieldStamp(remoteStamp))) {
-            resultDocs.set(docPath, doc);
-            continue;
+        const updateCandidates: FieldCandidate[] = [];
+        if (remoteStamp && !remoteStamp.deleted && (!barrier || coversVectorClock(remoteStamp.clock, barrier))) {
+            updateCandidates.push({ stamp: fieldStamp(remoteStamp), remote: true });
+        }
+        for (const operation of eligible) {
+            if (operation.isDelete) continue;
+            if (barrier && !coversVectorClock(operation.clock, barrier)) continue;
+            updateCandidates.push({
+                stamp: operationStamp(operation),
+                operation,
+                remote: false,
+            });
+        }
+
+        let selected: FieldCandidate;
+        if (updateCandidates.length) {
+            // Every eligible update causally supersedes the complete delete barrier.
+            // Concurrent updates then use the transitive protocol-2 total order.
+            selected = maxCandidate(updateCandidates);
+        } else {
+            const deleteCandidates: FieldCandidate[] = [];
+            if (remoteStamp?.deleted) {
+                deleteCandidates.push({ stamp: fieldStamp(remoteStamp), remote: true });
+            }
+            for (const operation of deleteOperations) {
+                deleteCandidates.push({
+                    stamp: operationStamp(operation),
+                    operation,
+                    remote: false,
+                });
+            }
+            if (!deleteCandidates.length) {
+                resultDocs.set(docPath, doc);
+                continue;
+            }
+            selected = maxCandidate(deleteCandidates);
         }
 
         const nextStamp: FieldStamp = {
-            clock: { ...winner.clock },
-            actorId: winner.actorId,
-            seq: winner.seq,
-            ...(winner.isDelete ? { deleted: true } : {}),
+            clock: { ...selected.stamp.clock },
+            actorId: selected.stamp.actorId,
+            seq: selected.stamp.seq,
+            ...(selected.stamp.isDelete ? { deleted: true } : {}),
+            ...(barrier ? { deleteClock: { ...barrier } } : {}),
         };
 
-        // Preserve descendants whose own total causal timestamp outranks an
-        // ancestor write. Lower-ranked descendants are semantically shadowed and
-        // their stamps are removed, so parent-before-child and child-before-parent
-        // delivery converge to the same business and causal state.
-        const protectedBefore = Object.entries(meta.fields)
-            .filter(([key, stamp]) => key.startsWith(`${fk}/`) && stampWins(fieldStamp(stamp), fieldStamp(nextStamp)))
-            .map(([key]) => key);
+        if (!nextStamp.deleted && nextStamp.deleteClock && !coversVectorClock(nextStamp.clock, nextStamp.deleteClock)) {
+            throw new Error('Visible causal winner does not cover delete barrier');
+        }
 
-        const preservedValues = new Map<string, unknown>();
-        for (const key of protectedBefore) {
-            const stamp = meta.fields[key];
-            if (!stamp.deleted) {
-                const path = pathFromFieldKey(key);
-                preservedValues.set(key, structuredClone(readSemanticValue(doc, winner.docPath, path)));
+        let protectedDescendants: ProtectedDescendant[] = [];
+        if (selected.operation) {
+            const prefix = `${fk}/`;
+            protectedDescendants = Object.entries(meta.fields)
+                .filter(([key, stamp]) => key.startsWith(prefix) && descendantSurvivesAncestor(stamp, nextStamp))
+                .map(([key, stamp]) => {
+                    const path = pathFromFieldKey(key);
+                    return {
+                        key,
+                        path,
+                        stamp,
+                        ...(stamp.deleted ? {} : {
+                            value: structuredClone(readSemanticValue(doc, docPath, path)),
+                        }),
+                    };
+                });
+
+            applyWinnerToDocument(doc, selected.operation, ordersToApply);
+
+            for (const [key] of Object.entries(meta.fields)) {
+                if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) {
+                    delete meta.fields[key];
+                }
             }
         }
 
-        applyWinnerToDocument(doc, winner, ordersToApply);
         meta.fields[fk] = nextStamp;
 
-        const prefix = `${fk}/`;
-        const protectedDescendants: ProtectedDescendant[] = [];
-        for (const [key, stamp] of Object.entries(meta.fields)) {
-            if (!key.startsWith(prefix)) continue;
-            if (stampWins(fieldStamp(stamp), fieldStamp(nextStamp))) {
-                protectedDescendants.push({
-                    key,
-                    path: pathFromFieldKey(key),
-                    stamp,
-                    ...(stamp.deleted ? {} : {
-                        value: preservedValues.has(key)
-                            ? preservedValues.get(key)
-                            : structuredClone(readSemanticValue(doc, winner.docPath, pathFromFieldKey(key))),
-                    }),
-                });
-            }
+        if (selected.operation) {
+            protectedDescendants
+                .sort((left, right) => left.path.length - right.path.length || left.key.localeCompare(right.key))
+                .forEach(item => applyWinnerToDocument(doc, {
+                    docPath,
+                    path: item.path,
+                    isDelete: item.stamp.deleted === true,
+                    ...(item.stamp.deleted ? {} : { value: item.value }),
+                    actorId: item.stamp.actorId,
+                    seq: item.stamp.seq,
+                    clock: item.stamp.clock,
+                }, ordersToApply));
         }
-        for (const [key] of Object.entries(meta.fields)) {
-            if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) delete meta.fields[key];
-        }
-        protectedDescendants
-            .sort((left, right) => left.path.length - right.path.length || left.key.localeCompare(right.key))
-            .forEach(item => applyWinnerToDocument(doc, {
-                docPath: winner.docPath,
-                path: item.path,
-                isDelete: item.stamp.deleted === true,
-                ...(item.stamp.deleted ? {} : { value: item.value }),
-                actorId: item.stamp.actorId,
-                seq: item.stamp.seq,
-                clock: item.stamp.clock,
-            }, ordersToApply));
 
         resultDocs.set(docPath, doc);
     }
