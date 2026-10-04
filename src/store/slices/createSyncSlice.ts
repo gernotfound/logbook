@@ -12,6 +12,7 @@ import { UserDataSchema } from '../../lib/schema';
 import { isUpdateRequiredError } from '../../lib/schemaEvolution';
 import { applyDomainOperations, type DomainOperationBatch } from '../../lib/sync/domainOperations';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
+import { requiredUpdateRecoveryRegistry } from '../../lib/sync/requiredUpdateRecovery';
 
 export type SyncHealth = 'saving' | 'synced' | 'local-pending' | 'rejected' | 'failed';
 export type SyncPresentation = 'normal' | 'quiet-workout';
@@ -80,6 +81,27 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
 
     const enterUpdateRequired = (error: unknown) => {
         const message = updateRequiredMessage(error);
+        try {
+            // Future persisted data must never be interpreted or mutated by this build.
+            // Capture only version-independent volatile UI drafts before invalidating
+            // the session that owns them.
+            requiredUpdateRecoveryRegistry.captureAll();
+        } catch (recoveryError) {
+            const recoveryMessage = recoveryError instanceof Error
+                ? recoveryError.message
+                : 'Impossibile mettere al sicuro le modifiche ancora presenti nell’interfaccia.';
+            set({
+                localPersistenceBlocked: true,
+                syncing: false,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: `Aggiornamento richiesto, ma il ricaricamento è bloccato: ${recoveryMessage}`,
+                compatibilityError: message,
+                syncGeneration: get().syncGeneration + 1,
+            });
+            return;
+        }
+
         invalidateSession();
         clearWorkoutTimer();
         if (timer) clearTimeout(timer);
