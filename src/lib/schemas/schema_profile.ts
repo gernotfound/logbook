@@ -7,9 +7,6 @@ import {
 } from './schema_utils';
 
 const PROFILE_STRING_MAX_LENGTH = 128;
-const boundedProfileString = () => safeOptionalString().transform(value =>
-    value !== undefined && value.length > PROFILE_STRING_MAX_LENGTH ? undefined : value
-);
 
 export const UserProfileSchema = z.preprocess((val: any) => {
     if (val && typeof val === 'object') {
@@ -21,19 +18,19 @@ export const UserProfileSchema = z.preprocess((val: any) => {
     }
     return val;
 }, z.object({
-    dob: boundedProfileString(),
-    height: boundedProfileString(),
-    gender: boundedProfileString(),
-    neck: boundedProfileString(),
-    waist: boundedProfileString(),
-    hip: boundedProfileString(),
-    hips: boundedProfileString(),
-    manualBf: boundedProfileString(),
-    chest: boundedProfileString(),
-    shoulders: boundedProfileString(),
-    biceps: boundedProfileString(),
-    thighs: boundedProfileString(),
-    calves: boundedProfileString(),
+    dob: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    height: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    gender: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    neck: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    waist: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    hip: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    hips: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    manualBf: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    chest: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    shoulders: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    biceps: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    thighs: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
+    calves: safeOptionalString(PROFILE_STRING_MAX_LENGTH),
 }).passthrough()).catch((ctx) => {
     reportZodSchemaFallback({
         schema: 'UserProfileSchema',
