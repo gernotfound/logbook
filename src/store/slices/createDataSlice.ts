@@ -7,7 +7,7 @@ import type { AppState } from '../useAppStore';
 import { getNutritionConflictFingerprint } from '../../lib/utils/object';
 
 import { updateStorageMarker, clearStorageMarker } from '../../lib/storageTelemetry';
-import { commitLocal, initializeLocal, clearNutritionConflict, readLocal } from '../../lib/sync/localRepository';
+import { commitLocal, initializeLocal, clearNutritionConflict, readLocal, StaleLocalRevisionError } from '../../lib/sync/localRepository';
 import { writeDeviceValue } from '../../lib/sync/deviceStorage';
 import { captureSession, isCurrentSession } from '../../lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../lib/sync/tabSnapshotCausality';
@@ -40,14 +40,20 @@ export const getInitialUserData = (): UserData | null => {
     }
 };
 
-export const saveUserDataToCache = async (data: UserData | null, base?: UserData): Promise<UserData | null> => {
+export const saveUserDataToCache = async (data: UserData | null, base?: UserData, expectedRevision?: number): Promise<UserData | null> => {
         const session = captureSession();
         if (data) {
             const current = await readLocal(session.owner);
+            if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
+                throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
+            }
             if (!current || !equal(UserDataSchema.parse(current.data), UserDataSchema.parse(data))) {
-                if (base) await commitLocal(session.owner, data, base);
-                else if (current) await commitLocal(session.owner, data, current.data);
-                else await initializeLocal(session.owner, data);
+                if (base) await commitLocal(session.owner, data, base, undefined, expectedRevision);
+                else if (current) await commitLocal(session.owner, data, current.data, undefined, expectedRevision);
+                else {
+                    if (expectedRevision !== undefined) throw new StaleLocalRevisionError(expectedRevision, null);
+                    await initializeLocal(session.owner, data);
+                }
             }
             const envelope = await readLocal(session.owner);
             if (!envelope) throw new Error('Copia locale non disponibile dopo il salvataggio.');

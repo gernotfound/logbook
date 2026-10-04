@@ -1,8 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const ui = vi.hoisted(() => ({ state: { userData: null as any, syncHealth: 'synced' }, confirm: vi.fn(), alert: vi.fn(), current: true }));
+const ui = vi.hoisted(() => ({
+    state: { userData: null as any, syncHealth: 'synced' },
+    durable: { data: null as any, revision: 7 },
+    confirm: vi.fn(),
+    alert: vi.fn(),
+    current: true,
+}));
 vi.mock('../../src/store/useAppStore', () => ({ useAppStore: { getState: () => ui.state } }));
 vi.mock('../../src/store/useDialogStore', () => ({ useDialogStore: { getState: () => ({ showConfirm: ui.confirm, showAlert: ui.alert }) } }));
 vi.mock('../../src/lib/sync/session', () => ({ captureSession: () => ({ owner: 'user:a', epoch: 0 }), isCurrentSession: () => ui.current }));
+vi.mock('../../src/lib/sync/localRepository', () => ({
+    readLocal: vi.fn(async () => ({ data: structuredClone(ui.durable.data), revision: ui.durable.revision })),
+}));
 vi.mock('../../src/lib/telemetryHub', () => ({ telemetryHub: { trackEvent: vi.fn(), trackError: vi.fn() } }));
 import { Exporter } from '../../src/lib/export';
 import { createBackup } from '../../src/lib/backup';
@@ -11,6 +20,7 @@ const payload = createBackup(UserDataSchema.parse({ profile: { height: '180' } }
 const file = { content: JSON.stringify(payload) } as unknown as File;
 beforeEach(() => {
     vi.resetAllMocks(); ui.current = true; ui.state = { userData: UserDataSchema.parse({ profile: { height: '170' } }), syncHealth: 'synced' };
+    ui.durable = { data: structuredClone(ui.state.userData), revision: 7 };
     ui.confirm.mockResolvedValue(true);
     vi.stubGlobal('FileReader', class {
         result = ''; onload = () => {}; onerror = () => {};

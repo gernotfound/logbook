@@ -331,15 +331,36 @@ function App() {
             I dati salvati su questo dispositivo sono stati conservati.
           </p>
           <p className="text-muted">
-            Riprova per completare in sicurezza la preparazione dell’account.
+            {isGuest
+              ? 'Scegli esplicitamente come gestire i dati locali prima di continuare.'
+              : 'Riprova per completare in sicurezza la preparazione dell’account.'}
           </p>
-          <button
-            type="button"
-            onClick={() => void retryGuestMigration()}
-            className="btn btn-primary"
-          >
-            Riprova
-          </button>
+          {isGuest ? (
+            <div style={{ display: 'grid', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => void retryGuestMigration('merge')}
+                className="btn btn-primary"
+              >
+                Trasferisci i progressi nell’account
+              </button>
+              <button
+                type="button"
+                onClick={() => void retryGuestMigration('skip')}
+                className="btn"
+              >
+                Non trasferire i progressi
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void retryGuestMigration()}
+              className="btn btn-primary"
+            >
+              Riprova
+            </button>
+          )}
         </div>
       </div>
     );

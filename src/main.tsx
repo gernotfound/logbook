@@ -31,6 +31,7 @@ import {
 import { telemetryHub } from './lib/telemetryHub';
 import { initSentry } from './lib/sentryClient';
 import { markTabSnapshotClean } from './lib/sync/tabSnapshotCausality';
+import { isUpdateRequiredError } from './lib/schemaEvolution';
 import { initOptionalGoogleAnalytics } from './lib/googleAnalytics';
 
 const STORAGE_UNAVAILABLE_MESSAGE = 'Archivio del dispositivo non disponibile. TheLogBook non può determinare in sicurezza a chi appartengono i dati locali. Riapri l’app o riprova dopo aver riabilitato lo storage del browser.';
@@ -141,8 +142,13 @@ export const initApp = async () => {
     });
 
     if (status === 'read_error') {
-      renderStorageUnavailable(rootElement);
-      return;
+      if (isUpdateRequiredError(readError)) {
+        window.__INITIAL_USER_DATA__ = null;
+        useAppStore.getState().setUpdateRequired(readError);
+      } else {
+        renderStorageUnavailable(rootElement);
+        return;
+      }
     }
 
     if (status === 'valid' && cached) {
@@ -167,7 +173,7 @@ export const initApp = async () => {
         // Update marker ONLY after complete successful read and schema validation
         if (bootstrapOwner) updateStorageMarker(Date.now(), undefined, bootstrapOwner);
       }
-    } else {
+    } else if (status !== 'read_error') {
       window.__INITIAL_USER_DATA__ = null;
 
       if (shouldReportAnomaly(status, marker)) {

@@ -46,6 +46,7 @@ describe('guest -> account V3 migration', () => {
     it('stages SemanticOperations, drains the authenticated journal, and keeps cloud + guest data', async () => {
         const { cloud, guest, merged } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem('guest_migration_policy', 'merge');
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload)
@@ -71,6 +72,7 @@ describe('guest -> account V3 migration', () => {
     it('keeps the merged authenticated envelope and pending journal if connectivity drops after hydration', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
+        localStorage.setItem('guest_migration_policy', 'merge');
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 

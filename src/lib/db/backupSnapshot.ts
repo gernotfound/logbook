@@ -11,6 +11,9 @@ import { withTimeout } from './db_core';
 import type { UserData } from '../../types';
 import type { BackupCoverage } from '../backup';
 
+const RECOVERY_DEVICE_KEYS = new Set(['workout', 'timer', 'draft_exercise', 'draft_routine']);
+const isRecoveryDeviceKey = (name: string) => RECOVERY_DEVICE_KEYS.has(name) || name.startsWith('draft:');
+
 export async function collectBackupSnapshot(fallback: UserData, includeCloud: boolean) {
     const session = captureSession();
     const assertCurrent = () => { if (!isCurrentSession(session)) throw new Error('Sessione cambiata durante il backup.'); };
@@ -85,8 +88,10 @@ export async function collectBackupSnapshot(fallback: UserData, includeCloud: bo
     for (let index = 0; index < localStorage.length; index++) {
         const key = localStorage.key(index);
         if (key?.startsWith(prefix)) {
+            const name = key.slice(prefix.length);
+            if (!isRecoveryDeviceKey(name)) continue;
             const value = localStorage.getItem(key);
-            if (value !== null) device[key.slice(prefix.length)] = value;
+            if (value !== null) device[name] = value;
         }
     }
     assertCurrent();

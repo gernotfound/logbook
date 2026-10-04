@@ -142,6 +142,33 @@ it('refuses future data or sync versions before producing a backup snapshot', as
     await expect(collectBackupSnapshot(base, true)).rejects.toThrow(FutureVersionError);
 });
 
+it('exports only allowlisted recovery device data and excludes account-deletion receipts', async () => {
+    const data = parse({ profile: { height: '171' } });
+    await initializeLocal('user:a', data);
+    const values = new Map<string, string>([
+        ['logbook:v2:user:a:workout', '{"id":"w1"}'],
+        ['logbook:v2:user:a:draft:measurement:2026-10-04', '{"weight":"80"}'],
+        ['logbook:v2:user:a:account-deletion', '{"receiptToken":"super-secret-receipt"}'],
+        ['logbook:v2:user:a:telemetry_queue', '[{"event":"x"}]'],
+        ['logbook:v2:user:a:storage_marker', '{"timestamp":1}'],
+    ]);
+    vi.stubGlobal('localStorage', {
+        get length() { return values.size; },
+        key: (index: number) => [...values.keys()][index] ?? null,
+        getItem: (key: string) => values.get(key) ?? null,
+    });
+
+    const backup = await collectBackupSnapshot(data, false);
+    expect(backup.recovery.device).toEqual({
+        workout: '{"id":"w1"}',
+        'draft:measurement:2026-10-04': '{"weight":"80"}',
+    });
+    expect(JSON.stringify(backup.recovery)).not.toContain('super-secret-receipt');
+    expect(backup.recovery.device).not.toHaveProperty('account-deletion');
+    expect(backup.recovery.device).not.toHaveProperty('telemetry_queue');
+    expect(backup.recovery.device).not.toHaveProperty('storage_marker');
+});
+
 it('never labels a failed cloud scan complete; explicit device export still works', async () => {
     const data = parse({ profile: { height: '171' } });
     await initializeLocal('user:a', data);

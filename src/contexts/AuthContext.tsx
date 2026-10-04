@@ -5,7 +5,7 @@ import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
 import { UserDataSchema } from '../lib/schema';
-import { AuthContext } from './AuthContextDef';
+import { AuthContext, type GuestMigrationPolicy } from './AuthContextDef';
 import { useDialogStore } from '../store/useDialogStore';
 import { getCachedCatalog, getInMemoryCatalog, isCatalogInMemory } from '../lib/catalog/catalogService';
 import { resolveEffectiveExercises, resolveEffectiveFoods } from '../lib/catalog/deltaResolver';
@@ -19,6 +19,7 @@ import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../lib/db/db_core';
 import {
     readBrowserValue,
+    readBrowserValueStrict,
     removeBrowserValue,
     tryRemoveBrowserValue,
     writeBrowserValue,
@@ -40,6 +41,12 @@ function isStoredGuest(): boolean {
 
 function readGuestMigrationSyncRecovery(): string | null {
     return readBrowserValue(GUEST_MIGRATION_SYNC_RECOVERY_KEY);
+}
+
+function readGuestMigrationPolicyStrict(): GuestMigrationPolicy {
+    const value = readBrowserValueStrict(GUEST_MIGRATION_POLICY_KEY);
+    if (value === 'merge' || value === 'skip') return value;
+    throw new Error('Scelta di trasferimento guest assente o non valida.');
 }
 
 function markGuestMigrationSyncRecovery(uid: string): void {
@@ -280,7 +287,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     draftRegistry.flushAll();
 
                     const guestData = migrationDataRef.current || useAppStore.getState().userData;
-                    const policy = readBrowserValue(GUEST_MIGRATION_POLICY_KEY) === 'skip' ? 'skip' : 'merge';
+                    let policy: GuestMigrationPolicy;
+                    try {
+                        policy = readGuestMigrationPolicyStrict();
+                    } catch (error) {
+                        if (!isCurrentRun()) return;
+                        console.error('Intento migrazione guest non determinabile:', error);
+                        setGuestMigrationStatus('failed');
+                        setSaveError('Non è possibile determinare la scelta di trasferimento. Scegli di nuovo come gestire i dati locali.');
+                        return;
+                    }
 
                     try {
                         const migrationResult = await migrateGuestAccount({
@@ -495,14 +511,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }, [setSaveError, startGoogleRedirect]);
 
-    const retryGuestMigration = useCallback(async () => {
+    const retryGuestMigration = useCallback(async (policy?: GuestMigrationPolicy) => {
         setSaveError(null);
 
         if (isStoredGuest()) {
             try {
+                if (policy) writeBrowserValue(GUEST_MIGRATION_POLICY_KEY, policy);
+                else readGuestMigrationPolicyStrict();
                 await safeHardReload();
             } catch (error) {
-                setSaveError(error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.');
+                setGuestMigrationStatus('failed');
+                setSaveError(
+                    error instanceof Error && error.message.includes('Scelta di trasferimento')
+                        ? 'Scegli esplicitamente se trasferire o non trasferire i dati locali.'
+                        : error instanceof Error ? error.message : 'Ricaricamento non sicuro. Riprova.'
+                );
             }
             return;
         }
