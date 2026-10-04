@@ -157,7 +157,7 @@ if (!hostingWorkflow.includes('VITE_FIREBASE_AUTH_DOMAIN') || !hostingWorkflow.i
   failures.push('Firebase Hosting production workflow must enforce the Firebase Hosting origin as authDomain');
 }
 
-if (!firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
+if (!firestoreWorkflow.includes('    branches:\n      - main') || !firestoreWorkflow.includes("github.event.workflow_run.event == 'push'") || !firestoreWorkflow.includes("github.event.workflow_run.head_branch == 'main'")) {
   failures.push('Firestore Production workflow must only activate after the canonical push-to-main verification run');
 }
 if (!firestoreWorkflow.includes('git ls-remote --exit-code origin refs/heads/main') || !firestoreWorkflow.includes('Refusing to deploy a stale or mismatched main SHA')) {
