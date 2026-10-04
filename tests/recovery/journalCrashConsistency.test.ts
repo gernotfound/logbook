@@ -213,6 +213,59 @@ describe('M3 journal crash consistency', () => {
         expect(currentCloudData().profile.height).toBe('171');
     });
 
+    it('requires a durable exact batch when the remote commit succeeds but its response is lost', async () => {
+        await commitLocal(owner, data(171), data(170));
+        remote.apply.mockImplementationOnce(async (_db: unknown, _uid: string, ops: SemanticOperation[]) => {
+            const outcome = applySemanticOperations(cloudDocuments, ops, cloudSyncMeta);
+            cloudDocuments = outcome.documents;
+            cloudSyncMeta = outcome.syncMetas;
+            throw Object.assign(new Error('Injected lost remote response'), { code: 'unavailable' });
+        });
+
+        const first = await replicateJournal();
+
+        expect(first.status).toBe('local-pending');
+        const committedCloud = cloudSnapshot();
+        expect((await readLocal(owner))?.pending.length).toBeGreaterThan(0);
+
+        installReplaySafeRemote();
+        invalidateSession();
+        const retry = await replicateJournal();
+
+        expect(retry).toMatchObject({ ok: true, status: 'synced' });
+        expect(cloudSnapshot()).toBe(committedCloud);
+        expect((await readLocal(owner))?.pending).toEqual([]);
+    });
+
+    it('hard-fails a lost remote response when the delivered batch is no longer durable', async () => {
+        await commitLocal(owner, data(171), data(170));
+        remote.apply.mockImplementationOnce(async (_db: unknown, _uid: string, ops: SemanticOperation[]) => {
+            const outcome = applySemanticOperations(cloudDocuments, ops, cloudSyncMeta);
+            cloudDocuments = outcome.documents;
+            cloudSyncMeta = outcome.syncMetas;
+            await clear();
+            throw Object.assign(new Error('Injected lost remote response'), { code: 'unavailable' });
+        });
+
+        const result = await replicateJournal();
+
+        expect(result.status).toBe('failed');
+        expect(await readLocal(owner)).toBeUndefined();
+        expect(currentCloudData().profile.height).toBe('171');
+    });
+
+    it('fails closed when a current-version envelope loses its journal field', async () => {
+        await commitLocal(owner, data(171), data(170));
+        const raw = await get<any>('logbook:v2:user:a');
+        delete raw.pending;
+        await set('logbook:v2:user:a', raw);
+
+        const result = await replicateJournal();
+
+        expect(result.status).toBe('failed');
+        expect((await get<any>('logbook:v2:user:a')).pending).toBeUndefined();
+    });
+
     it('hard-fails a lost acknowledgement when the retained operation payload changed', async () => {
         await commitLocal(owner, data(171), data(170));
         installReplaySafeRemote(async () => {
