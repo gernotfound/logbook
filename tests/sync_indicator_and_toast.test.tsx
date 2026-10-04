@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, act } from '@testing-library/react';
 import App from '../src/App';
+import ReloadPrompt from '../src/components/UI/ReloadPrompt';
 import { renderWithProviders, defaultMockUserData } from './setup';
 import { useAppStore } from '../src/store/useAppStore';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
@@ -52,7 +53,7 @@ describe('LogBook Background Sync & Error Toast 4-Tier Test Suite', () => {
 
   // Helper to render App and await mount settlement
   const renderSettledApp = async (options = {}) => {
-    const result = renderWithProviders(<App />, options);
+    const result = renderWithProviders(<><ReloadPrompt /><App /></>, options);
     await act(async () => {
       await Promise.resolve();
     });
