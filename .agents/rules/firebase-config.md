@@ -132,7 +132,7 @@ Le collection `users/{uid}/telemetry_errors`, `telemetry_events` e `telemetry_an
 
 ### Metadati `_sync`
 
-Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione: chiavi ammesse (`protocolVersion`, `clock`, `fields`) e tipo map per clock/fields. Durante il rolling cutover Sync Protocol 1→2 accettano entrambe le versioni, ma `preservesSyncProtocol()` vieta il downgrade di un documento già portato a 2. La validazione completa di Vector Clock e `FieldStamp` resta nel parser TypeScript; non duplicare l'intero parser nelle Security Rules.
+Le Rules verificano gli invarianti top-level del protocollo che appartengono al boundary di autorizzazione. Prima del cutover per-account accettano documenti legacy Protocol 1/2. Protocol 3 aggiunge `_sync.writer` (`slot`, `replicaId`, `generation`, `seq`) e `users/{uid}/sync_control/state`: una write corrente è ammessa solo se writer e registro attivo coincidono e l'avanzamento `lastSeq` avviene atomicamente. Dopo la creazione del registro, Protocol 1/2 non può più scrivere per quell'account e le delete fisiche dei documenti mensili sono negate. `request.time` è la prova autorevole della lease; la validazione completa di Vector Clock/`FieldStamp` e la completezza del full checkpoint restano nel protocollo TypeScript e nei relativi test.
 
 ### Sintomo di Rules/Auth/App Check
 
