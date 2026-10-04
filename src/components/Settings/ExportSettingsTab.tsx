@@ -48,7 +48,7 @@ export function ExportSettingsTab(props: ExportSettingsTabProps) {
             <div className="settings-detail-card">
                 <h2><FileSpreadsheet size={20} aria-hidden="true" /> Esportazione CSV</h2>
                 <p className="settings-help">Crea file tabellari dai dati attualmente caricati su questo dispositivo. Il CSV è pensato per analisi in un foglio di calcolo e non sostituisce il Backup JSON completo del cloud.</p>
-                <button type="button" className="btn settings-full" onClick={onExportCSV}><FileSpreadsheet size={18} aria-hidden="true" /> Esporta CSV (dati caricati)</button>
+                <button type="button" className="btn settings-full" onClick={onExportCSV}><FileSpreadsheet size={18} aria-hidden="true" /> Esporta dati (CSV)</button>
             </div>
         </section>
     );
