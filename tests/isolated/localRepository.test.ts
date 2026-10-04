@@ -221,7 +221,7 @@ describe('durable owner-scoped journal', () => {
             clock: { [actor]: 1 },
             fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
         };
-        await acknowledgeThrough('a', 1, newer, base, [], { '': meta2 });
+        await acknowledgeThrough('a', 1, newer, [], { '': meta2 });
 
         const stale = data(170);
         const staleDocuments = new Map<string, any>([
