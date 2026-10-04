@@ -116,7 +116,7 @@ describe('Schema Evolution registry', () => {
         expect(() => assertCurrentVersion(1, 2, 'schema')).toThrow(LegacyVersionError);
     });
 
-    it('migrates protocol-1 cloud metadata to protocol 2 without changing causal payload', () => {
+    it('migrates protocol-1 cloud metadata to the current protocol without changing causal payload', () => {
         const raw = {
             profile: { name: 'legacy' },
             _sync: {
@@ -169,7 +169,7 @@ describe('Schema Evolution registry', () => {
         });
     });
 
-    it('migrates protocol-1 local and raw backup recovery metadata without bumping their containers', () => {
+    it('migrates protocol-1 local metadata through envelope V5 while keeping backup V3', () => {
         const syncMeta = {
             protocolVersion: 1,
             clock: { A: 1 },
@@ -192,7 +192,8 @@ describe('Schema Evolution registry', () => {
         };
 
         const migratedEnvelope = normalizeLocalEnvelopeRecord(envelope);
-        expect(migratedEnvelope.version).toBe(4);
+        expect(migratedEnvelope.version).toBe(CURRENT_LOCAL_ENVELOPE);
+        expect(migratedEnvelope.replica).toBeNull();
         expect(migratedEnvelope.syncProtocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
         expect((migratedEnvelope.syncMetaByDocument as any)[''].protocolVersion).toBe(CURRENT_SYNC_PROTOCOL);
         expect(envelope.syncProtocolVersion).toBe(1);

@@ -8,7 +8,7 @@ import {
 import type { DocumentData } from '../../src/lib/sync/documentProjection';
 
 const tombstonedProfileMeta = (): SyncMeta => ({
-    protocolVersion: 2,
+    protocolVersion: 3,
     clock: { A: 2, B: 1, C: 1, ZERO: 0 },
     fields: {
         profile: { actorId: 'A', seq: 2, clock: { A: 2, B: 1, ZERO: 0 }, deleted: true },
@@ -61,7 +61,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('does not compact a descendant when a hidden candidate is not covered by the ancestor delete barrier', () => {
         const meta: SyncMeta = {
-            protocolVersion: 2,
+            protocolVersion: 3,
             clock: { A: 2, B: 1 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true, deleteClock: { A: 2 } },
@@ -88,7 +88,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('preserves the descendant tombstone identity when an ancestor only observes its context indirectly', () => {
         const initial: SyncMeta = {
-            protocolVersion: 2,
+            protocolVersion: 3,
             clock: { B: 1, C: 1 },
             fields: {
                 profile: {
@@ -145,9 +145,9 @@ describe('M4 causal metadata compaction', () => {
         expect(splitMeta).toEqual(batchedMeta);
     });
 
-    it('never retires positive actor-frontier coordinates or terminal tombstones', () => {
+    it('keeps positive actor-frontier coordinates and terminal tombstones without a stable-frontier proof', () => {
         const meta: SyncMeta = {
-            protocolVersion: 2,
+            protocolVersion: 3,
             clock: { A: 9, B: 7, C: 3 },
             fields: {
                 'history/old': { actorId: 'A', seq: 9, clock: { A: 9, B: 7 }, deleted: true },
@@ -159,6 +159,62 @@ describe('M4 causal metadata compaction', () => {
         expect(compacted.fields['history/old']).toEqual(meta.fields['history/old']);
     });
 
+    it('retires a terminal tombstone only after the stable frontier covers its full causal state', () => {
+        const meta: SyncMeta = {
+            protocolVersion: 3,
+            clock: { s00: 4, s01: 2 },
+            fields: {
+                'profile/name': {
+                    actorId: 's00',
+                    seq: 4,
+                    clock: { s00: 4, s01: 2 },
+                    deleted: true,
+                    deleteClock: { s00: 4, s01: 2 },
+                },
+            },
+        };
+
+        expect(compactSyncMeta(meta, { s00: 4, s01: 1 }).fields['profile/name']).toBeDefined();
+        expect(compactSyncMeta(meta, { s00: 4, s01: 2 }).fields['profile/name']).toBeUndefined();
+    });
+
+    it('retires a covered historical delete barrier after recreation but keeps uncovered hidden candidates', () => {
+        const recreated: SyncMeta = {
+            protocolVersion: 3,
+            clock: { s00: 4, s01: 2 },
+            fields: {
+                profile: {
+                    actorId: 's00',
+                    seq: 4,
+                    clock: { s00: 4, s01: 2 },
+                    deleteClock: { s01: 2 },
+                },
+            },
+        };
+        expect(compactSyncMeta(recreated, { s00: 4, s01: 2 }).fields.profile.deleteClock).toBeUndefined();
+
+        const hidden: SyncMeta = {
+            protocolVersion: 3,
+            clock: { s00: 4, s01: 2, s02: 1 },
+            fields: {
+                profile: {
+                    actorId: 's00',
+                    seq: 4,
+                    clock: { s00: 4, s01: 2 },
+                    deleted: true,
+                    deleteClock: { s01: 2 },
+                    candidates: [{
+                        actorId: 's02',
+                        seq: 1,
+                        clock: { s02: 1 },
+                        value: { name: 'late' },
+                    }],
+                },
+            },
+        };
+        expect(compactSyncMeta(hidden, { s00: 4, s01: 2 }).fields.profile).toBeDefined();
+    });
+
     it('is deterministic and idempotent', () => {
         const once = compactSyncMeta(tombstonedProfileMeta());
         const twice = compactSyncMeta(once);
@@ -168,7 +224,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('keeps a blocking ancestor stamp immutable while the document frontier observes the rejected child', () => {
         const meta: SyncMeta = {
-            protocolVersion: 2,
+            protocolVersion: 3,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
@@ -198,7 +254,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('preserves future merge results across stale, concurrent and causally newer writes', () => {
         const original: SyncMeta = {
-            protocolVersion: 2,
+            protocolVersion: 3,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },
@@ -235,7 +291,7 @@ describe('M4 causal metadata compaction', () => {
 
     it('preserves equivalence across a multi-step out-of-order descendant sequence', () => {
         const original: SyncMeta = {
-            protocolVersion: 2,
+            protocolVersion: 3,
             clock: { A: 2 },
             fields: {
                 profile: { actorId: 'A', seq: 2, clock: { A: 2 }, deleted: true },

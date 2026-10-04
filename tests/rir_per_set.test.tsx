@@ -86,8 +86,8 @@ describe('RIR reale per singola serie', () => {
 
     it('non richiede bump delle versioni persistite per il campo opzionale retrocompatibile', () => {
         expect(CURRENT_DATA_SCHEMA).toBe(1);
-        expect(CURRENT_SYNC_PROTOCOL).toBe(2);
-        expect(CURRENT_LOCAL_ENVELOPE).toBe(4);
+        expect(CURRENT_SYNC_PROTOCOL).toBe(3);
+        expect(CURRENT_LOCAL_ENVELOPE).toBe(5);
         expect(CURRENT_BACKUP_SCHEMA).toBe(3);
     });
 

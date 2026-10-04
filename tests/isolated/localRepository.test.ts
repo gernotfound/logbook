@@ -29,7 +29,7 @@ describe('durable owner-scoped journal', () => {
     });
 
     it('rejects pre-M1 and future local envelopes without rewriting their bytes', async () => {
-        const legacy = { owner: 'user:a', version: CURRENT_LOCAL_ENVELOPE - 1 };
+        const legacy = { owner: 'user:a', version: 3 };
         await set('logbook:v2:user:a', legacy);
         await expect(readLocal('a')).rejects.toThrow(LegacyVersionError);
         expect(await get('logbook:v2:user:a')).toEqual(legacy);
