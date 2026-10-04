@@ -80,7 +80,7 @@ describe('M4 causal metadata compaction', () => {
         expect(compactSyncMeta(tombstonedProfileMeta())).toEqual(once);
     });
 
-    it('makes a blocking ancestor absorb the causal context of a rejected child contender', () => {
+    it('keeps a blocking ancestor stamp immutable while the document frontier observes the rejected child', () => {
         const meta: SyncMeta = {
             protocolVersion: 2,
             clock: { A: 2 },
@@ -101,10 +101,12 @@ describe('M4 causal metadata compaction', () => {
 
         const outcome = applyOne(meta, concurrentUpdate);
         expect(outcome.documents.get('')).toEqual({});
-        expect(outcome.syncMetas[''].fields.profile.clock).toEqual({ A: 2, B: 1 });
+        expect(outcome.syncMetas[''].fields.profile.clock).toEqual({ A: 2 });
+        expect(outcome.syncMetas[''].clock).toEqual({ A: 2, B: 1 });
 
         const compacted = compactSyncMeta(outcome.syncMetas['']);
-        expect(compacted.fields.profile.clock).toEqual({ A: 2, B: 1 });
+        expect(compacted.fields.profile.clock).toEqual({ A: 2 });
+        expect(compacted.clock).toEqual({ A: 2, B: 1 });
         expect(compacted.fields['profile/name']).toBeUndefined();
     });
 
