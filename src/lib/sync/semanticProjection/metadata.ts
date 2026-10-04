@@ -45,7 +45,7 @@ function parseFieldCandidate(raw: unknown, documentClock: VectorClock, deleteClo
     assertDotCovered(clock, raw.actorId, seq, 'FieldCandidate');
     if (!coversVectorClock(documentClock, clock)) throw new Error('Document clock does not cover FieldCandidate');
     if (deleteClock && !coversVectorClock(clock, deleteClock)) throw new Error('FieldCandidate does not cover delete barrier');
-    if (!Object.hasOwn(raw, 'value')) throw new Error('Invalid FieldCandidate value');
+    if (!Object.hasOwn(raw, 'value') || raw.value === undefined) throw new Error('Invalid FieldCandidate value');
     let legacyClock: VectorClock | undefined;
     if ('legacyClock' in raw) {
         legacyClock = parseVectorClock(raw.legacyClock, 'legacy candidate clock');
@@ -156,7 +156,7 @@ export function parseSemanticOperation(raw: unknown): SemanticOperation {
     if (typeof raw.docPath !== 'string') throw new Error('Invalid SemanticOperation docPath');
     const path = parsePath(raw.path, 'SemanticOperation path');
     if (typeof raw.isDelete !== 'boolean') throw new Error('Invalid SemanticOperation delete flag');
-    if (!raw.isDelete && !Object.hasOwn(raw, 'value')) throw new Error('Invalid SemanticOperation value');
+    if (!raw.isDelete && (!Object.hasOwn(raw, 'value') || raw.value === undefined)) throw new Error('Invalid SemanticOperation value');
     if (typeof raw.actorId !== 'string' || !raw.actorId.trim()) throw new Error('Invalid SemanticOperation actorId');
     const seq = parseSafeSeq(raw.seq, 'SemanticOperation');
     const clock = parseVectorClock(raw.clock, 'SemanticOperation clock');
