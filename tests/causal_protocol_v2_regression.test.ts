@@ -143,6 +143,52 @@ describe('Sync Protocol 2 causal convergence regressions', () => {
         expect(outcomes[0].syncMetas[''].clock).toEqual({ A: 1, B: 1, C: 1 });
     });
 
+    it('recovers a hidden descendant that observed a late-delivered ancestor', () => {
+        const path = 'nutrition_months/2026-09';
+        const date = '2026-09-15';
+        const base = new Map<string, DocumentData>([[path, {
+            [date]: { date, weight: 70, meals: [] },
+        }]]);
+        const ancestor: SemanticOperation = {
+            docPath: path,
+            path: [date],
+            value: { date, weight: 75, meals: [] },
+            isDelete: false,
+            actorId: 'P',
+            seq: 1,
+            clock: { P: 1 },
+        };
+        const visibleConcurrent: SemanticOperation = {
+            docPath: path,
+            path: [date, 'weight'],
+            value: 90,
+            isDelete: false,
+            actorId: 'B',
+            seq: 3,
+            clock: { B: 3 },
+        };
+        const hiddenCausalDescendant: SemanticOperation = {
+            docPath: path,
+            path: [date, 'weight'],
+            value: 82,
+            isDelete: false,
+            actorId: 'A',
+            seq: 1,
+            clock: { P: 1, A: 1 },
+        };
+
+        const descendantsFirst = deliver(base, [ancestor, visibleConcurrent, hiddenCausalDescendant], [[1, 2], [0]]);
+        const ancestorFirst = deliver(base, [ancestor, visibleConcurrent, hiddenCausalDescendant], [[0], [1, 2]]);
+
+        expect(snapshot(descendantsFirst)).toEqual(snapshot(ancestorFirst));
+        expect((descendantsFirst.documents.get(path)?.[date] as any).weight).toBe(82);
+        expect(descendantsFirst.syncMetas[path].fields[`${date}/weight`]).toMatchObject({
+            actorId: 'A',
+            seq: 1,
+            clock: { P: 1, A: 1 },
+        });
+    });
+
     it('observes a stale active-workout operation only at document frontier, never inside the current field stamp', () => {
         const base = new Map<string, DocumentData>([['', {
             activeWorkout: { id: 's2', date: '2026-09-14', moodRating: 0, exercises: [] },
