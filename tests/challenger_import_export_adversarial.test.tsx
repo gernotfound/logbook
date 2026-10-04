@@ -3,12 +3,17 @@ import { Exporter } from '../src/lib/export';
 import { createBackup } from '../src/lib/backup';
 import { useAppStore } from '../src/store/useAppStore';
 import { useDialogStore } from '../src/store/useDialogStore';
+import { readLocal } from '../src/lib/sync/localRepository';
 import type { UserData } from '../src/types';
 
 vi.mock('../src/store/useAppStore', () => ({
     useAppStore: {
         getState: vi.fn(),
     }
+}));
+
+vi.mock('../src/lib/sync/localRepository', () => ({
+    readLocal: vi.fn(),
 }));
 
 vi.mock('../src/lib/sync/session', async () => {
@@ -42,6 +47,7 @@ describe('Adversarial Import/Export Logic', () => {
             trainingCycles: []
         };
         (useAppStore.getState as any).mockReturnValue({ userData: mockUserData });
+        vi.mocked(readLocal).mockResolvedValue({ data: mockUserData, revision: 7 } as any);
         vi.spyOn(useDialogStore.getState(), 'showAlert').mockClear();
     });
 
@@ -60,6 +66,7 @@ describe('Adversarial Import/Export Logic', () => {
 
         await Exporter.importFromJson(file, { uid: 'my_user_id' }, saveUserDataMock);
         expect(saveUserDataMock).toHaveBeenCalled();
+        expect(saveUserDataMock.mock.calls[0][1]).toEqual({ expectedRevision: 7 });
         const updater = saveUserDataMock.mock.calls[0][0];
         const finalData = typeof updater === 'function' ? updater(mockUserData) : updater;
         const ex1 = finalData.library.find((ex: any) => ex.id === 'ex1');
@@ -67,6 +74,25 @@ describe('Adversarial Import/Export Logic', () => {
         expect(ex1.name).toBe('Original');
         expect(ex1.setsCount).toBe(3);
         expect(ex2.name).toBe('New Ex');
+    });
+
+    it('invalidates the preview when the durable IndexedDB revision changes cross-tab', async () => {
+        const file = new File([JSON.stringify(sharePayload({
+            library: [{ id: 'ex2', name: 'New Ex', setsCount: 3, sets: [] }],
+        }))], 'test.json', { type: 'application/json' });
+
+        vi.mocked(readLocal)
+            .mockResolvedValueOnce({ data: mockUserData, revision: 7 } as any)
+            .mockResolvedValueOnce({
+                data: { ...mockUserData, profile: { dob: '1991-01-01' } },
+                revision: 8,
+            } as any);
+
+        await expect(
+            Exporter.importFromJson(file, { uid: 'my_user_id' }, saveUserDataMock),
+        ).rejects.toThrow('dati sono cambiati durante l’anteprima');
+
+        expect(saveUserDataMock).not.toHaveBeenCalled();
     });
 
     it('keeps schema sanitization behavior inside a current-version backup', async () => {
