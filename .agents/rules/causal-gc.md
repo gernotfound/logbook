@@ -48,7 +48,7 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 
 1. `T.deleted === true` oppure `T.deleteClock` è presente dopo una recreation;
 2. la chiave di `D` è realmente discendente della chiave di `T` (`T + '/'` come prefisso di segmenti già URI-encoded);
-3. la barriera `T.deleteClock` (o il clock della tombstone legacy quando necessario) copre completamente `D.clock`.
+3. la barriera `T.deleteClock` (o il clock della tombstone legacy quando necessario) copre completamente `D.clock` **e** i clock di ogni `D.candidates`; un contender nascosto non coperto impedisce la compaction dell'intero descendant.
 
 **MUST:** `T` stessa e la sua barriera delete restano persistite.
 
