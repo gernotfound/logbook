@@ -121,6 +121,41 @@ function causalChain(rng: SeededRandom, seed: number): SemanticOperation[] {
     return operations;
 }
 
+function mixedCausalDag(rng: SeededRandom, seed: number): SemanticOperation[] {
+    const actors = rng.shuffle(ACTORS).slice(0, 3);
+    const [ancestorActor, descendantActor, concurrentActor] = actors;
+    const path = [...rng.pick(PROFILE_PATHS)];
+    const ancestor: SemanticOperation = {
+        docPath: '',
+        path,
+        value: `${seed}:ancestor:${ancestorActor}`,
+        isDelete: false,
+        actorId: ancestorActor,
+        seq: 1,
+        clock: { [ancestorActor]: 1 },
+    };
+    const descendant: SemanticOperation = {
+        docPath: '',
+        path,
+        value: `${seed}:descendant:${descendantActor}`,
+        isDelete: false,
+        actorId: descendantActor,
+        seq: 1,
+        clock: { [ancestorActor]: 1, [descendantActor]: 1 },
+    };
+    const concurrent: SemanticOperation = {
+        docPath: '',
+        path,
+        ...(rng.bool(1, 4) ? {} : { value: `${seed}:concurrent:${concurrentActor}` }),
+        isDelete: rng.bool(1, 4),
+        actorId: concurrentActor,
+        seq: 1,
+        clock: { [concurrentActor]: 1 },
+    };
+    if (!concurrent.isDelete && concurrent.value === undefined) concurrent.value = `${seed}:concurrent:${concurrentActor}`;
+    return [ancestor, descendant, concurrent];
+}
+
 function randomClock(rng: SeededRandom): VectorClock {
     const clock: VectorClock = {};
     for (const actor of ACTORS) {
@@ -191,6 +226,16 @@ describe('M2 distributed property fuzz', () => {
                 distributed = deliverPartitioned(distributed, roundOperations, rng);
                 expect(snapshot(distributed)).toEqual(snapshot(canonical));
             }
+        });
+    });
+
+    it('converges for mixed causal DAGs where one contender descends from another and a third is concurrent', () => {
+        runProperty('mixed causal DAG convergence', 320, (rng, seed) => {
+            const operations = mixedCausalDag(rng, seed);
+            const canonical = applySemanticOperations(baseDocuments(), operations);
+            const distributed = deliverPartitioned(initialState(), operations, rng);
+
+            expect(snapshot(distributed)).toEqual(snapshot(canonical));
         });
     });
 
