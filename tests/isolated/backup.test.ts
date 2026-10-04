@@ -43,6 +43,11 @@ describe('versioned backup and non-mutating restore', () => {
     it('rejects unknown future backup/data/sync dimensions', () => {
         const base = createBackup(parse({}), 'guest') as any;
         expect(() => decodeImport({ ...base, version: CURRENT_BACKUP_SCHEMA + 1 }, 'guest')).toThrow(FutureVersionError);
+        expect(() => decodeImport({
+            ...base,
+            version: CURRENT_BACKUP_SCHEMA + 1,
+            format: 'logbook-backup-vNext',
+        }, 'guest')).toThrow(FutureVersionError);
         expect(() => decodeImport({ ...base, dataSchemaVersion: CURRENT_DATA_SCHEMA + 1 }, 'guest')).toThrow(FutureVersionError);
         expect(() => decodeImport({ ...base, syncProtocolVersion: CURRENT_SYNC_PROTOCOL + 1 }, 'guest')).toThrow(FutureVersionError);
     });
