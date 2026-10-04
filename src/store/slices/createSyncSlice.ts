@@ -28,7 +28,7 @@ export interface SyncSlice {
     setSyncing: (value: boolean) => void;
     setSaveError: (value: string | null) => void;
     setUpdateRequired: (error: unknown) => void;
-    saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null)) => Promise<SyncResult>;
+    saveUserData: (data: UserData | null | ((previous: UserData | null) => UserData | null), options?: { expectedRevision?: number }) => Promise<SyncResult>;
     updateUserData: (updater: (previous: UserData) => UserData) => Promise<SyncResult>;
     dispatchDomainOperation: (operation: DomainOperationBatch) => Promise<SyncResult>;
     submitLegalConsent: (consent: NonNullable<UserData['legalConsent']>) => Promise<void>;
@@ -203,7 +203,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
         setSyncing: value => set({ syncing: value }),
         setSaveError: value => set({ saveError: value }),
         setUpdateRequired: enterUpdateRequired,
-        saveUserData: async dataOrUpdater => {
+        saveUserData: async (dataOrUpdater, options) => {
             if (get().compatibilityStatus === 'update-required') {
                 return updateRequiredResult(get().compatibilityError ?? 'Aggiornamento richiesto.');
             }
@@ -222,8 +222,11 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncSlice> = (set, 
             if (userData) markTabSnapshotDirty(session, userData);
             set({ userData: data, dataOwner: session.owner, syncing: true, syncHealth: 'saving', syncPresentation: 'normal', saveError: null, syncGeneration: generation });
             // Snapshot writes remain for bulk boundaries (hydration/import/guest merge), not ordinary domain actions.
-            const cache = saveUserDataToCache(data, userData ?? UserDataSchema.parse({}) as unknown as UserData)
-                .then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
+            const cache = saveUserDataToCache(
+                data,
+                userData ?? UserDataSchema.parse({}) as unknown as UserData,
+                options?.expectedRevision,
+            ).then<CacheResult>(() => ({ ok: true })).catch<CacheResult>(error => ({ ok: false, error }));
             return enqueue(session, generation, cache);
         },
         updateUserData: updater => {
