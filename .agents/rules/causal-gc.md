@@ -50,9 +50,9 @@ Per path gerarchici, gli stamp antenati sono il boundary canonico di riconciliaz
 2. la chiave di `D` è realmente discendente della chiave di `T` (`T + '/'` come prefisso di segmenti già URI-encoded);
 3. la barriera `T.deleteClock` (o il clock della tombstone legacy quando necessario) copre completamente `D.clock` **e** i clock di ogni `D.candidates`; un contender nascosto non coperto impedisce la compaction dell'intero descendant.
 
-**MUST:** `T` stessa e la sua barriera delete restano persistite.
+**MUST:** senza una `stableFrontier` che copra integralmente lo stamp, `T` stessa e la sua barriera delete restano persistite. Con Protocol 3 possono essere ritirate solo secondo la prova stable-frontier descritta sotto.
 
-**MUST:** uno stamp concorrente/non osservato che è ancora semanticamente visibile dopo l'arbitration Protocol 2 resta persistito; la compaction non può eliminarlo usando il solo tie-break.
+**MUST:** uno stamp concorrente/non osservato che è ancora semanticamente visibile dopo l'arbitration causale resta persistito; la compaction non può eliminarlo usando il solo tie-break.
 
 **MUST:** sibling e path non discendenti restano invariati.
 
@@ -66,23 +66,43 @@ La compaction avviene dopo il semantic merge e prima della write Firestore. Il `
 
 Una tombstone terminale conta come `fields` persistito: un documento business vuoto non deve essere eliminato da Firestore se la sua barriera causale è ancora necessaria.
 
-## Limite esplicito di M4
+## Sync Protocol 3: stable frontier e replica retirement
 
-Il protocollo corrente non dispone di:
+Protocol 3 chiude il limite storico di M4 con un registro per-account in `users/{uid}/sync_control/state`:
 
-- replica membership autorevole;
-- stable frontier globale;
-- actor retirement;
-- fencing di una replica tornata online dopo il retirement.
+- massimo 16 slot actor `s00`…`s15`;
+- `replicaId` e `generation` identificano l'incarnazione corrente dello slot;
+- `lastSeq` è monotona e non riparte da zero quando uno slot viene riusato;
+- `checkpointClock` deriva da una scansione cloud `all` completa;
+- checkpoint ordinario almeno ogni 30 giorni;
+- lease massima 360 giorni;
+- una generation retired/riusata viene fenced e non può più pubblicare il vecchio journal.
 
-Di conseguenza M4 **non** pretende di eliminare tutte le tombstone né tutte le coordinate actor. Un futuro retirement della tombstone terminale richiede una modifica di protocollo che impedisca a una replica stale di reintrodurre operazioni pre-GC o che la costringa a rebase sicuro.
+La `stableFrontier` è il minimo componente-per-componente dei `checkpointClock` di tutte e sole le repliche `active`. Una coordinata assente vale zero e blocca il GC dello stato che la richiede.
 
+**MUST:** una tombstone terminale può essere eliminata solo quando la stable frontier copre winner clock, `deleteClock`, `legacyClock` e tutti i candidate clock dello stamp.
+
+**MUST:** una `deleteClock` storica dopo recreation può essere rimossa solo con la stessa prova.
+
+**MUST:** wall clock/lease decide soltanto membership e fencing. Non sostituisce la copertura causale.
+
+**MUST:** il riuso di uno slot incrementa `generation` e mantiene la sequence almeno al massimo già osservato per quella coordinata.
+
+**MUST:** business write, `_sync.writer` e avanzamento `lastSeq` sono atomici nella stessa transazione Firestore.
+
+Le Security Rules rendono autorevoli membership, generation e lease tramite `request.time`. Il contenuto del checkpoint è calcolato dal client soltanto dopo full scan ed è un'invariante del protocollo/test, non una read-proof crittografica verificabile dalle Rules.
+
+### Empty shell dopo terminal GC
+
+Dopo la creazione del registro Protocol 3 il client non esegue delete fisiche dei documenti di sync. Se business state e `fields` diventano vuoti dopo stable-frontier GC, `transactionWriter` persiste un empty shell con `_schemaVersion` e `_sync.writer`. Le Rules negano la delete fisica mensile dopo il cutover; prima del cutover resta la compatibilità legacy.
+
+Questo impedisce che una vecchia generation trasformi una delete Firestore non attribuita in una transizione causale. La cancellazione account trusted/Admin resta separata e può rimuovere fisicamente i documenti.
 ## Gate
 
-Il gate normativo M4 è:
+Il gate canonico del repository è:
 
 ```bash
-npm run verify:m4
+npm run verify:m8
 ```
 
-Deve includere integralmente M3 e aggiungere `npm run test:gc`. Un subset verde non equivale al superamento del milestone.
+`npm run test:gc` resta la suite causale dedicata; non sostituisce il gate completo.
