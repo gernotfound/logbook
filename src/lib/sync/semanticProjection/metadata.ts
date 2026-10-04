@@ -74,6 +74,7 @@ export function parseSemanticOperation(raw: unknown): SemanticOperation {
     if (typeof raw.docPath !== 'string') throw new Error('Invalid SemanticOperation docPath');
     const path = parsePath(raw.path, 'SemanticOperation path');
     if (typeof raw.isDelete !== 'boolean') throw new Error('Invalid SemanticOperation delete flag');
+    if (!raw.isDelete && !Object.hasOwn(raw, 'value')) throw new Error('Invalid SemanticOperation value');
     if (typeof raw.actorId !== 'string' || !raw.actorId.trim()) throw new Error('Invalid SemanticOperation actorId');
     const seq = parseSafeSeq(raw.seq, 'SemanticOperation');
     const clock = parseVectorClock(raw.clock, 'SemanticOperation clock');
