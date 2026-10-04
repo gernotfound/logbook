@@ -168,49 +168,6 @@ type ProtectedDescendant = {
     value?: unknown;
 };
 
-function reconcileDescendantsAfterWinner(
-    doc: DocumentData,
-    meta: SyncMeta,
-    winner: SemanticOperation,
-    winnerStamp: FieldStamp,
-    ordersToApply: Map<any[], { path: string[], orderIds: string[] }>,
-): void {
-    const winnerKey = fieldKey(winner.path);
-    const prefix = `${winnerKey}/`;
-    const protectedDescendants: ProtectedDescendant[] = [];
-
-    for (const [key, stamp] of Object.entries(meta.fields)) {
-        if (!key.startsWith(prefix)) continue;
-        if (stampWins(fieldStamp(stamp), fieldStamp(winnerStamp))) {
-            const path = pathFromFieldKey(key);
-            protectedDescendants.push({
-                key,
-                path,
-                stamp,
-                ...(stamp.deleted ? {} : { value: structuredClone(readSemanticValue(doc, winner.docPath, path)) }),
-            });
-        }
-    }
-
-    for (const [key] of Object.entries(meta.fields)) {
-        if (key.startsWith(prefix) && !protectedDescendants.some(item => item.key === key)) delete meta.fields[key];
-    }
-
-    protectedDescendants
-        .sort((left, right) => left.path.length - right.path.length || left.key.localeCompare(right.key))
-        .forEach(item => {
-            applyWinnerToDocument(doc, {
-                docPath: winner.docPath,
-                path: item.path,
-                isDelete: item.stamp.deleted === true,
-                ...(item.stamp.deleted ? {} : { value: item.value }),
-                actorId: item.stamp.actorId,
-                seq: item.stamp.seq,
-                clock: item.stamp.clock,
-            }, ordersToApply);
-        });
-}
-
 export function applySemanticOperations(
     base: Map<string, DocumentData>,
     ops: SemanticOperation[],
@@ -305,16 +262,6 @@ export function applySemanticOperations(
 
         applyWinnerToDocument(doc, winner, ordersToApply);
         meta.fields[fk] = nextStamp;
-
-        // Temporarily restore the captured values for descendants before the shared
-        // reconciliation helper applies them through semantic path handling.
-        for (const key of protectedBefore) {
-            const stamp = meta.fields[key];
-            if (stamp && !stamp.deleted && preservedValues.has(key)) {
-                // The helper reads the current document; keep the captured value on a
-                // transient property of the stamp map is deliberately avoided.
-            }
-        }
 
         const prefix = `${fk}/`;
         const protectedDescendants: ProtectedDescendant[] = [];
