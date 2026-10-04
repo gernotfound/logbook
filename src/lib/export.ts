@@ -108,7 +108,6 @@ export const Exporter = {
         }
 
         let str = String(value);
-        if (str === '') return "";
         const trimmed = str.replace(/^[\s\uFEFF\u00A0]+/, '');
         if (/^[=+\-@]/.test(trimmed)) {
             str = "'" + str;
@@ -271,21 +270,21 @@ export const Exporter = {
             const day = nutrition[date];
             nutritionCsv += this.formatCsvRow([
                 date,
-                day.weight ?? '',
+                day.weight,
                 day.kcal,
                 day.carbs,
                 day.pro,
                 day.fat,
-                day.bf ?? '',
+                day.bf,
                 day.bfProvenance?.method ?? '',
-                day.neck ?? '',
-                day.chest ?? '',
-                day.shoulders ?? '',
-                day.biceps ?? '',
-                day.waist ?? '',
-                day.hip ?? '',
-                day.thighs ?? '',
-                day.calves ?? '',
+                day.neck,
+                day.chest,
+                day.shoulders,
+                day.biceps,
+                day.waist,
+                day.hip,
+                day.thighs,
+                day.calves,
                 Logic.formatSleepTime(day.sleepHours),
                 Logic.formatSleepTime(day.sleepDeep),
                 Logic.formatSleepTime(day.sleepLight),
