@@ -18,6 +18,7 @@ import { captureSession, invalidateSession, isCurrentSession, userOwner } from '
 import { classifySyncFailure } from '../lib/sync/syncFailure';
 import { SyncTimeoutError } from '../lib/db/db_core';
 import {
+    BrowserStorageError,
     readBrowserValue,
     readBrowserValueStrict,
     removeBrowserValue,
@@ -727,7 +728,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setGuestMigrationStatus('idle');
             } catch (error: any) {
                 console.error("Errore durante il logout:", error);
-                await useDialogStore.getState().showAlert("Errore durante il logout. Controlla la connessione.");
+                const localStorageFailure = error instanceof AggregateError
+                    || error instanceof BrowserStorageError
+                    || error?.name === 'BrowserStorageError';
+                await useDialogStore.getState().showAlert(localStorageFailure
+                    ? 'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
+                    : 'Errore durante il logout. Controlla la connessione e riprova.');
             } finally {
                 setSyncing(false);
             }

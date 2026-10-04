@@ -9,6 +9,7 @@ import { DB } from '../src/lib/db';
 import { UserDataSchema } from '../src/lib/schema';
 import { useDialogStore } from '../src/store/useDialogStore';
 import { useAppStore } from '../src/store/useAppStore';
+import { BrowserStorageError } from '../src/lib/sync/browserStorage';
 import type { UserData } from '../src/types';
 
 const exporter = vi.hoisted(() => ({
@@ -232,7 +233,28 @@ describe('M5 logout protection through AuthProvider', () => {
             await result.current.logout({ mode: 'force' });
         });
 
-        expect(dialogs.showAlert).toHaveBeenCalledWith('Errore durante il logout. Controlla la connessione.');
+        expect(dialogs.showAlert).toHaveBeenCalledWith('Errore durante il logout. Controlla la connessione e riprova.');
+        expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
+        expect(useAppStore.getState().syncing).toBe(false);
+        consoleError.mockRestore();
+    });
+
+    it.each([
+        new BrowserStorageError('remove', 'logbook:v2:user:logout-user:workout', new DOMException('blocked', 'SecurityError')),
+        new AggregateError([new DOMException('full', 'QuotaExceededError')], 'Pulizia locale incompleta'),
+    ])('distinguishes local storage cleanup failures from network failures', async (failure) => {
+        vi.mocked(DB.secureLogOut).mockRejectedValueOnce(failure);
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.currentUser?.uid).toBe('logout-user'));
+
+        await act(async () => {
+            await result.current.logout({ mode: 'force' });
+        });
+
+        expect(dialogs.showAlert).toHaveBeenCalledWith(
+            'Impossibile completare il logout perché la memoria locale del dispositivo non è disponibile o non è stata pulita completamente. I dati locali potrebbero essere ancora presenti. Riprova.'
+        );
         expect(useAppStore.getState().userData?.routines?.[0]?.id).toBe('routine-1');
         expect(useAppStore.getState().syncing).toBe(false);
         consoleError.mockRestore();

@@ -192,7 +192,7 @@ describe('durable owner-scoped journal', () => {
             clock: { [actor]: 1 },
             fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
         };
-        await acknowledgeThrough('a', 1, first, base, [], { '': meta1 });
+        await acknowledgeThrough('a', 1, first, [], { '': meta1 });
 
         const second = data(172);
         await commitLocal('a', second, first);
@@ -201,8 +201,8 @@ describe('durable owner-scoped journal', () => {
             clock: { [actor]: 2 },
             fields: { 'profile/height': { actorId: actor, seq: 2, clock: { [actor]: 2 } } },
         };
-        await acknowledgeThrough('a', 2, second, first, [], { '': meta2 });
-        await acknowledgeThrough('a', 1, first, base, [], { '': meta1 });
+        await acknowledgeThrough('a', 2, second, [], { '': meta2 });
+        await acknowledgeThrough('a', 1, first, [], { '': meta1 });
 
         const stored = await readLocal('a');
         expect(stored?.data.profile.height).toBe('172');
@@ -221,7 +221,7 @@ describe('durable owner-scoped journal', () => {
             clock: { [actor]: 1 },
             fields: { 'profile/height': { actorId: actor, seq: 1, clock: { [actor]: 1 } } },
         };
-        await acknowledgeThrough('a', 1, newer, base, [], { '': meta2 });
+        await acknowledgeThrough('a', 1, newer, [], { '': meta2 });
 
         const stale = data(170);
         const staleDocuments = new Map<string, any>([

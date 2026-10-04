@@ -312,10 +312,9 @@ function applyOne(input: UserData, operation: DomainOperation): UserData {
             break;
         }
         case 'food.upsert': {
-            const id = requireId(operation.food.id, 'Alimento');
+            requireId(operation.food.id, 'Alimento');
             const food = { ...operation.food, id: operation.food.id };
             data.customFoods = upsertById(data.customFoods, food, item => requireId(item.id, 'Alimento'), 'Archivio alimenti');
-            if (!id) throw new Error('Alimento non valido');
             break;
         }
         case 'food.delete':

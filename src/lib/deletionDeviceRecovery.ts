@@ -1,5 +1,6 @@
 import type { User } from 'firebase/auth';
 import { auth, ensureAppCheck } from './firebase';
+import { readBrowserValue, removeBrowserValue, writeBrowserJson } from './sync/browserStorage';
 
 const KEY='logbook_deletion_recovery_devices_v1';
 const API=(import.meta.env.VITE_ACCOUNT_DELETION_API_ORIGIN || 'https://logbook-gnf.vercel.app').replace(/\/$/,'');
@@ -7,8 +8,8 @@ const MAX_DEVICES=4;
 type Credential={uid:string;token:string};
 
 function randomToken():string{const bytes=crypto.getRandomValues(new Uint8Array(32));let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
-function readAll():Credential[]{try{const v=localStorage.getItem(KEY);const p=v?JSON.parse(v):[];return Array.isArray(p)?p.filter(x=>typeof x?.uid==='string'&&typeof x?.token==='string').slice(-MAX_DEVICES):[];}catch{return [];}}
-function writeAll(v:Credential[]){const bounded=v.slice(-MAX_DEVICES);if(bounded.length===0)localStorage.removeItem(KEY);else localStorage.setItem(KEY,JSON.stringify(bounded));}
+function readAll():Credential[]{try{const v=readBrowserValue(KEY);const p=v?JSON.parse(v):[];return Array.isArray(p)?p.filter(x=>typeof x?.uid==='string'&&typeof x?.token==='string').slice(-MAX_DEVICES):[];}catch{return [];}}
+function writeAll(v:Credential[]){const bounded=v.slice(-MAX_DEVICES);if(bounded.length===0)removeBrowserValue(KEY);else writeBrowserJson(KEY,bounded);}
 export function removeDeletionRecoveryCredential(uid:string):void{writeAll(readAll().filter(x=>x.uid!==uid));}
 async function appToken(){await ensureAppCheck();const {getLimitedUseAppCheckToken}=await import('./appCheck');const t=await getLimitedUseAppCheckToken();if(!t)throw new Error('App Check non disponibile.');return t;}
 

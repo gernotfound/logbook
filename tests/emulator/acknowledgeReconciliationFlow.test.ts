@@ -31,7 +31,7 @@ vi.mock('../../src/lib/sync/localRepository', async () => {
         acknowledgeThrough: async (...args: Parameters<typeof actual.acknowledgeThrough>) => {
             await acknowledgeHarness.before?.(args[0], args[1]);
             await actual.acknowledgeThrough(...args);
-            await acknowledgeHarness.after?.(args[0], args[1], args[5]);
+            await acknowledgeHarness.after?.(args[0], args[1], args[4]);
         },
     };
 });

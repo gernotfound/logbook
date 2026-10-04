@@ -7,7 +7,8 @@ import {
     writeBrowserValue,
 } from '../src/lib/sync/browserStorage';
 import { isAccountDeletionPending, markAccountDeletion } from '../src/lib/sync/accountGate';
-import { readDeviceValue } from '../src/lib/sync/deviceStorage';
+import { readDeviceValue, writeDeviceValue } from '../src/lib/sync/deviceStorage';
+import { removeDeletionRecoveryCredential } from '../src/lib/deletionDeviceRecovery';
 import { storageOwner } from '../src/lib/sync/session';
 import { localStorageMock } from './setup';
 
@@ -71,5 +72,24 @@ describe('browser storage boundary', () => {
         localStorageMock.getItem.mockImplementationOnce(storageFailure);
 
         expect(readDeviceValue('workout')).toBeNull();
+    });
+
+    it('wraps device-storage write and remove failures in BrowserStorageError', () => {
+        localStorageMock.setItem.mockImplementationOnce(() => {
+            throw new DOMException('full', 'QuotaExceededError');
+        });
+        expect(() => writeDeviceValue('workout', '{}', OWNER)).toThrow(BrowserStorageError);
+
+        localStorageMock.removeItem.mockImplementationOnce(storageFailure);
+        expect(() => writeDeviceValue('workout', null, OWNER)).toThrow(BrowserStorageError);
+    });
+
+    it('keeps deletion-recovery credential writes on the strict browser-storage boundary', () => {
+        localStorage.setItem('logbook_deletion_recovery_devices_v1', JSON.stringify([
+            { uid: 'test-user', token: 'token' },
+        ]));
+        localStorageMock.removeItem.mockImplementationOnce(storageFailure);
+
+        expect(() => removeDeletionRecoveryCredential('test-user')).toThrow(BrowserStorageError);
     });
 });

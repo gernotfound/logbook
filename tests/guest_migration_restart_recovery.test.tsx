@@ -2,8 +2,6 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@vercel/analytics/react', () => ({ Analytics: () => null }));
-vi.mock('@vercel/speed-insights/react', () => ({ SpeedInsights: () => null }));
 vi.mock('../src/components/UI/ErrorBoundary', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 vi.mock('../src/components/UI/BottomNav', () => ({ default: () => <nav data-testid="bottom-nav" /> }));
 vi.mock('../src/components/UI/GlobalDialog', () => ({ GlobalDialog: () => null }));
