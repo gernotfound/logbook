@@ -54,7 +54,7 @@ async function requireDurableDeliveredBatch(
     delivered: SemanticOperation[],
     cause: unknown,
 ): Promise<never> {
-    if (!isWritableSession(session)) throw cause;
+    if (!isWritableSession(session)) throw new UnsafeDeliveredBatchError(cause);
 
     let retained: Awaited<ReturnType<typeof readLocal>>;
     try {
@@ -63,7 +63,7 @@ async function requireDurableDeliveredBatch(
         throw new UnsafeDeliveredBatchError(cause);
     }
 
-    if (!isWritableSession(session)) throw cause;
+    if (!isWritableSession(session)) throw new UnsafeDeliveredBatchError(cause);
     if (retained && containsDeliveredBatch(retained.pending, delivered)) {
         throw new DurableAcknowledgementPendingError(cause);
     }
