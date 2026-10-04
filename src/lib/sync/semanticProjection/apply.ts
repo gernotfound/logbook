@@ -172,6 +172,35 @@ function applyWinnerToDocument(
     else current[lastSeg] = operation.value;
 }
 
+type FieldCandidate = {
+    stamp: StampLike;
+    operation?: SemanticOperation;
+    remote: boolean;
+};
+
+function maxCandidate(candidates: FieldCandidate[]): FieldCandidate {
+    let winner = candidates[0];
+    for (let i = 1; i < candidates.length; i++) {
+        if (compareStamps(candidates[i].stamp, winner.stamp) > 0) winner = candidates[i];
+    }
+    return winner;
+}
+
+function canonicalStamp(stamp: FieldStamp): FieldStamp {
+    const barrier = deleteBarrier(stamp);
+    return {
+        clock: { ...stamp.clock },
+        actorId: stamp.actorId,
+        seq: stamp.seq,
+        ...(stamp.deleted ? { deleted: true } : {}),
+        ...(barrier ? { deleteClock: { ...barrier } } : {}),
+    };
+}
+
+function descendantSurvivesAncestor(descendant: FieldStamp, ancestor: FieldStamp): boolean {
+    return coversVectorClock(descendant.clock, requiredAncestorClock(ancestor));
+}
+
 type ProtectedDescendant = {
     key: string;
     path: string[];
@@ -194,7 +223,7 @@ export function applySemanticOperations(
             clock: { ...meta.clock },
             fields: Object.fromEntries(Object.entries(meta.fields).map(([key, stamp]) => [
                 key,
-                { ...stamp, clock: { ...stamp.clock } },
+                canonicalStamp(stamp),
             ])),
         };
     }
