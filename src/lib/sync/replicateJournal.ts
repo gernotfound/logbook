@@ -1,3 +1,4 @@
+import equal from 'fast-deep-equal';
 import { auth, getDb, ensureAppCheck, waitForPendingWrites } from '../firebase';
 import type { UserData, SyncResult } from '../../types';
 import { readLocal, acknowledgeThrough } from './localRepository';
@@ -17,13 +18,8 @@ class DurableAcknowledgementPendingError extends Error {
     }
 }
 
-function sameOperationIdentity(left: SemanticOperation, right: SemanticOperation): boolean {
-    return left.actorId === right.actorId
-        && left.seq === right.seq
-        && left.docPath === right.docPath
-        && left.isDelete === right.isDelete
-        && left.path.length === right.path.length
-        && left.path.every((segment, index) => segment === right.path[index]);
+function sameDeliveredOperation(left: SemanticOperation, right: SemanticOperation): boolean {
+    return equal(left, right);
 }
 
 const running = new Map<string, Promise<void>>();
@@ -68,7 +64,7 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
             }
             if (!current()) throw error;
             const fullBatchRetained = retained !== undefined && delivered.every(operation =>
-                retained.pending.some(candidate => sameOperationIdentity(operation, candidate))
+                retained.pending.some(candidate => sameDeliveredOperation(operation, candidate))
             );
             if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
             throw error;
