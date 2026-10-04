@@ -15,6 +15,7 @@ import { UserDataSchema } from '../../src/lib/schema';
 import { captureSession, invalidateSession } from '../../src/lib/sync/session';
 import { markTabSnapshotClean, markTabSnapshotDirty } from '../../src/lib/sync/tabSnapshotCausality';
 import { draftRegistry } from '../../src/lib/utils/draftRegistry';
+import { BrowserStorageError } from '../../src/lib/sync/browserStorage';
 import type { UserData } from '../../src/types';
 const parse = (height: number) => UserDataSchema.parse({ profile: { height } }) as unknown as UserData;
 let disk: Map<string, string>;
@@ -68,7 +69,7 @@ it('still blocks reload when the durable envelope is missing', async () => {
 });
 it('blocks reload when the synchronous workout snapshot fails', async () => {
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
-    await expect(prepareForReload()).rejects.toThrow('quota');
+    await expect(prepareForReload()).rejects.toBeInstanceOf(BrowserStorageError);
 });
 it('blocks reload on identity changes while awaiting persistence', async () => {
     app.flush.mockImplementation(async () => { app.auth.currentUser = { uid: 'b' }; invalidateSession(); });
@@ -121,7 +122,7 @@ it('still blocks update-required reload when the device-critical workout snapsho
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
     const reload = vi.fn();
 
-    await expect(requiredUpdateHardReload(reload)).rejects.toThrow('quota');
+    await expect(requiredUpdateHardReload(reload)).rejects.toBeInstanceOf(BrowserStorageError);
     expect(reload).not.toHaveBeenCalled();
 });
 it('does not delete an authenticated change written by another tab when this tab is clean and stale', async () => {
