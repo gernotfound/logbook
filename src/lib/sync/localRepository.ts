@@ -168,7 +168,11 @@ export async function commitLocal(owner: string, data: UserData, initialBase: Us
     await update<any>(keyFor(owner), raw => {
         if (guard && !guard()) return raw;
         const current = validate(raw, owner);
-        if (expectedRevision !== undefined && current?.revision !== expectedRevision) {
+        if (expectedRevision !== undefined && (
+            current?.revision !== expectedRevision
+            || !current
+            || !equal(parse(current.data), callerBase)
+        )) {
             throw new StaleLocalRevisionError(expectedRevision, current?.revision ?? null);
         }
         const currentData = structuredClone(parse(current?.data ?? callerBase));
