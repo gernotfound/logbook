@@ -104,6 +104,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSyncing,
             setSaveError,
         });
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+        if (auth.currentUser?.uid !== user.uid || isGuestRef.current || isStoredGuest()) return;
+
+        const { readLocal } = await import('../lib/sync/localRepository');
+        const envelope = await readLocal(user.uid);
+        if (!envelope?.replica || !envelope.pending.length) return;
+
+        // A Protocol 3 checkpoint can be the prerequisite that makes an offline or
+        // migrated journal deliverable. Drain it after the checkpoint instead of
+        // relying on listener ordering between the global replay and auth refresh.
+        await useAppStore.getState().flushPendingSyncs();
     }, [setSyncing, setUserData, setSaveError]);
 
     useEffect(() => {
@@ -376,6 +388,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('online', handleVisibilityChange);
 
         return () => {
             isMounted = false;
@@ -384,6 +397,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             unsubscribe();
             document.removeEventListener('visibilitychange', handleAuthVisibilityChange);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('online', handleVisibilityChange);
         };
     }, [loadData, setSyncing, setUserData, setSaveError]);
 
