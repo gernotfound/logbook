@@ -22,6 +22,16 @@ function sameDeliveredOperation(left: SemanticOperation, right: SemanticOperatio
     return equal(left, right);
 }
 
+function containsDeliveredBatch(pending: SemanticOperation[], delivered: SemanticOperation[]): boolean {
+    const unmatched = [...pending];
+    for (const operation of delivered) {
+        const index = unmatched.findIndex(candidate => sameDeliveredOperation(operation, candidate));
+        if (index < 0) return false;
+        unmatched.splice(index, 1);
+    }
+    return true;
+}
+
 const running = new Map<string, Promise<void>>();
 export async function waitForJournalIdle(owner: string): Promise<void> {
     const work = running.get(owner);
@@ -63,9 +73,8 @@ async function drain(session: ReturnType<typeof captureSession>): Promise<void> 
                 throw error;
             }
             if (!current()) throw error;
-            const fullBatchRetained = retained !== undefined && delivered.every(operation =>
-                retained.pending.some(candidate => sameDeliveredOperation(operation, candidate))
-            );
+            const fullBatchRetained = retained !== undefined
+                && containsDeliveredBatch(retained.pending, delivered);
             if (fullBatchRetained) throw new DurableAcknowledgementPendingError(error);
             throw error;
         }
