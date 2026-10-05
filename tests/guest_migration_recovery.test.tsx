@@ -11,6 +11,7 @@ import * as localRepository from '../src/lib/sync/localRepository';
 import { storageOwner } from '../src/lib/sync/session';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
+import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'guest-recovery-user', email: 'guest@example.com', displayName: 'Guest Recovery' } as any;
@@ -65,7 +66,7 @@ describe('guest migration crash recovery boundary', () => {
     it('keeps the guest marker, policy and guest mode when the authenticated local commit fails', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem('guest_migration_policy', 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
@@ -98,7 +99,7 @@ describe('guest migration crash recovery boundary', () => {
     it('retires the guest marker only after the authenticated envelope is durable and before replication', async () => {
         const { cloud, guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem('guest_migration_policy', 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
@@ -136,7 +137,7 @@ describe('guest migration crash recovery boundary', () => {
     it('creates a durable authenticated base when a new account has no cloud payload yet', async () => {
         const { guest } = fixtures();
         localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem('guest_migration_policy', 'merge');
+        beginGuestMigrationIntent('merge', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
         onlineSpy = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
 
