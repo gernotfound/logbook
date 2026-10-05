@@ -13,6 +13,7 @@ import { GlobalDialog } from '../src/components/UI/GlobalDialog';
 import { clearSyncTimers } from '../src/store/slices/createSyncSlice';
 import { clearWorkoutTimer } from '../src/store/slices/createWorkoutSlice';
 import { draftRegistry } from '../src/lib/utils/draftRegistry';
+import { captureSession } from '../src/lib/sync/session';
 
 // Exercise the actual dialog store; Firebase remains mocked at the network boundary.
 vi.unmock('../src/store/useDialogStore');
@@ -21,7 +22,18 @@ const workout = { id: 'w-audit', date: '2026-09-10', routineName: 'Test', exerci
 beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
-    useAppStore.setState({ userData: { ...emptyUserData, history: [], activeWorkout: workout }, localWorkout: workout, syncing: false, syncHealth: 'synced' });
+    useAppStore.setState({
+        userData: { ...emptyUserData, history: [], activeWorkout: workout },
+        dataOwner: captureSession().owner,
+        localWorkout: workout,
+        syncing: false,
+        syncHealth: 'synced',
+        syncPresentation: 'normal',
+        localPersistenceBlocked: false,
+        compatibilityStatus: 'ok',
+        compatibilityError: null,
+        saveError: null,
+    });
     vi.mocked(DB.saveUserData).mockResolvedValue({ ok: true, status: 'synced' });
 });
 afterEach(() => {
