@@ -2,7 +2,6 @@ import React, { useId, useRef, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { sendPasswordResetEmail, auth } from '../../lib/firebase';
 import { useDialogStore } from '../../store/useDialogStore';
-import { writeBrowserValue } from '../../lib/sync/browserStorage';
 import { Eye, EyeOff } from 'lucide-react';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
 import { checkPasswordStrength } from '../../lib/auth/passwordPolicy';
@@ -32,16 +31,8 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         onEscape: onCancel,
     });
 
-    const handleAuthAction = async (action: () => Promise<void>) => {
-        if (isGuest) {
-            try {
-                writeBrowserValue('guest_migration_policy', migrationPolicy);
-            } catch {
-                await showAlert('Impossibile salvare la scelta di trasferimento sul dispositivo. Libera spazio o abilita l’archivio del browser e riprova.');
-                return;
-            }
-        }
-        await action();
+    const handleAuthAction = async (action: (policy?: 'merge' | 'skip') => Promise<void>) => {
+        await action(isGuest ? migrationPolicy : undefined);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +40,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
         setLoading(true);
         try {
             if (mode === 'login') {
-                await handleAuthAction(() => loginWithEmail(email, password));
+                await handleAuthAction(policy => loginWithEmail(email, password, policy));
             } else if (mode === 'register') {
                 if (password !== confirmPassword) {
                     await showAlert("Le password non coincidono.");
@@ -62,7 +53,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     setLoading(false);
                     return;
                 }
-                await handleAuthAction(() => registerWithEmail(email, password));
+                await handleAuthAction(policy => registerWithEmail(email, password, policy));
             } else if (mode === 'forgot') {
                 if (!email) {
                     await showAlert("Inserisci la tua email.");
