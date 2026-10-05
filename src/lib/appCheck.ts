@@ -42,6 +42,7 @@ export interface AppCheckResult {
     providerInitialized: boolean;
     tokenAvailable: boolean;
     tokenError?: string;
+    retryable: boolean;
 }
 
 export interface AppCheckStatusDetails {
@@ -69,7 +70,54 @@ let isSupportedCached: boolean | null = null;
 let isFallbackOfflineMode = false;
 let lastToken: AppCheckTokenResult | null = null;
 let lastTokenError: string | null = null;
+let lastTokenRetryable = false;
 let appCheckPhase: AppCheckPhase = 'uninitialized';
+
+const TOKEN_FRESHNESS_MARGIN_MS = 60_000;
+
+function isFreshToken(token: AppCheckTokenResult | null): token is AppCheckTokenResult {
+    return Boolean(
+        token?.token
+        && Number.isFinite(token.expireTimeMillis)
+        && token.expireTimeMillis - Date.now() > TOKEN_FRESHNESS_MARGIN_MS
+    );
+}
+
+function appCheckErrorText(error: unknown): string {
+    if (!error || typeof error !== 'object') return String(error ?? '');
+    const candidate = error as { code?: unknown; message?: unknown; status?: unknown };
+    return [
+        typeof candidate.code === 'string' ? candidate.code : '',
+        typeof candidate.message === 'string' ? candidate.message : '',
+        typeof candidate.status === 'number' ? String(candidate.status) : '',
+    ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function isRetryableTokenError(error: unknown): boolean {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    const text = appCheckErrorText(error);
+    if (!text) return false;
+    return [
+        'network',
+        'failed to fetch',
+        'timeout',
+        'timed out',
+        'unavailable',
+        'deadline-exceeded',
+        'throttled',
+        'too-many-requests',
+        '429',
+        '500',
+        '502',
+        '503',
+        '504',
+    ].some(marker => text.includes(marker));
+}
+
+function effectivePhase(): AppCheckPhase {
+    if (appCheckPhase === 'token-ready' && !isFreshToken(lastToken)) return 'provider-ready';
+    return appCheckPhase;
+}
 
 function resolveSiteKey(options?: AppCheckInitOptions): string | undefined {
     return options?.siteKey
@@ -82,16 +130,19 @@ function runtimeSupportsAppCheck(): boolean {
 }
 
 function currentResult(reason?: string): AppCheckResult {
+    const phase = effectivePhase();
+    const tokenAvailable = isFreshToken(lastToken);
     return {
-        success: appCheckPhase === 'token-ready',
+        success: phase === 'token-ready' && tokenAvailable,
         appCheck: appCheckInstance,
         isFallbackOffline: isFallbackOfflineMode,
-        disabled: appCheckPhase === 'disabled',
+        disabled: phase === 'disabled',
         reason,
-        phase: appCheckPhase,
+        phase,
         providerInitialized: appCheckInstance !== null,
-        tokenAvailable: Boolean(lastToken?.token),
+        tokenAvailable,
         tokenError: lastTokenError ?? undefined,
+        retryable: phase === 'token-error' && lastTokenRetryable,
     };
 }
 
@@ -111,6 +162,7 @@ export function ensureAppCheckProvider(
         console.warn(APP_CHECK_STRINGS.missingSiteKeyWarning);
         isFallbackOfflineMode = true;
         isSupportedCached = runtimeSupportsAppCheck();
+        lastTokenRetryable = false;
         appCheckPhase = 'disabled';
         return currentResult('Site key not configured');
     }
@@ -120,6 +172,7 @@ export function ensureAppCheckProvider(
     if (!supported) {
         console.warn('[AppCheck] Ambiente non supportato da reCAPTCHA Enterprise. Attivazione modalità locale offline.');
         isFallbackOfflineMode = true;
+        lastTokenRetryable = false;
         appCheckPhase = 'unsupported';
         return currentResult(APP_CHECK_STRINGS.unsupportedMessage);
     }
@@ -137,6 +190,7 @@ export function ensureAppCheckProvider(
         });
         isFallbackOfflineMode = false;
         lastTokenError = null;
+        lastTokenRetryable = false;
         appCheckPhase = 'provider-ready';
         return currentResult();
     } catch (error: unknown) {
@@ -144,6 +198,7 @@ export function ensureAppCheckProvider(
         console.error('[AppCheck] Errore durante l\'inizializzazione del provider:', error);
         appCheckInstance = null;
         isFallbackOfflineMode = true;
+        lastTokenRetryable = false;
         appCheckPhase = 'error';
         return currentResult(message);
     }
@@ -175,15 +230,27 @@ export async function initAppCheck(
 ): Promise<AppCheckResult> {
     const providerResult = ensureAppCheckProvider(app, options);
     if (!providerResult.providerInitialized) return providerResult;
-    if (lastToken?.token) {
+    if (isFreshToken(lastToken)) {
         appCheckPhase = 'token-ready';
         isFallbackOfflineMode = false;
+        lastTokenRetryable = false;
         return currentResult();
     }
+    lastToken = null;
 
     try {
-        lastToken = await getToken(appCheckInstance!, false);
+        let tokenResult = await getToken(appCheckInstance!, false);
+        if (!isFreshToken(tokenResult)) {
+            tokenResult = await getToken(appCheckInstance!, true);
+        }
+        if (!isFreshToken(tokenResult)) {
+            throw Object.assign(new Error('Token App Check scaduto o troppo vicino alla scadenza.'), {
+                code: 'app-check-token-expired',
+            });
+        }
+        lastToken = tokenResult;
         lastTokenError = null;
+        lastTokenRetryable = false;
         isFallbackOfflineMode = false;
         appCheckPhase = 'token-ready';
         return currentResult();
@@ -192,6 +259,7 @@ export async function initAppCheck(
         console.warn('[AppCheck] Token iniziale non acquisito; la sincronizzazione cloud resta sospesa finché il token non è disponibile:', error);
         lastToken = null;
         lastTokenError = message;
+        lastTokenRetryable = isRetryableTokenError(error);
         isFallbackOfflineMode = true;
         appCheckPhase = 'token-error';
         return currentResult(message);
@@ -203,7 +271,7 @@ export function getAppCheckInstance(): AppCheck | null {
 }
 
 export function isAppCheckActive(): boolean {
-    return appCheckInstance !== null && Boolean(lastToken?.token) && !isFallbackOfflineMode;
+    return appCheckInstance !== null && isFreshToken(lastToken) && !isFallbackOfflineMode;
 }
 
 export function isAppCheckFallbackOffline(): boolean {
@@ -217,9 +285,18 @@ export function setAppCheckFallbackOffline(fallback: boolean): void {
 export async function getAppCheckToken(forceRefresh = false): Promise<string | null> {
     if (!appCheckInstance) return null;
     try {
-        const tokenResult = await getToken(appCheckInstance, forceRefresh);
+        let tokenResult = await getToken(appCheckInstance, forceRefresh);
+        if (!forceRefresh && !isFreshToken(tokenResult)) {
+            tokenResult = await getToken(appCheckInstance, true);
+        }
+        if (!isFreshToken(tokenResult)) {
+            throw Object.assign(new Error('Token App Check scaduto o troppo vicino alla scadenza.'), {
+                code: 'app-check-token-expired',
+            });
+        }
         lastToken = tokenResult;
         lastTokenError = null;
+        lastTokenRetryable = false;
         isFallbackOfflineMode = false;
         appCheckPhase = 'token-ready';
         return tokenResult.token;
@@ -228,6 +305,7 @@ export async function getAppCheckToken(forceRefresh = false): Promise<string | n
         console.error('[AppCheck] Errore durante il recupero del token:', error);
         lastToken = null;
         lastTokenError = message;
+        lastTokenRetryable = isRetryableTokenError(error);
         isFallbackOfflineMode = true;
         appCheckPhase = 'token-error';
         return null;
@@ -238,31 +316,28 @@ export async function getLimitedUseAppCheckToken(): Promise<string | null> {
     if (!appCheckInstance) return null;
     try {
         const tokenResult = await getLimitedUseToken(appCheckInstance);
-        lastTokenError = null;
-        isFallbackOfflineMode = false;
-        appCheckPhase = 'token-ready';
         return tokenResult.token;
     } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Token App Check limited-use non disponibile';
         console.error('[AppCheck] Errore durante il recupero del token limited-use:', error);
-        lastTokenError = message;
-        isFallbackOfflineMode = true;
-        appCheckPhase = 'token-error';
+        // Limited-use tokens protect custom backend requests and have their own
+        // one-shot lifecycle. Their failure must not overwrite the freshness state
+        // of the standard token used to represent Firebase cloud readiness.
         return null;
     }
 }
 
 export function getAppCheckStatus(): AppCheckStatusDetails {
+    const tokenAvailable = isFreshToken(lastToken);
     return {
         initialized: appCheckInstance !== null,
         providerInitialized: appCheckInstance !== null,
         supported: isSupportedCached === true,
         fallbackOffline: isFallbackOfflineMode,
-        hasToken: Boolean(lastToken?.token),
-        tokenAvailable: Boolean(lastToken?.token),
+        hasToken: tokenAvailable,
+        tokenAvailable,
         tokenError: lastTokenError,
         provider: appCheckInstance ? 'ReCaptchaEnterpriseProvider' : 'none',
-        phase: appCheckPhase,
+        phase: effectivePhase(),
     };
 }
 
@@ -272,5 +347,6 @@ export function resetAppCheckStateForTesting(): void {
     isFallbackOfflineMode = false;
     lastToken = null;
     lastTokenError = null;
+    lastTokenRetryable = false;
     appCheckPhase = 'uninitialized';
 }
