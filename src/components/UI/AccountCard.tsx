@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useSettings } from '../../hooks/useSettings';
 import { useDialogStore } from '../../store/useDialogStore';
-import { provider, linkWithPopup, linkWithCredential, verifyBeforeUpdateEmail, updatePassword, EmailAuthProvider } from '../../lib/firebase';
+import { provider, linkWithPopup, linkWithCredential, verifyBeforeUpdateEmail, updatePassword, EmailAuthProvider, sendEmailVerification } from '../../lib/firebase';
 import { isSensitiveReauthCancellation, reauthenticateForSensitiveAction } from '../../lib/auth/recentAuth';
 import { safeHardReload } from '../../lib/sync/safeReload';
 import { Eye, EyeOff } from 'lucide-react';
@@ -118,6 +118,20 @@ export const AccountCard = () => {
         } catch (error: any) {
             console.error("Action error", error);
             await showAlert("Errore durante l'operazione: " + error.message);
+        } finally {
+            setLoadingAction(null);
+        }
+    };
+
+    const resendVerification = async () => {
+        if (!currentUser?.email || currentUser.emailVerified) return;
+        try {
+            setLoadingAction('verifyEmail');
+            await sendEmailVerification(currentUser);
+            await showAlert('Email di verifica inviata. Apri il link ricevuto e poi riapri TheLogBook.');
+        } catch (error) {
+            console.error('Invio verifica email fallito:', error);
+            await showAlert('Non è stato possibile inviare la verifica email. Riprova più tardi.');
         } finally {
             setLoadingAction(null);
         }
