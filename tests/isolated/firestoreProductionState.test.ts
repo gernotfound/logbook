@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyFieldOverride,
+  FIELD_OVERRIDE_LIST_FILTER,
+  fieldOverrideListParent,
   isActiveFieldIndexRemoval,
   parseFieldResource,
 } from '../../scripts/firestore-production-state.mjs';
@@ -9,6 +11,12 @@ const desired = { collectionGroup: 'history_months', fieldPath: '*' };
 const fieldName = 'projects/p/databases/(default)/collectionGroups/history_months/fields/*';
 
 describe('Firestore Production field exemption convergence', () => {
+  it('uses the database-wide explicit-override list scope used by firebase-tools', () => {
+    expect(fieldOverrideListParent('p')).toBe('projects/p/databases/(default)/collectionGroups/-');
+    expect(FIELD_OVERRIDE_LIST_FILTER).toBe('indexConfig.usesAncestorConfig=false OR ttlConfig:*');
+    expect(() => fieldOverrideListParent('')).toThrow('Firestore project id is required');
+  });
+
   it('parses wildcard field resources without confusing them with literal field names', () => {
     expect(parseFieldResource(fieldName)).toEqual(desired);
     expect(parseFieldResource('invalid')).toBeNull();

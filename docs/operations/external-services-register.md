@@ -1,6 +1,6 @@
 # Registro servizi esterni TheLogBook
 
-> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-02.
+> Stato: registro operativo stabile. Ultimo consolidamento: 2026-10-06.
 >
 > Questo file documenta **perché** esistono le integrazioni e quali impostazioni devono essere preservate. Non è un inventario di segreti e non sostituisce la verifica live nelle console dei provider.
 
@@ -104,6 +104,8 @@ Analogamente, il runtime non importa Firebase Storage né Firebase Cloud Messagi
 Le vecchie collection Firestore `telemetry_errors`, `telemetry_events` e `telemetry_anomalies` sono `LEGACY`: il client corrente invia errori/anomalie a Sentry, ma Rules, account deletion e retention cron restano finché i client vecchi e i documenti residui non sono definitivamente smaltiti.
 
 Verifica live 2026-10-02 del database `(default)`: Firestore Native Standard in regione `europe-west12`, free tier attivo, PITR disabilitato e **delete protection abilitata** per impedire la cancellazione accidentale del database. PITR/backup gestiti non vengono attivati sul piano Spark perché richiedono fatturazione.
+
+Aggiornamento audit Firestore 2026-10-05/06: la configurazione desiderata versionata aggiunge exemption automatic-index wildcard (`fieldPath: '*'`, `indexes: []`) per i collection group `users`, `history_months`, `nutrition_months`, `sync_control` e `global_catalog`, che vengono letti per path/document ID e non richiedono indicizzazione ricorsiva dei payload grandi. Il primo deploy Firebase CLI ha accettato e applicato `firestore.rules`/`firestore.indexes.json`, ma il read-back custom usava erroneamente `ListFields` sul singolo collection group e non costituiva un oracolo valido per le wildcard collection-level. Il verifier corrente usa il boundary amministrativo database-wide `collectionGroups/-/fields` con filtro `indexConfig.usesAncestorConfig=false OR ttlConfig:*`, coerente con il client di deploy Firebase, e mantiene fail-closed la verifica di stato live.
 
 ## Firebase Admin e account deletion
 

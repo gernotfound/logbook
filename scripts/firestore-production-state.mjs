@@ -1,3 +1,10 @@
+export const FIELD_OVERRIDE_LIST_FILTER = 'indexConfig.usesAncestorConfig=false OR ttlConfig:*';
+
+export function fieldOverrideListParent(projectId) {
+  if (!projectId) throw new Error('Firestore project id is required');
+  return `projects/${projectId}/databases/(default)/collectionGroups/-`;
+}
+
 function decodeResourceSegment(value) {
   try {
     return decodeURIComponent(value);
