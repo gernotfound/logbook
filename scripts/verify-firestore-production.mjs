@@ -83,14 +83,17 @@ const normalizeDesiredFieldOverride = override => {
   };
 };
 
-const loadLiveFieldOverrides = async collectionGroup => {
+const loadLiveFieldOverrides = async () => {
   const fields = [];
   let pageToken = '';
 
   do {
-    const parent = `projects/${projectId}/databases/(default)/collectionGroups/${encodeURIComponent(collectionGroup)}`;
+    // Match firebase-tools' own readback boundary: collectionGroups/- lists explicit
+    // field overrides across the database. Per-collection ListFields can omit the
+    // special "*" collection-level exemption even though the override exists.
+    const parent = `projects/${projectId}/databases/(default)/collectionGroups/-`;
     const url = new URL(`https://firestore.googleapis.com/v1/${parent}/fields`);
-    url.searchParams.set('filter', 'indexConfig.usesAncestorConfig:false');
+    url.searchParams.set('filter', 'indexConfig.usesAncestorConfig=false OR ttlConfig:*');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const payload = await requestJson(url.toString());
@@ -98,7 +101,7 @@ const loadLiveFieldOverrides = async collectionGroup => {
     pageToken = payload.nextPageToken ?? '';
   } while (pageToken);
 
-  return fields;
+  return fields.filter(field => !String(field?.name ?? '').includes('/collectionGroups/__default__/'));
 };
 
 const loadActiveFirestoreOperations = async () => {
@@ -167,13 +170,12 @@ for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
 const activeOperations = desiredFieldOverrides.length > 0
   ? await loadActiveFirestoreOperations()
   : [];
-const fieldOverrideStatuses = [];
-for (const collectionGroup of [...new Set(desiredFieldOverrides.map(item => item.collectionGroup))]) {
-  const liveFields = await loadLiveFieldOverrides(collectionGroup);
-  for (const desired of desiredFieldOverrides.filter(item => item.collectionGroup === collectionGroup)) {
-    fieldOverrideStatuses.push(classifyFieldOverride(desired, liveFields, activeOperations));
-  }
-}
+const liveFieldOverrides = desiredFieldOverrides.length > 0
+  ? await loadLiveFieldOverrides()
+  : [];
+const fieldOverrideStatuses = desiredFieldOverrides.map(desired =>
+  classifyFieldOverride(desired, liveFieldOverrides, activeOperations)
+);
 
 const rulesMatch = normalizeText(liveRulesFile.content) === normalizeText(rulesSource);
 const missingIndexes = indexStatuses.filter(status => !status.found);
