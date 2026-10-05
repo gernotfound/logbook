@@ -1,4 +1,4 @@
-import { readDeviceValue, writeDeviceValue } from '../sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../sync/deviceStorage';
 import { storageOwner } from '../sync/session';
 
 export type WorkoutTimerState = 'stopped' | 'running' | 'paused';
@@ -54,7 +54,7 @@ function purgeObsoleteTimerValues(owner: string): void {
 }
 
 export function readWorkoutTimerSnapshot(owner = storageOwner()): WorkoutTimerSnapshot {
-    const raw = readDeviceValue(TIMER_STORAGE_KEY, owner);
+    const raw = readDeviceValueStrict(TIMER_STORAGE_KEY, owner);
     if (raw === null) return stoppedWorkoutTimer();
 
     try {
