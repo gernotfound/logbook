@@ -63,9 +63,19 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
     rawCode = error;
     rawMessage = error;
   } else if (error && typeof error === 'object') {
-    const errObj = error as Record<string, any>;
-    rawCode = String(errObj.code || errObj.name || '');
-    rawMessage = String(errObj.message || '');
+    const seen = new Set<unknown>();
+    let current: unknown = error;
+    const codes: string[] = [];
+    const messages: string[] = [];
+    for (let depth = 0; depth < 4 && current && typeof current === 'object' && !seen.has(current); depth++) {
+      seen.add(current);
+      const errObj = current as Record<string, any>;
+      if (errObj.code || errObj.name) codes.push(String(errObj.code || errObj.name));
+      if (errObj.message) messages.push(String(errObj.message));
+      current = errObj.cause;
+    }
+    rawCode = codes.join(' ');
+    rawMessage = messages.join(' ');
   }
 
   const combined = `${rawCode} ${rawMessage}`.toLowerCase();
@@ -231,7 +241,7 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
       title: 'Limite dati superato',
       message:
         'L\'operazione non può essere sincronizzata nel cloud perché supera i limiti consentiti per il tuo account. Verifica i dati inseriti o riduci il numero di elementi prima di riprovare. I dati rimangono comunque disponibili sul dispositivo.',
-      isOfflineSafe: true,
+      isOfflineSafe: false,
       canRetry: false,
     };
   }
@@ -283,8 +293,8 @@ export function mapFirebaseErrorCode(error: unknown): FormattedSyncError {
     title: 'Errore di sincronizzazione',
     message:
       'Si è verificato un errore imprevisto durante la sincronizzazione cloud. I tuoi dati locali sono preservati.',
-    isOfflineSafe: true,
-    canRetry: true,
+    isOfflineSafe: false,
+    canRetry: false,
   };
 }
 
