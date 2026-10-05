@@ -47,7 +47,7 @@ export const LoginBox: React.FC<LoginBoxProps> = ({ onCancel }) => {
                     setLoading(false);
                     return;
                 }
-                const weakError = checkPasswordStrength(password);
+                const weakError = await validatePasswordAgainstFirebase(password);
                 if (weakError) {
                     await showAlert(weakError);
                     setLoading(false);
