@@ -11,7 +11,7 @@ import { isAccountDeletionPending } from './accountGate';
 import type { SemanticOperation } from './semanticProjection';
 import { classifySyncFailure } from './syncFailure';
 import { ReplicaFencedError } from './replicaProtocol';
-import { distinctDocumentCount, firstPendingSequenceBatch, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
+import { boundedPendingTransactionBatch, distinctDocumentCount, MAX_SYNC_DOCUMENTS_PER_TRANSACTION } from './syncBatching';
 
 class DurableAcknowledgementPendingError extends Error {
     constructor(cause: unknown) {
@@ -107,7 +107,7 @@ async function drain(session: ReturnType<typeof captureSession>, deliveryState: 
             throw new ReplicaFencedError('Replica cambiata durante la preparazione del journal.');
         }
 
-        const delivered = structuredClone(firstPendingSequenceBatch(envelope.pending));
+        const delivered = structuredClone(boundedPendingTransactionBatch(envelope.pending));
         if (!delivered.length) return;
         if (distinctDocumentCount(delivered) > MAX_SYNC_DOCUMENTS_PER_TRANSACTION) {
             throw new ReplicaFencedError('Gruppo causale troppo grande: checkpoint completo richiesto.');
