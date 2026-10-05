@@ -117,6 +117,13 @@ class AccountDeletionRequestTimeoutError extends Error {
     }
 }
 
+export class AccountDeletionReceiptNotFoundError extends Error {
+    constructor() {
+        super('La ricevuta locale non è più riconosciuta dal server. La copia locale resta conservata fino alla verifica del dispositivo.');
+        this.name = 'AccountDeletionReceiptNotFoundError';
+    }
+}
+
 async function fetchAccountDeletion(input: RequestInfo | URL, init: RequestInit, timeoutMs = ACCOUNT_DELETION_HTTP_TIMEOUT_MS): Promise<Response> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
