@@ -165,7 +165,16 @@ export function useWorkoutSession() {
             ...(hasReadiness ? { readiness: { capturedAt: startedAt, ...readiness } } : {}),
         };
 
-        resetGlobalWorkoutTimer();
+        if (!resetGlobalWorkoutTimer()) {
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: 'Impossibile inizializzare il timer sul dispositivo. La sessione non verrà avviata.',
+            });
+            await showAlert('Impossibile iniziare la sessione: il timer locale non può essere salvato sul dispositivo.');
+            return false;
+        }
         try {
             const result = await setSyncedLocalWorkout(startedWorkout);
             return result.ok;
