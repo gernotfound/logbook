@@ -142,7 +142,7 @@ export const AccountCard = () => {
     };
 
     const onGuestRegister = async () => {
-        const weakError = checkPasswordStrength(newPasswordInput);
+        const weakError = await validatePasswordAgainstFirebase(newPasswordInput);
         if (weakError) {
             await showAlert(weakError);
             return;
