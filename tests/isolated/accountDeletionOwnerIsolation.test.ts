@@ -20,7 +20,7 @@ vi.mock('../../src/lib/firebase', () => ({
 vi.mock('../../src/lib/appCheck', () => ({ getLimitedUseAppCheckToken: boundary.appCheck }));
 vi.mock('../../src/lib/sync/replicateJournal', () => ({ waitForJournalIdle: vi.fn() }));
 
-import { resumeAccountDeletion } from '../../src/lib/db/db_account';
+import { finalizeCompletedDeletionForUid, resumeAccountDeletion } from '../../src/lib/db/db_account';
 import { isAccountDeletionPending, markAccountDeletion } from '../../src/lib/sync/accountGate';
 
 let disk: Map<string, string>;
@@ -79,6 +79,40 @@ it('does not purge shared local drafts while explicit guest mode is active', asy
     expect(boundary.resetCache).not.toHaveBeenCalled();
     expect(boundary.reset).not.toHaveBeenCalled();
     expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
+
+it('uses the same guest barrier for a completed device-recovery proof', async () => {
+    boundary.auth.currentUser = null;
+    disk.set('logbook_is_guest', 'true');
+
+    await expect(finalizeCompletedDeletionForUid('a', context)).resolves.toMatchObject({ status: 'pending' });
+
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(boundary.resetCache).not.toHaveBeenCalled();
+    expect(boundary.reset).not.toHaveBeenCalled();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
+it('uses the same account-isolation barrier for a completed device-recovery proof', async () => {
+    boundary.auth.currentUser = { uid: 'b' };
+
+    await expect(finalizeCompletedDeletionForUid('a', context)).resolves.toMatchObject({ status: 'pending' });
+
+    expect(boundary.auth.signOut).not.toHaveBeenCalled();
+    expect(boundary.purge).not.toHaveBeenCalled();
+    expect(isAccountDeletionPending('user:a')).toBe(true);
+});
+
+it('finalizes a completed device-recovery proof when no other identity is active', async () => {
+    boundary.auth.currentUser = null;
+
+    await expect(finalizeCompletedDeletionForUid('a', context)).resolves.toEqual({ status: 'complete' });
+
+    expect(boundary.purge).toHaveBeenCalledWith('user:a');
+    expect(boundary.resetCache).toHaveBeenCalledTimes(1);
+    expect(boundary.reset).toHaveBeenCalledTimes(1);
+    expect(isAccountDeletionPending('user:a')).toBe(false);
 });
 
 it('fails closed and preserves local data when guest ownership cannot be read', async () => {
