@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../lib/firebase';
+import { auth, getDb, waitForPendingWrites, provider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, reload } from '../lib/firebase';
 import { DB } from '../lib/db';
 import { useAppStore } from '../store/useAppStore';
 import { UserData } from '../types';
@@ -27,7 +27,7 @@ import {
 import { safeHardReload } from '../lib/sync/safeReload';
 import { classifyGooglePopupFailure } from './auth/googlePopup';
 import { watchDeletionRecoveryDeviceRegistration } from '../lib/deletionDeviceRecovery';
-import { PASSWORD_POLICY_SUMMARY } from '../lib/auth/passwordPolicy';
+import { PASSWORD_POLICY_SUMMARY, validatePasswordAgainstPolicy } from '../lib/auth/passwordPolicy';
 import { clearAuthenticatedOwnerHint, rememberAuthenticatedOwner } from '../lib/sync/authOwnerHint';
 import { beginGuestMigrationIntent, bindGuestMigrationIntentToUser, clearGuestMigrationIntent } from '../lib/auth/guestMigrationIntent';
 
@@ -61,6 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const isGuestRef = useRef(isStoredGuest());
     const [isGuest, setIsGuest] = useState(isGuestRef.current);
     const [guestMigrationStatus, setGuestMigrationStatus] = useState<'idle' | 'pending' | 'failed'>('idle');
+    const [emailVerificationRequired, setEmailVerificationRequired] = useState(false);
 
     // Dati da migrare da guest a Google al momento del link
     const migrationDataRef = useRef<UserData | null>(null);
@@ -309,6 +310,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (user) {
                 const wasGuest = isGuestRef.current || isStoredGuest();
+                const hasPasswordProvider = (user.providerData ?? []).some((item: { providerId?: string }) => item.providerId === 'password');
+                if (hasPasswordProvider && user.emailVerified === false) {
+                    if (wasGuest) {
+                        try {
+                            bindGuestMigrationIntentToUser(user);
+                        } catch (error) {
+                            console.error('Intento migrazione guest non determinabile durante verifica email:', error);
+                            setGuestMigrationStatus('failed');
+                            setSaveError('La scelta di trasferimento non è più valida. Dopo aver verificato l’email, avvia di nuovo l’accesso dalla modalità locale.');
+                        }
+                    }
+                    setEmailVerificationRequired(true);
+                    setLoading(false);
+                    return;
+                }
+                setEmailVerificationRequired(false);
                 const recoveryUid = readGuestMigrationSyncRecovery();
 
                 if (recoveryUid === user.uid) {
@@ -382,6 +399,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (isCurrentRun()) setLoading(false);
                 }
             } else {
+                setEmailVerificationRequired(false);
                 setGuestMigrationStatus('idle');
                 const isGuestActive = isGuestRef.current || isStoredGuest();
                 if (!isGuestActive) {
@@ -493,18 +511,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const registerWithEmail = useCallback(async (email: string, pass: string, guestPolicy?: GuestMigrationPolicy) => {
         setSaveError(null);
+        const weakError = await validatePasswordAgainstPolicy(pass);
+        if (weakError) {
+            const error = Object.assign(new Error(weakError), { code: 'auth/weak-password' });
+            handleAuthError(error);
+            return;
+        }
+
         migrationDataRef.current = useAppStore.getState().userData;
         if (isGuestRef.current || isStoredGuest()) {
             if (!guestPolicy) throw new Error('Scelta di trasferimento guest richiesta.');
             beginGuestMigrationIntent(guestPolicy, 'email', { email });
         }
+
+        let credential: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>;
         try {
-            await createUserWithEmailAndPassword(auth, email, pass);
+            credential = await createUserWithEmailAndPassword(auth, email, pass);
         } catch (error) {
             try { clearGuestMigrationIntent(); } catch { /* best effort */ }
             handleAuthError(error);
+            return;
+        }
+
+        if (!credential.user.emailVerified) {
+            try {
+                await sendEmailVerification(credential.user);
+                setSaveError('Verifica la tua email per completare l’accesso. Ti abbiamo inviato un link di conferma.');
+            } catch (error) {
+                console.error('Invio verifica email fallito:', error);
+                setSaveError('Account creato, ma non è stato possibile inviare la verifica email. Usa “Invia di nuovo” e riprova.');
+            }
         }
     }, [handleAuthError, setSaveError]);
+
+    const resendEmailVerification = useCallback(async () => {
+        const user = auth.currentUser;
+        if (!user || user.emailVerified) return;
+        await sendEmailVerification(user);
+        setSaveError('Email di verifica inviata. Controlla anche la cartella spam.');
+    }, [setSaveError]);
+
+    const refreshEmailVerification = useCallback(async () => {
+        const user = auth.currentUser;
+        if (!user) throw new Error('Sessione non disponibile.');
+        await reload(user);
+        if (!user.emailVerified) {
+            setSaveError('Email non ancora verificata. Apri il link ricevuto e riprova.');
+            return;
+        }
+        setEmailVerificationRequired(false);
+        setSaveError(null);
+        await safeHardReload();
+    }, [setSaveError]);
 
     // Accesso guest: solo localStorage, zero Firebase
     const loginAsGuest = useCallback(async () => {
@@ -780,14 +838,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         loading,
         isGuest,
         guestMigrationStatus,
+        emailVerificationRequired,
         login,
         loginAsGuest,
         linkGoogleAccount,
         retryGuestMigration,
         logout,
         loginWithEmail,
-        registerWithEmail
-    }), [currentUser, loading, isGuest, guestMigrationStatus, login, loginAsGuest, linkGoogleAccount, retryGuestMigration, logout, loginWithEmail, registerWithEmail]);
+        registerWithEmail,
+        resendEmailVerification,
+        refreshEmailVerification
+    }), [currentUser, loading, isGuest, guestMigrationStatus, emailVerificationRequired, login, loginAsGuest, linkGoogleAccount, retryGuestMigration, logout, loginWithEmail, registerWithEmail, resendEmailVerification, refreshEmailVerification]);
 
     return (
         <AuthContext.Provider value={value}>
