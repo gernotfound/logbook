@@ -17,12 +17,20 @@ export function getSyncErrorCode(error: unknown): string | undefined {
 export function classifySyncFailure(error: unknown, options?: { retryable?: boolean }): SyncFailureResult {
     const code = getSyncErrorCode(error);
     if (code === 'permission-denied') return { ok: false, status: 'rejected', error };
+    if (code === 'app-check-unavailable') {
+        const retryable = Boolean(
+            error
+            && typeof error === 'object'
+            && 'retryable' in error
+            && (error as { retryable?: unknown }).retryable === true
+        );
+        return { ok: false, status: retryable ? 'local-pending' : 'failed', error };
+    }
     if (
         options?.retryable
         || error instanceof SyncTimeoutError
         || code === 'unavailable'
         || code === 'deadline-exceeded'
-        || code === 'app-check-unavailable'
     ) {
         return { ok: false, status: 'local-pending', error };
     }
