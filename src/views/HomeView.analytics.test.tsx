@@ -3,8 +3,12 @@ import { screen, fireEvent } from '@testing-library/react';
 import HomeView from './HomeView';
 import { renderWithProviders } from '../../tests/setup';
 import type { WorkoutSession, NutritionDay, Exercise } from '../types';
+import { getLocalDateString, shiftDateString } from '../lib/utils/date';
 
 describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.analytics.test.tsx)', () => {
+    const today = getLocalDateString();
+    const recentDates = [-28, -21, -14, -7].map(days => shiftDateString(today, days));
+
     const mockLibrary: Exercise[] = [
         {
             id: 'ex_bench',
@@ -27,35 +31,35 @@ describe('HomeView Analytics Dashboard Integration Suite (src/views/HomeView.ana
     const mockHistory: WorkoutSession[] = [
         {
             id: 'w1',
-            date: '2026-08-04',
+            date: recentDates[0],
             routineName: 'Scheda A - Upper',
             exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's1', kg: '100', reps: '10', done: true }] }]
         },
         {
             id: 'w2',
-            date: '2026-08-11',
+            date: recentDates[1],
             routineName: 'Scheda A - Upper',
             exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's2', kg: '100', reps: '20', done: true }] }]
         },
         {
             id: 'w3',
-            date: '2026-08-18',
+            date: recentDates[2],
             routineName: 'Scheda A - Upper',
             exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's3', kg: '100', reps: '30', done: true }] }]
         },
         {
             id: 'w4',
-            date: '2026-08-25',
+            date: recentDates[3],
             routineName: 'Scheda A - Upper',
             exercises: [{ exId: 'ex_bench', sessionNote: '', sets: [{ id: 's4', kg: '100', reps: '40', done: true }] }]
         }
     ];
 
     const mockNutrition: Record<string, NutritionDay> = {
-        '2026-08-04': { date: '2026-08-04', kcal: 2000, carbs: 250, pro: 150, fat: 60 },
-        '2026-08-11': { date: '2026-08-11', kcal: 2400, carbs: 300, pro: 160, fat: 65 },
-        '2026-08-18': { date: '2026-08-18', kcal: 2800, carbs: 340, pro: 175, fat: 75 },
-        '2026-08-25': { date: '2026-08-25', kcal: 3200, carbs: 380, pro: 190, fat: 85 }
+        [recentDates[0]]: { date: recentDates[0], kcal: 2000, carbs: 250, pro: 150, fat: 60 },
+        [recentDates[1]]: { date: recentDates[1], kcal: 2400, carbs: 300, pro: 160, fat: 65 },
+        [recentDates[2]]: { date: recentDates[2], kcal: 2800, carbs: 340, pro: 175, fat: 75 },
+        [recentDates[3]]: { date: recentDates[3], kcal: 3200, carbs: 380, pro: 190, fat: 85 }
     };
 
     const mockUserData = {
