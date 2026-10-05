@@ -84,10 +84,6 @@ service cloud.firestore {
         );
     }
 
-    function syncControlExists(userId) {
-      return exists(/databases/$(database)/documents/users/$(userId)/sync_control/state);
-    }
-
     function syncControlExistsAfter(userId) {
       return existsAfter(/databases/$(database)/documents/users/$(userId)/sync_control/state);
     }

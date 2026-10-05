@@ -138,15 +138,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deadline=$((SECONDS + 1200))
+          deadline=$((SECONDS + 2100))
           while true; do
             if node scripts/verify-firestore-production.mjs verify; then
               break
             fi
             if [ "${SECONDS}" -ge "${deadline}" ]; then
-              echo "Firestore Production did not converge within 20 minutes" >&2
+              echo "Firestore Production did not converge within 35 minutes" >&2
               exit 1
             fi
-            echo "Firestore indexes are still converging; retrying in 15 seconds..."
+            echo "Firestore indexes or field exemptions are still converging; retrying in 15 seconds..."
             sleep 15
           done

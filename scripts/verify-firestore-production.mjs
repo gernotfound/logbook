@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { classifyFieldOverride, progressSummary } from './firestore-production-state.mjs';
 
 const mode = process.argv[2] ?? 'verify';
 const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -82,12 +83,6 @@ const normalizeDesiredFieldOverride = override => {
   };
 };
 
-const fieldPathFromName = name => {
-  const marker = '/fields/';
-  const index = String(name ?? '').lastIndexOf(marker);
-  return index < 0 ? '' : decodeURIComponent(String(name).slice(index + marker.length));
-};
-
 const loadLiveFieldOverrides = async collectionGroup => {
   const fields = [];
   let pageToken = '';
@@ -104,6 +99,24 @@ const loadLiveFieldOverrides = async collectionGroup => {
   } while (pageToken);
 
   return fields;
+};
+
+const loadActiveFirestoreOperations = async () => {
+  const operations = [];
+  let pageToken = '';
+
+  do {
+    const parent = `projects/${projectId}/databases/(default)`;
+    const url = new URL(`https://firestore.googleapis.com/v1/${parent}/operations`);
+    url.searchParams.set('filter', 'done:false');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const payload = await requestJson(url.toString());
+    operations.push(...(payload.operations ?? []));
+    pageToken = payload.nextPageToken ?? '';
+  } while (pageToken);
+
+  return operations;
 };
 
 const desiredFieldOverrides = indexConfig.fieldOverrides.map(normalizeDesiredFieldOverride);
@@ -151,28 +164,23 @@ for (const [collectionGroup, desiredIndexes] of desiredByGroup) {
   }
 }
 
+const activeOperations = desiredFieldOverrides.length > 0
+  ? await loadActiveFirestoreOperations()
+  : [];
 const fieldOverrideStatuses = [];
 for (const collectionGroup of [...new Set(desiredFieldOverrides.map(item => item.collectionGroup))]) {
   const liveFields = await loadLiveFieldOverrides(collectionGroup);
   for (const desired of desiredFieldOverrides.filter(item => item.collectionGroup === collectionGroup)) {
-    const live = liveFields.find(field => fieldPathFromName(field.name) === desired.fieldPath);
-    const indexConfigLive = live?.indexConfig;
-    const indexes = Array.isArray(indexConfigLive?.indexes) ? indexConfigLive.indexes : [];
-    fieldOverrideStatuses.push({
-      ...desired,
-      found: Boolean(live),
-      explicit: indexConfigLive?.usesAncestorConfig === false,
-      reverting: indexConfigLive?.reverting === true,
-      indexesDisabled: Boolean(live) && indexes.length === 0,
-    });
+    fieldOverrideStatuses.push(classifyFieldOverride(desired, liveFields, activeOperations));
   }
 }
 
 const rulesMatch = normalizeText(liveRulesFile.content) === normalizeText(rulesSource);
 const missingIndexes = indexStatuses.filter(status => !status.found);
 const pendingIndexes = indexStatuses.filter(status => status.found && status.state !== 'READY');
+const pendingFieldOverrides = fieldOverrideStatuses.filter(status => status.pending);
 const mismatchedFieldOverrides = fieldOverrideStatuses.filter(status =>
-  !status.found || !status.explicit || status.reverting || !status.indexesDisabled
+  !status.pending && (!status.found || !status.explicit || status.reverting || !status.indexesDisabled)
 );
 
 if (mode === 'preflight') {
@@ -182,7 +190,12 @@ if (mode === 'preflight') {
     console.log(`- ${status.collectionGroup}: ${status.found ? status.state : 'MISSING'}`);
   }
   for (const status of fieldOverrideStatuses) {
-    console.log(`- ${status.collectionGroup}/${status.fieldPath}: ${status.found && status.explicit && status.indexesDisabled && !status.reverting ? 'EXEMPT' : 'DIFFERS'}`);
+    const state = status.found && status.explicit && status.indexesDisabled && !status.reverting
+      ? 'EXEMPT'
+      : status.pending
+        ? 'PENDING'
+        : 'DIFFERS';
+    console.log(`- ${status.collectionGroup}/${status.fieldPath}: ${state}${progressSummary(status)}`);
   }
   process.exit(0);
 }
@@ -199,9 +212,13 @@ if (mode === 'status') {
     process.exit(10);
   }
 
-  if (pendingIndexes.length) {
+  if (pendingIndexes.length || pendingFieldOverrides.length) {
+    const pendingParts = [
+      ...pendingIndexes.map(item => `${item.collectionGroup}/${item.state ?? 'UNKNOWN'}`),
+      ...pendingFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}${progressSummary(item)}`),
+    ];
     console.log(
-      `Firestore deployment already contains the desired configuration, but indexes are still converging: ${pendingIndexes.map(item => `${item.collectionGroup}/${item.state ?? 'UNKNOWN'}`).join(', ')}`,
+      `Firestore deployment already contains the desired configuration, but index operations are still converging: ${pendingParts.join(', ')}`,
     );
     process.exit(11);
   }
@@ -216,6 +233,11 @@ if (!rulesMatch) {
 if (mismatchedFieldOverrides.length) {
   throw new Error(
     `Desired Firestore field exemptions do not match live state: ${mismatchedFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}`).join(', ')}`,
+  );
+}
+if (pendingFieldOverrides.length) {
+  throw new Error(
+    `Desired Firestore field exemptions are still converging: ${pendingFieldOverrides.map(item => `${item.collectionGroup}/${item.fieldPath}${progressSummary(item)}`).join(', ')}`,
   );
 }
 
