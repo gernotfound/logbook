@@ -11,7 +11,7 @@ import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange 
 import { classifyGooglePopupFailure } from '../../contexts/auth/googlePopup';
 
 export const AccountCard = () => {
-    const { currentUser, isGuest, linkGoogleAccount, registerWithEmail } = useAuth();
+    const { currentUser, isGuest, emailVerificationRequired, resendEmailVerification, refreshEmailVerification, linkGoogleAccount, registerWithEmail } = useAuth();
     const { handleLogout } = useSettings();
     const { showAlert } = useDialogStore();
 
@@ -250,6 +250,11 @@ export const AccountCard = () => {
                     <div>
                         <div style={{ fontWeight: "bold" }}>{currentUser.displayName || 'Utente TheLogBook'}</div>
                         <div className="ui-account-card-16" >{currentUser.email}</div>
+                        {emailVerificationRequired && (
+                            <div className="text-muted" style={{ marginTop: "0.25rem" }}>
+                                Email da verificare
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -263,6 +268,51 @@ export const AccountCard = () => {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {emailVerificationRequired && (
+                    <div className="ui-account-card-17" style={{ padding: "0.625rem", marginBottom: "0.3125rem" }}>
+                        <div style={{ marginBottom: "0.5rem" }}>
+                            Conferma l’indirizzo email tramite il link che ti abbiamo inviato.
+                        </div>
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                            <button
+                                className="btn"
+                                type="button"
+                                disabled={!!loadingAction}
+                                onClick={async () => {
+                                    setLoadingAction('verifyEmail');
+                                    try {
+                                        await refreshEmailVerification();
+                                    } catch (error: any) {
+                                        await showAlert(error?.message || 'Verifica email non riuscita.');
+                                    } finally {
+                                        setLoadingAction(null);
+                                    }
+                                }}
+                            >
+                                Ho verificato
+                            </button>
+                            <button
+                                className="btn"
+                                type="button"
+                                disabled={!!loadingAction}
+                                onClick={async () => {
+                                    setLoadingAction('verifyEmail');
+                                    try {
+                                        await resendEmailVerification();
+                                        await showAlert('Email di verifica inviata. Controlla anche la cartella spam.');
+                                    } catch (error: any) {
+                                        await showAlert(error?.message || 'Invio email non riuscito.');
+                                    } finally {
+                                        setLoadingAction(null);
+                                    }
+                                }}
+                            >
+                                Invia di nuovo
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {hasPassword && (
                     <>
                         <button className="btn ui-account-card-21"  onClick={() => { setShowReauthModal('email'); setShowCurrentPassword(false); setShowNewPassword(false); }}>Cambia Indirizzo Email</button>
