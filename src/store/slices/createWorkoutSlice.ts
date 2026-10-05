@@ -3,7 +3,7 @@ import { DomainParsers } from '../../lib/schema';
 import { Logic } from '../../lib/logic';
 import { normalizeBusinessId } from '../../lib/businessIdentity';
 import type { WorkoutSession, SyncResult } from '../../types';
-import { readDeviceValue, writeDeviceValue } from '../../lib/sync/deviceStorage';
+import { readDeviceValueStrict, writeDeviceValue } from '../../lib/sync/deviceStorage';
 import type { AppState } from '../useAppStore';
 import { assertWorkoutSessionIdentities } from '../../lib/sync/domainOperations/validation';
 
@@ -75,20 +75,22 @@ export const getInitialLocalWorkout = (owner?: string, fallback?: WorkoutSession
         if (validated) persistLocalWorkout(validated, owner);
         return validated;
     };
+    const saved = readDeviceValueStrict('workout', owner);
+    if (saved === null) return recoverFallback();
+
+    let parsed: unknown;
     try {
-        const saved = readDeviceValue('workout', owner);
-        if (!saved) return recoverFallback();
-        const parsed = JSON.parse(saved);
-        if (!parsed || typeof parsed !== 'object') return recoverFallback();
-        const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
-        if (!normalized) return recoverFallback();
-        const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
-        if (!validated) return recoverFallback();
-        persistLocalWorkout(validated, owner);
-        return validated;
-    } catch {
-        return recoverFallback();
+        parsed = JSON.parse(saved);
+    } catch (error) {
+        throw new Error('Snapshot workout del dispositivo non leggibile.', { cause: error });
     }
+    if (!parsed || typeof parsed !== 'object') throw new Error('Snapshot workout del dispositivo non valido.');
+    const normalized = normalizeDeviceWorkout(parsed as WorkoutSession);
+    if (!normalized) throw new Error('Snapshot workout del dispositivo non valido.');
+    const validated = DomainParsers.parseActiveWorkout(normalized) as WorkoutSession | null;
+    if (!validated) throw new Error('Snapshot workout del dispositivo non compatibile.');
+    persistLocalWorkout(validated, owner);
+    return validated;
 };
 
 export const createWorkoutSlice: StateCreator<AppState, [], [], WorkoutSlice> = (set, get) => ({
