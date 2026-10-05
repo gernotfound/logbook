@@ -8,6 +8,7 @@ import { UserDataSchema } from '../src/lib/schema';
 import { initializeLocal, readLocal } from '../src/lib/sync/localRepository';
 import { useAppStore } from '../src/store/useAppStore';
 import type { UserData } from '../src/types';
+import { beginGuestMigrationIntent } from '../src/lib/auth/guestMigrationIntent';
 
 const parse = (value: unknown) => UserDataSchema.parse(value) as unknown as UserData;
 const user = { uid: 'skip-user', email: 'skip@example.com', displayName: 'Skip User' } as any;
@@ -38,7 +39,7 @@ describe('guest -> account skip policy', () => {
         render(<AuthProvider><div>app</div></AuthProvider>);
 
         await waitFor(() => {
-            expect(useAppStore.getState().saveError).toContain('scelta di trasferimento');
+            expect(useAppStore.getState().saveError).toContain('tentativo di trasferimento');
         });
 
         expect(DB.loadCloudPayload).not.toHaveBeenCalled();
@@ -59,7 +60,7 @@ describe('guest -> account skip policy', () => {
 
         await initializeLocal('guest', guest);
         localStorage.setItem('logbook_is_guest', 'true');
-        localStorage.setItem('guest_migration_policy', 'skip');
+        beginGuestMigrationIntent('skip', 'recovery', { uid: user.uid });
         useAppStore.getState().setUserData(guest);
 
         vi.mocked(DB.loadCloudPayload).mockResolvedValueOnce({
