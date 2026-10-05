@@ -124,8 +124,30 @@ export function resequencePendingOperationsForBoundedTransactions(
     };
 }
 
-export function firstPendingSequenceBatch(pending: SemanticOperation[]): SemanticOperation[] {
+export function boundedPendingTransactionBatch(
+    pending: SemanticOperation[],
+    maxDocuments = MAX_SYNC_DOCUMENTS_PER_TRANSACTION,
+): SemanticOperation[] {
+    assertDocumentLimit(maxDocuments);
     if (pending.length === 0) return [];
-    const firstSeq = pending.reduce((minimum, operation) => Math.min(minimum, operation.seq), Number.POSITIVE_INFINITY);
-    return pending.filter(operation => operation.seq === firstSeq);
+
+    const sequences = [...new Set(pending.map(operation => operation.seq))].sort((left, right) => left - right);
+    const selected: SemanticOperation[] = [];
+    const selectedDocuments = new Set<string>();
+
+    for (const sequence of sequences) {
+        const group = pending.filter(operation => operation.seq === sequence);
+        const groupDocuments = new Set(group.map(operation => operation.docPath));
+        const nextDocumentCount = new Set([...selectedDocuments, ...groupDocuments]).size;
+
+        if (selected.length > 0 && nextDocumentCount > maxDocuments) break;
+        if (selected.length === 0 && nextDocumentCount > maxDocuments) {
+            throw new Error(`Gruppo causale troppo grande: ${nextDocumentCount} documenti, massimo ${maxDocuments}.`);
+        }
+
+        selected.push(...group);
+        for (const path of groupDocuments) selectedDocuments.add(path);
+    }
+
+    return selected;
 }
