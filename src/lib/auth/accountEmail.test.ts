@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { reload, verifyBeforeUpdateEmail } from '../firebase';
+import { firebaseApp, reload, verifyBeforeUpdateEmail } from '../firebase';
 import { linkEmailPasswordWithEnumerationProtection, requestVerifiedEmailChange } from './accountEmail';
 
 const mockedReload = vi.mocked(reload);
@@ -8,6 +8,7 @@ const mockedVerifyBeforeUpdateEmail = vi.mocked(verifyBeforeUpdateEmail);
 describe('account email operations', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        (firebaseApp as any).options = { apiKey: 'test-api-key' };
         vi.stubGlobal('fetch', vi.fn());
     });
 
