@@ -7,7 +7,7 @@ import SessionHeader from './SessionHeader';
 import SessionExerciseAccordion from './session/SessionExerciseAccordion';
 import SessionRatings from './session/SessionRatings';
 import { ExerciseSearchDropdown } from './ExerciseSearchDropdown';
-import { resetWorkoutClockGuard, resumeWorkoutClock, sampleWorkoutClock } from '../../lib/workoutClockGuard';
+import { resumeWorkoutClock, sampleWorkoutClock } from '../../lib/workoutClockGuard';
 import { useAppStore } from '../../store/useAppStore';
 
 const EMPTY_HISTORY_ARRAY: Array<{ date: string; sets: any[]; note: string }> = [];
@@ -55,7 +55,6 @@ const GlobalTimer = ({ workoutId, startTime }: { workoutId: string; startTime?: 
         return () => {
             clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
-            resetWorkoutClockGuard(workoutId);
         };
     }, [workoutId, startTime]);
 
