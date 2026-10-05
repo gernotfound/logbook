@@ -248,7 +248,20 @@ export function useWorkoutSession() {
         const expectedId = useAppStore.getState().localWorkout?.id;
         try {
         if (!expectedId || (confirmEnd && !(await showConfirm("Terminare l'allenamento?")))) return null;
-        draftRegistry.flushAll();
+        try {
+            draftRegistry.flushAll({ strict: true });
+        } catch (error) {
+            useAppStore.setState({
+                localPersistenceBlocked: true,
+                syncHealth: 'failed',
+                syncPresentation: 'normal',
+                saveError: 'Impossibile mettere al sicuro le ultime modifiche del workout. La sessione non verrà terminata.',
+            });
+            if (auth.currentUser?.uid === expectedUid) {
+                await showAlert('Le ultime modifiche non sono ancora al sicuro sul dispositivo. Riprova dopo aver risolto il problema di storage.');
+            }
+            return null;
+        }
         const currentWorkout = useAppStore.getState().localWorkout;
         if (!currentWorkout || currentWorkout.id !== expectedId || auth.currentUser?.uid !== expectedUid) return null;
 
