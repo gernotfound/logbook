@@ -7,6 +7,7 @@ const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
 const hostingWorkflow = readFileSync('.github/workflows/firebase-hosting-production.yml', 'utf8');
 const firestoreWorkflow = readFileSync('.github/workflows/firebase-firestore-production.yml', 'utf8');
 const firestoreVerifier = readFileSync('scripts/verify-firestore-production.mjs', 'utf8');
+const firestoreProductionState = readFileSync('scripts/firestore-production-state.mjs', 'utf8');
 const firestoreIndexes = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
 const vite = readFileSync('vite.config.ts', 'utf8');
 const swSource = readFileSync('src/sw.ts', 'utf8');
@@ -193,6 +194,15 @@ if (!firestoreVerifier.includes('releases/cloud.firestore') || !firestoreVerifie
 }
 if (!firestoreVerifier.includes('/fields') || !firestoreVerifier.includes('indexConfig.usesAncestorConfig:false') || !firestoreVerifier.includes('mismatchedFieldOverrides')) {
   failures.push('Firestore Production verifier must read back and compare explicit field exemptions');
+}
+if (!firestoreVerifier.includes('/operations') || !firestoreVerifier.includes("filter', 'done:false'") || !firestoreVerifier.includes('pendingFieldOverrides')) {
+  failures.push('Firestore Production verifier must distinguish active field-index convergence from stable field exemption drift');
+}
+if (!firestoreProductionState.includes('indexConfigDeltas') || !firestoreProductionState.includes("changeType === 'REMOVE'")) {
+  failures.push('Firestore Production field convergence must be tied to an exact active REMOVE operation');
+}
+if (!firestoreWorkflow.includes('deadline=$((SECONDS + 2100))') || !firestoreWorkflow.includes('did not converge within 35 minutes')) {
+  failures.push('Firestore Production must allow the documented bounded convergence window for field-index operations');
 }
 const requiredIndexExemptions = ['users', 'history_months', 'nutrition_months', 'sync_control', 'global_catalog'];
 for (const collectionGroup of requiredIndexExemptions) {
